@@ -1465,6 +1465,27 @@ export default function ProjectDetailPage() {
     return query ? `${config.route}?${query}` : config.route;
   };
 
+  const completedFormSummaries = (Array.isArray(hubTabs.workflow?.completedForms)
+    ? hubTabs.workflow.completedForms
+    : projectSteps.filter(step => step.status === 'completed')
+  )
+    .filter((step: ProjectStep) => step.status === 'completed')
+    .sort((a: ProjectStep, b: ProjectStep) => a.stepOrder - b.stepOrder)
+    .map((step: ProjectStep) => {
+      const attachments = getAttachmentsForStep(step.id);
+      const linkedId = getLinkedId(step);
+      const route = getStepFormRoute(step, true);
+      return {
+        step,
+        label: STEP_CONFIG[step.stepType]?.label || step.stepType,
+        completedBy: step.completedByDisplayName || 'Unknown',
+        completedAt: step.completedAt,
+        attachments,
+        linkedId,
+        route,
+      };
+    });
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-4">
@@ -1927,6 +1948,83 @@ export default function ProjectDetailPage() {
               </div>
             );
           })()}
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckSquare className="h-5 w-5 text-green-600" />
+                    Completed Form Summaries
+                  </CardTitle>
+                  <CardDescription>
+                    Read-only summary of completed workflow forms and their audit links.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline">
+                  {completedFormSummaries.length} complete
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {completedFormSummaries.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  No workflow forms have been completed yet.
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {completedFormSummaries.map((summary) => (
+                    <div key={summary.step.id} className="rounded-md border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">{summary.label}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {summary.completedAt
+                              ? `Completed ${format(new Date(summary.completedAt), 'MMM d, yyyy')}`
+                              : 'Completed date unavailable'}
+                            {summary.completedBy ? ` by ${summary.completedBy}` : ''}
+                          </p>
+                        </div>
+                        <Badge className="bg-green-100 text-green-800">Complete</Badge>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                        <div className="rounded bg-muted/40 px-2 py-1">
+                          <span className="text-muted-foreground">Linked record: </span>
+                          <span className="font-medium">{summary.linkedId || 'None'}</span>
+                        </div>
+                        <div className="rounded bg-muted/40 px-2 py-1">
+                          <span className="text-muted-foreground">Attachments: </span>
+                          <span className="font-medium">{summary.attachments.length}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {summary.route && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setLocation(summary.route!)}
+                          >
+                            <Eye className="mr-1 h-4 w-4" />
+                            View Form
+                          </Button>
+                        )}
+                        {summary.attachments.length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleStepExpanded(summary.step.id)}
+                          >
+                            <Paperclip className="mr-1 h-4 w-4" />
+                            Show in Timeline
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

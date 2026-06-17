@@ -1834,6 +1834,404 @@ router.get('/:id/p2-gate-status', async (req, res) => {
   }
 });
 
+// GET /api/projects/:id/p2-hub - read-only P2 Project Hub tab model.
+router.get('/:id/p2-hub', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await storage.getProject(id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    const optionalHubQuery = async <T>(
+      label: string,
+      query: string,
+      params: unknown[] = [],
+    ): Promise<T[]> => {
+      try {
+        return await pool.query<T>(query, params);
+      } catch (error) {
+        console.warn(`[Project P2 Hub] ${label} unavailable for project ${id}:`, error);
+        return [];
+      }
+    };
+
+    const [steps, projectRevisions, activityLog, workOrders, manualDocuments] = await Promise.all([
+      storage.getProjectSteps(id).catch(() => []),
+      storage.getProjectRevisions(id).catch(() => []),
+      storage.getProjectActivityLog(id).catch(() => []),
+      storage.getWorkOrdersByProject(id).catch(() => []),
+      optionalHubQuery(
+        'manual project documents',
+        `SELECT id, label, original_file_name, mime_type, file_size,
+                media_library_id, uploaded_by, created_at
+         FROM project_documents
+         WHERE project_id = $1
+         ORDER BY created_at DESC`,
+        [id],
+      ),
+    ]);
+
+    const poFamily = project.poId
+      ? await optionalHubQuery<any>(
+          'PO revision family',
+          `WITH selected_po AS (
+             SELECT COALESCE(parent_po_id, id) AS family_root_id
+             FROM p2_purchase_orders
+             WHERE id = $1
+           )
+           SELECT po.id, po.po_number, po.customer_id, po.customer_name, po.po_date,
+                  po.expected_delivery, po.status, po.project_name, po.revision_number,
+                  po.parent_po_id, po.change_reason, po.is_current_revision,
+                  po.revised_at, po.revised_by, po.created_at, po.updated_at
+           FROM p2_purchase_orders po
+           CROSS JOIN selected_po sp
+           WHERE po.id = sp.family_root_id OR po.parent_po_id = sp.family_root_id
+           ORDER BY po.revision_number DESC, po.created_at DESC`,
+          [project.poId],
+        )
+      : [];
+
+    const currentPo = poFamily.find((po: any) => po.is_current_revision) ?? poFamily[0] ?? null;
+    const poIds = poFamily.map((po: any) => po.id);
+    const activePoId = currentPo?.id ?? project.poId ?? null;
+
+    const poItems = poIds.length > 0
+      ? await optionalHubQuery<any>(
+          'PO line items',
+          `SELECT id, po_id, part_number, part_name, quantity, unit_price,
+                  total_price, specifications, notes, created_at, updated_at
+           FROM p2_purchase_order_items
+           WHERE po_id = ANY($1::int[])
+           ORDER BY po_id DESC, id ASC`,
+          [poIds],
+        )
+      : [];
+    const partNumbers = Array.from(new Set(poItems.map((item: any) => item.part_number).filter(Boolean)));
+
+    const [
+      productionOrders,
+      serializedItems,
+      lots,
+      packingSlips,
+      certificates,
+      invoices,
+      partsRequests,
+      receivedMaterials,
+      projectRoutings,
+      bomRecords,
+      quoteFeedback,
+    ] = await Promise.all([
+      poIds.length > 0
+        ? optionalHubQuery<any>(
+            'P2 production orders',
+            `SELECT id, order_id, p2_po_id, p2_po_item_id, bom_definition_id,
+                    bom_item_id, sku, part_name, quantity, quantity_manufactured,
+                    department, status, priority, due_date, scheduled_layup_date,
+                    started_at, completed_at, created_at, updated_at
+             FROM p2_production_orders
+             WHERE p2_po_id = ANY($1::int[])
+             ORDER BY created_at DESC`,
+            [poIds],
+          )
+        : Promise.resolve([]),
+      poIds.length > 0
+        ? optionalHubQuery<any>(
+            'serialized items',
+            `SELECT id, serial_number, barcode, po_id, po_item_id, po_number,
+                    part_number, part_name, current_department, status, completed_at,
+                    finalized_at, part_routing_id, traveler_barcode, sku,
+                    sequence_number, created_at, updated_at
+             FROM p2_serialized_items
+             WHERE po_id = ANY($1::int[])
+             ORDER BY po_number, part_number, sequence_number`,
+            [poIds],
+          )
+        : Promise.resolve([]),
+      poIds.length > 0
+        ? optionalHubQuery<any>(
+            'lots',
+            `SELECT id, lot_number, lot_type, po_id, po_item_id, quantity, status,
+                    shipped_at, packing_slip_id, certificate_id, created_at
+             FROM p2_lot_numbers
+             WHERE po_id = ANY($1::int[])
+             ORDER BY created_at DESC`,
+            [poIds],
+          )
+        : Promise.resolve([]),
+      poIds.length > 0
+        ? optionalHubQuery<any>(
+            'packing slips',
+            `SELECT ps.id, ps.packing_slip_number, ps.lot_number_id, ps.lot_number,
+                    ps.po_number, ps.invoice_number, ps.ship_date, ps.shipment_number,
+                    ps.carrier, ps.tracking_number, ps.total_quantity, ps.status,
+                    ps.external_pdf_url, ps.created_at
+             FROM p2_packing_slips ps
+             JOIN p2_lot_numbers ln ON ln.id = ps.lot_number_id
+             WHERE ln.po_id = ANY($1::int[])
+             ORDER BY ps.created_at DESC`,
+            [poIds],
+          )
+        : Promise.resolve([]),
+      poIds.length > 0
+        ? optionalHubQuery<any>(
+            'certificates of conformance',
+            `SELECT coc.id, coc.certificate_number, coc.lot_number_id, coc.lot_number,
+                    coc.po_number, coc.part_number, coc.part_name, coc.status,
+                    coc.approved_at, coc.issued_at, coc.created_at
+             FROM p2_certificates_of_conformance coc
+             JOIN p2_lot_numbers ln ON ln.id = coc.lot_number_id
+             WHERE ln.po_id = ANY($1::int[])
+             ORDER BY coc.created_at DESC`,
+            [poIds],
+          )
+        : Promise.resolve([]),
+      poIds.length > 0
+        ? optionalHubQuery<any>(
+            'AR invoices',
+            `SELECT DISTINCT ai.id, ai.invoice_number, ai.invoice_date, ai.due_date,
+                    ai.po_id, ai.lot_id, ai.packing_slip_id, ai.total_amount,
+                    ai.status, ai.sent_at, ai.created_at
+             FROM ar_invoices ai
+             LEFT JOIN p2_lot_numbers ln ON ln.id = ai.lot_id
+             LEFT JOIN p2_packing_slips ps ON ps.id = ai.packing_slip_id
+             LEFT JOIN p2_lot_numbers ps_ln ON ps_ln.id = ps.lot_number_id
+             WHERE ln.po_id = ANY($1::int[]) OR ps_ln.po_id = ANY($1::int[])
+             ORDER BY ai.created_at DESC`,
+            [poIds],
+          )
+        : Promise.resolve([]),
+      optionalHubQuery<any>(
+        'project parts requests',
+        `SELECT id, part_number, part_name, quantity, urgency, status,
+                estimated_cost, vendor_po_id, qty_ordered, qty_received,
+                request_date, updated_at
+         FROM parts_requests
+         WHERE project_id = $1
+         ORDER BY request_date DESC`,
+        [id],
+      ),
+      optionalHubQuery<any>(
+        'project received materials',
+        `SELECT id, received_unit_id, receipt_id, material_lot_id, quantity,
+                unit_cost, extended_cost, status, accepted_at, created_at
+         FROM project_received_materials
+         WHERE project_id = $1
+         ORDER BY created_at DESC`,
+        [id],
+      ),
+      optionalHubQuery<any>(
+        'part routings',
+        partNumbers.length > 0
+          ? `SELECT id, project_id, part_number, part_name, routing_name,
+                    routing_revision, routing_type, is_active, created_by,
+                    created_at, updated_at
+             FROM part_routings
+             WHERE project_id = $1 OR part_number = ANY($2::text[])
+             ORDER BY is_active DESC, updated_at DESC`
+          : `SELECT id, project_id, part_number, part_name, routing_name,
+                    routing_revision, routing_type, is_active, created_by,
+                    created_at, updated_at
+             FROM part_routings
+             WHERE project_id = $1
+             ORDER BY is_active DESC, updated_at DESC`,
+        partNumbers.length > 0 ? [id, partNumbers] : [id],
+      ),
+      partNumbers.length > 0
+        ? optionalHubQuery<any>(
+            'BOM records',
+            `SELECT b.id, b.parent_part_ag_number, b.code, b.description, b.is_active,
+                    br.id AS latest_revision_id, br.rev_code AS latest_rev_code,
+                    br.created_at AS latest_rev_created_at,
+                    COUNT(bl.id)::int AS line_count
+             FROM boms b
+             LEFT JOIN LATERAL (
+               SELECT id, rev_code, created_at
+               FROM bom_revisions
+               WHERE bom_id = b.id
+               ORDER BY created_at DESC
+               LIMIT 1
+             ) br ON true
+             LEFT JOIN bom_lines bl ON bl.revision_id = br.id
+             WHERE b.parent_part_ag_number = ANY($1::text[])
+             GROUP BY b.id, br.id, br.rev_code, br.created_at
+             ORDER BY b.is_active DESC, br.created_at DESC NULLS LAST`,
+            [partNumbers],
+          )
+        : Promise.resolve([]),
+      optionalHubQuery<any>(
+        'quote execution feedback',
+        `SELECT id, quote_id, quoted_labor_hours, actual_labor_hours,
+                labor_hours_variance, labor_hours_variance_pct, summary,
+                created_at, updated_at
+         FROM quote_execution_feedback
+         WHERE project_id = $1
+         ORDER BY updated_at DESC
+         LIMIT 1`,
+        [id],
+      ),
+    ]);
+
+    const completedSteps = steps.filter((step: any) => step.status === 'completed');
+    const latestWad = [...workOrders].sort((a: any, b: any) => {
+      const aTime = new Date(a.updatedAt ?? a.createdAt ?? 0).getTime();
+      const bTime = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime();
+      return bTime - aTime;
+    })[0] ?? null;
+    const activePoItems = activePoId ? poItems.filter((item: any) => item.po_id === activePoId) : poItems;
+    const completedSerials = serializedItems.filter((item: any) => (
+      item.status === 'COMPLETED' || item.completed_at || item.finalized_at
+    ));
+    const laborBudgetHours = workOrders.reduce((sum: number, workOrder: any) => {
+      const hours = Number(workOrder.totalBudgetHours ?? 0);
+      return Number.isFinite(hours) ? sum + hours : sum;
+    }, 0);
+    const materialBudget = workOrders.reduce((sum: number, workOrder: any) => {
+      const amount = Number(workOrder.materialBudgetAmount ?? 0);
+      return Number.isFinite(amount) ? sum + amount : sum;
+    }, 0);
+    const receivedMaterialCost = receivedMaterials.reduce((sum: number, material: any) => {
+      const amount = Number(material.extended_cost ?? 0);
+      return Number.isFinite(amount) ? sum + amount : sum;
+    }, 0);
+    const latestQuoteFeedback = quoteFeedback[0] ?? null;
+
+    return res.json({
+      project,
+      generatedAt: new Date().toISOString(),
+      source: {
+        mode: 'read_model',
+        activePoId,
+        poFamilyIds: poIds,
+        additiveOnly: true,
+      },
+      tabs: {
+        workflow: {
+          summary: {
+            totalSteps: steps.length,
+            completedSteps: completedSteps.length,
+            currentStage: project.currentStage ?? null,
+            status: project.status ?? null,
+          },
+          steps,
+          completedForms: completedSteps,
+          activityLog,
+          documents: manualDocuments,
+        },
+        po: {
+          summary: {
+            currentPo,
+            revisionCount: Math.max(poFamily.length - 1, 0),
+            lineItemCount: activePoItems.length,
+          },
+          currentPo,
+          lineItems: activePoItems,
+          revisionFamily: poFamily,
+          projectRevisions: projectRevisions.filter((revision: any) => revision.revisionType === 'po'),
+        },
+        bomRouting: {
+          summary: {
+            bomCount: bomRecords.length,
+            routingCount: projectRoutings.length,
+            manufacturedLineCount: poItems.length,
+          },
+          bomRecords,
+          routings: projectRoutings,
+          sourcePartNumbers: partNumbers,
+          changeLinks: projectRevisions.filter((revision: any) => ['drawing', 'contract'].includes(revision.revisionType)),
+        },
+        wad: {
+          summary: {
+            latestWad,
+            totalWads: workOrders.length,
+            releasedOrBeyond: workOrders.filter((wo: any) => ['RELEASED', 'IN_PROGRESS', 'COMPLETE', 'CLOSED'].includes(wo.status)).length,
+          },
+          latestWad,
+          workOrders,
+          revisions: projectRevisions.filter((revision: any) => revision.revisionType === 'wad'),
+        },
+        rom: {
+          summary: latestQuoteFeedback,
+          categories: {
+            labor: { quotedHours: latestQuoteFeedback?.quoted_labor_hours ?? null },
+            material: { budgetAmount: materialBudget },
+            outsideProcessing: null,
+            nrc: null,
+            tooling: null,
+            design: null,
+            capital: null,
+            generalAndAdmin: null,
+            overhead: null,
+            qualityAndCompliance: null,
+            shippingAndPackaging: null,
+            contingency: null,
+            escalationAndInflation: null,
+            profitFee: null,
+          },
+        },
+        production: {
+          summary: {
+            productionOrderCount: productionOrders.length,
+            serializedCount: serializedItems.length,
+            completedSerializedCount: completedSerials.length,
+          },
+          productionOrders,
+          serializedItems,
+          assemblyTree: {
+            poItems,
+            bomRecords,
+            productionOrders,
+          },
+        },
+        material: {
+          summary: {
+            partsRequestCount: partsRequests.length,
+            receivedMaterialCount: receivedMaterials.length,
+            materialBudget,
+            receivedMaterialCost,
+          },
+          parts: poItems,
+          partsRequests,
+          receivedMaterials,
+        },
+        labor: {
+          summary: {
+            budgetHours: laborBudgetHours,
+            actualHours: latestQuoteFeedback?.actual_labor_hours ?? null,
+            varianceHours: latestQuoteFeedback?.labor_hours_variance ?? null,
+            variancePercent: latestQuoteFeedback?.labor_hours_variance_pct ?? null,
+          },
+          workOrders,
+          quoteFeedback: latestQuoteFeedback,
+        },
+        traceability: {
+          summary: {
+            travelerCount: serializedItems.length,
+            cocCount: certificates.length,
+            lotCount: lots.length,
+          },
+          travelers: serializedItems,
+          lots,
+          certificates,
+        },
+        shippingInvoicing: {
+          summary: {
+            packingSlipCount: packingSlips.length,
+            invoiceCount: invoices.length,
+            needsInvoice: packingSlips.length > invoices.length,
+            sentInvoices: invoices.filter((invoice: any) => invoice.status === 'SENT' || invoice.sent_at).length,
+            receivedInvoices: invoices.filter((invoice: any) => ['PAID', 'RECEIVED'].includes(invoice.status)).length,
+          },
+          packingSlips,
+          certificates,
+          invoices,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching P2 project hub:', error);
+    res.status(500).json({ message: 'Failed to fetch P2 project hub' });
+  }
+});
+
 // GET /api/projects/:id/traceability — full cradle-to-grave data for a project
 router.get('/:id/traceability', async (req, res) => {
   try {

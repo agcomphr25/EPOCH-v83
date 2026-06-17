@@ -67,6 +67,7 @@ interface PartsRequestFormData {
   department: string;
   quantity: string;
   urgency: string;
+  vendorId: string;
   supplier: string;
   estimatedCost: string;
   reason: string;
@@ -164,6 +165,7 @@ export default function PartsRequestsCard() {
     department: '',
     quantity: '',
     urgency: 'MEDIUM',
+    vendorId: '',
     supplier: '',
     estimatedCost: '',
     reason: '',
@@ -316,6 +318,7 @@ export default function PartsRequestsCard() {
       department: '',
       quantity: '',
       urgency: 'MEDIUM',
+      vendorId: '',
       supplier: '',
       estimatedCost: '',
       reason: '',
@@ -367,6 +370,8 @@ export default function PartsRequestsCard() {
       agPartNumber: item.agPartNumber,
       partNumber: item.agPartNumber,
       partName: item.name,
+      vendorId: item.vendorId ? String(item.vendorId) : '',
+      supplier: item.source || prev.supplier,
     }));
     setIsPartSelectOpen(false);
   };
@@ -401,8 +406,15 @@ export default function PartsRequestsCard() {
       status: isManagerResponse ? formData.status : 'PENDING',
     };
 
+    const selectedVendorId = formData.vendorId
+      ? parseInt(formData.vendorId)
+      : selectedInventoryItem?.vendorId ?? null;
+    if (selectedVendorId && !Number.isNaN(selectedVendorId)) {
+      submitData.vendorId = selectedVendorId;
+    }
+    submitData.supplier = formData.supplier || selectedInventoryItem?.source || null;
+
     if (isManagerResponse) {
-      submitData.supplier = formData.supplier || null;
       submitData.estimatedCost = formData.estimatedCost
         ? parseFloat(formData.estimatedCost)
         : null;
@@ -441,6 +453,7 @@ export default function PartsRequestsCard() {
       department: request.department || '',
       quantity: request.quantity.toString(),
       urgency: request.urgency,
+      vendorId: request.vendorId ? String(request.vendorId) : '',
       supplier: request.supplier || '',
       estimatedCost: request.estimatedCost
         ? request.estimatedCost.toString()
@@ -571,6 +584,7 @@ export default function PartsRequestsCard() {
           {formData.partNumber && formData.partName && (
             <p className="mt-2 text-xs text-muted-foreground">
               Selected part: {formData.partNumber} - {formData.partName}
+              {formData.supplier ? ` | Source: ${formData.supplier}` : ''}
             </p>
           )}
         </div>

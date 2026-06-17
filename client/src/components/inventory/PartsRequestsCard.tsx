@@ -103,6 +103,12 @@ type PartsRequestWithProject = PartsRequest & {
     projectCode: string | null;
     projectName: string | null;
   };
+  vendorPO?: {
+    id: number | null;
+    poNumber: string | null;
+    externalPoNumber: string | null;
+    status: string | null;
+  };
 };
 
 const NONE_VALUE = '__none__';
@@ -1023,6 +1029,17 @@ export default function PartsRequestsCard() {
                               {new Date(
                                 request.expectedDelivery
                               ).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+
+                        {request.vendorPO && (
+                          <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                            <Package className="h-3 w-3" />
+                            <span>
+                              Vendor PO:{' '}
+                              {request.vendorPO.poNumber || `Draft #${request.vendorPO.id}`}
+                              {request.vendorPO.status ? ` (${request.vendorPO.status})` : ''}
                             </span>
                           </div>
                         )}

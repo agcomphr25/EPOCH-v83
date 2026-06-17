@@ -1715,7 +1715,7 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
     const { eq, and, inArray, isNotNull, isNull } = await import('drizzle-orm');
     
     // Get all active parts requests that are not yet delivered
-    const activeStatuses = ['PENDING', 'APPROVED', 'ORDERED', 'RECEIVED'];
+    const activeStatuses = ['PENDING', 'APPROVED', 'ORDERED_PARTIAL', 'ORDERED', 'RECEIVED_PARTIAL', 'RECEIVED'];
     const requests = await db
       .select()
       .from(partsRequests)

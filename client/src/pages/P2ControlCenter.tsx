@@ -794,8 +794,7 @@ export default function P2ControlCenter() {
               setShowBOMWizard(true);
             }} 
             onViewPO={(poId) => {
-              setSelectedPOForBOM(poId);
-              setActiveTab('schedule');
+              navigate(`/p2/purchase-orders/${poId}/preview`);
             }}
             selectedPOIds={selectedPOIds}
           />

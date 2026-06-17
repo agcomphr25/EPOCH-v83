@@ -797,10 +797,73 @@ function ensureP2BillingAllocationSchema(): Promise<void> {
         ADD COLUMN IF NOT EXISTS changed_by text,
         ADD COLUMN IF NOT EXISTS reason text,
         ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
-    `).then(() => undefined);
+    `).then(() => undefined).catch((err) => {
+      p2BillingAllocationSchemaReady = null;
+      throw err;
+    });
   }
 
   return p2BillingAllocationSchemaReady;
+}
+
+let p2LotNumberShipmentSchemaReady: Promise<void> | null = null;
+
+function ensureP2LotNumberShipmentSchema(): Promise<void> {
+  if (!p2LotNumberShipmentSchemaReady) {
+    p2LotNumberShipmentSchemaReady = pool.query(`
+      ALTER TABLE p2_lot_numbers
+        ADD COLUMN IF NOT EXISTS lot_type text DEFAULT 'PRODUCTION',
+        ADD COLUMN IF NOT EXISTS part_number text,
+        ADD COLUMN IF NOT EXISTS part_name text,
+        ADD COLUMN IF NOT EXISTS customer_id text,
+        ADD COLUMN IF NOT EXISTS customer_name text,
+        ADD COLUMN IF NOT EXISTS po_number text,
+        ADD COLUMN IF NOT EXISTS po_id integer REFERENCES p2_purchase_orders(id),
+        ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS quantity integer DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS serialized_item_ids jsonb,
+        ADD COLUMN IF NOT EXISTS barcodes jsonb,
+        ADD COLUMN IF NOT EXISTS manufacturing_date timestamp,
+        ADD COLUMN IF NOT EXISTS expiration_date timestamp,
+        ADD COLUMN IF NOT EXISTS status text DEFAULT 'OPEN',
+        ADD COLUMN IF NOT EXISTS closed_at timestamp,
+        ADD COLUMN IF NOT EXISTS closed_by text,
+        ADD COLUMN IF NOT EXISTS shipped_at timestamp,
+        ADD COLUMN IF NOT EXISTS shipped_by text,
+        ADD COLUMN IF NOT EXISTS packing_slip_id uuid,
+        ADD COLUMN IF NOT EXISTS certificate_id uuid,
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS tracking_number text,
+        ADD COLUMN IF NOT EXISTS carrier text,
+        ADD COLUMN IF NOT EXISTS bill_of_lading_url text,
+        ADD COLUMN IF NOT EXISTS lot_validation_report_url text,
+        ADD COLUMN IF NOT EXISTS packing_slip_upload_url text,
+        ADD COLUMN IF NOT EXISTS certificate_upload_url text,
+        ADD COLUMN IF NOT EXISTS created_by text,
+        ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();
+
+      ALTER TABLE p2_lot_numbers
+        ALTER COLUMN lot_type SET DEFAULT 'PRODUCTION',
+        ALTER COLUMN quantity SET DEFAULT 1,
+        ALTER COLUMN status SET DEFAULT 'OPEN',
+        ALTER COLUMN created_at SET DEFAULT now(),
+        ALTER COLUMN updated_at SET DEFAULT now();
+
+      ALTER TABLE p2_lot_numbers
+        ALTER COLUMN serialized_item_ids TYPE jsonb
+        USING COALESCE(serialized_item_ids::jsonb, '[]'::jsonb);
+
+      ALTER TABLE p2_lot_numbers
+        ALTER COLUMN barcodes TYPE jsonb
+        USING COALESCE(barcodes::jsonb, '[]'::jsonb);
+    `).then(() => undefined).catch((err) => {
+      p2LotNumberShipmentSchemaReady = null;
+      throw err;
+    });
+  }
+
+  return p2LotNumberShipmentSchemaReady;
 }
 
 router.get('/billing-allocations', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
@@ -1105,6 +1168,7 @@ async function assignSerialsToPoItemBuckets(
 
 router.post('/lots', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
+    await ensureP2LotNumberShipmentSchema();
     await ensureP2BillingAllocationSchema();
     const input = createLotSchema.parse(req.body);
     const actor = (req as any).user?.username || input.createdBy || 'shipping';
@@ -1270,7 +1334,7 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
     }>(
       `SELECT id, lot_number, serialized_item_ids, packing_slip_id
          FROM p2_lot_numbers
-        WHERE serialized_item_ids ?| $1::text[]
+        WHERE COALESCE(serialized_item_ids, '[]'::jsonb) ?| $1::text[]
           AND COALESCE(status, '') <> 'VOID'`,
       [input.serialIds]
     );

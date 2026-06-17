@@ -604,6 +604,15 @@ const createLotSchema = z.object({
     serializedItemId: z.string().uuid(),
     allocationId: z.string().uuid(),
   })).optional(),
+  billingBucketOverrides: z.array(z.object({
+    poItemId: z.coerce.number().int().positive(),
+    bucketLabel: z.string().trim().min(1, 'Bucket label is required'),
+    description: z.string().trim().optional(),
+    customerPoLine: z.string().trim().optional(),
+    quantityAuthorized: z.coerce.number().int().positive().optional(),
+    unitPrice: z.coerce.number().min(0).optional(),
+    serialIds: z.array(z.string().uuid()).optional(),
+  })).optional(),
 });
 
 const voidShipmentSchema = z.object({
@@ -888,6 +897,127 @@ router.post('/billing-allocations', authenticateToken, requirePermission('shippi
   }
 });
 
+type BillingBucketOverride = NonNullable<z.infer<typeof createLotSchema>['billingBucketOverrides']>[number];
+
+async function assignSerialsToPoItemBuckets(
+  serials: any[],
+  actor: string,
+  bucketOverrides: BillingBucketOverride[] = [],
+): Promise<void> {
+  const serialsByPoItemId = new Map<number, any[]>();
+  for (const serial of serials) {
+    const poItemId = Number(serial.poItemId);
+    if (!Number.isInteger(poItemId) || poItemId <= 0) {
+      throw new Error(`Serial ${serial.serialNumber} is missing a PO item line`);
+    }
+    serialsByPoItemId.set(poItemId, [...(serialsByPoItemId.get(poItemId) ?? []), serial]);
+  }
+
+  const overrideByPoItemId = new Map(bucketOverrides.map((override) => [override.poItemId, override]));
+
+  for (const [poItemId, group] of serialsByPoItemId.entries()) {
+    const first = group[0];
+    const override = overrideByPoItemId.get(poItemId);
+    const poItemResult = await pool.query<{
+      id: number;
+      po_id: number;
+      part_number: string;
+      part_name: string | null;
+      quantity: number | null;
+      unit_price: string | number | null;
+    }>(
+      `SELECT id, po_id, part_number, part_name, quantity, unit_price
+         FROM p2_purchase_order_items
+        WHERE id = $1 AND po_id = $2`,
+      [poItemId, first.poId],
+    );
+    const poItem = poItemResult.rows[0];
+    if (!poItem) throw new Error(`PO item ${poItemId} was not found for PO ${first.poNumber}`);
+
+    const authorizedQuantity = Math.max(
+      Number(override?.quantityAuthorized) || 0,
+      Number(poItem.quantity) || 0,
+      group.length,
+    );
+    const unitPrice = Number(override?.unitPrice ?? poItem.unit_price) || 0;
+    const bucketLabel = override?.bucketLabel || `PO Item #${poItem.id}`;
+    const description = override?.description || poItem.part_name || first.partName || null;
+    const customerPoLine = override?.customerPoLine || String(poItem.id);
+
+    const existingAllocationResult = await pool.query<{ id: string }>(
+      `SELECT id
+         FROM p2_billing_allocations
+        WHERE po_id = $1
+          AND po_item_id = $2
+          AND bucket_label = $3
+          AND active = true
+        ORDER BY created_at
+        LIMIT 1`,
+      [poItem.po_id, poItem.id, bucketLabel],
+    );
+
+    let allocationId = existingAllocationResult.rows[0]?.id;
+    if (allocationId) {
+      await pool.query(
+        `UPDATE p2_billing_allocations
+            SET bucket_label = $1,
+                description = COALESCE(description, $2),
+                customer_po_line = COALESCE(customer_po_line, $6),
+                quantity_authorized = GREATEST(quantity_authorized, $3),
+                unit_price = $4,
+                updated_at = now()
+          WHERE id = $5`,
+        [bucketLabel, description, authorizedQuantity, unitPrice.toFixed(2), allocationId, customerPoLine],
+      );
+    } else {
+      const createdAllocationResult = await pool.query<{ id: string }>(
+        `INSERT INTO p2_billing_allocations (
+           po_id, po_item_id, po_number, part_number, bucket_label, description,
+           customer_po_line, quantity_authorized, unit_price, notes, created_by
+         )
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         RETURNING id`,
+        [
+          poItem.po_id,
+          poItem.id,
+          first.poNumber,
+          poItem.part_number || first.partNumber,
+          bucketLabel,
+          description,
+          customerPoLine,
+          authorizedQuantity,
+          unitPrice.toFixed(2),
+          override
+            ? 'Pending revised PO bucket created during shipment creation'
+            : 'Auto-created from PO item line during shipment creation',
+          actor,
+        ],
+      );
+      allocationId = createdAllocationResult.rows[0].id;
+    }
+
+    for (const serial of group) {
+      await pool.query(
+        `INSERT INTO p2_serial_billing_assignments (
+           allocation_id, serialized_item_id, po_id, po_item_id, assigned_by, assignment_source
+         )
+         VALUES ($1,$2,$3,$4,$5,'po_item_shipment_create')
+         ON CONFLICT (serialized_item_id)
+         DO UPDATE SET
+           allocation_id = EXCLUDED.allocation_id,
+           po_id = EXCLUDED.po_id,
+           po_item_id = EXCLUDED.po_item_id,
+           assigned_at = now(),
+           assigned_by = EXCLUDED.assigned_by,
+           assignment_source = EXCLUDED.assignment_source,
+           updated_at = now()
+         WHERE p2_serial_billing_assignments.locked_at IS NULL`,
+        [allocationId, serial.id, serial.poId, serial.poItemId, actor],
+      );
+    }
+  }
+}
+
 router.post('/lots', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     await ensureP2BillingAllocationSchema();
@@ -925,6 +1055,10 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
     const incomingAssignmentBySerialId = new Map(
       incomingAssignments.map((assignment) => [assignment.serializedItemId, assignment.allocationId]),
     );
+    if (incomingAssignments.length === 0) {
+      await assignSerialsToPoItemBuckets(serials, actor, input.billingBucketOverrides ?? []);
+    }
+
     if (incomingAssignments.length > 0) {
       const missingIncoming = input.serialIds.filter((serialId) => !incomingAssignmentBySerialId.has(serialId));
       const outsideShipment = incomingAssignments.filter((assignment) => !selectedSerialIdSet.has(assignment.serializedItemId));

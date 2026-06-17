@@ -1919,7 +1919,6 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
         vendorGroups[key].totalEstimatedCost += request.estimatedCost || 0;
         continue;
       }
-      
       if (vendorId && vendorMap.has(vendorId)) {
         const vendor = vendorMap.get(vendorId)!;
         const key = `vendor-${vendorId}`;

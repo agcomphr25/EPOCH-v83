@@ -53,6 +53,16 @@ interface BOMItem {
   firstDepartment: string;
 }
 
+interface InventoryDepartment {
+  id: number;
+  name: string;
+}
+
+interface DepartmentOption {
+  value: string;
+  label: string;
+}
+
 interface PartNeedingBOM {
   id: string;
   partNumber: string;
@@ -62,17 +72,43 @@ interface PartNeedingBOM {
   bomItems: BOMItem[];
 }
 
-const DEPARTMENT_OPTIONS = [
-  { value: 'cutting_table', label: 'Cutting Table' },
-  { value: 'core_department', label: 'Core Department' },
-  { value: 'layup', label: 'Layup' },
-  { value: 'assembly', label: 'Assembly' },
-  { value: 'disassembly', label: 'Disassembly' },
-  { value: 'cnc', label: 'CNC' },
-  { value: 'finish', label: 'Finish' },
-  { value: 'paint', label: 'Paint' },
-  { value: 'final_qc', label: 'Final QC' },
+const DEFAULT_DEPARTMENT = 'Layup';
+const FALLBACK_DEPARTMENT_OPTIONS: DepartmentOption[] = [
+  { value: 'Production Queue', label: 'Production Queue' },
+  { value: 'Layup', label: 'Layup' },
+  { value: 'Barcode', label: 'Barcode' },
+  { value: 'CNC', label: 'CNC' },
+  { value: 'Gunsmith', label: 'Gunsmith' },
+  { value: 'Paint', label: 'Paint' },
+  { value: 'Finish', label: 'Finish' },
+  { value: 'Finish QC', label: 'Finish QC' },
+  { value: 'Shipping QC', label: 'Shipping QC' },
+  { value: 'Shipping', label: 'Shipping' },
+  { value: 'Cutting Table', label: 'Cutting Table' },
+  { value: 'Office', label: 'Office' },
+  { value: 'Assembly', label: 'Assembly' },
 ];
+const LEGACY_DEPARTMENT_LABELS: Record<string, string> = {
+  cutting_table: 'Cutting Table',
+  core_department: 'Core Department',
+  layup: 'Layup',
+  assembly: 'Assembly',
+  disassembly: 'Disassembly',
+  cnc: 'CNC',
+  finish: 'Finish',
+  paint: 'Paint',
+  final_qc: 'Final QC',
+};
+
+function getDepartmentLabel(value: string | undefined, options: DepartmentOption[]) {
+  if (!value) return '';
+  return options.find((department) => department.value === value)?.label ?? LEGACY_DEPARTMENT_LABELS[value] ?? value;
+}
+
+function departmentOptionsWithCurrent(options: DepartmentOption[], value: string | undefined) {
+  if (!value || options.some((department) => department.value === value)) return options;
+  return [...options, { value, label: getDepartmentLabel(value, options) }];
+}
 
 export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardProps) {
   const [currentPartIndex, setCurrentPartIndex] = useState(0);
@@ -93,6 +129,18 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
   const { data: inventoryItems = [] } = useQuery<any[]>({
     queryKey: ['/api/inventory/items'],
   });
+
+  const { data: inventoryDepartments = [] } = useQuery<InventoryDepartment[]>({
+    queryKey: ['/api/inventory/departments'],
+  });
+
+  const departmentOptions = useMemo<DepartmentOption[]>(() => {
+    if (inventoryDepartments.length === 0) return FALLBACK_DEPARTMENT_OPTIONS;
+    return inventoryDepartments.map((department) => ({
+      value: department.name,
+      label: department.name,
+    }));
+  }, [inventoryDepartments]);
 
   const saveBOMMutation = useMutation({
     mutationFn: async (data: { partId: string; bomItems: BOMItem[]; poItemId?: string; partNumber?: string }) => {
@@ -140,7 +188,7 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
         description: item.notes || item.description || '',
         quantity: item.quantity || 1,
         isManufactured: item.isManufactured === true || item.itemType === 'manufactured',
-        firstDepartment: item.firstDept || item.firstDepartment || 'layup',
+        firstDepartment: item.firstDept || item.firstDepartment || DEFAULT_DEPARTMENT,
       }));
     } catch (error) {
       console.error('Error fetching existing BOM items:', error);
@@ -210,7 +258,7 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
       description: newItem.description || '',
       quantity: newItem.quantity || 1,
       isManufactured: newItem.isManufactured || false,
-      firstDepartment: newItem.firstDepartment || 'layup',
+      firstDepartment: newItem.firstDepartment || DEFAULT_DEPARTMENT,
     };
 
     setCurrentBOMItems([...currentBOMItems, item]);
@@ -522,7 +570,7 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
                   <SelectValue placeholder="Dept..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {DEPARTMENT_OPTIONS.map((dept) => (
+                  {departmentOptionsWithCurrent(departmentOptions, newItem.firstDepartment).map((dept) => (
                     <SelectItem key={dept.value} value={dept.value}>
                       {dept.label}
                     </SelectItem>
@@ -578,7 +626,7 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
                   <TableCell className="text-center">{item.quantity}</TableCell>
                   <TableCell>
                     <Badge variant="outline">
-                      {DEPARTMENT_OPTIONS.find(d => d.value === item.firstDepartment)?.label || item.firstDepartment}
+                      {getDepartmentLabel(item.firstDepartment, departmentOptions)}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -660,7 +708,7 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {DEPARTMENT_OPTIONS.map((dept) => (
+                      {departmentOptionsWithCurrent(departmentOptions, editingItem.firstDepartment).map((dept) => (
                         <SelectItem key={dept.value} value={dept.value}>
                           {dept.label}
                         </SelectItem>

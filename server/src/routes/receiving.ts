@@ -1,6 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db';
-import { sql, eq, desc, and } from 'drizzle-orm';
+import { sql, eq, desc, and, isNull } from 'drizzle-orm';
+import fs from 'fs/promises';
+import path from 'path';
+import { randomUUID } from 'crypto';
 import {
   receipts,
   receiptLines,
@@ -18,6 +21,7 @@ import {
   materialLotTransactions,
   inventoryTransactionLedger,
   mediaLibrary,
+  mediaFolders,
   vendorPOs,
   vendorPOItems,
   inventoryItems,
@@ -37,7 +41,7 @@ import { z } from 'zod';
 import multer from 'multer';
 import { generateBarcodeImage, generateReceivingUnitBarcodeValue } from '../utils/barcodeGenerator';
 import { requireRole } from '../../middleware/auth';
-import { getFileStorageProvider, getStorageErrorResponse } from '../services/fileStorageProvider';
+import { getStorageErrorResponse } from '../services/fileStorageProvider';
 import { createInventoryEvent } from '../services/inventoryEventService';
 import { recordInventoryLedgerEntry } from '../services/inventoryTransactionLedgerService';
 import { ensureInventoryItemForReceipt } from '../services/ensureInventoryItemForReceipt';
@@ -67,6 +71,48 @@ function uploadReceiptDocument(req: Request, res: Response, next: NextFunction) 
 // All authenticated employees (ADMIN, EMPLOYEE, OWNER) may perform receiving operations.
 // Applied to all mutating endpoints at the route level for defence-in-depth beyond global auth.
 const requireReceivingAccess = requireRole('ADMIN', 'EMPLOYEE', 'OWNER');
+
+const RECEIVING_MEDIA_FOLDER_NAME = 'Receiving';
+const RECEIVING_MEDIA_STORAGE_DIR = path.join('uploads', 'media-library', 'receiving');
+
+function sanitizeUploadFilename(filename: string): string {
+  const ext = path.extname(filename);
+  const baseName = path.basename(filename, ext).replace(/[^a-zA-Z0-9.-]/g, '_') || 'document';
+  return `${Date.now()}-${randomUUID()}-${baseName}${ext}`;
+}
+
+async function saveReceivingMediaFile(file: Express.Multer.File): Promise<string> {
+  const storedFilename = sanitizeUploadFilename(file.originalname);
+  const storagePath = path.posix.join('uploads', 'media-library', 'receiving', storedFilename);
+  const absoluteDir = path.join(process.cwd(), RECEIVING_MEDIA_STORAGE_DIR);
+  await fs.mkdir(absoluteDir, { recursive: true });
+  await fs.writeFile(path.join(absoluteDir, storedFilename), file.buffer);
+  return storagePath;
+}
+
+async function getOrCreateReceivingMediaFolder(user: AuthUser, displayName: string): Promise<string | null> {
+  try {
+    const [existing] = await db.select({ id: mediaFolders.id })
+      .from(mediaFolders)
+      .where(and(eq(mediaFolders.name, RECEIVING_MEDIA_FOLDER_NAME), isNull(mediaFolders.parentId)))
+      .limit(1);
+
+    if (existing?.id) return existing.id;
+
+    const [created] = await db.insert(mediaFolders).values({
+      name: RECEIVING_MEDIA_FOLDER_NAME,
+      parentId: null,
+      visibleToRoles: null,
+      createdById: user?.employeeId ?? null,
+      createdByName: displayName,
+    }).returning({ id: mediaFolders.id });
+
+    return created?.id ?? null;
+  } catch (err: any) {
+    console.warn('receiving media folder resolve failed:', err.message);
+    return null;
+  }
+}
 
 let receivingProjectMaterialSchemaReady: Promise<void> | null = null;
 
@@ -1413,14 +1459,8 @@ router.post('/:id/documents', requireReceivingAccess, uploadReceiptDocument, asy
       mimeType = req.file.mimetype;
       fileSize = req.file.size;
 
-      const storageProvider = getFileStorageProvider();
-      storagePath = await storageProvider.uploadBuffer({
-        buffer: req.file.buffer,
-        fileName: filename,
-        contentType: mimeType,
-        scope: 'receiving-documents',
-        entityId: String(receiptId),
-      });
+      storagePath = await saveReceivingMediaFile(req.file);
+      const receivingFolderId = await getOrCreateReceivingMediaFolder(user, displayName);
 
       // Create media_library record for cross-system traceability
       const mediaValues: InsertMediaLibrary = {
@@ -1428,6 +1468,7 @@ router.post('/:id/documents', requireReceivingAccess, uploadReceiptDocument, asy
         storagePath: storagePath ?? filename,
         mimeType,
         fileSize: fileSize ?? undefined,
+        folderId: receivingFolderId,
         capturedById: user?.employeeId ?? null,
         capturedByName: displayName,
         category: docType ?? 'other',

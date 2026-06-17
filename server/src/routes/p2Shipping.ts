@@ -689,9 +689,15 @@ function ensureP2BillingAllocationSchema(): Promise<void> {
       );
 
       ALTER TABLE p2_billing_allocations
+        ADD COLUMN IF NOT EXISTS po_id integer,
         ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS po_number text,
+        ADD COLUMN IF NOT EXISTS part_number text,
+        ADD COLUMN IF NOT EXISTS bucket_label text,
         ADD COLUMN IF NOT EXISTS description text,
         ADD COLUMN IF NOT EXISTS customer_po_line text,
+        ADD COLUMN IF NOT EXISTS quantity_authorized integer,
+        ADD COLUMN IF NOT EXISTS unit_price numeric(12,2),
         ADD COLUMN IF NOT EXISTS notes text,
         ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true,
         ADD COLUMN IF NOT EXISTS created_by text,
@@ -700,12 +706,22 @@ function ensureP2BillingAllocationSchema(): Promise<void> {
 
       ALTER TABLE p2_billing_allocations
         ALTER COLUMN active SET DEFAULT true,
+        ALTER COLUMN quantity_authorized SET DEFAULT 0,
+        ALTER COLUMN unit_price SET DEFAULT 0,
         ALTER COLUMN created_at SET DEFAULT now(),
         ALTER COLUMN updated_at SET DEFAULT now();
 
       UPDATE p2_billing_allocations
          SET active = true
        WHERE active IS NULL;
+
+      UPDATE p2_billing_allocations
+         SET quantity_authorized = 0
+       WHERE quantity_authorized IS NULL;
+
+      UPDATE p2_billing_allocations
+         SET unit_price = 0
+       WHERE unit_price IS NULL;
 
       CREATE INDEX IF NOT EXISTS p2_billing_allocations_po_idx
         ON p2_billing_allocations(po_id)
@@ -732,6 +748,9 @@ function ensureP2BillingAllocationSchema(): Promise<void> {
       );
 
       ALTER TABLE p2_serial_billing_assignments
+        ADD COLUMN IF NOT EXISTS allocation_id uuid,
+        ADD COLUMN IF NOT EXISTS serialized_item_id uuid,
+        ADD COLUMN IF NOT EXISTS po_id integer,
         ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
         ADD COLUMN IF NOT EXISTS lot_id uuid REFERENCES p2_lot_numbers(id),
         ADD COLUMN IF NOT EXISTS packing_slip_id uuid REFERENCES p2_packing_slips(id),

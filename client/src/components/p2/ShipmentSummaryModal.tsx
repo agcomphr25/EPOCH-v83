@@ -51,10 +51,11 @@ type BucketOverrideDraft = {
 
 type PoItem = {
   id: number;
-  part_number: string;
-  part_name: string | null;
+  poId?: number;
+  partNumber: string;
+  partName: string | null;
   quantity: number | null;
-  unit_price: string | number | null;
+  unitPrice: string | number | null;
 };
 
 interface ShipmentSummaryModalProps {
@@ -78,9 +79,9 @@ export default function ShipmentSummaryModal({
   const [selectedPoItemId, setSelectedPoItemId] = useState<number | null>(null);
   const [bucketOverrides, setBucketOverrides] = useState<Record<number, BucketOverrideDraft>>({});
 
-  const { data: allocationData } = useQuery<{ poItems: PoItem[] }>({
-    queryKey: ['/api/p2/billing-allocations', poId],
-    queryFn: async () => apiRequest(`/api/p2/billing-allocations?poId=${encodeURIComponent(String(poId))}`),
+  const { data: poItems = [] } = useQuery<PoItem[]>({
+    queryKey: ['/api/p2-purchase-order-items', poId],
+    queryFn: async () => apiRequest(`/api/p2-purchase-order-items/${encodeURIComponent(String(poId))}`),
     enabled: !!poId,
   });
 
@@ -104,16 +105,15 @@ export default function ShipmentSummaryModal({
 
   const poItemOptions = useMemo(() => {
     const groupByPoItemId = new Map(poItemGroups.map((group) => [group.poItemId, group]));
-    const fetchedItems = allocationData?.poItems ?? [];
-    const fetchedOptions = fetchedItems.map((item) => {
+    const fetchedOptions = poItems.map((item) => {
       const group = groupByPoItemId.get(item.id);
       return {
         poItemId: item.id,
-        partNumber: item.part_number,
-        itemName: item.part_number || `PO Item #${item.id}`,
-        partName: item.part_name ?? group?.partName ?? '',
+        partNumber: item.partNumber,
+        itemName: item.partNumber || `PO Item #${item.id}`,
+        partName: item.partName ?? group?.partName ?? '',
         quantity: Number(item.quantity) || group?.units.length || 0,
-        unitPrice: Number(item.unit_price) || 0,
+        unitPrice: Number(item.unitPrice) || 0,
         units: group?.units ?? [],
       };
     });
@@ -132,7 +132,7 @@ export default function ShipmentSummaryModal({
       }));
 
     return [...fetchedOptions, ...serialOnlyOptions].sort((a, b) => a.poItemId - b.poItemId);
-  }, [allocationData?.poItems, poItemGroups]);
+  }, [poItems, poItemGroups]);
 
   const effectiveSelectedPoItemId = selectedPoItemId ?? poItemOptions[0]?.poItemId ?? poItemGroups[0]?.poItemId ?? null;
   const selectedPoItemOption =

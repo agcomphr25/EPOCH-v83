@@ -2931,6 +2931,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             quantity: item.quantity,
             dueDate: item.dueDate || null,
             unitPrice: item.unitPrice || 0,
+            specifications: item.description || item.specifications || null,
+            notes: item.notes || null,
           });
         }
       }
@@ -3047,6 +3049,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             quantity: Number(item.quantity) || 1,
             dueDate: item.dueDate || null,
             unitPrice: Number(item.unitPrice) || 0,
+            specifications: item.description || item.specifications || null,
+            notes: item.notes || null,
           };
 
           if (itemId && existingById.has(itemId)) {

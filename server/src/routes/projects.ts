@@ -809,7 +809,15 @@ router.get('/:id/po-link-options', async (req, res) => {
     }
 
     const poItems = await pool.query(
-      `SELECT id, po_id AS "poId", part_number AS "partNumber", part_name AS "partName", quantity, unit_price AS "unitPrice"
+      `SELECT id,
+              po_id AS "poId",
+              part_number AS "partNumber",
+              part_name AS "partName",
+              COALESCE(NULLIF(specifications, ''), NULLIF(notes, ''), part_name) AS description,
+              quantity,
+              unit_price AS "unitPrice",
+              specifications,
+              notes
          FROM p2_purchase_order_items
         WHERE po_id = $1
         ORDER BY id`,

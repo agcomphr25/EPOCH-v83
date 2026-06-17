@@ -2757,14 +2757,25 @@ export default function ProjectDetailPage() {
                         <p className="text-sm text-muted-foreground truncate">{po.customerName}</p>
                         {po.projectName && <p className="text-xs text-muted-foreground truncate">{po.projectName}</p>}
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={po.status === 'OPEN' ? 'secondary' : 'default'}>{po.status}</Badge>
-                        {project.poId === po.id && <Badge variant="outline">Primary</Badge>}
-                        {po.expectedDelivery && (
-                          <span className="text-xs text-muted-foreground">
-                            Due {format(new Date(po.expectedDelivery), 'MMM d, yyyy')}
-                          </span>
-                        )}
+                      <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={po.status === 'OPEN' ? 'secondary' : 'default'}>{po.status}</Badge>
+                          {project.poId === po.id && <Badge variant="outline">Primary</Badge>}
+                          {po.expectedDelivery && (
+                            <span className="text-xs text-muted-foreground">
+                              Due {format(new Date(po.expectedDelivery), 'MMM d, yyyy')}
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}&editPoId=${encodeURIComponent(String(po.id))}`)}
+                          data-testid={`button-view-project-po-${po.id}`}
+                        >
+                          <Eye className="h-4 w-4 mr-1.5" />
+                          View PO
+                        </Button>
                       </div>
                     </div>
                   ))

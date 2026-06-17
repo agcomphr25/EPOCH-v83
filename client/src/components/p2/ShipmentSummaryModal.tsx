@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Truck, Package, CalendarClock, Receipt, Plus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -23,6 +24,7 @@ type SerializedUnit = {
   poItemId: number;
   sequenceNumber: number;
   customerName: string;
+  sku?: string | null;
 };
 
 type BillingBucketOverride = {
@@ -60,6 +62,8 @@ export default function ShipmentSummaryModal({
 }: ShipmentSummaryModalProps) {
   const customer = serials[0]?.customerName ?? '-';
   const poNumber = serials[0]?.poNumber ?? '-';
+  const [bucketMode, setBucketMode] = useState<'combined' | 'split'>('combined');
+  const [selectedPoItemId, setSelectedPoItemId] = useState<number | null>(null);
   const [bucketOverrides, setBucketOverrides] = useState<Record<number, BucketOverrideDraft>>({});
 
   const poItemGroups = useMemo(() => {
@@ -74,10 +78,14 @@ export default function ShipmentSummaryModal({
         poItemId,
         units: units.sort((a, b) => a.sequenceNumber - b.sequenceNumber),
         partNumber: units[0]?.partNumber ?? '',
+        itemName: units.find((unit) => unit.sku)?.sku || units[0]?.partNumber || '',
         partName: units[0]?.partName ?? '',
       }))
       .sort((a, b) => a.poItemId - b.poItemId);
   }, [serials]);
+
+  const effectiveSelectedPoItemId = selectedPoItemId ?? poItemGroups[0]?.poItemId ?? null;
+  const selectedPoItemGroup = poItemGroups.find((group) => group.poItemId === effectiveSelectedPoItemId) ?? poItemGroups[0];
 
   const enabledBucketOverrides: BillingBucketOverride[] = poItemGroups.flatMap((group) => {
     const override = bucketOverrides[group.poItemId];
@@ -92,6 +100,18 @@ export default function ShipmentSummaryModal({
       serialIds: group.units.map((serial) => serial.id),
     }];
   });
+
+  const shipmentBucketOverrides: BillingBucketOverride[] =
+    bucketMode === 'combined' && selectedPoItemGroup
+      ? [{
+          poItemId: selectedPoItemGroup.poItemId,
+          bucketLabel: selectedPoItemGroup.itemName || `PO Item #${selectedPoItemGroup.poItemId}`,
+          description: selectedPoItemGroup.partName || undefined,
+          customerPoLine: String(selectedPoItemGroup.poItemId),
+          quantityAuthorized: serials.length,
+          serialIds: serials.map((serial) => serial.id),
+        }]
+      : enabledBucketOverrides;
 
   const toggleBucketOverride = (group: (typeof poItemGroups)[number]) => {
     setBucketOverrides((prev) => {
@@ -161,6 +181,82 @@ export default function ShipmentSummaryModal({
 
         <Separator />
 
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-muted-foreground">Bucket / CLIN Handling</div>
+          <RadioGroup
+            value={bucketMode}
+            onValueChange={(value) => setBucketMode(value as 'combined' | 'split')}
+            className="grid gap-2"
+          >
+            <Label
+              htmlFor="ship-bucket-combined"
+              className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40"
+            >
+              <RadioGroupItem id="ship-bucket-combined" value="combined" className="mt-0.5" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">Process all selected units under one bucket / CLIN</span>
+                <span className="block text-xs text-muted-foreground">
+                  Default. Select the PO item/SKU bucket below.
+                </span>
+              </span>
+            </Label>
+            {poItemGroups.length > 1 && (
+              <Label
+                htmlFor="ship-bucket-split"
+                className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40"
+              >
+                <RadioGroupItem id="ship-bucket-split" value="split" className="mt-0.5" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">Break out separately by PO item</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Creates separate bucket / CLIN assignments by PO item.
+                  </span>
+                </span>
+              </Label>
+            )}
+          </RadioGroup>
+        </div>
+
+        {bucketMode === 'combined' && (
+          <>
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground">PO Item Bucket / CLIN</div>
+              <RadioGroup
+                value={effectiveSelectedPoItemId ? String(effectiveSelectedPoItemId) : ''}
+                onValueChange={(value) => setSelectedPoItemId(Number(value))}
+                className="space-y-2"
+              >
+                {poItemGroups.map((group) => (
+                  <Label
+                    key={group.poItemId}
+                    htmlFor={`ship-po-item-${group.poItemId}`}
+                    className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40"
+                  >
+                    <RadioGroupItem
+                      id={`ship-po-item-${group.poItemId}`}
+                      value={String(group.poItemId)}
+                      className="mt-0.5"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-semibold">{group.itemName || `PO Item #${group.poItemId}`}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {group.units.length} unit{group.units.length !== 1 ? 's' : ''}
+                        </Badge>
+                      </span>
+                      <span className="block text-xs text-muted-foreground truncate">
+                        PO item {group.poItemId} - {group.partName}
+                      </span>
+                    </span>
+                  </Label>
+                ))}
+              </RadioGroup>
+            </div>
+
+            <Separator />
+          </>
+        )}
+
         <div className="overflow-y-auto flex-1 space-y-3 pr-1">
           {poItemGroups.map((group) => (
             <div key={group.poItemId} className="border rounded-md p-3 space-y-3">
@@ -168,8 +264,8 @@ export default function ShipmentSummaryModal({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <Receipt className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span className="text-xs text-muted-foreground">Bucket</span>
-                    <span className="font-mono text-sm font-semibold">PO Item #{group.poItemId}</span>
+                    <span className="text-xs text-muted-foreground">Bucket / CLIN</span>
+                    <span className="font-mono text-sm font-semibold">{group.itemName || `PO Item #${group.poItemId}`}</span>
                     <Badge variant="secondary" className="text-xs">
                       {group.units.length} unit{group.units.length !== 1 ? 's' : ''}
                     </Badge>
@@ -180,19 +276,21 @@ export default function ShipmentSummaryModal({
                     <span className="truncate">{group.partName}</span>
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => toggleBucketOverride(group)}
-                >
-                  {bucketOverrides[group.poItemId]?.enabled ? (
-                    <><X className="h-3.5 w-3.5 mr-1" />Use PO Line</>
-                  ) : (
-                    <><Plus className="h-3.5 w-3.5 mr-1" />Add Bucket</>
-                  )}
-                </Button>
+                {bucketMode === 'split' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => toggleBucketOverride(group)}
+                  >
+                    {bucketOverrides[group.poItemId]?.enabled ? (
+                      <><X className="h-3.5 w-3.5 mr-1" />Use PO Line</>
+                    ) : (
+                      <><Plus className="h-3.5 w-3.5 mr-1" />Add Bucket</>
+                    )}
+                  </Button>
+                )}
               </div>
 
               {bucketOverrides[group.poItemId]?.enabled && (
@@ -267,7 +365,7 @@ export default function ShipmentSummaryModal({
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
           <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-          Each unit will be assigned to its PO item line unless a pending revised-PO bucket is added.
+          Default shipments use one bucket / CLIN; choose breakout to assign separate PO item buckets.
         </div>
 
         <DialogFooter className="gap-2">
@@ -277,7 +375,7 @@ export default function ShipmentSummaryModal({
           <Button
             className="bg-blue-600 hover:bg-blue-700 text-white"
             disabled={serials.length === 0}
-            onClick={() => onConfirm([], enabledBucketOverrides)}
+            onClick={() => onConfirm([], shipmentBucketOverrides)}
           >
             <Truck className="h-4 w-4 mr-2" />
             Confirm Shipment ({serials.length} unit{serials.length !== 1 ? 's' : ''})

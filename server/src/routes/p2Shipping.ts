@@ -961,8 +961,23 @@ async function assignSerialsToPoItemBuckets(
   actor: string,
   bucketOverrides: BillingBucketOverride[] = [],
 ): Promise<void> {
+  const serialById = new Map(serials.map((serial) => [serial.id, serial]));
+  const assignedByOverride = new Set<string>();
+  const bucketGroups: { poItemId: number; group: any[]; override?: BillingBucketOverride }[] = [];
+
+  for (const override of bucketOverrides) {
+    const overrideSerialIds = override.serialIds?.filter((serialId) => serialById.has(serialId)) ?? [];
+    if (overrideSerialIds.length === 0) continue;
+
+    const group = overrideSerialIds.map((serialId) => serialById.get(serialId)!);
+    bucketGroups.push({ poItemId: override.poItemId, group, override });
+    for (const serialId of overrideSerialIds) assignedByOverride.add(serialId);
+  }
+
   const serialsByPoItemId = new Map<number, any[]>();
   for (const serial of serials) {
+    if (assignedByOverride.has(serial.id)) continue;
+
     const poItemId = Number(serial.poItemId);
     if (!Number.isInteger(poItemId) || poItemId <= 0) {
       throw new Error(`Serial ${serial.serialNumber} is missing a PO item line`);
@@ -973,8 +988,11 @@ async function assignSerialsToPoItemBuckets(
   const overrideByPoItemId = new Map(bucketOverrides.map((override) => [override.poItemId, override]));
 
   for (const [poItemId, group] of serialsByPoItemId.entries()) {
+    bucketGroups.push({ poItemId, group, override: overrideByPoItemId.get(poItemId) });
+  }
+
+  for (const { poItemId, group, override } of bucketGroups) {
     const first = group[0];
-    const override = overrideByPoItemId.get(poItemId);
     const poItemResult = await pool.query<{
       id: number;
       po_id: number;
@@ -1058,7 +1076,7 @@ async function assignSerialsToPoItemBuckets(
         allocationId,
         serializedItemId: serial.id,
         poId: serial.poId,
-        poItemId: serial.poItemId,
+        poItemId: poItem.id,
         actor,
         assignmentSource: 'po_item_shipment_create',
       });
@@ -1265,7 +1283,17 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
 
     const first = serials[0];
     const poItemIds = Array.from(new Set(serials.map((serial) => serial.poItemId)));
-    const lotPoItemId = poItemIds.length === 1 ? poItemIds[0] : null;
+    const fullShipmentOverride = (input.billingBucketOverrides ?? []).find((override) => {
+      const overrideSerialIds = new Set(override.serialIds ?? []);
+      return (
+        overrideSerialIds.size === input.serialIds.length &&
+        input.serialIds.every((serialId) => overrideSerialIds.has(serialId))
+      );
+    });
+    const lotPoItemId = fullShipmentOverride?.poItemId ?? (poItemIds.length === 1 ? poItemIds[0] : null);
+    const lotBucketSerial = lotPoItemId
+      ? serials.find((serial) => serial.poItemId === lotPoItemId) ?? first
+      : first;
     const lotNumber = await generateSequentialId('LOT', 'p2_lot_numbers', 'lot_number');
 
     const manufacturingDate =
@@ -1277,8 +1305,8 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       .values({
         lotNumber,
         lotType: 'SHIPPING',
-        partNumber: first.partNumber,
-        partName: first.partName,
+        partNumber: lotBucketSerial.partNumber,
+        partName: lotBucketSerial.partName,
         customerId: first.customerId,
         customerName: first.customerName,
         poNumber: first.poNumber, // kept for display/legacy
@@ -1459,6 +1487,7 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       ? await pool.query<{
           serialized_item_id: string;
           allocation_id: string;
+          po_item_id: number | null;
           bucket_label: string;
           customer_po_line: string | null;
           unit_price: string;
@@ -1466,6 +1495,7 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
           SELECT
             sba.serialized_item_id,
             sba.allocation_id,
+            a.po_item_id,
             a.bucket_label,
             a.customer_po_line,
             a.unit_price
@@ -1479,10 +1509,7 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
     const byPart: Record<string, typeof serials> = {};
     for (const s of serials) {
       const assignment = assignmentBySerialId.get(s.id);
-      const key = [
-        s.poItemId ? String(s.poItemId) : s.partNumber,
-        assignment?.allocation_id || 'unassigned',
-      ].join(':');
+      const key = assignment?.allocation_id || `po-item:${s.poItemId || s.partNumber}`;
       if (!byPart[key]) byPart[key] = [];
       byPart[key].push(s);
     }
@@ -1492,7 +1519,7 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       const firstAssignment = assignmentBySerialId.get(group[0].id);
 
       return {
-        poItemId: group[0].poItemId,
+        poItemId: firstAssignment?.po_item_id || group[0].poItemId,
         billingAllocationId: firstAssignment?.allocation_id || null,
         billingBucketLabel: firstAssignment?.bucket_label || null,
         customerPoLine: firstAssignment?.customer_po_line || null,

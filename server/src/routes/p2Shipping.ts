@@ -899,6 +899,63 @@ router.post('/billing-allocations', authenticateToken, requirePermission('shippi
 
 type BillingBucketOverride = NonNullable<z.infer<typeof createLotSchema>['billingBucketOverrides']>[number];
 
+async function assignSerialBillingBucket(params: {
+  allocationId: string;
+  serializedItemId: string;
+  poId: number;
+  poItemId: number | null;
+  actor: string;
+  assignmentSource: string;
+}): Promise<void> {
+  const updated = await pool.query(
+    `UPDATE p2_serial_billing_assignments
+        SET allocation_id = $1,
+            po_id = $3,
+            po_item_id = $4,
+            assigned_at = now(),
+            assigned_by = $5,
+            assignment_source = $6,
+            updated_at = now()
+      WHERE serialized_item_id = $2
+        AND locked_at IS NULL
+      RETURNING id`,
+    [
+      params.allocationId,
+      params.serializedItemId,
+      params.poId,
+      params.poItemId,
+      params.actor,
+      params.assignmentSource,
+    ],
+  );
+
+  if (updated.rowCount > 0) return;
+
+  const existing = await pool.query<{ id: string }>(
+    `SELECT id
+       FROM p2_serial_billing_assignments
+      WHERE serialized_item_id = $1
+      LIMIT 1`,
+    [params.serializedItemId],
+  );
+  if (existing.rows.length > 0) return;
+
+  await pool.query(
+    `INSERT INTO p2_serial_billing_assignments (
+       allocation_id, serialized_item_id, po_id, po_item_id, assigned_by, assignment_source
+     )
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [
+      params.allocationId,
+      params.serializedItemId,
+      params.poId,
+      params.poItemId,
+      params.actor,
+      params.assignmentSource,
+    ],
+  );
+}
+
 async function assignSerialsToPoItemBuckets(
   serials: any[],
   actor: string,
@@ -997,23 +1054,14 @@ async function assignSerialsToPoItemBuckets(
     }
 
     for (const serial of group) {
-      await pool.query(
-        `INSERT INTO p2_serial_billing_assignments (
-           allocation_id, serialized_item_id, po_id, po_item_id, assigned_by, assignment_source
-         )
-         VALUES ($1,$2,$3,$4,$5,'po_item_shipment_create')
-         ON CONFLICT (serialized_item_id)
-         DO UPDATE SET
-           allocation_id = EXCLUDED.allocation_id,
-           po_id = EXCLUDED.po_id,
-           po_item_id = EXCLUDED.po_item_id,
-           assigned_at = now(),
-           assigned_by = EXCLUDED.assigned_by,
-           assignment_source = EXCLUDED.assignment_source,
-           updated_at = now()
-         WHERE p2_serial_billing_assignments.locked_at IS NULL`,
-        [allocationId, serial.id, serial.poId, serial.poItemId, actor],
-      );
+      await assignSerialBillingBucket({
+        allocationId,
+        serializedItemId: serial.id,
+        poId: serial.poId,
+        poItemId: serial.poItemId,
+        actor,
+        assignmentSource: 'po_item_shipment_create',
+      });
     }
   }
 }
@@ -1136,22 +1184,14 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
 
       for (const assignment of incomingAssignments) {
         const serial = selectedSerialById.get(assignment.serializedItemId)!;
-        await pool.query(`
-          INSERT INTO p2_serial_billing_assignments (
-            allocation_id, serialized_item_id, po_id, po_item_id, assigned_by, assignment_source
-          )
-          VALUES ($1,$2,$3,$4,$5,'shipment_create')
-          ON CONFLICT (serialized_item_id)
-          DO UPDATE SET
-            allocation_id = EXCLUDED.allocation_id,
-            po_id = EXCLUDED.po_id,
-            po_item_id = EXCLUDED.po_item_id,
-            assigned_at = now(),
-            assigned_by = EXCLUDED.assigned_by,
-            assignment_source = EXCLUDED.assignment_source,
-            updated_at = now()
-          WHERE p2_serial_billing_assignments.locked_at IS NULL
-        `, [assignment.allocationId, assignment.serializedItemId, serial.poId, serial.poItemId, actor]);
+        await assignSerialBillingBucket({
+          allocationId: assignment.allocationId,
+          serializedItemId: assignment.serializedItemId,
+          poId: serial.poId,
+          poItemId: serial.poItemId,
+          actor,
+          assignmentSource: 'shipment_create',
+        });
 
         await pool.query(`
           INSERT INTO p2_billing_allocation_audit (entity_type, entity_id, action, new_value, changed_by, reason)
@@ -1307,9 +1347,9 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
         inv.invoice_number,
         inv.status AS invoice_status,
         inv.total_amount AS invoice_total_amount,
-        je.id AS journal_entry_id,
-        je.status AS journal_entry_status,
-        COALESCE(jlc.line_count, 0)::int AS journal_line_count
+        NULL::integer AS journal_entry_id,
+        NULL::text AS journal_entry_status,
+        0::int AS journal_line_count
       FROM p2_lot_numbers l
       JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
       LEFT JOIN p2_certificates_of_conformance cc ON cc.id = l.certificate_id
@@ -1320,19 +1360,6 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
         ORDER BY created_at DESC
         LIMIT 1
       ) inv ON true
-      LEFT JOIN LATERAL (
-        SELECT id, status
-        FROM journal_entries
-        WHERE reference_uuid = inv.id
-          AND transaction_type = 'AR_INVOICE'
-        ORDER BY created_at DESC
-        LIMIT 1
-      ) je ON true
-      LEFT JOIN LATERAL (
-        SELECT COUNT(*)::int AS line_count
-        FROM journal_lines
-        WHERE journal_entry_id = je.id
-      ) jlc ON true
       WHERE l.po_id IS NOT NULL
         AND l.packing_slip_id IS NOT NULL
         AND COALESCE(l.status, '') <> 'VOID'
@@ -2754,23 +2781,10 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
          inv.total_amount,
          inv.status,
          inv.packing_slip_id,
-         je.id AS journal_entry_id,
-         je.status AS journal_entry_status,
-         COALESCE(jlc.line_count, 0)::int AS journal_line_count
+         NULL::integer AS journal_entry_id,
+         NULL::text AS journal_entry_status,
+         0::int AS journal_line_count
        FROM ar_invoices inv
-       LEFT JOIN LATERAL (
-         SELECT id, status
-         FROM journal_entries
-         WHERE reference_uuid = inv.id
-           AND transaction_type = 'AR_INVOICE'
-         ORDER BY created_at DESC
-         LIMIT 1
-       ) je ON true
-       LEFT JOIN LATERAL (
-         SELECT COUNT(*)::int AS line_count
-         FROM journal_lines
-         WHERE journal_entry_id = je.id
-       ) jlc ON true
        WHERE inv.lot_id = $1 OR ($2::uuid IS NOT NULL AND inv.packing_slip_id = $2::uuid)
        ORDER BY inv.created_at DESC
        LIMIT 1`,

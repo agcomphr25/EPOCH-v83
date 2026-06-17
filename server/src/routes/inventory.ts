@@ -1411,32 +1411,46 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
       },
     ];
 
-    if (requestData.agPartNumber) {
+    const requestedPartNumbers = Array.from(
+      new Set(
+        [requestData.agPartNumber, requestData.partNumber]
+          .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+          .map((part) => part.trim())
+      )
+    );
+
+    if (requestedPartNumbers.length > 0) {
       const { inventoryItems } = await import('../../schema');
       const [item] = await db
         .select({
+          agPartNumber: inventoryItems.agPartNumber,
           vendorId: inventoryItems.vendorId,
           source: inventoryItems.source,
           defaultOrderMethod: inventoryItems.defaultOrderMethod,
         })
         .from(inventoryItems)
-        .where(eq(inventoryItems.agPartNumber, requestData.agPartNumber))
+        .where(inArray(inventoryItems.agPartNumber, requestedPartNumbers))
         .limit(1);
 
       if (item) {
+        requestData.agPartNumber = requestData.agPartNumber || item.agPartNumber;
+        requestData.partNumber = requestData.partNumber || item.agPartNumber;
+
         // Auto-set orderMethod from item default if not provided
         if (!requestData.orderMethod && item.defaultOrderMethod) {
           requestData.orderMethod = item.defaultOrderMethod as 'PO' | 'WEBSITE';
         }
 
-        // Auto-assign vendor from source or item vendor if not provided.
+        // Auto-assign vendor from the inventory item first; source is legacy display text.
         // Future improvement: a supplier_items table or source_vendor_id FK would replace this lookup.
         if (!requestData.vendorId) {
-          const sourceVendorId = await resolveSourceVendorId(item.source, db);
-          if (sourceVendorId) {
-            requestData.vendorId = sourceVendorId;
-          } else if (item.vendorId) {
+          if (item.vendorId) {
             requestData.vendorId = item.vendorId;
+          } else {
+            const sourceVendorId = await resolveSourceVendorId(item.source, db);
+            if (sourceVendorId) {
+              requestData.vendorId = sourceVendorId;
+            }
           }
         }
       }
@@ -1785,8 +1799,9 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
       }
 
       let vendorId = request.vendorId;
-      if (!vendorId && request.agPartNumber) {
-        vendorId = itemVendorMap.get(request.agPartNumber) || null;
+      const requestPartNumber = request.agPartNumber || request.partNumber;
+      if (!vendorId && requestPartNumber) {
+        vendorId = itemVendorMap.get(requestPartNumber) || null;
       }
       
       if (vendorId && vendorMap.has(vendorId)) {
@@ -2194,7 +2209,37 @@ router.post(
           throw Object.assign(new Error(`Parts request(s) not found: ${missing.join(', ')}`), { status: 404 });
         }
 
-        const badStatus = selected.filter((r) => r.status !== 'APPROVED');
+        const selectedPartNumbers = Array.from(
+          new Set(
+            selected
+              .flatMap((request) => [request.agPartNumber, request.partNumber])
+              .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+              .map((part) => part.trim())
+          )
+        );
+        const inventoryVendorRows = selectedPartNumbers.length > 0
+          ? await tx
+            .select({
+              agPartNumber: inventoryItems.agPartNumber,
+              vendorId: inventoryItems.vendorId,
+            })
+            .from(inventoryItems)
+            .where(dInArray(inventoryItems.agPartNumber, selectedPartNumbers))
+          : [];
+        const vendorByPartNumber = new Map(
+          inventoryVendorRows
+            .filter((row) => typeof row.vendorId === 'number')
+            .map((row) => [row.agPartNumber, row.vendorId as number])
+        );
+        const selectedWithResolvedVendors = selected.map((request) => {
+          const resolvedVendorId = request.vendorId
+            ?? (request.agPartNumber ? vendorByPartNumber.get(request.agPartNumber) : undefined)
+            ?? (request.partNumber ? vendorByPartNumber.get(request.partNumber) : undefined)
+            ?? null;
+          return { ...request, vendorId: resolvedVendorId };
+        });
+
+        const badStatus = selectedWithResolvedVendors.filter((r) => r.status !== 'APPROVED');
         if (badStatus.length > 0) {
           throw Object.assign(
             new Error(`Only APPROVED parts requests can start RFQ/PO flow. Invalid request id(s): ${badStatus.map((r) => `${r.id} (${r.status})`).join(', ')}`),
@@ -2202,7 +2247,7 @@ router.post(
           );
         }
 
-        const websiteRequests = selected.filter((r) => r.orderMethod === 'WEBSITE');
+        const websiteRequests = selectedWithResolvedVendors.filter((r) => r.orderMethod === 'WEBSITE');
         if (websiteRequests.length > 0) {
           throw Object.assign(
             new Error(`Website-order request(s) cannot be used to create a Vendor PO: ${websiteRequests.map((r) => r.id).join(', ')}`),
@@ -2210,7 +2255,7 @@ router.post(
           );
         }
 
-        const alreadyLinked = selected.filter((r) => r.vendorPoId != null);
+        const alreadyLinked = selectedWithResolvedVendors.filter((r) => r.vendorPoId != null);
         if (alreadyLinked.length > 0) {
           throw Object.assign(
             new Error(`Request(s) already linked to a Vendor PO: ${alreadyLinked.map((r) => `${r.id} -> PO ${r.vendorPoId}`).join(', ')}`),
@@ -2218,12 +2263,12 @@ router.post(
           );
         }
 
-        const vendorIds = Array.from(new Set(selected.map((r) => r.vendorId).filter((v): v is number => typeof v === 'number')));
+        const vendorIds = Array.from(new Set(selectedWithResolvedVendors.map((r) => r.vendorId).filter((v): v is number => typeof v === 'number')));
         if (vendorIds.length !== 1) {
           throw Object.assign(new Error('All selected requests must have the same assigned vendor before creating a Vendor PO draft.'), { status: 422 });
         }
 
-        const wrongCategory = selected.filter((r) => {
+        const wrongCategory = selectedWithResolvedVendors.filter((r) => {
           const requestCategory = normalizePartsRequestCategory(r.productionLine);
           return requestCategory != null && requestCategory !== payload.purchasingCategory;
         });
@@ -2235,8 +2280,8 @@ router.post(
         }
 
         const vendorId = vendorIds[0];
-        const estimatedTotal = selected.reduce((sum, r) => sum + Number(r.estimatedCost || 0), 0);
-        const requestSummary = selected.map((r) => `PR-${r.id}`).join(', ');
+        const estimatedTotal = selectedWithResolvedVendors.reduce((sum, r) => sum + Number(r.estimatedCost || 0), 0);
+        const requestSummary = selectedWithResolvedVendors.map((r) => `PR-${r.id}`).join(', ');
         const [vendorPO] = await tx
           .insert(vendorPOs)
           .values({
@@ -2255,8 +2300,8 @@ router.post(
           })
           .returning();
 
-        const grouped = new Map<string, typeof selected>();
-        for (const request of selected) {
+        const grouped = new Map<string, typeof selectedWithResolvedVendors>();
+        for (const request of selectedWithResolvedVendors) {
           const key = `${request.agPartNumber || ''}|${request.partNumber}|${request.partName}`;
           grouped.set(key, [...(grouped.get(key) || []), request]);
         }
@@ -2307,7 +2352,7 @@ router.post(
           .where(dAnd(dInArray(partsRequests.id, uniqueRequestIds), dEq(partsRequests.status, 'APPROVED')));
 
         await tx.insert(partsRequestStatusHistory).values(
-          selected.map((request) => ({
+          selectedWithResolvedVendors.map((request) => ({
             partsRequestId: request.id,
             fromStatus: request.status,
             toStatus: request.status,

@@ -1971,6 +1971,188 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
 // ==========================================
 
 // Create order batch from selected parts requests
+const linkExistingVendorPoSchema = z.object({
+  vendorPoId: z.coerce.number().int().positive(),
+  createLineItem: z.boolean().default(true),
+  quantity: z.coerce.number().positive().optional(),
+  unitPrice: z.coerce.number().min(0).optional(),
+  notes: z.string().optional().nullable(),
+});
+
+function statusFromLinkedVendorPo(poStatus: string | null | undefined, currentStatus: string) {
+  if (poStatus === 'Fully Received') return 'RECEIVED';
+  if (poStatus === 'Partially Received') return 'RECEIVED_PARTIAL';
+  if (poStatus === 'Sent') return 'ORDERED';
+  return currentStatus;
+}
+
+router.post(
+  '/parts-requests/:id/link-vendor-po',
+  requirePermission('purchasing.manage_pos'),
+  async (req: Request, res: Response) => {
+    try {
+      const requestId = Number(req.params.id);
+      if (!Number.isInteger(requestId) || requestId <= 0) {
+        return res.status(400).json({ error: 'Invalid parts request ID' });
+      }
+
+      const payload = linkExistingVendorPoSchema.parse(req.body);
+      const actor = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
+      const { partsRequests, partsRequestStatusHistory, vendorPOs, vendorPOItems } = await import('../../schema');
+      const { eq: dEq, and: dAnd, or: dOr, sql: dSql } = await import('drizzle-orm');
+
+      const result = await db.transaction(async (tx) => {
+        const [request] = await tx
+          .select()
+          .from(partsRequests)
+          .where(dEq(partsRequests.id, requestId))
+          .for('update');
+
+        if (!request || request.isActive === false) {
+          throw Object.assign(new Error('Parts request not found'), { status: 404 });
+        }
+
+        if (['REJECTED', 'CANCELED', 'DELIVERED_TO_DEPT'].includes(request.status)) {
+          throw Object.assign(
+            new Error(`Cannot link a Vendor PO to a ${request.status.replace(/_/g, ' ')} request.`),
+            { status: 422 }
+          );
+        }
+
+        if (request.orderMethod === 'WEBSITE') {
+          throw Object.assign(new Error('Website-order requests cannot be linked to a Vendor PO.'), { status: 422 });
+        }
+
+        if (request.vendorPoId && request.vendorPoId !== payload.vendorPoId) {
+          throw Object.assign(
+            new Error(`Request is already linked to Vendor PO #${request.vendorPoId}.`),
+            { status: 409 }
+          );
+        }
+
+        const [vendorPO] = await tx
+          .select()
+          .from(vendorPOs)
+          .where(dEq(vendorPOs.id, payload.vendorPoId));
+
+        if (!vendorPO) {
+          throw Object.assign(new Error('Vendor PO not found'), { status: 404 });
+        }
+
+        if (vendorPO.status === 'Cancelled') {
+          throw Object.assign(new Error('Cannot link a request to a cancelled Vendor PO.'), { status: 422 });
+        }
+
+        if (request.vendorId && request.vendorId !== vendorPO.vendorId) {
+          throw Object.assign(
+            new Error(`Request vendor does not match Vendor PO vendor. Request vendor id ${request.vendorId}; PO vendor id ${vendorPO.vendorId}.`),
+            { status: 422 }
+          );
+        }
+
+        const [existingLine] = await tx
+          .select()
+          .from(vendorPOItems)
+          .where(dAnd(
+            dEq(vendorPOItems.vendorPoId, vendorPO.id),
+            dOr(
+              request.agPartNumber ? dEq(vendorPOItems.agPartNumber, request.agPartNumber) : dEq(vendorPOItems.description, request.partName),
+              dEq(vendorPOItems.description, request.partName)
+            )
+          ));
+
+        let createdLine: any = null;
+        if (payload.createLineItem && !existingLine) {
+          const maxResult = await tx.execute(dSql`
+            SELECT COALESCE(MAX(line_number), 0) + 1 AS next_line_number
+            FROM vendor_po_items
+            WHERE vendor_po_id = ${vendorPO.id}
+          `);
+          const lineNumber = Number(maxResult.rows?.[0]?.next_line_number ?? 1);
+          const quantity = Number(payload.quantity || request.quantity || 1);
+          const unitPrice =
+            payload.unitPrice != null
+              ? Number(payload.unitPrice)
+              : quantity > 0
+                ? Number(request.estimatedCost || 0) / quantity
+                : 0;
+
+          [createdLine] = await tx
+            .insert(vendorPOItems)
+            .values({
+              vendorPoId: vendorPO.id,
+              lineNumber,
+              agPartNumber: request.agPartNumber || null,
+              description: request.partName,
+              quantity,
+              unitPrice,
+              lineTotal: quantity * unitPrice,
+              notes: [
+                `Linked from parts request PR-${request.id}.`,
+                payload.notes?.trim() || null,
+              ].filter(Boolean).join('\n'),
+            })
+            .returning();
+        }
+
+        const nextStatus = statusFromLinkedVendorPo(vendorPO.status, request.status);
+        const updateData: Record<string, unknown> = {
+          vendorPoId: vendorPO.id,
+          vendorId: vendorPO.vendorId,
+          orderMethod: 'PO',
+          status: nextStatus,
+          updatedAt: new Date(),
+        };
+
+        if (nextStatus === 'ORDERED') {
+          updateData.orderDate = vendorPO.orderDate ? new Date(vendorPO.orderDate) : new Date();
+          updateData.expectedDelivery = vendorPO.expectedDeliveryDate ?? request.expectedDelivery ?? null;
+          updateData.qtyOrdered = request.quantity;
+        }
+        if (nextStatus === 'RECEIVED' || nextStatus === 'RECEIVED_PARTIAL') {
+          updateData.orderDate = vendorPO.orderDate ? new Date(vendorPO.orderDate) : (request.orderDate ?? new Date());
+          updateData.expectedDelivery = vendorPO.expectedDeliveryDate ?? request.expectedDelivery ?? null;
+          updateData.actualDelivery = vendorPO.actualDeliveryDate ?? request.actualDelivery ?? null;
+        }
+
+        const [updatedRequest] = await tx
+          .update(partsRequests)
+          .set(updateData)
+          .where(dEq(partsRequests.id, request.id))
+          .returning();
+
+        await tx.insert(partsRequestStatusHistory).values({
+          partsRequestId: request.id,
+          fromStatus: request.status,
+          toStatus: updatedRequest.status,
+          changedBy: actor,
+          reason: [
+            `Linked to existing Vendor PO #${vendorPO.id}${vendorPO.poNumber ? ` (${vendorPO.poNumber})` : ''}.`,
+            existingLine ? `Matched existing PO line #${existingLine.lineNumber}.` : null,
+            createdLine ? `Created PO line #${createdLine.lineNumber}.` : null,
+            payload.notes?.trim() || null,
+          ].filter(Boolean).join(' '),
+        });
+
+        return {
+          request: updatedRequest,
+          vendorPO,
+          existingLine,
+          createdLine,
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error('Link parts request to Vendor PO error:', error);
+      const status = (error as any)?.status || 500;
+      res.status(status).json({
+        error: status === 500 ? 'Failed to link parts request to Vendor PO' : (error as Error).message,
+      });
+    }
+  }
+);
+
 const createVendorPoFromPartsRequestsSchema = z.object({
   requestIds: z.array(z.number().int().positive()).min(1),
   purchasingCategory: z.enum(['P1', 'P2', 'GENERAL', 'R_AND_D']),

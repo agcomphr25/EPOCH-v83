@@ -852,11 +852,19 @@ function ensureP2LotNumberShipmentSchema(): Promise<void> {
 
       ALTER TABLE p2_lot_numbers
         ALTER COLUMN serialized_item_ids TYPE jsonb
-        USING COALESCE(serialized_item_ids::jsonb, '[]'::jsonb);
+        USING CASE
+          WHEN serialized_item_ids IS NULL THEN '[]'::jsonb
+          WHEN jsonb_typeof(serialized_item_ids::jsonb) = 'array' THEN serialized_item_ids::jsonb
+          ELSE jsonb_build_array(serialized_item_ids::jsonb)
+        END;
 
       ALTER TABLE p2_lot_numbers
         ALTER COLUMN barcodes TYPE jsonb
-        USING COALESCE(barcodes::jsonb, '[]'::jsonb);
+        USING CASE
+          WHEN barcodes IS NULL THEN '[]'::jsonb
+          WHEN jsonb_typeof(barcodes::jsonb) = 'array' THEN barcodes::jsonb
+          ELSE jsonb_build_array(barcodes::jsonb)
+        END;
     `).then(() => undefined).catch((err) => {
       p2LotNumberShipmentSchemaReady = null;
       throw err;
@@ -1383,26 +1391,34 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       (serials.map((s) => s.completedAt).filter(Boolean).sort().pop() as Date | null) ||
       new Date();
 
-    const [lot] = await db
-      .insert(p2LotNumbers)
-      .values({
+    const lotRows = await pool.query<typeof p2LotNumbers.$inferSelect>(
+      `INSERT INTO p2_lot_numbers (
+         lot_number, lot_type, part_number, part_name, customer_id, customer_name,
+         po_number, po_id, po_item_id, quantity, serialized_item_ids, barcodes,
+         manufacturing_date, status, created_by, created_at, updated_at
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15,now(),now())
+       RETURNING *`,
+      [
         lotNumber,
-        lotType: 'SHIPPING',
-        partNumber: lotBucketSerial.partNumber,
-        partName: lotBucketSerial.partName,
-        customerId: first.customerId,
-        customerName: first.customerName,
-        poNumber: first.poNumber, // kept for display/legacy
-        poId: first.poId,         // hard FK — serial already carries the integer po_id
-        poItemId: lotPoItemId,
-        quantity: serials.length,
-        serializedItemIds: input.serialIds,
-        barcodes: serials.map((s) => s.barcode),
+        'SHIPPING',
+        lotBucketSerial.partNumber,
+        lotBucketSerial.partName,
+        first.customerId,
+        first.customerName,
+        first.poNumber,
+        first.poId,
+        lotPoItemId,
+        serials.length,
+        JSON.stringify(input.serialIds),
+        JSON.stringify(serials.map((s) => s.barcode).filter(Boolean)),
         manufacturingDate,
-        status: 'OPEN',
-        createdBy: input.createdBy,
-      })
-      .returning();
+        'OPEN',
+        input.createdBy || actor || 'shipping',
+      ],
+    );
+    const lot = lotRows[0];
+    if (!lot) throw new Error('Shipping lot insert returned no row');
 
     await pool.query(`
       UPDATE p2_serial_billing_assignments
@@ -1420,7 +1436,13 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       return res.status(400).json({ error: err.message });
     }
     console.error('Create lot error:', err);
-    return res.status(500).json({ error: 'Failed to create lot' });
+    return res.status(500).json({
+      error: 'Failed to create lot',
+      message: err?.message || 'Unknown create-lot error',
+      code: err?.code,
+      detail: err?.detail,
+      hint: err?.hint,
+    });
   }
 });
 

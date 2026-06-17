@@ -845,13 +845,13 @@ const InventoryForm = ({
           />
         </div>
         <div>
-          <Label htmlFor="source">Source</Label>
+          <Label htmlFor="source">Vendor Name</Label>
           <Input
             id="source"
             name="source"
             value={formData.source}
             onChange={onChange}
-            placeholder="Enter source"
+            placeholder="Enter vendor name"
             data-testid="input-source"
           />
         </div>
@@ -1677,6 +1677,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   });
 
   const vendors = vendorsResponse?.data || [];
+  const vendorById = React.useMemo(() => {
+    const map = new Map<number, VendorOption>();
+    vendors.forEach((vendor) => map.set(vendor.id, vendor));
+    return map;
+  }, [vendors]);
 
   const { data: assets = [] } = useQuery<{ id: string; assetTag: string; name: string; status: string }[]>({
     queryKey: ['/api/assets'],
@@ -2221,8 +2226,19 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   );
 
   const handleSelectChange = useCallback((name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  }, []);
+    setFormData((prev) => {
+      if (name !== 'vendorId') {
+        return { ...prev, [name]: value };
+      }
+
+      const selectedVendor = vendors.find((vendor) => vendor.id.toString() === value);
+      return {
+        ...prev,
+        vendorId: value,
+        source: selectedVendor && !prev.source.trim() ? selectedVendor.name : prev.source,
+      };
+    });
+  }, [vendors]);
 
   const handleMultiSelectChange = useCallback((name: string, values: string[]) => {
     setFormData((prev) => ({ ...prev, [name]: values }));
@@ -2760,7 +2776,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             <div className="text-sm text-gray-500 space-y-1">
               <p className="font-semibold">Expected columns:</p>
               <p>
-                AG Part#, SKU, Name, Source, Supplier Part #, Cost per, Order
+                AG Part#, SKU, Name, Vendor, Supplier Part #, Cost per, Order
                 Date, Notes, Utilized, Secondary Source
               </p>
               <p className="text-xs italic mt-2">
@@ -2988,7 +3004,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   data-testid="header-source"
                 >
                   <div className="flex items-center gap-2">
-                    Source
+                    Vendor
                     {sortColumn === 'source' ? (
                       sortDirection === 'asc' ? (
                         <ArrowUp className="h-4 w-4" />
@@ -3158,7 +3174,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                       {item.name}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                      {item.source || '-'}
+                      {(item.vendorId && vendorById.get(item.vendorId)?.name) || item.source || '-'}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       {item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}

@@ -2245,7 +2245,7 @@ router.post(
     try {
       const payload = createVendorPoFromPartsRequestsSchema.parse(req.body);
       const actor = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
-      const { partsRequests, partsRequestStatusHistory, vendorPOs, vendorPOItems } = await import('../../schema');
+      const { partsRequests, partsRequestStatusHistory, vendorPOs, vendorPOItems, inventoryItems } = await import('../../schema');
       const { eq: dEq, inArray: dInArray, and: dAnd, sql: dSql } = await import('drizzle-orm');
 
       const uniqueRequestIds = Array.from(new Set(payload.requestIds));

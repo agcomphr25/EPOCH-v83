@@ -15,6 +15,9 @@ import {
   GitBranch,
   ExternalLink,
   AlertCircle,
+  Image as ImageIcon,
+  Star,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
@@ -30,6 +33,7 @@ import {
 
 import InventoryItemCostHistory from './InventoryItemCostHistory';
 import TraceabilityConfigModal from './TraceabilityConfigModal';
+import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
 
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -79,6 +83,201 @@ type VendorOption = {
   id: number;
   name: string;
 };
+
+type InventoryMediaAttachment = {
+  attachment: {
+    id: string;
+    mediaId: string;
+    entityType: string;
+    entityId: string;
+    attachedAt: string;
+    notes: string | null;
+  };
+  media: {
+    id: string;
+    filename: string;
+    storagePath: string;
+    mimeType: string;
+    title: string | null;
+  };
+};
+
+function mediaDownloadUrl(mediaId?: string | null) {
+  return mediaId ? `/api/media/${mediaId}/download` : '';
+}
+
+function PartImageThumbnail({
+  item,
+  className = 'h-10 w-10',
+}: {
+  item: InventoryItem;
+  className?: string;
+}) {
+  const primaryImageMediaId = (item as any).primaryImageMediaId as string | null | undefined;
+
+  if (!primaryImageMediaId) {
+    return (
+      <div className={`${className} flex items-center justify-center rounded-md border bg-muted text-muted-foreground`}>
+        <ImageIcon className="h-4 w-4" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={mediaDownloadUrl(primaryImageMediaId)}
+      alt={`${item.agPartNumber} ${item.name}`}
+      className={`${className} rounded-md border object-cover bg-muted`}
+      loading="lazy"
+    />
+  );
+}
+
+function InventoryItemImagesPanel({
+  item,
+  onPrimaryImageChange,
+}: {
+  item: InventoryItem;
+  onPrimaryImageChange?: (item: InventoryItem) => void;
+}) {
+  const queryClient = useQueryClient();
+  const itemPrimaryImageMediaId = ((item as any).primaryImageMediaId as string | null | undefined) ?? null;
+  const [primaryImageMediaId, setPrimaryImageMediaId] = useState<string | null>(itemPrimaryImageMediaId);
+
+  useEffect(() => {
+    setPrimaryImageMediaId(itemPrimaryImageMediaId);
+  }, [item.id, itemPrimaryImageMediaId]);
+
+  const attachmentKey = ['/api/media/attachments', 'inventory_item', item.agPartNumber];
+
+  const { data: attachments = [], isLoading } = useQuery<InventoryMediaAttachment[]>({
+    queryKey: attachmentKey,
+    queryFn: async () => {
+      const res = await fetch(`/api/media/attachments/inventory_item/${encodeURIComponent(item.agPartNumber)}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to load part images');
+      return res.json();
+    },
+    enabled: !!item.agPartNumber,
+  });
+
+  const imageAttachments = attachments.filter((attachment) => attachment.media.mimeType.startsWith('image/'));
+
+  const setPrimaryImageMutation = useMutation({
+    mutationFn: (mediaId: string | null) =>
+      apiRequest(`/api/inventory/items/${item.id}/primary-image`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaId }),
+      }),
+    onSuccess: (updatedItem: InventoryItem) => {
+      const nextPrimary = ((updatedItem as any).primaryImageMediaId as string | null | undefined) ?? null;
+      setPrimaryImageMediaId(nextPrimary);
+      onPrimaryImageChange?.(updatedItem);
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+      toast.success(nextPrimary ? 'Primary image updated' : 'Primary image cleared');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to update primary image');
+    },
+  });
+
+  return (
+    <Card className="mt-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ImageIcon className="h-4 w-4" />
+          Part Images
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <PartImageThumbnail item={{ ...item, primaryImageMediaId } as InventoryItem} className="h-16 w-16" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{item.agPartNumber} | {item.name}</div>
+            <div className="text-xs text-muted-foreground">
+              Attach images from Central Storage, upload a new photo, then mark the best one as primary.
+            </div>
+          </div>
+          {primaryImageMediaId && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPrimaryImageMutation.mutate(null)}
+              disabled={setPrimaryImageMutation.isPending}
+              data-testid={`button-clear-primary-image-${item.id}`}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Clear Primary
+            </Button>
+          )}
+          <MediaAttachmentPicker
+            entityType="inventory_item"
+            entityId={item.agPartNumber}
+            compact
+            onAttachmentChange={() => {
+              queryClient.invalidateQueries({ queryKey: attachmentKey });
+            }}
+            trigger={
+              <Button variant="outline" size="sm" data-testid={`button-manage-images-${item.id}`}>
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Attach Images
+              </Button>
+            }
+          />
+        </div>
+
+        {isLoading ? (
+          <div className="text-sm text-muted-foreground">Loading images...</div>
+        ) : imageAttachments.length === 0 ? (
+          <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+            No images are attached to this part yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {imageAttachments.map((attachment) => {
+              const isPrimary = attachment.media.id === primaryImageMediaId;
+              return (
+                <div key={attachment.attachment.id} className="rounded-md border overflow-hidden bg-background">
+                  <button
+                    type="button"
+                    className="block aspect-square w-full bg-muted"
+                    onClick={() => window.open(mediaDownloadUrl(attachment.media.id), '_blank', 'noopener,noreferrer')}
+                    data-testid={`button-open-part-image-${attachment.media.id}`}
+                  >
+                    <img
+                      src={mediaDownloadUrl(attachment.media.id)}
+                      alt={attachment.media.title || attachment.media.filename}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </button>
+                  <div className="p-2 space-y-2">
+                    <div className="truncate text-xs font-medium" title={attachment.media.title || attachment.media.filename}>
+                      {attachment.media.title || attachment.media.filename}
+                    </div>
+                    <Button
+                      variant={isPrimary ? 'default' : 'outline'}
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setPrimaryImageMutation.mutate(attachment.media.id)}
+                      disabled={isPrimary || setPrimaryImageMutation.isPending}
+                      data-testid={`button-set-primary-image-${attachment.media.id}`}
+                    >
+                      <Star className="h-3.5 w-3.5 mr-2" />
+                      {isPrimary ? 'Primary' : 'Set Primary'}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function createInventoryRequestId() {
   return `inv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -2688,7 +2887,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       ) : (
         <div style={{ overflow: 'hidden', width: '100%' }}>
           <div style={{ overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ minWidth: '1400px', borderCollapse: 'collapse' }} className="w-full border border-gray-200 dark:border-gray-700">
+            <table style={{ minWidth: '1480px', borderCollapse: 'collapse' }} className="w-full border border-gray-200 dark:border-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800">
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center w-12">
@@ -2699,6 +2898,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     onCheckedChange={toggleSelectAll}
                     data-testid="checkbox-select-all"
                   />
+                </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left w-20">
+                  Image
                 </th>
                 <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -2959,6 +3161,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                         data-testid={`checkbox-item-${item.id}`}
                       />
                     </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      <PartImageThumbnail item={item} />
+                    </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 font-medium">
                       {item.agPartNumber}
                     </td>
@@ -3045,6 +3250,15 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2" onClick={(e) => e.stopPropagation()}>
                       <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(item)}
+                          title="Images"
+                          data-testid={`button-images-${item.id}`}
+                        >
+                          <ImageIcon className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -3157,6 +3371,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b bg-muted/50">
+                              <th className="h-9 px-4 text-left font-medium">Image</th>
                               <th className="h-9 px-4 text-left font-medium">AG Part #</th>
                               <th className="h-9 px-4 text-left font-medium">Name</th>
                               <th className="h-9 px-4 text-left font-medium">Level</th>
@@ -3169,7 +3384,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                           <tbody>
                             {catItems.length === 0 ? (
                               <tr>
-                                <td colSpan={7} className="py-6 text-center text-gray-500 text-xs">
+                                <td colSpan={8} className="py-6 text-center text-gray-500 text-xs">
                                   No {CATEGORY_DISPLAY_NAMES[category]} items
                                   {(searchTerm || utilizedFilter !== 'all') && ' matching filters'}
                                 </td>
@@ -3177,6 +3392,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                             ) : (
                               catItems.map((item) => (
                                 <tr key={item.id} className="border-b hover:bg-muted/50 transition-all duration-150 hover:shadow-sm cursor-pointer" onClick={() => handleEdit(item)}>
+                                  <td className="px-4 py-2">
+                                    <PartImageThumbnail item={item} />
+                                  </td>
                                   <td className="px-4 py-2 font-mono text-xs">{item.agPartNumber}</td>
                                   <td className="px-4 py-2 font-medium">{item.name}</td>
                                   <td className="px-4 py-2">
@@ -3218,6 +3436,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                                   </td>
                                   <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex space-x-2">
+                                      <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Images" data-testid={`button-images-mfg-${item.id}`}>
+                                        <ImageIcon className="h-4 w-4" />
+                                      </Button>
                                       <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit" data-testid={`button-edit-mfg-${item.id}`}>
                                         <Edit className="h-4 w-4" />
                                       </Button>
@@ -3276,6 +3497,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b bg-muted/50">
+                            <th className="h-9 px-4 text-left font-medium">Image</th>
                             <th className="h-9 px-4 text-left font-medium">AG Part #</th>
                             <th className="h-9 px-4 text-left font-medium">Name</th>
                             <th className="h-9 px-4 text-left font-medium">Actions</th>
@@ -3284,10 +3506,16 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                         <tbody>
                           {filteredUncategorized.map((item) => (
                             <tr key={item.id} className="border-b hover:bg-muted/50 transition-all duration-150 hover:shadow-sm cursor-pointer" onClick={() => handleEdit(item)}>
+                              <td className="px-4 py-2">
+                                <PartImageThumbnail item={item} />
+                              </td>
                               <td className="px-4 py-2 font-mono text-xs">{item.agPartNumber}</td>
                               <td className="px-4 py-2 font-medium">{item.name}</td>
                               <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex space-x-2">
+                                  <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Images">
+                                    <ImageIcon className="h-4 w-4" />
+                                  </Button>
                                   <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit">
                                     <Edit className="h-4 w-4" />
                                   </Button>
@@ -3360,6 +3588,13 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             onSaveTraceabilityFields={handleSaveTraceabilityFields}
             onTraceabilityConfigChange={handleTraceabilityConfigChange}
           />
+          {editingItem?.agPartNumber && (
+            <InventoryItemImagesPanel
+              item={editingItem}
+              onPrimaryImageChange={(updatedItem) => setEditingItem(updatedItem)}
+            />
+          )}
+
           {editingItem?.agPartNumber && (
             <div className="mt-6 border-t pt-6">
               <InventoryItemCostHistory

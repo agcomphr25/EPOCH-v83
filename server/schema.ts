@@ -718,6 +718,7 @@ export const inventoryItems = pgTable('inventory_items', {
   requiresCoc: boolean('requires_coc').notNull().default(false),       // Certificate of Conformance
   requiresTestReport: boolean('requires_test_report').notNull().default(false),
   requiresPackingSlipPhoto: boolean('requires_packing_slip_photo').notNull().default(false),
+  primaryImageMediaId: uuid('primary_image_media_id'),
   // Per-field traceability configuration — map of received_units field name → visibility setting
   // Fields: lotNumber, batchNumber, serialNumber, expirationDate, manufactureDate, heatLot, rollNumber, certReference
   // Values: 'required' | 'optional' | 'hidden'

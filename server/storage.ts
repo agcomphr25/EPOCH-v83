@@ -7300,17 +7300,67 @@ export class DatabaseStorage implements IStorage {
         eq(partsRequests.isActive, true)
       ))
       .orderBy(desc(partsRequests.urgency), desc(partsRequests.requestDate));
+
+    const allVendors = await db
+      .select({
+        id: vendors.id,
+        name: vendors.name,
+        website: vendors.website,
+      })
+      .from(vendors)
+      .where(eq(vendors.isActive, true));
+
+    const vendorById = new Map(allVendors.map((vendor) => [vendor.id, vendor]));
+    const normalizeVendorName = (value?: string | null) =>
+      (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const vendorByName = new Map(
+      allVendors
+        .map((vendor) => [normalizeVendorName(vendor.name), vendor] as const)
+        .filter(([key]) => key.length > 0)
+    );
+
+    const resolveVendorByName = (value?: string | null) => {
+      const sourceKey = normalizeVendorName(value);
+      if (!sourceKey) return null;
+      if (vendorByName.has(sourceKey)) return vendorByName.get(sourceKey)!;
+      for (const [vendorKey, vendor] of vendorByName) {
+        if (vendorKey.includes(sourceKey) || sourceKey.includes(vendorKey)) {
+          return vendor;
+        }
+      }
+      return null;
+    };
     
-    return results.map(r => ({
-      ...r.request,
-      inventoryItem: r.inventoryItem,
-      department: r.department,
-      project: r.projectCode ? {
-        id: r.request.projectId,
-        projectCode: r.projectCode,
-        projectName: r.projectName,
-      } : undefined,
-    }));
+    return results.map(r => {
+      const requestVendor = r.request.vendorId ? vendorById.get(r.request.vendorId) : null;
+      const itemVendor = r.inventoryItem?.vendorId ? vendorById.get(r.inventoryItem.vendorId) : null;
+      const sourceVendor = resolveVendorByName(r.inventoryItem?.source || r.request.supplier);
+      const resolvedVendor = requestVendor ?? itemVendor ?? sourceVendor;
+      const resolvedVendorId = r.request.vendorId ?? resolvedVendor?.id ?? r.inventoryItem?.vendorId ?? null;
+      const resolvedVendorName = resolvedVendor?.name ?? r.request.supplier ?? r.inventoryItem?.source ?? null;
+
+      return {
+        ...r.request,
+        vendorId: resolvedVendorId,
+        supplier: resolvedVendorName,
+        vendor: resolvedVendor ? {
+          id: resolvedVendor.id,
+          name: resolvedVendor.name,
+          website: resolvedVendor.website,
+        } : undefined,
+        inventoryItem: r.inventoryItem ? {
+          ...r.inventoryItem,
+          vendorId: r.inventoryItem.vendorId ?? resolvedVendorId,
+          vendorName: resolvedVendorName,
+        } : undefined,
+        department: r.department,
+        project: r.projectCode ? {
+          id: r.request.projectId,
+          projectCode: r.projectCode,
+          projectName: r.projectName,
+        } : undefined,
+      };
+    });
   }
 
   // Departments CRUD

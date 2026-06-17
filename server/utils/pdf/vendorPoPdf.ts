@@ -130,6 +130,27 @@ function drawRightText(
   page.drawText(value, { x: rightX - widthOf(value, font, size), y, size, font, color });
 }
 
+function drawRightTextFit(
+  page: PDFPage,
+  text: unknown,
+  rightX: number,
+  minX: number,
+  y: number,
+  font: PDFFont,
+  size: number,
+  color = COLOR.PRIMARY_TEXT,
+) {
+  const value = cleanText(text);
+  if (!value) return;
+
+  let fontSize = size;
+  while (fontSize > 7 && widthOf(value, font, fontSize) > rightX - minX) {
+    fontSize -= 0.25;
+  }
+
+  page.drawText(value, { x: Math.max(minX, rightX - widthOf(value, font, fontSize)), y, size: fontSize, font, color });
+}
+
 function wrapText(text: unknown, maxWidth: number, font: PDFFont, fontSize: number): string[] {
   const paragraphs = cleanText(text).split('\n');
   const lines: string[] = [];
@@ -372,14 +393,16 @@ function tableColumns() {
   const x = PAGE.MARGIN;
   return {
     line: x + 10,
-    part: x + 50,
-    description: x + 152,
-    qtyRight: x + 374,
-    unit: x + 386,
-    priceRight: x + 482,
+    part: x + 48,
+    description: x + 140,
+    qtyRight: x + 348,
+    unit: x + 360,
+    priceLeft: x + 386,
+    priceRight: x + 446,
+    totalLeft: x + 472,
     totalRight: x + 526,
-    descWidth: 178,
-    partWidth: 92,
+    descWidth: 154,
+    partWidth: 84,
   };
 }
 
@@ -427,8 +450,8 @@ function drawItemsTable(state: DrawState, items: any[], startY: number): { y: nu
 
     drawRightText(state.page, formatNumber(qty), cols.qtyRight, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
     drawText(state.page, item.vendorUnit || item.unit || item.uom || '-', cols.unit, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
-    drawRightText(state.page, formatCurrency(price), cols.priceRight, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
-    drawRightText(state.page, formatCurrency(total), cols.totalRight, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+    drawRightTextFit(state.page, formatCurrency(price), cols.priceRight, cols.priceLeft, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+    drawRightTextFit(state.page, formatCurrency(total), cols.totalRight, cols.totalLeft, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
     y -= rowHeight;
   }
 

@@ -356,6 +356,74 @@ router.get('/items/by-part-number/:partNumber', async (req: Request, res: Respon
   }
 });
 
+const setPrimaryImageSchema = z.object({
+  mediaId: z.string().uuid().nullable(),
+});
+
+router.put('/items/:id/primary-image', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return res.status(400).json({ error: 'Invalid inventory item ID' });
+    }
+
+    const { mediaId } = setPrimaryImageSchema.parse(req.body);
+    const { inventoryItems, mediaAttachments, mediaLibrary } = await import('../../schema');
+
+    const [item] = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, itemId));
+
+    if (!item) {
+      return res.status(404).json({ error: 'Inventory item not found' });
+    }
+
+    if (mediaId) {
+      const [attachedImage] = await db
+        .select({
+          mediaId: mediaLibrary.id,
+          mimeType: mediaLibrary.mimeType,
+        })
+        .from(mediaAttachments)
+        .innerJoin(mediaLibrary, eq(mediaAttachments.mediaId, mediaLibrary.id))
+        .where(and(
+          eq(mediaAttachments.entityType, 'inventory_item'),
+          eq(mediaAttachments.entityId, item.agPartNumber),
+          eq(mediaAttachments.mediaId, mediaId)
+        ));
+
+      if (!attachedImage) {
+        return res.status(422).json({ error: 'Primary image must be attached to this inventory item first.' });
+      }
+
+      if (!attachedImage.mimeType?.startsWith('image/')) {
+        return res.status(422).json({ error: 'Primary media must be an image.' });
+      }
+    }
+
+    const [updatedItem] = await db
+      .update(inventoryItems)
+      .set({
+        primaryImageMediaId: mediaId,
+        updatedAt: new Date(),
+      })
+      .where(eq(inventoryItems.id, itemId))
+      .returning();
+
+    res.json(withSupplySourceDashboard(updatedItem));
+  } catch (error) {
+    console.error('Set inventory item primary image error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid primary image payload' });
+    }
+    res.status(500).json({ error: 'Failed to update primary image' });
+  }
+});
+
 // Enhanced Inventory API - Update item
 router.put('/inventory/items/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
@@ -1743,18 +1811,42 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
     // Get all vendors for lookup
     const allVendors = await db.select().from(vendors);
     const vendorMap = new Map(allVendors.map(v => [v.id, v]));
+    const normalizeVendorName = (value?: string | null) =>
+      (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const vendorNameMap = new Map(
+      allVendors
+        .map((vendor) => [normalizeVendorName(vendor.name), vendor] as const)
+        .filter(([key]) => key.length > 0)
+    );
+    const resolveVendorByName = (value?: string | null) => {
+      const sourceKey = normalizeVendorName(value);
+      if (!sourceKey) return null;
+      if (vendorNameMap.has(sourceKey)) return vendorNameMap.get(sourceKey)!;
+      for (const [vendorKey, vendor] of vendorNameMap) {
+        if (vendorKey.includes(sourceKey) || sourceKey.includes(vendorKey)) {
+          return vendor;
+        }
+      }
+      return null;
+    };
     
-    // Get inventory items with vendor assignments for auto-suggest
+    // Get inventory items for vendor resolution by either request part-number field.
     const itemsWithVendors = await db
       .select({
         agPartNumber: inventoryItems.agPartNumber,
         vendorId: inventoryItems.vendorId,
+        source: inventoryItems.source,
         name: inventoryItems.name,
       })
       .from(inventoryItems)
-      .where(isNotNull(inventoryItems.vendorId));
+      .where(
+        or(
+          isNotNull(inventoryItems.vendorId),
+          isNotNull(inventoryItems.source)
+        )
+      );
     
-    const itemVendorMap = new Map(itemsWithVendors.map(i => [i.agPartNumber, i.vendorId]));
+    const itemByPartNumber = new Map(itemsWithVendors.map(i => [i.agPartNumber, i]));
     
     // Group requests by vendor
     const vendorGroups: Record<string, {
@@ -1762,7 +1854,16 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
       vendorName: string;
       orderMethod: string | null;
       websiteUrl: string | null;
-      requests: typeof requests;
+      requests: Array<typeof requests[number] & {
+        supplier?: string | null;
+        inventoryItem?: {
+          agPartNumber: string;
+          name: string;
+          source: string | null;
+          vendorId: number | null;
+          vendorName: string | null;
+        };
+      }>;
       totalQuantity: number;
       totalEstimatedCost: number;
     }> = {};
@@ -1779,7 +1880,28 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
     };
     
     for (const request of requests) {
-      if (request.orderMethod === 'WEBSITE') {
+      const requestPartNumber = request.agPartNumber || request.partNumber;
+      const inventoryItem = requestPartNumber ? itemByPartNumber.get(requestPartNumber) : null;
+      const sourceVendor = resolveVendorByName(inventoryItem?.source || request.supplier);
+      const resolvedVendor = request.vendorId
+        ? vendorMap.get(request.vendorId)
+        : inventoryItem?.vendorId
+          ? vendorMap.get(inventoryItem.vendorId)
+          : sourceVendor;
+      const vendorId = request.vendorId ?? resolvedVendor?.id ?? inventoryItem?.vendorId ?? null;
+      const vendorName = resolvedVendor?.name ?? request.supplier ?? inventoryItem?.source ?? null;
+      const enrichedRequest = {
+        ...request,
+        vendorId,
+        supplier: vendorName,
+        inventoryItem: inventoryItem ? {
+          ...inventoryItem,
+          vendorId: inventoryItem.vendorId ?? vendorId,
+          vendorName,
+        } : undefined,
+      };
+
+      if (!resolvedVendor && request.orderMethod === 'WEBSITE') {
         const key = 'WEBSITE';
         if (!vendorGroups[key]) {
           vendorGroups[key] = {
@@ -1792,18 +1914,11 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
             totalEstimatedCost: 0,
           };
         }
-        vendorGroups[key].requests.push(request);
+        vendorGroups[key].requests.push(enrichedRequest);
         vendorGroups[key].totalQuantity += request.quantity;
         vendorGroups[key].totalEstimatedCost += request.estimatedCost || 0;
         continue;
       }
-
-      let vendorId = request.vendorId;
-      const requestPartNumber = request.agPartNumber || request.partNumber;
-      if (!vendorId && requestPartNumber) {
-        vendorId = itemVendorMap.get(requestPartNumber) || null;
-      }
-      
       if (vendorId && vendorMap.has(vendorId)) {
         const vendor = vendorMap.get(vendorId)!;
         const key = `vendor-${vendorId}`;
@@ -1820,11 +1935,11 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
           };
         }
         
-        vendorGroups[key].requests.push(request);
+        vendorGroups[key].requests.push(enrichedRequest);
         vendorGroups[key].totalQuantity += request.quantity;
         vendorGroups[key].totalEstimatedCost += request.estimatedCost || 0;
       } else {
-        vendorGroups['unassigned'].requests.push(request);
+        vendorGroups['unassigned'].requests.push(enrichedRequest);
         vendorGroups['unassigned'].totalQuantity += request.quantity;
         vendorGroups['unassigned'].totalEstimatedCost += request.estimatedCost || 0;
       }

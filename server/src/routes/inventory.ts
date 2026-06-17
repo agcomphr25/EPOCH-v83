@@ -356,6 +356,74 @@ router.get('/items/by-part-number/:partNumber', async (req: Request, res: Respon
   }
 });
 
+const setPrimaryImageSchema = z.object({
+  mediaId: z.string().uuid().nullable(),
+});
+
+router.put('/items/:id/primary-image', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return res.status(400).json({ error: 'Invalid inventory item ID' });
+    }
+
+    const { mediaId } = setPrimaryImageSchema.parse(req.body);
+    const { inventoryItems, mediaAttachments, mediaLibrary } = await import('../../schema');
+
+    const [item] = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, itemId));
+
+    if (!item) {
+      return res.status(404).json({ error: 'Inventory item not found' });
+    }
+
+    if (mediaId) {
+      const [attachedImage] = await db
+        .select({
+          mediaId: mediaLibrary.id,
+          mimeType: mediaLibrary.mimeType,
+        })
+        .from(mediaAttachments)
+        .innerJoin(mediaLibrary, eq(mediaAttachments.mediaId, mediaLibrary.id))
+        .where(and(
+          eq(mediaAttachments.entityType, 'inventory_item'),
+          eq(mediaAttachments.entityId, item.agPartNumber),
+          eq(mediaAttachments.mediaId, mediaId)
+        ));
+
+      if (!attachedImage) {
+        return res.status(422).json({ error: 'Primary image must be attached to this inventory item first.' });
+      }
+
+      if (!attachedImage.mimeType?.startsWith('image/')) {
+        return res.status(422).json({ error: 'Primary media must be an image.' });
+      }
+    }
+
+    const [updatedItem] = await db
+      .update(inventoryItems)
+      .set({
+        primaryImageMediaId: mediaId,
+        updatedAt: new Date(),
+      })
+      .where(eq(inventoryItems.id, itemId))
+      .returning();
+
+    res.json(withSupplySourceDashboard(updatedItem));
+  } catch (error) {
+    console.error('Set inventory item primary image error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid primary image payload' });
+    }
+    res.status(500).json({ error: 'Failed to update primary image' });
+  }
+});
+
 // Enhanced Inventory API - Update item
 router.put('/inventory/items/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {

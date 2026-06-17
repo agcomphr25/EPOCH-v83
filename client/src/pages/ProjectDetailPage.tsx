@@ -404,7 +404,16 @@ export default function ProjectDetailPage() {
   const [, setLocation] = useLocation();
 
   // Read ?tab= from URL to support deep-links (e.g. from serial search)
-  const initialTab = new URLSearchParams(window.location.search).get('tab') ?? 'workflow';
+  const requestedTab = new URLSearchParams(window.location.search).get('tab') ?? 'workflow';
+  const tabAliases: Record<string, string> = {
+    'parts-request': 'material',
+    nre: 'rom',
+    'assembly-tree': 'production',
+    activity: 'workflow',
+    revisions: 'po',
+    closing: 'workflow',
+  };
+  const initialTab = tabAliases[requestedTab] ?? requestedTab;
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -716,6 +725,12 @@ export default function ProjectDetailPage() {
     enabled: !!id,
   });
 
+  const { data: p2Hub } = useQuery<any>({
+    queryKey: ['/api/projects', id, 'p2-hub'],
+    queryFn: () => fetch(`/api/projects/${id}/p2-hub`).then(r => r.json()),
+    enabled: !!id,
+  });
+
   interface GateStatus {
     gates?: { key: string; label: string; passed: boolean; status?: string; message?: string }[];
     allPassed: boolean;
@@ -737,6 +752,13 @@ export default function ProjectDetailPage() {
   const allProjectStepAttachments = Array.isArray(allStepAttachments) ? allStepAttachments : [];
   const gateStatusGates = Array.isArray(gateStatus?.gates) ? gateStatus.gates : [];
   const traceabilitySerials = Array.isArray(traceability?.serials) ? traceability.serials : [];
+  const hubTabs = p2Hub?.tabs ?? {};
+  const hubWad = hubTabs.wad ?? {};
+  const hubRom = hubTabs.rom ?? {};
+  const hubProduction = hubTabs.production ?? {};
+  const hubMaterial = hubTabs.material ?? {};
+  const hubLabor = hubTabs.labor ?? {};
+  const hubShippingInvoicing = hubTabs.shippingInvoicing ?? {};
 
   const { data: projectFarFlowdowns = [] } = useQuery<ProjectFarFlowdown[]>({
     queryKey: ['/api/far-flowdown-clauses/project', id],
@@ -1794,37 +1816,18 @@ export default function ProjectDetailPage() {
       <Tabs defaultValue={initialTab} className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
-          <TabsTrigger value="bom-routing" data-testid="tab-bom-routing">BOM/Routing</TabsTrigger>
-          <TabsTrigger value="parts-request" data-testid="tab-parts-request">Parts/Request</TabsTrigger>
-          <TabsTrigger value="labor" data-testid="tab-labor">Labor</TabsTrigger>
-          <TabsTrigger value="nre" data-testid="tab-nre">NRE</TabsTrigger>
-          <TabsTrigger value="assembly-tree" data-testid="tab-assembly-tree">Assembly Tree</TabsTrigger>
-          <TabsTrigger value="activity" data-testid="tab-activity">Activity Log</TabsTrigger>
           <TabsTrigger value="po" data-testid="tab-po">
             <Receipt className="h-4 w-4 mr-1.5" />
             PO
           </TabsTrigger>
-          <TabsTrigger value="revisions" data-testid="tab-revisions">
-            <History className="h-4 w-4 mr-1.5" />
-            Revisions
-          </TabsTrigger>
+          <TabsTrigger value="bom-routing" data-testid="tab-bom-routing">BOM/Routing</TabsTrigger>
+          <TabsTrigger value="wad" data-testid="tab-wad">WAD</TabsTrigger>
+          <TabsTrigger value="rom" data-testid="tab-rom">ROM</TabsTrigger>
+          <TabsTrigger value="production" data-testid="tab-production">Production</TabsTrigger>
+          <TabsTrigger value="material" data-testid="tab-material">Material</TabsTrigger>
+          <TabsTrigger value="labor" data-testid="tab-labor">Labor</TabsTrigger>
           <TabsTrigger value="traceability" data-testid="tab-traceability">Traceability</TabsTrigger>
-          <TabsTrigger value="closing" data-testid="tab-closing">
-            <BookOpen className="h-4 w-4 mr-1.5" />
-            Close Project
-            <span
-              className={`ml-1.5 inline-block w-2 h-2 rounded-full ${
-                project.closingStatus === 'APPROVED'
-                  ? 'bg-blue-500'
-                  : project.closingStatus === 'COMPLETE'
-                  ? 'bg-green-500'
-                  : project.closingStatus === 'INCOMPLETE'
-                  ? 'bg-yellow-500'
-                  : 'bg-red-400'
-              }`}
-              title={`Closing: ${project.closingStatus}`}
-            />
-          </TabsTrigger>
+          <TabsTrigger value="shipping-invoicing" data-testid="tab-shipping-invoicing">Shipping/Invoicing</TabsTrigger>
         </TabsList>
 
         <TabsContent value="workflow" className="space-y-4">
@@ -2523,6 +2526,220 @@ export default function ProjectDetailPage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="wad" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5" />
+                Work Authorization Document
+              </CardTitle>
+              <CardDescription>Current WAD summary, project work orders, and WAD revision history.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Latest WAD</p>
+                  <p className="font-medium">{hubWad.summary?.latestWad?.workOrderNumber || projectWorkOrders[0]?.workOrderNumber || 'Not created'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Total WADs</p>
+                  <p className="font-medium">{hubWad.summary?.totalWads ?? projectWorkOrders.length}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Released or Beyond</p>
+                  <p className="font-medium">{hubWad.summary?.releasedOrBeyond ?? 0}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setLocation(`/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}`)}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open WAD
+                </Button>
+                <Button variant="outline" onClick={() => setLocation(`/pm-control-center?project=${project.id}`)}>
+                  <BarChart2 className="h-4 w-4 mr-2" />
+                  PM Control Center
+                </Button>
+              </div>
+              {Array.isArray(hubWad.workOrders) && hubWad.workOrders.length > 0 && (
+                <div className="space-y-2">
+                  {hubWad.workOrders.map((wo: any) => (
+                    <div key={wo.id} className="flex items-center justify-between rounded-md border p-3">
+                      <div>
+                        <p className="font-medium">{wo.workOrderNumber}</p>
+                        <p className="text-sm text-muted-foreground">{wo.partNumber} · {wo.description || 'WAD'}</p>
+                      </div>
+                      <Badge variant="secondary">{wo.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="rom" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                Rough Order of Magnitude
+              </CardTitle>
+              <CardDescription>Quote estimate summary grouped by ROM cost categories.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Labor Hours</p>
+                  <p className="font-medium">{hubRom.categories?.labor?.quotedHours ?? quoteFeedback?.quotedLaborHours ?? 'Not set'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Material Budget</p>
+                  <p className="font-medium">${Number(hubRom.categories?.material?.budgetAmount ?? 0).toLocaleString()}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Actual Labor</p>
+                  <p className="font-medium">{hubLabor.summary?.actualHours ?? quoteFeedback?.actualLaborHours ?? 'Pending'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Variance</p>
+                  <p className="font-medium">{hubLabor.summary?.varianceHours ?? quoteFeedback?.laborHoursVariance ?? 'Pending'}</p>
+                </div>
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
+                {[
+                  'Outside Processing',
+                  'NRC / Tooling / Design',
+                  'Capital',
+                  'G&A',
+                  'Overhead',
+                  'Quality and Compliance',
+                  'Shipping and Packaging',
+                  'Contingency',
+                  'Escalation and Inflation',
+                  'Profit / Fee',
+                ].map((label) => (
+                  <div key={label} className="rounded-md border p-3">
+                    <p className="text-sm font-medium">{label}</p>
+                    <p className="text-xs text-muted-foreground">Ready for ROM Builder data</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setLocation(`/p2-quote-form?projectId=${encodeURIComponent(project.id)}`)}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open Quote
+                </Button>
+                <Button variant="outline" onClick={() => regenerateFeedbackMutation.mutate()} disabled={regenerateFeedbackMutation.isPending}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${regenerateFeedbackMutation.isPending ? 'animate-spin' : ''}`} />
+                  Refresh Quote Feedback
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="production" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Layers className="h-5 w-5" />
+                Production
+              </CardTitle>
+              <CardDescription>P2 Control Center status, assembly tree, and manufactured work order progress.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Production Orders</p>
+                  <p className="font-medium">{hubProduction.summary?.productionOrderCount ?? 0}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Serialized Parts</p>
+                  <p className="font-medium">{hubProduction.summary?.serializedCount ?? traceabilitySerials.length}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Completed Serialized</p>
+                  <p className="font-medium">{hubProduction.summary?.completedSerializedCount ?? 0}</p>
+                </div>
+              </div>
+              <Button onClick={() => setLocation('/p2-control-center')}>
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open P2 Control Center
+              </Button>
+              {Array.isArray(hubProduction.productionOrders) && hubProduction.productionOrders.length > 0 ? (
+                <div className="space-y-2">
+                  {hubProduction.productionOrders.slice(0, 8).map((order: any) => (
+                    <div key={order.id} className="flex items-center justify-between rounded-md border p-3">
+                      <div>
+                        <p className="font-medium">{order.order_id}</p>
+                        <p className="text-sm text-muted-foreground">{order.sku} · {order.part_name}</p>
+                      </div>
+                      <Badge variant="secondary">{order.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No P2 production orders are linked yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="material" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Material
+              </CardTitle>
+              <CardDescription>Project part list, parts requests, purchasing status, material budget, and receiving evidence.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">PO Parts</p>
+                  <p className="font-medium">{Array.isArray(hubMaterial.parts) ? hubMaterial.parts.length : 0}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Parts Requests</p>
+                  <p className="font-medium">{hubMaterial.summary?.partsRequestCount ?? 0}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Received Materials</p>
+                  <p className="font-medium">{hubMaterial.summary?.receivedMaterialCount ?? 0}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Received Cost</p>
+                  <p className="font-medium">${Number(hubMaterial.summary?.receivedMaterialCost ?? 0).toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setLocation(`/inventory/parts-request?projectId=${encodeURIComponent(project.id)}`)}>
+                  <Package className="h-4 w-4 mr-2" />
+                  Create Parts Request
+                </Button>
+                <Button variant="outline" onClick={() => setLocation(`/pm-control-center?project=${project.id}`)}>
+                  <BarChart2 className="h-4 w-4 mr-2" />
+                  Material Budget
+                </Button>
+              </div>
+              {Array.isArray(hubMaterial.parts) && hubMaterial.parts.length > 0 && (
+                <div className="space-y-2">
+                  {hubMaterial.parts.map((part: any) => (
+                    <div key={part.id} className="flex items-center justify-between rounded-md border p-3">
+                      <div>
+                        <p className="font-medium">{part.part_number}</p>
+                        <p className="text-sm text-muted-foreground">{part.part_name}</p>
+                      </div>
+                      <Badge variant="outline">Qty {part.quantity}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="parts-request" className="space-y-4">
@@ -3251,6 +3468,71 @@ export default function ProjectDetailPage() {
                     </div>
                   ))}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="shipping-invoicing" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="h-5 w-5" />
+                Shipping / Invoicing
+              </CardTitle>
+              <CardDescription>Packing lists, shipped CoCs, and invoice status for this project.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Packing Lists</p>
+                  <p className="font-medium">{hubShippingInvoicing.summary?.packingSlipCount ?? traceability?.packingSlips?.length ?? 0}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Invoices</p>
+                  <p className="font-medium">{hubShippingInvoicing.summary?.invoiceCount ?? (traceability?.invoice ? 1 : 0)}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Needed</p>
+                  <p className="font-medium">{hubShippingInvoicing.summary?.needsInvoice ? 'Yes' : 'No'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Received</p>
+                  <p className="font-medium">{hubShippingInvoicing.summary?.receivedInvoices ?? 0}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setLocation('/p2-control-center?tab=shipping')}>
+                  <Truck className="h-4 w-4 mr-2" />
+                  Open P2 Shipping
+                </Button>
+                <Button variant="outline" onClick={() => setLocation('/finance/invoices')}>
+                  <Receipt className="h-4 w-4 mr-2" />
+                  Open Invoices
+                </Button>
+              </div>
+              {Array.isArray(hubShippingInvoicing.packingSlips) && hubShippingInvoicing.packingSlips.length > 0 ? (
+                <div className="space-y-2">
+                  {hubShippingInvoicing.packingSlips.map((slip: any) => (
+                    <div key={slip.id} className="flex items-center justify-between rounded-md border p-3">
+                      <div>
+                        <p className="font-medium">{slip.packing_slip_number}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {slip.ship_date ? format(new Date(slip.ship_date), 'MMM d, yyyy') : 'Ship date pending'}
+                          {slip.tracking_number ? ` · ${slip.tracking_number}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{slip.status}</Badge>
+                        <Button variant="ghost" size="sm" onClick={() => setLocation(`/p2/packing-slip/${slip.id}`)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No packing lists are linked yet.</p>
               )}
             </CardContent>
           </Card>

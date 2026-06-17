@@ -7,9 +7,10 @@ import {
   p2PurchaseOrderItems,
   p2ProductionOrders,
   partRoutings,
+  projects,
   insertP2LayupScheduleSchema 
 } from '../../schema';
-import { eq, and, gte, lte, desc, inArray, ilike, max } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, inArray, ilike, max, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import JsBarcode from 'jsbarcode';
@@ -663,12 +664,54 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
       .where(eq(p2SerializedItems.poId, po.id));
     const startSeq = (maxSeqResult[0]?.maxSeq ?? 0) + 1;
 
-    let itemRouting = await db.query.partRoutings.findFirst({
-      where: and(eq(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
-    });
+    const [projectForPoItem] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.poId, po.id), eq(projects.p2PoItemId, poItem.id)))
+      .limit(1);
+    const [projectForPo] = projectForPoItem
+      ? [projectForPoItem]
+      : await db
+          .select({ id: projects.id })
+          .from(projects)
+          .where(eq(projects.poId, po.id))
+          .limit(1);
+    const projectId = projectForPo?.id ?? null;
+
+    let itemRouting = projectId
+      ? await db.query.partRoutings.findFirst({
+          where: and(
+            eq(partRoutings.projectId, projectId),
+            eq(partRoutings.partNumber, poItem.partNumber),
+            eq(partRoutings.isActive, true)
+          ),
+        })
+      : null;
+    if (!itemRouting && projectId) {
+      itemRouting = await db.query.partRoutings.findFirst({
+        where: and(
+          eq(partRoutings.projectId, projectId),
+          ilike(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
     if (!itemRouting) {
       itemRouting = await db.query.partRoutings.findFirst({
-        where: and(ilike(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
+        where: and(
+          isNull(partRoutings.projectId),
+          eq(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
+    if (!itemRouting) {
+      itemRouting = await db.query.partRoutings.findFirst({
+        where: and(
+          isNull(partRoutings.projectId),
+          ilike(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
       });
     }
     const baseMatch = poItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);

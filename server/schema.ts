@@ -5480,6 +5480,7 @@ export const routingTypeEnum = pgEnum('routing_type', [
 export const partRoutings = pgTable('part_routings', {
   id: uuid('id').defaultRandom().primaryKey(),
   inventoryItemId: text('inventory_item_id').notNull(), // Reference to inventory item
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }), // Nullable for legacy routings
   partNumber: text('part_number').notNull(), // Denormalized for display
   partName: text('part_name').notNull(), // Denormalized for display
   routingName: text('routing_name').default('Default').notNull(), // AS9100 routing name for revision control
@@ -5503,6 +5504,7 @@ export const partRoutings = pgTable('part_routings', {
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   inventoryItemIdx: index('part_routings_inventory_item_idx').on(table.inventoryItemId),
+  projectIdx: index('part_routings_project_idx').on(table.projectId),
 }));
 
 // Routing Operations - Step-by-step operations within a part routing

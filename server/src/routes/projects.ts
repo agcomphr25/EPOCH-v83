@@ -1854,6 +1854,40 @@ router.get('/:id/traceability', async (req, res) => {
       [project.poId]
     );
     const po = poRows[0] ?? null;
+    const linkedPoId = Number(project.poId);
+    let traceabilityPoIds = [linkedPoId].filter(Number.isFinite);
+
+    if (po) {
+      const poFamilyRows = await pool.query<{
+        id: number;
+        parentPoId: number | null;
+        revisionNumber: number;
+      }>(
+        `WITH linked_po AS (
+           SELECT id, parent_po_id
+           FROM p2_purchase_orders
+           WHERE id = $1
+         ),
+         family_root AS (
+           SELECT COALESCE(parent_po_id, id) AS root_id
+           FROM linked_po
+         )
+         SELECT id,
+                parent_po_id AS "parentPoId",
+                revision_number AS "revisionNumber"
+         FROM p2_purchase_orders
+         WHERE id = (SELECT root_id FROM family_root)
+            OR parent_po_id = (SELECT root_id FROM family_root)
+         ORDER BY revision_number ASC, id ASC`,
+        [linkedPoId]
+      );
+      const familyIds = poFamilyRows
+        .map((row) => Number(row.id))
+        .filter(Number.isFinite);
+      if (familyIds.length > 0) {
+        traceabilityPoIds = familyIds;
+      }
+    }
 
     const optionalTraceQuery = async <T>(
       label: string,
@@ -1875,10 +1909,10 @@ router.get('/:id/traceability', async (req, res) => {
     }>('lot lookup',
       `SELECT id, lot_number, status, shipped_at, created_at, quantity, po_number
        FROM p2_lot_numbers
-       WHERE po_id = $1
+       WHERE po_id = ANY($1::int[])
        ORDER BY created_at DESC
        LIMIT 1`,
-      [project.poId]
+      [traceabilityPoIds]
     );
     const lot = lots[0] ?? null;
 
@@ -1947,9 +1981,9 @@ router.get('/:id/traceability', async (req, res) => {
               ps.tracking_number, ps.total_quantity, ps.created_at, ps.external_pdf_url
        FROM p2_packing_slips ps
        JOIN p2_lot_numbers ln ON ln.id = ps.lot_number_id
-       WHERE ln.po_id = $1
+       WHERE ln.po_id = ANY($1::int[])
        ORDER BY ps.created_at ASC`,
-      [project.poId]
+      [traceabilityPoIds]
     );
     packingSlips = allSlipsResult;
 
@@ -1958,13 +1992,15 @@ router.get('/:id/traceability', async (req, res) => {
       id: string; serial_number: string; barcode: string; part_number: string;
       part_name: string; status: string; completed_at: string | null; finalized_at: string | null;
       current_department: string; sku: string | null; sequence_number: number;
+      po_id: number; po_number: string;
     }>('serialized items lookup',
       `SELECT id, serial_number, barcode, part_number, part_name, status,
-              completed_at, finalized_at, current_department, sku, sequence_number
+              completed_at, finalized_at, current_department, sku, sequence_number,
+              po_id, po_number
        FROM p2_serialized_items
-       WHERE po_id = $1
-       ORDER BY part_number, sequence_number`,
-      [project.poId]
+       WHERE po_id = ANY($1::int[])
+       ORDER BY po_id, part_number, sequence_number`,
+      [traceabilityPoIds]
     );
 
     return res.json({

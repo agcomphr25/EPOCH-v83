@@ -67,7 +67,7 @@ interface AttachmentData {
 }
 
 interface MediaAttachmentPickerProps {
-  entityType: 'order' | 'invoice' | 'purchase_order' | 'packing_slip' | 'other';
+  entityType: 'order' | 'invoice' | 'purchase_order' | 'packing_slip' | 'inventory_item' | 'other';
   entityId: string;
   trigger?: React.ReactNode;
   onAttachmentChange?: () => void;

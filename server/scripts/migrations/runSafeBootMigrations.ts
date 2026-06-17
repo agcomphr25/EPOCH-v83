@@ -203,6 +203,7 @@ const safeFiles = [
   '0173_nonconformance_records_runtime_alignment.sql',
   '0175_repair_remaining_ff_signature_queue_orders.sql',
   '0176_part_routings_project_id.sql',
+  '0177_inventory_item_primary_image.sql',
   'investigation_308_order_duplication.sql',
 ];
 

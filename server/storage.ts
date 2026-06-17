@@ -7112,6 +7112,7 @@ export class DatabaseStorage implements IStorage {
       .select({
         request: partsRequests,
         invId: inventoryItems.id,
+        invAgPartNumber: inventoryItems.agPartNumber,
         invName: inventoryItems.name,
         invSource: inventoryItems.source,
         invVendorId: inventoryItems.vendorId,
@@ -7123,7 +7124,13 @@ export class DatabaseStorage implements IStorage {
         vendorPoStatus: vendorPOs.status,
       })
       .from(partsRequests)
-      .leftJoin(inventoryItems, eq(inventoryItems.agPartNumber, partsRequests.agPartNumber))
+      .leftJoin(
+        inventoryItems,
+        eq(
+          inventoryItems.agPartNumber,
+          sql`COALESCE(NULLIF(${partsRequests.agPartNumber}, ''), NULLIF(${partsRequests.partNumber}, ''))`
+        )
+      )
       .leftJoin(projects, eq(projects.id, partsRequests.projectId))
       .leftJoin(vendorPOs, eq(vendorPOs.id, partsRequests.vendorPoId))
       .where(eq(partsRequests.isActive, true))
@@ -7133,7 +7140,7 @@ export class DatabaseStorage implements IStorage {
       ...r.request,
       inventoryItem: r.invId ? {
         id: r.invId,
-        agPartNumber: r.request.agPartNumber,
+        agPartNumber: r.invAgPartNumber ?? r.request.agPartNumber ?? r.request.partNumber,
         name: r.invName,
         source: r.invSource,
         vendorName: r.invSource,
@@ -7275,7 +7282,13 @@ export class DatabaseStorage implements IStorage {
         projectName: projects.projectName,
       })
       .from(partsRequests)
-      .leftJoin(inventoryItems, eq(partsRequests.agPartNumber, inventoryItems.agPartNumber))
+      .leftJoin(
+        inventoryItems,
+        eq(
+          inventoryItems.agPartNumber,
+          sql`COALESCE(NULLIF(${partsRequests.agPartNumber}, ''), NULLIF(${partsRequests.partNumber}, ''))`
+        )
+      )
       .leftJoin(departments, eq(partsRequests.departmentId, departments.id))
       .leftJoin(projects, eq(projects.id, partsRequests.projectId))
       .where(and(

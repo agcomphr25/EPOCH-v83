@@ -4472,6 +4472,32 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const allPoIds = allPos
         .map((po: any) => Number(po.id))
         .filter(Number.isFinite);
+      const familyRootByPoId = new Map<number, number>();
+      const currentPoIdByFamilyRoot = new Map<number, { poId: number; revisionNumber: number }>();
+      for (const po of allPos as any[]) {
+        const poId = Number(po.id);
+        if (!Number.isFinite(poId)) continue;
+        const rootId = Number(po.parentPoId ?? po.parent_po_id ?? po.id);
+        const familyRootId = Number.isFinite(rootId) ? rootId : poId;
+        familyRootByPoId.set(poId, familyRootId);
+        if (po.isCurrentRevision === false) continue;
+        const revisionNumber = Number(po.revisionNumber ?? po.revision_number ?? 0) || 0;
+        const existing = currentPoIdByFamilyRoot.get(familyRootId);
+        if (!existing || revisionNumber >= existing.revisionNumber) {
+          currentPoIdByFamilyRoot.set(familyRootId, { poId, revisionNumber });
+        }
+      }
+      const displayPoIdForPoId = (poId: number) => {
+        const familyRootId = familyRootByPoId.get(poId) ?? poId;
+        return currentPoIdByFamilyRoot.get(familyRootId)?.poId ?? poId;
+      };
+      const familyPoIdsByDisplayPoId = new Map<number, number[]>();
+      for (const poId of allPoIds) {
+        const displayPoId = displayPoIdForPoId(poId);
+        const familyPoIds = familyPoIdsByDisplayPoId.get(displayPoId) ?? [];
+        familyPoIds.push(poId);
+        familyPoIdsByDisplayPoId.set(displayPoId, familyPoIds);
+      }
       p2StatusStage = 'loading legacy project production rows';
       const legacyProductionRows = allPoIds.length > 0
         ? await optionalP2Rows(
@@ -4649,6 +4675,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       );
       const pos = allPos.filter((po: any) => {
         const poId = Number(po.id);
+        if (displayPoIdForPoId(poId) !== poId) return false;
         const hasProductionHistory = poIdsWithSerializedUnits.has(poId)
           || legacyStatsByPoId.has(poId)
           || poIdsWithLegacyProjectProduction.has(poId)
@@ -4828,7 +4855,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       p2StatusStage = 'building P2 status response';
       const poStatuses = pos.map((po: any) => {
         const poId = Number(po.id);
-        const poItems = serializedItems.filter((s: any) => Number(s.poId ?? s.po_id) === poId);
+        const familyPoIds = familyPoIdsByDisplayPoId.get(poId) ?? [poId];
+        const familyPoIdSet = new Set<number>(familyPoIds);
+        const poItems = serializedItems.filter((s: any) => familyPoIdSet.has(Number(s.poId ?? s.po_id)));
         const linkedProject = projectByPoId.get(poId);
         const travelerProjectStats = linkedProject?.projectId
           ? travelerStatsByProject.get(String(linkedProject.projectId))
@@ -4836,15 +4865,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const travelerCompletedItems = Number(travelerProjectStats?.completedQty ?? 0);
         const travelerInProductionItems = Number(travelerProjectStats?.inProductionQty ?? 0);
         const travelerTotalItems = Number(travelerProjectStats?.totalQty ?? 0);
-        const legacyP2Stats = legacyStatsByPoId.get(poId);
-        const legacyProjectStats = legacyProjectStatsByPoId.get(poId);
-        const legacyStats = legacyP2Stats || legacyProjectStats
+        const sumStats = (rows: Array<any | undefined>) => rows.some(Boolean)
           ? {
-              totalQty: Number(legacyP2Stats?.totalQty ?? 0) + Number(legacyProjectStats?.totalQty ?? 0),
-              completedQty: Number(legacyP2Stats?.completedQty ?? 0) + Number(legacyProjectStats?.completedQty ?? 0),
-              inProductionQty: Number(legacyP2Stats?.inProductionQty ?? 0) + Number(legacyProjectStats?.inProductionQty ?? 0),
+              totalQty: rows.reduce((sum, row) => sum + Number(row?.totalQty ?? 0), 0),
+              completedQty: rows.reduce((sum, row) => sum + Number(row?.completedQty ?? 0), 0),
+              inProductionQty: rows.reduce((sum, row) => sum + Number(row?.inProductionQty ?? 0), 0),
             }
-          : null;
+            : null;
+        const legacyP2Stats = sumStats(familyPoIds.map((id) => legacyStatsByPoId.get(id)));
+        const legacyProjectStats = sumStats(familyPoIds.map((id) => legacyProjectStatsByPoId.get(id)));
+        const legacyStats = sumStats([legacyP2Stats, legacyProjectStats]);
         
         // Use actual column names: status (ACTIVE/COMPLETED/SCRAPPED/HOLD) and currentDepartment
         const serializedCompletedItems = poItems.filter((s: any) => {
@@ -4856,7 +4886,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             || s.packingSlipId;
         }).length;
         const legacyCompletedItems = Number(legacyStats?.completedQty ?? 0);
-        const shippedLotCompletedItems = shippedQtyByPoId.get(poId) ?? 0;
+        const shippedLotCompletedItems = familyPoIds.reduce(
+          (sum, familyPoId) => sum + (shippedQtyByPoId.get(familyPoId) ?? 0),
+          0
+        );
         const completedItems = Math.max(
           serializedCompletedItems,
           legacyCompletedItems,
@@ -4890,12 +4923,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
         // totalItems is the sum of ordered quantities across all line items so that
         // lines without serialized items generated yet are still reflected on the card.
-        const totalItems = Math.max(
-          orderedQtyByPoId.get(poId) ?? 0,
-          Number(legacyStats?.totalQty ?? 0),
-          travelerTotalItems,
-          poItems.length
+        const currentPoOrderedQty = orderedQtyByPoId.get(poId) ?? 0;
+        const familyOrderedQty = familyPoIds.reduce(
+          (sum, familyPoId) => sum + (orderedQtyByPoId.get(familyPoId) ?? 0),
+          0
         );
+        const totalItems = currentPoOrderedQty > 0
+          ? currentPoOrderedQty
+          : Math.max(familyOrderedQty, travelerTotalItems, poItems.length);
         const inProductionItems = Math.min(
           rawInProductionItems,
           Math.max(0, totalItems - completedItems)

@@ -848,6 +848,10 @@ function App() {
                     component={DepartmentPartsRequestPage}
                   />
                   <Route
+                    path="/inventory/department-parts-request"
+                    component={DepartmentPartsRequestPage}
+                  />
+                  <Route
                     path="/inventory/consolidated-needs"
                     component={ConsolidatedNeedsListPage}
                   />

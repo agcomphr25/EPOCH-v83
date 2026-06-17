@@ -4987,6 +4987,35 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         await storage.getP2SerializedItems({})
       );
 
+      const poFamilyResult = await dbPool.query(
+        `SELECT
+           id,
+           parent_po_id AS "parentPoId",
+           revision_number AS "revisionNumber",
+           is_current_revision AS "isCurrentRevision"
+         FROM p2_purchase_orders`
+      );
+      const poFamilyRows = p2ControlRows(poFamilyResult);
+      const familyRootByPoId = new Map<number, number>();
+      const currentPoIdByFamilyRoot = new Map<number, { poId: number; revisionNumber: number }>();
+      for (const po of poFamilyRows as any[]) {
+        const poId = Number(po.id);
+        if (!Number.isFinite(poId)) continue;
+        const rootId = Number(po.parentPoId ?? po.parent_po_id ?? po.id);
+        const familyRootId = Number.isFinite(rootId) ? rootId : poId;
+        familyRootByPoId.set(poId, familyRootId);
+        if (po.isCurrentRevision === false) continue;
+        const revisionNumber = Number(po.revisionNumber ?? po.revision_number ?? 0) || 0;
+        const existing = currentPoIdByFamilyRoot.get(familyRootId);
+        if (!existing || revisionNumber >= existing.revisionNumber) {
+          currentPoIdByFamilyRoot.set(familyRootId, { poId, revisionNumber });
+        }
+      }
+      const displayPoIdForPoId = (poId: number) => {
+        const familyRootId = familyRootByPoId.get(poId) ?? poId;
+        return currentPoIdByFamilyRoot.get(familyRootId)?.poId ?? poId;
+      };
+
       const poItemResult = await dbPool.query(
         `SELECT
            poi.id AS "poItemId",
@@ -5001,6 +5030,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          FROM p2_purchase_order_items poi
          JOIN p2_purchase_orders po ON po.id = poi.po_id
          WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')
+           AND po.is_current_revision IS NOT FALSE
          ORDER BY poi.po_id, poi.created_at, poi.id`
       );
       const poItems = Array.isArray(poItemResult)
@@ -5040,34 +5070,37 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         (Number(a.sequenceNumber) || 0) - (Number(b.sequenceNumber) || 0) ||
         String(a.id).localeCompare(String(b.id));
 
-      const isCompletedOrPastScheduling = (s: any) => {
-        if (s.status === 'COMPLETED') return true;
+      const consumesCurrentRevisionCapacity = (s: any) => {
+        if (s.status === 'COMPLETED' || s.status === 'SCRAPPED') return true;
         if (s.status !== 'ACTIVE') return false;
         const dept = String(s.currentDepartment || '').trim();
-        return dept !== '' && dept !== 'Pending Layup' && dept !== 'Layup';
+        return dept !== '' && dept !== 'Pending Layup';
       };
 
-      const poItemsByPoId = new Map<number, any[]>();
+      const poItemsByDisplayPoId = new Map<number, any[]>();
       for (const poItem of poItems) {
-        const poId = Number(poItem.poId);
-        if (!poItemsByPoId.has(poId)) {
-          poItemsByPoId.set(poId, []);
+        const displayPoId = displayPoIdForPoId(Number(poItem.poId));
+        if (!poItemsByDisplayPoId.has(displayPoId)) {
+          poItemsByDisplayPoId.set(displayPoId, []);
         }
-        poItemsByPoId.get(poId)!.push(poItem);
+        poItemsByDisplayPoId.get(displayPoId)!.push(poItem);
       }
 
       const consumedCapacityByPoItemId = new Map<number, number>();
-      for (const [poId, poLineItems] of poItemsByPoId.entries()) {
-        let completedOrPastSchedulingCount = (serializedItems as any[])
-          .filter((s: any) => Number(s.poId) === poId && isCompletedOrPastScheduling(s))
+      for (const [displayPoId, poLineItems] of poItemsByDisplayPoId.entries()) {
+        let consumedRevisionFamilyCount = (serializedItems as any[])
+          .filter((s: any) =>
+            displayPoIdForPoId(Number(s.poId)) === displayPoId &&
+            consumesCurrentRevisionCapacity(s)
+          )
           .length;
 
         for (const poItem of poLineItems) {
           const poItemId = Number(poItem.poItemId);
           const orderedQuantity = Number(poItem.orderedQuantity) || 0;
-          const consumedForLine = Math.min(orderedQuantity, completedOrPastSchedulingCount);
+          const consumedForLine = Math.min(orderedQuantity, consumedRevisionFamilyCount);
           consumedCapacityByPoItemId.set(poItemId, consumedForLine);
-          completedOrPastSchedulingCount = Math.max(0, completedOrPastSchedulingCount - consumedForLine);
+          consumedRevisionFamilyCount = Math.max(0, consumedRevisionFamilyCount - consumedForLine);
         }
       }
 
@@ -5084,23 +5117,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           orderedQuantity - completedCount
         );
 
-        const scheduledItems = items.filter((s: any) =>
-          s.status === 'ACTIVE' && String(s.currentDepartment || '').trim() === 'Layup'
-        );
         const pendingItems = items.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
           const dept = String(s.currentDepartment || '').trim();
           return dept === '' || dept === 'Pending Layup';
         });
 
-        const scheduledToShow = scheduledItems.slice(0, earlyStageCapacity);
-        const pendingToShow = pendingItems.slice(
-          0,
-          Math.max(0, earlyStageCapacity - scheduledToShow.length)
-        );
+        const pendingToShow = pendingItems.slice(0, earlyStageCapacity);
 
-        for (const s of [...scheduledToShow, ...pendingToShow]) {
-          const isScheduled = String(s.currentDepartment || '').trim() === 'Layup';
+        for (const s of pendingToShow) {
           schedulingList.push({
             id: s.id,
             poId: poItem.poId,
@@ -5109,11 +5134,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             partNumber: poItem.partNumber || s.partNumber || 'Unknown',
             description: poItem.partName || s.partName || '',
             totalQuantity: 1,
-            scheduledQuantity: isScheduled ? 1 : 0,
-            remainingQuantity: isScheduled ? 0 : 1,
+            scheduledQuantity: 0,
+            remainingQuantity: 1,
             dueDate: poItem.dueDate,
             priority: 'normal',
-            status: isScheduled ? 'scheduled' : 'pending'
+            status: 'pending'
           });
         }
       }

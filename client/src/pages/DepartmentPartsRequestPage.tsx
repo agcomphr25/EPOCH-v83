@@ -31,6 +31,10 @@ type InventoryItem = {
   name: string;
   sku?: string;
   department?: string;
+  source?: string | null;
+  supplierPartNumber?: string | null;
+  vendorId?: number | null;
+  defaultOrderMethod?: string | null;
 
   assignedDepartmentIds?: number[];
   currentBalance?: number;
@@ -188,6 +192,9 @@ export default function DepartmentPartsRequestPage() {
       requestedBy: string;
       department: string;
       departmentId: number | null;
+      vendorId: number | null;
+      supplier: string | null;
+      orderMethod: string | null;
       catalogFixNeeded: boolean;
       outOfDeptReason: string | null;
       requestedForEmployeeId: number | null;
@@ -330,6 +337,9 @@ export default function DepartmentPartsRequestPage() {
       requestedBy: requestForm.requestedBy.trim(),
       department: effectiveDepartment,
       departmentId: effectiveDepartmentId,
+      vendorId: selectedItem.vendorId ?? null,
+      supplier: selectedItem.source || null,
+      orderMethod: selectedItem.defaultOrderMethod || null,
       catalogFixNeeded: outOfDept,
       outOfDeptReason: outOfDept ? requestForm.outOfDeptReason : null,
       requestedForEmployeeId: requestForm.requestedForEmployeeId
@@ -792,6 +802,10 @@ export default function DepartmentPartsRequestPage() {
                 <div>
                   <span className="text-muted-foreground">Current Balance:</span>
                   <p className="font-medium">{selectedItem?.currentBalance ?? 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Source:</span>
+                  <p className="font-medium">{selectedItem?.source || 'Unassigned'}</p>
                 </div>
               </div>
               {selectedItemOutOfDept && (

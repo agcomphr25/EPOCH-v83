@@ -201,6 +201,16 @@ type InventoryItemOption = {
   manufacturedCategory?: string | null;
 };
 
+type InventoryDepartmentOption = {
+  id: number;
+  name: string;
+};
+
+type DepartmentOption = {
+  value: string;
+  label: string;
+};
+
 type AssemblyStockState = 'on-hand' | 'low-stock' | 'blocked';
 type AssemblyManufactureState = 'ready' | 'waiting' | 'needs-plan';
 type AssemblyTreeNode = {
@@ -318,6 +328,46 @@ const departmentOptions = [
   { value: 'paint', label: 'Paint' },
   { value: 'final_qc', label: 'Final QC' },
 ];
+const fallbackBomDepartmentOptions: DepartmentOption[] = [
+  { value: 'Production Queue', label: 'Production Queue' },
+  { value: 'Layup', label: 'Layup' },
+  { value: 'Barcode', label: 'Barcode' },
+  { value: 'CNC', label: 'CNC' },
+  { value: 'Gunsmith', label: 'Gunsmith' },
+  { value: 'Paint', label: 'Paint' },
+  { value: 'Finish', label: 'Finish' },
+  { value: 'Finish QC', label: 'Finish QC' },
+  { value: 'Shipping QC', label: 'Shipping QC' },
+  { value: 'Shipping', label: 'Shipping' },
+  { value: 'Cutting Table', label: 'Cutting Table' },
+  { value: 'Office', label: 'Office' },
+  { value: 'Assembly', label: 'Assembly' },
+];
+const legacyDepartmentLabels: Record<string, string> = {
+  cutting_table: 'Cutting Table',
+  core_department: 'Core Department',
+  layup: 'Layup',
+  assembly: 'Assembly',
+  disassembly: 'Disassembly',
+  cnc: 'CNC',
+  finish: 'Finish',
+  paint: 'Paint',
+  final_qc: 'Final QC',
+};
+
+function bomDepartmentLabel(value: string | undefined, options: DepartmentOption[]) {
+  if (!value) return '';
+  return options.find((department) => department.value === value)?.label ?? legacyDepartmentLabels[value] ?? value;
+}
+
+function bomDepartmentOptionsWithCurrent(options: DepartmentOption[], value: string | undefined) {
+  if (!value || options.some((department) => department.value === value)) return options;
+  return [...options, { value, label: bomDepartmentLabel(value, options) }];
+}
+
+function defaultBomDepartment(options: DepartmentOption[]) {
+  return options.find((department) => department.value === 'Layup')?.value ?? options[0]?.value ?? 'Layup';
+}
 const employeeRoleOptions = [
   'Operator',
   'Technician',
@@ -1152,6 +1202,18 @@ export default function DraftBOMBuilderPage() {
     queryKey: ['/api/inventory'],
     queryFn: () => apiRequest('/api/inventory'),
   });
+
+  const { data: inventoryDepartments = [] } = useQuery<InventoryDepartmentOption[]>({
+    queryKey: ['/api/inventory/departments'],
+  });
+
+  const bomDepartmentOptions = useMemo<DepartmentOption[]>(() => {
+    if (inventoryDepartments.length === 0) return fallbackBomDepartmentOptions;
+    return inventoryDepartments.map((department) => ({
+      value: department.name,
+      label: department.name,
+    }));
+  }, [inventoryDepartments]);
 
   const projectOptions = useMemo(() => {
     return [...projects].sort((a, b) => projectLabel(a).localeCompare(projectLabel(b)));
@@ -2464,6 +2526,7 @@ export default function DraftBOMBuilderPage() {
                   draftLines={draft.lines}
                   savedDraftBoms={draft.savedDraftBoms ?? []}
                   inventoryItems={activeInventoryItems}
+                  departmentOptions={bomDepartmentOptions}
                   seedLineId={wizardSeedLineId}
                   onSeedLineConsumed={() => setWizardSeedLineId(null)}
                   onSaveWizardBom={saveWizardBom}
@@ -3405,6 +3468,7 @@ function DraftBomWizardWorkspace({
   draftLines,
   savedDraftBoms,
   inventoryItems,
+  departmentOptions,
   seedLineId,
   onSeedLineConsumed,
   onSaveWizardBom,
@@ -3414,6 +3478,7 @@ function DraftBomWizardWorkspace({
   draftLines: BomLine[];
   savedDraftBoms: DraftPartBom[];
   inventoryItems: InventoryItemOption[];
+  departmentOptions: DepartmentOption[];
   seedLineId: string | null;
   onSeedLineConsumed: () => void;
   onSaveWizardBom: (part: DraftBomPart, bom: DraftPartBom) => void;
@@ -3436,7 +3501,8 @@ function DraftBomWizardWorkspace({
   const [componentDescription, setComponentDescription] = useState('');
   const [componentQuantity, setComponentQuantity] = useState('1');
   const [componentManufactured, setComponentManufactured] = useState(false);
-  const [componentDepartment, setComponentDepartment] = useState(defaultDepartment);
+  const currentDefaultDepartment = defaultBomDepartment(departmentOptions);
+  const [componentDepartment, setComponentDepartment] = useState(currentDefaultDepartment);
 
   const draftPartLines = useMemo(
     () => draftLines.filter((line) => line.isDraftPart !== false || line.inventoryItemId || line.description || line.agPartNumber),
@@ -3507,7 +3573,7 @@ function DraftBomWizardWorkspace({
     setComponentDescription('');
     setComponentQuantity('1');
     setComponentManufactured(false);
-    setComponentDepartment(defaultDepartment);
+    setComponentDepartment(currentDefaultDepartment);
   }
 
   function syncComponentFromDraftLine(lineId: string) {
@@ -3517,7 +3583,7 @@ function DraftBomWizardWorkspace({
     setComponentPartNumber(linePartNumber(line));
     setComponentDescription(lineDescription(line));
     setComponentManufactured(line.isManufactured === true);
-    setComponentDepartment(line.firstDepartment ?? defaultDepartment);
+    setComponentDepartment(line.firstDepartment ?? currentDefaultDepartment);
   }
 
   function syncComponentFromInventory(itemId: string) {
@@ -3527,7 +3593,7 @@ function DraftBomWizardWorkspace({
     setComponentPartNumber(inventoryPartNumber(item));
     setComponentDescription(inventoryDescription(item));
     setComponentManufactured(isInventoryManufactured(item));
-    setComponentDepartment(defaultDepartment);
+    setComponentDepartment(currentDefaultDepartment);
   }
 
   function addComponent() {
@@ -3542,7 +3608,7 @@ function DraftBomWizardWorkspace({
       description: componentDescription.trim() || componentPartNumber.trim(),
       quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
       isManufactured: componentManufactured,
-      firstDepartment: componentDepartment || defaultDepartment,
+      firstDepartment: componentDepartment || currentDefaultDepartment,
     };
 
     setActiveBom((current) => {
@@ -3885,7 +3951,7 @@ function DraftBomWizardWorkspace({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {departmentOptions.map((department) => (
+                    {bomDepartmentOptionsWithCurrent(departmentOptions, componentDepartment).map((department) => (
                       <SelectItem key={department.value} value={department.value}>
                         {department.label}
                       </SelectItem>
@@ -3960,7 +4026,7 @@ function DraftBomWizardWorkspace({
                         </TableCell>
                         <TableCell className="min-w-[160px]">
                           <Select
-                            value={component.firstDepartment || defaultDepartment}
+                            value={component.firstDepartment || currentDefaultDepartment}
                             onValueChange={(value) => updateComponent(component.id, { firstDepartment: value })}
                             disabled={!isEditMode}
                           >
@@ -3968,7 +4034,7 @@ function DraftBomWizardWorkspace({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {departmentOptions.map((department) => (
+                              {bomDepartmentOptionsWithCurrent(departmentOptions, component.firstDepartment).map((department) => (
                                 <SelectItem key={department.value} value={department.value}>
                                   {department.label}
                                 </SelectItem>

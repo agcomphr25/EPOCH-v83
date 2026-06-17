@@ -525,6 +525,15 @@ export default function ConsolidatedNeedsListPage() {
     return null;
   }, [vendorMap, vendorNameMap, normalizeVendorName]);
 
+  const getRequestVendorLabel = useCallback((request: PartsRequest): string => {
+    return (
+      request.inventoryItem?.vendorName ||
+      request.inventoryItem?.source ||
+      request.supplier ||
+      ''
+    ).trim();
+  }, []);
+
   const openLinkPoDialog = (request: PartsRequest) => {
     setLinkPoRequest(request);
     setSelectedVendorPoId(request.vendorPoId ? String(request.vendorPoId) : '');
@@ -557,6 +566,7 @@ export default function ConsolidatedNeedsListPage() {
 
     for (const request of activeRequests) {
       const vendor = getResolvedVendorForRequest(request);
+      const vendorLabel = getRequestVendorLabel(request);
 
       if (vendor) {
         // Has a resolved vendor record — group under that vendor regardless of order method
@@ -568,6 +578,24 @@ export default function ConsolidatedNeedsListPage() {
             vendorName: vendor.name,
             orderMethod: request.orderMethod || null,
             websiteUrl: vendor.website || null,
+            requests: [],
+            totalQuantity: 0,
+            totalEstimatedCost: 0,
+          };
+        }
+        groups[key].requests.push(request);
+        groups[key].totalQuantity += request.quantity;
+        groups[key].totalEstimatedCost += request.estimatedCost || 0;
+      } else if (vendorLabel) {
+        const sourceKey = normalizeVendorName(vendorLabel);
+        const key = `source-${sourceKey || vendorLabel.toLowerCase()}`;
+        if (!groups[key]) {
+          groups[key] = {
+            key,
+            vendorId: null,
+            vendorName: vendorLabel,
+            orderMethod: request.orderMethod || null,
+            websiteUrl: null,
             requests: [],
             totalQuantity: 0,
             totalEstimatedCost: 0,
@@ -613,7 +641,7 @@ export default function ConsolidatedNeedsListPage() {
         if (b.vendorName === 'Website Orders') return -1;
         return a.vendorName.localeCompare(b.vendorName);
       });
-  }, [filteredRequests, getResolvedVendorForRequest]);
+  }, [filteredRequests, getRequestVendorLabel, getResolvedVendorForRequest, normalizeVendorName]);
 
   const filteredVendorGroups = useMemo(() => {
     if (vendorFilterTab === 'po') {

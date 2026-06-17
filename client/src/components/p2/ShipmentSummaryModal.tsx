@@ -63,6 +63,8 @@ type PoItem = {
   partName: string | null;
   quantity: number | null;
   unitPrice: string | number | null;
+  specifications?: string | null;
+  notes?: string | null;
 };
 
 interface ShipmentSummaryModalProps {
@@ -126,6 +128,7 @@ export default function ShipmentSummaryModal({
         partNumber: item.partNumber,
         itemName: item.partNumber || `PO Item #${item.id}`,
         partName: item.partName ?? group?.partName ?? '',
+        lineDescription: item.specifications || item.notes || item.partName || group?.partName || '',
         quantity: Number(item.quantity) || group?.units.length || 0,
         unitPrice: Number(item.unitPrice) || 0,
         units: group?.units ?? [],
@@ -140,6 +143,7 @@ export default function ShipmentSummaryModal({
         partNumber: group.partNumber,
         itemName: group.itemName || `PO Item #${group.poItemId}`,
         partName: group.partName,
+        lineDescription: group.partName,
         quantity: group.units.length,
         unitPrice: 0,
         units: group.units,
@@ -158,6 +162,7 @@ export default function ShipmentSummaryModal({
           partNumber: poItemGroups[0].partNumber,
           itemName: poItemGroups[0].itemName || `PO Item #${poItemGroups[0].poItemId}`,
           partName: poItemGroups[0].partName,
+          lineDescription: poItemGroups[0].partName,
           quantity: poItemGroups[0].units.length,
           unitPrice: 0,
           units: poItemGroups[0].units,
@@ -185,6 +190,7 @@ export default function ShipmentSummaryModal({
     : '';
   const combinedBucketDescription = selectedPoItemOption
     ? combinedBucketOverride.description.trim() ||
+      selectedPoItemOption.lineDescription ||
       selectedPoItemOption.partName ||
       ''
     : '';
@@ -352,7 +358,7 @@ export default function ShipmentSummaryModal({
                   <SelectContent>
                     {poItemOptions.map((item) => (
                       <SelectItem key={item.poItemId} value={String(item.poItemId)}>
-                        {item.itemName || `PO Item #${item.poItemId}`} - {item.partName || item.partNumber}
+                        {item.itemName || `PO Item #${item.poItemId}`} - {item.lineDescription || item.partName || item.partNumber}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -383,9 +389,9 @@ export default function ShipmentSummaryModal({
                   <Label className="text-xs">Description</Label>
                   <Input
                     className="h-9"
-                    value={combinedBucketOverride.description}
+                    value={combinedBucketOverride.description || selectedPoItemOption?.lineDescription || ''}
                     onChange={(e) => updateCombinedBucketOverride('description', e.target.value)}
-                    placeholder={selectedPoItemOption?.partName || 'Shipment line description'}
+                    placeholder="Shipment line description"
                   />
                 </div>
                 <div className="space-y-1">

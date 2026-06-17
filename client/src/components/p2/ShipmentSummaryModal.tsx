@@ -12,6 +12,13 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { apiRequest } from '@/lib/queryClient';
 import { useQuery } from '@tanstack/react-query';
 import { Truck, Package, CalendarClock, Receipt, Plus, X } from 'lucide-react';
@@ -77,6 +84,13 @@ export default function ShipmentSummaryModal({
   const poId = serials[0]?.poId;
   const [bucketMode, setBucketMode] = useState<'combined' | 'split'>('combined');
   const [selectedPoItemId, setSelectedPoItemId] = useState<number | null>(null);
+  const [combinedBucketOverride, setCombinedBucketOverride] = useState<Omit<BucketOverrideDraft, 'enabled'>>({
+    bucketLabel: '',
+    description: '',
+    customerPoLine: '',
+    quantityAuthorized: '',
+    unitPrice: '',
+  });
   const [bucketOverrides, setBucketOverrides] = useState<Record<number, BucketOverrideDraft>>({});
 
   const { data: poItems = [] } = useQuery<PoItem[]>({
@@ -164,18 +178,56 @@ export default function ShipmentSummaryModal({
     }];
   });
 
+  const combinedBucketLabel = selectedPoItemOption
+    ? combinedBucketOverride.bucketLabel.trim() ||
+      selectedPoItemOption.itemName ||
+      `PO Item #${selectedPoItemOption.poItemId}`
+    : '';
+  const combinedBucketDescription = selectedPoItemOption
+    ? combinedBucketOverride.description.trim() ||
+      selectedPoItemOption.partName ||
+      ''
+    : '';
+
   const shipmentBucketOverrides: BillingBucketOverride[] =
     bucketMode === 'combined' && selectedPoItemOption
       ? [{
           poItemId: selectedPoItemOption.poItemId,
-          bucketLabel: selectedPoItemOption.itemName || `PO Item #${selectedPoItemOption.poItemId}`,
-          description: selectedPoItemOption.partName || undefined,
-          customerPoLine: String(selectedPoItemOption.poItemId),
-          quantityAuthorized: serials.length,
-          unitPrice: selectedPoItemOption.unitPrice || undefined,
+          bucketLabel: combinedBucketLabel,
+          description: combinedBucketDescription || undefined,
+          customerPoLine:
+            combinedBucketOverride.customerPoLine.trim() ||
+            String(selectedPoItemOption.poItemId),
+          quantityAuthorized: Number(combinedBucketOverride.quantityAuthorized) || serials.length,
+          unitPrice:
+            combinedBucketOverride.unitPrice.trim() === ''
+              ? selectedPoItemOption.unitPrice || undefined
+              : Number(combinedBucketOverride.unitPrice) || 0,
           serialIds: serials.map((serial) => serial.id),
         }]
       : enabledBucketOverrides;
+
+  const updateCombinedBucketOverride = (
+    field: keyof Omit<BucketOverrideDraft, 'enabled'>,
+    value: string,
+  ) => {
+    setCombinedBucketOverride((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const selectCombinedPoItem = (value: string) => {
+    setSelectedPoItemId(Number(value));
+    setCombinedBucketOverride({
+      bucketLabel: '',
+      description: '',
+      customerPoLine: '',
+      quantityAuthorized: '',
+      unitPrice: '',
+    });
+  };
+
+  const canConfirmShipment =
+    serials.length > 0 &&
+    (bucketMode !== 'combined' || !!selectedPoItemOption);
 
   const toggleBucketOverride = (group: (typeof poItemGroups)[number]) => {
     setBucketOverrides((prev) => {
@@ -286,38 +338,89 @@ export default function ShipmentSummaryModal({
 
         {bucketMode === 'combined' && (
           <>
-            <div className="space-y-2">
-              <div className="text-xs font-medium text-muted-foreground">PO Item Bucket / CLIN</div>
-              <RadioGroup
-                value={effectiveSelectedPoItemId ? String(effectiveSelectedPoItemId) : ''}
-                onValueChange={(value) => setSelectedPoItemId(Number(value))}
-                className="space-y-2"
-              >
-                {poItemOptions.map((group) => (
-                  <Label
-                    key={group.poItemId}
-                    htmlFor={`ship-po-item-${group.poItemId}`}
-                    className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40"
-                  >
-                    <RadioGroupItem
-                      id={`ship-po-item-${group.poItemId}`}
-                      value={String(group.poItemId)}
-                      className="mt-0.5"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-semibold">{group.itemName || `PO Item #${group.poItemId}`}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {group.units.length > 0 ? `${group.units.length} selected` : `${group.quantity} on PO`}
-                        </Badge>
-                      </span>
-                      <span className="block text-xs text-muted-foreground truncate">
-                        PO item {group.poItemId} - {group.partName}
-                      </span>
-                    </span>
-                  </Label>
-                ))}
-              </RadioGroup>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-muted-foreground">PO Line Item</div>
+                <Select
+                  value={effectiveSelectedPoItemId ? String(effectiveSelectedPoItemId) : ''}
+                  onValueChange={selectCombinedPoItem}
+                  disabled={poItemOptions.length === 0}
+                >
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Select a PO line item" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {poItemOptions.map((item) => (
+                      <SelectItem key={item.poItemId} value={String(item.poItemId)}>
+                        {item.itemName || `PO Item #${item.poItemId}`} - {item.partName || item.partNumber}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedPoItemOption ? (
+                  <div className="text-xs text-muted-foreground">
+                    Selected PO item {selectedPoItemOption.poItemId}
+                    {selectedPoItemOption.quantity ? ` - ${selectedPoItemOption.quantity} on PO` : ''}
+                  </div>
+                ) : (
+                  <div className="text-xs text-destructive">
+                    No PO line items were available for this shipment.
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-6 gap-2 rounded-md border bg-muted/20 p-3">
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Bucket / CLIN</Label>
+                  <Input
+                    className="h-9"
+                    value={combinedBucketOverride.bucketLabel}
+                    onChange={(e) => updateCombinedBucketOverride('bucketLabel', e.target.value)}
+                    placeholder={selectedPoItemOption?.itemName || 'Enter bucket / CLIN'}
+                  />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Description</Label>
+                  <Input
+                    className="h-9"
+                    value={combinedBucketOverride.description}
+                    onChange={(e) => updateCombinedBucketOverride('description', e.target.value)}
+                    placeholder={selectedPoItemOption?.partName || 'Shipment line description'}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Qty</Label>
+                  <Input
+                    className="h-9"
+                    type="number"
+                    min="1"
+                    value={combinedBucketOverride.quantityAuthorized}
+                    onChange={(e) => updateCombinedBucketOverride('quantityAuthorized', e.target.value)}
+                    placeholder={String(serials.length)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Unit Price</Label>
+                  <Input
+                    className="h-9"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={combinedBucketOverride.unitPrice}
+                    onChange={(e) => updateCombinedBucketOverride('unitPrice', e.target.value)}
+                    placeholder={selectedPoItemOption?.unitPrice ? String(selectedPoItemOption.unitPrice) : '0.00'}
+                  />
+                </div>
+                <div className="space-y-1 col-span-6">
+                  <Label className="text-xs">Revised PO Line Reference</Label>
+                  <Input
+                    className="h-9"
+                    value={combinedBucketOverride.customerPoLine}
+                    onChange={(e) => updateCombinedBucketOverride('customerPoLine', e.target.value)}
+                    placeholder={selectedPoItemOption ? String(selectedPoItemOption.poItemId) : 'optional'}
+                  />
+                </div>
+              </div>
             </div>
 
             <Separator />
@@ -332,7 +435,11 @@ export default function ShipmentSummaryModal({
                   <div className="flex items-center gap-2">
                     <Receipt className="h-4 w-4 text-emerald-600 shrink-0" />
                     <span className="text-xs text-muted-foreground">Bucket / CLIN</span>
-                    <span className="font-mono text-sm font-semibold">{group.itemName || `PO Item #${group.poItemId}`}</span>
+                    <span className="font-mono text-sm font-semibold">
+                      {bucketMode === 'combined' && combinedBucketLabel
+                        ? combinedBucketLabel
+                        : group.itemName || `PO Item #${group.poItemId}`}
+                    </span>
                     <Badge variant="secondary" className="text-xs">
                       {group.units.length} unit{group.units.length !== 1 ? 's' : ''}
                     </Badge>
@@ -340,7 +447,11 @@ export default function ShipmentSummaryModal({
                   <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                     <Package className="h-3.5 w-3.5 shrink-0" />
                     <span className="font-mono text-foreground">{group.partNumber}</span>
-                    <span className="truncate">{group.partName}</span>
+                    <span className="truncate">
+                      {bucketMode === 'combined' && combinedBucketDescription
+                        ? combinedBucketDescription
+                        : group.partName}
+                    </span>
                   </div>
                 </div>
                 {bucketMode === 'split' && (
@@ -441,7 +552,7 @@ export default function ShipmentSummaryModal({
           </Button>
           <Button
             className="bg-blue-600 hover:bg-blue-700 text-white"
-            disabled={serials.length === 0}
+            disabled={!canConfirmShipment}
             onClick={() => onConfirm([], shipmentBucketOverrides)}
           >
             <Truck className="h-4 w-4 mr-2" />

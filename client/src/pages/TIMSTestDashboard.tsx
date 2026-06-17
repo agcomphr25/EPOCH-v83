@@ -10,6 +10,7 @@ import {
   User,
   Factory,
   GraduationCap,
+  ClipboardList,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -123,6 +124,20 @@ export default function TIMSTestDashboard() {
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Equipment maintenance
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/inventory/department-parts-request">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-sky-200">
+            <CardContent className="p-4 text-center">
+              <ClipboardList className="w-8 h-8 text-sky-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Parts Request
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Request parts for CNC and maintenance work
               </p>
             </CardContent>
           </Card>

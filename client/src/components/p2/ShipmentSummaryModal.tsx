@@ -1,6 +1,7 @@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -11,6 +12,8 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { apiRequest } from '@/lib/queryClient';
+import { useQuery } from '@tanstack/react-query';
 import { Truck, Package, CalendarClock, Receipt, Plus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -46,6 +49,14 @@ type BucketOverrideDraft = {
   unitPrice: string;
 };
 
+type PoItem = {
+  id: number;
+  part_number: string;
+  part_name: string | null;
+  quantity: number | null;
+  unit_price: string | number | null;
+};
+
 interface ShipmentSummaryModalProps {
   serials: SerializedUnit[];
   onConfirm: (
@@ -62,9 +73,16 @@ export default function ShipmentSummaryModal({
 }: ShipmentSummaryModalProps) {
   const customer = serials[0]?.customerName ?? '-';
   const poNumber = serials[0]?.poNumber ?? '-';
+  const poId = serials[0]?.poId;
   const [bucketMode, setBucketMode] = useState<'combined' | 'split'>('combined');
   const [selectedPoItemId, setSelectedPoItemId] = useState<number | null>(null);
   const [bucketOverrides, setBucketOverrides] = useState<Record<number, BucketOverrideDraft>>({});
+
+  const { data: allocationData } = useQuery<{ poItems: PoItem[] }>({
+    queryKey: ['/api/p2/billing-allocations', poId],
+    queryFn: async () => apiRequest(`/api/p2/billing-allocations?poId=${encodeURIComponent(String(poId))}`),
+    enabled: !!poId,
+  });
 
   const poItemGroups = useMemo(() => {
     const groups = new Map<number, SerializedUnit[]>();
@@ -84,8 +102,53 @@ export default function ShipmentSummaryModal({
       .sort((a, b) => a.poItemId - b.poItemId);
   }, [serials]);
 
-  const effectiveSelectedPoItemId = selectedPoItemId ?? poItemGroups[0]?.poItemId ?? null;
-  const selectedPoItemGroup = poItemGroups.find((group) => group.poItemId === effectiveSelectedPoItemId) ?? poItemGroups[0];
+  const poItemOptions = useMemo(() => {
+    const groupByPoItemId = new Map(poItemGroups.map((group) => [group.poItemId, group]));
+    const fetchedItems = allocationData?.poItems ?? [];
+    const fetchedOptions = fetchedItems.map((item) => {
+      const group = groupByPoItemId.get(item.id);
+      return {
+        poItemId: item.id,
+        partNumber: item.part_number,
+        itemName: item.part_number || `PO Item #${item.id}`,
+        partName: item.part_name ?? group?.partName ?? '',
+        quantity: Number(item.quantity) || group?.units.length || 0,
+        unitPrice: Number(item.unit_price) || 0,
+        units: group?.units ?? [],
+      };
+    });
+
+    const fetchedIds = new Set(fetchedOptions.map((option) => option.poItemId));
+    const serialOnlyOptions = poItemGroups
+      .filter((group) => !fetchedIds.has(group.poItemId))
+      .map((group) => ({
+        poItemId: group.poItemId,
+        partNumber: group.partNumber,
+        itemName: group.itemName || `PO Item #${group.poItemId}`,
+        partName: group.partName,
+        quantity: group.units.length,
+        unitPrice: 0,
+        units: group.units,
+      }));
+
+    return [...fetchedOptions, ...serialOnlyOptions].sort((a, b) => a.poItemId - b.poItemId);
+  }, [allocationData?.poItems, poItemGroups]);
+
+  const effectiveSelectedPoItemId = selectedPoItemId ?? poItemOptions[0]?.poItemId ?? poItemGroups[0]?.poItemId ?? null;
+  const selectedPoItemOption =
+    poItemOptions.find((option) => option.poItemId === effectiveSelectedPoItemId) ??
+    poItemOptions[0] ??
+    (poItemGroups[0]
+      ? {
+          poItemId: poItemGroups[0].poItemId,
+          partNumber: poItemGroups[0].partNumber,
+          itemName: poItemGroups[0].itemName || `PO Item #${poItemGroups[0].poItemId}`,
+          partName: poItemGroups[0].partName,
+          quantity: poItemGroups[0].units.length,
+          unitPrice: 0,
+          units: poItemGroups[0].units,
+        }
+      : null);
 
   const enabledBucketOverrides: BillingBucketOverride[] = poItemGroups.flatMap((group) => {
     const override = bucketOverrides[group.poItemId];
@@ -102,13 +165,14 @@ export default function ShipmentSummaryModal({
   });
 
   const shipmentBucketOverrides: BillingBucketOverride[] =
-    bucketMode === 'combined' && selectedPoItemGroup
+    bucketMode === 'combined' && selectedPoItemOption
       ? [{
-          poItemId: selectedPoItemGroup.poItemId,
-          bucketLabel: selectedPoItemGroup.itemName || `PO Item #${selectedPoItemGroup.poItemId}`,
-          description: selectedPoItemGroup.partName || undefined,
-          customerPoLine: String(selectedPoItemGroup.poItemId),
+          poItemId: selectedPoItemOption.poItemId,
+          bucketLabel: selectedPoItemOption.itemName || `PO Item #${selectedPoItemOption.poItemId}`,
+          description: selectedPoItemOption.partName || undefined,
+          customerPoLine: String(selectedPoItemOption.poItemId),
           quantityAuthorized: serials.length,
+          unitPrice: selectedPoItemOption.unitPrice || undefined,
           serialIds: serials.map((serial) => serial.id),
         }]
       : enabledBucketOverrides;
@@ -162,6 +226,9 @@ export default function ShipmentSummaryModal({
             <Truck className="h-5 w-5 text-blue-600" />
             Shipment Summary
           </DialogTitle>
+          <DialogDescription>
+            Confirm the PO line item bucket for the selected serialized units.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-3 gap-3 text-sm">
@@ -226,7 +293,7 @@ export default function ShipmentSummaryModal({
                 onValueChange={(value) => setSelectedPoItemId(Number(value))}
                 className="space-y-2"
               >
-                {poItemGroups.map((group) => (
+                {poItemOptions.map((group) => (
                   <Label
                     key={group.poItemId}
                     htmlFor={`ship-po-item-${group.poItemId}`}
@@ -241,7 +308,7 @@ export default function ShipmentSummaryModal({
                       <span className="flex items-center gap-2">
                         <span className="font-mono text-sm font-semibold">{group.itemName || `PO Item #${group.poItemId}`}</span>
                         <Badge variant="secondary" className="text-xs">
-                          {group.units.length} unit{group.units.length !== 1 ? 's' : ''}
+                          {group.units.length > 0 ? `${group.units.length} selected` : `${group.quantity} on PO`}
                         </Badge>
                       </span>
                       <span className="block text-xs text-muted-foreground truncate">

@@ -1333,6 +1333,9 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
   } catch (err: any) {
     if (err instanceof z.ZodError)
       return res.status(400).json({ error: err.errors[0].message });
+    if (typeof err?.message === 'string' && /PO item|PO line|Serial .*missing/i.test(err.message)) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('Create lot error:', err);
     return res.status(500).json({ error: 'Failed to create lot' });
   }
@@ -1347,7 +1350,6 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
   try {
     const rows = await pool.query<{
       po_id: number;
-      po_item_id: number | null;
       lot_id: string;
       lot_number: string;
       slip_id: string;
@@ -1364,30 +1366,21 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
     }>(`
       SELECT
         l.po_id,
-        l.po_item_id,
         l.id           AS lot_id,
         l.lot_number,
         ps.id          AS slip_id,
         ps.packing_slip_number AS slip_number,
-        cc.id          AS cert_id,
-        cc.certificate_number  AS cert_number,
-        inv.id AS invoice_id,
-        inv.invoice_number,
-        inv.status AS invoice_status,
-        inv.total_amount AS invoice_total_amount,
+        NULL::uuid AS cert_id,
+        NULL::text AS cert_number,
+        NULL::uuid AS invoice_id,
+        NULL::text AS invoice_number,
+        NULL::text AS invoice_status,
+        NULL::numeric AS invoice_total_amount,
         NULL::integer AS journal_entry_id,
         NULL::text AS journal_entry_status,
         0::int AS journal_line_count
       FROM p2_lot_numbers l
       JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
-      LEFT JOIN p2_certificates_of_conformance cc ON cc.id = l.certificate_id
-      LEFT JOIN LATERAL (
-        SELECT id, invoice_number, status, total_amount
-        FROM ar_invoices
-        WHERE packing_slip_id = ps.id OR lot_id = l.id
-        ORDER BY created_at DESC
-        LIMIT 1
-      ) inv ON true
       WHERE l.po_id IS NOT NULL
         AND l.packing_slip_id IS NOT NULL
         AND COALESCE(l.status, '') <> 'VOID'

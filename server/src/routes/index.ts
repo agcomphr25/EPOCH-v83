@@ -4994,12 +4994,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            poi.part_number AS "partNumber",
            poi.part_name AS "partName",
            poi.quantity AS "orderedQuantity",
+           poi.created_at AS "createdAt",
            po.po_number AS "poNumber",
            po.expected_delivery AS "dueDate",
            po.status AS "poStatus"
          FROM p2_purchase_order_items poi
          JOIN p2_purchase_orders po ON po.id = poi.po_id
-         WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')`
+         WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')
+         ORDER BY poi.po_id, poi.created_at, poi.id`
       );
       const poItems = Array.isArray(poItemResult)
         ? poItemResult
@@ -5038,6 +5040,37 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         (Number(a.sequenceNumber) || 0) - (Number(b.sequenceNumber) || 0) ||
         String(a.id).localeCompare(String(b.id));
 
+      const isCompletedOrPastScheduling = (s: any) => {
+        if (s.status === 'COMPLETED') return true;
+        if (s.status !== 'ACTIVE') return false;
+        const dept = String(s.currentDepartment || '').trim();
+        return dept !== '' && dept !== 'Pending Layup' && dept !== 'Layup';
+      };
+
+      const poItemsByPoId = new Map<number, any[]>();
+      for (const poItem of poItems) {
+        const poId = Number(poItem.poId);
+        if (!poItemsByPoId.has(poId)) {
+          poItemsByPoId.set(poId, []);
+        }
+        poItemsByPoId.get(poId)!.push(poItem);
+      }
+
+      const consumedCapacityByPoItemId = new Map<number, number>();
+      for (const [poId, poLineItems] of poItemsByPoId.entries()) {
+        let completedOrPastSchedulingCount = (serializedItems as any[])
+          .filter((s: any) => Number(s.poId) === poId && isCompletedOrPastScheduling(s))
+          .length;
+
+        for (const poItem of poLineItems) {
+          const poItemId = Number(poItem.poItemId);
+          const orderedQuantity = Number(poItem.orderedQuantity) || 0;
+          const consumedForLine = Math.min(orderedQuantity, completedOrPastSchedulingCount);
+          consumedCapacityByPoItemId.set(poItemId, consumedForLine);
+          completedOrPastSchedulingCount = Math.max(0, completedOrPastSchedulingCount - consumedForLine);
+        }
+      }
+
       const schedulingList: any[] = [];
       for (const poItem of poItems) {
         const items = (serializedByPoItemId.get(Number(poItem.poItemId)) ?? [])
@@ -5045,15 +5078,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         if (items.length === 0) continue;
 
         const orderedQuantity = Number(poItem.orderedQuantity) || 0;
-        const completedCount = items.filter((s: any) => s.status === 'COMPLETED').length;
-        const otherInProductionCount = items.filter((s: any) => {
-          if (s.status !== 'ACTIVE') return false;
-          const dept = String(s.currentDepartment || '').trim();
-          return dept !== '' && dept !== 'Pending Layup' && dept !== 'Layup';
-        }).length;
+        const completedCount = consumedCapacityByPoItemId.get(Number(poItem.poItemId)) ?? 0;
         const earlyStageCapacity = Math.max(
           0,
-          orderedQuantity - completedCount - otherInProductionCount
+          orderedQuantity - completedCount
         );
 
         const scheduledItems = items.filter((s: any) =>

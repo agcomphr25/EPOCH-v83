@@ -767,6 +767,17 @@ export default function ProjectDetailPage() {
   const latestWad = hubWad.latestWad ?? wadSummary.latestWad ?? wadWorkOrders[0] ?? null;
   const hubRom = hubTabs.rom ?? {};
   const hubProduction = hubTabs.production ?? {};
+  const productionSummary = hubProduction.summary ?? {};
+  const projectProductionOrders = Array.isArray(hubProduction.productionOrders) ? hubProduction.productionOrders : [];
+  const projectSerializedItems = Array.isArray(hubProduction.serializedItems) ? hubProduction.serializedItems : traceabilitySerials;
+  const productionAssemblyTree = hubProduction.assemblyTree ?? {};
+  const assemblyPoItems = Array.isArray(productionAssemblyTree.poItems) ? productionAssemblyTree.poItems : [];
+  const assemblyBomRecords = Array.isArray(productionAssemblyTree.bomRecords) ? productionAssemblyTree.bomRecords : bomRoutingRecords;
+  const productionStatusCounts = projectProductionOrders.reduce((counts: Record<string, number>, order: any) => {
+    const status = String(order.status || 'Unknown');
+    counts[status] = (counts[status] ?? 0) + 1;
+    return counts;
+  }, {});
   const hubMaterial = hubTabs.material ?? {};
   const hubLabor = hubTabs.labor ?? {};
   const hubShippingInvoicing = hubTabs.shippingInvoicing ?? {};
@@ -3023,24 +3034,55 @@ export default function ProjectDetailPage() {
               <CardDescription>P2 Control Center status, assembly tree, and manufactured work order progress.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-4">
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Production Orders</p>
-                  <p className="font-medium">{hubProduction.summary?.productionOrderCount ?? 0}</p>
+                  <p className="font-medium">{productionSummary.productionOrderCount ?? projectProductionOrders.length}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Serialized Parts</p>
-                  <p className="font-medium">{hubProduction.summary?.serializedCount ?? traceabilitySerials.length}</p>
+                  <p className="font-medium">{productionSummary.serializedCount ?? projectSerializedItems.length}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Completed Serialized</p>
-                  <p className="font-medium">{hubProduction.summary?.completedSerializedCount ?? 0}</p>
+                  <p className="font-medium">{productionSummary.completedSerializedCount ?? 0}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Assembly Lines</p>
+                  <p className="font-medium">{assemblyPoItems.length}</p>
                 </div>
               </div>
-              <Button onClick={() => setLocation('/p2-control-center')}>
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Open P2 Control Center
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setLocation('/p2-control-center')}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open P2 Control Center
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(`/p2-control-center?tab=production&projectId=${encodeURIComponent(project.id)}`)}
+                  data-testid="button-open-project-production-orders"
+                >
+                  <Layers className="h-4 w-4 mr-2" />
+                  Production Orders
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(`/projects/${project.id}?tab=bom-routing`)}
+                  data-testid="button-open-project-production-assembly"
+                >
+                  <ListChecks className="h-4 w-4 mr-2" />
+                  BOM/Routing
+                </Button>
+              </div>
+              {Object.keys(productionStatusCounts).length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(productionStatusCounts).map(([status, count]) => (
+                    <Badge key={status} variant="outline">
+                      {status}: {count}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               {Array.isArray(hubProduction.productionOrders) && hubProduction.productionOrders.length > 0 ? (
                 <div className="space-y-2">
                   {hubProduction.productionOrders.slice(0, 8).map((order: any) => (
@@ -3056,6 +3098,67 @@ export default function ProjectDetailPage() {
               ) : (
                 <p className="text-sm text-muted-foreground">No P2 production orders are linked yet.</p>
               )}
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Package className="h-4 w-4" />
+                      Assembly Source
+                    </CardTitle>
+                    <CardDescription>PO line items and BOM records feeding production.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {assemblyPoItems.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No PO assembly lines are linked yet.</p>
+                    ) : (
+                      assemblyPoItems.slice(0, 8).map((item: any) => (
+                        <div key={item.id} className="rounded-md border p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="font-mono font-medium">{item.part_number ?? item.partNumber}</p>
+                              <p className="text-sm text-muted-foreground">{item.part_name ?? item.partName ?? 'No description'}</p>
+                            </div>
+                            <Badge variant="outline">Qty {Number(item.quantity ?? 0).toLocaleString()}</Badge>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    {assemblyBomRecords.length > 0 && (
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">BOM Records Available</p>
+                        <p className="font-medium">{assemblyBomRecords.length}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Hash className="h-4 w-4" />
+                      Serialized Production Status
+                    </CardTitle>
+                    <CardDescription>Serialized part progress from P2 traceability records.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {projectSerializedItems.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No serialized production records are linked yet.</p>
+                    ) : (
+                      <div className="grid gap-2">
+                        {projectSerializedItems.slice(0, 8).map((item: any) => (
+                          <div key={item.id} className="flex items-center justify-between rounded-md border p-3">
+                            <div className="min-w-0">
+                              <p className="font-mono font-medium truncate">{item.serial_number ?? item.serialNumber ?? item.barcode}</p>
+                              <p className="text-sm text-muted-foreground truncate">{item.part_number ?? item.partNumber} - {item.part_name ?? item.partName}</p>
+                            </div>
+                            <Badge variant="secondary">{item.status || item.current_department || 'Unknown'}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

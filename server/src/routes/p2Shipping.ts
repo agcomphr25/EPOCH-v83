@@ -1391,7 +1391,7 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       (serials.map((s) => s.completedAt).filter(Boolean).sort().pop() as Date | null) ||
       new Date();
 
-    const lotRows = await pool.query<typeof p2LotNumbers.$inferSelect>(
+    const lotResult = await pgPool.query<typeof p2LotNumbers.$inferSelect>(
       `INSERT INTO p2_lot_numbers (
          lot_number, lot_type, part_number, part_name, customer_id, customer_name,
          po_number, po_id, po_item_id, quantity, serialized_item_ids, barcodes,
@@ -1417,7 +1417,7 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
         input.createdBy || actor || 'shipping',
       ],
     );
-    const lot = lotRows[0];
+    const lot = lotResult.rows[0];
     if (!lot) throw new Error('Shipping lot insert returned no row');
 
     await pool.query(`

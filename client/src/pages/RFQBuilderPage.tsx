@@ -9,6 +9,26 @@ import RFQBuilderStep3Bom, {
   type BomLineRow,
 } from "@/components/estimating/RFQBuilderStep3Bom";
 import { privateerDraftBomLines, type PrivateerDraftBomLine } from "@/data/privateerDraftBom";
+import {
+  adjustmentCostPerPart,
+  calculateCostRollup,
+  calculateNrcSummary,
+  defaultPricingSettings,
+  laborCostPerPart,
+  materialCostPerPart,
+  nrcRowTotal,
+  separateToolingTotal,
+  shippingCostPerPart,
+  toolingCostPerPart,
+  validationMessages,
+  type ChargeTiming,
+  type CostSourceType,
+  type NrcCategory,
+  type NrcCostRow,
+  type PricingApplyTo,
+  type PricingSetting,
+  type PricingSettingMode,
+} from "@/lib/estimatingCostModel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +45,15 @@ type RfqPartRow = {
   makeBuyType: string;
   partType: string;
   notes: string;
+};
+
+type DraftLaborEstimateLine = {
+  id: string;
+  department: string;
+  employeeRole: string;
+  hourlyRate: number | "";
+  hoursPerPart: number | "";
+  quantityPerPo: number | "";
 };
 
 type RfqHeader = {
@@ -158,10 +187,13 @@ type DraftBomRecord = {
   revision: string;
   project: string;
   lines: PrivateerDraftBomLine[];
+  laborEstimateLines?: DraftLaborEstimateLine[];
+  nrcRows?: NrcCostRow[];
 };
 
 type BomSourceType = "draft-bom" | "draft-po" | "parts-list" | "existing";
 type ToolingFilter = "exclude" | "include" | "only";
+type RomSourceMode = "USE_DRAFT" | "MANUAL" | "IMPORT_EDIT";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -181,6 +213,10 @@ const pricingModeOptions = [
 const shippingModeOptions = ["PER_PART", "PER_PO", "INTERNAL_ONLY"];
 const shippingAllocationOptions = ["EVEN", "BY_QUANTITY", "BY_VALUE", "MANUAL"];
 const draftBomStorageKey = "epoch:draft-boms";
+const nrcCategoryOptions: NrcCategory[] = ["TOOLING", "NRE_LABOR", "CAPITAL_ASSET", "INSTALLATION", "TRAINING", "OTHER"];
+const chargeTimingOptions: ChargeTiming[] = ["ONE_TIME", "FIRST_PO_ONLY", "FIRST_ARTICLE_ONLY", "EVERY_ORDER"];
+const settingModeOptions: PricingSettingMode[] = ["FLAT_PERCENT", "TIERED_PERCENT", "MANUAL_AMOUNT", "DISABLED"];
+const settingApplyToOptions: PricingApplyTo[] = ["MATERIAL", "LABOR", "NRC", "DIRECT_COST", "TOTAL_COST"];
 
 // ── Factories ─────────────────────────────────────────────────────────────────
 
@@ -199,7 +235,7 @@ const emptyBomLine = (rfqPartId: string): BomLineRow => ({
   rfqPartId, inventoryItemId: null, childPartAgNumber: "", description: "",
   category: "PREPREG", quantityPerPart: 0, uom: "EA", estimatedUnitCost: 0,
   scrapPercent: 0, isEstimated: true, isDraftInventoryItem: false,
-  vendorNameSnapshot: "", materialSpec: "", notes: "",
+  vendorNameSnapshot: "", materialSpec: "", notes: "", sourceType: "MANUAL", sourceLabel: "ROM Builder",
 });
 
 const privateerDraftBomRecord = (): DraftBomRecord => ({
@@ -208,13 +244,19 @@ const privateerDraftBomRecord = (): DraftBomRecord => ({
   revision: "Draft A",
   project: "Privateer",
   lines: privateerDraftBomLines,
+  laborEstimateLines: [],
+  nrcRows: [],
 });
 
 function loadDraftBomRecords(): DraftBomRecord[] {
   try {
     const raw = window.localStorage.getItem(draftBomStorageKey);
     if (!raw) return [privateerDraftBomRecord()];
-    const saved = JSON.parse(raw) as DraftBomRecord[];
+    const saved = (JSON.parse(raw) as DraftBomRecord[]).map((draft) => ({
+      ...draft,
+      laborEstimateLines: draft.laborEstimateLines ?? [],
+      nrcRows: (draft.nrcRows ?? []).map((row) => normalizeNrcRow(row, "DRAFT", `${draft.name} - ${draft.revision}`)),
+    }));
     const hasPrivateer = saved.some((draft) => draft.id === "privateer");
     return hasPrivateer ? saved : [privateerDraftBomRecord(), ...saved];
   } catch {
@@ -256,6 +298,52 @@ const emptyQuantityBreak = (sortOrder: number): QuantityBreakRow => ({
   label: "", quantity: 1, sortOrder,
 });
 
+const emptyNrcRow = (sourceType: CostSourceType = "MANUAL", sourceLabel = "ROM Builder"): NrcCostRow => ({
+  id: crypto.randomUUID(),
+  category: "TOOLING",
+  description: "",
+  quantity: 1,
+  unitCost: 0,
+  totalCost: 0,
+  amortized: false,
+  amortizationQty: null,
+  chargeTiming: "ONE_TIME",
+  includeInCustomerPrice: true,
+  internalOnly: false,
+  notes: "",
+  assetName: "",
+  usefulLifeMonths: null,
+  amortizationBasis: "",
+  installationCost: 0,
+  trainingCost: 0,
+  sourceType,
+  sourceLabel,
+});
+
+function normalizeNrcRow(row: Partial<NrcCostRow>, sourceType: CostSourceType = "MANUAL", sourceLabel = "ROM Builder"): NrcCostRow {
+  const normalized: NrcCostRow = {
+    ...emptyNrcRow(sourceType, sourceLabel),
+    ...row,
+    id: row.id || crypto.randomUUID(),
+    category: (row.category || "OTHER") as NrcCategory,
+    quantity: Number(row.quantity || 0),
+    unitCost: Number(row.unitCost || 0),
+    totalCost: Number(row.totalCost ?? Number(row.quantity || 0) * Number(row.unitCost || 0)),
+    amortized: !!row.amortized,
+    amortizationQty: row.amortizationQty != null ? Number(row.amortizationQty) : null,
+    chargeTiming: (row.chargeTiming || "ONE_TIME") as ChargeTiming,
+    includeInCustomerPrice: row.includeInCustomerPrice !== false,
+    internalOnly: !!row.internalOnly,
+    usefulLifeMonths: row.usefulLifeMonths != null ? Number(row.usefulLifeMonths) : null,
+    installationCost: Number(row.installationCost || 0),
+    trainingCost: Number(row.trainingCost || 0),
+    sourceType: row.sourceType ?? sourceType,
+    sourceLabel: row.sourceLabel ?? sourceLabel,
+  };
+  normalized.totalCost = nrcRowTotal(normalized);
+  return normalized;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function RFQBuilderPage() {
@@ -282,10 +370,14 @@ export default function RFQBuilderPage() {
   const [selectedExistingBomId, setSelectedExistingBomId] = useState("");
   const [toolingFilter, setToolingFilter] = useState<ToolingFilter>("exclude");
   const [bomSourceMessage, setBomSourceMessage] = useState("");
+  const [romSourceMode, setRomSourceMode] = useState<RomSourceMode>("IMPORT_EDIT");
 
   const [selectedProcessPartId, setSelectedProcessPartId] = useState("");
   const [processRows, setProcessRows] = useState<ProcessRow[]>([]);
   const [processMessage, setProcessMessage] = useState("");
+  const [nrcRows, setNrcRows] = useState<NrcCostRow[]>([]);
+  const [nrcMessage, setNrcMessage] = useState("");
+  const [pricingSettings, setPricingSettings] = useState<PricingSetting[]>(() => defaultPricingSettings());
 
   const [selectedAdjustmentPartId, setSelectedAdjustmentPartId] = useState("");
   const [adjustmentScopeFilter, setAdjustmentScopeFilter] = useState<"RFQ" | "PART">("RFQ");
@@ -304,7 +396,6 @@ export default function RFQBuilderPage() {
   const [createdQuoteId, setCreatedQuoteId] = useState<string | null>(null);
   const [createdQuoteNumber, setCreatedQuoteNumber] = useState<string | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
-  const [marginPercent, setMarginPercent] = useState(20);
   const [controlMessage, setControlMessage] = useState("");
   const [versionSummary, setVersionSummary] = useState("");
   const [assumptionDraft, setAssumptionDraft] = useState({
@@ -406,7 +497,7 @@ export default function RFQBuilderPage() {
   });
 
   const releaseReadinessQuery = useQuery<ReleaseReadiness>({
-    queryKey: ["estimating-rfq-release-readiness", rfqId, marginPercent], enabled: !!rfqId,
+    queryKey: ["estimating-rfq-release-readiness", rfqId], enabled: !!rfqId,
     queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/approval-readiness`, { method: "POST", body: {} }),
   });
 
@@ -460,7 +551,7 @@ export default function RFQBuilderPage() {
         uom: l.uom ?? "EA", estimatedUnitCost: Number(l.estimatedUnitCost ?? 0),
         scrapPercent: Number(l.scrapPercent ?? 0), isEstimated: !!l.isEstimated,
         isDraftInventoryItem: !!l.isDraftInventoryItem, vendorNameSnapshot: l.vendorNameSnapshot ?? "",
-        materialSpec: l.materialSpec ?? "", notes: l.notes ?? "",
+        materialSpec: l.materialSpec ?? "", notes: l.notes ?? "", sourceType: "MANUAL", sourceLabel: "Saved ROM",
       })));
     }
   }, [bomLinesQuery.data]);
@@ -686,10 +777,27 @@ export default function RFQBuilderPage() {
     vendorNameSnapshot: line.supplier || "",
     materialSpec: line.manufacturer || "",
     notes: [
+      "Draft sourced",
       `${bomSourceType.replace("-", " ")} source`,
       line.category,
       line.supplierItemId,
       line.note,
+    ].filter(Boolean).join(" | "),
+    sourceType: "DRAFT",
+    sourceLabel: draftBomRecords.find((item) => item.id === selectedDraftBomId)?.name ?? "Draft Builder",
+  });
+
+  const mapDraftLaborLineToProcessRow = (line: DraftLaborEstimateLine): ProcessRow => ({
+    rfqPartId: selectedProcessPartId || selectedBomPartId,
+    departmentName: (line.department || "OTHER").toUpperCase(),
+    sourceType: "DRAFT_BUILDER",
+    setupHours: 0,
+    hoursPerPart: Number(line.hoursPerPart || 0),
+    hourlyRate: Number(line.hourlyRate || 0),
+    notes: [
+      "Draft sourced",
+      line.employeeRole,
+      `Draft quantity ${line.quantityPerPo || 1}`,
     ].filter(Boolean).join(" | "),
   });
 
@@ -706,12 +814,29 @@ export default function RFQBuilderPage() {
     }
 
     const mappedLines = filterDraftSourceLines(draft).map(mapDraftLineToBomLine);
+    const mappedProcessRows = (draft.laborEstimateLines ?? [])
+      .filter((line) => Number(line.hoursPerPart || 0) > 0 || Number(line.hourlyRate || 0) > 0)
+      .map(mapDraftLaborLineToProcessRow);
+    const mappedNrcRows = (draft.nrcRows ?? []).map((row) => normalizeNrcRow({
+      ...row,
+      id: crypto.randomUUID(),
+      sourceType: "DRAFT",
+      sourceLabel: `${draft.name} - ${draft.revision}`,
+    }, "DRAFT", `${draft.name} - ${draft.revision}`));
 
     setBomLines((prev) => [
       ...prev.filter((line) => line.rfqPartId !== selectedBomPartId || line.id),
       ...mappedLines,
     ]);
-    setBomSourceMessage(`${mappedLines.length} line(s) loaded from ${draft.name}. Save individual lines to persist them to this ROM.`);
+    setProcessRows((prev) => [
+      ...prev.filter((row) => row.rfqPartId !== (selectedProcessPartId || selectedBomPartId) || row.id),
+      ...mappedProcessRows,
+    ]);
+    setNrcRows((prev) => [
+      ...prev.filter((row) => row.sourceLabel !== `${draft.name} - ${draft.revision}`),
+      ...mappedNrcRows,
+    ]);
+    setBomSourceMessage(`${mappedLines.length} material, ${mappedProcessRows.length} labor, and ${mappedNrcRows.length} NRC row(s) loaded from ${draft.name}. Save individual server-backed rows to persist BOM and labor.`);
   };
 
   const loadExistingBomIntoRfq = async () => {
@@ -743,6 +868,8 @@ export default function RFQBuilderPage() {
       vendorNameSnapshot: line.childInventoryItem?.source || "",
       materialSpec: line.referenceDesignator || "",
       notes: `Loaded from existing BOM ${selectedBom.code ?? selectedBom.id}`,
+      sourceType: "MANUAL",
+      sourceLabel: "Existing BOM",
     }));
 
     setBomLines((prev) => [
@@ -880,6 +1007,31 @@ export default function RFQBuilderPage() {
   const selectedProcessPart = useMemo(() => parts.find((p) => p.id === selectedProcessPartId), [parts, selectedProcessPartId]);
   const selectedProcessQty = Number(selectedProcessPart?.quantity ?? 0);
   const processExtendedTotal = processSummary.setupCost + processSummary.recurringCostPerPart * selectedProcessQty;
+
+  const nrcSummary = useMemo(() => calculateNrcSummary(nrcRows, Number(quantityBreakRows[0]?.quantity || 1)), [nrcRows, quantityBreakRows]);
+
+  const addNrcRow = () => {
+    setNrcRows((prev) => [...prev, emptyNrcRow("MANUAL", "ROM Builder")]);
+  };
+
+  const updateNrcRow = (index: number, field: keyof NrcCostRow, value: string | number | boolean | null) => {
+    setNrcRows((prev) => {
+      const next = [...prev];
+      const current = next[index];
+      if (!current) return prev;
+      next[index] = normalizeNrcRow({ ...current, [field]: value }, current.sourceType ?? "MANUAL", current.sourceLabel ?? "ROM Builder");
+      return next;
+    });
+  };
+
+  const deleteNrcRow = (index: number) => {
+    setNrcRows((prev) => prev.filter((_, rowIndex) => rowIndex !== index));
+    setNrcMessage("NRC row removed from this ROM.");
+  };
+
+  const updatePricingSetting = (key: PricingSetting["key"], patch: Partial<PricingSetting>) => {
+    setPricingSettings((prev) => prev.map((setting) => (setting.key === key ? { ...setting, ...patch } : setting)));
+  };
 
   // ── Adjustment helpers ───────────────────────────────────────────────────────
 
@@ -1068,99 +1220,90 @@ export default function RFQBuilderPage() {
 
   // ── Pricing calculator functions ──────────────────────────────────────────────
 
-  const getToolingCostPerPartForBreak = (breakQty: number) => {
-    return toolingRows.reduce((sum, row) => {
-      const total = Number(row.totalCost ?? 0);
-      if (row.pricingTreatment === "BLENDED_UNIT_PRICE") return sum + (breakQty > 0 ? total / breakQty : 0);
-      if (row.pricingTreatment === "AMORTIZED") {
-        const amortQty = Number(row.amortizationQty || 0);
-        return sum + (amortQty > 0 ? total / amortQty : 0);
-      }
-      return sum;
-    }, 0);
-  };
-
-  const getMaterialCostPerPartForPart = (partId: string | undefined) => {
-    return bomLines
-      .filter((l) => l.rfqPartId === partId)
-      .reduce((sum, r) => {
-        return sum + Number(r.quantityPerPart || 0) * Number(r.estimatedUnitCost || 0) * (1 + Number(r.scrapPercent || 0) / 100);
-      }, 0);
-  };
-
-  const getLaborCostPerPartForPartAndBreak = (partId: string | undefined, breakQty: number) => {
-    const rows = processRows.filter((r) => r.rfqPartId === partId);
-    const setupCost = rows.reduce((s, r) => s + Number(r.setupHours || 0) * Number(r.hourlyRate || 0), 0);
-    const recurringPerPart = rows.reduce((s, r) => s + Number(r.hoursPerPart || 0) * Number(r.hourlyRate || 0), 0);
-    return recurringPerPart + (breakQty > 0 ? setupCost / breakQty : 0);
-  };
-
-  const getAdjustmentCostForPartAndBreak = (
-    partId: string | undefined,
-    breakQty: number,
-    materialCostPerPart: number,
-    laborCostPerPart: number
-  ) => {
-    const applicable = adjustmentRows.filter((r) => {
-      if (!r.includeInCustomerPrice) return false;
-      if (r.pricingMode === "INTERNAL_ONLY") return false;
-      if (r.appliesToScope === "RFQ") return true;
-      return r.appliesToScope === "PART" && r.rfqPartId === partId;
-    });
-    return applicable.reduce((sum, r) => {
-      if (r.pricingMode === "FLAT") return sum + (breakQty > 0 ? Number(r.amount || 0) / breakQty : 0);
-      if (r.pricingMode === "PER_PART") return sum + Number(r.amount || 0);
-      if (r.pricingMode === "PERCENT_OF_MATERIAL") return sum + materialCostPerPart * (Number(r.percentValue || 0) / 100);
-      if (r.pricingMode === "PERCENT_OF_LABOR") return sum + laborCostPerPart * (Number(r.percentValue || 0) / 100);
-      return sum;
-    }, 0);
-  };
-
-  const getShippingCostPerPartForBreak = (partId: string | undefined, breakQty: number) => {
-    const applicable = shippingRows.filter((r) => {
-      if (!r.includeInCustomerPrice) return false;
-      if (r.shippingMode === "INTERNAL_ONLY") return false;
-      if (!r.rfqPartId) return true;
-      return r.rfqPartId === partId;
-    });
-    return applicable.reduce((sum, r) => {
-      if (r.shippingMode === "PER_PART") return sum + Number(r.amount || 0);
-      if (r.shippingMode === "PER_PO") return sum + (breakQty > 0 ? Number(r.amount || 0) / breakQty : 0);
-      return sum;
-    }, 0);
-  };
-
   const pricingMatrix = useMemo(() => {
     return quantityBreakRows
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((qb) => {
         const breakQty = Number(qb.quantity || 0);
-        const toolingPerPart = getToolingCostPerPartForBreak(breakQty);
+        const toolingPerPart = toolingCostPerPart(toolingRows, breakQty);
+        const nrcPerPartRows = nrcRows.map((row) => {
+          const customerFacingTotal = calculateNrcSummary([row], breakQty).customerFacingNrcCost;
+          const unitCost = breakQty > 0 ? customerFacingTotal / breakQty : 0;
+          return {
+            ...row,
+            quantity: 1,
+            unitCost,
+            totalCost: unitCost,
+            amortized: false,
+            installationCost: 0,
+            trainingCost: 0,
+          };
+        });
         const partRows = parts.filter((p) => p.id).map((part) => {
-          const materialPerPart = getMaterialCostPerPartForPart(part.id);
-          const laborPerPart = getLaborCostPerPartForPartAndBreak(part.id, breakQty);
-          const adjustmentPerPart = getAdjustmentCostForPartAndBreak(part.id, breakQty, materialPerPart, laborPerPart);
-          const shippingPerPart = getShippingCostPerPartForBreak(part.id, breakQty);
-          const totalCostPerPart = materialPerPart + laborPerPart + toolingPerPart + adjustmentPerPart + shippingPerPart;
-          const marginDecimal = Number(marginPercent || 0) / 100;
-          const sellPricePerPart = marginDecimal >= 1 ? totalCostPerPart : totalCostPerPart / (1 - marginDecimal);
+          const materialPerPart = materialCostPerPart(bomLines, part.id);
+          const laborPerPart = laborCostPerPart(processRows, part.id, breakQty);
+          const adjustmentPerPart = adjustmentCostPerPart(adjustmentRows, part.id, breakQty, materialPerPart, laborPerPart);
+          const shippingPerPart = shippingCostPerPart(shippingRows, part.id, breakQty);
+          const rollup = calculateCostRollup({
+            materialCost: materialPerPart,
+            laborCost: laborPerPart,
+            nrcRows: nrcPerPartRows,
+            settings: pricingSettings,
+            breakQty: 1,
+            adjustments: toolingPerPart + adjustmentPerPart,
+            shipping: shippingPerPart,
+          });
+          const nrcPerPart = rollup.customerFacingNrcCost;
+          const totalCostPerPart = rollup.totalCost;
+          const sellPricePerPart = rollup.sellPrice;
           return {
             partId: part.id, partNumber: part.partNumber,
-            materialPerPart, laborPerPart, toolingPerPart, adjustmentPerPart, shippingPerPart,
+            ...rollup,
+            materialPerPart, laborPerPart, nrcPerPart, toolingPerPart, adjustmentPerPart, shippingPerPart,
             totalCostPerPart, sellPricePerPart,
             extendedPrice: sellPricePerPart * breakQty,
           };
         });
         const totalExtended = partRows.reduce((s, r) => s + r.extendedPrice, 0);
-        const separateTooling = toolingRows
-          .filter((t) => t.pricingTreatment === "SEPARATE_LINE")
-          .reduce((s, t) => s + Number(t.totalCost ?? 0), 0);
+        const separateTooling = separateToolingTotal(toolingRows);
+        const rollup = partRows.reduce(
+          (acc, row) => {
+            acc.materialCost += row.materialCost * breakQty;
+            acc.laborCost += row.laborCost * breakQty;
+            acc.nrcCost += row.nrcCost * breakQty;
+            acc.customerFacingNrcCost += row.customerFacingNrcCost * breakQty;
+            acc.tooling += row.tooling * breakQty;
+            acc.nreLabor += row.nreLabor * breakQty;
+            acc.capitalAssets += row.capitalAssets * breakQty;
+            acc.installationTraining += row.installationTraining * breakQty;
+            acc.otherNrc += row.otherNrc * breakQty;
+            acc.adjustments += row.adjustments * breakQty;
+            acc.shipping += row.shipping * breakQty;
+            acc.overhead += row.overhead * breakQty;
+            acc.gna += row.gna * breakQty;
+            acc.riskContingency += row.riskContingency * breakQty;
+            acc.escalationInflation += row.escalationInflation * breakQty;
+            acc.totalCost += row.totalCost * breakQty;
+            acc.profit += row.profit * breakQty;
+            acc.sellPrice += row.sellPrice * breakQty;
+            acc.warnings = [...new Set([...acc.warnings, ...row.warnings])];
+            return acc;
+          },
+          {
+            materialCost: 0, laborCost: 0, nrcCost: 0, customerFacingNrcCost: 0,
+            tooling: 0, nreLabor: 0, capitalAssets: 0, installationTraining: 0, otherNrc: 0,
+            adjustments: 0, shipping: 0, overhead: 0, gna: 0, riskContingency: 0,
+            escalationInflation: 0, totalCost: 0, profit: 0, sellPrice: 0, marginPercent: 0,
+            warnings: [] as string[],
+          }
+        );
+        rollup.marginPercent = rollup.sellPrice > 0 ? (rollup.profit / rollup.sellPrice) * 100 : 0;
 
-        return { id: qb.id, label: qb.label, quantity: breakQty, rows: partRows, totalExtended, separateTooling };
+        return { id: qb.id, label: qb.label, quantity: breakQty, rows: partRows, rollup, totalExtended, separateTooling };
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quantityBreakRows, parts, bomLines, processRows, toolingRows, adjustmentRows, shippingRows, marginPercent]);
+  }, [quantityBreakRows, parts, bomLines, processRows, toolingRows, adjustmentRows, shippingRows, nrcRows, pricingSettings]);
 
   // ── Step 8: Pricing Snapshot rows ────────────────────────────────────────────
 
@@ -1172,16 +1315,23 @@ export default function RFQBuilderPage() {
         quantityBreakId: breakRow.id,
         materialCostPerPart: String(row.materialPerPart),
         laborCostPerPart: String(row.laborPerPart),
-        overheadCostPerPart: String(row.adjustmentPerPart),
+        overheadCostPerPart: String(row.overhead + row.gna + row.riskContingency + row.escalationInflation + row.adjustmentPerPart + row.nrcPerPart),
         shippingCostPerPart: String(row.shippingPerPart),
         toolingCostPerPart: String(row.toolingPerPart),
         totalCostPerPart: String(row.totalCostPerPart),
-        marginPercent: String(marginPercent),
+        marginPercent: String(row.marginPercent),
         sellPricePerPart: String(row.sellPricePerPart),
         extendedPrice: String(row.extendedPrice),
       })),
     );
-  }, [pricingMatrix, rfqId, marginPercent]);
+  }, [pricingMatrix, rfqId]);
+
+  const costModelValidationMessages = useMemo(() => validationMessages({
+    bomLines,
+    processRows,
+    nrcRows,
+    settings: pricingSettings,
+  }), [bomLines, processRows, nrcRows, pricingSettings]);
 
   const latestVersion = versionsQuery.data?.[0];
   const latestRiskAssessment = riskAssessmentsQuery.data?.[0];
@@ -1451,6 +1601,29 @@ export default function RFQBuilderPage() {
             onSaveToolingRow={saveToolingRow} onDeleteToolingRow={deleteToolingRow}
           />
 
+          <div className="border rounded-lg p-5 space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold">ROM Source Mode</h2>
+              <p className="text-sm text-muted-foreground">Choose whether this ROM is driven from Draft Builder data, manually authored, or imported and edited.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {([
+                ["USE_DRAFT", "Use Draft Builder data"],
+                ["MANUAL", "Create manually in ROM Builder"],
+                ["IMPORT_EDIT", "Import and edit"],
+              ] as [RomSourceMode, string][]).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`rounded border px-4 py-3 text-left ${romSourceMode === mode ? "border-primary bg-primary/5" : ""}`}
+                  onClick={() => setRomSourceMode(mode)}
+                >
+                  <span className="font-medium">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* ── Step 3: BOM Builder (extracted component) ────────────────────── */}
           <div className="border rounded-lg p-5 space-y-4">
             <div>
@@ -1589,6 +1762,7 @@ export default function RFQBuilderPage() {
                             <td className="p-2">
                               <select className="w-[160px] border rounded px-2 py-1" value={row.sourceType} onChange={(e) => updateProcessRow(index, "sourceType", e.target.value)}>
                                 <option value="MANUAL">Manual</option>
+                                <option value="DRAFT_BUILDER">Draft Builder</option>
                                 <option value="ROUTING_TEMPLATE">Routing Template</option>
                                 <option value="HISTORICAL">Historical</option>
                               </select>
@@ -1619,6 +1793,81 @@ export default function RFQBuilderPage() {
                   <div className="flex justify-between"><span>Recurring / Part</span><span>${processSummary.recurringCostPerPart.toFixed(4)}</span></div>
                   <div className="border-t pt-2 flex justify-between font-semibold"><span>Labor / Part</span><span>${processSummary.totalPerPart.toFixed(4)}</span></div>
                   <div className="flex justify-between font-semibold"><span>Total @ Qty</span><span>${processExtendedTotal.toFixed(2)}</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-5 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Step 4B - NRC</h2>
+                <p className="text-sm text-muted-foreground">Estimate non-recurring tooling, NRE labor, capital assets, installation, training, and other one-time costs.</p>
+              </div>
+              <button className="border rounded px-4 py-2" onClick={addNrcRow} type="button">+ Add NRC</button>
+            </div>
+            {nrcMessage && <div className="rounded border px-3 py-2 text-sm">{nrcMessage}</div>}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-3 overflow-x-auto">
+                <table className="w-full border-collapse min-w-[1750px]">
+                  <thead>
+                    <tr className="border-b">
+                      {["Source","Category","Description","Qty","Unit Cost","Total","Amortized","Amort Qty","Timing","Customer Price","Internal","Capital Asset","Notes","Actions"].map((h) => (
+                        <th key={h} className="text-left p-2">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nrcRows.length === 0 ? (
+                      <tr><td colSpan={14} className="p-4 text-sm text-muted-foreground">No NRC rows yet.</td></tr>
+                    ) : (
+                      nrcRows.map((row, index) => (
+                        <tr key={`${row.id ?? "new"}-${index}`} className="border-b align-top">
+                          <td className="p-2"><span className="rounded border px-2 py-1 text-xs">{row.sourceType === "DRAFT" ? "Draft sourced" : "Manual"}</span></td>
+                          <td className="p-2"><select className="w-[150px] border rounded px-2 py-1" value={row.category} onChange={(e) => updateNrcRow(index, "category", e.target.value)}>{nrcCategoryOptions.map((o) => <option key={o} value={o}>{o}</option>)}</select></td>
+                          <td className="p-2"><input className="w-[200px] border rounded px-2 py-1" value={row.description} onChange={(e) => updateNrcRow(index, "description", e.target.value)} /></td>
+                          <td className="p-2"><input type="number" min={0} className="w-[90px] border rounded px-2 py-1" value={row.quantity} onChange={(e) => updateNrcRow(index, "quantity", Number(e.target.value))} /></td>
+                          <td className="p-2">
+                            <input type="number" min={0} step="0.01" className={`w-[120px] border rounded px-2 py-1 ${Number(row.quantity || 0) > 0 && Number(row.unitCost || 0) <= 0 ? "border-amber-400" : ""}`} value={row.unitCost} onChange={(e) => updateNrcRow(index, "unitCost", Number(e.target.value))} />
+                            {Number(row.quantity || 0) > 0 && Number(row.unitCost || 0) <= 0 ? <p className="mt-1 text-xs text-amber-700">Missing unit cost</p> : null}
+                          </td>
+                          <td className="p-2">${nrcRowTotal(row).toFixed(2)}</td>
+                          <td className="p-2 text-center"><input type="checkbox" checked={row.amortized} onChange={(e) => updateNrcRow(index, "amortized", e.target.checked)} /></td>
+                          <td className="p-2">
+                            <input type="number" min={0} className={`w-[110px] border rounded px-2 py-1 ${row.amortized && !Number(row.amortizationQty || 0) ? "border-amber-400" : ""}`} value={row.amortizationQty ?? ""} disabled={!row.amortized} onChange={(e) => updateNrcRow(index, "amortizationQty", e.target.value ? Number(e.target.value) : null)} />
+                            {row.amortized && !Number(row.amortizationQty || 0) ? <p className="mt-1 text-xs text-amber-700">Required</p> : null}
+                          </td>
+                          <td className="p-2"><select className="w-[150px] border rounded px-2 py-1" value={row.chargeTiming} onChange={(e) => updateNrcRow(index, "chargeTiming", e.target.value)}>{chargeTimingOptions.map((o) => <option key={o} value={o}>{o}</option>)}</select></td>
+                          <td className="p-2 text-center"><input type="checkbox" checked={row.includeInCustomerPrice} onChange={(e) => updateNrcRow(index, "includeInCustomerPrice", e.target.checked)} /></td>
+                          <td className="p-2 text-center"><input type="checkbox" checked={row.internalOnly} onChange={(e) => updateNrcRow(index, "internalOnly", e.target.checked)} /></td>
+                          <td className="p-2">
+                            {row.category === "CAPITAL_ASSET" ? (
+                              <div className="grid w-[390px] grid-cols-2 gap-2">
+                                <input className="border rounded px-2 py-1" placeholder="Asset name" value={row.assetName ?? ""} onChange={(e) => updateNrcRow(index, "assetName", e.target.value)} />
+                                <input className="border rounded px-2 py-1" type="number" min={0} placeholder="Life months" value={row.usefulLifeMonths ?? ""} onChange={(e) => updateNrcRow(index, "usefulLifeMonths", e.target.value ? Number(e.target.value) : null)} />
+                                <input className="border rounded px-2 py-1" placeholder="Basis" value={row.amortizationBasis ?? ""} onChange={(e) => updateNrcRow(index, "amortizationBasis", e.target.value)} />
+                                <input className="border rounded px-2 py-1" type="number" min={0} step="0.01" placeholder="Install" value={row.installationCost ?? 0} onChange={(e) => updateNrcRow(index, "installationCost", Number(e.target.value))} />
+                                <input className="border rounded px-2 py-1" type="number" min={0} step="0.01" placeholder="Training" value={row.trainingCost ?? 0} onChange={(e) => updateNrcRow(index, "trainingCost", Number(e.target.value))} />
+                              </div>
+                            ) : <span className="text-sm text-muted-foreground">Capital asset only</span>}
+                          </td>
+                          <td className="p-2"><input className="w-[180px] border rounded px-2 py-1" value={row.notes ?? ""} onChange={(e) => updateNrcRow(index, "notes", e.target.value)} /></td>
+                          <td className="p-2"><button className="border rounded px-3 py-1" onClick={() => deleteNrcRow(index)} type="button">Delete</button></td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="border rounded-lg p-4 h-fit">
+                <h3 className="font-semibold mb-3">NRC Summary</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span>Tooling</span><span>${nrcSummary.tooling.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>NRE Labor</span><span>${nrcSummary.nreLabor.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>Capital Assets</span><span>${nrcSummary.capitalAssets.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>Install / Training</span><span>${nrcSummary.installationTraining.toFixed(2)}</span></div>
+                  <div className="border-t pt-2 flex justify-between font-semibold"><span>Total NRC</span><span>${nrcSummary.nrcCost.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>Customer Facing</span><span>${nrcSummary.customerFacingNrcCost.toFixed(2)}</span></div>
                 </div>
               </div>
             </div>
@@ -1792,6 +2041,71 @@ export default function RFQBuilderPage() {
             </div>
           </div>
 
+          <div className="border rounded-lg p-5 space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold">Step 6B - ROM Settings</h2>
+              <p className="text-sm text-muted-foreground">Apply overhead, G&A, risk, escalation, and profit rules to the pricing snapshot.</p>
+            </div>
+            {costModelValidationMessages.length > 0 && (
+              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {costModelValidationMessages.map((message) => <div key={message}>{message}</div>)}
+              </div>
+            )}
+            <div className="grid gap-4 xl:grid-cols-5">
+              {pricingSettings.map((setting) => (
+                <div key={setting.key} className={`rounded border p-4 space-y-3 ${!setting.enabled || setting.mode === "DISABLED" ? "border-amber-300 bg-amber-50/50" : ""}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-semibold">{setting.label}</h3>
+                    <label className="text-sm flex items-center gap-2">
+                      <input type="checkbox" checked={setting.enabled} onChange={(e) => updatePricingSetting(setting.key, { enabled: e.target.checked })} />
+                      Enabled
+                    </label>
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1 text-muted-foreground">Mode</label>
+                    <select className="w-full border rounded px-2 py-1" value={setting.mode} onChange={(e) => updatePricingSetting(setting.key, { mode: e.target.value as PricingSettingMode })}>
+                      {settingModeOptions.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1 text-muted-foreground">Apply To</label>
+                    <select className="w-full border rounded px-2 py-1" value={setting.applyTo} onChange={(e) => updatePricingSetting(setting.key, { applyTo: e.target.value as PricingApplyTo })}>
+                      {settingApplyToOptions.map((applyTo) => <option key={applyTo} value={applyTo}>{applyTo}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1 text-muted-foreground">Default %</label>
+                    <input type="number" min={0} step="0.01" className="w-full border rounded px-2 py-1" value={setting.defaultPercent} onChange={(e) => updatePricingSetting(setting.key, { defaultPercent: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1 text-muted-foreground">Manual Amount</label>
+                    <input type="number" min={0} step="0.01" className="w-full border rounded px-2 py-1" value={setting.manualAmount ?? 0} onChange={(e) => updatePricingSetting(setting.key, { manualAmount: Number(e.target.value) })} disabled={setting.mode !== "MANUAL_AMOUNT"} />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1 text-muted-foreground">Tiers JSON</label>
+                    <textarea
+                      className="w-full border rounded px-2 py-1 min-h-[70px] text-xs"
+                      value={JSON.stringify(setting.tiers)}
+                      onChange={(e) => {
+                        try {
+                          const tiers = JSON.parse(e.target.value);
+                          if (Array.isArray(tiers)) updatePricingSetting(setting.key, { tiers });
+                        } catch {
+                          updatePricingSetting(setting.key, { notes: "Invalid tiers JSON" });
+                        }
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1 text-muted-foreground">Notes</label>
+                    <textarea className="w-full border rounded px-2 py-1 min-h-[60px] text-sm" value={setting.notes ?? ""} onChange={(e) => updatePricingSetting(setting.key, { notes: e.target.value })} />
+                  </div>
+                  {!setting.enabled || setting.mode === "DISABLED" ? <p className="text-xs text-amber-700">Visible disabled pricing setting</p> : null}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* ── Step 7: Quantity Break Pricing ──────────────────────────────── */}
           <div className="border rounded-lg p-5 space-y-4">
             <div className="flex items-center justify-between gap-4">
@@ -1806,9 +2120,10 @@ export default function RFQBuilderPage() {
 
             <div className="flex flex-wrap items-end gap-4">
               <div>
-                <label className="block text-sm mb-1">Margin %</label>
+                <label className="block text-sm mb-1">Profit %</label>
                 <input type="number" min={0} step="0.01" className="border rounded px-3 py-2 w-[140px]"
-                  value={marginPercent} onChange={(e) => setMarginPercent(Number(e.target.value))} />
+                  value={pricingSettings.find((setting) => setting.key === "PROFIT")?.defaultPercent ?? 0}
+                  onChange={(e) => updatePricingSetting("PROFIT", { defaultPercent: Number(e.target.value), mode: "FLAT_PERCENT", enabled: true })} />
               </div>
             </div>
 
@@ -1861,25 +2176,27 @@ export default function RFQBuilderPage() {
                       <table className="w-full border-collapse min-w-[1100px]">
                         <thead>
                           <tr className="border-b">
-                            {["Part","Material / Part","Labor / Part","Tooling / Part","Adjustments / Part","Shipping / Part","Cost / Part","Sell / Part","Extended"].map((h) => (
+                            {["Part","Material / Part","Labor / Part","NRC / Part","Tooling / Part","OH/G&A/Risk/Esc","Profit / Part","Cost / Part","Sell / Part","Margin %","Extended"].map((h) => (
                               <th key={h} className="text-left p-2">{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {breakRow.rows.length === 0 ? (
-                            <tr><td colSpan={9} className="p-4 text-sm text-muted-foreground">No parts with saved IDs yet.</td></tr>
+                            <tr><td colSpan={11} className="p-4 text-sm text-muted-foreground">No parts with saved IDs yet.</td></tr>
                           ) : (
                             breakRow.rows.map((row) => (
                               <tr key={row.partId} className="border-b">
                                 <td className="p-2">{row.partNumber}</td>
                                 <td className="p-2">${row.materialPerPart.toFixed(4)}</td>
                                 <td className="p-2">${row.laborPerPart.toFixed(4)}</td>
+                                <td className="p-2">${row.nrcPerPart.toFixed(4)}</td>
                                 <td className="p-2">${row.toolingPerPart.toFixed(4)}</td>
-                                <td className="p-2">${row.adjustmentPerPart.toFixed(4)}</td>
-                                <td className="p-2">${row.shippingPerPart.toFixed(4)}</td>
+                                <td className="p-2">${(row.overhead + row.gna + row.riskContingency + row.escalationInflation).toFixed(4)}</td>
+                                <td className="p-2">${row.profit.toFixed(4)}</td>
                                 <td className="p-2 font-medium">${row.totalCostPerPart.toFixed(4)}</td>
                                 <td className="p-2 font-medium">${row.sellPricePerPart.toFixed(4)}</td>
+                                <td className="p-2">{row.marginPercent.toFixed(2)}%</td>
                                 <td className="p-2 font-semibold">${row.extendedPrice.toFixed(2)}</td>
                               </tr>
                             ))
@@ -2125,6 +2442,62 @@ export default function RFQBuilderPage() {
                           )}
                         </tbody>
                         <tfoot className="border-t bg-muted/30">
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Material Cost</td>
+                            <td className="p-2">${breakRow.rollup.materialCost.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Labor Cost</td>
+                            <td className="p-2">${breakRow.rollup.laborCost.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">NRC Cost</td>
+                            <td className="p-2">${breakRow.rollup.nrcCost.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Tooling</td>
+                            <td className="p-2">${breakRow.rollup.tooling.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">NRE Labor</td>
+                            <td className="p-2">${breakRow.rollup.nreLabor.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Capital Assets</td>
+                            <td className="p-2">${breakRow.rollup.capitalAssets.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Installation / Training</td>
+                            <td className="p-2">${breakRow.rollup.installationTraining.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Overhead</td>
+                            <td className="p-2">${breakRow.rollup.overhead.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">G&A</td>
+                            <td className="p-2">${breakRow.rollup.gna.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Risk / Contingency</td>
+                            <td className="p-2">${breakRow.rollup.riskContingency.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Escalation / Inflation</td>
+                            <td className="p-2">${breakRow.rollup.escalationInflation.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Total Cost</td>
+                            <td className="p-2 font-semibold">${breakRow.rollup.totalCost.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Profit</td>
+                            <td className="p-2 font-semibold">${breakRow.rollup.profit.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={3} className="p-2 text-right text-muted-foreground">Margin %</td>
+                            <td className="p-2 font-semibold">{breakRow.rollup.marginPercent.toFixed(2)}%</td>
+                          </tr>
                           <tr>
                             <td colSpan={3} className="p-2 text-right text-muted-foreground">Parts subtotal</td>
                             <td className="p-2 font-semibold">${breakRow.totalExtended.toFixed(2)}</td>

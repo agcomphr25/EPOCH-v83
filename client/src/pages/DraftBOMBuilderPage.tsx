@@ -41,6 +41,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { privateerDraftBomLines, type PrivateerDraftBomLine } from '@/data/privateerDraftBom';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { nrcRowTotal, type ChargeTiming, type NrcCategory, type NrcCostRow } from '@/lib/estimatingCostModel';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 
@@ -89,7 +90,7 @@ type DraftPartBom = {
   rootPart: DraftBomPart;
   parts: DraftBomPart[];
 };
-type BuiltInWorkspaceTabId = 'po-draft' | 'parts-request' | 'direct-labor' | 'bom-wizard' | 'assembly-tree';
+type BuiltInWorkspaceTabId = 'po-draft' | 'parts-request' | 'direct-labor' | 'nrc' | 'bom-wizard' | 'assembly-tree';
 type CustomWorkspaceTabId = `custom:${string}`;
 type WorkspaceTabId = BuiltInWorkspaceTabId | CustomWorkspaceTabId;
 type DraftLaborEstimateLine = {
@@ -143,6 +144,7 @@ type BomDraft = {
   lines: BomLine[];
   savedDraftBoms?: DraftPartBom[];
   laborEstimateLines?: DraftLaborEstimateLine[];
+  nrcRows?: NrcCostRow[];
   customLaborDepartments?: string[];
   poVisibleColumns?: PoColumnId[];
   partsRequestVisibleColumns?: PartsRequestColumnId[];
@@ -252,11 +254,12 @@ const P2_PROJECT_VALUE_PREFIX = 'p2:';
 const RD_PROJECT_VALUE_PREFIX = 'rd:';
 
 const statuses: BomStatus[] = ['Needs Review', 'Needs Quote', 'RFQ Sent', 'On Order', 'On Hand', 'ETA / Inbound', 'Hold'];
-const defaultWorkspaceTabs: BuiltInWorkspaceTabId[] = ['po-draft', 'parts-request', 'direct-labor', 'bom-wizard', 'assembly-tree'];
+const defaultWorkspaceTabs: BuiltInWorkspaceTabId[] = ['po-draft', 'parts-request', 'direct-labor', 'nrc', 'bom-wizard', 'assembly-tree'];
 const workspaceTabLabels: Record<BuiltInWorkspaceTabId, string> = {
   'po-draft': 'PO draft',
   'parts-request': 'Parts/request',
   'direct-labor': 'Draft Direct Labor Estimate',
+  nrc: 'NRC',
   'bom-wizard': 'BOM wizard',
   'assembly-tree': 'Assembly tree',
 };
@@ -389,6 +392,30 @@ function newLaborEstimateLine(): DraftLaborEstimateLine {
   };
 }
 
+function newNrcRow(): NrcCostRow {
+  return {
+    id: crypto.randomUUID(),
+    category: 'TOOLING',
+    description: '',
+    quantity: 1,
+    unitCost: 0,
+    totalCost: 0,
+    amortized: false,
+    amortizationQty: null,
+    chargeTiming: 'ONE_TIME',
+    includeInCustomerPrice: true,
+    internalOnly: false,
+    notes: '',
+    assetName: '',
+    usefulLifeMonths: null,
+    amortizationBasis: '',
+    installationCost: 0,
+    trainingCost: 0,
+    sourceType: 'MANUAL',
+    sourceLabel: 'Draft Builder',
+  };
+}
+
 function newLine(): BomLine {
   return {
     id: crypto.randomUUID(),
@@ -518,6 +545,7 @@ function createPrivateerDraft(): BomDraft {
     })),
     savedDraftBoms: [],
     laborEstimateLines: [newLaborEstimateLine()],
+    nrcRows: [],
     customLaborDepartments: [],
     poVisibleColumns: defaultPoColumns,
     partsRequestVisibleColumns: defaultPartsRequestColumns,
@@ -573,6 +601,29 @@ function normalizeDraft(draft: BomDraft): BomDraft {
       hoursPerPart: line.hoursPerPart ?? '',
       quantityPerPo: line.quantityPerPo ?? 1,
     })),
+    nrcRows: (draft.nrcRows ?? []).map((row) => {
+      const normalized = {
+        ...newNrcRow(),
+        ...row,
+        id: row.id || crypto.randomUUID(),
+        category: (row.category || 'OTHER') as NrcCategory,
+        quantity: Number(row.quantity || 0),
+        unitCost: Number(row.unitCost || 0),
+        totalCost: Number(row.totalCost ?? Number(row.quantity || 0) * Number(row.unitCost || 0)),
+        amortized: !!row.amortized,
+        amortizationQty: row.amortizationQty != null ? Number(row.amortizationQty) : null,
+        chargeTiming: (row.chargeTiming || 'ONE_TIME') as ChargeTiming,
+        includeInCustomerPrice: row.includeInCustomerPrice !== false,
+        internalOnly: !!row.internalOnly,
+        usefulLifeMonths: row.usefulLifeMonths != null ? Number(row.usefulLifeMonths) : null,
+        installationCost: Number(row.installationCost || 0),
+        trainingCost: Number(row.trainingCost || 0),
+        sourceType: row.sourceType ?? 'MANUAL',
+        sourceLabel: row.sourceLabel ?? 'Draft Builder',
+      };
+      normalized.totalCost = nrcRowTotal(normalized);
+      return normalized;
+    }),
     customLaborDepartments: draft.customLaborDepartments ?? [],
     poVisibleColumns: sanitizePoColumns(draft.poVisibleColumns),
     partsRequestVisibleColumns: draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
@@ -1123,11 +1174,15 @@ function laborDepartmentValue(label: string) {
 
 function normalizeWorkspaceTabs(tabs?: WorkspaceTabId[]) {
   const sourceTabs = tabs?.length ? tabs : defaultWorkspaceTabs;
-  if (sourceTabs.includes('direct-labor')) return sourceTabs;
-
   const nextTabs = [...sourceTabs];
-  const partsRequestIndex = nextTabs.indexOf('parts-request');
-  nextTabs.splice(partsRequestIndex >= 0 ? partsRequestIndex + 1 : nextTabs.length, 0, 'direct-labor');
+  if (!nextTabs.includes('direct-labor')) {
+    const partsRequestIndex = nextTabs.indexOf('parts-request');
+    nextTabs.splice(partsRequestIndex >= 0 ? partsRequestIndex + 1 : nextTabs.length, 0, 'direct-labor');
+  }
+  if (!nextTabs.includes('nrc')) {
+    const directLaborIndex = nextTabs.indexOf('direct-labor');
+    nextTabs.splice(directLaborIndex >= 0 ? directLaborIndex + 1 : nextTabs.length, 0, 'nrc');
+  }
   return nextTabs;
 }
 
@@ -1380,18 +1435,24 @@ export default function DraftBOMBuilderPage() {
       (sum, line) => sum + asNumber(line.hoursPerPart) * asNumber(line.quantityPerPo),
       0,
     );
+    const nrcTotal = (draft.nrcRows ?? []).reduce((sum, row) => sum + nrcRowTotal(row), 0);
+    const customerFacingNrcTotal = (draft.nrcRows ?? [])
+      .filter((row) => row.includeInCustomerPrice && !row.internalOnly)
+      .reduce((sum, row) => sum + nrcRowTotal(row), 0);
 
     return {
       materialTotal,
       laborTotal,
       laborHours,
+      nrcTotal,
+      customerFacingNrcTotal,
       selectedTotal,
       onHandTotal,
       needsQuote,
       rfqSent,
       lineCount: draft.lines.length,
     };
-  }, [draft.laborEstimateLines, draft.lines, selectedLines]);
+  }, [draft.laborEstimateLines, draft.lines, draft.nrcRows, selectedLines]);
 
   const filterTotals = useMemo(() => {
     const grouped = new Map<string, { count: number; total: number }>();
@@ -1450,6 +1511,39 @@ export default function DraftBOMBuilderPage() {
         laborEstimateLines: remainingLines.length > 0 ? remainingLines : [newLaborEstimateLine()],
       };
     });
+  }
+
+  function updateNrcRow(id: string, patch: Partial<NrcCostRow>) {
+    setDraft((current) => ({
+      ...current,
+      nrcRows: (current.nrcRows ?? []).map((row) => {
+        if (row.id !== id) return row;
+        const nextRow = { ...row, ...patch };
+        return { ...nextRow, totalCost: nrcRowTotal(nextRow) };
+      }),
+    }));
+  }
+
+  function updateNrcNumberRow(
+    id: string,
+    field: 'quantity' | 'unitCost' | 'amortizationQty' | 'usefulLifeMonths' | 'installationCost' | 'trainingCost',
+    value: string,
+  ) {
+    updateNrcRow(id, { [field]: value === '' ? null : Number(value) } as Partial<NrcCostRow>);
+  }
+
+  function addNrcRow() {
+    setDraft((current) => ({
+      ...current,
+      nrcRows: [...(current.nrcRows ?? []), newNrcRow()],
+    }));
+  }
+
+  function removeNrcRow(id: string) {
+    setDraft((current) => ({
+      ...current,
+      nrcRows: (current.nrcRows ?? []).filter((row) => row.id !== id),
+    }));
   }
 
   function addLaborDepartment() {
@@ -1825,6 +1919,7 @@ export default function DraftBOMBuilderPage() {
       lines: [newLine()],
       savedDraftBoms: [],
       laborEstimateLines: [newLaborEstimateLine()],
+      nrcRows: [],
       customLaborDepartments: [],
       poVisibleColumns: defaultPoColumns,
       partsRequestVisibleColumns: defaultPartsRequestColumns,
@@ -1895,6 +1990,7 @@ export default function DraftBOMBuilderPage() {
       lines: [newLine()],
       savedDraftBoms: [],
       laborEstimateLines: [newLaborEstimateLine()],
+      nrcRows: [],
       customLaborDepartments: [],
       poVisibleColumns: defaultPoColumns,
       partsRequestVisibleColumns: defaultPartsRequestColumns,
@@ -2239,6 +2335,7 @@ export default function DraftBOMBuilderPage() {
                 <SummaryMetric label="Total Material / Tooling" value={money(totals.materialTotal)} />
                 <SummaryMetric label="Direct Labor Estimate" value={money(totals.laborTotal)} />
                 <SummaryMetric label="Direct Labor Hours" value={totals.laborHours.toLocaleString(undefined, { maximumFractionDigits: 2 })} />
+                <SummaryMetric label="NRC Estimate" value={money(totals.nrcTotal)} />
                 <SummaryMetric label="Selected for RFQ / Order" value={money(totals.selectedTotal)} />
                 <SummaryMetric label="On Hand Value" value={money(totals.onHandTotal)} />
                 <SummaryMetric label="Needs Quote Count" value={String(totals.needsQuote)} />
@@ -2515,6 +2612,21 @@ export default function DraftBOMBuilderPage() {
                   onRemoveLine={removeLaborEstimateLine}
                   onUpdateLine={updateLaborEstimateLine}
                   onUpdateNumberLine={updateLaborEstimateNumberLine}
+                  isEditMode={isEditMode}
+                />
+              </TabsContent>
+            ) : null}
+
+            {visibleWorkspaceTabs.includes('nrc') ? (
+              <TabsContent value="nrc" className="mt-4">
+                <NrcEstimateWorkspace
+                  rows={draft.nrcRows ?? []}
+                  totalCost={totals.nrcTotal}
+                  customerFacingTotal={totals.customerFacingNrcTotal}
+                  onAddRow={addNrcRow}
+                  onRemoveRow={removeNrcRow}
+                  onUpdateRow={updateNrcRow}
+                  onUpdateNumberRow={updateNrcNumberRow}
                   isEditMode={isEditMode}
                 />
               </TabsContent>
@@ -3460,6 +3572,192 @@ function DirectLaborEstimateWorkspace({
           </span>
         </div>
       </section>
+    </section>
+  );
+}
+
+const nrcCategoryOptions: { value: NrcCategory; label: string }[] = [
+  { value: 'TOOLING', label: 'Tooling' },
+  { value: 'NRE_LABOR', label: 'NRE Labor' },
+  { value: 'CAPITAL_ASSET', label: 'Capital Asset' },
+  { value: 'INSTALLATION', label: 'Installation' },
+  { value: 'TRAINING', label: 'Training' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+const chargeTimingOptions: { value: ChargeTiming; label: string }[] = [
+  { value: 'ONE_TIME', label: 'One Time' },
+  { value: 'FIRST_PO_ONLY', label: 'First PO Only' },
+  { value: 'FIRST_ARTICLE_ONLY', label: 'First Article Only' },
+  { value: 'EVERY_ORDER', label: 'Every Order' },
+];
+
+function NrcEstimateWorkspace({
+  rows,
+  totalCost,
+  customerFacingTotal,
+  onAddRow,
+  onRemoveRow,
+  onUpdateRow,
+  onUpdateNumberRow,
+  isEditMode,
+}: {
+  rows: NrcCostRow[];
+  totalCost: number;
+  customerFacingTotal: number;
+  onAddRow: () => void;
+  onRemoveRow: (id: string) => void;
+  onUpdateRow: (id: string, patch: Partial<NrcCostRow>) => void;
+  onUpdateNumberRow: (
+    id: string,
+    field: 'quantity' | 'unitCost' | 'amortizationQty' | 'usefulLifeMonths' | 'installationCost' | 'trainingCost',
+    value: string,
+  ) => void;
+  isEditMode: boolean;
+}) {
+  const amortizationWarnings = rows.filter((row) => row.amortized && !Number(row.amortizationQty || 0)).length;
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="font-semibold text-slate-950">NRC Estimate</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Capture tooling, NRE labor, capital assets, installation, training, and other non-recurring costs with the draft.
+          </p>
+        </div>
+        <Button type="button" onClick={onAddRow} disabled={!isEditMode}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add NRC
+        </Button>
+      </div>
+
+      <div className="grid gap-3 border-b border-slate-200 p-4 sm:grid-cols-3">
+        <SummaryMetric label="Total NRC" value={money(totalCost)} />
+        <SummaryMetric label="Customer Price NRC" value={money(customerFacingTotal)} />
+        <SummaryMetric label="Amortization Warnings" value={String(amortizationWarnings)} />
+      </div>
+
+      <div className="overflow-x-auto p-4">
+        <Table className="min-w-[1800px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Source</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Qty</TableHead>
+              <TableHead>Unit Cost</TableHead>
+              <TableHead>Total</TableHead>
+              <TableHead>Amortized</TableHead>
+              <TableHead>Amort Qty</TableHead>
+              <TableHead>Timing</TableHead>
+              <TableHead>Customer Price</TableHead>
+              <TableHead>Internal Only</TableHead>
+              <TableHead>Capital Asset Details</TableHead>
+              <TableHead>Notes</TableHead>
+              <TableHead className="text-right">Remove</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={14} className="py-8 text-center text-sm text-slate-500">
+                  No NRC rows yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map((row) => (
+                <TableRow key={row.id} className="align-top">
+                  <TableCell>
+                    <Badge variant={row.sourceType === 'DRAFT' ? 'default' : 'outline'}>
+                      {row.sourceType === 'DRAFT' ? 'Draft sourced' : 'Manual'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Select value={row.category} onValueChange={(value) => onUpdateRow(row.id ?? '', { category: value as NrcCategory })} disabled={!isEditMode}>
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {nrcCategoryOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Input className="w-[220px]" value={row.description} onChange={(event) => onUpdateRow(row.id ?? '', { description: event.target.value })} disabled={!isEditMode} />
+                  </TableCell>
+                  <TableCell>
+                    <Input className="w-[90px]" type="number" min={0} value={row.quantity} onChange={(event) => onUpdateNumberRow(row.id ?? '', 'quantity', event.target.value)} disabled={!isEditMode} />
+                  </TableCell>
+                  <TableCell>
+                    <Input className="w-[120px]" type="number" min={0} step="0.01" value={row.unitCost} onChange={(event) => onUpdateNumberRow(row.id ?? '', 'unitCost', event.target.value)} disabled={!isEditMode} />
+                  </TableCell>
+                  <TableCell className="tabular-nums">{money(nrcRowTotal(row))}</TableCell>
+                  <TableCell>
+                    <Checkbox checked={row.amortized} onCheckedChange={(checked) => onUpdateRow(row.id ?? '', { amortized: checked === true })} disabled={!isEditMode} aria-label="Amortized NRC" />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className={cn('w-[110px]', row.amortized && !Number(row.amortizationQty || 0) ? 'border-amber-400' : '')}
+                      type="number"
+                      min={0}
+                      value={row.amortizationQty ?? ''}
+                      onChange={(event) => onUpdateNumberRow(row.id ?? '', 'amortizationQty', event.target.value)}
+                      disabled={!isEditMode || !row.amortized}
+                    />
+                    {row.amortized && !Number(row.amortizationQty || 0) ? <p className="mt-1 text-xs text-amber-700">Required</p> : null}
+                  </TableCell>
+                  <TableCell>
+                    <Select value={row.chargeTiming} onValueChange={(value) => onUpdateRow(row.id ?? '', { chargeTiming: value as ChargeTiming })} disabled={!isEditMode}>
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {chargeTimingOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Checkbox checked={row.includeInCustomerPrice} onCheckedChange={(checked) => onUpdateRow(row.id ?? '', { includeInCustomerPrice: checked === true })} disabled={!isEditMode} aria-label="Include NRC in customer price" />
+                  </TableCell>
+                  <TableCell>
+                    <Checkbox checked={row.internalOnly} onCheckedChange={(checked) => onUpdateRow(row.id ?? '', { internalOnly: checked === true })} disabled={!isEditMode} aria-label="Internal-only NRC" />
+                  </TableCell>
+                  <TableCell>
+                    {row.category === 'CAPITAL_ASSET' ? (
+                      <div className="grid w-[420px] grid-cols-2 gap-2">
+                        <Input value={row.assetName ?? ''} onChange={(event) => onUpdateRow(row.id ?? '', { assetName: event.target.value })} placeholder="Asset name" disabled={!isEditMode} />
+                        <Input type="number" min={0} value={row.usefulLifeMonths ?? ''} onChange={(event) => onUpdateNumberRow(row.id ?? '', 'usefulLifeMonths', event.target.value)} placeholder="Useful life months" disabled={!isEditMode} />
+                        <Input value={row.amortizationBasis ?? ''} onChange={(event) => onUpdateRow(row.id ?? '', { amortizationBasis: event.target.value })} placeholder="Amortization basis" disabled={!isEditMode} />
+                        <Input type="number" min={0} step="0.01" value={row.installationCost ?? 0} onChange={(event) => onUpdateNumberRow(row.id ?? '', 'installationCost', event.target.value)} placeholder="Installation cost" disabled={!isEditMode} />
+                        <Input type="number" min={0} step="0.01" value={row.trainingCost ?? 0} onChange={(event) => onUpdateNumberRow(row.id ?? '', 'trainingCost', event.target.value)} placeholder="Training cost" disabled={!isEditMode} />
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-500">Only shown for capital assets</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Input className="w-[220px]" value={row.notes ?? ''} onChange={(event) => onUpdateRow(row.id ?? '', { notes: event.target.value })} disabled={!isEditMode} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button type="button" variant="ghost" size="icon" onClick={() => onRemoveRow(row.id ?? '')} disabled={!isEditMode}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </section>
   );
 }

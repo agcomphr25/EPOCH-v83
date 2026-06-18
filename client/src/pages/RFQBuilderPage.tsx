@@ -762,7 +762,17 @@ export default function RFQBuilderPage() {
     });
   };
 
-  const mapDraftLineToBomLine = (line: PrivateerDraftBomLine): BomLineRow => ({
+  const draftImportSourceToken = (draft: DraftBomRecord) => `Draft Builder import:${draft.id}:${bomSourceType}`;
+  const isDraftImportedBomLine = (line: BomLineRow, token: string) => {
+    const notes = line.notes ?? "";
+    return line.sourceType === "DRAFT" || notes.includes(token) || notes.includes("Draft sourced");
+  };
+  const isDraftImportedProcessRow = (row: ProcessRow, token: string) => {
+    const notes = row.notes ?? "";
+    return row.sourceType === "DRAFT_BUILDER" || notes.includes(token) || notes.includes("Draft sourced");
+  };
+
+  const mapDraftLineToBomLine = (draft: DraftBomRecord, line: PrivateerDraftBomLine): BomLineRow => ({
     rfqPartId: selectedBomPartId,
     inventoryItemId: null,
     childPartAgNumber: line.agPartNumber || line.supplierItemId || "",
@@ -777,6 +787,7 @@ export default function RFQBuilderPage() {
     vendorNameSnapshot: line.supplier || "",
     materialSpec: line.manufacturer || "",
     notes: [
+      draftImportSourceToken(draft),
       "Draft sourced",
       `${bomSourceType.replace("-", " ")} source`,
       line.category,
@@ -784,10 +795,10 @@ export default function RFQBuilderPage() {
       line.note,
     ].filter(Boolean).join(" | "),
     sourceType: "DRAFT",
-    sourceLabel: draftBomRecords.find((item) => item.id === selectedDraftBomId)?.name ?? "Draft Builder",
+    sourceLabel: draft.name,
   });
 
-  const mapDraftLaborLineToProcessRow = (line: DraftLaborEstimateLine): ProcessRow => ({
+  const mapDraftLaborLineToProcessRow = (draft: DraftBomRecord, line: DraftLaborEstimateLine): ProcessRow => ({
     rfqPartId: selectedProcessPartId || selectedBomPartId,
     departmentName: (line.department || "OTHER").toUpperCase(),
     sourceType: "DRAFT_BUILDER",
@@ -795,6 +806,7 @@ export default function RFQBuilderPage() {
     hoursPerPart: Number(line.hoursPerPart || 0),
     hourlyRate: Number(line.hourlyRate || 0),
     notes: [
+      draftImportSourceToken(draft),
       "Draft sourced",
       line.employeeRole,
       `Draft quantity ${line.quantityPerPo || 1}`,
@@ -813,10 +825,12 @@ export default function RFQBuilderPage() {
       return;
     }
 
-    const mappedLines = filterDraftSourceLines(draft).map(mapDraftLineToBomLine);
+    const importToken = draftImportSourceToken(draft);
+    const targetProcessPartId = selectedProcessPartId || selectedBomPartId;
+    const mappedLines = filterDraftSourceLines(draft).map((line) => mapDraftLineToBomLine(draft, line));
     const mappedProcessRows = (draft.laborEstimateLines ?? [])
       .filter((line) => Number(line.hoursPerPart || 0) > 0 || Number(line.hourlyRate || 0) > 0)
-      .map(mapDraftLaborLineToProcessRow);
+      .map((line) => mapDraftLaborLineToProcessRow(draft, line));
     const mappedNrcRows = (draft.nrcRows ?? []).map((row) => normalizeNrcRow({
       ...row,
       id: crypto.randomUUID(),
@@ -825,11 +839,11 @@ export default function RFQBuilderPage() {
     }, "DRAFT", `${draft.name} - ${draft.revision}`));
 
     setBomLines((prev) => [
-      ...prev.filter((line) => line.rfqPartId !== selectedBomPartId || line.id),
+      ...prev.filter((line) => line.rfqPartId !== selectedBomPartId || !isDraftImportedBomLine(line, importToken)),
       ...mappedLines,
     ]);
     setProcessRows((prev) => [
-      ...prev.filter((row) => row.rfqPartId !== (selectedProcessPartId || selectedBomPartId) || row.id),
+      ...prev.filter((row) => row.rfqPartId !== targetProcessPartId || !isDraftImportedProcessRow(row, importToken)),
       ...mappedProcessRows,
     ]);
     setNrcRows((prev) => [

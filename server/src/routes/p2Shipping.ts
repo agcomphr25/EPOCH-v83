@@ -605,6 +605,8 @@ const createLotSchema = z.object({
     allocationId: z.string().uuid(),
   })).optional(),
   billingBucketOverrides: z.array(z.object({
+    poId: z.coerce.number().int().positive().optional(),
+    poNumber: z.string().trim().optional(),
     poItemId: z.coerce.number().int().positive(),
     bucketLabel: z.string().trim().min(1, 'Bucket label is required'),
     description: z.string().trim().optional(),
@@ -1083,21 +1085,24 @@ async function assignSerialsToPoItemBuckets(
 
   for (const { poItemId, group, override } of bucketGroups) {
     const first = group[0];
+    const targetPoId = override?.poId ?? first.poId;
     const poItemResult = await pool.query<{
       id: number;
       po_id: number;
+      po_number: string;
       part_number: string;
       part_name: string | null;
       quantity: number | null;
       unit_price: string | number | null;
     }>(
-      `SELECT id, po_id, part_number, part_name, quantity, unit_price
-         FROM p2_purchase_order_items
-        WHERE id = $1 AND po_id = $2`,
-      [poItemId, first.poId],
+      `SELECT i.id, i.po_id, po.po_number, i.part_number, i.part_name, i.quantity, i.unit_price
+         FROM p2_purchase_order_items i
+         JOIN p2_purchase_orders po ON po.id = i.po_id
+        WHERE i.id = $1 AND i.po_id = $2`,
+      [poItemId, targetPoId],
     );
     const poItem = poItemResult.rows[0];
-    if (!poItem) throw new Error(`PO item ${poItemId} was not found for PO ${first.poNumber}`);
+    if (!poItem) throw new Error(`PO item ${poItemId} was not found for PO ${override?.poNumber || first.poNumber}`);
 
     const authorizedQuantity = Math.max(
       Number(override?.quantityAuthorized) || 0,
@@ -1108,6 +1113,7 @@ async function assignSerialsToPoItemBuckets(
     const bucketLabel = override?.bucketLabel || `PO Item #${poItem.id}`;
     const description = override?.description || poItem.part_name || first.partName || null;
     const customerPoLine = override?.customerPoLine || String(poItem.id);
+    const allocationPoNumber = override?.poNumber || poItem.po_number || first.poNumber;
 
     const existingAllocationResult = await pool.query<{ id: string }>(
       `SELECT id
@@ -1145,7 +1151,7 @@ async function assignSerialsToPoItemBuckets(
         [
           poItem.po_id,
           poItem.id,
-          first.poNumber,
+          allocationPoNumber,
           poItem.part_number || first.partNumber,
           bucketLabel,
           description,
@@ -1165,7 +1171,7 @@ async function assignSerialsToPoItemBuckets(
       await assignSerialBillingBucket({
         allocationId,
         serializedItemId: serial.id,
-        poId: serial.poId,
+        poId: poItem.po_id,
         poItemId: poItem.id,
         actor,
         assignmentSource: 'po_item_shipment_create',
@@ -1382,6 +1388,8 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       );
     });
     const lotPoItemId = fullShipmentOverride?.poItemId ?? (poItemIds.length === 1 ? poItemIds[0] : null);
+    const lotPoId = fullShipmentOverride?.poId ?? first.poId;
+    const lotPoNumber = fullShipmentOverride?.poNumber || first.poNumber;
     const lotBucketSerial = lotPoItemId
       ? serials.find((serial) => serial.poItemId === lotPoItemId) ?? first
       : first;
@@ -1406,8 +1414,8 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
         lotBucketSerial.partName,
         first.customerId,
         first.customerName,
-        first.poNumber,
-        first.poId,
+        lotPoNumber,
+        lotPoId,
         lotPoItemId,
         serials.length,
         JSON.stringify(input.serialIds),

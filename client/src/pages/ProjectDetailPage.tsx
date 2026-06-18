@@ -801,6 +801,40 @@ export default function ProjectDetailPage() {
     const date = new Date(String(value));
     return Number.isNaN(date.getTime()) ? fallback : format(date, 'MMM d, yyyy');
   };
+  const formatCurrencyLabel = (value: unknown, fallback = 'Pending') => {
+    if (value === null || value === undefined || value === '') return fallback;
+    const amount = Number(value);
+    return Number.isFinite(amount)
+      ? amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
+      : fallback;
+  };
+  const formatHoursLabel = (value: unknown, fallback = 'Pending') => {
+    if (value === null || value === undefined || value === '') return fallback;
+    const hours = Number(value);
+    return Number.isFinite(hours) ? `${hours.toLocaleString()} hrs` : fallback;
+  };
+  const romCategories = [
+    {
+      label: 'Labor',
+      value: formatHoursLabel(hubRom.categories?.labor?.quotedHours ?? quoteFeedback?.quotedLaborHours),
+      detail: 'Direct labor estimate from ROM/quote feedback',
+    },
+    {
+      label: 'Material',
+      value: formatCurrencyLabel(hubRom.categories?.material?.budgetAmount, 'Not set'),
+      detail: 'Material budget from WAD/project work orders',
+    },
+    { label: 'Outside Processing', value: formatCurrencyLabel(hubRom.categories?.outsideProcessing), detail: 'Vendor services and outside operations' },
+    { label: 'NRC / Tooling / Design', value: formatCurrencyLabel(hubRom.categories?.nrc), detail: 'Non-recurring cost, tooling, and design labor' },
+    { label: 'Capital', value: formatCurrencyLabel(hubRom.categories?.capital), detail: 'Assets, startup services, and startup labor' },
+    { label: 'G&A', value: formatCurrencyLabel(hubRom.categories?.generalAndAdmin), detail: 'General and administrative burden' },
+    { label: 'Overhead', value: formatCurrencyLabel(hubRom.categories?.overhead), detail: 'Indirect cost burden' },
+    { label: 'Quality and Compliance', value: formatCurrencyLabel(hubRom.categories?.qualityAndCompliance), detail: 'Inspection, compliance, and quality planning' },
+    { label: 'Shipping and Packaging', value: formatCurrencyLabel(hubRom.categories?.shippingAndPackaging), detail: 'Pack, ship, freight, and documentation' },
+    { label: 'Contingency', value: formatCurrencyLabel(hubRom.categories?.contingency), detail: 'Risk reserve' },
+    { label: 'Escalation and Inflation', value: formatCurrencyLabel(hubRom.categories?.escalationAndInflation), detail: 'Schedule and pricing escalation' },
+    { label: 'Profit / Fee', value: formatCurrencyLabel(hubRom.categories?.profitFee), detail: 'Quote profit or fee target' },
+  ];
 
   const { data: projectFarFlowdowns = [] } = useQuery<ProjectFarFlowdown[]>({
     queryKey: ['/api/far-flowdown-clauses/project', id],
@@ -2910,41 +2944,61 @@ export default function ProjectDetailPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Labor Hours</p>
-                  <p className="font-medium">{hubRom.categories?.labor?.quotedHours ?? quoteFeedback?.quotedLaborHours ?? 'Not set'}</p>
+                  <p className="text-xs text-muted-foreground">Quote Feedback</p>
+                  <p className="font-medium">{quoteFeedback ? 'Available' : 'Not generated'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Quoted Labor</p>
+                  <p className="font-medium">{formatHoursLabel(hubRom.categories?.labor?.quotedHours ?? quoteFeedback?.quotedLaborHours, 'Not set')}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Material Budget</p>
-                  <p className="font-medium">${Number(hubRom.categories?.material?.budgetAmount ?? 0).toLocaleString()}</p>
+                  <p className="font-medium">{formatCurrencyLabel(hubRom.categories?.material?.budgetAmount, 'Not set')}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Actual Labor</p>
-                  <p className="font-medium">{hubLabor.summary?.actualHours ?? quoteFeedback?.actualLaborHours ?? 'Pending'}</p>
-                </div>
-                <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Variance</p>
-                  <p className="font-medium">{hubLabor.summary?.varianceHours ?? quoteFeedback?.laborHoursVariance ?? 'Pending'}</p>
+                  <p className="text-xs text-muted-foreground">Labor Variance</p>
+                  <p className="font-medium">{formatHoursLabel(hubLabor.summary?.varianceHours ?? quoteFeedback?.laborHoursVariance)}</p>
                 </div>
               </div>
-              <div className="grid gap-2 md:grid-cols-3">
-                {[
-                  'Outside Processing',
-                  'NRC / Tooling / Design',
-                  'Capital',
-                  'G&A',
-                  'Overhead',
-                  'Quality and Compliance',
-                  'Shipping and Packaging',
-                  'Contingency',
-                  'Escalation and Inflation',
-                  'Profit / Fee',
-                ].map((label) => (
-                  <div key={label} className="rounded-md border p-3">
-                    <p className="text-sm font-medium">{label}</p>
-                    <p className="text-xs text-muted-foreground">Ready for ROM Builder data</p>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                {romCategories.map((category) => (
+                  <div key={category.label} className="rounded-md border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">{category.label}</p>
+                        <p className="text-xs text-muted-foreground">{category.detail}</p>
+                      </div>
+                      <Badge variant={category.value === 'Pending' || category.value === 'Not set' ? 'outline' : 'secondary'}>
+                        {category.value}
+                      </Badge>
+                    </div>
                   </div>
                 ))}
               </div>
+
+              {quoteFeedback?.summary && (
+                <div className="rounded-md border bg-muted/30 p-4 space-y-2">
+                  <p className="text-sm font-medium">Quote Feedback Summary</p>
+                  <p className="text-sm text-muted-foreground">{quoteFeedback.summary}</p>
+                </div>
+              )}
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Actual Labor</p>
+                  <p className="font-medium">{formatHoursLabel(hubLabor.summary?.actualHours ?? quoteFeedback?.actualLaborHours)}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Quoted Lead Time</p>
+                  <p className="font-medium">{quoteFeedback?.quotedLeadTimeDays != null ? `${quoteFeedback.quotedLeadTimeDays} days` : 'Pending'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Actual Lead Time</p>
+                  <p className="font-medium">{quoteFeedback?.actualLeadTimeDays != null ? `${quoteFeedback.actualLeadTimeDays} days` : 'Pending'}</p>
+                </div>
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 <Button onClick={() => setLocation(`/p2-quote-form?projectId=${encodeURIComponent(project.id)}`)}>
                   <ExternalLink className="h-4 w-4 mr-2" />

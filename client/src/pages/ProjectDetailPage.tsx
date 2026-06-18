@@ -759,6 +759,26 @@ export default function ProjectDetailPage() {
   const hubMaterial = hubTabs.material ?? {};
   const hubLabor = hubTabs.labor ?? {};
   const hubShippingInvoicing = hubTabs.shippingInvoicing ?? {};
+  const hubPo = hubTabs.po ?? {};
+  const currentProjectPo = hubPo.currentPo ?? linkedProjectPO ?? projectP2POs[0] ?? null;
+  const currentPoLineItems = Array.isArray(hubPo.lineItems) ? hubPo.lineItems : [];
+  const poRevisionFamily = Array.isArray(hubPo.revisionFamily) ? hubPo.revisionFamily : projectP2POs;
+  const poAuditRevisions = (Array.isArray(hubPo.projectRevisions) && hubPo.projectRevisions.length > 0
+    ? hubPo.projectRevisions
+    : projectRevisions.filter((revision: any) => {
+        const type = String(revision.revision_type ?? revision.revisionType ?? '').toLowerCase();
+        return type === 'po' || type === 'po_link_change';
+      }));
+  const currentPoNumber = currentProjectPo?.po_number ?? currentProjectPo?.poNumber ?? null;
+  const currentPoStatus = currentProjectPo?.status ?? 'Unknown';
+  const currentPoCustomer = currentProjectPo?.customer_name ?? currentProjectPo?.customerName ?? project?.customer?.name ?? project?.customerId ?? 'Not set';
+  const currentPoDueDate = currentProjectPo?.expected_delivery ?? currentProjectPo?.expectedDelivery ?? null;
+  const currentPoRevisionNumber = Number(currentProjectPo?.revision_number ?? 0);
+  const formatDateLabel = (value: unknown, fallback = 'Not set') => {
+    if (!value) return fallback;
+    const date = new Date(String(value));
+    return Number.isNaN(date.getTime()) ? fallback : format(date, 'MMM d, yyyy');
+  };
 
   const { data: projectFarFlowdowns = [] } = useQuery<ProjectFarFlowdown[]>({
     queryKey: ['/api/far-flowdown-clauses/project', id],
@@ -3049,6 +3069,108 @@ export default function ProjectDetailPage() {
 
         {/* P2 purchase orders assigned to this project */}
         <TabsContent value="po" className="space-y-4">
+          <Tabs defaultValue="current-po" className="space-y-4">
+            <TabsList className="flex h-auto flex-wrap justify-start">
+              <TabsTrigger value="current-po" data-testid="tab-project-current-po">Current PO</TabsTrigger>
+              <TabsTrigger value="po-revisions" data-testid="tab-project-po-revisions">Revisions</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="current-po" className="space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Receipt className="h-4 w-4" /> Current PO Summary
+                      </CardTitle>
+                      <CardDescription>Most recent/current P2 PO revision linked to this project.</CardDescription>
+                    </div>
+                    {currentProjectPo && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}&editPoId=${encodeURIComponent(String(currentProjectPo.id))}`)}
+                        data-testid="button-open-current-project-po"
+                      >
+                        <Eye className="h-4 w-4 mr-1.5" />
+                        View PO
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!currentProjectPo ? (
+                    <div className="rounded-md border border-dashed p-6 text-center text-muted-foreground">
+                      <Receipt className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                      <p className="text-sm font-medium">No current PO linked yet</p>
+                      <p className="text-xs">Create or link a P2 PO to start the project PO audit trail.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 md:grid-cols-5">
+                        <div className="rounded-md border bg-muted/30 p-3 md:col-span-2">
+                          <p className="text-xs text-muted-foreground">PO Number</p>
+                          <p className="font-mono font-semibold text-primary">{currentPoNumber}</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground">Revision</p>
+                          <p className="font-medium">Rev {Number.isFinite(currentPoRevisionNumber) ? currentPoRevisionNumber : 0}</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground">Status</p>
+                          <p className="font-medium">{currentPoStatus}</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground">Due Date</p>
+                          <p className="font-medium">{formatDateLabel(currentPoDueDate)}</p>
+                        </div>
+                      </div>
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">Customer</p>
+                        <p className="font-medium">{currentPoCustomer}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium">Current PO Lines</p>
+                          <Badge variant="outline">{currentPoLineItems.length} line{currentPoLineItems.length === 1 ? '' : 's'}</Badge>
+                        </div>
+                        {currentPoLineItems.length === 0 ? (
+                          <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                            No line items are available for the current PO revision.
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto rounded-md border">
+                            <table className="w-full text-sm">
+                              <thead className="bg-muted/50 text-xs text-muted-foreground">
+                                <tr>
+                                  <th className="px-3 py-2 text-left font-medium">Part</th>
+                                  <th className="px-3 py-2 text-left font-medium">Description</th>
+                                  <th className="px-3 py-2 text-right font-medium">Qty</th>
+                                  <th className="px-3 py-2 text-right font-medium">Unit Price</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {currentPoLineItems.map((item: any) => (
+                                  <tr key={item.id} className="border-t">
+                                    <td className="px-3 py-2 font-mono">{item.part_number ?? item.partNumber ?? 'Unspecified'}</td>
+                                    <td className="px-3 py-2">{item.part_name ?? item.partName ?? 'No description'}</td>
+                                    <td className="px-3 py-2 text-right">{Number(item.quantity ?? 0).toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right">
+                                      {Number(item.unit_price ?? item.unitPrice ?? 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-4">
             <Card>
               <CardHeader className="pb-3">
@@ -3311,6 +3433,308 @@ export default function ProjectDetailPage() {
               )}
             </div>
           </div>
+            </TabsContent>
+
+            <TabsContent value="po-revisions" className="space-y-4">
+              <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <History className="h-4 w-4" />
+                      PO Revision Audit Trail
+                    </CardTitle>
+                    <CardDescription>
+                      Current and previous PO revisions stay linked to the project without altering older PO records.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">Current PO</p>
+                        <p className="font-mono font-medium">{currentPoNumber || 'Not linked'}</p>
+                      </div>
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">PO Revisions</p>
+                        <p className="font-medium">{Math.max(poRevisionFamily.length - 1, 0)}</p>
+                      </div>
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">Project Revision Events</p>
+                        <p className="font-medium">{poAuditRevisions.length}</p>
+                      </div>
+                    </div>
+
+                    {poRevisionFamily.length === 0 ? (
+                      <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                        No PO revision family is linked to this project yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {poRevisionFamily.map((po: any) => {
+                          const poId = po.id;
+                          const poNumber = po.po_number ?? po.poNumber;
+                          const revisionNumber = po.revision_number ?? 0;
+                          const isCurrent = po.is_current_revision ?? project.poId === poId;
+                          const changeReason = po.change_reason ?? po.changeReason;
+                          return (
+                            <div key={poId} className="rounded-md border p-4 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant={isCurrent ? 'default' : 'outline'}>{isCurrent ? 'Current' : 'Historical'}</Badge>
+                                  <span className="font-mono font-semibold">{poNumber}</span>
+                                  <span className="text-xs text-muted-foreground">Rev {revisionNumber}</span>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}&editPoId=${encodeURIComponent(String(poId))}`)}
+                                >
+                                  <Eye className="h-4 w-4 mr-1.5" />
+                                  View
+                                </Button>
+                              </div>
+                              <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-3">
+                                <span>Status: {po.status ?? 'Unknown'}</span>
+                                <span>Due: {formatDateLabel(po.expected_delivery ?? po.expectedDelivery)}</span>
+                                <span>Changed: {formatDateLabel(po.revised_at ?? po.updated_at ?? po.updatedAt ?? po.created_at ?? po.createdAt)}</span>
+                              </div>
+                              {changeReason && <p className="text-sm text-muted-foreground">{changeReason}</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <Separator />
+
+                    {poAuditRevisions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No PO revision events have been recorded yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {poAuditRevisions.map((revision: any) => (
+                          <div key={revision.id} className="rounded-md border p-4 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className="font-mono">{revision.revision_label ?? revision.revisionLabel}</Badge>
+                              <Badge>{revision.has_po_change || revision.hasPoChange ? 'PO Change' : 'PO Audit'}</Badge>
+                              <span className="text-xs text-muted-foreground">{formatDateLabel(revision.created_at ?? revision.createdAt)}</span>
+                            </div>
+                            <p className="text-sm font-medium">{revision.summary}</p>
+                            <p className="text-sm text-muted-foreground">{revision.reason}</p>
+                            {(revision.previous_po_number || revision.new_po_number || revision.previousPoNumber || revision.newPoNumber) && (
+                              <p className="text-xs text-muted-foreground font-mono">
+                                PO: {revision.previous_po_number ?? revision.previousPoNumber ?? 'none'} -&gt; {revision.new_po_number ?? revision.newPoNumber ?? 'none'}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Plus className="h-4 w-4" />
+                      Create Revision
+                    </CardTitle>
+                    <CardDescription>Create a project revision and optionally spin a copied P2 PO revision.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3">
+                      <div className="space-y-2">
+                        <Label>Revision Type</Label>
+                        <Select
+                          value={revisionForm.revisionType}
+                          onValueChange={(value: 'po' | 'drawing' | 'contract') =>
+                            setRevisionForm((prev) => ({
+                              ...prev,
+                              revisionType: value,
+                              hasPoChange: value === 'po' ? prev.hasPoChange : false,
+                              revisedPoNumber: value === 'po' ? prev.revisedPoNumber : '',
+                              revisedDueDate: value === 'po' ? prev.revisedDueDate : '',
+                              revisedLineItems: value === 'po' ? prev.revisedLineItems : [],
+                            }))
+                          }
+                        >
+                          <SelectTrigger data-testid="select-project-po-tab-revision-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="po">PO</SelectItem>
+                            <SelectItem value="drawing">Drawing</SelectItem>
+                            <SelectItem value="contract">Contract</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Revision Date</Label>
+                        <Input
+                          type="date"
+                          value={revisionForm.revisionDate}
+                          onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisionDate: e.target.value }))}
+                          data-testid="input-project-po-tab-revision-date"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Reason</Label>
+                        <Input
+                          value={revisionForm.reason}
+                          onChange={(e) => setRevisionForm((prev) => ({ ...prev, reason: e.target.value }))}
+                          placeholder="Why this revision is needed"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 rounded-md border p-3">
+                      <Checkbox
+                        id="project-po-tab-change"
+                        checked={revisionForm.hasPoChange}
+                        disabled={revisionForm.revisionType !== 'po' || !project.poId}
+                        onCheckedChange={(checked) =>
+                          setRevisionForm((prev) => ({
+                            ...prev,
+                            hasPoChange: checked === true,
+                            revisedPoNumber: checked === true ? prev.revisedPoNumber : '',
+                            revisedDueDate: checked === true ? prev.revisedDueDate : '',
+                            revisedLineItems: checked === true ? prev.revisedLineItems : [],
+                          }))
+                        }
+                        data-testid="checkbox-project-po-tab-change"
+                      />
+                      <div className="space-y-1">
+                        <Label htmlFor="project-po-tab-change" className="font-medium">PO change required</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Creates a copied editable P2 PO revision tied back to this audit event.
+                        </p>
+                        {!project.poId && (
+                          <p className="text-xs text-amber-700">Link a PO before creating a PO-change revision.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {revisionForm.hasPoChange && (
+                      <div className="space-y-3 rounded-md border p-3">
+                        <div className="grid gap-3">
+                          <div className="space-y-2">
+                            <Label>Revised PO Number</Label>
+                            <Input
+                              value={revisionForm.revisedPoNumber}
+                              onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisedPoNumber: e.target.value }))}
+                              placeholder="#####-RA"
+                              data-testid="input-project-po-tab-revised-po-number"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Revised Due Date</Label>
+                            <Input
+                              type="date"
+                              value={revisionForm.revisedDueDate}
+                              onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisedDueDate: e.target.value }))}
+                              data-testid="input-project-po-tab-revised-due-date"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <Label>Revised Line Items</Label>
+                          <Button type="button" variant="outline" size="sm" onClick={addRevisionLineItem}>
+                            <Plus className="h-4 w-4 mr-1.5" />
+                            Add Line
+                          </Button>
+                        </div>
+                        {revisionForm.revisedLineItems.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">Add at least one line item for the revised PO.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {revisionForm.revisedLineItems.map((item, index) => (
+                              <div key={item.id ?? index} className="grid gap-2 rounded-md border p-3">
+                                <div className="grid gap-2 md:grid-cols-2">
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Part Number</Label>
+                                    <Input
+                                      value={item.partNumber}
+                                      onChange={(e) => updateRevisionLineItem(index, { partNumber: e.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Qty</Label>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      value={item.quantity}
+                                      onChange={(e) => updateRevisionLineItem(index, { quantity: parseInt(e.target.value, 10) || 0 })}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Description</Label>
+                                  <Input
+                                    value={item.partName}
+                                    onChange={(e) => updateRevisionLineItem(index, { partName: e.target.value })}
+                                  />
+                                </div>
+                                <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Line Date</Label>
+                                    <Input
+                                      type="date"
+                                      value={item.dueDate?.slice(0, 10) || ''}
+                                      onChange={(e) => updateRevisionLineItem(index, { dueDate: e.target.value } as Partial<P2PurchaseOrderItem>)}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Unit Price</Label>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={item.unitPrice ?? 0}
+                                      onChange={(e) => updateRevisionLineItem(index, { unitPrice: parseFloat(e.target.value) || 0 })}
+                                    />
+                                  </div>
+                                  <div className="flex items-end">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeRevisionLineItem(index)}
+                                      aria-label="Remove revised PO line"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <Button
+                      className="w-full"
+                      disabled={
+                        !revisionForm.revisionDate ||
+                        revisionForm.reason.trim().length < 3 ||
+                        createRevisionMutation.isPending ||
+                        (revisionForm.hasPoChange && (
+                          !project.poId ||
+                          !revisionForm.revisedPoNumber.trim() ||
+                          !revisionForm.revisedDueDate ||
+                          revisionForm.revisedLineItems.length === 0 ||
+                          hasInvalidRevisedLineItems
+                        ))
+                      }
+                      onClick={() => createRevisionMutation.mutate(revisionForm)}
+                      data-testid="button-create-project-po-tab-revision"
+                    >
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      {createRevisionMutation.isPending ? 'Saving...' : 'Create Revision'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         {/* ── TRACEABILITY TAB ── */}

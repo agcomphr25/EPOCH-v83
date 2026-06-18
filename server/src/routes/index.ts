@@ -9959,10 +9959,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         storage.getProductionOrdersByPoId(poId),
       ]);
 
-      // Build per-item existing count map using poItemId
+      // Build per-item existing count map using active poItemId children.
+      // Cancelled rows are history and must not block a safe missing-line backfill.
       const existingByItemId = new Map<number, number>();
       for (const order of existingOrders) {
-        if (order.poItemId) {
+        if (order.poItemId && order.productionStatus !== 'CANCELLED') {
           existingByItemId.set(order.poItemId, (existingByItemId.get(order.poItemId) ?? 0) + 1);
         }
       }
@@ -10026,10 +10027,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         storage.getProductionOrdersByPoId(poId),
       ]);
 
-      // Build per-item existing count map (gap-fill: only generate what's missing)
+      // Build per-item existing count map from active production children.
+      // Cancelled rows remain audit history and do not satisfy the PO line quantity.
       const existingByItemId = new Map<number, number>();
       for (const order of existingOrders) {
-        if (order.poItemId) {
+        if (order.poItemId && order.productionStatus !== 'CANCELLED') {
           existingByItemId.set(order.poItemId, (existingByItemId.get(order.poItemId) ?? 0) + 1);
         }
       }

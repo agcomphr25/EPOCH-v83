@@ -759,6 +759,17 @@ export default function ProjectDetailPage() {
   const hubMaterial = hubTabs.material ?? {};
   const hubLabor = hubTabs.labor ?? {};
   const hubShippingInvoicing = hubTabs.shippingInvoicing ?? {};
+  const hubBomRouting = hubTabs.bomRouting ?? {};
+  const bomRoutingSummary = hubBomRouting.summary ?? {};
+  const bomRoutingRecords = Array.isArray(hubBomRouting.bomRecords) ? hubBomRouting.bomRecords : [];
+  const bomRoutingRoutings = Array.isArray(hubBomRouting.routings) ? hubBomRouting.routings : [];
+  const bomRoutingPartNumbers = Array.isArray(hubBomRouting.sourcePartNumbers) ? hubBomRouting.sourcePartNumbers : [];
+  const bomRoutingChangeLinks = Array.isArray(hubBomRouting.changeLinks)
+    ? hubBomRouting.changeLinks
+    : projectRevisions.filter((revision: any) => {
+        const type = String(revision.revision_type ?? revision.revisionType ?? '').toLowerCase();
+        return type === 'drawing' || type === 'contract';
+      });
   const hubPo = hubTabs.po ?? {};
   const currentProjectPo = hubPo.currentPo ?? linkedProjectPO ?? projectP2POs[0] ?? null;
   const currentPoLineItems = Array.isArray(hubPo.lineItems) ? hubPo.lineItems : [];
@@ -2578,31 +2589,119 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         <TabsContent value="bom-routing" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">BOMs</p>
+              <p className="font-medium">{bomRoutingSummary.bomCount ?? bomRoutingRecords.length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Routings</p>
+              <p className="font-medium">{bomRoutingSummary.routingCount ?? bomRoutingRoutings.length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Manufactured Lines</p>
+              <p className="font-medium">{bomRoutingSummary.manufacturedLineCount ?? currentPoLineItems.length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Change Links</p>
+              <p className="font-medium">{bomRoutingChangeLinks.length}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${project.poId ? `&poId=${encodeURIComponent(String(project.poId))}` : ''}`)}
+              data-testid="button-open-project-bom-routing-setup"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Open P2 BOM Setup
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation('/estimating/bom-drafts')}
+              data-testid="button-open-project-draft-bom-builder"
+            >
+              <Layers className="h-4 w-4 mr-2" />
+              Draft Builder
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation('/robust-bom')}
+              data-testid="button-open-project-robust-bom"
+            >
+              <BookOpen className="h-4 w-4 mr-2" />
+              Robust BOM
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation('/p2-control-center?tab=routing')}
+              data-testid="button-open-project-routing"
+            >
+              <ListChecks className="h-4 w-4 mr-2" />
+              Routing
+            </Button>
+          </div>
+
+          {bomRoutingPartNumbers.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Tag className="h-4 w-4" />
+                  Source Parts
+                </CardTitle>
+                <CardDescription>Manufactured PO parts used to find BOM and routing records.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {bomRoutingPartNumbers.map((partNumber: string) => (
+                    <Badge key={partNumber} variant="outline" className="font-mono">
+                      {partNumber}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="grid gap-4 xl:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Layers className="h-5 w-5" />
-                  BOM Setup
+                  BOM Records
                 </CardTitle>
                 <CardDescription>
-                  Project BOM work is managed in the P2 setup flow for the linked purchase order.
+                  BOMs found for manufactured parts on the linked PO family.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Linked PO</span>
-                    <span className="font-medium">{project.poId ? `#${project.poId}` : 'Not linked'}</span>
+                {bomRoutingRecords.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    No BOM records are linked to the manufactured PO parts yet.
                   </div>
-                </div>
-                <Button
-                  onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${project.poId ? `&poId=${encodeURIComponent(String(project.poId))}` : ''}`)}
-                  data-testid="button-open-project-bom-routing-setup"
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Open BOM Setup
-                </Button>
+                ) : (
+                  <div className="space-y-3">
+                    {bomRoutingRecords.map((bom: any) => (
+                      <div key={bom.id} className="rounded-md border p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-mono font-semibold">{bom.parent_part_ag_number ?? bom.code ?? 'Unknown part'}</p>
+                            <p className="truncate text-sm text-muted-foreground">{bom.description || 'No BOM description'}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={bom.is_active ? 'default' : 'secondary'}>{bom.is_active ? 'Active' : 'Inactive'}</Badge>
+                            {bom.latest_rev_code && <Badge variant="outline">Rev {bom.latest_rev_code}</Badge>}
+                          </div>
+                        </div>
+                        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                          <span>Lines: {Number(bom.line_count ?? 0).toLocaleString()}</span>
+                          <span>Revision ID: {bom.latest_revision_id ?? 'None'}</span>
+                          <span>Created: {formatDateLabel(bom.latest_rev_created_at, 'No revision date')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -2610,40 +2709,77 @@ export default function ProjectDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <ListChecks className="h-5 w-5" />
-                  Routing
+                  Routing Records
                 </CardTitle>
                 <CardDescription>
-                  Part routings and routing documents stay in the P2 routing hub.
+                  Active and historical part routings associated with the project or PO part numbers.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Project</span>
-                    <span className="font-medium">{project.projectCode}</span>
+                {bomRoutingRoutings.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    No part routings are linked to the project or PO parts yet.
                   </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setLocation('/p2-control-center?tab=routing')}
-                    data-testid="button-open-project-routing"
-                  >
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Open Routing
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setLocation('/p2-control-center?tab=documents')}
-                    data-testid="button-open-project-routing-documents"
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Routing Docs
-                  </Button>
-                </div>
+                ) : (
+                  <div className="space-y-3">
+                    {bomRoutingRoutings.map((routing: any) => (
+                      <div key={routing.id} className="rounded-md border p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-mono font-semibold">{routing.part_number ?? 'Unspecified part'}</p>
+                            <p className="truncate text-sm text-muted-foreground">
+                              {routing.routing_name || routing.part_name || 'Unnamed routing'}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={routing.is_active ? 'default' : 'secondary'}>{routing.is_active ? 'Active' : 'Inactive'}</Badge>
+                            {routing.routing_revision && <Badge variant="outline">Rev {routing.routing_revision}</Badge>}
+                          </div>
+                        </div>
+                        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                          <span>Type: {routing.routing_type || 'Not set'}</span>
+                          <span>Updated: {formatDateLabel(routing.updated_at ?? routing.created_at)}</span>
+                          <span>Project: {routing.project_id || 'Part master'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <History className="h-4 w-4" />
+                BOM/Routing Change Links
+              </CardTitle>
+              <CardDescription>
+                Drawing and contract revisions that may drive BOM or routing updates.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {bomRoutingChangeLinks.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No drawing or contract change links are recorded yet.</p>
+              ) : (
+                bomRoutingChangeLinks.map((revision: any) => {
+                  const revisionType = String(revision.revision_type ?? revision.revisionType ?? 'Change');
+                  return (
+                    <div key={revision.id} className="rounded-md border p-4 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="font-mono">{revision.revision_label ?? revision.revisionLabel}</Badge>
+                        <Badge variant="secondary">{revisionType}</Badge>
+                        <span className="text-xs text-muted-foreground">{formatDateLabel(revision.created_at ?? revision.createdAt)}</span>
+                      </div>
+                      <p className="text-sm font-medium">{revision.summary || 'Project change recorded'}</p>
+                      {revision.reason && <p className="text-sm text-muted-foreground">{revision.reason}</p>}
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="wad" className="space-y-4">

@@ -76,6 +76,7 @@ interface Traveler {
   partNumber: string;
   partName: string | null;
   workOrderId: string | null;
+  lotNumber: string | null;
   serialNumber: string | null;
   status: string;
   quantity: number;
@@ -214,6 +215,10 @@ export default function P2ControlCenter() {
     : poFromUrl
       ? [poFromUrl]
     : [];
+  const selectedProjectId = selectedPOIds.length === 1
+    ? allPOStatuses.find((po) => po.id === selectedPOIds[0])?.projectId || undefined
+    : undefined;
+  const programProjectId = selectedProjectId || wadProjectId || undefined;
 
   const togglePOFilter = (poId: number) => {
     setSelectedPOIds((prev) =>
@@ -857,15 +862,15 @@ export default function P2ControlCenter() {
         </TabsContent>
 
         <TabsContent value="program">
-          <ProgramManufacturingOrchestration mode="overview" projectId={wadProjectId || undefined} />
+          <ProgramManufacturingOrchestration mode="overview" projectId={programProjectId} />
         </TabsContent>
 
         <TabsContent value="assembly-tree">
-          <ProgramManufacturingOrchestration mode="tree" projectId={wadProjectId || undefined} />
+          <ProgramManufacturingOrchestration mode="tree" projectId={programProjectId} />
         </TabsContent>
 
         <TabsContent value="swimlane">
-          <ProgramManufacturingOrchestration mode="swimlane" projectId={wadProjectId || undefined} />
+          <ProgramManufacturingOrchestration mode="swimlane" projectId={programProjectId} />
         </TabsContent>
 
         <TabsContent value="shipping" className="space-y-4">
@@ -883,7 +888,7 @@ export default function P2ControlCenter() {
         </TabsContent>
 
         <TabsContent value="travelers">
-          <P2TravelersTab />
+          <P2TravelersTab selectedPONumbers={selectedPONumbers} />
         </TabsContent>
 
         <TabsContent value="changes">
@@ -952,7 +957,7 @@ function POsNeedingBOMs({ onSelectPO }: { onSelectPO: (poId: number) => void }) 
   );
 }
 
-function P2TravelersTab() {
+function P2TravelersTab({ selectedPONumbers = [] }: { selectedPONumbers?: string[] }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -1004,7 +1009,20 @@ function P2TravelersTab() {
     },
   });
 
-  const filteredTravelers = travelers.filter(t => {
+  const travelersForSelectedPOs = selectedPONumbers.length > 0
+    ? travelers.filter((traveler) => {
+        const sourceFields = [
+          traveler.lotNumber,
+          traveler.workOrderId,
+          traveler.travelerNumber,
+        ].filter((value): value is string => !!value);
+        return selectedPONumbers.some((poNumber) =>
+          sourceFields.some((value) => value.toLowerCase().includes(poNumber.toLowerCase()))
+        );
+      })
+    : travelers;
+
+  const filteredTravelers = travelersForSelectedPOs.filter(t => {
     if (statusFilter === 'all') return true;
     return t.status === statusFilter;
   });
@@ -1044,10 +1062,10 @@ function P2TravelersTab() {
   };
 
   const travelerStats = {
-    draft: travelers.filter(t => t.status === 'DRAFT').length,
-    inProgress: travelers.filter(t => t.status === 'IN_PROGRESS').length,
-    completed: travelers.filter(t => t.status === 'COMPLETED').length,
-    blocked: travelers.filter(t => t.status === 'BLOCKED').length,
+    draft: travelersForSelectedPOs.filter(t => t.status === 'DRAFT').length,
+    inProgress: travelersForSelectedPOs.filter(t => t.status === 'IN_PROGRESS').length,
+    completed: travelersForSelectedPOs.filter(t => t.status === 'COMPLETED').length,
+    blocked: travelersForSelectedPOs.filter(t => t.status === 'BLOCKED').length,
   };
 
   return (
@@ -1144,9 +1162,11 @@ function P2TravelersTab() {
               <p className="text-muted-foreground mb-4">
                 {statusFilter !== 'all' 
                   ? `No travelers with status "${statusFilter.replace('_', ' ')}" found.`
+                  : selectedPONumbers.length > 0
+                  ? 'No travelers found for the selected PO filter.'
                   : 'Generate a traveler from a part routing to get started.'}
               </p>
-              {statusFilter === 'all' && (
+              {statusFilter === 'all' && selectedPONumbers.length === 0 && (
                 <Button onClick={() => setShowCreateDialog(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Generate First Traveler

@@ -63,11 +63,23 @@ type SerializedUnit = {
   completedAt: string | null;
   finalizedAt: string | null;
   finalizedBy: string | null;
+  projectId?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
+  projectPoId?: number | null;
+  projectPoNumber?: string | null;
+  projectPoItemId?: number | null;
 };
 
 type POGroup = {
   poNumber: string;
   poId: number;
+  shipmentPoId: number;
+  shipmentPoNumber: string;
+  shipmentPoItemId: number | null;
+  projectId: string | null;
+  projectCode: string | null;
+  projectName: string | null;
   customerName: string;
   units: SerializedUnit[];
   totalUnits: number;
@@ -90,6 +102,15 @@ type CreatedShipment = {
   journalEntryId?: number;
   journalEntryStatus?: string;
   journalLineCount?: number;
+};
+
+type ShipmentPoContext = {
+  poId?: number | null;
+  poNumber?: string | null;
+  poItemId?: number | null;
+  projectId?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
 };
 
 function invoiceStatusColor(status?: string) {
@@ -124,6 +145,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   const [generatingCertFor, setGeneratingCertFor] = useState<string | null>(null);
   const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
   const [summaryModalSerials, setSummaryModalSerials] = useState<SerializedUnit[]>([]);
+  const [summaryModalPoContext, setSummaryModalPoContext] = useState<ShipmentPoContext | null>(null);
   const [cocModal, setCocModal] = useState<{ poNumber: string; lotId: string } | null>(null);
   const [cocSpecialProcesses, setCocSpecialProcesses] = useState('N/A');
   const [cocShipDate, setCocShipDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -136,8 +158,23 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   });
 
   const shippingUnits = selectedPOIds.length > 0
-    ? shippingUnitsRaw.filter((u) => selectedPOIds.includes(u.poId))
+    ? shippingUnitsRaw.filter((u) => selectedPOIds.includes(u.projectPoId ?? u.poId) || selectedPOIds.includes(u.poId))
     : shippingUnitsRaw;
+
+  const buildShipmentPoContext = (
+    units: SerializedUnit[],
+    fallbackPoNumber?: string | null,
+  ): ShipmentPoContext => {
+    const sample = units[0];
+    return {
+      poId: sample?.projectPoId ?? sample?.poId ?? null,
+      poNumber: sample?.projectPoNumber ?? fallbackPoNumber ?? sample?.poNumber ?? null,
+      poItemId: sample?.projectPoItemId ?? null,
+      projectId: sample?.projectId ?? null,
+      projectCode: sample?.projectCode ?? null,
+      projectName: sample?.projectName ?? null,
+    };
+  };
 
   type ExistingShipmentRow = {
     po_id: number;
@@ -165,6 +202,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     const map: Record<number, string> = {};
     for (const u of shippingUnits) {
       if (u.poId && u.poNumber) map[u.poId] = u.poNumber;
+      if (u.projectPoId && u.projectPoNumber) map[u.projectPoId] = u.projectPoNumber;
     }
     return map;
   }, [shippingUnits]);
@@ -221,6 +259,12 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
         groups[key] = {
           poNumber: unit.poNumber,
           poId: unit.poId,
+          shipmentPoId: unit.projectPoId ?? unit.poId,
+          shipmentPoNumber: unit.projectPoNumber ?? unit.poNumber,
+          shipmentPoItemId: unit.projectPoItemId ?? null,
+          projectId: unit.projectId ?? null,
+          projectCode: unit.projectCode ?? null,
+          projectName: unit.projectName ?? null,
           customerName: unit.customerName,
           units: [],
           totalUnits: 0,
@@ -286,7 +330,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   useEffect(() => {
     if (!initialPO || autoTriggered.current || shippingUnits.length === 0) return;
     const readyForPO = shippingUnits.filter(
-      (u) => u.poNumber === initialPO &&
+      (u) => (u.poNumber === initialPO || u.projectPoNumber === initialPO) &&
              u.status === 'COMPLETED' &&
              !!(u.finalizedAt && u.sku && u.drawingName)
     );
@@ -307,6 +351,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
 
     setSelectedSerials((prev) => ({ ...prev, [initialPO]: new Set(unitsToShip.map((u) => u.id)) }));
     setSummaryModalSerials(unitsToShip);
+    setSummaryModalPoContext(buildShipmentPoContext(unitsToShip, initialPO));
     setSummaryModalPO(initialPO);
   }, [initialPO, initialUnits, shippingUnits]);
 
@@ -565,16 +610,19 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
       {summaryModalPO && (
         <ShipmentSummaryModal
           serials={summaryModalSerials}
+          poContext={summaryModalPoContext ?? undefined}
           onConfirm={(billingAssignments, billingBucketOverrides) => {
             const po = summaryModalPO!;
             const ids = summaryModalSerials.map((s) => s.id);
             setSummaryModalPO(null);
             setSummaryModalSerials([]);
+            setSummaryModalPoContext(null);
             handleCreateShipment(po, ids, billingAssignments, billingBucketOverrides);
           }}
           onCancel={() => {
             setSummaryModalPO(null);
             setSummaryModalSerials([]);
+            setSummaryModalPoContext(null);
           }}
         />
       )}
@@ -683,6 +731,14 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                             [group.poNumber]: new Set(finalizedUnits.map((u) => u.id)),
                           }));
                           setSummaryModalSerials(finalizedUnits);
+                          setSummaryModalPoContext({
+                            poId: group.shipmentPoId,
+                            poNumber: group.shipmentPoNumber,
+                            poItemId: group.shipmentPoItemId,
+                            projectId: group.projectId,
+                            projectCode: group.projectCode,
+                            projectName: group.projectName,
+                          });
                           setSummaryModalPO(group.poNumber);
                         }}
                       >
@@ -971,6 +1027,14 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                           onClick={() => {
                             const selected = group.units.filter((u) => shipSelForPO.has(u.id));
                             setSummaryModalSerials(selected);
+                            setSummaryModalPoContext({
+                              poId: group.shipmentPoId,
+                              poNumber: group.shipmentPoNumber,
+                              poItemId: group.shipmentPoItemId,
+                              projectId: group.projectId,
+                              projectCode: group.projectCode,
+                              projectName: group.projectName,
+                            });
                             setSummaryModalPO(group.poNumber);
                           }}
                           className="bg-blue-600 hover:bg-blue-700 text-white"

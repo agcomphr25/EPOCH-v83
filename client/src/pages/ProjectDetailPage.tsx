@@ -754,6 +754,17 @@ export default function ProjectDetailPage() {
   const traceabilitySerials = Array.isArray(traceability?.serials) ? traceability.serials : [];
   const hubTabs = p2Hub?.tabs ?? {};
   const hubWad = hubTabs.wad ?? {};
+  const wadSummary = hubWad.summary ?? {};
+  const wadWorkOrders = Array.isArray(hubWad.workOrders) && hubWad.workOrders.length > 0
+    ? hubWad.workOrders
+    : projectWorkOrders;
+  const wadRevisions = Array.isArray(hubWad.revisions)
+    ? hubWad.revisions
+    : projectRevisions.filter((revision: any) => {
+        const type = String(revision.revision_type ?? revision.revisionType ?? '').toLowerCase();
+        return type === 'wad';
+      });
+  const latestWad = hubWad.latestWad ?? wadSummary.latestWad ?? wadWorkOrders[0] ?? null;
   const hubRom = hubTabs.rom ?? {};
   const hubProduction = hubTabs.production ?? {};
   const hubMaterial = hubTabs.material ?? {};
@@ -2783,11 +2794,29 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         <TabsContent value="wad" className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Latest WAD</p>
+              <p className="font-medium">{latestWad?.workOrderNumber || 'Not created'}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Total WADs</p>
+              <p className="font-medium">{wadSummary.totalWads ?? wadWorkOrders.length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Released or Beyond</p>
+              <p className="font-medium">{wadSummary.releasedOrBeyond ?? 0}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Revision Events</p>
+              <p className="font-medium">{wadRevisions.length}</p>
+            </div>
+          </div>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ClipboardList className="h-5 w-5" />
-                Work Authorization Document
+                Current WAD Summary
               </CardTitle>
               <CardDescription>Current WAD summary, project work orders, and WAD revision history.</CardDescription>
             </CardHeader>
@@ -2795,15 +2824,15 @@ export default function ProjectDetailPage() {
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Latest WAD</p>
-                  <p className="font-medium">{hubWad.summary?.latestWad?.workOrderNumber || projectWorkOrders[0]?.workOrderNumber || 'Not created'}</p>
+                  <p className="font-medium">{latestWad?.workOrderNumber || 'Not created'}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Total WADs</p>
-                  <p className="font-medium">{hubWad.summary?.totalWads ?? projectWorkOrders.length}</p>
+                  <p className="font-medium">{wadSummary.totalWads ?? wadWorkOrders.length}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Released or Beyond</p>
-                  <p className="font-medium">{hubWad.summary?.releasedOrBeyond ?? 0}</p>
+                  <p className="font-medium">{wadSummary.releasedOrBeyond ?? 0}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2815,10 +2844,18 @@ export default function ProjectDetailPage() {
                   <BarChart2 className="h-4 w-4 mr-2" />
                   PM Control Center
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(`/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}&revision=1`)}
+                  data-testid="button-add-project-wad-revision"
+                >
+                  <History className="h-4 w-4 mr-2" />
+                  Add WAD Revision
+                </Button>
               </div>
-              {Array.isArray(hubWad.workOrders) && hubWad.workOrders.length > 0 && (
+              {wadWorkOrders.length > 0 ? (
                 <div className="space-y-2">
-                  {hubWad.workOrders.map((wo: any) => (
+                  {wadWorkOrders.map((wo: any) => (
                     <div key={wo.id} className="flex items-center justify-between rounded-md border p-3">
                       <div>
                         <p className="font-medium">{wo.workOrderNumber}</p>
@@ -2828,6 +2865,34 @@ export default function ProjectDetailPage() {
                     </div>
                   ))}
                 </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No WAD records are linked yet.</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-4 w-4" />
+                WAD Revision Events
+              </CardTitle>
+              <CardDescription>Project revision entries associated with WAD changes.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {wadRevisions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No WAD revision events have been recorded yet.</p>
+              ) : (
+                wadRevisions.map((revision: any) => (
+                  <div key={revision.id} className="rounded-md border p-4 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="font-mono">{revision.revision_label ?? revision.revisionLabel}</Badge>
+                      <Badge variant="secondary">WAD</Badge>
+                      <span className="text-xs text-muted-foreground">{formatDateLabel(revision.created_at ?? revision.createdAt)}</span>
+                    </div>
+                    <p className="text-sm font-medium">{revision.summary || 'WAD revision recorded'}</p>
+                    {revision.reason && <p className="text-sm text-muted-foreground">{revision.reason}</p>}
+                  </div>
+                ))
               )}
             </CardContent>
           </Card>

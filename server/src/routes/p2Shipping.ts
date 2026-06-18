@@ -1463,6 +1463,8 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
   try {
     const rows = await pool.query<{
       po_id: number;
+      source_po_ids: number[] | null;
+      source_po_numbers: string[] | null;
       lot_id: string;
       lot_number: string;
       slip_id: string;
@@ -1479,6 +1481,8 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
     }>(`
       SELECT
         l.po_id,
+        COALESCE(source.source_po_ids, ARRAY[]::int[]) AS source_po_ids,
+        COALESCE(source.source_po_numbers, ARRAY[]::text[]) AS source_po_numbers,
         l.id           AS lot_id,
         l.lot_number,
         ps.id          AS slip_id,
@@ -1494,6 +1498,19 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
         0::int AS journal_line_count
       FROM p2_lot_numbers l
       JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
+      LEFT JOIN LATERAL (
+        SELECT
+          ARRAY_AGG(DISTINCT si.po_id) FILTER (WHERE si.po_id IS NOT NULL) AS source_po_ids,
+          ARRAY_AGG(DISTINCT si.po_number) FILTER (WHERE si.po_number IS NOT NULL) AS source_po_numbers
+        FROM jsonb_array_elements_text(
+          CASE
+            WHEN jsonb_typeof(COALESCE(l.serialized_item_ids, '[]'::jsonb)) = 'array'
+              THEN COALESCE(l.serialized_item_ids, '[]'::jsonb)
+            ELSE '[]'::jsonb
+          END
+        ) serial(serial_id)
+        JOIN p2_serialized_items si ON si.id = serial.serial_id::uuid
+      ) source ON true
       WHERE l.po_id IS NOT NULL
         AND l.packing_slip_id IS NOT NULL
         AND COALESCE(l.status, '') <> 'VOID'

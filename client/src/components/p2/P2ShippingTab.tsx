@@ -178,6 +178,8 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
 
   type ExistingShipmentRow = {
     po_id: number;
+    source_po_ids?: number[] | null;
+    source_po_numbers?: string[] | null;
     lot_id: string;
     lot_number: string;
     slip_id: string;
@@ -198,11 +200,17 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   });
 
   // Build poId → poNumber lookup from the live shipping queue
-  const poIdToNumber = useMemo(() => {
-    const map: Record<number, string> = {};
+  const shipmentPoIdToGroupKeys = useMemo(() => {
+    const map: Record<number, Set<string>> = {};
     for (const u of shippingUnits) {
-      if (u.poId && u.poNumber) map[u.poId] = u.poNumber;
-      if (u.projectPoId && u.projectPoNumber) map[u.projectPoId] = u.projectPoNumber;
+      if (u.poId && u.poNumber) {
+        map[u.poId] = map[u.poId] ?? new Set<string>();
+        map[u.poId].add(u.poNumber);
+      }
+      if (u.projectPoId && u.poNumber) {
+        map[u.projectPoId] = map[u.projectPoId] ?? new Set<string>();
+        map[u.projectPoId].add(u.poNumber);
+      }
     }
     return map;
   }, [shippingUnits]);
@@ -211,14 +219,16 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   // Merges server rows into existing local state: adds missing lots but preserves locally-enriched
   // fields (e.g. certId/certNumber set by handleGenerateCoC before the next server refetch).
   useEffect(() => {
-    if (!existingShipmentRows.length || !Object.keys(poIdToNumber).length) return;
+    if (!existingShipmentRows.length || !Object.keys(shipmentPoIdToGroupKeys).length) return;
     setCreatedShipments((prev) => {
       const next: Record<string, CreatedShipment[]> = { ...prev };
       for (const row of existingShipmentRows) {
-        const poNumber = poIdToNumber[row.po_id];
-        if (!poNumber) continue;
-        if (!next[poNumber]) next[poNumber] = [];
-        const existingIdx = next[poNumber].findIndex((s) => s.lotId === row.lot_id);
+        const poNumbers = Array.from(new Set<string>([
+          ...(row.source_po_numbers ?? []),
+          ...Array.from(shipmentPoIdToGroupKeys[row.po_id] ?? []),
+          ...(row.source_po_ids ?? []).flatMap((poId) => Array.from(shipmentPoIdToGroupKeys[poId] ?? [])),
+        ].filter((poNumber): poNumber is string => !!poNumber)));
+        if (poNumbers.length === 0) continue;
         const serverEntry: CreatedShipment = {
           lotId: row.lot_id,
           lotNumber: row.lot_number,
@@ -234,22 +244,26 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           journalEntryStatus: row.journal_entry_status ?? undefined,
           journalLineCount: row.journal_line_count ?? undefined,
         };
-        if (existingIdx === -1) {
-          next[poNumber] = [...next[poNumber], serverEntry];
-        } else {
-          const local = next[poNumber][existingIdx];
-          // Prefer local cert fields if server hasn't caught up yet
-          const merged: CreatedShipment = {
-            ...serverEntry,
-            certId: local.certId ?? serverEntry.certId,
-            certNumber: local.certNumber ?? serverEntry.certNumber,
-          };
-          next[poNumber] = next[poNumber].map((s, i) => (i === existingIdx ? merged : s));
+        for (const poNumber of poNumbers) {
+          if (!next[poNumber]) next[poNumber] = [];
+          const existingIdx = next[poNumber].findIndex((s) => s.lotId === row.lot_id);
+          if (existingIdx === -1) {
+            next[poNumber] = [...next[poNumber], serverEntry];
+          } else {
+            const local = next[poNumber][existingIdx];
+            // Prefer local cert fields if server hasn't caught up yet
+            const merged: CreatedShipment = {
+              ...serverEntry,
+              certId: local.certId ?? serverEntry.certId,
+              certNumber: local.certNumber ?? serverEntry.certNumber,
+            };
+            next[poNumber] = next[poNumber].map((s, i) => (i === existingIdx ? merged : s));
+          }
         }
       }
       return next;
     });
-  }, [existingShipmentRows, poIdToNumber]);
+  }, [existingShipmentRows, shipmentPoIdToGroupKeys]);
 
   const poGroups = useMemo(() => {
     const groups: Record<string, POGroup> = {};
@@ -453,6 +467,8 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     serialIds: string[],
     billingAssignments: { serializedItemId: string; allocationId: string }[] = [],
     billingBucketOverrides: {
+      poId?: number;
+      poNumber?: string;
       poItemId: number;
       bucketLabel: string;
       description?: string;

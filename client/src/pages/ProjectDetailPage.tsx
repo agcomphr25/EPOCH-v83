@@ -772,7 +772,6 @@ export default function ProjectDetailPage() {
   const projectSerializedItems = Array.isArray(hubProduction.serializedItems) ? hubProduction.serializedItems : traceabilitySerials;
   const productionAssemblyTree = hubProduction.assemblyTree ?? {};
   const assemblyPoItems = Array.isArray(productionAssemblyTree.poItems) ? productionAssemblyTree.poItems : [];
-  const assemblyBomRecords = Array.isArray(productionAssemblyTree.bomRecords) ? productionAssemblyTree.bomRecords : bomRoutingRecords;
   const productionStatusCounts = projectProductionOrders.reduce((counts: Record<string, number>, order: any) => {
     const status = String(order.status || 'Unknown');
     counts[status] = (counts[status] ?? 0) + 1;
@@ -784,6 +783,7 @@ export default function ProjectDetailPage() {
   const hubBomRouting = hubTabs.bomRouting ?? {};
   const bomRoutingSummary = hubBomRouting.summary ?? {};
   const bomRoutingRecords = Array.isArray(hubBomRouting.bomRecords) ? hubBomRouting.bomRecords : [];
+  const assemblyBomRecords = Array.isArray(productionAssemblyTree.bomRecords) ? productionAssemblyTree.bomRecords : bomRoutingRecords;
   const bomRoutingRoutings = Array.isArray(hubBomRouting.routings) ? hubBomRouting.routings : [];
   const bomRoutingPartNumbers = Array.isArray(hubBomRouting.sourcePartNumbers) ? hubBomRouting.sourcePartNumbers : [];
   const bomRoutingChangeLinks = Array.isArray(hubBomRouting.changeLinks)

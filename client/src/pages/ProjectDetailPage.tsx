@@ -824,6 +824,17 @@ export default function ProjectDetailPage() {
     const hours = Number(value);
     return Number.isFinite(hours) ? `${hours.toLocaleString()} hrs` : fallback;
   };
+  const { data: quoteFeedback, isLoading: isLoadingFeedback } = useQuery<QuoteExecutionFeedback | null>({
+    queryKey: ['/api/projects', id, 'quote-feedback'],
+    queryFn: () =>
+      fetch(`/api/projects/${id}/quote-feedback`, { credentials: 'include' }).then(async r => {
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error('Failed to fetch quote feedback');
+        return r.json();
+      }),
+    enabled: !!id,
+  });
+
   const romCategories = [
     {
       label: 'Labor',
@@ -1048,17 +1059,6 @@ export default function ProjectDetailPage() {
       toast({ title: 'Closing record updated', description: 'Lessons learned have been saved.' });
     },
     onError: (err: any) => toast({ title: 'Update failed', description: err?.message || 'Could not update closing record.', variant: 'destructive' }),
-  });
-
-  const { data: quoteFeedback, isLoading: isLoadingFeedback } = useQuery<QuoteExecutionFeedback | null>({
-    queryKey: ['/api/projects', id, 'quote-feedback'],
-    queryFn: () =>
-      fetch(`/api/projects/${id}/quote-feedback`, { credentials: 'include' }).then(async r => {
-        if (r.status === 404) return null;
-        if (!r.ok) throw new Error('Failed to fetch quote feedback');
-        return r.json();
-      }),
-    enabled: !!id,
   });
 
   const regenerateFeedbackMutation = useMutation({

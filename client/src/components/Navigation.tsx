@@ -554,12 +554,6 @@ export default function Navigation() {
       description: 'View and manage ROM estimates',
     },
     {
-      path: '/rfq-builder',
-      label: 'Cost Builder',
-      icon: Calculator,
-      description: 'BOM-driven cost estimation with overhead rates and margins',
-    },
-    {
       path: '/estimating/bom-drafts',
       label: 'Draft Builder',
       icon: FileSpreadsheet,

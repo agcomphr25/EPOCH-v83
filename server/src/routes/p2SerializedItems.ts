@@ -74,8 +74,64 @@ router.get('/shipping-queue', async (req, res) => {
 
     // Exclude any serial already in a lot — prevents re-shipment
     const unshipped = units.filter((u) => !shippedIds.has(u.id));
+    const sourcePoIds = Array.from(
+      new Set(unshipped.map((unit) => unit.poId).filter((poId): poId is number => Number.isInteger(poId))),
+    );
 
-    res.json(unshipped);
+    const projectPoContextBySourcePoId = new Map<number, {
+      projectId: string | null;
+      projectCode: string | null;
+      projectName: string | null;
+      projectPoId: number | null;
+      projectPoNumber: string | null;
+      projectPoItemId: number | null;
+    }>();
+
+    if (sourcePoIds.length > 0) {
+      const contextRows = await pool.query<{
+        source_po_id: number;
+        project_id: string | null;
+        project_code: string | null;
+        project_name: string | null;
+        project_po_id: number | null;
+        project_po_number: string | null;
+        project_po_item_id: number | null;
+      }>(
+        `SELECT DISTINCT ON (source_po.id)
+            source_po.id AS source_po_id,
+            p.id::text AS project_id,
+            p.project_code,
+            p.project_name,
+            COALESCE(p.po_id, source_po.id) AS project_po_id,
+            COALESCE(current_po.po_number, source_po.po_number) AS project_po_number,
+            p.p2_po_item_id AS project_po_item_id
+           FROM p2_purchase_orders source_po
+           LEFT JOIN projects p
+             ON p.id = source_po.project_id
+             OR p.po_id = source_po.id
+           LEFT JOIN p2_purchase_orders current_po
+             ON current_po.id = COALESCE(p.po_id, source_po.id)
+          WHERE source_po.id = ANY($1::int[])
+          ORDER BY source_po.id, (p.po_id IS NOT NULL) DESC, p.updated_at DESC NULLS LAST`,
+        [sourcePoIds],
+      );
+
+      for (const row of contextRows) {
+        projectPoContextBySourcePoId.set(row.source_po_id, {
+          projectId: row.project_id,
+          projectCode: row.project_code,
+          projectName: row.project_name,
+          projectPoId: row.project_po_id,
+          projectPoNumber: row.project_po_number,
+          projectPoItemId: row.project_po_item_id,
+        });
+      }
+    }
+
+    res.json(unshipped.map((unit) => ({
+      ...unit,
+      ...(projectPoContextBySourcePoId.get(unit.poId) ?? {}),
+    })));
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Failed to fetch shipping queue' });
   }

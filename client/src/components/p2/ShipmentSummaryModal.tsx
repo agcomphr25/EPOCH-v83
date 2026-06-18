@@ -38,6 +38,8 @@ type SerializedUnit = {
 };
 
 type BillingBucketOverride = {
+  poId?: number;
+  poNumber?: string;
   poItemId: number;
   bucketLabel: string;
   description?: string;
@@ -67,8 +69,18 @@ type PoItem = {
   notes?: string | null;
 };
 
+type ShipmentPoContext = {
+  poId?: number | null;
+  poNumber?: string | null;
+  poItemId?: number | null;
+  projectId?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
+};
+
 interface ShipmentSummaryModalProps {
   serials: SerializedUnit[];
+  poContext?: ShipmentPoContext;
   onConfirm: (
     assignments?: { serializedItemId: string; allocationId: string }[],
     bucketOverrides?: BillingBucketOverride[],
@@ -78,12 +90,14 @@ interface ShipmentSummaryModalProps {
 
 export default function ShipmentSummaryModal({
   serials,
+  poContext,
   onConfirm,
   onCancel,
 }: ShipmentSummaryModalProps) {
   const customer = serials[0]?.customerName ?? '-';
-  const poNumber = serials[0]?.poNumber ?? '-';
-  const poId = serials[0]?.poId;
+  const poNumber = poContext?.poNumber || serials[0]?.poNumber || '-';
+  const poId = poContext?.poId ?? serials[0]?.poId;
+  const preferredPoItemId = poContext?.poItemId ?? null;
   const [bucketMode, setBucketMode] = useState<'combined' | 'split'>('combined');
   const [selectedPoItemId, setSelectedPoItemId] = useState<number | null>(null);
   const [combinedBucketOverride, setCombinedBucketOverride] = useState<Omit<BucketOverrideDraft, 'enabled'>>({
@@ -125,6 +139,8 @@ export default function ShipmentSummaryModal({
       const group = groupByPoItemId.get(item.id);
       return {
         poItemId: item.id,
+        poId: item.poId ?? poId,
+        poNumber,
         partNumber: item.partNumber,
         itemName: item.partNumber || `PO Item #${item.id}`,
         partName: item.partName ?? group?.partName ?? '',
@@ -140,6 +156,8 @@ export default function ShipmentSummaryModal({
       .filter((group) => !fetchedIds.has(group.poItemId))
       .map((group) => ({
         poItemId: group.poItemId,
+        poId: group.units[0]?.poId,
+        poNumber: group.units[0]?.poNumber,
         partNumber: group.partNumber,
         itemName: group.itemName || `PO Item #${group.poItemId}`,
         partName: group.partName,
@@ -152,13 +170,22 @@ export default function ShipmentSummaryModal({
     return [...fetchedOptions, ...serialOnlyOptions].sort((a, b) => a.poItemId - b.poItemId);
   }, [poItems, poItemGroups]);
 
-  const effectiveSelectedPoItemId = selectedPoItemId ?? poItemOptions[0]?.poItemId ?? poItemGroups[0]?.poItemId ?? null;
+  const effectiveSelectedPoItemId =
+    selectedPoItemId ??
+    (preferredPoItemId && poItemOptions.some((option) => option.poItemId === preferredPoItemId)
+      ? preferredPoItemId
+      : null) ??
+    poItemOptions[0]?.poItemId ??
+    poItemGroups[0]?.poItemId ??
+    null;
   const selectedPoItemOption =
     poItemOptions.find((option) => option.poItemId === effectiveSelectedPoItemId) ??
     poItemOptions[0] ??
     (poItemGroups[0]
       ? {
           poItemId: poItemGroups[0].poItemId,
+          poId: poItemGroups[0].units[0]?.poId,
+          poNumber: poItemGroups[0].units[0]?.poNumber,
           partNumber: poItemGroups[0].partNumber,
           itemName: poItemGroups[0].itemName || `PO Item #${poItemGroups[0].poItemId}`,
           partName: poItemGroups[0].partName,
@@ -173,6 +200,8 @@ export default function ShipmentSummaryModal({
     const override = bucketOverrides[group.poItemId];
     if (!override?.enabled || !override.bucketLabel.trim()) return [];
     return [{
+      poId: group.units[0]?.poId,
+      poNumber: group.units[0]?.poNumber,
       poItemId: group.poItemId,
       bucketLabel: override.bucketLabel.trim(),
       description: override.description.trim() || undefined,
@@ -198,6 +227,8 @@ export default function ShipmentSummaryModal({
   const shipmentBucketOverrides: BillingBucketOverride[] =
     bucketMode === 'combined' && selectedPoItemOption
       ? [{
+          poId: selectedPoItemOption.poId,
+          poNumber: selectedPoItemOption.poNumber || poNumber,
           poItemId: selectedPoItemOption.poItemId,
           bucketLabel: combinedBucketLabel,
           description: combinedBucketDescription || undefined,

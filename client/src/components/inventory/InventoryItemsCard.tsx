@@ -106,6 +106,12 @@ function mediaDownloadUrl(mediaId?: string | null) {
   return mediaId ? `/api/media/${mediaId}/download` : '';
 }
 
+function normalizeOrderUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 function PartImageThumbnail({
   item,
   className = 'h-10 w-10',
@@ -346,6 +352,7 @@ interface InventoryFormData {
   source: string;
   vendorId: string;
   supplierPartNumber: string;
+  orderUrl: string;
   secondarySupplierPartNumber: string;
   costPer: string;
   vendorUnit: string;
@@ -842,6 +849,19 @@ const InventoryForm = ({
             onChange={onChange}
             placeholder="Enter supplier part #"
             data-testid="input-supplierPartNumber"
+          />
+        </div>
+        <div>
+          <Label htmlFor="orderUrl">Order Website Link</Label>
+          <Input
+            id="orderUrl"
+            name="orderUrl"
+            type="text"
+            inputMode="url"
+            value={formData.orderUrl}
+            onChange={onChange}
+            placeholder="https://vendor.com/item"
+            data-testid="input-orderUrl"
           />
         </div>
         <div>
@@ -1534,6 +1554,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     source: '',
     vendorId: 'none',
     supplierPartNumber: '',
+    orderUrl: '',
     secondarySupplierPartNumber: '',
     costPer: '',
     vendorUnit: '',
@@ -2171,6 +2192,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       source: '',
       vendorId: 'none',
       supplierPartNumber: '',
+      orderUrl: '',
       secondarySupplierPartNumber: '',
       costPer: '',
       vendorUnit: '',
@@ -2340,6 +2362,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             ? parseInt(formData.vendorId)
             : null,
         supplierPartNumber: formData.supplierPartNumber || null,
+        orderUrl: normalizeOrderUrl(formData.orderUrl),
         secondarySupplierPartNumber:
           formData.secondarySupplierPartNumber || null,
         costPer: formData.costPer !== '' ? parseFloat(formData.costPer) : null,
@@ -2415,6 +2438,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       source: item.source || '',
       vendorId: item.vendorId ? item.vendorId.toString() : 'none',
       supplierPartNumber: item.supplierPartNumber || '',
+      orderUrl: item.orderUrl || '',
       secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
       costPer: item.costPer != null ? item.costPer.toString() : '',
       vendorUnit: item.vendorUnit || '',

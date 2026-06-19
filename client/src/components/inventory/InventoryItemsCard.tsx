@@ -14,6 +14,7 @@ import {
   ArrowDown,
   GitBranch,
   ExternalLink,
+  Copy,
   AlertCircle,
   Image as ImageIcon,
   Star,
@@ -104,6 +105,12 @@ type InventoryMediaAttachment = {
 
 function mediaDownloadUrl(mediaId?: string | null) {
   return mediaId ? `/api/media/${mediaId}/download` : '';
+}
+
+function normalizeOrderUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
 function PartImageThumbnail({
@@ -346,6 +353,7 @@ interface InventoryFormData {
   source: string;
   vendorId: string;
   supplierPartNumber: string;
+  orderUrl: string;
   secondarySupplierPartNumber: string;
   costPer: string;
   vendorUnit: string;
@@ -842,6 +850,17 @@ const InventoryForm = ({
             onChange={onChange}
             placeholder="Enter supplier part #"
             data-testid="input-supplierPartNumber"
+          />
+        </div>
+        <div>
+          <Label htmlFor="orderUrl">Order Website URL</Label>
+          <Input
+            id="orderUrl"
+            name="orderUrl"
+            value={formData.orderUrl}
+            onChange={onChange}
+            placeholder="vendor.com/item-page"
+            data-testid="input-orderUrl"
           />
         </div>
         <div>
@@ -1534,6 +1553,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     source: '',
     vendorId: 'none',
     supplierPartNumber: '',
+    orderUrl: '',
     secondarySupplierPartNumber: '',
     costPer: '',
     vendorUnit: '',
@@ -1582,6 +1602,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const [otherDocsFile, setOtherDocsFile] = useState<File | null>(null);
   const [currentOtherDocsFileName, setCurrentOtherDocsFileName] = useState<string | null>(null);
   const [isTraceabilityModalOpen, setIsTraceabilityModalOpen] = useState(false);
+  const [orderUrlItem, setOrderUrlItem] = useState<InventoryItem | null>(null);
+  const [orderUrlDraft, setOrderUrlDraft] = useState('');
 
   // Sync legacy department field with first assigned department
   useEffect(() => {
@@ -2054,6 +2076,25 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     onError: () => toast.error('Failed to delete inventory item'),
   });
 
+  const updateOrderUrlMutation = useMutation({
+    mutationFn: ({ id, orderUrl }: { id: number; orderUrl: string | null }) =>
+      apiRequest(`/api/inventory/items/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ orderUrl }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/items'] });
+      toast.success('Order URL saved');
+      setOrderUrlItem(null);
+      setOrderUrlDraft('');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to save order URL');
+    },
+  });
+
   const handleExportCSV = async () => {
     try {
       const response = await fetch('/api/enhanced/inventory/export/csv');
@@ -2171,6 +2212,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       source: '',
       vendorId: 'none',
       supplierPartNumber: '',
+      orderUrl: '',
       secondarySupplierPartNumber: '',
       costPer: '',
       vendorUnit: '',
@@ -2303,6 +2345,68 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     document.getElementById(id)?.click();
   }, []);
 
+  const getInventoryItemFormData = (
+    item: InventoryItem,
+    overrides: Partial<InventoryFormData> = {}
+  ): InventoryFormData => {
+    const resolvedItemType = item.itemType || (item.type === 'Manufactured' ? 'MANUFACTURED' : 'PURCHASED');
+    return {
+      agPartNumber: item.agPartNumber,
+      sku: item.sku || '',
+      name: item.name,
+      type: item.type || 'Purchased',
+      itemType: resolvedItemType,
+      manufacturedCategory: item.manufacturedCategory || (item.isPacket ? 'PACKET' : ''),
+      manufacturingLevel: item.manufacturingLevel || '',
+      manufacturingDepartment: item.manufacturingDepartment || '',
+      machineType: item.machineType || '',
+      source: item.source || '',
+      vendorId: item.vendorId ? item.vendorId.toString() : 'none',
+      supplierPartNumber: item.supplierPartNumber || '',
+      orderUrl: (item as any).orderUrl || '',
+      secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
+      costPer: item.costPer != null ? item.costPer.toString() : '',
+      vendorUnit: item.vendorUnit || '',
+      purchaseUnitLabel: item.purchaseUnitLabel || '',
+      purchaseUnit: item.purchaseUnit || '',
+      purchaseUnitId: (item as any).purchaseUnitId?.toString() || '',
+      purchaseQuantity: item.purchaseQuantity ? item.purchaseQuantity.toString() : '',
+      consumptionRate: item.consumptionRate ? item.consumptionRate.toString() : '',
+      usageUnit: item.usageUnit || '',
+      usageUnitId: (item as any).usageUnitId?.toString() || '',
+      cogsPerUnit: item.cogsPerUnit != null ? item.cogsPerUnit.toString() : '',
+      orderDate: item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
+      department: item.department || '',
+      assignedDepartments: (item as any).assignedDepartments || [],
+      leadTimeDays: item.leadTimeDays ? item.leadTimeDays.toString() : '',
+      secondarySource: item.secondarySource || '',
+      notes: item.notes || '',
+      isStockItem: item.isStockItem || false,
+      utilizedInPL1: item.utilizedInPL1 || false,
+      utilizedInPL2: item.utilizedInPL2 || false,
+      utilizedInPL3: item.utilizedInPL3 || false,
+      traceabilityRequired: item.traceabilityRequired || false,
+      traceabilityFields: (item as any).traceabilityFields || [],
+      traceabilityFieldConfig: (item as any).traceabilityFieldConfig || {},
+      utilizedInFacilities: item.utilizedInFacilities || false,
+      utilizedInAdmin: item.utilizedInAdmin || false,
+      utilizedInServices: item.utilizedInServices || false,
+      isPacket: (item as any).isPacket || false,
+      isFabric: item.isFabric || false,
+      hasSds: item.hasSds || false,
+      hasTds: item.hasTds || false,
+      hasOtherDocs: item.hasOtherDocs || false,
+      assignedToAsset: (item as any).assignedToAsset || '',
+      defaultOrderMethod: (item as any).defaultOrderMethod || '',
+      shelfLifeControlled: (item as any).shelfLifeControlled || false,
+      frozenShelfLifeDays: (item as any).frozenShelfLifeDays != null ? String((item as any).frozenShelfLifeDays) : '',
+      roomTempShelfLifeDays: (item as any).roomTempShelfLifeDays != null ? String((item as any).roomTempShelfLifeDays) : '',
+      defaultMaxOutTimeMinutes: (item as any).defaultMaxOutTimeMinutes != null ? String((item as any).defaultMaxOutTimeMinutes) : '',
+      outTimeEnforcementRequired: (item as any).outTimeEnforcementRequired || false,
+      ...overrides,
+    };
+  };
+
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -2340,6 +2444,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             ? parseInt(formData.vendorId)
             : null,
         supplierPartNumber: formData.supplierPartNumber || null,
+        orderUrl: normalizeOrderUrl(formData.orderUrl),
         secondarySupplierPartNumber:
           formData.secondarySupplierPartNumber || null,
         costPer: formData.costPer !== '' ? parseFloat(formData.costPer) : null,
@@ -2401,66 +2506,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
 
   const handleEdit = (item: InventoryItem) => {
     setEditingItem(item);
-    const resolvedItemType = item.itemType || (item.type === 'Manufactured' ? 'MANUFACTURED' : 'PURCHASED');
-    setFormData({
-      agPartNumber: item.agPartNumber,
-      sku: item.sku || '',
-      name: item.name,
-      type: item.type || 'Purchased',
-      itemType: resolvedItemType,
-      manufacturedCategory: item.manufacturedCategory || (item.isPacket ? 'PACKET' : ''),
-      manufacturingLevel: item.manufacturingLevel || '',
-      manufacturingDepartment: item.manufacturingDepartment || '',
-      machineType: item.machineType || '',
-      source: item.source || '',
-      vendorId: item.vendorId ? item.vendorId.toString() : 'none',
-      supplierPartNumber: item.supplierPartNumber || '',
-      secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
-      costPer: item.costPer != null ? item.costPer.toString() : '',
-      vendorUnit: item.vendorUnit || '',
-      purchaseUnitLabel: item.purchaseUnitLabel || '',
-      purchaseUnit: item.purchaseUnit || '',
-      purchaseUnitId: (item as any).purchaseUnitId?.toString() || '',
-      purchaseQuantity: item.purchaseQuantity
-        ? item.purchaseQuantity.toString()
-        : '',
-      consumptionRate: item.consumptionRate
-        ? item.consumptionRate.toString()
-        : '',
-      usageUnit: item.usageUnit || '',
-      usageUnitId: (item as any).usageUnitId?.toString() || '',
-      cogsPerUnit: item.cogsPerUnit != null ? item.cogsPerUnit.toString() : '',
-      orderDate: item.orderDate
-        ? new Date(item.orderDate).toISOString().split('T')[0]
-        : '',
-      department: item.department || '',
-      assignedDepartments: (item as any).assignedDepartments || [],
-      leadTimeDays: item.leadTimeDays ? item.leadTimeDays.toString() : '',
-      secondarySource: item.secondarySource || '',
-      notes: item.notes || '',
-      isStockItem: item.isStockItem || false,
-      utilizedInPL1: item.utilizedInPL1 || false,
-      utilizedInPL2: item.utilizedInPL2 || false,
-      utilizedInPL3: item.utilizedInPL3 || false,
-      traceabilityRequired: item.traceabilityRequired || false,
-      traceabilityFields: (item as any).traceabilityFields || [],
-      traceabilityFieldConfig: (item as any).traceabilityFieldConfig || {},
-      utilizedInFacilities: item.utilizedInFacilities || false,
-      utilizedInAdmin: item.utilizedInAdmin || false,
-      utilizedInServices: item.utilizedInServices || false,
-      isPacket: (item as any).isPacket || false,
-      isFabric: item.isFabric || false,
-      hasSds: item.hasSds || false,
-      hasTds: item.hasTds || false,
-      hasOtherDocs: item.hasOtherDocs || false,
-      assignedToAsset: (item as any).assignedToAsset || '',
-      defaultOrderMethod: (item as any).defaultOrderMethod || '',
-      shelfLifeControlled: (item as any).shelfLifeControlled || false,
-      frozenShelfLifeDays: (item as any).frozenShelfLifeDays != null ? String((item as any).frozenShelfLifeDays) : '',
-      roomTempShelfLifeDays: (item as any).roomTempShelfLifeDays != null ? String((item as any).roomTempShelfLifeDays) : '',
-      defaultMaxOutTimeMinutes: (item as any).defaultMaxOutTimeMinutes != null ? String((item as any).defaultMaxOutTimeMinutes) : '',
-      outTimeEnforcementRequired: (item as any).outTimeEnforcementRequired || false,
-    });
+    setFormData(getInventoryItemFormData(item));
     setSdsFile(null);
     setCurrentSdsFileName(item.sdsFilePath ? item.sdsFilePath.split('/').pop() || null : null);
     setTdsFile(null);
@@ -2468,6 +2514,49 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     setOtherDocsFile(null);
     setCurrentOtherDocsFileName(item.otherDocsFilePath ? item.otherDocsFilePath.split('/').pop() || null : null);
     setIsEditOpen(true);
+  };
+
+  const handleCopyItem = async (item: InventoryItem) => {
+    setEditingItem(null);
+    setSdsFile(null);
+    setCurrentSdsFileName(null);
+    setTdsFile(null);
+    setCurrentTdsFileName(null);
+    setOtherDocsFile(null);
+    setCurrentOtherDocsFileName(null);
+    setRoutingCreateMode(null);
+    setSelectedTemplateId('');
+    setSelectedExistingRoutingId('');
+    setFormData(getInventoryItemFormData(item, {
+      agPartNumber: '',
+      name: `${item.name} Copy`,
+      hasSds: false,
+      hasTds: false,
+      hasOtherDocs: false,
+    }));
+    setIsCreateOpen(true);
+
+    try {
+      const data = await fetch('/api/inventory/items/next-part-number').then((r) => r.json());
+      if (data.nextPartNumber) {
+        setFormData((prev) => ({ ...prev, agPartNumber: data.nextPartNumber }));
+      }
+    } catch {
+      toast.error('Copied item details, but could not fetch the next part number');
+    }
+  };
+
+  const openOrderUrlDialog = (item: InventoryItem) => {
+    setOrderUrlItem(item);
+    setOrderUrlDraft((item as any).orderUrl || '');
+  };
+
+  const handleSaveOrderUrl = () => {
+    if (!orderUrlItem) return;
+    updateOrderUrlMutation.mutate({
+      id: orderUrlItem.id,
+      orderUrl: normalizeOrderUrl(orderUrlDraft),
+    });
   };
 
   const handleDelete = (id: number) => {
@@ -3253,11 +3342,20 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleEdit(item)}
-                          title="Images"
-                          data-testid={`button-images-${item.id}`}
+                          onClick={() => openOrderUrlDialog(item)}
+                          title={(item as any).orderUrl ? 'Edit order URL' : 'Add order URL'}
+                          data-testid={`button-order-url-${item.id}`}
                         >
-                          <ImageIcon className="h-4 w-4" />
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCopyItem(item)}
+                          title="Copy part"
+                          data-testid={`button-copy-${item.id}`}
+                        >
+                          <Copy className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="outline"
@@ -3436,8 +3534,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                                   </td>
                                   <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex space-x-2">
-                                      <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Images" data-testid={`button-images-mfg-${item.id}`}>
-                                        <ImageIcon className="h-4 w-4" />
+                                      <Button variant="outline" size="sm" onClick={() => openOrderUrlDialog(item)} title={(item as any).orderUrl ? 'Edit order URL' : 'Add order URL'} data-testid={`button-order-url-mfg-${item.id}`}>
+                                        <ExternalLink className="h-4 w-4" />
+                                      </Button>
+                                      <Button variant="outline" size="sm" onClick={() => handleCopyItem(item)} title="Copy part" data-testid={`button-copy-mfg-${item.id}`}>
+                                        <Copy className="h-4 w-4" />
                                       </Button>
                                       <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit" data-testid={`button-edit-mfg-${item.id}`}>
                                         <Edit className="h-4 w-4" />
@@ -3513,8 +3614,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                               <td className="px-4 py-2 font-medium">{item.name}</td>
                               <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex space-x-2">
-                                  <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Images">
-                                    <ImageIcon className="h-4 w-4" />
+                                  <Button variant="outline" size="sm" onClick={() => openOrderUrlDialog(item)} title={(item as any).orderUrl ? 'Edit order URL' : 'Add order URL'} data-testid={`button-order-url-uncat-${item.id}`}>
+                                    <ExternalLink className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => handleCopyItem(item)} title="Copy part" data-testid={`button-copy-uncat-${item.id}`}>
+                                    <Copy className="h-4 w-4" />
                                   </Button>
                                   <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit">
                                     <Edit className="h-4 w-4" />
@@ -3536,6 +3640,88 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={!!orderUrlItem}
+        onOpenChange={(open) => {
+          if (!open) {
+            setOrderUrlItem(null);
+            setOrderUrlDraft('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Order Website URL</DialogTitle>
+          </DialogHeader>
+          {orderUrlItem && (
+            <div className="space-y-4">
+              <div className="text-sm">
+                <p className="font-medium">{orderUrlItem.name}</p>
+                <p className="text-muted-foreground">{orderUrlItem.agPartNumber}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="actionOrderUrl">Website URL</Label>
+                <Input
+                  id="actionOrderUrl"
+                  value={orderUrlDraft}
+                  onChange={(e) => setOrderUrlDraft(e.target.value)}
+                  placeholder="vendor.com/item-page"
+                  inputMode="url"
+                  data-testid="input-action-order-url"
+                />
+              </div>
+              <div className="flex flex-wrap justify-between gap-2">
+                <div className="flex gap-2">
+                  {((item: InventoryItem) => {
+                    const currentUrl = normalizeOrderUrl((item as any).orderUrl || '');
+                    return currentUrl ? (
+                      <Button
+                        variant="outline"
+                        type="button"
+                        onClick={() => window.open(currentUrl, '_blank', 'noopener,noreferrer')}
+                        data-testid="button-open-order-url"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open
+                      </Button>
+                    ) : null;
+                  })(orderUrlItem)}
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => updateOrderUrlMutation.mutate({ id: orderUrlItem.id, orderUrl: null })}
+                    disabled={updateOrderUrlMutation.isPending || !(orderUrlItem as any).orderUrl}
+                    data-testid="button-clear-order-url"
+                  >
+                    Clear
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => {
+                      setOrderUrlItem(null);
+                      setOrderUrlDraft('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSaveOrderUrl}
+                    disabled={updateOrderUrlMutation.isPending}
+                    data-testid="button-save-order-url"
+                  >
+                    Save URL
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={isEditOpen}

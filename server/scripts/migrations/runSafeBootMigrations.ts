@@ -204,6 +204,7 @@ const safeFiles = [
   '0175_repair_remaining_ff_signature_queue_orders.sql',
   '0176_part_routings_project_id.sql',
   '0177_inventory_item_primary_image.sql',
+  '0179_inventory_item_order_url.sql',
   'investigation_308_order_duplication.sql',
 ];
 

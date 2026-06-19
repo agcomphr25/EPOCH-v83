@@ -642,6 +642,7 @@ export const inventoryItems = pgTable('inventory_items', {
   name: text('name').notNull(), // Name
   source: text('source'), // Source
   supplierPartNumber: text('supplier_part_number'), // Supplier Part #
+  orderUrl: text('order_url'), // Website link for ordering this item
   costPer: real('cost_per'), // Purchase cost from vendor (e.g., $491.20 for 80lb box)
   orderDate: date('order_date'), // Order Date
   notes: text('notes'), // Notes
@@ -2455,6 +2456,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     source: z.string().optional().nullable(),
     vendorId: z.number().int().positive().optional().nullable(),
     supplierPartNumber: z.string().optional().nullable(),
+    orderUrl: z.string().optional().nullable(),
     secondarySupplierPartNumber: z.string().optional().nullable(),
     costPer: z.number().min(0).optional().nullable(),
     purchaseUnit: z.string().optional().nullable(),

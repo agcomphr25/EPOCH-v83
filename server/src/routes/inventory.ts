@@ -690,6 +690,7 @@ router.get('/items/all-for-request', async (req: Request, res: Response) => {
         source: inventoryItems.source,
         vendorId: inventoryItems.vendorId,
         supplierPartNumber: inventoryItems.supplierPartNumber,
+        orderUrl: inventoryItems.orderUrl,
         defaultOrderMethod: inventoryItems.defaultOrderMethod,
         sku: inventoryItems.sku,
         department: inventoryItems.department,

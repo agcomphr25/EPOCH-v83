@@ -300,6 +300,8 @@ FROM item_map
 WHERE mq.p2_po_id = item_map.old_po_id
   AND mq.p2_po_item_id = item_map.old_item_id;
 
+ALTER TABLE p2_lot_numbers ADD COLUMN IF NOT EXISTS po_item_id INTEGER;
+
 WITH current_revisions AS (
   SELECT
     current_po.id AS new_po_id,

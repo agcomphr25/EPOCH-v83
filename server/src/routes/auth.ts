@@ -1130,6 +1130,9 @@ async function handleGetCurrentSession(req: any, res: any, endpoint: string) {
         role: 'ADMIN',
         employeeId: null,
         employeeName: null,
+        employeeDepartment: null,
+        departmentId: null,
+        department: null,
       });
     }
 
@@ -1172,9 +1175,17 @@ async function handleGetCurrentSession(req: any, res: any, endpoint: string) {
     const dbUserResult = await pool.query(
       `SELECT u.id, u.username, u.first_name, u.last_name, u.role, u.employee_id,
               e.name as employee_name,
-              e.pay_type as pay_type
+              e.department as employee_department,
+              e.pay_type as pay_type,
+              COALESCE(prd.id, legacy_prd.id) as parts_request_department_id,
+              COALESCE(prd.name, legacy_prd.name) as parts_request_department_name
        FROM users u
        LEFT JOIN employees e ON u.employee_id = e.id
+       LEFT JOIN inventory_departments prd ON e.parts_request_department_id = prd.id
+       LEFT JOIN inventory_departments legacy_prd
+         ON e.parts_request_department_id IS NULL
+        AND legacy_prd.name = e.department
+        AND legacy_prd.is_active = true
        WHERE u.id = $1 AND u.is_active = true`,
       [session.user_id]
     );
@@ -1213,6 +1224,9 @@ async function handleGetCurrentSession(req: any, res: any, endpoint: string) {
       role: user.role,
       employeeId: user.employee_id,
       employeeName: user.employee_name ?? null,
+      employeeDepartment: user.employee_department ?? null,
+      departmentId: user.parts_request_department_id ?? null,
+      department: user.parts_request_department_name ?? null,
       payType: user.pay_type ?? null,
     });
   } catch (error) {

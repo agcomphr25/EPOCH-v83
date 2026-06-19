@@ -83,6 +83,7 @@ interface Employee {
   jobTitle: string;
   userRole: string;
   department: string;
+  partsRequestDepartmentId?: number | null;
   employmentType: string;
   payType?: string | null;
   hireDate: string;
@@ -114,6 +115,11 @@ interface Employee {
   tciAccess?: boolean;
   hasPin?: boolean;
   supervisorEmployeeId?: number | null;
+}
+
+interface InventoryDepartment {
+  id: number;
+  name: string;
 }
 
 interface ChargeCodeOption {
@@ -611,6 +617,10 @@ export default function EmployeeDetail() {
       return response.json();
     },
     enabled: !!id,
+  });
+
+  const { data: inventoryDepartments = [] } = useQuery<InventoryDepartment[]>({
+    queryKey: ['/api/inventory/departments'],
   });
 
   useEffect(() => {
@@ -2029,6 +2039,45 @@ export default function EmployeeDetail() {
                           {employee.department || 'Not specified'}
                         </p>
                       )}
+                    </div>
+
+                    <div>
+                      <Label>Parts Request Department</Label>
+                      {isEditing ? (
+                        <Select
+                          value={
+                            editData.partsRequestDepartmentId == null
+                              ? 'none'
+                              : String(editData.partsRequestDepartmentId)
+                          }
+                          onValueChange={(value) =>
+                            setEditData((prev) => ({
+                              ...prev,
+                              partsRequestDepartmentId: value === 'none' ? null : Number(value),
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select inventory department" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No parts request access</SelectItem>
+                            {inventoryDepartments.map((dept) => (
+                              <SelectItem key={dept.id} value={String(dept.id)}>
+                                {dept.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          {inventoryDepartments.find((dept) => dept.id === employee.partsRequestDepartmentId)?.name ||
+                            'Not assigned'}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        Controls which inventory parts this employee can request.
+                      </p>
                     </div>
 
                     <div>

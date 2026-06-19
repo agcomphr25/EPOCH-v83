@@ -1072,6 +1072,7 @@ export const employees = pgTable('employees', {
   jobTitle: text('job_title'), // Informational only - e.g., "Department Manager", "HR Specialist"
   userRole: text('user_role').notNull().default('EMPLOYEE'), // ADMIN, EMPLOYEE, OWNER - system access level
   department: text('department'),
+  partsRequestDepartmentId: integer('parts_request_department_id').references(() => inventoryDepartments.id, { onDelete: 'set null' }),
   hireDate: date('hire_date'),
   dateOfBirth: date('date_of_birth'),
   address: text('address'),
@@ -2588,6 +2589,10 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     jobTitle: z.string().optional().nullable(), // Informational job title
     userRole: z.enum(['ADMIN', 'EMPLOYEE', 'OWNER']).default('EMPLOYEE'), // System role
     department: z.string().optional().nullable(),
+    partsRequestDepartmentId: z.preprocess(
+      (val) => (val === '' || val === 'none' || val === undefined ? null : val),
+      z.coerce.number().int().positive().optional().nullable()
+    ),
     hireDate: optionalDateSchema,
     dateOfBirth: optionalDateSchema,
     address: z.string().optional().nullable(),

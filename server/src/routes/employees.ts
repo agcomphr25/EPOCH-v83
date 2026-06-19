@@ -34,6 +34,16 @@ const router = Router();
 let chargeCodeAssignmentTableReady: Promise<void> | null = null;
 let employeeTerminationSchemaReady: Promise<void> | null = null;
 
+function normalizePartsRequestDepartmentId(value: unknown) {
+  if (value === undefined) return undefined;
+  if (value === null || value === '' || value === 'none') return null;
+  const id = Number(value);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('Parts Request Department must be a valid inventory department.');
+  }
+  return id;
+}
+
 const employeeListColumns = [
   ['id', 'id'],
   ['employee_code', 'employeeCode'],
@@ -45,6 +55,7 @@ const employeeListColumns = [
   ['job_title', 'jobTitle'],
   ['user_role', 'userRole'],
   ['department', 'department'],
+  ['parts_request_department_id', 'partsRequestDepartmentId'],
   ['hire_date', 'hireDate'],
   ['date_of_birth', 'dateOfBirth'],
   ['address', 'address'],
@@ -1825,6 +1836,9 @@ router.post('/', async (req: Request, res: Response) => {
     if (typeof rawBody.email === 'string' && rawBody.email.trim() === '') {
       rawBody.email = undefined;
     }
+    if ('partsRequestDepartmentId' in rawBody) {
+      rawBody.partsRequestDepartmentId = normalizePartsRequestDepartmentId(rawBody.partsRequestDepartmentId);
+    }
 
     let employeeData = insertEmployeeSchema.parse(rawBody);
 
@@ -1924,6 +1938,9 @@ router.put('/:id', async (req: Request, res: Response) => {
     // Normalize employeeCode - trim whitespace
     if (typeof updates.employeeCode === 'string') {
       updates.employeeCode = updates.employeeCode.trim();
+    }
+    if ('partsRequestDepartmentId' in updates) {
+      updates.partsRequestDepartmentId = normalizePartsRequestDepartmentId(updates.partsRequestDepartmentId);
     }
     
     // Get current employee for comparison

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Eye, EyeOff, RefreshCw, AlertTriangle, KeyRound } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -19,8 +19,34 @@ interface AddEmployeeModalProps {
   onClose: () => void;
 }
 
+type InventoryDepartment = {
+  id: number;
+  name: string;
+};
+
+type NewEmployeeFormData = {
+  name: string;
+  employeeCode: string;
+  email: string;
+  phone: string;
+  jobTitle: string;
+  userRole: string;
+  department: string;
+  partsRequestDepartmentId: number | null;
+  employmentType: string;
+  hireDate: string;
+  emergencyContact: string;
+  emergencyPhone: string;
+  address: string;
+  gateCardNumber: string;
+  vehicleType: string;
+  buildingKeyAccess: boolean;
+  tciAccess: boolean;
+  timekeeperPin?: string;
+};
+
 export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<NewEmployeeFormData>({
     name: '',
     employeeCode: '',
     email: '',
@@ -28,6 +54,7 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
     jobTitle: '',
     userRole: 'EMPLOYEE',
     department: '',
+    partsRequestDepartmentId: null,
     employmentType: 'FULL_TIME',
     hireDate: '',
     emergencyContact: '',
@@ -50,8 +77,12 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const { data: inventoryDepartments = [] } = useQuery<InventoryDepartment[]>({
+    queryKey: ['/api/inventory/departments'],
+  });
+
   const createEmployeeMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
+    mutationFn: async (data: NewEmployeeFormData) => {
       const response = await fetch('/api/employees', {
         method: 'POST',
         headers: {
@@ -258,6 +289,34 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
               <SelectItem value="Warehouse">Warehouse</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="partsRequestDepartmentId">Parts Request Department</Label>
+          <Select
+            value={formData.partsRequestDepartmentId == null ? 'none' : String(formData.partsRequestDepartmentId)}
+            onValueChange={(value) =>
+              setFormData((prev) => ({
+                ...prev,
+                partsRequestDepartmentId: value === 'none' ? null : Number(value),
+              }))
+            }
+          >
+            <SelectTrigger id="partsRequestDepartmentId">
+              <SelectValue placeholder="Select inventory department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No parts request access</SelectItem>
+              {inventoryDepartments.map((dept) => (
+                <SelectItem key={dept.id} value={String(dept.id)}>
+                  {dept.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">
+            Controls which inventory parts this employee can request.
+          </p>
         </div>
 
         <div>

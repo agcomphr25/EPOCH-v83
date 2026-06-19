@@ -101,6 +101,7 @@ type PartsRequest = {
   requestDate: string;
   approvedBy?: string;
   approvedDate?: string;
+  productionLine?: string | null;
   orderDate?: string;
   expectedDelivery?: string;
   actualDelivery?: string;
@@ -404,6 +405,62 @@ export default function ConsolidatedNeedsListPage() {
     const defaultQuantities: Record<number, number> = {};
     approvedRequests.forEach(r => { defaultQuantities[r.id] = r.quantity; });
     setBatchQuantities(defaultQuantities);
+    setIsCreateBatchDialogOpen(true);
+  };
+
+  const inferPurchasingCategory = (request: PartsRequest): 'P1' | 'P2' | 'GENERAL' | 'R_AND_D' => {
+    const raw = String(request.productionLine || '').trim().toUpperCase();
+    if (raw === 'P1') return 'P1';
+    if (raw === 'P2') return 'P2';
+    if (raw === 'R&D' || raw === 'R_AND_D') return 'R_AND_D';
+    return 'GENERAL';
+  };
+
+  const openCreatePoDialogForRequest = (request: PartsRequest) => {
+    if (request.orderMethod === 'WEBSITE') {
+      toast({
+        title: 'Website Order',
+        description: 'Website-order requests are handled separately from Vendor POs.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (request.status !== 'APPROVED') {
+      toast({
+        title: 'Approval Required',
+        description: 'Approve the request before creating a Vendor PO draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const vendor = getResolvedVendorForRequest(request);
+    const vendorId = request.vendorId ?? vendor?.id ?? request.inventoryItem?.vendorId ?? null;
+    if (!vendorId) {
+      toast({
+        title: 'Vendor Required',
+        description: 'Assign a vendor before creating a Vendor PO draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setBatchVendorGroup({
+      key: `request-${request.id}`,
+      vendorId,
+      vendorName: vendor?.name || getRequestVendorLabel(request) || 'Selected Vendor',
+      orderMethod: 'PO',
+      websiteUrl: vendor?.website || null,
+      requests: [request],
+      totalQuantity: request.quantity,
+      totalEstimatedCost: request.estimatedCost || 0,
+    });
+    setBatchQuantities({ [request.id]: request.quantity });
+    setBatchPurchasingCategory(inferPurchasingCategory(request));
+    setBatchExpectedDelivery(request.expectedDelivery || '');
+    setBatchNotes('');
+    setBatchShipVia('');
     setIsCreateBatchDialogOpen(true);
   };
 
@@ -1254,8 +1311,10 @@ export default function ConsolidatedNeedsListPage() {
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                       {vendorGroup.requests.map((request) => {
                         const selectableForPo = request.status === 'APPROVED' && request.orderMethod !== 'WEBSITE' && !request.vendorPoId;
+                        const canCreateNewPo = selectableForPo;
                         const canLinkExistingPo = !request.vendorPoId
                           && request.orderMethod !== 'WEBSITE'
+                          && ['APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL'].includes(request.status)
                           && !['REJECTED', 'CANCELED', 'DELIVERED_TO_DEPT'].includes(request.status);
                         return (
                         <tr key={request.id} className="bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -1318,6 +1377,22 @@ export default function ConsolidatedNeedsListPage() {
                               <Eye className="w-3 h-3 mr-1" />
                               View
                             </Button>
+                            {request.status === 'PENDING' && (
+                              <>
+                                <Button size="sm" variant="default" onClick={() => handleAction(request, 'approve')} data-testid={`button-approve-vendor-${request.id}`}>
+                                  Approve
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => handleAction(request, 'reject')} data-testid={`button-reject-vendor-${request.id}`}>
+                                  Reject
+                                </Button>
+                              </>
+                            )}
+                            {canCreateNewPo && (
+                              <Button size="sm" variant="default" onClick={() => openCreatePoDialogForRequest(request)} data-testid={`button-create-po-${request.id}`}>
+                                <ShoppingCart className="w-3 h-3 mr-1" />
+                                Create PO
+                              </Button>
+                            )}
                             {canLinkExistingPo && (
                               <Button size="sm" variant="outline" onClick={() => openLinkPoDialog(request)} data-testid={`button-link-po-${request.id}`}>
                                 <LinkIcon className="w-3 h-3 mr-1" />
@@ -1706,7 +1781,18 @@ export default function ConsolidatedNeedsListPage() {
               )}
 
               <div className="flex justify-end gap-2">
-                {!detailRequest.vendorPoId && detailRequest.orderMethod !== 'WEBSITE' && !['REJECTED', 'CANCELED', 'DELIVERED_TO_DEPT'].includes(detailRequest.status) && (
+                {!detailRequest.vendorPoId && detailRequest.orderMethod !== 'WEBSITE' && detailRequest.status === 'APPROVED' && (
+                  <Button
+                    onClick={() => {
+                      openCreatePoDialogForRequest(detailRequest);
+                      setDetailRequest(null);
+                    }}
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-2" />
+                    Create PO
+                  </Button>
+                )}
+                {!detailRequest.vendorPoId && detailRequest.orderMethod !== 'WEBSITE' && ['APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL'].includes(detailRequest.status) && (
                   <Button
                     variant="outline"
                     onClick={() => {

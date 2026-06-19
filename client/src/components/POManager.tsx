@@ -911,40 +911,66 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
 
     setIsUploading(true);
     try {
-      const urlResponse = await apiRequest(`/api/pos/${poId}/attachments/request-upload-url`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type,
-        }),
-      });
+      const uploadViaLocalFallback = async (reason: string) => {
+        console.warn('[POAttachments] Falling back to local upload', {
+          poId,
+          fileName: file.name,
+          reason,
+        });
 
-      const uploadResponse = await fetch(urlResponse.uploadURL, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
-      });
-      if (!uploadResponse.ok) {
-        const error = await uploadResponse.json().catch(() => ({}));
-        throw new Error(error.details || error.reason || `Storage upload failed (${uploadResponse.status})`);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const fallbackResponse = await fetch(`/api/pos/${poId}/attachments/local-upload`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+
+        if (!fallbackResponse.ok) {
+          const error = await fallbackResponse.json().catch(() => ({}));
+          throw new Error(error.details || error.reason || error.error || `Fallback upload failed (${fallbackResponse.status})`);
+        }
+      };
+
+      try {
+        const urlResponse = await apiRequest(`/api/pos/${poId}/attachments/request-upload-url`, {
+          method: 'POST',
+          body: JSON.stringify({
+            name: file.name,
+            size: file.size,
+            contentType: file.type,
+          }),
+        });
+
+        const uploadResponse = await fetch(urlResponse.uploadURL, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type },
+        });
+        if (!uploadResponse.ok) {
+          const error = await uploadResponse.json().catch(() => ({}));
+          throw new Error(error.details || error.reason || `Storage upload failed (${uploadResponse.status})`);
+        }
+
+        await apiRequest(`/api/pos/${poId}/attachments/complete-upload`, {
+          method: 'POST',
+          body: JSON.stringify({
+            objectPath: urlResponse.objectPath,
+            originalFileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+          }),
+        });
+      } catch (storageError: any) {
+        await uploadViaLocalFallback(storageError?.message || 'storage upload failed');
       }
-
-      await apiRequest(`/api/pos/${poId}/attachments/complete-upload`, {
-        method: 'POST',
-        body: JSON.stringify({
-          objectPath: urlResponse.objectPath,
-          originalFileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type,
-        }),
-      });
 
       toast.success('PDF attached successfully');
       refetch();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      toast.error('Failed to upload PDF');
+      toast.error(error.message || 'Failed to upload PDF');
     } finally {
       setIsUploading(false);
       if (event.target) event.target.value = '';

@@ -9652,6 +9652,43 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   });
 
   // ============ PO ATTACHMENTS ============
+  const poAttachmentsDir = path.join(uploadsDir, 'po-attachments');
+
+  if (!fs.existsSync(poAttachmentsDir)) {
+    fs.mkdirSync(poAttachmentsDir, { recursive: true });
+  }
+
+  const poAttachmentUpload = multer({
+    storage: multer.diskStorage({
+      destination: (_req: any, _file: any, cb: any) => cb(null, poAttachmentsDir),
+      filename: (_req: any, file: any, cb: any) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const basename = path
+          .basename(file.originalname, ext)
+          .replace(/[^a-zA-Z0-9-_]/g, '_')
+          .slice(0, 90);
+        cb(null, `${Date.now()}_${crypto.randomBytes(8).toString('hex')}_${basename}${ext}`);
+      },
+    }),
+    fileFilter: (_req: any, file: any, cb: any) => {
+      if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+        return;
+      }
+      cb(new Error('Only PDF files are allowed'));
+    },
+    limits: {
+      fileSize: 25 * 1024 * 1024,
+    },
+  });
+
+  function isLocalPoAttachmentPath(filePath: string | null | undefined) {
+    if (!filePath) return false;
+    const resolvedFile = path.resolve(filePath);
+    const resolvedDir = path.resolve(poAttachmentsDir);
+    return resolvedFile.startsWith(resolvedDir + path.sep) || resolvedFile === resolvedDir;
+  }
+
   // Request presigned upload URL for PO attachment
   app.post('/api/pos/:id/attachments/request-upload-url', async (req, res) => {
     try {
@@ -9683,6 +9720,61 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { status, reason, message } = getStorageErrorResponse(error);
       console.error('Error generating PO attachment upload URL:', { status, reason, message });
       res.status(status).json({ error: 'Failed to generate upload URL', reason, details: message });
+    }
+  });
+
+  // Server-mediated fallback for environments where object URL signing/direct upload is unavailable.
+  app.post('/api/pos/:id/attachments/local-upload', poAttachmentUpload.single('file'), async (req: any, res) => {
+    try {
+      const poId = parseInt(req.params.id);
+      const user = req.user;
+      const file = req.file as Express.Multer.File | undefined;
+
+      if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const { storage } = await import('../../storage');
+      const purchaseOrder = await storage.getPurchaseOrder(poId);
+      if (!purchaseOrder) {
+        if (isLocalPoAttachmentPath(file.path) && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+
+      const { randomUUID } = await import('crypto');
+      const attachment = {
+        id: randomUUID(),
+        fileName: file.filename,
+        originalFileName: file.originalname,
+        filePath: file.path,
+        fileSize: file.size || 0,
+        mimeType: file.mimetype || 'application/pdf',
+        uploadedBy: user?.username || null,
+        uploadedAt: new Date().toISOString(),
+        notes: req.body?.notes || null,
+      };
+
+      const currentAttachments = (purchaseOrder as any).attachments || [];
+      await storage.updatePurchaseOrder(poId, {
+        attachments: [...currentAttachments, attachment],
+      } as any);
+
+      console.warn('[PO attachments] Saved through local fallback', {
+        poId,
+        attachmentId: attachment.id,
+        fileName: attachment.originalFileName,
+      });
+
+      res.status(201).json(attachment);
+    } catch (error: any) {
+      const file = req.file as Express.Multer.File | undefined;
+      if (file?.path && isLocalPoAttachmentPath(file.path) && fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+      console.error('Error uploading PO attachment through local fallback:', error);
+      res.status(500).json({ error: error.message || 'Failed to upload attachment' });
     }
   });
 
@@ -9795,9 +9887,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const normalizedPath = attachmentToDelete.filePath?.startsWith('objects/')
           ? `/${attachmentToDelete.filePath}`
           : attachmentToDelete.filePath;
-        if (normalizedPath) {
+        if (normalizedPath?.startsWith('/objects/')) {
           await getFileStorageProviderForObjectPath(normalizedPath).deleteObject(normalizedPath);
           console.log('📎 Deleted file from storage:', attachmentToDelete.filePath);
+        } else if (isLocalPoAttachmentPath(attachmentToDelete.filePath) && fs.existsSync(path.resolve(attachmentToDelete.filePath))) {
+          fs.unlinkSync(path.resolve(attachmentToDelete.filePath));
+          console.log('[PO attachments] Deleted local fallback file:', attachmentToDelete.filePath);
         }
       } catch (storageError) {
         console.warn('📎 Failed to delete file from storage (may not exist):', storageError);
@@ -9839,18 +9934,33 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         ? `/${attachment.filePath}`
         : attachment.filePath;
 
-      if (!normalizedPath || !normalizedPath.startsWith('/objects/')) {
-        return res.status(404).json({ error: 'File not found in cloud storage' });
+      if (!normalizedPath) {
+        return res.status(404).json({ error: 'File not found in storage' });
       }
 
-      if (forceDownload) {
-        res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalFileName}"`);
-      } else {
-        res.setHeader('Content-Disposition', `inline; filename="${attachment.originalFileName}"`);
+      if (normalizedPath.startsWith('/objects/')) {
+        res.setHeader(
+          'Content-Disposition',
+          `${forceDownload ? 'attachment' : 'inline'}; filename="${attachment.originalFileName}"`
+        );
+        res.setHeader('Content-Type', attachment.mimeType || 'application/pdf');
+        await getFileStorageProviderForObjectPath(normalizedPath).downloadObject(normalizedPath, res);
+        return;
       }
 
-      res.setHeader('Content-Type', attachment.mimeType || 'application/pdf');
-      await getFileStorageProviderForObjectPath(normalizedPath).downloadObject(normalizedPath, res);
+      if (isLocalPoAttachmentPath(normalizedPath) && fs.existsSync(path.resolve(normalizedPath))) {
+        res.setHeader(
+          'Content-Disposition',
+          `${forceDownload ? 'attachment' : 'inline'}; filename="${attachment.originalFileName}"`
+        );
+        res.setHeader('Content-Type', attachment.mimeType || 'application/pdf');
+        res.sendFile(path.resolve(normalizedPath));
+        return;
+      }
+
+      res.status(404).json({
+        error: 'File not available. It may have been stored locally and is not accessible in this environment.',
+      });
     } catch (error: any) {
       const { status, reason, message } = getStorageErrorResponse(error);
       console.error('Error downloading PO attachment:', { status, reason, message });

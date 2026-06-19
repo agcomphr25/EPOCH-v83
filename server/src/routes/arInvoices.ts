@@ -966,6 +966,12 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       return res.status(409).json({ error: 'Invoice is locked' });
     }
 
+    if (String(status || '').toUpperCase() === 'PAID') {
+      return res.status(409).json({
+        error: 'Invoices must be marked paid by recording and allocating an AR payment so payment records and journal entries stay in sync.',
+      });
+    }
+
     const isP1Invoice =
       (await isP1PackingSlipInvoice(id)) ||
       String(existing.notes || '').startsWith('Auto-created from P1 OEM packing slip') ||

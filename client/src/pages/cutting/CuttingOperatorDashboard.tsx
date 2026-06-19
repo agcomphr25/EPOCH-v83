@@ -250,7 +250,8 @@ function isQueueProductionProtected(item: ManufacturingQueueItem): boolean {
 }
 
 function isPacketBarcodePrintable(item: ManufacturingQueueItem): boolean {
-  return (item.status === 'PENDING' || item.status === 'IN_PROGRESS') && !isQueueProductionProtected(item) && getPrintableBarcodeCount(item) > 0;
+  const status = String(item.status || '').toUpperCase();
+  return (status === 'PENDING' || status === 'IN_PROGRESS' || status === 'LOCKED') && getPrintableBarcodeCount(item) > 0;
 }
 
 function useIsAdmin() {
@@ -2278,7 +2279,7 @@ export default function CuttingOperatorDashboard() {
                       data-testid={`row-mfg-item-${item.id}`}
                     >
                       <TableCell>
-                        {isPacketBarcodePrintable(item) && !isProductionProtected ? (
+                        {isPacketBarcodePrintable(item) ? (
                           <input
                             type="checkbox"
                             checked={selectedPrintIds.includes(item.id)}
@@ -2331,7 +2332,7 @@ export default function CuttingOperatorDashboard() {
                         <Badge variant="outline" className="font-mono">{item.estimatedCuts}</Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        {isPacketBarcodePrintable(item) && !isProductionProtected ? (
+                        {isPacketBarcodePrintable(item) ? (
                           <Input
                             type="number"
                             min={1}

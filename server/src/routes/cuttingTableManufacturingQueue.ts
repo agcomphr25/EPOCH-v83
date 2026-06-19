@@ -228,7 +228,9 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
         routingSignal,
         or(
           eq(manufacturingQueue.status, 'PENDING'),
-          eq(manufacturingQueue.status, 'IN_PROGRESS')
+          eq(manufacturingQueue.status, 'IN_PROGRESS'),
+          eq(manufacturingQueue.status, 'LOCKED'),
+          eq(manufacturingQueue.status, 'locked')
         )
       );
     } else if (status && status !== 'ALL') {

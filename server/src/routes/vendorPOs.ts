@@ -30,6 +30,7 @@ import {
 import { recordAuditEvent } from '../services/auditLedgerService';
 import { sendApiError } from '../../utils/apiErrors';
 import { generateVendorPoPdf } from '../../utils/pdf/vendorPoPdf';
+import { syncLinkedPartsRequestsReceivedForVendorPo } from '../services/partsRequestVendorPoSyncService';
 
 const router = Router();
 
@@ -256,68 +257,6 @@ async function markLinkedPartsRequestsOrdered(vendorPoId: number, actor: string)
       updated.map((row) => row.id),
       actor,
       `Linked Vendor PO #${vendorPoId} was issued.`,
-    ]
-  );
-}
-
-async function markLinkedPartsRequestsReceivedForPo(vendorPoId: number, actor: string) {
-  const updated = await queryRows<{ id: number; previous_status: string; next_status: string }>(
-    `
-    WITH po_totals AS (
-      SELECT
-        pr.id,
-        pr.status AS previous_status,
-        pr.quantity,
-        COALESCE(SUM(vpi.received_quantity), 0)::float AS received_qty
-      FROM parts_requests pr
-      JOIN vendor_po_items vpi
-        ON vpi.vendor_po_id = pr.vendor_po_id
-       AND (
-         (pr.ag_part_number IS NOT NULL AND vpi.ag_part_number = pr.ag_part_number)
-         OR (pr.ag_part_number IS NULL AND vpi.description = pr.part_name)
-       )
-      WHERE pr.vendor_po_id = $1
-        AND pr.status IN ('ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL')
-      GROUP BY pr.id, pr.status, pr.quantity
-    ),
-    next_values AS (
-      SELECT
-        id,
-        previous_status,
-        LEAST(quantity, FLOOR(received_qty)::int) AS qty_received,
-        CASE
-          WHEN received_qty >= quantity THEN 'RECEIVED'
-          WHEN received_qty > 0 THEN 'RECEIVED_PARTIAL'
-          ELSE previous_status
-        END AS next_status
-      FROM po_totals
-      WHERE received_qty > 0
-    )
-    UPDATE parts_requests pr
-       SET qty_received = next_values.qty_received,
-           status = next_values.next_status,
-           actual_delivery = CASE WHEN next_values.next_status = 'RECEIVED' THEN CURRENT_DATE ELSE pr.actual_delivery END,
-           updated_at = NOW()
-      FROM next_values
-     WHERE pr.id = next_values.id
-       AND pr.status <> next_values.next_status
-    RETURNING pr.id, next_values.previous_status, next_values.next_status
-    `,
-    [vendorPoId]
-  );
-
-  if (updated.length === 0) return;
-
-  await queryRows(
-    `
-    INSERT INTO parts_request_status_history (parts_request_id, from_status, to_status, changed_by, reason)
-    SELECT id, previous_status, next_status, $2, $3
-      FROM jsonb_to_recordset($1::jsonb) AS x(id int, previous_status text, next_status text)
-    `,
-    [
-      JSON.stringify(updated),
-      actor,
-      `Linked Vendor PO #${vendorPoId} receipt updated the parts request automatically.`,
     ]
   );
 }
@@ -1985,7 +1924,7 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
     const receivedItem = await storage.getVendorPOItemById(itemId);
     if (receivedItem?.vendorPoId) {
       const actor = String((req as any).user?.username ?? createdBy ?? 'unknown');
-      await markLinkedPartsRequestsReceivedForPo(receivedItem.vendorPoId, actor);
+      await syncLinkedPartsRequestsReceivedForVendorPo(receivedItem.vendorPoId, actor);
       await recordVendorPoAudit(req, receivedItem.vendorPoId, 'VENDOR_PO_ITEM_RECEIVED', {
         after: receivedItem,
         reason: normalizeAuditReason(notes) || null,

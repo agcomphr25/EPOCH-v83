@@ -45,6 +45,7 @@ import { getStorageErrorResponse } from '../services/fileStorageProvider';
 import { createInventoryEvent } from '../services/inventoryEventService';
 import { recordInventoryLedgerEntry } from '../services/inventoryTransactionLedgerService';
 import { ensureInventoryItemForReceipt } from '../services/ensureInventoryItemForReceipt';
+import { syncLinkedPartsRequestsReceivedForVendorPo } from '../services/partsRequestVendorPoSyncService';
 
 const router = Router();
 
@@ -909,6 +910,9 @@ router.patch('/:id', requireReceivingAccess, async (req: Request, res: Response)
         vendorPoId: result.updated.vendorPoId,
         newStatus: 'Partially Received',
       });
+    }
+    if (updates.status === 'complete' && result.updated.vendorPoId) {
+      await syncLinkedPartsRequestsReceivedForVendorPo(result.updated.vendorPoId, actorName(user));
     }
     res.json(result.updated);
   } catch (err: any) {

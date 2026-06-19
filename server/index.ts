@@ -7555,6 +7555,18 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ Vendor PO receiving status backfill failed:', backfillErr);
     }
 
+    // Backfill linked parts requests from Vendor PO / RCC receiving evidence.
+    // This repairs requests that were linked while pending or received through RCC.
+    try {
+      const { backfillLinkedPartsRequestReceiptStatuses } = await import('./src/services/partsRequestVendorPoSyncService');
+      const result = await backfillLinkedPartsRequestReceiptStatuses();
+      if (result.requestUpdateCount > 0) {
+        console.log(`Backfilled ${result.requestUpdateCount} linked parts request receipt status update(s) across ${result.vendorPoCount} Vendor PO(s)`);
+      }
+    } catch (partsRequestBackfillErr) {
+      console.warn('Linked parts request receipt status backfill failed:', partsRequestBackfillErr);
+    }
+
     // One-time backfill: set shippedDate for FULFILLED orders that have shippingCompletedAt but no shippedDate.
     // The existence check avoids a full table scan on every boot once all rows are already populated.
     try {

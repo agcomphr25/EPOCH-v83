@@ -274,23 +274,6 @@ export default function InvoiceDetailPage() {
     enabled: !!invoice?.lotId && invoice?.invoiceSource !== 'P1',
   });
 
-  const markPaidMutation = useMutation({
-    mutationFn: () =>
-      apiRequest(`/api/ar-invoices/${id}`, {
-        method: 'PUT',
-        body: { status: 'PAID' },
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) =>
-        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
-      });
-      toast({ title: 'Invoice marked as paid' });
-    },
-    onError: (error: any) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    },
-  });
-
   const postInvoiceMutation = useMutation({
     mutationFn: () => apiRequest(`/api/ar-invoices/${id}/post`, { method: 'POST' }),
     onSuccess: () => {
@@ -652,19 +635,10 @@ export default function InvoiceDetailPage() {
             </Button>
           )}
           {invoice.status !== 'PAID' && invoice.status !== 'VOID' && (
-            <>
-              <Button variant="outline" onClick={handleOpenPaymentDialog}>
-                <DollarSign className="mr-2 h-4 w-4" />
-                Apply Payment
-              </Button>
-              <Button
-                onClick={() => markPaidMutation.mutate()}
-                disabled={markPaidMutation.isPending}
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                {markPaidMutation.isPending ? 'Updating...' : 'Mark Paid'}
-              </Button>
-            </>
+            <Button variant="outline" onClick={handleOpenPaymentDialog}>
+              <DollarSign className="mr-2 h-4 w-4" />
+              Record Payment
+            </Button>
           )}
         </div>
       </div>
@@ -946,7 +920,7 @@ export default function InvoiceDetailPage() {
                 {invoice.status !== 'PAID' && invoice.status !== 'VOID' && (
                   <Button variant="outline" size="sm" onClick={handleOpenPaymentDialog}>
                     <DollarSign className="mr-2 h-4 w-4" />
-                    Apply Payment
+                    Record Payment
                   </Button>
                 )}
               </CardTitle>

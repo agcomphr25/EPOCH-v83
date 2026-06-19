@@ -108,6 +108,12 @@ type PartsRequest = {
   receivedByDepartment?: string;
   vendorId?: number;
   vendorPoId?: number | null;
+  vendorPO?: {
+    id: number;
+    poNumber?: string | null;
+    externalPoNumber?: string | null;
+    status?: string | null;
+  };
   orderMethod?: 'PO' | 'WEBSITE';
   vendorPartNumber?: string;
   productUrl?: string;
@@ -280,7 +286,7 @@ export default function ConsolidatedNeedsListPage() {
       toast({
         title: 'Vendor PO Draft Created',
         description: result?.vendorPO?.id
-          ? `Draft Vendor PO #${result.vendorPO.id} was created. RFQ and PO numbers will follow the existing workflow.`
+          ? `Draft Vendor PO internal #${result.vendorPO.id} was created. RFQ and PO numbers will follow the existing workflow.`
           : 'Selected parts were linked to a draft Vendor PO.',
       });
       setIsCreateBatchDialogOpen(false);
@@ -330,7 +336,7 @@ export default function ConsolidatedNeedsListPage() {
           : '';
       toast({
         title: 'Vendor PO Linked',
-        description: `Parts request is now linked to Vendor PO #${result?.vendorPO?.id}.${lineMessage}`,
+        description: `Parts request is now linked to ${result?.vendorPO?.poNumber || `Vendor PO internal #${result?.vendorPO?.id}`}.${lineMessage}`,
       });
       setLinkPoRequest(null);
       setSelectedVendorPoId('');
@@ -532,6 +538,14 @@ export default function ConsolidatedNeedsListPage() {
       request.supplier ||
       ''
     ).trim();
+  }, []);
+
+  const getVendorPoDisplayLabel = useCallback((request: PartsRequest): string | null => {
+    if (!request.vendorPoId) return null;
+    const poNumber = request.vendorPO?.poNumber?.trim();
+    const externalPoNumber = request.vendorPO?.externalPoNumber?.trim();
+    const displayNumber = poNumber || externalPoNumber;
+    return displayNumber || `Vendor PO internal #${request.vendorPoId}`;
   }, []);
 
   const openLinkPoDialog = (request: PartsRequest) => {
@@ -1289,7 +1303,12 @@ export default function ConsolidatedNeedsListPage() {
                                 <Badge className="bg-teal-100 text-teal-800 w-fit">Website order</Badge>
                               )}
                               {request.vendorPoId && (
-                                <Badge variant="outline" className="w-fit">Linked to Vendor PO #{request.vendorPoId}</Badge>
+                                <Badge variant="outline" className="w-fit">
+                                  Linked to {getVendorPoDisplayLabel(request)}
+                                  {request.vendorPO?.poNumber && (
+                                    <span className="ml-1 text-muted-foreground">(internal #{request.vendorPoId})</span>
+                                  )}
+                                </Badge>
                               )}
                             </div>
                           </td>
@@ -1653,7 +1672,12 @@ export default function ConsolidatedNeedsListPage() {
                 <div>
                   <div className="text-muted-foreground">Vendor PO</div>
                   <div className="font-medium">
-                    {detailRequest.vendorPoId ? `Vendor PO #${detailRequest.vendorPoId}` : 'Not linked'}
+                    {getVendorPoDisplayLabel(detailRequest) || 'Not linked'}
+                    {detailRequest.vendorPO?.poNumber && detailRequest.vendorPoId ? (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        Internal ID #{detailRequest.vendorPoId}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 <div>

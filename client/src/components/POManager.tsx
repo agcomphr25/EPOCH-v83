@@ -390,12 +390,47 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
   const duplicateCount = duplicateOrderIds.size;
   const activeOrders = (productionOrders as any[]).filter((order: any) => getP1EffectiveStatus(order) !== 'CANCELLED');
   const cancelledOrders = (productionOrders as any[]).filter((order: any) => getP1EffectiveStatus(order) === 'CANCELLED');
+  const missingLineItems = useMemo(() => {
+    const activeCountByPoItemId = new Map<number, number>();
+    for (const order of activeOrders) {
+      const poItemId = Number(order.poItemId);
+      if (!Number.isFinite(poItemId)) continue;
+      activeCountByPoItemId.set(poItemId, (activeCountByPoItemId.get(poItemId) ?? 0) + 1);
+    }
+
+    return (poItems as PurchaseOrderItem[])
+      .map((item) => {
+        const activeCount = activeCountByPoItemId.get(item.id) ?? 0;
+        const missing = Math.max(0, item.quantity - activeCount);
+        return { item, activeCount, missing };
+      })
+      .filter((entry) => entry.missing > 0);
+  }, [activeOrders, poItems]);
+  const missingCount = missingLineItems.reduce((sum, entry) => sum + entry.missing, 0);
   const visibleProductionOrders =
     visibilityFilter === 'all'
       ? (productionOrders as any[])
       : visibilityFilter === 'cancelled'
         ? cancelledOrders
         : activeOrders;
+
+  const backfillMissingMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/pos/${poId}/generate-production-orders`, { method: 'POST' });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/pos/${poId}/items`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+      const created = data?.createdOrders ?? 0;
+      toast.success(created > 0
+        ? `Created ${created} missing production order${created !== 1 ? 's' : ''}.`
+        : 'No missing production orders needed to be created.');
+    },
+    onError: (error: any) => {
+      toast.error('Failed to create missing production orders: ' + (error.message || 'Unknown error'));
+    },
+  });
 
   const cancelMutation = useMutation({
     mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
@@ -521,6 +556,22 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Package className="h-10 w-10 text-muted-foreground mb-3" />
             <p className="text-muted-foreground">No production orders generated from this PO.</p>
+            {missingCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-4 text-red-700 border-red-300 hover:bg-red-50"
+                disabled={backfillMissingMutation.isPending}
+                onClick={() => backfillMissingMutation.mutate()}
+              >
+                {backfillMissingMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                )}
+                Create Missing Production Orders
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -544,6 +595,11 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                 ⚠ {duplicateCount} Duplicate{duplicateCount !== 1 ? 's' : ''} detected
               </Badge>
             )}
+            {missingCount > 0 && (
+              <Badge className="bg-red-100 text-red-800 text-xs font-semibold ml-1">
+                {missingCount} Missing
+              </Badge>
+            )}
           </CardTitle>
           <div className="flex items-center gap-2">
             <Select
@@ -559,6 +615,23 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                 <SelectItem value="cancelled">Cancelled Items ({cancelledOrders.length})</SelectItem>
               </SelectContent>
             </Select>
+            {missingCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-red-700 border-red-300 hover:bg-red-50 h-7 px-2 text-xs shrink-0"
+                disabled={backfillMissingMutation.isPending}
+                onClick={() => backfillMissingMutation.mutate()}
+                title="Create only the missing production orders for PO lines that are below quantity"
+              >
+                {backfillMissingMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                )}
+                Create Missing
+              </Button>
+            )}
             {hasMetalAccessoryOrders && (
               <Button
                 size="sm"
@@ -576,6 +649,12 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
         {duplicateCount > 0 && (
           <p className="text-xs text-orange-700 mt-1">
             Rows highlighted in orange were generated beyond the PO item quantity. Cancel them to clean up.
+          </p>
+        )}
+        {missingCount > 0 && (
+          <p className="text-xs text-red-700 mt-1">
+            {missingCount} production order{missingCount !== 1 ? 's are' : ' is'} missing for PO line{missingLineItems.length !== 1 ? 's' : ''}: {' '}
+            {missingLineItems.map(({ item, missing }) => `${item.itemName || item.itemId || `Line #${item.id}`} (${missing})`).join(', ')}.
           </p>
         )}
       </CardHeader>

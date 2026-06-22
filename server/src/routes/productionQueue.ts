@@ -2,9 +2,8 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
 import { storage } from '../../storage';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
-import { computeEffectivePriority, compareOrderPriority } from '../../../shared/utils/computeEffectivePriority';
+import { computeEffectivePriority, getEffectivePriorityScore, compareOrderPriority } from '../../../shared/utils/computeEffectivePriority';
 import { auditUpdateOrders } from '../services/orderAuditWrapper';
-import { mapPrioritizedQueueRow } from '../helpers/prioritizedProductionQueue';
 
 function logDuplicatePrevention(event: string, details: Record<string, any>) {
   console.log(JSON.stringify({
@@ -16,10 +15,6 @@ function logDuplicatePrevention(event: string, details: Record<string, any>) {
 }
 
 const router = Router();
-
-function rowsFromQueryResult(result: any): any[] {
-  return Array.isArray(result) ? result : result?.rows || [];
-}
 
 // Helper function to automatically handle orders that need attention or movement
 async function autoMoveInvalidStockModelOrders(storage: any) {
@@ -368,29 +363,29 @@ router.get('/prioritized', async (req: Request, res: Response) => {
 
     // Schema-safe query: avoid referencing columns that may not exist in all environments
     // UNIFIED PRIORITY MODEL: Include all priority-related fields for computeEffectivePriority()
+    // NOTE: P1 PO orders are handled separately in their dedicated P1 Purchase Orders queue
+    // This query only includes regular customer orders from all_orders
     const queueQuery = `
       SELECT 
-        o.order_id as orderid,
-        o.fb_order_number as fbordernumber,
-        o.model_id as modelid,
-        o.model_id as stockmodelid,
-        o.due_date as duedate,
-        o.order_date as orderdate,
-        o.current_department as currentdepartment,
+        o.order_id as orderId,
+        o.fb_order_number as fbOrderNumber,
+        o.model_id as modelId,
+        o.model_id as stockModelId,
+        o.due_date as dueDate,
+        o.order_date as orderDate,
+        o.current_department as currentDepartment,
         o.status,
-        o.customer_id as customerid,
+        o.customer_id as customerId,
         o.features,
         o.urgency,
-        o.is_manual_urgency as ismanualurgency,
+        o.is_manual_urgency as isManualUrgency,
         NULL as manual_priority_override,
-        NULL as prioritysource,
-        'ready' as productionreadinessstatus,
-        0 as queueposition,
-        o.created_at as createdat,
-        COALESCE(c.name, 'Customer ' || o.customer_id) as customername,
-        'SALES' as ordersource,
-        NULL as ponumber,
-        NULL as poitemid,
+        NULL as prioritySource,
+        'ready' as productionReadinessStatus,
+        0 as queuePosition,
+        o.created_at as createdAt,
+        COALESCE(c.name, 'Customer ' || o.customer_id) as customerName,
+        'SALES' as orderSource,
         o.is_flattop as "isFlattop"
       FROM all_orders o
       LEFT JOIN customers c ON o.customer_id ~ '^[0-9]+$' AND CAST(o.customer_id AS INTEGER) = c.id
@@ -416,45 +411,67 @@ router.get('/prioritized', async (req: Request, res: Response) => {
     console.log(`🏭 PRIORITIZED QUEUE: Raw result type: ${typeof queueResult}, isArray: ${Array.isArray(queueResult)}`);
     console.log(`🏭 PRIORITIZED QUEUE: Raw result length/rows: ${Array.isArray(queueResult) ? queueResult.length : (queueResult?.rows?.length || 'no rows')}`);
     
-    const prioritizedQueue = rowsFromQueryResult(queueResult);
+    const prioritizedQueue = Array.isArray(queueResult)
+      ? queueResult
+      : queueResult.rows || [];
     
     console.log(`🏭 PRIORITIZED QUEUE: Processed queue length: ${prioritizedQueue.length}`);
 
-    const productionOrdersQuery = `
-      SELECT
-        po.order_id as orderid,
-        NULL as fbordernumber,
-        po.item_id as modelid,
-        po.item_id as stockmodelid,
-        po.due_date as duedate,
-        po.order_date as orderdate,
-        po.current_department as currentdepartment,
-        po.production_status as status,
-        po.customer_id as customerid,
-        po.customer_name as customername,
-        po.specifications as features,
-        NULL as urgency,
-        false as ismanualurgency,
-        NULL as manual_priority_override,
-        NULL as prioritysource,
-        'PO' as ordersource,
-        po.po_number as ponumber,
-        po.po_item_id as poitemid,
-        po.created_at as createdat
-      FROM production_orders po
-      WHERE po.current_department = 'P1 Production Queue'
-        AND UPPER(po.production_status) IN ('PENDING', 'IN_PROGRESS')
-        AND COALESCE(po.is_fulfilled, false) = false
-      ORDER BY po.due_date ASC, po.created_at ASC
-    `;
+    // Calculate current priority metrics
+    const now = new Date();
+    const enhancedQueue = prioritizedQueue.map((order: any, index: number) => {
+      const dueDate = new Date(order.dueDate || order.orderDate);
+      const daysToDue = Math.floor(
+        (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+      );
 
-    const productionOrdersResult = await pool.query(productionOrdersQuery);
-    const p1ProductionOrders = rowsFromQueryResult(productionOrdersResult);
-    console.log(`ðŸ­ PRIORITIZED QUEUE: Found ${p1ProductionOrders.length} active PO production orders`);
+      // If manual urgency is set, use that; otherwise calculate from due date
+      let urgencyLevel: 'critical' | 'high' | 'medium' | 'normal';
+      if (order.ismanualurgency && order.urgency) {
+        // Map database urgency values to urgencyLevel
+        urgencyLevel = order.urgency === 'critical' ? 'critical' 
+                     : order.urgency === 'high' ? 'high'
+                     : order.urgency === 'medium' ? 'medium'
+                     : 'normal';
+      } else {
+        // Calculate from due date
+        urgencyLevel = daysToDue < 0 ? 'critical'
+                     : daysToDue <= 7 ? 'high'
+                     : daysToDue <= 14 ? 'medium'
+                     : 'normal';
+      }
 
-    const enhancedQueue = [...prioritizedQueue, ...p1ProductionOrders].map(
-      (order: any, index: number) => mapPrioritizedQueueRow(order, index)
-    );
+      // UNIFIED PRIORITY MODEL: Compute priority at runtime, never read from DB
+      const priorityResult = computeEffectivePriority({
+        dueDate: order.duedate,
+        urgency: order.urgency,
+        isManualUrgency: order.ismanualurgency,
+        manualPriorityOverride: order.manual_priority_override,
+      });
+
+      return {
+        orderId: order.orderid,
+        fbOrderNumber: order.fbordernumber,
+        modelId: order.modelid,
+        stockModelId: order.modelid,
+        dueDate: order.duedate,
+        orderDate: order.orderdate,
+        currentDepartment: order.currentdepartment,
+        status: order.status,
+        customerId: order.customerid,
+        customerName: order.customername,
+        features: order.features,
+        priorityScore: priorityResult.score, // COMPUTED, not from DB
+        prioritySource: priorityResult.source,
+        priorityReason: priorityResult.reason,
+        urgency: order.urgency,
+        isManualUrgency: order.ismanualurgency,
+        queuePosition: index + 1, // Will be re-assigned after sorting
+        daysToDue,
+        isOverdue: daysToDue < 0,
+        urgencyLevel,
+      };
+    });
 
     // UNIFIED PRIORITY MODEL: Sort using shared compareOrderPriority comparator
     enhancedQueue.sort(compareOrderPriority);

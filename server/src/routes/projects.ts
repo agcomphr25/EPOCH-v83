@@ -2102,8 +2102,35 @@ router.get('/:id/p2-hub', async (req, res) => {
             `SELECT id, serial_number, barcode, po_id, po_item_id, po_number,
                     part_number, part_name, current_department, status, completed_at,
                     finalized_at, part_routing_id, traveler_barcode, sku,
-                    sequence_number, created_at, updated_at
+                    sequence_number, created_at, updated_at,
+                    active_traveler.traveler_number AS active_traveler_number,
+                    active_traveler.status AS active_traveler_status,
+                    active_traveler.department_name AS active_traveler_department,
+                    active_traveler.started_at AS active_traveler_started_at
              FROM p2_serialized_items
+             LEFT JOIN LATERAL (
+               SELECT t.traveler_number, t.status, active_step.department_name, active_step.started_at
+               FROM travelers t
+               LEFT JOIN LATERAL (
+                 SELECT ts.department_name, ts.started_at
+                 FROM traveler_steps ts
+                 WHERE ts.traveler_id = t.id
+                   AND UPPER(ts.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+                 ORDER BY ts.step_number ASC
+                 LIMIT 1
+               ) active_step ON true
+               WHERE (
+                   LOWER(TRIM(t.serial_number)) = LOWER(TRIM(p2_serialized_items.serial_number))
+                   OR LOWER(TRIM(t.serial_number)) = LOWER(TRIM(p2_serialized_items.barcode))
+                   OR LOWER(TRIM(t.lot_number)) = LOWER(TRIM(p2_serialized_items.serial_number))
+                   OR LOWER(TRIM(t.lot_number)) = LOWER(TRIM(p2_serialized_items.barcode))
+                 )
+                 AND UPPER(t.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED', 'COMPLETED')
+               ORDER BY
+                 CASE WHEN UPPER(t.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED') THEN 0 ELSE 1 END,
+                 t.updated_at DESC NULLS LAST
+               LIMIT 1
+             ) active_traveler ON true
              WHERE po_id = ANY($1::int[])
              ORDER BY po_number, part_number, sequence_number`,
             [poIds],
@@ -2250,9 +2277,143 @@ router.get('/:id/p2-hub', async (req, res) => {
       return bTime - aTime;
     })[0] ?? null;
     const activePoItems = activePoId ? poItems.filter((item: any) => item.po_id === activePoId) : poItems;
-    const completedSerials = serializedItems.filter((item: any) => (
-      item.status === 'COMPLETED' || item.completed_at || item.finalized_at
-    ));
+    const normalizeProductionKey = (value: unknown) => String(value ?? '').trim().toLowerCase();
+    const normalizePlacementLabel = (value: unknown) => {
+      const raw = String(value ?? '').trim();
+      if (!raw) return '';
+      const key = raw.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+      const canonical: Record<string, string> = {
+        active: 'In Production',
+        in_progress: 'In Production',
+        'in progress': 'In Production',
+        started: 'In Production',
+        scheduled: 'Scheduled',
+        pending: 'Pending',
+        completed: 'Completed',
+        complete: 'Completed',
+        finalized: 'Completed',
+        shipped: 'Shipped',
+        closed: 'Closed',
+        'pending layup': 'Pending Layup',
+        layup: 'Layup',
+        'cutting table': 'Cutting Table',
+        cnc: 'CNC',
+        finish: 'Finish',
+        paint: 'Paint',
+        'final qc': 'Final QC',
+        qc: 'Final QC',
+        shipping: 'Shipping',
+      };
+      return canonical[key] || raw;
+    };
+    const isCompletedSerializedItem = (item: any) => {
+      const status = String(item.status ?? item.active_traveler_status ?? '').toUpperCase();
+      return ['COMPLETE', 'COMPLETED', 'FINALIZED', 'SHIPPED', 'CLOSED'].includes(status)
+        || Boolean(item.completed_at || item.finalized_at);
+    };
+    const getSerializedPlacement = (item: any) => {
+      if (isCompletedSerializedItem(item)) return 'Completed';
+      return normalizePlacementLabel(
+        item.active_traveler_department
+          || item.current_department
+          || item.active_traveler_status
+          || item.status
+          || 'Not placed'
+      );
+    };
+    const completedSerials = serializedItems.filter(isCompletedSerializedItem);
+    const activePoItemIds = new Set(activePoItems.map((item: any) => Number(item.id)).filter(Number.isFinite));
+    const lineIdByPart = new Map<string, number>();
+    activePoItems.forEach((item: any) => {
+      const partKey = normalizeProductionKey(item.part_number);
+      const itemId = Number(item.id);
+      if (partKey && Number.isFinite(itemId) && !lineIdByPart.has(partKey)) {
+        lineIdByPart.set(partKey, itemId);
+      }
+    });
+    const resolveLineId = (row: any, partValue?: unknown) => {
+      const exactId = Number(row.po_item_id ?? row.p2_po_item_id);
+      if (Number.isFinite(exactId) && activePoItemIds.has(exactId)) return exactId;
+      const partKey = normalizeProductionKey(partValue ?? row.part_number ?? row.sku);
+      return partKey ? lineIdByPart.get(partKey) ?? null : null;
+    };
+    const serializedByLineId = new Map<number, any[]>();
+    serializedItems.forEach((item: any) => {
+      const lineId = resolveLineId(item);
+      if (!lineId) return;
+      const rows = serializedByLineId.get(lineId) ?? [];
+      rows.push(item);
+      serializedByLineId.set(lineId, rows);
+    });
+    const productionOrdersByLineId = new Map<number, any[]>();
+    productionOrders.forEach((order: any) => {
+      const lineId = resolveLineId(order, order.sku ?? order.part_number);
+      if (!lineId) return;
+      const rows = productionOrdersByLineId.get(lineId) ?? [];
+      rows.push(order);
+      productionOrdersByLineId.set(lineId, rows);
+    });
+    const workOrdersByPart = new Map<string, any[]>();
+    workOrders.forEach((workOrder: any) => {
+      const partKey = normalizeProductionKey(workOrder.partNumber ?? workOrder.part_number);
+      if (!partKey) return;
+      const rows = workOrdersByPart.get(partKey) ?? [];
+      rows.push(workOrder);
+      workOrdersByPart.set(partKey, rows);
+    });
+    const poLinePlacements = activePoItems.map((item: any) => {
+      const lineId = Number(item.id);
+      const lineSerializedItems = serializedByLineId.get(lineId) ?? [];
+      const lineProductionOrders = productionOrdersByLineId.get(lineId) ?? [];
+      const lineWorkOrders = workOrdersByPart.get(normalizeProductionKey(item.part_number)) ?? [];
+      const orderedQuantity = Math.max(0, Number(item.quantity ?? 0) || 0);
+      const completedQuantity = lineSerializedItems.filter(isCompletedSerializedItem).length;
+      const serializedQuantity = lineSerializedItems.length;
+      const unreleasedQuantity = Math.max(orderedQuantity - serializedQuantity, 0);
+      const remainingQuantity = Math.max(orderedQuantity - completedQuantity, 0);
+      const placementCounts = lineSerializedItems.reduce((counts: Record<string, number>, serializedItem: any) => {
+        const placement = getSerializedPlacement(serializedItem) || 'Not placed';
+        counts[placement] = (counts[placement] ?? 0) + 1;
+        return counts;
+      }, {});
+      if (unreleasedQuantity > 0) {
+        placementCounts['Not serialized / not released'] = unreleasedQuantity;
+      }
+
+      return {
+        poItemId: item.id,
+        poId: item.po_id,
+        partNumber: item.part_number,
+        partName: item.part_name,
+        orderedQuantity,
+        serializedQuantity,
+        completedQuantity,
+        remainingQuantity,
+        unreleasedQuantity,
+        placementCounts,
+        productionOrders: lineProductionOrders,
+        workOrders: lineWorkOrders,
+        serializedItems: lineSerializedItems.map((serializedItem: any) => ({
+          ...serializedItem,
+          productionPlacement: getSerializedPlacement(serializedItem),
+          activeTravelerNumber: serializedItem.active_traveler_number ?? null,
+        })),
+      };
+    });
+    const productionTotals = poLinePlacements.reduce((totals: Record<string, number>, line: any) => {
+      totals.orderedQuantity += line.orderedQuantity;
+      totals.serializedQuantity += line.serializedQuantity;
+      totals.completedQuantity += line.completedQuantity;
+      totals.remainingQuantity += line.remainingQuantity;
+      totals.unreleasedQuantity += line.unreleasedQuantity;
+      return totals;
+    }, {
+      orderedQuantity: 0,
+      serializedQuantity: 0,
+      completedQuantity: 0,
+      remainingQuantity: 0,
+      unreleasedQuantity: 0,
+    });
     const laborBudgetHours = workOrders.reduce((sum: number, workOrder: any) => {
       const hours = Number(workOrder.totalBudgetHours ?? 0);
       return Number.isFinite(hours) ? sum + hours : sum;
@@ -2374,11 +2535,14 @@ router.get('/:id/p2-hub', async (req, res) => {
             productionOrderCount: productionOrders.length,
             serializedCount: serializedItems.length,
             completedSerializedCount: completedSerials.length,
+            workOrderCount: workOrders.length,
+            ...productionTotals,
           },
+          poLinePlacements,
           productionOrders,
           serializedItems,
           assemblyTree: {
-            poItems,
+            poItems: activePoItems,
             bomRecords,
             productionOrders,
           },

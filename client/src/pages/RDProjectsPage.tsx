@@ -30,6 +30,8 @@ import { Textarea } from '@/components/ui/textarea';
 interface EmployeeOption {
   id: number;
   name: string;
+  employeeCode?: string;
+  isActive?: boolean;
   userRole?: string;
 }
 
@@ -458,6 +460,10 @@ export default function RDProjectsPage() {
   );
   const activeProjects = projects.filter((project) => project.status === 'active').length;
   const draftProjects = projects.filter((project) => project.status === 'draft').length;
+  const activeEmployees = useMemo(
+    () => employees.filter((employee) => employee.isActive !== false),
+    [employees],
+  );
 
   useEffect(() => {
     writeJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, projects);
@@ -476,10 +482,11 @@ export default function RDProjectsPage() {
   const resetForm = () => setForm(emptyProject);
 
   const createProject = () => {
+    const ownerEmployee = activeEmployees.find((employee) => String(employee.id) === form.owner);
     const project: RDProject = {
       id: `rd-${Date.now()}`,
       projectName: form.projectName.trim(),
-      owner: form.owner.trim(),
+      owner: ownerEmployee?.name ?? '',
       description: form.description.trim(),
       signoffRequired: form.signoffRequired,
       signoffUserId: form.signoffRequired ? form.signoffUserId : '',
@@ -836,11 +843,28 @@ export default function RDProjectsPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="rd-project-owner">Owner</Label>
-                <Input
-                  id="rd-project-owner"
+                <Select
                   value={form.owner}
-                  onChange={(event) => setForm((current) => ({ ...current, owner: event.target.value }))}
-                />
+                  onValueChange={(value) => setForm((current) => ({ ...current, owner: value }))}
+                >
+                  <SelectTrigger id="rd-project-owner">
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeEmployees.length === 0 ? (
+                      <SelectItem value="__no_employees__" disabled>
+                        No employees available
+                      </SelectItem>
+                    ) : (
+                      activeEmployees.map((employee) => (
+                        <SelectItem key={employee.id} value={String(employee.id)}>
+                          {employee.name}
+                          {employee.employeeCode ? ` (${employee.employeeCode})` : ''}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="rd-project-description">Notes</Label>
@@ -872,7 +896,7 @@ export default function RDProjectsPage() {
                       <SelectValue placeholder="Select user" />
                     </SelectTrigger>
                     <SelectContent>
-                      {employees.map((employee) => (
+                      {activeEmployees.map((employee) => (
                         <SelectItem key={employee.id} value={String(employee.id)}>
                           {employee.name}
                         </SelectItem>

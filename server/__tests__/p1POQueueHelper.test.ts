@@ -270,6 +270,35 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     expect(result).toHaveLength(0);
   });
 
+  it('keeps released PO production orders that are still in P1 Production Queue visible', () => {
+    const po = makePO({ poNumber: 'P18261' });
+    const item = makeItem({
+      id: 18,
+      itemName: 'AG-CRB-PV105-ER',
+      specifications: { stockModel: 'AG-CRB-PV105-ER' },
+      quantity: 1,
+      orderCount: 1,
+    });
+    const itemsByPoId = new Map([[po.id, [item]]]);
+    const prodRows: ProductionOrderRow[] = [
+      makeProdRow({
+        po_item_id: 18,
+        production_status: 'PENDING',
+        current_department: 'P1 Production Queue',
+      }),
+    ];
+
+    const result = computeP1Queue([po], itemsByPoId, prodRows);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].purchaseOrders[0].poNumber).toBe('P18261');
+    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({
+      id: 18,
+      productName: 'AG-CRB-PV105-ER',
+      quantity: 1,
+    });
+  });
+
   it('returns empty when given no POs', () => {
     const result = computeP1Queue([], new Map(), []);
     expect(result).toHaveLength(0);

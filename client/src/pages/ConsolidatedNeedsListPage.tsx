@@ -971,6 +971,21 @@ export default function ConsolidatedNeedsListPage() {
     );
   };
 
+  const formatRequestDate = (value?: string | null) => {
+    if (!value) return 'Not recorded';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not recorded';
+    return date.toLocaleDateString();
+  };
+
+  const getOldestRequestDate = (requests: PartsRequest[]) => {
+    const timestamps = requests
+      .map((request) => new Date(request.requestDate).getTime())
+      .filter((time) => Number.isFinite(time));
+    if (timestamps.length === 0) return null;
+    return new Date(Math.min(...timestamps)).toISOString();
+  };
+
   const getOrderMethodBadge = (method: string | null) => {
     if (method === 'WEBSITE') {
       return (
@@ -1004,6 +1019,7 @@ export default function ConsolidatedNeedsListPage() {
           const isLowStock = consolidated.currentBalance !== undefined && 
                            consolidated.inventoryItem?.minStock !== undefined && 
                            consolidated.currentBalance < consolidated.inventoryItem.minStock;
+          const oldestRequestDate = getOldestRequestDate(consolidated.requests);
 
           return (
             <div key={consolidated.partNumber} className="border rounded-lg dark:border-gray-700">
@@ -1014,6 +1030,10 @@ export default function ConsolidatedNeedsListPage() {
                     <div className="col-span-2">
                       <div className="font-medium text-gray-900 dark:text-gray-100">{consolidated.partName}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">{consolidated.partNumber}</div>
+                      <div className="mt-1 flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                        <Clock className="h-3 w-3" />
+                        <span>Oldest request: {formatRequestDate(oldestRequestDate)}</span>
+                      </div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">Total Quantity</div>
@@ -1062,6 +1082,7 @@ export default function ConsolidatedNeedsListPage() {
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Department</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested By</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested For</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Created</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Qty</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Urgency</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Reason</th>
@@ -1074,6 +1095,7 @@ export default function ConsolidatedNeedsListPage() {
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.department}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedBy}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedForDisplayName || '—'}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{formatRequestDate(request.requestDate)}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.quantity}</td>
                           <td className="px-4 py-2 text-sm">{getUrgencyBadge(request.urgency)}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">{request.reason}</td>
@@ -1303,6 +1325,7 @@ export default function ConsolidatedNeedsListPage() {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Department</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested By</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested For</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Created</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Urgency</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
                         <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400">Actions</th>
@@ -1354,6 +1377,7 @@ export default function ConsolidatedNeedsListPage() {
                           <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.department}</td>
                           <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedBy}</td>
                           <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedForDisplayName || '—'}</td>
+                          <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{formatRequestDate(request.requestDate)}</td>
                           <td className="px-3 py-2">{getUrgencyBadge(request.urgency)}</td>
                           <td className="px-3 py-2">
                             <div className="flex flex-col gap-1">
@@ -1737,6 +1761,10 @@ export default function ConsolidatedNeedsListPage() {
                 <div>
                   <div className="text-muted-foreground">Requested By</div>
                   <div className="font-medium">{detailRequest.requestedBy}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Created</div>
+                  <div className="font-medium">{formatRequestDate(detailRequest.requestDate)}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Vendor</div>

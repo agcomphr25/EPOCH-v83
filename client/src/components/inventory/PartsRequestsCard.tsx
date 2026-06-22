@@ -509,6 +509,13 @@ export default function PartsRequestsCard() {
     }
   };
 
+  const formatRequestDate = (value?: string | Date | null) => {
+    if (!value) return 'Not recorded';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not recorded';
+    return date.toLocaleDateString();
+  };
+
   const dialogContentClass =
     'flex max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-2xl flex-col overflow-hidden';
 
@@ -970,6 +977,11 @@ export default function PartsRequestsCard() {
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-gray-400" />
                             <span>For: {request.requestedForDisplayName || '—'}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-gray-400" />
+                            <span>Created: {formatRequestDate(request.requestDate)}</span>
                           </div>
 
                         {(request.productionLine || request.project) && (

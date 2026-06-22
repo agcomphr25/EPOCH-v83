@@ -688,6 +688,11 @@ export default function ProjectDetailPage() {
         revisedLineItems: [],
       });
       toast({ title: 'Revision created', description: 'Project revision history was updated.' });
+      const revisionMetadata = (createdRevision as any)?.metadata;
+      if (revisionMetadata?.source === 'project-bom-routing' && revisionMetadata?.pcfRecommended) {
+        setLocation(buildBomRoutingPcfUrl(createdRevision));
+        return;
+      }
       if (createdRevision?.has_po_change && createdRevision.new_po_id) {
         setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(id || '')}&editPoId=${encodeURIComponent(String(createdRevision.new_po_id))}`);
       }
@@ -792,6 +797,56 @@ export default function ProjectDetailPage() {
         const type = String(revision.revision_type ?? revision.revisionType ?? '').toLowerCase();
         return type === 'drawing' || type === 'contract';
       });
+  const primaryBomRoutingPartNumber = bomRoutingPartNumbers[0] ?? bomRoutingRecords[0]?.parent_part_ag_number ?? bomRoutingRoutings[0]?.part_number ?? '';
+  const latestBomRevisionCode = bomRoutingRecords.find((bom: any) => bom.latest_rev_code)?.latest_rev_code;
+  const latestRoutingRevisionCode = bomRoutingRoutings.find((routing: any) => routing.routing_revision)?.routing_revision;
+  const currentBomRoutingRevision = [latestBomRevisionCode ? `BOM ${latestBomRevisionCode}` : '', latestRoutingRevisionCode ? `Routing ${latestRoutingRevisionCode}` : '']
+    .filter(Boolean)
+    .join(' / ');
+  const buildBomRoutingPcfUrl = (revision?: any) => {
+    const revisionLabel = revision?.revision_label ?? revision?.revisionLabel ?? '';
+    const revisionSummary = revision?.summary ?? '';
+    const params = new URLSearchParams({
+      tab: 'changes',
+      newPCF: '1',
+      changeType: 'BOM',
+      scope: project?.poId ? 'PO' : 'PART',
+      documents: 'BOM,ROUTING',
+      actions: 'UPDATE_BOM,UPDATE_ROUTING',
+      projectId: project?.id ?? '',
+      projectLabel: project?.projectCode || project?.projectName || project?.id || '',
+      proposedChange: revisionLabel
+        ? `${revisionLabel}: ${revisionSummary || 'Revise BOM/routing package'}`
+        : `Revise BOM/routing package for ${project?.projectCode || project?.projectName || 'this project'}.`,
+      reason: revision?.reason || 'Project BOM/routing revision requires controlled production change review.',
+      notes: [
+        project?.id ? `Project ID: ${project.id}` : '',
+        revision?.id ? `Project revision ID: ${revision.id}` : '',
+        revisionLabel ? `Project revision: ${revisionLabel}` : '',
+      ].filter(Boolean).join(' | '),
+    });
+    if (project?.poId) params.set('poId', String(project.poId));
+    if (primaryBomRoutingPartNumber) params.set('partNumber', primaryBomRoutingPartNumber);
+    if (currentBomRoutingRevision) params.set('currentRevision', currentBomRoutingRevision);
+    return `/p2-control-center?${params.toString()}`;
+  };
+  const recordBomRoutingRevision = (revisionType: 'drawing' | 'contract') => {
+    createRevisionMutation.mutate({
+      revisionType,
+      revisionDate: new Date().toISOString().split('T')[0],
+      hasPoChange: false,
+      revisedPoNumber: '',
+      revisedDueDate: '',
+      revisedLineItems: [],
+      summary: `${revisionType === 'drawing' ? 'Drawing' : 'Contract'} revision for BOM/routing`,
+      reason: `BOM/routing revision started from the P2 Project BOM/Routing summary for ${project?.projectCode || project?.projectName || 'this project'}.`,
+      metadata: {
+        source: 'project-bom-routing',
+        pcfRecommended: true,
+        currentBomRoutingRevision,
+      },
+    } as any);
+  };
   const hubPo = hubTabs.po ?? {};
   const currentProjectPo = hubPo.currentPo ?? linkedProjectPO ?? projectP2POs[0] ?? null;
   const currentPoLineItems = Array.isArray(hubPo.lineItems) ? hubPo.lineItems : [];
@@ -2696,7 +2751,70 @@ export default function ProjectDetailPage() {
               <ListChecks className="h-4 w-4 mr-2" />
               Routing
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation(buildBomRoutingPcfUrl())}
+              data-testid="button-start-project-bom-routing-pcf"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Start PCF
+            </Button>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ClipboardList className="h-4 w-4" />
+                Controlled BOM/Routing Revision
+              </CardTitle>
+              <CardDescription>
+                Record the drawing or contract revision that drives the BOM/routing update, then start the linked production change form.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Current Package</p>
+                  <p className="font-medium">{currentBomRoutingRevision || 'No revision recorded'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Primary Part</p>
+                  <p className="font-mono font-medium">{primaryBomRoutingPartNumber || 'Not found'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Revision Links</p>
+                  <p className="font-medium">{bomRoutingChangeLinks.length}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => recordBomRoutingRevision('drawing')}
+                  disabled={createRevisionMutation.isPending}
+                  data-testid="button-record-project-bom-drawing-revision"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Drawing Revision
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => recordBomRoutingRevision('contract')}
+                  disabled={createRevisionMutation.isPending}
+                  data-testid="button-record-project-bom-contract-revision"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Contract Revision
+                </Button>
+                <Button
+                  onClick={() => setLocation(buildBomRoutingPcfUrl())}
+                  data-testid="button-start-project-bom-routing-linked-pcf"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Start Production Change Form
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {bomRoutingPartNumbers.length > 0 && (
             <Card>
@@ -2830,6 +2948,15 @@ export default function ProjectDetailPage() {
                       </div>
                       <p className="text-sm font-medium">{revision.summary || 'Project change recorded'}</p>
                       {revision.reason && <p className="text-sm text-muted-foreground">{revision.reason}</p>}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLocation(buildBomRoutingPcfUrl(revision))}
+                        data-testid={`button-start-pcf-for-bom-routing-revision-${revision.id}`}
+                      >
+                        <FileText className="h-4 w-4 mr-1.5" />
+                        Start linked PCF
+                      </Button>
                     </div>
                   );
                 })

@@ -58,6 +58,7 @@ function clearStoredAuth() {
 export function useActionAuth() {
   const [authState, setAuthState] = useState<ActionAuthState>(getStoredAuth);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [actionDescription, setActionDescription] = useState('perform this action');
   const pendingActionRef = useRef<(() => void) | null>(null);
 
   const { data: sessionUser } = useQuery<ActionAuthUser | null>({
@@ -107,8 +108,17 @@ export function useActionAuth() {
     }
 
     pendingActionRef.current = action;
+    setActionDescription(actionDescription || 'perform this action');
     setShowAuthModal(true);
   }, [isAuthenticated]);
+
+  const requireFreshAuth = useCallback((action: () => void, actionDescription?: string) => {
+    clearStoredAuth();
+    setAuthState({ isAuthenticated: false, user: null, token: null, expiresAt: null });
+    pendingActionRef.current = action;
+    setActionDescription(actionDescription || 'perform this action');
+    setShowAuthModal(true);
+  }, []);
 
   const handleAuthSuccess = useCallback((token: string, user: ActionAuthUser, expiresAt?: string) => {
     const expiry = expiresAt || new Date(Date.now() + 15 * 60 * 1000).toISOString();
@@ -144,7 +154,9 @@ export function useActionAuth() {
     user: currentUser,
     actionToken: authState.token,
     showAuthModal,
+    actionDescription,
     requireAuth,
+    requireFreshAuth,
     handleAuthSuccess,
     handleAuthModalClose,
     getAuthHeaders,

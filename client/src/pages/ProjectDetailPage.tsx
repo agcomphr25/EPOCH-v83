@@ -70,6 +70,26 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
+const ROM_CATEGORY_CONFIG = [
+  { key: 'labor', label: 'Labor', field: 'quotedHours', kind: 'hours', detail: 'Direct labor estimate from ROM/quote feedback' },
+  { key: 'material', label: 'Material', field: 'budgetAmount', kind: 'currency', detail: 'Material budget that will seed the WAD' },
+  { key: 'outsideProcessing', label: 'Outside Processing', field: 'budgetAmount', kind: 'currency', detail: 'Vendor services and outside operations' },
+  { key: 'nrc', label: 'NRC', field: 'budgetAmount', kind: 'currency', detail: 'Non-recurring cost' },
+  { key: 'tooling', label: 'Tooling', field: 'budgetAmount', kind: 'currency', detail: 'Tooling budget' },
+  { key: 'design', label: 'Design', field: 'budgetAmount', kind: 'currency', detail: 'Design labor and engineering budget' },
+  { key: 'capital', label: 'Capital', field: 'budgetAmount', kind: 'currency', detail: 'Assets, startup services, and startup labor' },
+  { key: 'generalAndAdmin', label: 'G&A', field: 'budgetAmount', kind: 'currency', detail: 'General and administrative burden' },
+  { key: 'overhead', label: 'Overhead', field: 'budgetAmount', kind: 'currency', detail: 'Indirect cost burden' },
+  { key: 'qualityAndCompliance', label: 'Quality and Compliance', field: 'budgetAmount', kind: 'currency', detail: 'Inspection, compliance, and quality planning' },
+  { key: 'shippingAndPackaging', label: 'Shipping and Packaging', field: 'budgetAmount', kind: 'currency', detail: 'Pack, ship, freight, and documentation' },
+  { key: 'contingency', label: 'Contingency', field: 'budgetAmount', kind: 'currency', detail: 'Risk reserve' },
+  { key: 'escalationAndInflation', label: 'Escalation and Inflation', field: 'budgetAmount', kind: 'currency', detail: 'Schedule and pricing escalation' },
+  { key: 'profitFee', label: 'Profit / Fee', field: 'budgetAmount', kind: 'currency', detail: 'Quote profit or fee target' },
+] as const;
+
+type RomCategoryKey = typeof ROM_CATEGORY_CONFIG[number]['key'];
+type RomCategoryField = typeof ROM_CATEGORY_CONFIG[number]['field'];
+
 interface ProjectStep {
   id: string;
   stepType: string;
@@ -485,6 +505,13 @@ export default function ProjectDetailPage() {
     revisedLineItems: [] as P2PurchaseOrderItem[],
   });
   const [showProjectPOWizard, setShowProjectPOWizard] = useState(false);
+  const [romForm, setRomForm] = useState({
+    summary: '',
+    assumptions: '',
+    riskNotes: '',
+    categories: {} as Record<string, Record<string, string>>,
+  });
+  const [romFormHydratedKey, setRomFormHydratedKey] = useState('');
 
   const linkedProjectPO = useMemo(() => {
     if (!project?.poId) return null;
@@ -773,13 +800,15 @@ export default function ProjectDetailPage() {
   const hubRom = hubTabs.rom ?? {};
   const hubProduction = hubTabs.production ?? {};
   const productionSummary = hubProduction.summary ?? {};
-  const projectProductionOrders = Array.isArray(hubProduction.productionOrders) ? hubProduction.productionOrders : [];
   const projectSerializedItems = Array.isArray(hubProduction.serializedItems) ? hubProduction.serializedItems : traceabilitySerials;
+  const productionLinePlacements = Array.isArray(hubProduction.poLinePlacements) ? hubProduction.poLinePlacements : [];
   const productionAssemblyTree = hubProduction.assemblyTree ?? {};
   const assemblyPoItems = Array.isArray(productionAssemblyTree.poItems) ? productionAssemblyTree.poItems : [];
-  const productionStatusCounts = projectProductionOrders.reduce((counts: Record<string, number>, order: any) => {
-    const status = String(order.status || 'Unknown');
-    counts[status] = (counts[status] ?? 0) + 1;
+  const productionPlacementCounts = productionLinePlacements.reduce((counts: Record<string, number>, line: any) => {
+    Object.entries(line.placementCounts ?? {}).forEach(([placement, count]) => {
+      const numericCount = Number(count);
+      counts[placement] = (counts[placement] ?? 0) + (Number.isFinite(numericCount) ? numericCount : 0);
+    });
     return counts;
   }, {});
   const hubMaterial = hubTabs.material ?? {};
@@ -911,6 +940,30 @@ export default function ProjectDetailPage() {
     if (status === 'covered_by_project_data' || status === 'not_applicable') return <CheckCircle2 className="h-4 w-4" />;
     return <AlertCircle className="h-4 w-4" />;
   };
+  const formatQuantityLabel = (value: unknown) => {
+    const quantity = Number(value ?? 0);
+    return Number.isFinite(quantity) ? quantity.toLocaleString() : '0';
+  };
+  const romSummary = hubRom.summary ?? {};
+  const romDraft = hubRom.draft ?? null;
+  const romLockState = hubRom.lockState ?? { locked: Boolean(romSummary.locked), reason: romSummary.lockedReason ?? null };
+  const isRomLocked = Boolean(romLockState.locked || romSummary.locked);
+  const getRomCategoryValue = (categoryKey: RomCategoryKey, field: RomCategoryField) => {
+    const value = hubRom.categories?.[categoryKey]?.[field];
+    return value === null || value === undefined ? '' : String(value);
+  };
+  const buildRomFormFromHub = () => {
+    const categories = ROM_CATEGORY_CONFIG.reduce((acc, category) => {
+      acc[category.key] = { [category.field]: getRomCategoryValue(category.key, category.field) };
+      return acc;
+    }, {} as Record<string, Record<string, string>>);
+    return {
+      summary: romSummary.draftSummary ?? romDraft?.summary ?? '',
+      assumptions: romSummary.assumptions ?? romDraft?.assumptions ?? '',
+      riskNotes: romSummary.riskNotes ?? romDraft?.risk_notes ?? romDraft?.riskNotes ?? '',
+      categories,
+    };
+  };
   const { data: quoteFeedback, isLoading: isLoadingFeedback } = useQuery<QuoteExecutionFeedback | null>({
     queryKey: ['/api/projects', id, 'quote-feedback'],
     queryFn: () =>
@@ -920,6 +973,35 @@ export default function ProjectDetailPage() {
         return r.json();
       }),
     enabled: !!id,
+  });
+
+  useEffect(() => {
+    const hydrateKey = `${id ?? ''}:${romDraft?.id ?? 'default'}:${romSummary.updatedAt ?? ''}:${JSON.stringify(hubRom.categories ?? {})}`;
+    if (!id || hydrateKey === romFormHydratedKey) return;
+    setRomForm(buildRomFormFromHub());
+    setRomFormHydratedKey(hydrateKey);
+  }, [id, romDraft?.id, romSummary.updatedAt, hubRom.categories, romFormHydratedKey]);
+
+  const saveRomMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/projects/${id}/rom-draft`, {
+        method: 'PATCH',
+        body: {
+          summary: romForm.summary,
+          assumptions: romForm.assumptions,
+          riskNotes: romForm.riskNotes,
+          categories: romForm.categories,
+        },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'p2-hub'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders/project', id] });
+      toast({ title: 'ROM draft saved', description: 'WAD creation will use the updated ROM values.' });
+    },
+    onError: (err: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'p2-hub'] });
+      toast({ title: 'ROM save failed', description: err?.message || 'The ROM may be locked after award.', variant: 'destructive' });
+    },
   });
 
   const romCategories = [
@@ -933,16 +1015,16 @@ export default function ProjectDetailPage() {
       value: formatCurrencyLabel(hubRom.categories?.material?.budgetAmount, 'Not set'),
       detail: 'Material budget from WAD/project work orders',
     },
-    { label: 'Outside Processing', value: formatCurrencyLabel(hubRom.categories?.outsideProcessing), detail: 'Vendor services and outside operations' },
-    { label: 'NRC / Tooling / Design', value: formatCurrencyLabel(hubRom.categories?.nrc), detail: 'Non-recurring cost, tooling, and design labor' },
-    { label: 'Capital', value: formatCurrencyLabel(hubRom.categories?.capital), detail: 'Assets, startup services, and startup labor' },
-    { label: 'G&A', value: formatCurrencyLabel(hubRom.categories?.generalAndAdmin), detail: 'General and administrative burden' },
-    { label: 'Overhead', value: formatCurrencyLabel(hubRom.categories?.overhead), detail: 'Indirect cost burden' },
-    { label: 'Quality and Compliance', value: formatCurrencyLabel(hubRom.categories?.qualityAndCompliance), detail: 'Inspection, compliance, and quality planning' },
-    { label: 'Shipping and Packaging', value: formatCurrencyLabel(hubRom.categories?.shippingAndPackaging), detail: 'Pack, ship, freight, and documentation' },
-    { label: 'Contingency', value: formatCurrencyLabel(hubRom.categories?.contingency), detail: 'Risk reserve' },
-    { label: 'Escalation and Inflation', value: formatCurrencyLabel(hubRom.categories?.escalationAndInflation), detail: 'Schedule and pricing escalation' },
-    { label: 'Profit / Fee', value: formatCurrencyLabel(hubRom.categories?.profitFee), detail: 'Quote profit or fee target' },
+    { label: 'Outside Processing', value: formatCurrencyLabel(hubRom.categories?.outsideProcessing?.budgetAmount), detail: 'Vendor services and outside operations' },
+    { label: 'NRC / Tooling / Design', value: formatCurrencyLabel(hubRom.categories?.nrc?.budgetAmount), detail: 'Non-recurring cost, tooling, and design labor' },
+    { label: 'Capital', value: formatCurrencyLabel(hubRom.categories?.capital?.budgetAmount), detail: 'Assets, startup services, and startup labor' },
+    { label: 'G&A', value: formatCurrencyLabel(hubRom.categories?.generalAndAdmin?.budgetAmount), detail: 'General and administrative burden' },
+    { label: 'Overhead', value: formatCurrencyLabel(hubRom.categories?.overhead?.budgetAmount), detail: 'Indirect cost burden' },
+    { label: 'Quality and Compliance', value: formatCurrencyLabel(hubRom.categories?.qualityAndCompliance?.budgetAmount), detail: 'Inspection, compliance, and quality planning' },
+    { label: 'Shipping and Packaging', value: formatCurrencyLabel(hubRom.categories?.shippingAndPackaging?.budgetAmount), detail: 'Pack, ship, freight, and documentation' },
+    { label: 'Contingency', value: formatCurrencyLabel(hubRom.categories?.contingency?.budgetAmount), detail: 'Risk reserve' },
+    { label: 'Escalation and Inflation', value: formatCurrencyLabel(hubRom.categories?.escalationAndInflation?.budgetAmount), detail: 'Schedule and pricing escalation' },
+    { label: 'Profit / Fee', value: formatCurrencyLabel(hubRom.categories?.profitFee?.budgetAmount), detail: 'Quote profit or fee target' },
   ];
 
   const { data: projectFarFlowdowns = [] } = useQuery<ProjectFarFlowdown[]>({
@@ -3265,6 +3347,90 @@ export default function ProjectDetailPage() {
                 </div>
               )}
 
+              <div className="rounded-md border p-4 space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">ROM Draft</p>
+                    <p className="text-sm text-muted-foreground">
+                      Editable until PO/contract award. Saved ROM values auto-fill the WAD when it is created.
+                    </p>
+                  </div>
+                  <Badge variant={isRomLocked ? 'secondary' : 'outline'} className="gap-1">
+                    {isRomLocked ? <Lock className="h-3 w-3" /> : <Edit className="h-3 w-3" />}
+                    {isRomLocked ? 'Locked after award' : 'Draft editable'}
+                  </Badge>
+                </div>
+                {isRomLocked && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    {romLockState.reason || romSummary.lockedReason || 'PO/contract award has locked this ROM.'}
+                  </div>
+                )}
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-2 md:col-span-3">
+                    <Label>ROM summary</Label>
+                    <Textarea
+                      value={romForm.summary}
+                      onChange={(event) => setRomForm((current) => ({ ...current, summary: event.target.value }))}
+                      disabled={isRomLocked}
+                      placeholder="Scope, pricing basis, and award assumptions"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-3">
+                    <Label>Assumptions</Label>
+                    <Textarea
+                      value={romForm.assumptions}
+                      onChange={(event) => setRomForm((current) => ({ ...current, assumptions: event.target.value }))}
+                      disabled={isRomLocked}
+                      placeholder="Customer, schedule, material, and routing assumptions"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-3">
+                    <Label>Risk notes</Label>
+                    <Textarea
+                      value={romForm.riskNotes}
+                      onChange={(event) => setRomForm((current) => ({ ...current, riskNotes: event.target.value }))}
+                      disabled={isRomLocked}
+                      placeholder="Risks that WAD planning should inherit"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {ROM_CATEGORY_CONFIG.map((category) => (
+                    <div key={category.key} className="space-y-2">
+                      <Label>{category.label}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step={category.kind === 'hours' ? '0.1' : '0.01'}
+                        value={romForm.categories[category.key]?.[category.field] ?? ''}
+                        onChange={(event) => setRomForm((current) => ({
+                          ...current,
+                          categories: {
+                            ...current.categories,
+                            [category.key]: {
+                              ...(current.categories[category.key] ?? {}),
+                              [category.field]: event.target.value,
+                            },
+                          },
+                        }))}
+                        disabled={isRomLocked}
+                        placeholder={category.kind === 'hours' ? 'Hours' : 'USD'}
+                      />
+                      <p className="text-xs text-muted-foreground">{category.detail}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => saveRomMutation.mutate()}
+                    disabled={isRomLocked || saveRomMutation.isPending}
+                  >
+                    {saveRomMutation.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                    Save ROM Draft
+                  </Button>
+                </div>
+              </div>
+
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Actual Labor</p>
@@ -3306,20 +3472,20 @@ export default function ProjectDetailPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Production Orders</p>
-                  <p className="font-medium">{productionSummary.productionOrderCount ?? projectProductionOrders.length}</p>
+                  <p className="text-xs text-muted-foreground">PO Quantity</p>
+                  <p className="font-medium">{formatQuantityLabel(productionSummary.orderedQuantity)}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Serialized Parts</p>
-                  <p className="font-medium">{productionSummary.serializedCount ?? projectSerializedItems.length}</p>
+                  <p className="text-xs text-muted-foreground">In Production</p>
+                  <p className="font-medium">{formatQuantityLabel(Number(productionSummary.serializedQuantity ?? projectSerializedItems.length) - Number(productionSummary.completedQuantity ?? productionSummary.completedSerializedCount ?? 0))}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Completed Serialized</p>
-                  <p className="font-medium">{productionSummary.completedSerializedCount ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">Completed</p>
+                  <p className="font-medium">{formatQuantityLabel(productionSummary.completedQuantity ?? productionSummary.completedSerializedCount)}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Assembly Lines</p>
-                  <p className="font-medium">{assemblyPoItems.length}</p>
+                  <p className="text-xs text-muted-foreground">Remaining on PO</p>
+                  <p className="font-medium">{formatQuantityLabel(productionSummary.remainingQuantity)}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -3344,16 +3510,161 @@ export default function ProjectDetailPage() {
                   BOM/Routing
                 </Button>
               </div>
-              {Object.keys(productionStatusCounts).length > 0 && (
+              {Object.keys(productionPlacementCounts).length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(productionStatusCounts).map(([status, count]) => (
-                    <Badge key={status} variant="outline">
-                      {status}: {count}
+                  {Object.entries(productionPlacementCounts).map(([placement, count]) => (
+                    <Badge key={placement} variant="outline">
+                      {placement}: {formatQuantityLabel(count)}
                     </Badge>
                   ))}
                 </div>
               )}
-              {Array.isArray(hubProduction.productionOrders) && hubProduction.productionOrders.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-semibold">PO Line Production Placement</h3>
+                    <p className="text-sm text-muted-foreground">Current production placement, remaining PO quantity, and work orders by part.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">{formatQuantityLabel(productionLinePlacements.length)} PO lines</Badge>
+                    <Badge variant="outline">{formatQuantityLabel(productionSummary.workOrderCount ?? wadWorkOrders.length)} work orders</Badge>
+                  </div>
+                </div>
+                {productionLinePlacements.length === 0 ? (
+                  <p className="rounded-md border p-3 text-sm text-muted-foreground">No current PO line production placement is available yet.</p>
+                ) : (
+                  productionLinePlacements.map((line: any) => {
+                    const lineWorkOrders = Array.isArray(line.workOrders) ? line.workOrders : [];
+                    const lineProductionOrders = Array.isArray(line.productionOrders) ? line.productionOrders : [];
+                    const lineSerializedItems = Array.isArray(line.serializedItems) ? line.serializedItems : [];
+                    const inProductionQuantity = Math.max(0, Number(line.serializedQuantity ?? 0) - Number(line.completedQuantity ?? 0));
+
+                    return (
+                      <div key={line.poItemId ?? line.partNumber} className="rounded-md border p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-mono text-sm font-semibold">{line.partNumber ?? 'Unassigned part'}</p>
+                            <p className="text-sm text-muted-foreground">{line.partName ?? 'No description'}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground">PO Qty</p>
+                              <p className="font-medium">{formatQuantityLabel(line.orderedQuantity)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">In Prod</p>
+                              <p className="font-medium">{formatQuantityLabel(inProductionQuantity)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Complete</p>
+                              <p className="font-medium">{formatQuantityLabel(line.completedQuantity)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Remain</p>
+                              <p className="font-medium">{formatQuantityLabel(line.remainingQuantity)}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {Object.entries(line.placementCounts ?? {}).map(([placement, count]) => (
+                            <Badge key={placement} variant={placement === 'Completed' ? 'default' : 'outline'}>
+                              {placement}: {formatQuantityLabel(count)}
+                            </Badge>
+                          ))}
+                          {Object.keys(line.placementCounts ?? {}).length === 0 && (
+                            <Badge variant="outline">No production placement</Badge>
+                          )}
+                        </div>
+
+                        <div className="mt-4 grid gap-3 xl:grid-cols-3">
+                          <div className="rounded-md border bg-muted/20 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">Serialized / Traveler Status</p>
+                              <Badge variant="secondary">{formatQuantityLabel(lineSerializedItems.length)}</Badge>
+                            </div>
+                            {lineSerializedItems.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No serialized items have been released for this line.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {lineSerializedItems.slice(0, 5).map((item: any) => (
+                                  <div key={item.id} className="flex items-center justify-between gap-2 rounded-md border bg-background p-2">
+                                    <div className="min-w-0">
+                                      <p className="truncate font-mono text-sm">{item.serial_number ?? item.serialNumber ?? item.barcode}</p>
+                                      <p className="truncate text-xs text-muted-foreground">
+                                        Traveler {item.activeTravelerNumber ?? item.traveler_barcode ?? item.travelerBarcode ?? 'not linked'}
+                                      </p>
+                                    </div>
+                                    <Badge variant="outline">{item.productionPlacement ?? item.current_department ?? item.status ?? 'Unknown'}</Badge>
+                                  </div>
+                                ))}
+                                {lineSerializedItems.length > 5 && (
+                                  <p className="text-xs text-muted-foreground">+{formatQuantityLabel(lineSerializedItems.length - 5)} more serialized items</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="rounded-md border bg-muted/20 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">Associated Work Orders</p>
+                              <Badge variant="secondary">{formatQuantityLabel(lineWorkOrders.length)}</Badge>
+                            </div>
+                            {lineWorkOrders.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No WAD/work orders are linked to this part yet.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {lineWorkOrders.slice(0, 5).map((wo: any) => (
+                                  <div key={wo.id ?? wo.workOrderNumber} className="rounded-md border bg-background p-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="truncate font-medium">{wo.workOrderNumber ?? wo.work_order_number}</p>
+                                      <Badge variant="outline">{wo.status ?? 'Unknown'}</Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      Qty {formatQuantityLabel(wo.quantity)} - Due {formatDateLabel(wo.dueDate ?? wo.due_date)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="rounded-md border bg-muted/20 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">Production Orders</p>
+                              <Badge variant="secondary">{formatQuantityLabel(lineProductionOrders.length)}</Badge>
+                            </div>
+                            {lineProductionOrders.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No generated production-order rows are linked to this PO line.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {lineProductionOrders.slice(0, 5).map((order: any) => (
+                                  <div key={order.id} className="rounded-md border bg-background p-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="truncate font-medium">{order.order_id}</p>
+                                      <Badge variant="outline">{order.status ?? 'Unknown'}</Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      Qty {formatQuantityLabel(order.quantity)} - Made {formatQuantityLabel(order.quantity_manufactured)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                {assemblyBomRecords.length > 0 && (
+                  <div className="rounded-md border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">BOM Records Available</p>
+                    <p className="font-medium">{formatQuantityLabel(assemblyBomRecords.length)}</p>
+                  </div>
+                )}
+              </div>
+              {productionLinePlacements.length < 0 && (Array.isArray(hubProduction.productionOrders) && hubProduction.productionOrders.length > 0 ? (
                 <div className="space-y-2">
                   {hubProduction.productionOrders.slice(0, 8).map((order: any) => (
                     <div key={order.id} className="flex items-center justify-between rounded-md border p-3">
@@ -3367,7 +3678,8 @@ export default function ProjectDetailPage() {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No P2 production orders are linked yet.</p>
-              )}
+              ))}
+              {productionLinePlacements.length < 0 && (
               <div className="grid gap-4 xl:grid-cols-2">
                 <Card>
                   <CardHeader className="pb-3">
@@ -3429,6 +3741,7 @@ export default function ProjectDetailPage() {
                   </CardContent>
                 </Card>
               </div>
+              ))}
             </CardContent>
           </Card>
         </TabsContent>

@@ -885,6 +885,7 @@ const productionWorkOrderReadColumns = {
   status: productionWorkOrders.status,
   departmentBudgets: productionWorkOrders.departmentBudgets,
   totalBudgetHours: productionWorkOrders.totalBudgetHours,
+  materialBudgetAmount: productionWorkOrders.materialBudgetAmount,
   startDate: productionWorkOrders.startDate,
   dueDate: productionWorkOrders.dueDate,
   warningThreshold: productionWorkOrders.warningThreshold,
@@ -902,7 +903,7 @@ const productionWorkOrderReadColumns = {
 };
 
 function withDefaultMaterialBudgetAmount<T extends Record<string, unknown>>(row: T | undefined): (T & { materialBudgetAmount: string }) | undefined {
-  return row ? ({ ...row, materialBudgetAmount: '0' } as T & { materialBudgetAmount: string }) : undefined;
+  return row ? ({ ...row, materialBudgetAmount: row.materialBudgetAmount ?? '0' } as T & { materialBudgetAmount: string }) : undefined;
 }
 
 type P1OrderNoteParts = {

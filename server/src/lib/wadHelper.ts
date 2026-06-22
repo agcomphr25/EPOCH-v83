@@ -7,6 +7,7 @@ import {
   quoteLineItems,
   p2PurchaseOrders,
   p2PurchaseOrderItems,
+  projectRomDrafts,
   bomDefinitions,
   bomItems,
   partRoutings,
@@ -19,6 +20,7 @@ import { cancelWadWorkOrdersSupersededByP2 } from '../services/wadSupersedeServi
 export interface WadSeedData {
   partNumber: string | null;
   totalBudgetHours: string | null;
+  materialBudgetAmount: string | null;
   departmentBudgets: Record<string, number> | null;
   description: string | null;
   quantity: number | null;
@@ -28,6 +30,7 @@ export interface WadSeedData {
     poId: number | null;
     bomDefinitionId: string | null;
     routingId: string | null;
+    romDraftId: string | null;
     quoteLineItemCount: number;
     poLineItemCount: number;
     bomItemCount: number;
@@ -97,6 +100,7 @@ const productionWorkOrderReadColumns = {
   status: productionWorkOrders.status,
   departmentBudgets: productionWorkOrders.departmentBudgets,
   totalBudgetHours: productionWorkOrders.totalBudgetHours,
+  materialBudgetAmount: productionWorkOrders.materialBudgetAmount,
   startDate: productionWorkOrders.startDate,
   dueDate: productionWorkOrders.dueDate,
   warningThreshold: productionWorkOrders.warningThreshold,
@@ -115,6 +119,17 @@ const productionWorkOrderReadColumns = {
 
 function withDefaultMaterialBudgetAmount(row: Record<string, unknown>): ProductionWorkOrder {
   return { ...row, materialBudgetAmount: '0' } as ProductionWorkOrder;
+}
+
+function getRomCategoryNumber(categories: Record<string, any> | null | undefined, category: string, key = 'budgetAmount'): number | null {
+  const value = categories?.[category]?.[key];
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function formatRomCurrency(value: number | null): string | null {
+  return value == null ? null : value.toFixed(2);
 }
 
 /**
@@ -240,6 +255,17 @@ export async function ensureProjectHasWADFromCanonicalSources(
       throw new Error(`Project ${projectId} not found`);
     }
 
+    const [romDraft] = await tx
+      .select()
+      .from(projectRomDrafts)
+      .where(eq(projectRomDrafts.projectId, projectId))
+      .limit(1);
+    const romCategories = (romDraft?.categories && typeof romDraft.categories === 'object'
+      ? romDraft.categories
+      : {}) as Record<string, any>;
+    const romLaborHours = getRomCategoryNumber(romCategories, 'labor', 'quotedHours');
+    const romMaterialBudget = getRomCategoryNumber(romCategories, 'material');
+
     // Source 1: originating quote line items (preferred — has laborHours + department).
     let quoteId: string | null = null;
     let quoteLines: QuoteLineItem[] = [];
@@ -332,10 +358,10 @@ export async function ensureProjectHasWADFromCanonicalSources(
         : null);
     const dueDate = poExpectedDelivery ?? project.targetShipDate ?? null;
 
-    // Precedence for hour budgets: quote line items → BOM labor items.
+    // Precedence for hour budgets: ROM draft → quote line items → BOM labor items.
     // Routing (zero-hour department list) is only used when neither has data,
     // so the wizard still gets pre-populated department rows from the routing.
-    const totalBudgetHours = quoteSeed.totalBudgetHours ?? bomSeed.totalBudgetHours;
+    const totalBudgetHours = romLaborHours != null ? String(romLaborHours) : (quoteSeed.totalBudgetHours ?? bomSeed.totalBudgetHours);
     let departmentBudgets = quoteSeed.departmentBudgets ?? bomSeed.departmentBudgets;
     if (!departmentBudgets && routingSeed.departments.length > 0) {
       departmentBudgets = Object.fromEntries(routingSeed.departments.map((d) => [d, 0]));
@@ -344,6 +370,7 @@ export async function ensureProjectHasWADFromCanonicalSources(
     const seedData: WadSeedData = {
       partNumber,
       totalBudgetHours,
+      materialBudgetAmount: formatRomCurrency(romMaterialBudget),
       departmentBudgets,
       description,
       quantity,
@@ -353,6 +380,7 @@ export async function ensureProjectHasWADFromCanonicalSources(
         poId,
         bomDefinitionId,
         routingId: routingSeed.routingId,
+        romDraftId: romDraft?.id ?? null,
         quoteLineItemCount: quoteLines.length,
         poLineItemCount: poLines.length,
         bomItemCount: bomItemRows.length,
@@ -372,6 +400,16 @@ export async function ensureProjectHasWADFromCanonicalSources(
       description,
       dueDate,
       totalBudgetHours: seedData.totalBudgetHours,
+      materialBudgetAmount: seedData.materialBudgetAmount ?? undefined,
+      wizardData: romDraft ? {
+        __romSeed: {
+          romDraftId: romDraft.id,
+          summary: romDraft.summary ?? null,
+          assumptions: romDraft.assumptions ?? null,
+          riskNotes: romDraft.riskNotes ?? null,
+          categories: romDraft.categories ?? {},
+        },
+      } : undefined,
       ...(seedData.departmentBudgets ? { departmentBudgets: seedData.departmentBudgets } : {}),
     });
 

@@ -42,6 +42,87 @@ const router = Router();
 let projectRevisionSchemaReady = false;
 let projectClinSchemaReady = false;
 
+const ROM_LOCK_STAGES = new Set(['po_received', 'p2_release', 'production', 'completed']);
+const ROM_EDITABLE_PO_STATUSES = new Set(['OPEN', 'DRAFT', 'CREATED']);
+
+function currentUserSnapshot(req: any): { id: number | null; displayName: string | null } {
+  const user = req.user ?? null;
+  const rawId = user?.id;
+  const parsedId = rawId == null ? null : Number.parseInt(String(rawId), 10);
+  return {
+    id: Number.isFinite(parsedId) ? parsedId : null,
+    displayName: user?.displayName || user?.username || null,
+  };
+}
+
+function normalizeRomNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function normalizeRomCategories(raw: unknown): Record<string, any> {
+  const source = raw && typeof raw === 'object' ? raw as Record<string, any> : {};
+  const normalizeCategory = (key: string, numericKeys: string[]) => {
+    const category = source[key] && typeof source[key] === 'object' ? source[key] : {};
+    return numericKeys.reduce((acc: Record<string, number | null>, numericKey) => {
+      acc[numericKey] = normalizeRomNumber(category[numericKey]);
+      return acc;
+    }, {});
+  };
+
+  return {
+    labor: normalizeCategory('labor', ['quotedHours']),
+    material: normalizeCategory('material', ['budgetAmount']),
+    outsideProcessing: normalizeCategory('outsideProcessing', ['budgetAmount']),
+    nrc: normalizeCategory('nrc', ['budgetAmount']),
+    tooling: normalizeCategory('tooling', ['budgetAmount']),
+    design: normalizeCategory('design', ['budgetAmount']),
+    capital: normalizeCategory('capital', ['budgetAmount']),
+    generalAndAdmin: normalizeCategory('generalAndAdmin', ['budgetAmount']),
+    overhead: normalizeCategory('overhead', ['budgetAmount']),
+    qualityAndCompliance: normalizeCategory('qualityAndCompliance', ['budgetAmount']),
+    shippingAndPackaging: normalizeCategory('shippingAndPackaging', ['budgetAmount']),
+    contingency: normalizeCategory('contingency', ['budgetAmount']),
+    escalationAndInflation: normalizeCategory('escalationAndInflation', ['budgetAmount']),
+    profitFee: normalizeCategory('profitFee', ['budgetAmount']),
+  };
+}
+
+async function getRomLockState(projectId: string) {
+  const projectRows = await pool.query(
+    `SELECT id, current_stage, po_id FROM projects WHERE id = $1 LIMIT 1`,
+    [projectId],
+  );
+  const project = projectRows.rows[0];
+  if (!project) return { project: null, locked: false, reason: null as string | null, po: null as any };
+
+  const poRows = await pool.query(
+    `SELECT id, status, locked_at
+     FROM p2_purchase_orders
+     WHERE id = $1 OR project_id = $2
+     ORDER BY locked_at DESC NULLS LAST, updated_at DESC NULLS LAST, id DESC
+     LIMIT 1`,
+    [project.po_id ?? null, projectId],
+  );
+  const po = poRows.rows[0] ?? null;
+  const stage = String(project.current_stage ?? '');
+  const poStatus = String(po?.status ?? '').toUpperCase();
+  const locked =
+    ROM_LOCK_STAGES.has(stage) ||
+    Boolean(po?.locked_at) ||
+    Boolean(po && poStatus && !ROM_EDITABLE_PO_STATUSES.has(poStatus));
+  const reason = ROM_LOCK_STAGES.has(stage)
+    ? 'Project has reached PO received/award stage.'
+    : po?.locked_at
+      ? 'Linked PO is locked.'
+      : locked
+        ? `Linked PO status is ${poStatus}.`
+        : null;
+
+  return { project, locked, reason, po };
+}
+
 async function ensureProjectRevisionSchema() {
   if (projectRevisionSchemaReady) return;
 
@@ -1842,6 +1923,79 @@ router.get('/:id/p2-gate-status', async (req, res) => {
   }
 });
 
+const romDraftBodySchema = z.object({
+  summary: z.string().trim().optional().nullable(),
+  assumptions: z.string().trim().optional().nullable(),
+  riskNotes: z.string().trim().optional().nullable(),
+  categories: z.record(z.any()).optional().default({}),
+});
+
+// PATCH /api/projects/:id/rom-draft - edit ROM draft until PO/contract award locks it.
+router.patch('/:id/rom-draft', async (req, res) => {
+  try {
+    const parsed = romDraftBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid ROM draft payload', details: parsed.error.flatten() });
+    }
+
+    const lockState = await getRomLockState(req.params.id);
+    if (!lockState.project) return res.status(404).json({ message: 'Project not found' });
+    if (lockState.locked) {
+      await pool.query(
+        `UPDATE project_rom_drafts
+         SET status = 'locked',
+             locked_at = COALESCE(locked_at, NOW()),
+             locked_reason = COALESCE(locked_reason, $2),
+             updated_at = NOW()
+         WHERE project_id = $1`,
+        [req.params.id, lockState.reason],
+      );
+      return res.status(409).json({ message: 'ROM is locked after PO/contract award.', lockedReason: lockState.reason });
+    }
+
+    const actor = currentUserSnapshot(req as any);
+    const categories = normalizeRomCategories(parsed.data.categories);
+    const result = await pool.query(
+      `INSERT INTO project_rom_drafts (
+         project_id, status, summary, assumptions, risk_notes, categories,
+         created_by, created_by_display_name, updated_by, updated_by_display_name
+       )
+       VALUES ($1, 'draft', $2, $3, $4, $5::jsonb, $6, $7, $6, $7)
+       ON CONFLICT (project_id) DO UPDATE
+       SET summary = EXCLUDED.summary,
+           assumptions = EXCLUDED.assumptions,
+           risk_notes = EXCLUDED.risk_notes,
+           categories = EXCLUDED.categories,
+           updated_by = EXCLUDED.updated_by,
+           updated_by_display_name = EXCLUDED.updated_by_display_name,
+           updated_at = NOW()
+       WHERE project_rom_drafts.status = 'draft'
+       RETURNING *`,
+      [
+        req.params.id,
+        parsed.data.summary || null,
+        parsed.data.assumptions || null,
+        parsed.data.riskNotes || null,
+        JSON.stringify(categories),
+        actor.id,
+        actor.displayName,
+      ],
+    );
+
+    if (!result.rows[0]) {
+      return res.status(409).json({ message: 'ROM is locked and cannot be edited.' });
+    }
+
+    res.json({
+      ...result.rows[0],
+      lockState: { locked: false, reason: null },
+    });
+  } catch (error: any) {
+    console.error('Error saving ROM draft:', error);
+    res.status(500).json({ message: 'Failed to save ROM draft', error: error.message });
+  }
+});
+
 // GET /api/projects/:id/p2-hub - read-only P2 Project Hub tab model.
 router.get('/:id/p2-hub', async (req, res) => {
   try {
@@ -1928,6 +2082,7 @@ router.get('/:id/p2-hub', async (req, res) => {
       bomRecords,
       quoteFeedback,
       projectFarFlowdowns,
+      romDraftRows,
     ] = await Promise.all([
       poIds.length > 0
         ? optionalHubQuery<any>(
@@ -1948,8 +2103,35 @@ router.get('/:id/p2-hub', async (req, res) => {
             `SELECT id, serial_number, barcode, po_id, po_item_id, po_number,
                     part_number, part_name, current_department, status, completed_at,
                     finalized_at, part_routing_id, traveler_barcode, sku,
-                    sequence_number, created_at, updated_at
+                    sequence_number, created_at, updated_at,
+                    active_traveler.traveler_number AS active_traveler_number,
+                    active_traveler.status AS active_traveler_status,
+                    active_traveler.department_name AS active_traveler_department,
+                    active_traveler.started_at AS active_traveler_started_at
              FROM p2_serialized_items
+             LEFT JOIN LATERAL (
+               SELECT t.traveler_number, t.status, active_step.department_name, active_step.started_at
+               FROM travelers t
+               LEFT JOIN LATERAL (
+                 SELECT ts.department_name, ts.started_at
+                 FROM traveler_steps ts
+                 WHERE ts.traveler_id = t.id
+                   AND UPPER(ts.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+                 ORDER BY ts.step_number ASC
+                 LIMIT 1
+               ) active_step ON true
+               WHERE (
+                   LOWER(TRIM(t.serial_number)) = LOWER(TRIM(p2_serialized_items.serial_number))
+                   OR LOWER(TRIM(t.serial_number)) = LOWER(TRIM(p2_serialized_items.barcode))
+                   OR LOWER(TRIM(t.lot_number)) = LOWER(TRIM(p2_serialized_items.serial_number))
+                   OR LOWER(TRIM(t.lot_number)) = LOWER(TRIM(p2_serialized_items.barcode))
+                 )
+                 AND UPPER(t.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED', 'COMPLETED')
+               ORDER BY
+                 CASE WHEN UPPER(t.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED') THEN 0 ELSE 1 END,
+                 t.updated_at DESC NULLS LAST
+               LIMIT 1
+             ) active_traveler ON true
              WHERE po_id = ANY($1::int[])
              ORDER BY po_number, part_number, sequence_number`,
             [poIds],
@@ -2090,6 +2272,16 @@ router.get('/:id/p2-hub', async (req, res) => {
          ORDER BY pff.created_at DESC`,
         [id],
       ),
+      optionalHubQuery<any>(
+        'project ROM draft',
+        `SELECT id, project_id, status, summary, assumptions, risk_notes,
+                categories, locked_at, locked_reason, updated_at,
+                updated_by_display_name
+         FROM project_rom_drafts
+         WHERE project_id = $1
+         LIMIT 1`,
+        [id],
+      ),
     ]);
 
     const routingIds = projectRoutings.map((routing: any) => routing.id).filter(Boolean);
@@ -2123,9 +2315,143 @@ router.get('/:id/p2-hub', async (req, res) => {
       return bTime - aTime;
     })[0] ?? null;
     const activePoItems = activePoId ? poItems.filter((item: any) => item.po_id === activePoId) : poItems;
-    const completedSerials = serializedItems.filter((item: any) => (
-      item.status === 'COMPLETED' || item.completed_at || item.finalized_at
-    ));
+    const normalizeProductionKey = (value: unknown) => String(value ?? '').trim().toLowerCase();
+    const normalizePlacementLabel = (value: unknown) => {
+      const raw = String(value ?? '').trim();
+      if (!raw) return '';
+      const key = raw.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+      const canonical: Record<string, string> = {
+        active: 'In Production',
+        in_progress: 'In Production',
+        'in progress': 'In Production',
+        started: 'In Production',
+        scheduled: 'Scheduled',
+        pending: 'Pending',
+        completed: 'Completed',
+        complete: 'Completed',
+        finalized: 'Completed',
+        shipped: 'Shipped',
+        closed: 'Closed',
+        'pending layup': 'Pending Layup',
+        layup: 'Layup',
+        'cutting table': 'Cutting Table',
+        cnc: 'CNC',
+        finish: 'Finish',
+        paint: 'Paint',
+        'final qc': 'Final QC',
+        qc: 'Final QC',
+        shipping: 'Shipping',
+      };
+      return canonical[key] || raw;
+    };
+    const isCompletedSerializedItem = (item: any) => {
+      const status = String(item.status ?? item.active_traveler_status ?? '').toUpperCase();
+      return ['COMPLETE', 'COMPLETED', 'FINALIZED', 'SHIPPED', 'CLOSED'].includes(status)
+        || Boolean(item.completed_at || item.finalized_at);
+    };
+    const getSerializedPlacement = (item: any) => {
+      if (isCompletedSerializedItem(item)) return 'Completed';
+      return normalizePlacementLabel(
+        item.active_traveler_department
+          || item.current_department
+          || item.active_traveler_status
+          || item.status
+          || 'Not placed'
+      );
+    };
+    const completedSerials = serializedItems.filter(isCompletedSerializedItem);
+    const activePoItemIds = new Set(activePoItems.map((item: any) => Number(item.id)).filter(Number.isFinite));
+    const lineIdByPart = new Map<string, number>();
+    activePoItems.forEach((item: any) => {
+      const partKey = normalizeProductionKey(item.part_number);
+      const itemId = Number(item.id);
+      if (partKey && Number.isFinite(itemId) && !lineIdByPart.has(partKey)) {
+        lineIdByPart.set(partKey, itemId);
+      }
+    });
+    const resolveLineId = (row: any, partValue?: unknown) => {
+      const exactId = Number(row.po_item_id ?? row.p2_po_item_id);
+      if (Number.isFinite(exactId) && activePoItemIds.has(exactId)) return exactId;
+      const partKey = normalizeProductionKey(partValue ?? row.part_number ?? row.sku);
+      return partKey ? lineIdByPart.get(partKey) ?? null : null;
+    };
+    const serializedByLineId = new Map<number, any[]>();
+    serializedItems.forEach((item: any) => {
+      const lineId = resolveLineId(item);
+      if (!lineId) return;
+      const rows = serializedByLineId.get(lineId) ?? [];
+      rows.push(item);
+      serializedByLineId.set(lineId, rows);
+    });
+    const productionOrdersByLineId = new Map<number, any[]>();
+    productionOrders.forEach((order: any) => {
+      const lineId = resolveLineId(order, order.sku ?? order.part_number);
+      if (!lineId) return;
+      const rows = productionOrdersByLineId.get(lineId) ?? [];
+      rows.push(order);
+      productionOrdersByLineId.set(lineId, rows);
+    });
+    const workOrdersByPart = new Map<string, any[]>();
+    workOrders.forEach((workOrder: any) => {
+      const partKey = normalizeProductionKey(workOrder.partNumber ?? workOrder.part_number);
+      if (!partKey) return;
+      const rows = workOrdersByPart.get(partKey) ?? [];
+      rows.push(workOrder);
+      workOrdersByPart.set(partKey, rows);
+    });
+    const poLinePlacements = activePoItems.map((item: any) => {
+      const lineId = Number(item.id);
+      const lineSerializedItems = serializedByLineId.get(lineId) ?? [];
+      const lineProductionOrders = productionOrdersByLineId.get(lineId) ?? [];
+      const lineWorkOrders = workOrdersByPart.get(normalizeProductionKey(item.part_number)) ?? [];
+      const orderedQuantity = Math.max(0, Number(item.quantity ?? 0) || 0);
+      const completedQuantity = lineSerializedItems.filter(isCompletedSerializedItem).length;
+      const serializedQuantity = lineSerializedItems.length;
+      const unreleasedQuantity = Math.max(orderedQuantity - serializedQuantity, 0);
+      const remainingQuantity = Math.max(orderedQuantity - completedQuantity, 0);
+      const placementCounts = lineSerializedItems.reduce((counts: Record<string, number>, serializedItem: any) => {
+        const placement = getSerializedPlacement(serializedItem) || 'Not placed';
+        counts[placement] = (counts[placement] ?? 0) + 1;
+        return counts;
+      }, {});
+      if (unreleasedQuantity > 0) {
+        placementCounts['Not serialized / not released'] = unreleasedQuantity;
+      }
+
+      return {
+        poItemId: item.id,
+        poId: item.po_id,
+        partNumber: item.part_number,
+        partName: item.part_name,
+        orderedQuantity,
+        serializedQuantity,
+        completedQuantity,
+        remainingQuantity,
+        unreleasedQuantity,
+        placementCounts,
+        productionOrders: lineProductionOrders,
+        workOrders: lineWorkOrders,
+        serializedItems: lineSerializedItems.map((serializedItem: any) => ({
+          ...serializedItem,
+          productionPlacement: getSerializedPlacement(serializedItem),
+          activeTravelerNumber: serializedItem.active_traveler_number ?? null,
+        })),
+      };
+    });
+    const productionTotals = poLinePlacements.reduce((totals: Record<string, number>, line: any) => {
+      totals.orderedQuantity += line.orderedQuantity;
+      totals.serializedQuantity += line.serializedQuantity;
+      totals.completedQuantity += line.completedQuantity;
+      totals.remainingQuantity += line.remainingQuantity;
+      totals.unreleasedQuantity += line.unreleasedQuantity;
+      return totals;
+    }, {
+      orderedQuantity: 0,
+      serializedQuantity: 0,
+      completedQuantity: 0,
+      remainingQuantity: 0,
+      unreleasedQuantity: 0,
+    });
     const laborBudgetHours = workOrders.reduce((sum: number, workOrder: any) => {
       const hours = Number(workOrder.totalBudgetHours ?? 0);
       return Number.isFinite(hours) ? sum + hours : sum;
@@ -2313,6 +2639,18 @@ router.get('/:id/p2-hub', async (req, res) => {
     ];
     const coveredStatuses = new Set(['attached', 'covered_by_project_data', 'not_applicable']);
     const coverageCoveredCount = coverageItems.filter(item => coveredStatuses.has(item.status)).length;
+    const latestRomDraft = romDraftRows[0] ?? null;
+    const romLockState = await getRomLockState(id);
+    const savedRomCategories = latestRomDraft?.categories && typeof latestRomDraft.categories === 'object'
+      ? latestRomDraft.categories
+      : {};
+    const getSavedRomNumber = (category: string, key = 'budgetAmount') => {
+      const value = savedRomCategories?.[category]?.[key];
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    };
+    const romLaborHours = getSavedRomNumber('labor', 'quotedHours') ?? latestQuoteFeedback?.quoted_labor_hours ?? null;
+    const romMaterialBudget = getSavedRomNumber('material') ?? materialBudget;
 
     return res.json({
       project,
@@ -2381,22 +2719,39 @@ router.get('/:id/p2-hub', async (req, res) => {
           revisions: projectRevisions.filter((revision: any) => revision.revisionType === 'wad'),
         },
         rom: {
-          summary: latestQuoteFeedback,
+          summary: {
+            ...(latestQuoteFeedback ?? {}),
+            draftId: latestRomDraft?.id ?? null,
+            status: romLockState.locked ? 'locked' : (latestRomDraft?.status ?? 'draft'),
+            locked: romLockState.locked,
+            lockedAt: latestRomDraft?.locked_at ?? null,
+            lockedReason: romLockState.reason ?? latestRomDraft?.locked_reason ?? null,
+            draftSummary: latestRomDraft?.summary ?? latestQuoteFeedback?.summary ?? null,
+            assumptions: latestRomDraft?.assumptions ?? null,
+            riskNotes: latestRomDraft?.risk_notes ?? null,
+            updatedAt: latestRomDraft?.updated_at ?? latestQuoteFeedback?.updated_at ?? null,
+            updatedByDisplayName: latestRomDraft?.updated_by_display_name ?? null,
+          },
+          draft: latestRomDraft,
+          lockState: {
+            locked: romLockState.locked,
+            reason: romLockState.reason,
+          },
           categories: {
-            labor: { quotedHours: latestQuoteFeedback?.quoted_labor_hours ?? null },
-            material: { budgetAmount: materialBudget },
-            outsideProcessing: null,
-            nrc: null,
-            tooling: null,
-            design: null,
-            capital: null,
-            generalAndAdmin: null,
-            overhead: null,
-            qualityAndCompliance: null,
-            shippingAndPackaging: null,
-            contingency: null,
-            escalationAndInflation: null,
-            profitFee: null,
+            labor: { quotedHours: romLaborHours },
+            material: { budgetAmount: romMaterialBudget },
+            outsideProcessing: { budgetAmount: getSavedRomNumber('outsideProcessing') },
+            nrc: { budgetAmount: getSavedRomNumber('nrc') },
+            tooling: { budgetAmount: getSavedRomNumber('tooling') },
+            design: { budgetAmount: getSavedRomNumber('design') },
+            capital: { budgetAmount: getSavedRomNumber('capital') },
+            generalAndAdmin: { budgetAmount: getSavedRomNumber('generalAndAdmin') },
+            overhead: { budgetAmount: getSavedRomNumber('overhead') },
+            qualityAndCompliance: { budgetAmount: getSavedRomNumber('qualityAndCompliance') },
+            shippingAndPackaging: { budgetAmount: getSavedRomNumber('shippingAndPackaging') },
+            contingency: { budgetAmount: getSavedRomNumber('contingency') },
+            escalationAndInflation: { budgetAmount: getSavedRomNumber('escalationAndInflation') },
+            profitFee: { budgetAmount: getSavedRomNumber('profitFee') },
           },
         },
         production: {
@@ -2404,11 +2759,14 @@ router.get('/:id/p2-hub', async (req, res) => {
             productionOrderCount: productionOrders.length,
             serializedCount: serializedItems.length,
             completedSerializedCount: completedSerials.length,
+            workOrderCount: workOrders.length,
+            ...productionTotals,
           },
+          poLinePlacements,
           productionOrders,
           serializedItems,
           assemblyTree: {
-            poItems,
+            poItems: activePoItems,
             bomRecords,
             productionOrders,
           },

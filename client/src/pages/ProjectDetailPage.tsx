@@ -800,13 +800,15 @@ export default function ProjectDetailPage() {
   const hubRom = hubTabs.rom ?? {};
   const hubProduction = hubTabs.production ?? {};
   const productionSummary = hubProduction.summary ?? {};
-  const projectProductionOrders = Array.isArray(hubProduction.productionOrders) ? hubProduction.productionOrders : [];
   const projectSerializedItems = Array.isArray(hubProduction.serializedItems) ? hubProduction.serializedItems : traceabilitySerials;
+  const productionLinePlacements = Array.isArray(hubProduction.poLinePlacements) ? hubProduction.poLinePlacements : [];
   const productionAssemblyTree = hubProduction.assemblyTree ?? {};
   const assemblyPoItems = Array.isArray(productionAssemblyTree.poItems) ? productionAssemblyTree.poItems : [];
-  const productionStatusCounts = projectProductionOrders.reduce((counts: Record<string, number>, order: any) => {
-    const status = String(order.status || 'Unknown');
-    counts[status] = (counts[status] ?? 0) + 1;
+  const productionPlacementCounts = productionLinePlacements.reduce((counts: Record<string, number>, line: any) => {
+    Object.entries(line.placementCounts ?? {}).forEach(([placement, count]) => {
+      const numericCount = Number(count);
+      counts[placement] = (counts[placement] ?? 0) + (Number.isFinite(numericCount) ? numericCount : 0);
+    });
     return counts;
   }, {});
   const hubMaterial = hubTabs.material ?? {};
@@ -905,6 +907,10 @@ export default function ProjectDetailPage() {
     if (value === null || value === undefined || value === '') return fallback;
     const hours = Number(value);
     return Number.isFinite(hours) ? `${hours.toLocaleString()} hrs` : fallback;
+  };
+  const formatQuantityLabel = (value: unknown) => {
+    const quantity = Number(value ?? 0);
+    return Number.isFinite(quantity) ? quantity.toLocaleString() : '0';
   };
   const romSummary = hubRom.summary ?? {};
   const romDraft = hubRom.draft ?? null;
@@ -3326,20 +3332,20 @@ export default function ProjectDetailPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Production Orders</p>
-                  <p className="font-medium">{productionSummary.productionOrderCount ?? projectProductionOrders.length}</p>
+                  <p className="text-xs text-muted-foreground">PO Quantity</p>
+                  <p className="font-medium">{formatQuantityLabel(productionSummary.orderedQuantity)}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Serialized Parts</p>
-                  <p className="font-medium">{productionSummary.serializedCount ?? projectSerializedItems.length}</p>
+                  <p className="text-xs text-muted-foreground">In Production</p>
+                  <p className="font-medium">{formatQuantityLabel(Number(productionSummary.serializedQuantity ?? projectSerializedItems.length) - Number(productionSummary.completedQuantity ?? productionSummary.completedSerializedCount ?? 0))}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Completed Serialized</p>
-                  <p className="font-medium">{productionSummary.completedSerializedCount ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">Completed</p>
+                  <p className="font-medium">{formatQuantityLabel(productionSummary.completedQuantity ?? productionSummary.completedSerializedCount)}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Assembly Lines</p>
-                  <p className="font-medium">{assemblyPoItems.length}</p>
+                  <p className="text-xs text-muted-foreground">Remaining on PO</p>
+                  <p className="font-medium">{formatQuantityLabel(productionSummary.remainingQuantity)}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -3364,16 +3370,161 @@ export default function ProjectDetailPage() {
                   BOM/Routing
                 </Button>
               </div>
-              {Object.keys(productionStatusCounts).length > 0 && (
+              {Object.keys(productionPlacementCounts).length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(productionStatusCounts).map(([status, count]) => (
-                    <Badge key={status} variant="outline">
-                      {status}: {count}
+                  {Object.entries(productionPlacementCounts).map(([placement, count]) => (
+                    <Badge key={placement} variant="outline">
+                      {placement}: {formatQuantityLabel(count)}
                     </Badge>
                   ))}
                 </div>
               )}
-              {Array.isArray(hubProduction.productionOrders) && hubProduction.productionOrders.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-semibold">PO Line Production Placement</h3>
+                    <p className="text-sm text-muted-foreground">Current production placement, remaining PO quantity, and work orders by part.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">{formatQuantityLabel(productionLinePlacements.length)} PO lines</Badge>
+                    <Badge variant="outline">{formatQuantityLabel(productionSummary.workOrderCount ?? wadWorkOrders.length)} work orders</Badge>
+                  </div>
+                </div>
+                {productionLinePlacements.length === 0 ? (
+                  <p className="rounded-md border p-3 text-sm text-muted-foreground">No current PO line production placement is available yet.</p>
+                ) : (
+                  productionLinePlacements.map((line: any) => {
+                    const lineWorkOrders = Array.isArray(line.workOrders) ? line.workOrders : [];
+                    const lineProductionOrders = Array.isArray(line.productionOrders) ? line.productionOrders : [];
+                    const lineSerializedItems = Array.isArray(line.serializedItems) ? line.serializedItems : [];
+                    const inProductionQuantity = Math.max(0, Number(line.serializedQuantity ?? 0) - Number(line.completedQuantity ?? 0));
+
+                    return (
+                      <div key={line.poItemId ?? line.partNumber} className="rounded-md border p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-mono text-sm font-semibold">{line.partNumber ?? 'Unassigned part'}</p>
+                            <p className="text-sm text-muted-foreground">{line.partName ?? 'No description'}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground">PO Qty</p>
+                              <p className="font-medium">{formatQuantityLabel(line.orderedQuantity)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">In Prod</p>
+                              <p className="font-medium">{formatQuantityLabel(inProductionQuantity)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Complete</p>
+                              <p className="font-medium">{formatQuantityLabel(line.completedQuantity)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Remain</p>
+                              <p className="font-medium">{formatQuantityLabel(line.remainingQuantity)}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {Object.entries(line.placementCounts ?? {}).map(([placement, count]) => (
+                            <Badge key={placement} variant={placement === 'Completed' ? 'default' : 'outline'}>
+                              {placement}: {formatQuantityLabel(count)}
+                            </Badge>
+                          ))}
+                          {Object.keys(line.placementCounts ?? {}).length === 0 && (
+                            <Badge variant="outline">No production placement</Badge>
+                          )}
+                        </div>
+
+                        <div className="mt-4 grid gap-3 xl:grid-cols-3">
+                          <div className="rounded-md border bg-muted/20 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">Serialized / Traveler Status</p>
+                              <Badge variant="secondary">{formatQuantityLabel(lineSerializedItems.length)}</Badge>
+                            </div>
+                            {lineSerializedItems.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No serialized items have been released for this line.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {lineSerializedItems.slice(0, 5).map((item: any) => (
+                                  <div key={item.id} className="flex items-center justify-between gap-2 rounded-md border bg-background p-2">
+                                    <div className="min-w-0">
+                                      <p className="truncate font-mono text-sm">{item.serial_number ?? item.serialNumber ?? item.barcode}</p>
+                                      <p className="truncate text-xs text-muted-foreground">
+                                        Traveler {item.activeTravelerNumber ?? item.traveler_barcode ?? item.travelerBarcode ?? 'not linked'}
+                                      </p>
+                                    </div>
+                                    <Badge variant="outline">{item.productionPlacement ?? item.current_department ?? item.status ?? 'Unknown'}</Badge>
+                                  </div>
+                                ))}
+                                {lineSerializedItems.length > 5 && (
+                                  <p className="text-xs text-muted-foreground">+{formatQuantityLabel(lineSerializedItems.length - 5)} more serialized items</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="rounded-md border bg-muted/20 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">Associated Work Orders</p>
+                              <Badge variant="secondary">{formatQuantityLabel(lineWorkOrders.length)}</Badge>
+                            </div>
+                            {lineWorkOrders.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No WAD/work orders are linked to this part yet.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {lineWorkOrders.slice(0, 5).map((wo: any) => (
+                                  <div key={wo.id ?? wo.workOrderNumber} className="rounded-md border bg-background p-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="truncate font-medium">{wo.workOrderNumber ?? wo.work_order_number}</p>
+                                      <Badge variant="outline">{wo.status ?? 'Unknown'}</Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      Qty {formatQuantityLabel(wo.quantity)} - Due {formatDateLabel(wo.dueDate ?? wo.due_date)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="rounded-md border bg-muted/20 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">Production Orders</p>
+                              <Badge variant="secondary">{formatQuantityLabel(lineProductionOrders.length)}</Badge>
+                            </div>
+                            {lineProductionOrders.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No generated production-order rows are linked to this PO line.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {lineProductionOrders.slice(0, 5).map((order: any) => (
+                                  <div key={order.id} className="rounded-md border bg-background p-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="truncate font-medium">{order.order_id}</p>
+                                      <Badge variant="outline">{order.status ?? 'Unknown'}</Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      Qty {formatQuantityLabel(order.quantity)} - Made {formatQuantityLabel(order.quantity_manufactured)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                {assemblyBomRecords.length > 0 && (
+                  <div className="rounded-md border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">BOM Records Available</p>
+                    <p className="font-medium">{formatQuantityLabel(assemblyBomRecords.length)}</p>
+                  </div>
+                )}
+              </div>
+              {productionLinePlacements.length < 0 && (Array.isArray(hubProduction.productionOrders) && hubProduction.productionOrders.length > 0 ? (
                 <div className="space-y-2">
                   {hubProduction.productionOrders.slice(0, 8).map((order: any) => (
                     <div key={order.id} className="flex items-center justify-between rounded-md border p-3">
@@ -3387,7 +3538,8 @@ export default function ProjectDetailPage() {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No P2 production orders are linked yet.</p>
-              )}
+              ))}
+              {productionLinePlacements.length < 0 && (
               <div className="grid gap-4 xl:grid-cols-2">
                 <Card>
                   <CardHeader className="pb-3">
@@ -3449,6 +3601,7 @@ export default function ProjectDetailPage() {
                   </CardContent>
                 </Card>
               </div>
+              ))}
             </CardContent>
           </Card>
         </TabsContent>

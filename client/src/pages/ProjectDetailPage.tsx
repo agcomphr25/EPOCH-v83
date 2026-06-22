@@ -3741,7 +3741,7 @@ export default function ProjectDetailPage() {
                   </CardContent>
                 </Card>
               </div>
-              ))}
+              )}
             </CardContent>
           </Card>
         </TabsContent>

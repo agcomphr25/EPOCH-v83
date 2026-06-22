@@ -206,21 +206,6 @@ export default function MasterDocumentRegister() {
   const canCreateEdit = session?.role === 'ADMIN' || session?.role === 'OWNER' || session?.username === 'lauriet';
   const canApprove = session?.username === 'lauriet';
 
-  // Filter documents
-  const filteredDocuments = documents.filter((doc) => {
-    const matchesSearch =
-      searchQuery === '' ||
-      doc.documentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.documentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    const matchesDepartment = departmentFilter === 'all' || doc.department === departmentFilter;
-    const matchesType = typeFilter === 'all' || doc.documentType === typeFilter;
-    const matchesStatus = statusFilter === 'all' || doc.status === statusFilter;
-
-    return matchesSearch && matchesDepartment && matchesType && matchesStatus;
-  });
-
   // Get unique departments and types for filters
   const departments = ['all', ...Array.from(new Set(documents.map((d) => d.department)))];
   const documentTypes = ['all', ...Array.from(new Set(documents.map((d) => d.documentType)))];
@@ -247,6 +232,23 @@ export default function MasterDocumentRegister() {
     const daysUntilExpiration = Math.floor((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return daysUntilExpiration > 0 && daysUntilExpiration <= 30;
   };
+
+  // Filter documents
+  const filteredDocuments = documents.filter((doc) => {
+    const matchesSearch =
+      searchQuery === '' ||
+      doc.documentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.documentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesDepartment = departmentFilter === 'all' || doc.department === departmentFilter;
+    const matchesType = typeFilter === 'all' || doc.documentType === typeFilter;
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'expired' ? isExpired(doc) : doc.status === statusFilter);
+
+    return matchesSearch && matchesDepartment && matchesType && matchesStatus;
+  });
 
   const getStatusBadge = (doc: ControlledDocument) => {
     if (isExpired(doc)) {
@@ -619,6 +621,7 @@ export default function MasterDocumentRegister() {
                   <SelectItem value="draft">Draft</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
                 </SelectContent>
               </Select>
             </div>

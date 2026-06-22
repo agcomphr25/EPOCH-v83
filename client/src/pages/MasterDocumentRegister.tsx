@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,122 @@ import type { ControlledDocument, DocumentVersionHistory } from '@shared/schema'
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
+const DOCUMENT_TYPE_OPTIONS = [
+  { value: 'POSTER', label: 'Poster', codeToken: 'Poster' },
+  { value: 'PROCEDURE', label: 'Procedure / DOC', codeToken: 'DOC' },
+  { value: 'FORM', label: 'Form', codeToken: 'Form' },
+  { value: 'TABLE', label: 'Table', codeToken: 'Table' },
+  { value: 'SOP', label: 'SOP', codeToken: 'DOC' },
+  { value: 'WI', label: 'Work Instruction', codeToken: 'DOC' },
+  { value: 'POLICY', label: 'Policy', codeToken: 'DOC' },
+  { value: 'PLAN', label: 'Plan', codeToken: 'DOC' },
+];
+
+const DOCUMENT_DEPARTMENT_OPTIONS = [
+  'General Use',
+  'Front Office',
+  'HR',
+  'Quality',
+  'Quality Control',
+  'P1 Operations',
+  'P2 Operations',
+  'PL1',
+  'PL2',
+  'PL3',
+  'CNC',
+  'Cutting Table',
+  'Gunsmith',
+  'Inventory',
+  'Paint',
+  'Plugging',
+  'Production',
+  'Shipping - PL1',
+  'Finish - PL1',
+  'Mold Maintenance',
+  'Purchasing',
+];
+
+const DEPARTMENT_CODE_PREFIXES: Record<string, string> = {
+  'General Use': 'AG',
+  'Front Office': 'FO',
+  HR: 'HR',
+  Quality: 'QC',
+  'Quality Control': 'QC',
+  'P1 Operations': 'PL1',
+  'P2 Operations': 'PL2',
+  PL1: 'PL1',
+  PL2: 'PL2',
+  PL3: 'PL3',
+  CNC: 'CNC',
+  'Cutting Table': 'CT',
+  Gunsmith: 'GU',
+  Inventory: 'IN',
+  Paint: 'PT',
+  Plugging: 'PG',
+  Production: 'PR',
+  'Shipping - PL1': 'SH',
+  'Finish - PL1': 'FN',
+  'Mold Maintenance': 'MM',
+  Purchasing: 'PO',
+};
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const codePrefixForDepartment = (department: string) => {
+  const mapped = DEPARTMENT_CODE_PREFIXES[department];
+  if (mapped) return mapped;
+  return department
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 4);
+};
+
+const codeTokenForDocumentType = (documentType: string) =>
+  DOCUMENT_TYPE_OPTIONS.find((option) => option.value === documentType)?.codeToken || documentType;
+
+const generateDocumentNumber = (
+  documents: ControlledDocument[],
+  department: string,
+  documentType: string
+) => {
+  if (!department || !documentType) return '';
+
+  const prefix = codePrefixForDepartment(department);
+  const codeToken = codeTokenForDocumentType(documentType);
+  const matcher = new RegExp(
+    `^${escapeRegExp(prefix)}\\s+${escapeRegExp(codeToken)}\\s*(\\d+(?:\\.\\d+)?)$`,
+    'i'
+  );
+
+  const highestWholeNumber = documents.reduce((highest, doc) => {
+    const match = doc.documentNumber?.trim().match(matcher);
+    if (!match) return highest;
+    const number = Number(match[1]);
+    if (!Number.isFinite(number)) return highest;
+    return Math.max(highest, Math.floor(number));
+  }, 0);
+
+  return `${prefix} ${codeToken} ${highestWholeNumber + 1}`;
+};
+
+const nextRevisionVersion = (version: string | null | undefined) => {
+  const match = String(version || '1.0').match(/^(\d+)(?:\.(\d+))?$/);
+  if (!match) return '1.1';
+
+  const major = Number(match[1]);
+  const minor = Number(match[2] || '0');
+  if (!Number.isFinite(major) || !Number.isFinite(minor)) return '1.1';
+
+  if (minor >= 9) {
+    return `${major + 1}.0`;
+  }
+
+  return `${major}.${minor + 1}`;
+};
+
 export default function MasterDocumentRegister() {
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
@@ -61,7 +177,8 @@ export default function MasterDocumentRegister() {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<ControlledDocument | null>(null);
   const [createNewVersion, setCreateNewVersion] = useState(false);
-  const [versionType, setVersionType] = useState<'major' | 'minor'>('minor');
+  const [newDocumentDepartment, setNewDocumentDepartment] = useState('');
+  const [newDocumentType, setNewDocumentType] = useState('');
   const { toast } = useToast();
 
   // Fetch controlled documents
@@ -107,6 +224,14 @@ export default function MasterDocumentRegister() {
   // Get unique departments and types for filters
   const departments = ['all', ...Array.from(new Set(documents.map((d) => d.department)))];
   const documentTypes = ['all', ...Array.from(new Set(documents.map((d) => d.documentType)))];
+  const createDepartmentOptions = useMemo(
+    () => Array.from(new Set([...DOCUMENT_DEPARTMENT_OPTIONS, ...documents.map((d) => d.department).filter(Boolean)])),
+    [documents]
+  );
+  const generatedDocumentNumber = useMemo(
+    () => generateDocumentNumber(documents, newDocumentDepartment, newDocumentType),
+    [documents, newDocumentDepartment, newDocumentType]
+  );
 
   // Check if document is expired
   const isExpired = (doc: ControlledDocument) => {
@@ -206,6 +331,8 @@ export default function MasterDocumentRegister() {
       queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
       setIsCreateDialogOpen(false);
       setSelectedFile(null);
+      setNewDocumentDepartment('');
+      setNewDocumentType('');
       toast({
         title: 'Success',
         description: 'Document created successfully',
@@ -279,7 +406,6 @@ export default function MasterDocumentRegister() {
 
     if (createNewVersion) {
       formData.append('createNewVersion', 'true');
-      formData.append('versionType', versionType);
     }
 
     if (selectedFile) {
@@ -416,7 +542,11 @@ export default function MasterDocumentRegister() {
                 <Button
                   className="flex items-center gap-2"
                   data-testid="button-create-document"
-                  onClick={() => setIsCreateDialogOpen(true)}
+                  onClick={() => {
+                    setNewDocumentDepartment('');
+                    setNewDocumentType('');
+                    setIsCreateDialogOpen(true);
+                  }}
                 >
                   <Plus className="h-4 w-4" />
                   New Document
@@ -656,7 +786,10 @@ export default function MasterDocumentRegister() {
                   id="documentNumber"
                   name="documentNumber"
                   required
-                  placeholder="e.g., P1-001"
+                  value={generatedDocumentNumber}
+                  readOnly
+                  placeholder="Select department and type"
+                  className="bg-gray-100 font-mono"
                   data-testid="input-document-number"
                 />
               </div>
@@ -676,34 +809,32 @@ export default function MasterDocumentRegister() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="documentType">Document Type *</Label>
-                <Select name="documentType" required>
+                <Select name="documentType" value={newDocumentType} onValueChange={setNewDocumentType} required>
                   <SelectTrigger data-testid="select-document-type">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="SOP">SOP - Standard Operating Procedure</SelectItem>
-                    <SelectItem value="WI">WI - Work Instruction</SelectItem>
-                    <SelectItem value="FORM">Form</SelectItem>
-                    <SelectItem value="POLICY">Policy</SelectItem>
-                    <SelectItem value="PROCEDURE">Procedure</SelectItem>
-                    <SelectItem value="PLAN">Plan</SelectItem>
+                    {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="department">Department *</Label>
-                <Select name="department" required>
+                <Select name="department" value={newDocumentDepartment} onValueChange={setNewDocumentDepartment} required>
                   <SelectTrigger data-testid="select-department">
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="P1 Operations">P1 Operations</SelectItem>
-                    <SelectItem value="P2 Operations">P2 Operations</SelectItem>
-                    <SelectItem value="Quality Control">Quality Control</SelectItem>
-                    <SelectItem value="Manufacturing">Manufacturing</SelectItem>
-                    <SelectItem value="Engineering">Engineering</SelectItem>
-                    <SelectItem value="Safety">Safety</SelectItem>
+                    {createDepartmentOptions.map((department) => (
+                      <SelectItem key={department} value={department}>
+                        {department}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -747,6 +878,8 @@ export default function MasterDocumentRegister() {
                 id="currentVersion"
                 name="currentVersion"
                 defaultValue="1.0"
+                readOnly
+                className="bg-gray-100"
                 placeholder="e.g., 2.3"
                 data-testid="input-current-version"
               />
@@ -770,7 +903,7 @@ export default function MasterDocumentRegister() {
                   id="retentionLength"
                   name="retentionLength"
                   placeholder="e.g., 1 year, 5 years, Permanent"
-                  defaultValue="1 year"
+                  defaultValue="10 years"
                   data-testid="input-retention-length"
                 />
               </div>
@@ -815,6 +948,8 @@ export default function MasterDocumentRegister() {
                 onClick={() => {
                   setIsCreateDialogOpen(false);
                   setSelectedFile(null);
+                  setNewDocumentDepartment('');
+                  setNewDocumentType('');
                 }}
                 data-testid="button-cancel-create"
               >
@@ -857,7 +992,9 @@ export default function MasterDocumentRegister() {
                     <div>
                       <p className="text-sm font-medium">Current Version: {selectedDocument.currentVersion}</p>
                       <p className="text-xs text-gray-600">
-                        {createNewVersion ? 'Creating new version' : 'Updating current version'}
+                        {createNewVersion
+                          ? `Next revision: ${nextRevisionVersion(selectedDocument.currentVersion)}`
+                          : 'Updating current version'}
                       </p>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -877,17 +1014,11 @@ export default function MasterDocumentRegister() {
 
                   {createNewVersion && (
                     <div className="space-y-3 border-t pt-3">
-                      <div className="space-y-2">
-                        <Label>Version Type</Label>
-                        <Select value={versionType} onValueChange={(v) => setVersionType(v as 'major' | 'minor')}>
-                          <SelectTrigger data-testid="select-version-type">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="minor">Minor Version (e.g., 1.0 → 1.1)</SelectItem>
-                            <SelectItem value="major">Major Version (e.g., 1.0 → 2.0)</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <div className="rounded-md border border-blue-200 bg-white p-3">
+                        <div className="text-xs font-medium uppercase text-gray-500">Next Version</div>
+                        <div className="font-mono text-lg">
+                          {nextRevisionVersion(selectedDocument.currentVersion)}
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -940,12 +1071,11 @@ export default function MasterDocumentRegister() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="SOP">SOP - Standard Operating Procedure</SelectItem>
-                      <SelectItem value="WI">WI - Work Instruction</SelectItem>
-                      <SelectItem value="FORM">Form</SelectItem>
-                      <SelectItem value="POLICY">Policy</SelectItem>
-                      <SelectItem value="PROCEDURE">Procedure</SelectItem>
-                      <SelectItem value="PLAN">Plan</SelectItem>
+                      {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -957,12 +1087,11 @@ export default function MasterDocumentRegister() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="P1 Operations">P1 Operations</SelectItem>
-                      <SelectItem value="P2 Operations">P2 Operations</SelectItem>
-                      <SelectItem value="Quality Control">Quality Control</SelectItem>
-                      <SelectItem value="Manufacturing">Manufacturing</SelectItem>
-                      <SelectItem value="Engineering">Engineering</SelectItem>
-                      <SelectItem value="Safety">Safety</SelectItem>
+                      {createDepartmentOptions.map((department) => (
+                        <SelectItem key={department} value={department}>
+                          {department}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1019,7 +1148,7 @@ export default function MasterDocumentRegister() {
                   <Input
                     id="edit-retentionLength"
                     name="retentionLength"
-                    defaultValue={selectedDocument.retentionLength || ''}
+                    defaultValue={selectedDocument.retentionLength || '10 years'}
                     data-testid="input-edit-retention-length"
                   />
                 </div>

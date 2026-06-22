@@ -143,6 +143,21 @@ const csvUpload = multer({
   }
 });
 
+const nextRevisionVersion = (version: string | null | undefined): string => {
+  const match = String(version || '1.0').match(/^(\d+)(?:\.(\d+))?$/);
+  if (!match) return '1.1';
+
+  const major = Number(match[1]);
+  const minor = Number(match[2] || '0');
+  if (!Number.isFinite(major) || !Number.isFinite(minor)) return '1.1';
+
+  if (minor >= 9) {
+    return `${major + 1}.0`;
+  }
+
+  return `${major}.${minor + 1}`;
+};
+
 // Get all controlled documents (authenticated users only)
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -238,7 +253,7 @@ router.post('/', requireDocumentEditor, upload.single('file'), async (req: Reque
       versionDate: versionDate || null,
       originationDate: originationDate || null,
       status: 'pending',
-      retentionLength,
+      retentionLength: retentionLength || '10 years',
       documentOwner,
       filePath,
       classification: classification || 'internal',
@@ -283,7 +298,6 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
     const user = (req as any).user!; // Guaranteed by middleware
     const {
       createNewVersion,
-      versionType, // 'major' or 'minor'
       changeDescription,
       documentName,
       templateKey,
@@ -328,12 +342,7 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
       }
 
       // Calculate new version number
-      const [major, minor] = existingDoc.currentVersion.split('.').map(Number);
-      if (versionType === 'major') {
-        newVersion = `${major + 1}.0`;
-      } else {
-        newVersion = `${major}.${minor + 1}`;
-      }
+      newVersion = nextRevisionVersion(existingDoc.currentVersion);
 
       // Use the newly uploaded file
       filePath = `/assets/documents/${req.file.filename}`;
@@ -348,7 +357,7 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
         documentId: req.params.id,
         versionNumber: newVersion,
         changeDescription: changeDescription || 'Document updated',
-        changeType: versionType,
+        changeType: 'minor',
         filePath,
         status: 'pending',
         createdBy,
@@ -370,7 +379,7 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
           description,
           versionDate: versionDate || existingDoc.versionDate,
           originationDate: originationDate || existingDoc.originationDate,
-          retentionLength,
+          retentionLength: retentionLength || existingDoc.retentionLength || '10 years',
           documentOwner,
           classification: classification || existingDoc.classification,
           cuiCategory: cuiCategory || null,
@@ -404,7 +413,7 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
           description,
           versionDate: versionDate || existingDoc.versionDate,
           originationDate: originationDate || existingDoc.originationDate,
-          retentionLength,
+          retentionLength: retentionLength || existingDoc.retentionLength || '10 years',
           documentOwner,
           filePath,
           classification: classification || existingDoc.classification,

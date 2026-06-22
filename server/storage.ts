@@ -632,6 +632,7 @@ import {
   type InsertTravelerComponentAssociation,
   p2LotNumbers,
   productionWorkOrders,
+  wadRevisions,
   type ProductionWorkOrder,
   type InsertProductionWorkOrder,
   // Labor → GL Posting Engine
@@ -20711,6 +20712,7 @@ export class DatabaseStorage implements IStorage {
         id: productionWorkOrders.id,
         workOrderNumber: productionWorkOrders.workOrderNumber,
         partNumber: productionWorkOrders.partNumber,
+        description: productionWorkOrders.description,
         quantity: productionWorkOrders.quantity,
       })
       .from(productionWorkOrders)
@@ -20741,6 +20743,16 @@ export class DatabaseStorage implements IStorage {
 
     traveler = await this.linkTravelerToProductionWorkOrder(traveler.id, wadId);
 
+    const [activeWadRevision] = await db
+      .select({
+        id: wadRevisions.id,
+        revisionCode: wadRevisions.revisionCode,
+      })
+      .from(wadRevisions)
+      .where(and(eq(wadRevisions.wadId, wadId), eq(wadRevisions.status, 'approved')))
+      .orderBy(desc(wadRevisions.approvedAt), desc(wadRevisions.createdAt))
+      .limit(1);
+
     // Patch traveler to inherit part number, description, and quantity from the WAD
     const [patched] = await db
       .update(travelers)
@@ -20748,6 +20760,7 @@ export class DatabaseStorage implements IStorage {
         partNumber: wad.partNumber,
         partName: wad.description ?? traveler.partName,
         quantity: wad.quantity,
+        wadRevisionId: activeWadRevision?.id ?? null,
         updatedAt: new Date(),
       })
       .where(eq(travelers.id, traveler.id))

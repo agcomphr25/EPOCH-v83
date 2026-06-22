@@ -1863,7 +1863,7 @@ export default function ProjectDetailPage() {
                 ))
               ) : (
                 <div className="space-y-2">
-                  {['PO Review', 'WAD (Work Authorization Document)', 'Preproduction'].map(label => (
+                  {['PO Review', 'WAD (Working Authorization Document)', 'Preproduction'].map(label => (
                     <div key={label} className="flex items-center gap-3 py-1">
                       <Clock className="h-5 w-5 text-gray-400 flex-shrink-0" />
                       <span className="text-sm text-muted-foreground">{label}</span>
@@ -3008,7 +3008,9 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setLocation(`/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}`)}>
+                <Button
+                  onClick={() => setLocation(latestWad?.id ? `/work-orders/${latestWad.id}/wad-summary` : `/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}`)}
+                >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Open WAD
                 </Button>
@@ -3018,7 +3020,8 @@ export default function ProjectDetailPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setLocation(`/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}&revision=1`)}
+                  onClick={() => setLocation(latestWad?.id ? `/work-orders/${latestWad.id}/wad-summary?tab=revisions&createRevision=1` : `/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}`)}
+                  disabled={!latestWad?.id}
                   data-testid="button-add-project-wad-revision"
                 >
                   <History className="h-4 w-4 mr-2" />

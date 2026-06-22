@@ -5,7 +5,7 @@ import { db } from '../../../server/db';
 import { pool } from '../../../server/db';
 import { requirePermission } from '../../../server/middleware/requirePermission';
 import { controlledDocuments, documentVersionHistory, insertControlledDocumentSchema, insertDocumentVersionHistorySchema } from '../../../server/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, inArray } from 'drizzle-orm';
 import fs from 'fs/promises';
 import { createReadStream } from 'fs';
 import { z } from 'zod';
@@ -717,7 +717,9 @@ router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), asyn
       return 'OTHER';
     };
 
-    // Process each row
+    const parsedDocuments = [];
+
+    // Process and validate each row before writing so the database work can be batched.
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
       
@@ -757,63 +759,101 @@ router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), asyn
         const expirationDate = new Date(baseDate);
         expirationDate.setFullYear(expirationDate.getFullYear() + 1);
 
-        // Check if document already exists
-        const [existing] = await db
-          .select()
-          .from(controlledDocuments)
-          .where(eq(controlledDocuments.documentNumber, documentNumber));
-
-        if (existing) {
-          // Update existing document
-          await db
-            .update(controlledDocuments)
-            .set({
-              documentName,
-              documentType,
-              department,
-              currentVersion,
-              retentionLength,
-              description: description || existing.description,
-              effectiveDate: effectiveDate || existing.effectiveDate,
-              expirationDate: expirationDate.toISOString().split('T')[0],
-              updatedAt: new Date(),
-            })
-            .where(eq(controlledDocuments.id, existing.id));
-        } else {
-          // Create new document
-          const [newDoc] = await db.insert(controlledDocuments).values({
-            documentNumber,
-            documentName,
-            documentType,
-            department,
-            currentVersion,
-            status: effectiveDate ? 'approved' : 'draft',
-            retentionLength,
-            description,
-            effectiveDate,
-            expirationDate: expirationDate.toISOString().split('T')[0],
-            createdBy: user.username,
-          }).returning();
-
-          // Create initial version history
-          await db.insert(documentVersionHistory).values({
-            documentId: newDoc.id,
-            versionNumber: currentVersion,
-            changeDescription: description || 'Imported from CSV',
-            changeType: 'major',
-            status: effectiveDate ? 'approved' : 'draft',
-            createdBy: user.username,
-            effectiveDate,
-            expirationDate: expirationDate.toISOString().split('T')[0],
-          });
-        }
-
-        importResults.success++;
+        parsedDocuments.push({
+          documentNumber,
+          documentName,
+          documentType,
+          department,
+          currentVersion,
+          retentionLength,
+          description,
+          effectiveDate,
+          expirationDate: expirationDate.toISOString().split('T')[0],
+          rowNumber: i + 2,
+        });
       } catch (error: any) {
         const errorMsg = `Row ${i + 2}: ${error.message}`;
         console.error('CSV import error:', errorMsg);
         importResults.errors.push(errorMsg);
       }
+    }
+
+    const seenDocumentNumbers = new Set<string>();
+    const importDocuments = parsedDocuments.filter((doc) => {
+      if (seenDocumentNumbers.has(doc.documentNumber)) {
+        importResults.skipped++;
+        importResults.errors.push(`Row ${doc.rowNumber}: Duplicate CODE "${doc.documentNumber}" in import file`);
+        return false;
+      }
+      seenDocumentNumbers.add(doc.documentNumber);
+      return true;
+    });
+
+    const existingDocuments = importDocuments.length > 0
+      ? await db
+          .select()
+          .from(controlledDocuments)
+          .where(inArray(
+            controlledDocuments.documentNumber,
+            importDocuments.map((doc) => doc.documentNumber)
+          ))
+      : [];
+
+    const existingByNumber = new Map(existingDocuments.map((doc) => [doc.documentNumber, doc]));
+    const documentsToCreate = [];
+
+    for (const doc of importDocuments) {
+      const existing = existingByNumber.get(doc.documentNumber);
+
+      if (existing) {
+        await db
+          .update(controlledDocuments)
+          .set({
+            documentName: doc.documentName,
+            documentType: doc.documentType,
+            department: doc.department,
+            currentVersion: doc.currentVersion,
+            retentionLength: doc.retentionLength,
+            description: doc.description || existing.description,
+            effectiveDate: doc.effectiveDate || existing.effectiveDate,
+            expirationDate: doc.expirationDate,
+            updatedAt: new Date(),
+          })
+          .where(eq(controlledDocuments.id, existing.id));
+      } else {
+        documentsToCreate.push({
+          documentNumber: doc.documentNumber,
+          documentName: doc.documentName,
+          documentType: doc.documentType,
+          department: doc.department,
+          currentVersion: doc.currentVersion,
+          status: doc.effectiveDate ? 'approved' : 'draft',
+          retentionLength: doc.retentionLength,
+          description: doc.description,
+          effectiveDate: doc.effectiveDate,
+          expirationDate: doc.expirationDate,
+          createdBy: user.username,
+        });
+      }
+
+      importResults.success++;
+    }
+
+    if (documentsToCreate.length > 0) {
+      const newDocs = await db.insert(controlledDocuments).values(documentsToCreate).returning();
+
+      const versionHistoryToCreate = newDocs.map((newDoc) => ({
+        documentId: newDoc.id,
+        versionNumber: newDoc.currentVersion,
+        changeDescription: newDoc.description || 'Imported from CSV',
+        changeType: 'major',
+        status: newDoc.status,
+        createdBy: user.username,
+        effectiveDate: newDoc.effectiveDate,
+        expirationDate: newDoc.expirationDate,
+      }));
+
+      await db.insert(documentVersionHistory).values(versionHistoryToCreate);
     }
 
     // Log final results

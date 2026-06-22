@@ -1116,6 +1116,10 @@ export const employees = pgTable('employees', {
   timekeeperPin: text('timekeeper_pin'), // bcrypt-hashed PIN for kiosk authentication — canonical PIN source for timekeeping module
   timezone: text('timezone').notNull().default('UTC'), // Employee's local timezone for punch time calculations
   supervisorEmployeeId: integer('supervisor_employee_id').references((): AnyPgColumn => employees.id), // Nullable supervisor assignment for PTO routing
+  notificationPreferences: jsonb('notification_preferences')
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -2602,6 +2606,7 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     isActive: z.boolean().default(true),
     timekeeperPin: z.string().optional().nullable(),
     timezone: z.string().optional(),
+    notificationPreferences: z.record(z.unknown()).optional(),
   });
 
 // Certifications schemas

@@ -152,7 +152,8 @@ function ensureEmployeeTerminationSchema(): Promise<void> {
         ADD COLUMN IF NOT EXISTS termination_notes TEXT,
         ADD COLUMN IF NOT EXISTS terminated_by_user_id INTEGER REFERENCES users(id),
         ADD COLUMN IF NOT EXISTS terminated_by_name TEXT,
-        ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMP
+        ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{}'::jsonb
     `).then(() => pool.query(`
       ALTER TABLE users
         ADD COLUMN IF NOT EXISTS access_status TEXT NOT NULL DEFAULT 'ACTIVE',
@@ -179,6 +180,24 @@ const terminationSchema = z.object({
   retainAccess: z.boolean().default(false),
   accessExceptionReason: z.string().trim().optional().nullable(),
 });
+
+const notificationTopicSchema = z.object({
+  email: z.boolean().optional().default(false),
+  popup: z.boolean().optional().default(false),
+});
+
+const employeeNotificationPreferencesSchema = z.object({
+  taskList: notificationTopicSchema.optional().default({ email: false, popup: false }),
+  maintenanceSchedules: notificationTopicSchema.optional().default({ email: false, popup: false }),
+  trainingExpirations: notificationTopicSchema.optional().default({ email: false, popup: false }),
+});
+
+function normalizeEmployeeNotificationPreferences(value: unknown) {
+  const parsed = employeeNotificationPreferencesSchema.safeParse(value ?? {});
+  return parsed.success
+    ? parsed.data
+    : employeeNotificationPreferencesSchema.parse({});
+}
 
 function ensureChargeCodeAssignmentTable(): Promise<void> {
   if (!chargeCodeAssignmentTableReady) {
@@ -1801,6 +1820,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
     res.json({
       ...employee,
+      notificationPreferences: normalizeEmployeeNotificationPreferences((employee as any).notificationPreferences),
       userId: linkedUser?.userId ?? null,
       userIsActive: linkedUser?.userIsActive ?? null,
       accessStatus: linkedUser?.accessStatus ?? null,
@@ -1821,12 +1841,16 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
+    await ensureEmployeeTerminationSchema();
     const rawBody = { ...req.body };
     if (typeof rawBody.email === 'string' && rawBody.email.trim() === '') {
       rawBody.email = undefined;
     }
 
     let employeeData = insertEmployeeSchema.parse(rawBody);
+    employeeData.notificationPreferences = normalizeEmployeeNotificationPreferences(
+      (employeeData as any).notificationPreferences
+    );
 
     // Normalize employeeCode — trim whitespace, treat blank as absent
     if (typeof employeeData.employeeCode === 'string') {
@@ -1918,6 +1942,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.put('/:id', async (req: Request, res: Response) => {
   try {
+    await ensureEmployeeTerminationSchema();
     const employeeId = parseInt(req.params.id);
     let updates = req.body;
     
@@ -1950,6 +1975,10 @@ router.put('/:id', async (req: Request, res: Response) => {
         }
         updates.supervisorEmployeeId = supervisorId;
       }
+    }
+
+    if (updates.notificationPreferences !== undefined) {
+      updates.notificationPreferences = normalizeEmployeeNotificationPreferences(updates.notificationPreferences);
     }
     
     // Validate / resolve employee code on update

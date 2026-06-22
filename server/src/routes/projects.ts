@@ -2081,6 +2081,7 @@ router.get('/:id/p2-hub', async (req, res) => {
       projectRoutings,
       bomRecords,
       quoteFeedback,
+      projectFarFlowdowns,
       romDraftRows,
     ] = await Promise.all([
       poIds.length > 0
@@ -2212,13 +2213,15 @@ router.get('/:id/p2-hub', async (req, res) => {
         'part routings',
         partNumbers.length > 0
           ? `SELECT id, project_id, part_number, part_name, routing_name,
-                    routing_revision, routing_type, is_active, created_by,
+                    routing_revision, routing_type, is_active, department_config,
+                    qc_standards, created_by,
                     created_at, updated_at
              FROM part_routings
              WHERE project_id = $1 OR part_number = ANY($2::text[])
              ORDER BY is_active DESC, updated_at DESC`
           : `SELECT id, project_id, part_number, part_name, routing_name,
-                    routing_revision, routing_type, is_active, created_by,
+                    routing_revision, routing_type, is_active, department_config,
+                    qc_standards, created_by,
                     created_at, updated_at
              FROM part_routings
              WHERE project_id = $1
@@ -2259,6 +2262,17 @@ router.get('/:id/p2-hub', async (req, res) => {
         [id],
       ),
       optionalHubQuery<any>(
+        'project FAR flowdowns',
+        `SELECT pff.id, pff.project_id, pff.purchase_review_checklist_id,
+                pff.applicable, pff.reasoning, pff.source, pff.status,
+                ffc.clause_number, ffc.title
+         FROM project_far_flowdowns pff
+         JOIN far_flowdown_clauses ffc ON ffc.id = pff.clause_id
+         WHERE pff.project_id = $1
+         ORDER BY pff.created_at DESC`,
+        [id],
+      ),
+      optionalHubQuery<any>(
         'project ROM draft',
         `SELECT id, project_id, status, summary, assumptions, risk_notes,
                 categories, locked_at, locked_reason, updated_at,
@@ -2269,6 +2283,30 @@ router.get('/:id/p2-hub', async (req, res) => {
         [id],
       ),
     ]);
+
+    const routingIds = projectRoutings.map((routing: any) => routing.id).filter(Boolean);
+    const routingOperationSummaries = routingIds.length > 0
+      ? await optionalHubQuery<any>(
+          'routing operation summaries',
+          `SELECT part_routing_id,
+                  COUNT(*)::int AS operation_count,
+                  COUNT(*) FILTER (
+                    WHERE instruction_pack IS NOT NULL
+                      AND instruction_pack::text NOT IN ('{}', '[]', 'null', '""')
+                  )::int AS instruction_pack_count,
+                  COUNT(*) FILTER (
+                    WHERE operation_type IN ('QC', 'INSPECT')
+                  )::int AS inspection_operation_count,
+                  COUNT(*) FILTER (
+                    WHERE certificate_required = true
+                       OR receiving_inspection_required = true
+                  )::int AS material_cert_requirement_count
+           FROM routing_operations
+           WHERE part_routing_id = ANY($1::uuid[])
+           GROUP BY part_routing_id`,
+          [routingIds],
+        )
+      : [];
 
     const completedSteps = steps.filter((step: any) => step.status === 'completed');
     const latestWad = [...workOrders].sort((a: any, b: any) => {
@@ -2427,6 +2465,180 @@ router.get('/:id/p2-hub', async (req, res) => {
       return Number.isFinite(amount) ? sum + amount : sum;
     }, 0);
     const latestQuoteFeedback = quoteFeedback[0] ?? null;
+    const routeByPartNumber = new Map(
+      projectRoutings
+        .filter((routing: any) => routing.part_number)
+        .map((routing: any) => [String(routing.part_number).trim().toLowerCase(), routing]),
+    );
+    const routingOperationSummaryById = new Map(
+      routingOperationSummaries.map((summary: any) => [String(summary.part_routing_id), summary]),
+    );
+    const hasManualDocument = (...needles: string[]) => manualDocuments.some((document: any) => {
+      const haystack = [
+        document.label,
+        document.original_file_name,
+        document.mime_type,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return needles.some(needle => haystack.includes(needle.toLowerCase()));
+    });
+    const stepByType = new Map(steps.map((step: any) => [step.stepType, step]));
+    const isStepCovered = (stepType: string) => {
+      const step = stepByType.get(stepType) as any;
+      return !!step && ['completed', 'not_applicable'].includes(step.status);
+    };
+    const activePoPartNumbers = Array.from(new Set(activePoItems.map((item: any) => item.part_number).filter(Boolean)));
+    const partsMissingRoutings = activePoPartNumbers.filter((partNumber: string) => (
+      !routeByPartNumber.has(String(partNumber).trim().toLowerCase())
+    ));
+    const partsMissingInstructions = activePoPartNumbers.filter((partNumber: string) => {
+      const routing = routeByPartNumber.get(String(partNumber).trim().toLowerCase()) as any;
+      if (!routing) return true;
+      const operationSummary = routingOperationSummaryById.get(String(routing.id)) as any;
+      const departmentConfigText = JSON.stringify(routing.department_config ?? {});
+      const hasInstructionConfig = /workInstructionRefs|aiSnippets|specialNotes|instructionPack|media/i.test(departmentConfigText);
+      return !hasInstructionConfig && Number(operationSummary?.instruction_pack_count ?? 0) === 0;
+    });
+    const routingInspectionCount = routingOperationSummaries.reduce((sum: number, summary: any) => (
+      sum + Number(summary.inspection_operation_count ?? 0)
+    ), 0);
+    const routingMaterialCertRequirementCount = routingOperationSummaries.reduce((sum: number, summary: any) => (
+      sum + Number(summary.material_cert_requirement_count ?? 0)
+    ), 0);
+    const routingQcStandardCount = projectRoutings.reduce((sum: number, routing: any) => {
+      const standards = routing.qc_standards;
+      return sum + (Array.isArray(standards) ? standards.length : standards ? 1 : 0);
+    }, 0);
+    const poSpecsCount = activePoItems.filter((item: any) => item.specifications || item.notes).length;
+    const revisionsForSpecs = projectRevisions.filter((revision: any) => {
+      const type = String(revision.revisionType ?? revision.revision_type ?? '').toLowerCase();
+      return ['drawing', 'contract', 'spec', 'po'].includes(type);
+    });
+    const coverageItems = [
+      {
+        key: 'customer_po',
+        label: 'Customer PO',
+        status: currentPo ? 'covered_by_project_data' : 'needs_upload',
+        source: currentPo ? 'P2 PO record' : 'Project document upload',
+        detail: currentPo ? `PO ${currentPo.po_number ?? currentPo.poNumber ?? activePoId} is linked to the project.` : 'Attach or link the customer PO before release.',
+        route: project.poId ? `/p2/purchase-orders/${project.poId}/preview` : '/p2-control-center',
+        relatedCount: currentPo ? 1 : 0,
+      },
+      {
+        key: 'drawing',
+        label: 'Drawing',
+        status: hasManualDocument('drawing', 'print') ? 'attached' : 'covered_by_project_data',
+        source: hasManualDocument('drawing', 'print') ? 'Project document attachment' : 'Received / pending vaulted storage',
+        detail: hasManualDocument('drawing', 'print')
+          ? 'Drawing file is attached to the project.'
+          : 'Vaulted drawing storage is not available yet, so received drawing status is tracked as acceptable project coverage.',
+        route: `/projects/${id}?tab=workflow`,
+        relatedCount: manualDocuments.filter((document: any) => String(document.label ?? document.original_file_name ?? '').toLowerCase().includes('drawing')).length,
+      },
+      {
+        key: 'rev_spec',
+        label: 'Revision / Specification',
+        status: revisionsForSpecs.length > 0 || poSpecsCount > 0 ? 'covered_by_project_data' : 'needs_clarification',
+        source: revisionsForSpecs.length > 0 ? 'Project revision ledger' : poSpecsCount > 0 ? 'PO line specifications' : 'Clarification required',
+        detail: revisionsForSpecs.length > 0 || poSpecsCount > 0
+          ? 'Revision/spec coverage is present through project revisions or PO line specifications.'
+          : 'Define whether Rev/Spec means drawing revision, customer spec, PO revision, or part specification for this project.',
+        route: `/projects/${id}?tab=po`,
+        relatedCount: revisionsForSpecs.length + poSpecsCount,
+      },
+      {
+        key: 'work_instructions',
+        label: 'Work Instructions',
+        status: activePoPartNumbers.length > 0 && partsMissingInstructions.length === 0 ? 'covered_by_project_data' : 'needs_setup',
+        source: 'Part routing instruction packs',
+        detail: activePoPartNumbers.length === 0
+          ? 'No PO parts are linked yet.'
+          : partsMissingInstructions.length === 0
+            ? 'Every PO part has routing instruction evidence.'
+            : `${partsMissingInstructions.length} PO part(s) need work instruction setup.`,
+        route: `/p2-control-center?tab=routing&projectId=${encodeURIComponent(id)}`,
+        relatedCount: Math.max(activePoPartNumbers.length - partsMissingInstructions.length, 0),
+        missingParts: partsMissingInstructions,
+      },
+      {
+        key: 'bom',
+        label: 'BOM',
+        status: bomRecords.length > 0 ? 'covered_by_project_data' : 'needs_setup',
+        source: 'Project BOM/Routing tab',
+        detail: bomRecords.length > 0 ? `${bomRecords.length} BOM record(s) match PO parts.` : 'Create or link BOM records for the PO parts.',
+        route: `/projects/${id}?tab=bom-routing`,
+        relatedCount: bomRecords.length,
+      },
+      {
+        key: 'routing',
+        label: 'Routing',
+        status: projectRoutings.length > 0 && partsMissingRoutings.length === 0 ? 'covered_by_project_data' : 'needs_setup',
+        source: 'Part routings',
+        detail: partsMissingRoutings.length === 0 && projectRoutings.length > 0
+          ? `${projectRoutings.length} routing record(s) cover the PO parts.`
+          : `${partsMissingRoutings.length || activePoPartNumbers.length} PO part(s) need routing coverage.`,
+        route: `/projects/${id}?tab=bom-routing`,
+        relatedCount: projectRoutings.length,
+        missingParts: partsMissingRoutings,
+      },
+      {
+        key: 'quote',
+        label: 'Quote',
+        status: isStepCovered('quote') || !!latestQuoteFeedback ? 'covered_by_project_data' : 'needs_setup',
+        source: latestQuoteFeedback ? 'ROM / quote feedback' : 'Project workflow',
+        detail: isStepCovered('quote') || !!latestQuoteFeedback ? 'Quote or quote execution feedback is linked to the project.' : 'Link or complete the quote workflow step.',
+        route: `/p2-quote-form?projectId=${encodeURIComponent(id)}`,
+        relatedCount: isStepCovered('quote') || !!latestQuoteFeedback ? 1 : 0,
+      },
+      {
+        key: 'risk_assessment',
+        label: 'Risk Assessment',
+        status: isStepCovered('rfq_risk_assessment') ? 'covered_by_project_data' : 'needs_setup',
+        source: 'RFQ risk assessment step',
+        detail: isStepCovered('rfq_risk_assessment') ? 'Risk assessment workflow step is complete.' : 'Complete or link the RFQ risk assessment.',
+        route: '/rfq-risk-assessment',
+        relatedCount: isStepCovered('rfq_risk_assessment') ? 1 : 0,
+      },
+      {
+        key: 'purchase_review_checklist',
+        label: 'Purchase Review Checklist',
+        status: isStepCovered('purchase_review_checklist') || projectFarFlowdowns.length > 0 ? 'covered_by_project_data' : 'needs_setup',
+        source: 'Purchase review workflow',
+        detail: isStepCovered('purchase_review_checklist') || projectFarFlowdowns.length > 0 ? 'Purchase review evidence is linked to the project.' : 'Complete the purchase review checklist.',
+        route: `/purchase-review-checklist?projectId=${encodeURIComponent(id)}`,
+        relatedCount: projectFarFlowdowns.length || (isStepCovered('purchase_review_checklist') ? 1 : 0),
+      },
+      {
+        key: 'material_cert_requirements',
+        label: 'Material Cert Requirements',
+        status: routingMaterialCertRequirementCount > 0 || certificates.length > 0 ? 'covered_by_project_data' : 'needs_setup',
+        source: routingMaterialCertRequirementCount > 0 ? 'Routing operation requirements' : certificates.length > 0 ? 'COC / cert records' : 'Structured requirement setup needed',
+        detail: routingMaterialCertRequirementCount > 0 || certificates.length > 0
+          ? 'Certificate requirements or resulting cert records are visible in the project read model.'
+          : 'Add a structured requirement model for material cert type, supplier responsibility, receiving hold, and closeout evidence.',
+        route: `/projects/${id}?tab=material`,
+        relatedCount: routingMaterialCertRequirementCount + certificates.length,
+      },
+      {
+        key: 'inspection_plan',
+        label: 'Inspection Plan',
+        status: routingInspectionCount > 0 || routingQcStandardCount > 0 ? 'covered_by_project_data' : 'needs_setup',
+        source: 'QC routing requirements',
+        detail: routingInspectionCount > 0 || routingQcStandardCount > 0 ? 'QC/inspection operations or standards exist on the routing.' : 'Add QC standards or inspection operations to the part routing.',
+        route: `/projects/${id}?tab=bom-routing`,
+        relatedCount: routingInspectionCount + routingQcStandardCount,
+      },
+      {
+        key: 'flowdowns',
+        label: 'Flow Downs',
+        status: projectFarFlowdowns.length > 0 ? 'covered_by_project_data' : 'needs_setup',
+        source: 'WAD / purchase review flowdowns',
+        detail: projectFarFlowdowns.length > 0 ? `${projectFarFlowdowns.length} project flowdown clause(s) are recorded.` : 'Capture flowdowns through the purchase review checklist so WAD can display them.',
+        route: `/projects/${id}?tab=workflow`,
+        relatedCount: projectFarFlowdowns.length,
+      },
+    ];
+    const coveredStatuses = new Set(['attached', 'covered_by_project_data', 'not_applicable']);
+    const coverageCoveredCount = coverageItems.filter(item => coveredStatuses.has(item.status)).length;
     const latestRomDraft = romDraftRows[0] ?? null;
     const romLockState = await getRomLockState(id);
     const savedRomCategories = latestRomDraft?.categories && typeof latestRomDraft.categories === 'object'
@@ -2461,6 +2673,18 @@ router.get('/:id/p2-hub', async (req, res) => {
           completedForms: completedSteps,
           activityLog,
           documents: manualDocuments,
+        },
+        documentCoverage: {
+          summary: {
+            totalItems: coverageItems.length,
+            coveredItems: coverageCoveredCount,
+            needsAttention: coverageItems.length - coverageCoveredCount,
+            attachedItems: coverageItems.filter(item => item.status === 'attached').length,
+            coveredByProjectData: coverageItems.filter(item => item.status === 'covered_by_project_data').length,
+          },
+          items: coverageItems,
+          flowdowns: projectFarFlowdowns,
+          routingOperationSummaries,
         },
         po: {
           summary: {

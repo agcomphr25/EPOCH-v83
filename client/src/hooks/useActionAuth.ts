@@ -60,6 +60,7 @@ export function useActionAuth() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [actionDescription, setActionDescription] = useState('perform this action');
   const pendingActionRef = useRef<(() => void) | null>(null);
+  const authSuccessCloseRef = useRef(false);
 
   const { data: sessionUser } = useQuery<ActionAuthUser | null>({
     queryKey: ['/api/auth/session'],
@@ -123,16 +124,22 @@ export function useActionAuth() {
   const handleAuthSuccess = useCallback((token: string, user: ActionAuthUser, expiresAt?: string) => {
     const expiry = expiresAt || new Date(Date.now() + 15 * 60 * 1000).toISOString();
     storeAuth(token, expiry, user);
+    authSuccessCloseRef.current = true;
     setAuthState({
       isAuthenticated: true,
       user,
       token,
       expiresAt: new Date(expiry),
     });
+    setShowAuthModal(false);
   }, []);
 
   const handleAuthModalClose = useCallback(() => {
     setShowAuthModal(false);
+    if (authSuccessCloseRef.current) {
+      authSuccessCloseRef.current = false;
+      return;
+    }
     pendingActionRef.current = null;
   }, []);
 

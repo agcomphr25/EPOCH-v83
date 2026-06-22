@@ -429,7 +429,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       let urgencyLevel: 'critical' | 'high' | 'medium' | 'normal';
       if (order.ismanualurgency && order.urgency) {
         // Map database urgency values to urgencyLevel
-        urgencyLevel = order.urgency === 'critical' ? 'critical' 
+        urgencyLevel = order.urgency === 'critical' ? 'critical'
                      : order.urgency === 'high' ? 'high'
                      : order.urgency === 'medium' ? 'medium'
                      : 'normal';

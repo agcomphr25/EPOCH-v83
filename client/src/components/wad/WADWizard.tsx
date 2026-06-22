@@ -759,6 +759,7 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
     const totalBudget: number = wad.totalBudgetHours
       ? Number(wad.totalBudgetHours) || 0
       : budgetEntries.reduce((sum, [, h]) => sum + (Number(h) || 0), 0);
+    const materialBudget = Number((wad as any).materialBudgetAmount ?? 0);
     const defaultChargeCode = wad.defaultChargeCodeId ? String(wad.defaultChargeCodeId) : '';
     setData((prev) => {
       const next: WizardData = { ...prev };
@@ -837,6 +838,23 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
         if (pruned.length !== next.step4.chargeCodes.length) {
           next.step4 = { chargeCodes: pruned };
         }
+      }
+      if ((!next.step5 || !next.step5.materialSpendCap) && Number.isFinite(materialBudget) && materialBudget > 0) {
+        next.step5 = {
+          bomLinked: next.step5?.bomLinked ?? false,
+          materialLotsRequired: next.step5?.materialLotsRequired ?? false,
+          serializedMaterial: next.step5?.serializedMaterial ?? false,
+          icnScanRequired: next.step5?.icnScanRequired ?? false,
+          expirationBlocking: next.step5?.expirationBlocking ?? false,
+          outTimeTracking: next.step5?.outTimeTracking ?? false,
+          customerSuppliedMaterial: next.step5?.customerSuppliedMaterial ?? false,
+          certsRequired: next.step5?.certsRequired ?? false,
+          materialSpendCap: materialBudget,
+          outsideProcessingCap: next.step5?.outsideProcessingCap ?? 0,
+          materialOverrunRule: next.step5?.materialOverrunRule ?? 'REQUIRE_APPROVAL',
+          outsideProcessingRule: next.step5?.outsideProcessingRule ?? 'REQUIRE_APPROVAL',
+          notes: next.step5?.notes ?? 'Seeded from project ROM material budget.',
+        };
       }
       if (scopeOperation && next.step4?.chargeCodes?.length) {
         const currentRows = next.step4.chargeCodes;

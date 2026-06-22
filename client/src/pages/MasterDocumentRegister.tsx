@@ -318,11 +318,6 @@ export default function MasterDocumentRegister() {
     Boolean(doc.filePath && /^https?:\/\//i.test(doc.filePath));
 
   const openDocumentFile = (doc: ControlledDocument, mode: 'view' | 'download') => {
-    if (isExternalDocument(doc)) {
-      window.open(doc.filePath!, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
     const path = `/api/controlled-documents/${doc.id}/${mode}`;
     window.open(path, '_blank', 'noopener,noreferrer');
   };

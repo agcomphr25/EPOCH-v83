@@ -196,6 +196,9 @@ const normalizeImportedFilePath = async (row: Record<string, unknown>, documentN
   }
 };
 
+const isExternalDocumentPath = (filePath: string | null | undefined) =>
+  Boolean(filePath && /^https?:\/\//i.test(filePath));
+
 // Get all controlled documents (authenticated users only)
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -581,6 +584,11 @@ router.get('/:id/view', requireAuth, requireStepUp(), async (req: Request, res: 
       return res.status(404).json({ error: 'No file attached to this document' });
     }
 
+    if (isExternalDocumentPath(doc.filePath)) {
+      await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
+      return res.redirect(doc.filePath);
+    }
+
     // Strip leading slash from filePath before joining
     const relativePath = doc.filePath.replace(/^\//, '');
     const filePath = path.join(process.cwd(), 'server/src', relativePath);
@@ -651,6 +659,11 @@ router.get('/:id/download', requireAuth, requireStepUp(), async (req: Request, r
 
     if (!doc.filePath) {
       return res.status(404).json({ error: 'No file attached to this document' });
+    }
+
+    if (isExternalDocumentPath(doc.filePath)) {
+      await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
+      return res.redirect(doc.filePath);
     }
 
     // Strip leading slash from filePath before joining

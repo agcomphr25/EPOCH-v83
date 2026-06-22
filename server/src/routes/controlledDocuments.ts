@@ -12,6 +12,7 @@ import { z } from 'zod';
 import Papa from 'papaparse';
 import { requireStepUp } from '../../../server/middleware/auth';
 import { writeAccessLog } from './vault';
+import { fileURLToPath } from 'url';
 
 const router = Router();
 
@@ -168,6 +169,82 @@ const getCsvValue = (row: Record<string, unknown>, names: string[]) => {
   return '';
 };
 
+const toForwardSlashPath = (filePath: string) => filePath.replace(/\\/g, '/').toLowerCase();
+
+const isWindowsAbsolutePath = (filePath: string) => /^[a-zA-Z]:[\\/]/.test(filePath);
+
+const isUncPath = (filePath: string) => /^\\\\[^\\]+\\[^\\]+/.test(filePath);
+
+const isAllowedImportedAbsolutePath = (filePath: string) => {
+  const normalized = toForwardSlashPath(filePath);
+  return (
+    normalized.includes('/my drive/') ||
+    normalized.includes('/shared drives/') ||
+    normalized.includes('/onedrive/') ||
+    normalized.includes('/google drive/')
+  );
+};
+
+const getExternalRedirectUrl = (filePath: string | null | undefined) => {
+  const trimmed = String(filePath || '').trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^(?:drive|docs)\.google\.com\//i.test(trimmed)) return `https://${trimmed}`;
+  return null;
+};
+
+const getImportedFileReference = (filePath: string | null | undefined) => {
+  const trimmed = String(filePath || '').trim();
+  if (!trimmed) return null;
+  if (getExternalRedirectUrl(trimmed)) return getExternalRedirectUrl(trimmed);
+  if (trimmed.startsWith('/assets/documents/') || trimmed.startsWith('assets/documents/')) {
+    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  }
+
+  if (/^file:\/\//i.test(trimmed)) {
+    try {
+      const localPath = fileURLToPath(trimmed);
+      return isAllowedImportedAbsolutePath(localPath) ? localPath : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if ((isWindowsAbsolutePath(trimmed) || isUncPath(trimmed) || path.isAbsolute(trimmed)) && isAllowedImportedAbsolutePath(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
+};
+
+const resolveControlledDocumentFile = (filePath: string | null | undefined) => {
+  const trimmed = String(filePath || '').trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('/assets/documents/') || trimmed.startsWith('assets/documents/')) {
+    const relativePath = trimmed.replace(/^\//, '');
+    return path.join(process.cwd(), 'server/src', relativePath);
+  }
+
+  if (/^file:\/\//i.test(trimmed)) {
+    try {
+      const localPath = fileURLToPath(trimmed);
+      return isAllowedImportedAbsolutePath(localPath) ? localPath : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if ((isWindowsAbsolutePath(trimmed) || isUncPath(trimmed) || path.isAbsolute(trimmed)) && isAllowedImportedAbsolutePath(trimmed)) {
+    return trimmed;
+  }
+
+  if (/^[^\\/]+\.[a-z0-9]{2,5}$/i.test(trimmed)) {
+    return path.join(process.cwd(), 'server/src/assets/documents', path.basename(trimmed));
+  }
+
+  return null;
+};
+
 const normalizeImportedFilePath = async (row: Record<string, unknown>, documentName: string) => {
   const explicitLink = getCsvValue(row, [
     'Document Link',
@@ -180,8 +257,8 @@ const normalizeImportedFilePath = async (row: Record<string, unknown>, documentN
     'filePath',
   ]);
 
-  if (/^https?:\/\//i.test(explicitLink)) return explicitLink;
-  if (explicitLink.startsWith('/assets/documents/')) return explicitLink;
+  const importedFileReference = getImportedFileReference(explicitLink);
+  if (importedFileReference) return importedFileReference;
 
   const candidateName = explicitLink || documentName;
   if (!/\.[a-z0-9]{2,5}$/i.test(candidateName)) return null;
@@ -195,9 +272,6 @@ const normalizeImportedFilePath = async (row: Record<string, unknown>, documentN
     return null;
   }
 };
-
-const isExternalDocumentPath = (filePath: string | null | undefined) =>
-  Boolean(filePath && /^https?:\/\//i.test(filePath));
 
 // Get all controlled documents (authenticated users only)
 router.get('/', requireAuth, async (req: Request, res: Response) => {
@@ -584,20 +658,22 @@ router.get('/:id/view', requireAuth, requireStepUp(), async (req: Request, res: 
       return res.status(404).json({ error: 'No file attached to this document' });
     }
 
-    if (isExternalDocumentPath(doc.filePath)) {
+    const externalRedirectUrl = getExternalRedirectUrl(doc.filePath);
+    if (externalRedirectUrl) {
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
-      return res.redirect(doc.filePath);
+      return res.redirect(externalRedirectUrl);
     }
 
-    // Strip leading slash from filePath before joining
-    const relativePath = doc.filePath.replace(/^\//, '');
-    const filePath = path.join(process.cwd(), 'server/src', relativePath);
+    const filePath = resolveControlledDocumentFile(doc.filePath);
+    if (!filePath) {
+      return res.status(422).json({ error: 'Document file path is not a supported app-accessible location' });
+    }
     
     // Check if file exists
     try {
       await fs.access(filePath);
     } catch {
-      return res.status(404).json({ error: 'File not found on server' });
+      return res.status(404).json({ error: 'Document file is not accessible from this server' });
     }
 
     if (path.extname(filePath).toLowerCase() !== '.pdf') {
@@ -661,20 +737,22 @@ router.get('/:id/download', requireAuth, requireStepUp(), async (req: Request, r
       return res.status(404).json({ error: 'No file attached to this document' });
     }
 
-    if (isExternalDocumentPath(doc.filePath)) {
+    const externalRedirectUrl = getExternalRedirectUrl(doc.filePath);
+    if (externalRedirectUrl) {
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
-      return res.redirect(doc.filePath);
+      return res.redirect(externalRedirectUrl);
     }
 
-    // Strip leading slash from filePath before joining
-    const relativePath = doc.filePath.replace(/^\//, '');
-    const filePath = path.join(process.cwd(), 'server/src', relativePath);
+    const filePath = resolveControlledDocumentFile(doc.filePath);
+    if (!filePath) {
+      return res.status(422).json({ error: 'Document file path is not a supported app-accessible location' });
+    }
 
     // Check if file exists
     try {
       await fs.access(filePath);
     } catch {
-      return res.status(404).json({ error: 'File not found on server' });
+      return res.status(404).json({ error: 'Document file is not accessible from this server' });
     }
 
     // Write download access log entry before sending the file

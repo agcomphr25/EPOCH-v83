@@ -22,6 +22,7 @@ import {
   evaluateShippingCertPackageGate,
 } from '../services/certPackageService';
 import { recordAuditEvent } from '../services/auditLedgerService';
+import { formatP2DocumentPoNumber } from '../utils/p2DocumentPoNumber';
 import multer from 'multer';
 import {
   getFileStorageProvider,
@@ -1680,7 +1681,7 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
         customerAddress,
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         lineItems,
         totalQuantity: serials.length,
         status: 'DRAFT',
@@ -1803,7 +1804,18 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
       lineItems = Array.isArray(slip.lineItems) ? slip.lineItems : [];
     }
 
-    return res.json({ ...slip, lineItems, originalPackingSlip, replacementSlips });
+    return res.json({
+      ...slip,
+      poNumber: formatP2DocumentPoNumber(slip.poNumber),
+      lineItems,
+      originalPackingSlip: originalPackingSlip
+        ? { ...originalPackingSlip, poNumber: formatP2DocumentPoNumber(originalPackingSlip.poNumber) }
+        : null,
+      replacementSlips: replacementSlips.map((replacement) => ({
+        ...replacement,
+        poNumber: formatP2DocumentPoNumber(replacement.poNumber),
+      })),
+    });
   } catch (err: any) {
     console.error('Get packing slip error:', err);
     return res.status(500).json({ error: 'Failed to fetch packing slip' });
@@ -2461,7 +2473,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
         customerAddress,
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         partNumber: assignedSku || lot.partNumber,
         partName: lot.partName,
         quantity: serials.length,
@@ -2487,7 +2499,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
       .set({ certificateId: cert.id })
       .where(eq(p2LotNumbers.id, lot.id));
 
-    return res.status(201).json(cert);
+    return res.status(201).json({ ...cert, poNumber: formatP2DocumentPoNumber(cert.poNumber) });
   } catch (err: any) {
     if (err instanceof z.ZodError)
       return res.status(400).json({ error: err.errors[0].message });
@@ -2521,6 +2533,7 @@ router.get('/certificates/:id', async (req: Request, res: Response) => {
     const assignedSku = await getAssignedSkuForLot(cert.lotNumberId);
     return res.json({
       ...cert,
+      poNumber: formatP2DocumentPoNumber(cert.poNumber),
       partNumber: assignedSku || cert.partNumber,
       specialProcesses: getSpecialProcesses(cert.processRecords),
       qaMgrTitle: getQaMgrTitle(cert.traceabilityData),
@@ -2619,7 +2632,7 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
 
     const infoRows: [string, string][] = [
       ['Customer:', cert.customerName],
-      ['Purchase Order #:', cert.poNumber || '—'],
+      ['Purchase Order #:', formatP2DocumentPoNumber(cert.poNumber) || '—'],
       [assignedSku ? 'SKU:' : 'Part Number:', displayPartNumber],
       ['Part Description:', cert.partName || '—'],
       ['Special Processes:', specialProcesses],

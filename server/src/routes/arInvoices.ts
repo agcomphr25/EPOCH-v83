@@ -33,6 +33,7 @@ import {
   buildRevenueDimensionTags,
   resolveRevenueAccountForProductionLine,
 } from '../services/productionLineAccounting';
+import { formatP2DocumentPoNumber } from '../utils/p2DocumentPoNumber';
 
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
 
@@ -156,6 +157,17 @@ const invoicePoNumberSql = () => sql<string | null>`
     ${p2PurchaseOrders.poNumber}
   )
 `;
+
+function normalizeInvoiceDocumentPo<T extends { invoiceSource?: string | null; poNumber?: string | null; poOverride?: string | null }>(
+  invoice: T,
+): T {
+  if (invoice.invoiceSource === 'P1') return invoice;
+  return {
+    ...invoice,
+    poNumber: formatP2DocumentPoNumber(invoice.poNumber),
+    poOverride: formatP2DocumentPoNumber(invoice.poOverride) ?? invoice.poOverride,
+  };
+}
 
 async function isP1PackingSlipInvoice(invoiceId: string): Promise<boolean> {
   const [row] = await db
@@ -455,7 +467,7 @@ router.get('/', async (req: Request, res: Response) => {
       )
       .orderBy(desc(arInvoices.createdAt));
 
-    res.json(results);
+    res.json(results.map(normalizeInvoiceDocumentPo));
   } catch (error) {
     console.error('Failed to fetch invoices:', error);
     res.status(500).json({ error: 'Failed to fetch invoices' });
@@ -545,7 +557,7 @@ router.get('/needs-review', async (_req: Request, res: Response) => {
         )
       )
       .orderBy(desc(arInvoices.createdAt));
-    res.json(results);
+    res.json(results.map(normalizeInvoiceDocumentPo));
   } catch (error) {
     console.error('Failed to fetch needs-review invoices:', error);
     res.status(500).json({ error: 'Failed to fetch needs-review invoices' });
@@ -568,7 +580,7 @@ router.get('/unsent', async (_req: Request, res: Response) => {
         )
       )
       .orderBy(desc(arInvoices.createdAt));
-    res.json(results);
+    res.json(results.map(normalizeInvoiceDocumentPo));
   } catch (error) {
     console.error('Failed to fetch unsent invoices:', error);
     res.status(500).json({ error: 'Failed to fetch unsent invoices' });
@@ -591,7 +603,7 @@ router.get('/disputed', async (_req: Request, res: Response) => {
         )
       )
       .orderBy(desc(arInvoices.createdAt));
-    res.json(results);
+    res.json(results.map(normalizeInvoiceDocumentPo));
   } catch (error) {
     console.error('Failed to fetch disputed invoices:', error);
     res.status(500).json({ error: 'Failed to fetch disputed invoices' });
@@ -806,7 +818,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       .from(arPaymentAllocations)
       .where(eq(arPaymentAllocations.invoiceId, id));
 
-    res.json({ ...invoice, lines, payments });
+    res.json({ ...normalizeInvoiceDocumentPo(invoice), lines, payments });
   } catch (error) {
     console.error('Failed to fetch invoice:', error);
     res.status(500).json({ error: 'Failed to fetch invoice' });

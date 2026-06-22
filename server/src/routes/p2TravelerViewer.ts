@@ -40,6 +40,7 @@ import {
   insertP2DepartmentTransferSignatureSchema,
 } from '../../schema';
 import { eq, and, desc, sql, inArray, or, ilike, asc } from 'drizzle-orm';
+import { formatP2DocumentPoNumber } from '../utils/p2DocumentPoNumber';
 
 const router = Router();
 
@@ -1413,7 +1414,13 @@ router.post('/packing-slip', async (req: Request, res: Response) => {
       packingSlipNumber,
     });
     
-    const [packingSlip] = await db.insert(p2PackingSlips).values(validatedData).returning();
+    const [packingSlip] = await db
+      .insert(p2PackingSlips)
+      .values({
+        ...validatedData,
+        poNumber: formatP2DocumentPoNumber(validatedData.poNumber),
+      })
+      .returning();
 
     // If associated with a lot, update the lot
     if (req.body.lotNumberId) {
@@ -1423,7 +1430,10 @@ router.post('/packing-slip', async (req: Request, res: Response) => {
         .where(eq(p2LotNumbers.id, req.body.lotNumberId));
     }
 
-    return res.json({ success: true, packingSlip });
+    return res.json({
+      success: true,
+      packingSlip: { ...packingSlip, poNumber: formatP2DocumentPoNumber(packingSlip.poNumber) },
+    });
   } catch (error: any) {
     console.error('Error creating packing slip:', error);
     return res.status(500).json({ error: error.message || 'Failed to create packing slip' });
@@ -1455,7 +1465,7 @@ router.get('/packing-slip/:id', async (req: Request, res: Response) => {
     if (!packingSlip) {
       return res.status(404).json({ error: 'Packing slip not found' });
     }
-    return res.json(packingSlip);
+    return res.json({ ...packingSlip, poNumber: formatP2DocumentPoNumber(packingSlip.poNumber) });
   } catch (error: any) {
     console.error('Error getting packing slip:', error);
     return res.status(500).json({ error: 'Failed to get packing slip' });
@@ -1516,7 +1526,13 @@ router.post('/certificate-of-conformance', async (req: Request, res: Response) =
       traceabilityData,
     });
     
-    const [certificate] = await db.insert(p2CertificatesOfConformance).values(validatedData).returning();
+    const [certificate] = await db
+      .insert(p2CertificatesOfConformance)
+      .values({
+        ...validatedData,
+        poNumber: formatP2DocumentPoNumber(validatedData.poNumber),
+      })
+      .returning();
 
     // If associated with a lot, update the lot
     if (req.body.lotNumberId) {
@@ -1526,7 +1542,10 @@ router.post('/certificate-of-conformance', async (req: Request, res: Response) =
         .where(eq(p2LotNumbers.id, req.body.lotNumberId));
     }
 
-    return res.json({ success: true, certificate });
+    return res.json({
+      success: true,
+      certificate: { ...certificate, poNumber: formatP2DocumentPoNumber(certificate.poNumber) },
+    });
   } catch (error: any) {
     console.error('Error creating certificate of conformance:', error);
     return res.status(500).json({ error: error.message || 'Failed to create certificate of conformance' });
@@ -1561,6 +1580,7 @@ router.get('/certificate-of-conformance/:id', async (req: Request, res: Response
     const assignedSku = await getAssignedSkuForLot(certificate.lotNumberId);
     return res.json({
       ...certificate,
+      poNumber: formatP2DocumentPoNumber(certificate.poNumber),
       partNumber: assignedSku || certificate.partNumber,
       specialProcesses: getSpecialProcesses(certificate.processRecords),
       qaMgrTitle: getQaMgrTitle(certificate.traceabilityData),
@@ -1759,7 +1779,7 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
         lotNumber: lot.lotNumber,
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         lineItems,
         totalQuantity: serializedItems.length,
         status: 'DRAFT',
@@ -1791,7 +1811,7 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
         lotNumber: lot.lotNumber,
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         partNumber: lot.partNumber,
         partName: lot.partName,
         quantity: serializedItems.length,
@@ -1870,7 +1890,7 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
         lotNumber: lot.lotNumber,
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         partNumber: lot.partNumber,
         partName: lot.partName,
         quantity: serializedItems.length,

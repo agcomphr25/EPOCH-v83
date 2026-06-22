@@ -569,7 +569,7 @@ export default function InvoiceDetailPage() {
   const lines = invoice.lines || [];
   const payments = invoice.payments || [];
   const isP1Invoice = invoice.invoiceSource === 'P1';
-  const sourcePoLabel = invoice.poOverride || invoice.poNumber || invoice.poId;
+  const sourcePoLabel = invoice.poOverride || invoice.poNumber || packingSlipInfo?.poNumber || invoice.poId;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -726,15 +726,15 @@ export default function InvoiceDetailPage() {
                   <p className="text-sm text-muted-foreground">Terms</p>
                   <p className="font-medium">{invoice.terms || '—'}</p>
                 </div>
-                {(invoice.poId || invoice.poOverride) && (
+                {sourcePoLabel && (
                   <div>
                     <p className="text-sm text-muted-foreground">PO</p>
-                    <p className="font-medium">{invoice.poOverride || invoice.poNumber || invoice.poId || '—'}</p>
+                    <p className="font-medium">{sourcePoLabel}</p>
                   </div>
                 )}
               </div>
 
-              {(invoice.packingSlipId || invoice.lotId || invoice.poOverride || invoice.poId) && (
+              {(invoice.packingSlipId || invoice.lotId || sourcePoLabel) && (
                 <>
                   <Separator className="my-4" />
                   <div>
@@ -767,14 +767,14 @@ export default function InvoiceDetailPage() {
                           </Link>
                         </Button>
                       )}
-                      {(invoice.poOverride || invoice.poId) && (
+                      {sourcePoLabel && (invoice.poOverride || invoice.poNumber || invoice.poId) && (
                         <Button variant="outline" size="sm" asChild>
                           <Link href={isP1Invoice
                             ? `/oem-shipments?search=${encodeURIComponent(sourcePoLabel || '')}`
                             : `/p2-control-center?tab=pos&search=${encodeURIComponent(sourcePoLabel || '')}`}
                           >
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
-                            {isP1Invoice ? 'P1 PO' : 'P2 PO'}: {sourcePoLabel || invoice.poId}
+                            {isP1Invoice ? 'P1 PO' : 'P2 PO'}: {sourcePoLabel}
                             <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
                           </Link>
                         </Button>

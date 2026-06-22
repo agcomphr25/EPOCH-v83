@@ -785,6 +785,9 @@ export default function ProjectDetailPage() {
   const hubMaterial = hubTabs.material ?? {};
   const hubLabor = hubTabs.labor ?? {};
   const hubShippingInvoicing = hubTabs.shippingInvoicing ?? {};
+  const hubDocumentCoverage = hubTabs.documentCoverage ?? {};
+  const documentCoverageSummary = hubDocumentCoverage.summary ?? {};
+  const documentCoverageItems = Array.isArray(hubDocumentCoverage.items) ? hubDocumentCoverage.items : [];
   const hubBomRouting = hubTabs.bomRouting ?? {};
   const bomRoutingSummary = hubBomRouting.summary ?? {};
   const bomRoutingRecords = Array.isArray(hubBomRouting.bomRecords) ? hubBomRouting.bomRecords : [];
@@ -878,6 +881,35 @@ export default function ProjectDetailPage() {
     if (value === null || value === undefined || value === '') return fallback;
     const hours = Number(value);
     return Number.isFinite(hours) ? `${hours.toLocaleString()} hrs` : fallback;
+  };
+  const coverageStatusLabels: Record<string, string> = {
+    attached: 'Attached',
+    covered_by_project_data: 'Covered by project data',
+    needs_upload: 'Needs upload',
+    needs_setup: 'Needs setup',
+    needs_clarification: 'Needs clarification',
+    not_applicable: 'Not applicable',
+  };
+  const coverageStatusClass = (status: string) => {
+    switch (status) {
+      case 'attached':
+      case 'covered_by_project_data':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'needs_upload':
+      case 'needs_setup':
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'needs_clarification':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'not_applicable':
+        return 'bg-gray-100 text-gray-700 border-gray-200';
+      default:
+        return 'bg-gray-100 text-gray-700 border-gray-200';
+    }
+  };
+  const coverageStatusIcon = (status: string) => {
+    if (status === 'attached') return <Paperclip className="h-4 w-4" />;
+    if (status === 'covered_by_project_data' || status === 'not_applicable') return <CheckCircle2 className="h-4 w-4" />;
+    return <AlertCircle className="h-4 w-4" />;
   };
   const { data: quoteFeedback, isLoading: isLoadingFeedback } = useQuery<QuoteExecutionFeedback | null>({
     queryKey: ['/api/projects', id, 'quote-feedback'],
@@ -1979,6 +2011,7 @@ export default function ProjectDetailPage() {
       <Tabs defaultValue={initialTab} className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
+          <TabsTrigger value="document-coverage" data-testid="tab-document-coverage">Document Coverage</TabsTrigger>
           <TabsTrigger value="po" data-testid="tab-po">
             <Receipt className="h-4 w-4 mr-1.5" />
             PO
@@ -2694,6 +2727,113 @@ export default function ProjectDetailPage() {
                 })()}
 
               </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="document-coverage" className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Covered</p>
+              <p className="font-medium">
+                {documentCoverageSummary.coveredItems ?? documentCoverageItems.filter((item: any) => ['attached', 'covered_by_project_data', 'not_applicable'].includes(item.status)).length}
+                {' / '}
+                {documentCoverageSummary.totalItems ?? documentCoverageItems.length}
+              </p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Needs Attention</p>
+              <p className="font-medium">{documentCoverageSummary.needsAttention ?? documentCoverageItems.filter((item: any) => !['attached', 'covered_by_project_data', 'not_applicable'].includes(item.status)).length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Attached Files</p>
+              <p className="font-medium">{documentCoverageSummary.attachedItems ?? documentCoverageItems.filter((item: any) => item.status === 'attached').length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Project Data Coverage</p>
+              <p className="font-medium">{documentCoverageSummary.coveredByProjectData ?? documentCoverageItems.filter((item: any) => item.status === 'covered_by_project_data').length}</p>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-green-600" />
+                    Required Document Coverage
+                  </CardTitle>
+                  <CardDescription>
+                    Shows whether each WAD/customer requirement is attached, covered by Epoch project data, or still needs setup.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(latestWad?.id ? `/work-orders/${latestWad.id}/wad-summary` : `/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}`)}
+                  data-testid="button-open-wad-from-coverage"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open WAD
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {documentCoverageItems.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  Coverage data is still loading or unavailable for this project.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {documentCoverageItems.map((item: any) => {
+                    const missingParts = Array.isArray(item.missingParts) ? item.missingParts : [];
+                    return (
+                      <div key={item.key} className="rounded-md border p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium">{item.label}</p>
+                              <Badge variant="outline" className={coverageStatusClass(item.status)}>
+                                <span className="mr-1">{coverageStatusIcon(item.status)}</span>
+                                {coverageStatusLabels[item.status] ?? item.status}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{item.detail}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {typeof item.relatedCount === 'number' && (
+                              <Badge variant="secondary">{item.relatedCount} source{item.relatedCount === 1 ? '' : 's'}</Badge>
+                            )}
+                            {item.route && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setLocation(item.route)}
+                                data-testid={`button-open-coverage-${item.key}`}
+                              >
+                                <ExternalLink className="h-4 w-4 mr-1.5" />
+                                Open
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span className="rounded bg-muted px-2 py-1">Source: {item.source || 'Project record'}</span>
+                          {missingParts.slice(0, 8).map((part: string) => (
+                            <span key={part} className="rounded bg-amber-50 px-2 py-1 text-amber-800">
+                              Missing: {part}
+                            </span>
+                          ))}
+                          {missingParts.length > 8 && (
+                            <span className="rounded bg-amber-50 px-2 py-1 text-amber-800">
+                              +{missingParts.length - 8} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </CardContent>
           </Card>

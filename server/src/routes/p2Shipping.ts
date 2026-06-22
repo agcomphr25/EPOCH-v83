@@ -1804,7 +1804,18 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
       lineItems = Array.isArray(slip.lineItems) ? slip.lineItems : [];
     }
 
-    return res.json({ ...slip, lineItems, originalPackingSlip, replacementSlips });
+    return res.json({
+      ...slip,
+      poNumber: formatP2DocumentPoNumber(slip.poNumber),
+      lineItems,
+      originalPackingSlip: originalPackingSlip
+        ? { ...originalPackingSlip, poNumber: formatP2DocumentPoNumber(originalPackingSlip.poNumber) }
+        : null,
+      replacementSlips: replacementSlips.map((replacement) => ({
+        ...replacement,
+        poNumber: formatP2DocumentPoNumber(replacement.poNumber),
+      })),
+    });
   } catch (err: any) {
     console.error('Get packing slip error:', err);
     return res.status(500).json({ error: 'Failed to fetch packing slip' });

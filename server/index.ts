@@ -5365,6 +5365,37 @@ async function initializeBackgroundServices() {
             updated_at                 TIMESTAMPTZ DEFAULT NOW()
           )
         `);
+        await pool.query(`
+          ALTER TABLE p2_production_changes
+            ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid(),
+            ADD COLUMN IF NOT EXISTS change_number TEXT,
+            ADD COLUMN IF NOT EXISTS change_type TEXT,
+            ADD COLUMN IF NOT EXISTS scope TEXT DEFAULT 'PO',
+            ADD COLUMN IF NOT EXISTS part_number TEXT,
+            ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id),
+            ADD COLUMN IF NOT EXISTS routing_id UUID,
+            ADD COLUMN IF NOT EXISTS current_revision TEXT,
+            ADD COLUMN IF NOT EXISTS proposed_change TEXT,
+            ADD COLUMN IF NOT EXISTS reason TEXT,
+            ADD COLUMN IF NOT EXISTS risk_assessment TEXT,
+            ADD COLUMN IF NOT EXISTS requires_customer_approval BOOLEAN DEFAULT false,
+            ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'DRAFT',
+            ADD COLUMN IF NOT EXISTS submitted_by_id INTEGER REFERENCES employees(id),
+            ADD COLUMN IF NOT EXISTS submitted_by_name TEXT,
+            ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS approved_by_id INTEGER REFERENCES employees(id),
+            ADD COLUMN IF NOT EXISTS approved_by_name TEXT,
+            ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS rejected_by_id INTEGER REFERENCES employees(id),
+            ADD COLUMN IF NOT EXISTS rejected_by_name TEXT,
+            ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS rejection_reason TEXT,
+            ADD COLUMN IF NOT EXISTS implemented_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS effective_date DATE,
+            ADD COLUMN IF NOT EXISTS notes TEXT,
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW(),
+            ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
+        `);
         await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_po_id_idx ON p2_production_changes(po_id)`);
         await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_status_idx ON p2_production_changes(status)`);
         await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_type_idx ON p2_production_changes(change_type)`);

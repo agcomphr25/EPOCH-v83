@@ -17217,17 +17217,29 @@ export class DatabaseStorage implements IStorage {
       .where(like(p2ProductionChanges.changeNumber, `PCF-${year}-%`));
     const nextNum = (lastNumber ?? 0) + 1;
     const changeNumber = `PCF-${year}-${String(nextNum).padStart(3, '0')}`;
+    const changeData = this.normalizeP2ProductionChangeDates(data);
     
-    const [change] = await db.insert(p2ProductionChanges).values({ ...data, changeNumber }).returning();
+    const [change] = await db.insert(p2ProductionChanges).values({ ...changeData, changeNumber }).returning();
     return change;
   }
 
   async updateP2ProductionChange(id: string, data: Partial<InsertP2ProductionChange>): Promise<P2ProductionChange> {
+    const changeData = this.normalizeP2ProductionChangeDates(data);
     const [change] = await db.update(p2ProductionChanges)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...changeData, updatedAt: new Date() })
       .where(eq(p2ProductionChanges.id, id))
       .returning();
     return change;
+  }
+
+  private normalizeP2ProductionChangeDates<T extends Partial<InsertP2ProductionChange>>(data: T): T {
+    const normalized: any = { ...data };
+    for (const field of ['submittedAt', 'approvedAt', 'rejectedAt', 'implementedAt'] as const) {
+      if (typeof normalized[field] === 'string' && normalized[field].trim()) {
+        normalized[field] = new Date(normalized[field]);
+      }
+    }
+    return normalized;
   }
 
   // P2 Traveler Changes (Deviations) CRUD

@@ -12,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -85,6 +84,8 @@ interface StartProductionTimerModalProps {
   travelerTaskId?: string;
   departmentName?: string;
   enableTravelerScan?: boolean;
+  requireAuth?: (action: () => void, description?: string) => void;
+  getAuthHeaders?: () => Record<string, string>;
 }
 
 export default function StartProductionTimerModal({
@@ -100,6 +101,8 @@ export default function StartProductionTimerModal({
   travelerTaskId,
   departmentName,
   enableTravelerScan = false,
+  requireAuth,
+  getAuthHeaders,
 }: StartProductionTimerModalProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -107,17 +110,15 @@ export default function StartProductionTimerModal({
   const streamRef = useRef<MediaStream | null>(null);
   const travelerInputRef = useRef<HTMLInputElement>(null);
   const serialInputRef = useRef<HTMLInputElement>(null);
+  const scanningActiveRef = useRef(false);
 
   const [travelerBarcode, setTravelerBarcode] = useState('');
   const [resolvedTraveler, setResolvedTraveler] = useState<TravelerScanResolution | null>(null);
   const [programId, setProgramId] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
-  const [description, setDescription] = useState('');
   const [mandrelNumber, setMandrelNumber] = useState('');
   const [ovenNumber, setOvenNumber] = useState('');
   const [ovenSlot, setOvenSlot] = useState('');
-  const [notes, setNotes] = useState('');
-  const [scannedBy, setScannedBy] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [barcodeSupported, setBarcodeSupported] = useState(false);
   const [isResolvingTraveler, setIsResolvingTraveler] = useState(false);
@@ -154,14 +155,18 @@ export default function StartProductionTimerModal({
       setTravelerBarcode('');
       setResolvedTraveler(null);
       setSerialNumber('');
-      setDescription('');
       setMandrelNumber('');
       setOvenNumber('');
       setOvenSlot('');
-      setNotes('');
-      setScannedBy('');
     }
   }, [open, defaultSerialNumber, defaultProgramId, enableTravelerScan]);
+
+  useEffect(() => {
+    if (!open || defaultProgramId || programId || !programs?.length) return;
+    if (programs.length === 1) {
+      setProgramId(programs[0].id);
+    }
+  }, [open, defaultProgramId, programId, programs]);
 
   const applyTravelerResolution = (resolution: TravelerScanResolution) => {
     setResolvedTraveler(resolution);
@@ -203,17 +208,17 @@ export default function StartProductionTimerModal({
     mutationFn: async () => {
       return apiRequest('/api/production/timers/runs/start', {
         method: 'POST',
+        headers: getAuthHeaders?.(),
         body: JSON.stringify({
           programId,
           serialNumber: serialNumber.trim(),
-          description: description.trim() || undefined,
           mandrelNumber: parseInt(mandrelNumber, 10),
           ovenNumber: parseInt(ovenNumber, 10),
           ovenSlot,
           ...(resolvedTraveler?.scannedTravelerBarcode || travelerBarcode.trim()
             ? { scannedTravelerBarcode: resolvedTraveler?.scannedTravelerBarcode || travelerBarcode.trim() }
             : {}),
-          ...(scannedBy.trim() ? { badgeId: scannedBy.trim() } : badgeId ? { badgeId } : {}),
+          ...(badgeId ? { badgeId } : {}),
           ...(travelerId || resolvedTraveler?.traveler?.id ? { travelerId: travelerId || resolvedTraveler?.traveler?.id } : {}),
           ...(travelerStepId ? { travelerStepId } : {}),
           ...(travelerTaskId ? { travelerTaskId } : {}),
@@ -253,6 +258,7 @@ export default function StartProductionTimerModal({
         await videoRef.current.play();
       }
 
+      scanningActiveRef.current = true;
       setIsScanning(true);
 
       if ('BarcodeDetector' in window) {
@@ -261,7 +267,7 @@ export default function StartProductionTimerModal({
         });
 
         const scanFrame = async () => {
-          if (!videoRef.current || !isScanning) return;
+          if (!videoRef.current || !scanningActiveRef.current) return;
 
           try {
             const barcodes = await detector.detect(videoRef.current);
@@ -280,7 +286,7 @@ export default function StartProductionTimerModal({
             console.error('Barcode detection error:', err);
           }
 
-          if (isScanning) {
+          if (scanningActiveRef.current) {
             requestAnimationFrame(scanFrame);
           }
         };
@@ -294,11 +300,13 @@ export default function StartProductionTimerModal({
         description: 'Please allow camera access to scan barcodes',
         variant: 'destructive',
       });
+      scanningActiveRef.current = false;
       setIsScanning(false);
     }
   };
 
   const stopScanning = () => {
+    scanningActiveRef.current = false;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -319,29 +327,35 @@ export default function StartProductionTimerModal({
       });
       return;
     }
-    startMutation.mutate();
+    const startTimer = () => startMutation.mutate();
+    if (requireAuth && !badgeId) {
+      requireAuth(startTimer, 'start this timer');
+      return;
+    }
+    startTimer();
   };
 
   const isValid = programId && serialNumber.trim() && mandrelNumber && ovenNumber && ovenSlot;
+  const showProgramSelector = !enableTravelerScan || (!programId && (programs?.length || 0) > 1);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <Play className="w-5 h-5" />
-            Start Timer
+            <ScanBarcode className="w-5 h-5" />
+            Scan Traveler to Start Timer
           </DialogTitle>
           <DialogDescription>
-            Configure production run parameters
+            Scan the traveler, then enter mandrel, oven, and side.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {enableTravelerScan && (
             <div className="space-y-2">
-              <Label htmlFor="travelerBarcode">Traveler Scan</Label>
-              <div className="flex gap-2">
+              <Label htmlFor="travelerBarcode" className="text-base font-semibold">Traveler Barcode *</Label>
+              <div className="flex gap-2 rounded-lg border-2 border-emerald-300 bg-emerald-50/70 p-3 dark:border-emerald-700 dark:bg-emerald-950/30">
                 <Input
                   id="travelerBarcode"
                   ref={travelerInputRef}
@@ -354,7 +368,7 @@ export default function StartProductionTimerModal({
                     }
                   }}
                   placeholder="Scan traveler barcode"
-                  className="flex-1 font-mono"
+                  className="h-14 flex-1 bg-white font-mono text-lg dark:bg-slate-950"
                   autoComplete="off"
                 />
                 <Button
@@ -362,6 +376,7 @@ export default function StartProductionTimerModal({
                   variant="outline"
                   onClick={() => resolveTravelerScan(travelerBarcode)}
                   disabled={!travelerBarcode.trim() || isResolvingTraveler}
+                  className="h-14 border-emerald-300 bg-white dark:bg-slate-950"
                 >
                   {isResolvingTraveler ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -391,32 +406,35 @@ export default function StartProductionTimerModal({
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="program">Program *</Label>
-            <Select value={programId} onValueChange={setProgramId}>
-              <SelectTrigger id="program">
-                <SelectValue placeholder="Select a program..." />
-              </SelectTrigger>
-              <SelectContent>
-                {programsLoading ? (
-                  <div className="p-2 text-center text-muted-foreground">
-                    Loading programs...
-                  </div>
-                ) : programs?.length === 0 ? (
-                  <div className="p-2 text-center text-muted-foreground">
-                    No active programs available
-                  </div>
-                ) : (
-                  programs?.map((program) => (
-                    <SelectItem key={program.id} value={program.id}>
-                      {program.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          {showProgramSelector && (
+            <div className="space-y-2">
+              <Label htmlFor="program">Program *</Label>
+              <Select value={programId} onValueChange={setProgramId}>
+                <SelectTrigger id="program">
+                  <SelectValue placeholder="Select a program..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {programsLoading ? (
+                    <div className="p-2 text-center text-muted-foreground">
+                      Loading programs...
+                    </div>
+                  ) : programs?.length === 0 ? (
+                    <div className="p-2 text-center text-muted-foreground">
+                      No active programs available
+                    </div>
+                  ) : (
+                    programs?.map((program) => (
+                      <SelectItem key={program.id} value={program.id}>
+                        {program.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
+          {!enableTravelerScan && (
           <div className="space-y-2">
             <Label htmlFor="serialNumber">Serial # *</Label>
             <div className="flex gap-2">
@@ -452,6 +470,7 @@ export default function StartProductionTimerModal({
               )}
             </div>
           </div>
+          )}
 
           {isScanning && (
             <div className="relative rounded-lg overflow-hidden bg-black">
@@ -470,17 +489,7 @@ export default function StartProductionTimerModal({
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Input
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter description (optional)"
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="mandrel">Mandrel # *</Label>
               <Select value={mandrelNumber} onValueChange={setMandrelNumber}>
@@ -509,7 +518,7 @@ export default function StartProductionTimerModal({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="ovenSlot">Oven Slot *</Label>
+              <Label htmlFor="ovenSlot">Side *</Label>
               <Select value={ovenSlot} onValueChange={setOvenSlot}>
                 <SelectTrigger id="ovenSlot">
                   <SelectValue placeholder="Select" />
@@ -520,28 +529,6 @@ export default function StartProductionTimerModal({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes (optional)</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Any additional notes..."
-              rows={2}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="scannedBy">Employee Code</Label>
-            <Input
-              id="scannedBy"
-              value={scannedBy}
-              onChange={(e) => setScannedBy(e.target.value)}
-              placeholder="Scan or enter your badge/employee code"
-              autoComplete="off"
-            />
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">

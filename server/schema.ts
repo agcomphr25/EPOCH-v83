@@ -6065,6 +6065,7 @@ export const travelers = pgTable('travelers', {
   salesOrderId: varchar('sales_order_id', { length: 255 }),
   workOrderId: varchar('work_order_id', { length: 255 }),
   productionWorkOrderId: uuid('production_work_order_id').references((): AnyPgColumn => productionWorkOrders.id),
+  wadRevisionId: uuid('wad_revision_id'),
   projectId: uuid('project_id').references((): AnyPgColumn => projects.id),
   defaultChargeCodeId: integer('default_charge_code_id').references(() => chargeCodes.id, { onDelete: 'set null' }),
 
@@ -6097,6 +6098,7 @@ export const travelers = pgTable('travelers', {
   statusIdx: index('travelers_status_idx').on(table.status),
   partNumberIdx: index('travelers_part_number_idx').on(table.partNumber),
   workOrderIdx: index('travelers_work_order_idx').on(table.workOrderId),
+  wadRevisionIdx: index('travelers_wad_revision_idx').on(table.wadRevisionId),
 }));
 
 // Traveler Steps - Departments in sequence
@@ -17094,6 +17096,65 @@ export const insertProductionWorkOrderSchema = createInsertSchema(productionWork
 
 export type ProductionWorkOrder = typeof productionWorkOrders.$inferSelect;
 export type InsertProductionWorkOrder = z.infer<typeof insertProductionWorkOrderSchema>;
+
+export const wadRevisions = pgTable('wad_revisions', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  wadId: uuid('wad_id').notNull().references(() => productionWorkOrders.id, { onDelete: 'cascade' }),
+  revisionCode: text('revision_code').notNull(),
+  status: text('status').notNull().default('draft'),
+  revisionReason: text('revision_reason').notNull(),
+  reasonNotes: text('reason_notes'),
+  impactProduction: boolean('impact_production').notNull().default(false),
+  impactReleasedTravelers: boolean('impact_released_travelers').notNull().default(false),
+  impactCompletedWork: boolean('impact_completed_work').notNull().default(false),
+  impactMaterialIssued: boolean('impact_material_issued').notNull().default(false),
+  impactInspection: boolean('impact_inspection').notNull().default(false),
+  impactLaborBudget: boolean('impact_labor_budget').notNull().default(false),
+  impactDeliveryDate: boolean('impact_delivery_date').notNull().default(false),
+  impactCustomerApproval: boolean('impact_customer_approval').notNull().default(false),
+  requiresProductionHold: boolean('requires_production_hold').notNull().default(false),
+  effectiveDate: date('effective_date'),
+  wadSnapshot: jsonb('wad_snapshot').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdByDisplayName: text('created_by_display_name'),
+  approvedBy: integer('approved_by').references(() => users.id, { onDelete: 'set null' }),
+  approvedByDisplayName: text('approved_by_display_name'),
+  approvedAt: timestamp('approved_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  wadIdIdx: index('wad_revisions_wad_id_idx').on(table.wadId),
+  statusIdx: index('wad_revisions_status_idx').on(table.status),
+  wadRevisionUnique: uniqueIndex('wad_revisions_wad_revision_unique').on(table.wadId, table.revisionCode),
+}));
+
+export const wadRevisionApprovalHistory = pgTable('wad_revision_approval_history', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  wadRevisionId: uuid('wad_revision_id').notNull().references(() => wadRevisions.id, { onDelete: 'cascade' }),
+  approverRole: text('approver_role').notNull(),
+  approverUserId: integer('approver_user_id').references(() => users.id, { onDelete: 'set null' }),
+  status: text('status').notNull().default('pending'),
+  comments: text('comments'),
+  signedAt: timestamp('signed_at'),
+}, (table) => ({
+  revisionIdx: index('wad_revision_approval_history_revision_idx').on(table.wadRevisionId),
+  approverIdx: index('wad_revision_approval_history_approver_idx').on(table.approverRole, table.approverUserId),
+}));
+
+export const insertWadRevisionSchema = createInsertSchema(wadRevisions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  approvedAt: true,
+}).extend({
+  revisionReason: z.string().min(1, 'revisionReason is required'),
+  reasonNotes: z.string().optional().nullable(),
+  effectiveDate: z.string().optional().nullable(),
+});
+
+export type WadRevision = typeof wadRevisions.$inferSelect;
+export type InsertWadRevision = z.infer<typeof insertWadRevisionSchema>;
+export type WadRevisionApprovalHistory = typeof wadRevisionApprovalHistory.$inferSelect;
 
 // Program Manufacturing Orchestration - additive layer above P2 queues/WADs.
 export const programBuilds = pgTable('program_builds', {

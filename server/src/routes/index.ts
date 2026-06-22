@@ -201,6 +201,7 @@ import { qrResolverRouter, qrAdminRouter } from './qrCodes';
 import onboardingRoutes from './onboarding';
 import assetManagementRoutes from './assetManagement';
 import workOrdersRoutes from './workOrders';
+import wadRevisionsRoutes from './wadRevisions';
 import productionControlTemplatesRoutes from './productionControlTemplates';
 import productLabelsRoutes from './productLabels';
 import executiveRundownRoutes from './executiveRundown';
@@ -1251,6 +1252,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Work Orders — Consolidated: maintenance events + production WADs (EPOCH v9 spine)
   app.use('/api/work-orders', workOrdersRoutes);
+  app.use('/api', wadRevisionsRoutes);
 
   // Production Control Templates — WAD Step 6 Template Library
   app.use('/api/production-control-templates', productionControlTemplatesRoutes);

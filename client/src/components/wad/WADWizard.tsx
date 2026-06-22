@@ -903,7 +903,7 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold">WAD Wizard — {wad?.workOrderNumber}</h1>
+          <h1 className="text-xl font-bold">WAD (Working Authorization Document) — {wad?.workOrderNumber}</h1>
           <p className="text-sm text-muted-foreground">
             {project?.projectName ?? ''}
             {project?.projectCode && <span className="ml-1">· {project.projectCode}</span>}

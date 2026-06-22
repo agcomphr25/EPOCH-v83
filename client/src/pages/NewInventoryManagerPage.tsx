@@ -382,7 +382,7 @@ export default function NewInventoryManagerPage() {
             <div className="p-6 pt-0">
               {activeCard === 'inventory' && inventoryView === 'split' && <InventorySplitView />}
               {activeCard === 'inventory' && inventoryView === 'full' && <InventoryItemsCard />}
-              {activeCard === 'parts-requests' && <PartsRequestsCard />}
+              {activeCard === 'parts-requests' && <PartsRequestsCard scope="all" />}
               {activeCard === 'outstanding-orders' && <OutstandingOrdersCard />}
               {activeCard === 'order-placement' && <OrderPlacementCard />}
             </div>

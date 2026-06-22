@@ -5308,6 +5308,37 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+export const projectRomDrafts = pgTable('project_rom_drafts', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  projectId: uuid('project_id').notNull().references((): AnyPgColumn => projects.id, { onDelete: 'cascade' }).unique(),
+  status: text('status').notNull().default('draft'),
+  summary: text('summary'),
+  assumptions: text('assumptions'),
+  riskNotes: text('risk_notes'),
+  categories: jsonb('categories').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  lockedAt: timestamp('locked_at'),
+  lockedReason: text('locked_reason'),
+  createdBy: integer('created_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  createdByDisplayName: text('created_by_display_name'),
+  updatedBy: integer('updated_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  updatedByDisplayName: text('updated_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdx: index('project_rom_drafts_project_idx').on(table.projectId),
+  statusIdx: index('project_rom_drafts_status_idx').on(table.status),
+}));
+
+export const insertProjectRomDraftSchema = createInsertSchema(projectRomDrafts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lockedAt: true,
+});
+
+export type ProjectRomDraft = typeof projectRomDrafts.$inferSelect;
+export type InsertProjectRomDraft = z.infer<typeof insertProjectRomDraftSchema>;
+
 // RFQ Risk Assessments - stores RFQ risk assessment records
 export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
   id: serial('id').primaryKey(),

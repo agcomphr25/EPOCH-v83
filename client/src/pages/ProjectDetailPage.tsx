@@ -70,6 +70,26 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
+const ROM_CATEGORY_CONFIG = [
+  { key: 'labor', label: 'Labor', field: 'quotedHours', kind: 'hours', detail: 'Direct labor estimate from ROM/quote feedback' },
+  { key: 'material', label: 'Material', field: 'budgetAmount', kind: 'currency', detail: 'Material budget that will seed the WAD' },
+  { key: 'outsideProcessing', label: 'Outside Processing', field: 'budgetAmount', kind: 'currency', detail: 'Vendor services and outside operations' },
+  { key: 'nrc', label: 'NRC', field: 'budgetAmount', kind: 'currency', detail: 'Non-recurring cost' },
+  { key: 'tooling', label: 'Tooling', field: 'budgetAmount', kind: 'currency', detail: 'Tooling budget' },
+  { key: 'design', label: 'Design', field: 'budgetAmount', kind: 'currency', detail: 'Design labor and engineering budget' },
+  { key: 'capital', label: 'Capital', field: 'budgetAmount', kind: 'currency', detail: 'Assets, startup services, and startup labor' },
+  { key: 'generalAndAdmin', label: 'G&A', field: 'budgetAmount', kind: 'currency', detail: 'General and administrative burden' },
+  { key: 'overhead', label: 'Overhead', field: 'budgetAmount', kind: 'currency', detail: 'Indirect cost burden' },
+  { key: 'qualityAndCompliance', label: 'Quality and Compliance', field: 'budgetAmount', kind: 'currency', detail: 'Inspection, compliance, and quality planning' },
+  { key: 'shippingAndPackaging', label: 'Shipping and Packaging', field: 'budgetAmount', kind: 'currency', detail: 'Pack, ship, freight, and documentation' },
+  { key: 'contingency', label: 'Contingency', field: 'budgetAmount', kind: 'currency', detail: 'Risk reserve' },
+  { key: 'escalationAndInflation', label: 'Escalation and Inflation', field: 'budgetAmount', kind: 'currency', detail: 'Schedule and pricing escalation' },
+  { key: 'profitFee', label: 'Profit / Fee', field: 'budgetAmount', kind: 'currency', detail: 'Quote profit or fee target' },
+] as const;
+
+type RomCategoryKey = typeof ROM_CATEGORY_CONFIG[number]['key'];
+type RomCategoryField = typeof ROM_CATEGORY_CONFIG[number]['field'];
+
 interface ProjectStep {
   id: string;
   stepType: string;
@@ -485,6 +505,13 @@ export default function ProjectDetailPage() {
     revisedLineItems: [] as P2PurchaseOrderItem[],
   });
   const [showProjectPOWizard, setShowProjectPOWizard] = useState(false);
+  const [romForm, setRomForm] = useState({
+    summary: '',
+    assumptions: '',
+    riskNotes: '',
+    categories: {} as Record<string, Record<string, string>>,
+  });
+  const [romFormHydratedKey, setRomFormHydratedKey] = useState('');
 
   const linkedProjectPO = useMemo(() => {
     if (!project?.poId) return null;
@@ -879,6 +906,26 @@ export default function ProjectDetailPage() {
     const hours = Number(value);
     return Number.isFinite(hours) ? `${hours.toLocaleString()} hrs` : fallback;
   };
+  const romSummary = hubRom.summary ?? {};
+  const romDraft = hubRom.draft ?? null;
+  const romLockState = hubRom.lockState ?? { locked: Boolean(romSummary.locked), reason: romSummary.lockedReason ?? null };
+  const isRomLocked = Boolean(romLockState.locked || romSummary.locked);
+  const getRomCategoryValue = (categoryKey: RomCategoryKey, field: RomCategoryField) => {
+    const value = hubRom.categories?.[categoryKey]?.[field];
+    return value === null || value === undefined ? '' : String(value);
+  };
+  const buildRomFormFromHub = () => {
+    const categories = ROM_CATEGORY_CONFIG.reduce((acc, category) => {
+      acc[category.key] = { [category.field]: getRomCategoryValue(category.key, category.field) };
+      return acc;
+    }, {} as Record<string, Record<string, string>>);
+    return {
+      summary: romSummary.draftSummary ?? romDraft?.summary ?? '',
+      assumptions: romSummary.assumptions ?? romDraft?.assumptions ?? '',
+      riskNotes: romSummary.riskNotes ?? romDraft?.risk_notes ?? romDraft?.riskNotes ?? '',
+      categories,
+    };
+  };
   const { data: quoteFeedback, isLoading: isLoadingFeedback } = useQuery<QuoteExecutionFeedback | null>({
     queryKey: ['/api/projects', id, 'quote-feedback'],
     queryFn: () =>
@@ -888,6 +935,35 @@ export default function ProjectDetailPage() {
         return r.json();
       }),
     enabled: !!id,
+  });
+
+  useEffect(() => {
+    const hydrateKey = `${id ?? ''}:${romDraft?.id ?? 'default'}:${romSummary.updatedAt ?? ''}:${JSON.stringify(hubRom.categories ?? {})}`;
+    if (!id || hydrateKey === romFormHydratedKey) return;
+    setRomForm(buildRomFormFromHub());
+    setRomFormHydratedKey(hydrateKey);
+  }, [id, romDraft?.id, romSummary.updatedAt, hubRom.categories, romFormHydratedKey]);
+
+  const saveRomMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/projects/${id}/rom-draft`, {
+        method: 'PATCH',
+        body: {
+          summary: romForm.summary,
+          assumptions: romForm.assumptions,
+          riskNotes: romForm.riskNotes,
+          categories: romForm.categories,
+        },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'p2-hub'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders/project', id] });
+      toast({ title: 'ROM draft saved', description: 'WAD creation will use the updated ROM values.' });
+    },
+    onError: (err: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'p2-hub'] });
+      toast({ title: 'ROM save failed', description: err?.message || 'The ROM may be locked after award.', variant: 'destructive' });
+    },
   });
 
   const romCategories = [
@@ -901,16 +977,16 @@ export default function ProjectDetailPage() {
       value: formatCurrencyLabel(hubRom.categories?.material?.budgetAmount, 'Not set'),
       detail: 'Material budget from WAD/project work orders',
     },
-    { label: 'Outside Processing', value: formatCurrencyLabel(hubRom.categories?.outsideProcessing), detail: 'Vendor services and outside operations' },
-    { label: 'NRC / Tooling / Design', value: formatCurrencyLabel(hubRom.categories?.nrc), detail: 'Non-recurring cost, tooling, and design labor' },
-    { label: 'Capital', value: formatCurrencyLabel(hubRom.categories?.capital), detail: 'Assets, startup services, and startup labor' },
-    { label: 'G&A', value: formatCurrencyLabel(hubRom.categories?.generalAndAdmin), detail: 'General and administrative burden' },
-    { label: 'Overhead', value: formatCurrencyLabel(hubRom.categories?.overhead), detail: 'Indirect cost burden' },
-    { label: 'Quality and Compliance', value: formatCurrencyLabel(hubRom.categories?.qualityAndCompliance), detail: 'Inspection, compliance, and quality planning' },
-    { label: 'Shipping and Packaging', value: formatCurrencyLabel(hubRom.categories?.shippingAndPackaging), detail: 'Pack, ship, freight, and documentation' },
-    { label: 'Contingency', value: formatCurrencyLabel(hubRom.categories?.contingency), detail: 'Risk reserve' },
-    { label: 'Escalation and Inflation', value: formatCurrencyLabel(hubRom.categories?.escalationAndInflation), detail: 'Schedule and pricing escalation' },
-    { label: 'Profit / Fee', value: formatCurrencyLabel(hubRom.categories?.profitFee), detail: 'Quote profit or fee target' },
+    { label: 'Outside Processing', value: formatCurrencyLabel(hubRom.categories?.outsideProcessing?.budgetAmount), detail: 'Vendor services and outside operations' },
+    { label: 'NRC / Tooling / Design', value: formatCurrencyLabel(hubRom.categories?.nrc?.budgetAmount), detail: 'Non-recurring cost, tooling, and design labor' },
+    { label: 'Capital', value: formatCurrencyLabel(hubRom.categories?.capital?.budgetAmount), detail: 'Assets, startup services, and startup labor' },
+    { label: 'G&A', value: formatCurrencyLabel(hubRom.categories?.generalAndAdmin?.budgetAmount), detail: 'General and administrative burden' },
+    { label: 'Overhead', value: formatCurrencyLabel(hubRom.categories?.overhead?.budgetAmount), detail: 'Indirect cost burden' },
+    { label: 'Quality and Compliance', value: formatCurrencyLabel(hubRom.categories?.qualityAndCompliance?.budgetAmount), detail: 'Inspection, compliance, and quality planning' },
+    { label: 'Shipping and Packaging', value: formatCurrencyLabel(hubRom.categories?.shippingAndPackaging?.budgetAmount), detail: 'Pack, ship, freight, and documentation' },
+    { label: 'Contingency', value: formatCurrencyLabel(hubRom.categories?.contingency?.budgetAmount), detail: 'Risk reserve' },
+    { label: 'Escalation and Inflation', value: formatCurrencyLabel(hubRom.categories?.escalationAndInflation?.budgetAmount), detail: 'Schedule and pricing escalation' },
+    { label: 'Profit / Fee', value: formatCurrencyLabel(hubRom.categories?.profitFee?.budgetAmount), detail: 'Quote profit or fee target' },
   ];
 
   const { data: projectFarFlowdowns = [] } = useQuery<ProjectFarFlowdown[]>({
@@ -3124,6 +3200,90 @@ export default function ProjectDetailPage() {
                   <p className="text-sm text-muted-foreground">{quoteFeedback.summary}</p>
                 </div>
               )}
+
+              <div className="rounded-md border p-4 space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">ROM Draft</p>
+                    <p className="text-sm text-muted-foreground">
+                      Editable until PO/contract award. Saved ROM values auto-fill the WAD when it is created.
+                    </p>
+                  </div>
+                  <Badge variant={isRomLocked ? 'secondary' : 'outline'} className="gap-1">
+                    {isRomLocked ? <Lock className="h-3 w-3" /> : <Edit className="h-3 w-3" />}
+                    {isRomLocked ? 'Locked after award' : 'Draft editable'}
+                  </Badge>
+                </div>
+                {isRomLocked && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    {romLockState.reason || romSummary.lockedReason || 'PO/contract award has locked this ROM.'}
+                  </div>
+                )}
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-2 md:col-span-3">
+                    <Label>ROM summary</Label>
+                    <Textarea
+                      value={romForm.summary}
+                      onChange={(event) => setRomForm((current) => ({ ...current, summary: event.target.value }))}
+                      disabled={isRomLocked}
+                      placeholder="Scope, pricing basis, and award assumptions"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-3">
+                    <Label>Assumptions</Label>
+                    <Textarea
+                      value={romForm.assumptions}
+                      onChange={(event) => setRomForm((current) => ({ ...current, assumptions: event.target.value }))}
+                      disabled={isRomLocked}
+                      placeholder="Customer, schedule, material, and routing assumptions"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-3">
+                    <Label>Risk notes</Label>
+                    <Textarea
+                      value={romForm.riskNotes}
+                      onChange={(event) => setRomForm((current) => ({ ...current, riskNotes: event.target.value }))}
+                      disabled={isRomLocked}
+                      placeholder="Risks that WAD planning should inherit"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {ROM_CATEGORY_CONFIG.map((category) => (
+                    <div key={category.key} className="space-y-2">
+                      <Label>{category.label}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step={category.kind === 'hours' ? '0.1' : '0.01'}
+                        value={romForm.categories[category.key]?.[category.field] ?? ''}
+                        onChange={(event) => setRomForm((current) => ({
+                          ...current,
+                          categories: {
+                            ...current.categories,
+                            [category.key]: {
+                              ...(current.categories[category.key] ?? {}),
+                              [category.field]: event.target.value,
+                            },
+                          },
+                        }))}
+                        disabled={isRomLocked}
+                        placeholder={category.kind === 'hours' ? 'Hours' : 'USD'}
+                      />
+                      <p className="text-xs text-muted-foreground">{category.detail}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => saveRomMutation.mutate()}
+                    disabled={isRomLocked || saveRomMutation.isPending}
+                  >
+                    {saveRomMutation.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                    Save ROM Draft
+                  </Button>
+                </div>
+              </div>
 
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-md border bg-muted/30 p-3">

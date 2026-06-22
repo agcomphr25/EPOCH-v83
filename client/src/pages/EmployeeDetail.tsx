@@ -37,6 +37,7 @@ import {
   Eye,
   EyeOff,
   Tags,
+  Bell,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -67,6 +68,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import AddCertificationModal from '@/components/employee/AddCertificationModal';
@@ -114,6 +116,57 @@ interface Employee {
   tciAccess?: boolean;
   hasPin?: boolean;
   supervisorEmployeeId?: number | null;
+  notificationPreferences?: EmployeeNotificationPreferences | null;
+}
+
+type NotificationTopicKey = 'taskList' | 'maintenanceSchedules' | 'trainingExpirations';
+type NotificationChannelKey = 'email' | 'popup';
+
+interface EmployeeNotificationTopicPreferences {
+  email: boolean;
+  popup: boolean;
+}
+
+type EmployeeNotificationPreferences = Record<NotificationTopicKey, EmployeeNotificationTopicPreferences>;
+
+const DEFAULT_NOTIFICATION_PREFERENCES: EmployeeNotificationPreferences = {
+  taskList: { email: false, popup: false },
+  maintenanceSchedules: { email: false, popup: false },
+  trainingExpirations: { email: false, popup: false },
+};
+
+const NOTIFICATION_TOPICS: Array<{
+  key: NotificationTopicKey;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: 'taskList',
+    label: 'New tasks in task list',
+    description: 'Notify this employee when a new task is assigned to their task list.',
+  },
+  {
+    key: 'maintenanceSchedules',
+    label: 'Maintenance schedules',
+    description: 'Notify this employee about maintenance work they need to prepare for or complete.',
+  },
+  {
+    key: 'trainingExpirations',
+    label: 'Training expirations',
+    description: 'Notify this employee when required training is expiring or overdue.',
+  },
+];
+
+function normalizeNotificationPreferences(
+  value?: Partial<Record<NotificationTopicKey, Partial<EmployeeNotificationTopicPreferences>>> | null
+): EmployeeNotificationPreferences {
+  return NOTIFICATION_TOPICS.reduce((prefs, topic) => {
+    prefs[topic.key] = {
+      email: Boolean(value?.[topic.key]?.email),
+      popup: Boolean(value?.[topic.key]?.popup),
+    };
+    return prefs;
+  }, { ...DEFAULT_NOTIFICATION_PREFERENCES } as EmployeeNotificationPreferences);
 }
 
 interface ChargeCodeOption {
@@ -514,7 +567,7 @@ function CertificationCard({
   );
 }
 
-const VALID_TABS = ['details','permissions','charge-codes','certifications','evaluations','training','traveler','documents','badge','journal','history','qualifications'] as const;
+const VALID_TABS = ['details','permissions','notifications','charge-codes','certifications','evaluations','training','traveler','documents','badge','journal','history','qualifications'] as const;
 type TabValue = typeof VALID_TABS[number];
 
 export default function EmployeeDetail() {
@@ -552,6 +605,9 @@ export default function EmployeeDetail() {
   const [showAssignUser, setShowAssignUser] = useState(false);
   const [selectedChargeCodeIds, setSelectedChargeCodeIds] = useState<number[]>([]);
   const [defaultChargeCodeId, setDefaultChargeCodeId] = useState<number | null>(null);
+  const [notificationPreferences, setNotificationPreferences] = useState<EmployeeNotificationPreferences>(
+    DEFAULT_NOTIFICATION_PREFERENCES
+  );
   const [showTerminateDialog, setShowTerminateDialog] = useState(false);
   const [terminationForm, setTerminationForm] = useState({
     terminationDate: new Date().toISOString().split('T')[0],
@@ -593,6 +649,12 @@ export default function EmployeeDetail() {
     .filter((emp) => emp.isActive !== false && String(emp.id) !== String(id))
     .sort((a, b) => a.name.localeCompare(b.name));
   const assignedSupervisor = allEmployees.find((emp) => emp.id === employee?.supervisorEmployeeId);
+
+  useEffect(() => {
+    if (employee) {
+      setNotificationPreferences(normalizeNotificationPreferences(employee.notificationPreferences));
+    }
+  }, [employee]);
 
   const { data: allChargeCodes = [] } = useQuery<ChargeCodeOption[]>({
     queryKey: ['/api/charge-codes'],
@@ -844,6 +906,24 @@ export default function EmployeeDetail() {
     );
     setDefaultChargeCodeId((current) => (current === chargeCodeId ? null : current));
   };
+
+  const toggleNotificationPreference = (
+    topic: NotificationTopicKey,
+    channel: NotificationChannelKey,
+    checked: boolean
+  ) => {
+    setNotificationPreferences((current) => ({
+      ...current,
+      [topic]: {
+        ...current[topic],
+        [channel]: checked,
+      },
+    }));
+  };
+
+  const savedNotificationPreferences = normalizeNotificationPreferences(employee?.notificationPreferences);
+  const notificationPreferencesChanged =
+    JSON.stringify(notificationPreferences) !== JSON.stringify(savedNotificationPreferences);
 
   const generatePortalTokenMutation = useMutation({
     mutationFn: async () => {
@@ -1849,9 +1929,10 @@ export default function EmployeeDetail() {
         {/* Main Content Tabs */}
         <div className="lg:col-span-2">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-12">
+            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
               <TabsTrigger value="charge-codes">Codes</TabsTrigger>
               <TabsTrigger value="certifications">Certs</TabsTrigger>
               <TabsTrigger value="evaluations">Reviews</TabsTrigger>
@@ -2423,6 +2504,81 @@ export default function EmployeeDetail() {
                       </div>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="notifications">
+              <Card>
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Bell className="w-5 h-5" />
+                      Notifications
+                    </CardTitle>
+                    <CardDescription>
+                      Choose which employee events send email and in-app popup notifications.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={() => updateEmployeeMutation.mutate({ notificationPreferences })}
+                    disabled={!notificationPreferencesChanged || updateEmployeeMutation.isPending}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!employee.email && (
+                    <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-900">Email notifications need an employee email</p>
+                        <p className="text-sm text-amber-800">
+                          Popup preferences can still be saved, but email delivery requires an email address on the employee profile.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-lg border">
+                    <div className="grid grid-cols-[1fr_96px_96px] items-center gap-3 border-b bg-muted/40 px-4 py-3 text-sm font-medium">
+                      <span>Notification</span>
+                      <span className="text-center">Email</span>
+                      <span className="text-center">Popup</span>
+                    </div>
+                    {NOTIFICATION_TOPICS.map((topic, index) => (
+                      <div
+                        key={topic.key}
+                        className={`grid grid-cols-[1fr_96px_96px] items-center gap-3 px-4 py-4 ${
+                          index < NOTIFICATION_TOPICS.length - 1 ? 'border-b' : ''
+                        }`}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{topic.label}</p>
+                          <p className="text-sm text-muted-foreground">{topic.description}</p>
+                        </div>
+                        <div className="flex justify-center">
+                          <Switch
+                            checked={notificationPreferences[topic.key].email}
+                            onCheckedChange={(checked) =>
+                              toggleNotificationPreference(topic.key, 'email', checked)
+                            }
+                            aria-label={`${topic.label} email notifications`}
+                          />
+                        </div>
+                        <div className="flex justify-center">
+                          <Switch
+                            checked={notificationPreferences[topic.key].popup}
+                            onCheckedChange={(checked) =>
+                              toggleNotificationPreference(topic.key, 'popup', checked)
+                            }
+                            aria-label={`${topic.label} popup notifications`}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

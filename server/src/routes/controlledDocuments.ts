@@ -158,6 +158,44 @@ const nextRevisionVersion = (version: string | null | undefined): string => {
   return `${major}.${minor + 1}`;
 };
 
+const getCsvValue = (row: Record<string, unknown>, names: string[]) => {
+  for (const name of names) {
+    const value = row[name];
+    if (value !== undefined && value !== null && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+  return '';
+};
+
+const normalizeImportedFilePath = async (row: Record<string, unknown>, documentName: string) => {
+  const explicitLink = getCsvValue(row, [
+    'Document Link',
+    'Document URL',
+    'File Link',
+    'File URL',
+    'URL',
+    'Link',
+    'File Path',
+    'filePath',
+  ]);
+
+  if (/^https?:\/\//i.test(explicitLink)) return explicitLink;
+  if (explicitLink.startsWith('/assets/documents/')) return explicitLink;
+
+  const candidateName = explicitLink || documentName;
+  if (!/\.[a-z0-9]{2,5}$/i.test(candidateName)) return null;
+
+  const safeName = path.basename(candidateName);
+  const localPath = path.join(process.cwd(), 'server/src/assets/documents', safeName);
+  try {
+    await fs.access(localPath);
+    return `/assets/documents/${safeName}`;
+  } catch {
+    return null;
+  }
+};
+
 // Get all controlled documents (authenticated users only)
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -747,6 +785,7 @@ router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), asyn
         const retentionLength = String(row['Record Retention Length'] || 'N/A').trim();
         const description = String(row['Summary of Changes (if needed)'] || '').trim();
         const dateStr = String(row.Date || '').trim();
+        const filePath = await normalizeImportedFilePath(row, documentName);
         
         // Parse effective date
         let effectiveDate = null;
@@ -776,6 +815,7 @@ router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), asyn
           currentVersion,
           retentionLength,
           description,
+          filePath,
           effectiveDate,
           expirationDate: expirationDate.toISOString().split('T')[0],
           rowNumber: i + 2,
@@ -824,6 +864,7 @@ router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), asyn
             currentVersion: doc.currentVersion,
             retentionLength: doc.retentionLength,
             description: doc.description || existing.description,
+            filePath: doc.filePath || existing.filePath,
             effectiveDate: doc.effectiveDate || existing.effectiveDate,
             expirationDate: doc.expirationDate,
             updatedAt: new Date(),
@@ -839,6 +880,7 @@ router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), asyn
           status: doc.effectiveDate ? 'approved' : 'draft',
           retentionLength: doc.retentionLength,
           description: doc.description,
+          filePath: doc.filePath,
           effectiveDate: doc.effectiveDate,
           expirationDate: doc.expirationDate,
           createdBy: user.username,
@@ -858,6 +900,7 @@ router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), asyn
         changeType: 'major',
         status: newDoc.status,
         createdBy: user.username,
+        filePath: newDoc.filePath,
         effectiveDate: newDoc.effectiveDate,
         expirationDate: newDoc.expirationDate,
       }));

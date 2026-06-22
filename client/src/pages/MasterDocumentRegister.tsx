@@ -335,6 +335,7 @@ export default function MasterDocumentRegister() {
       return await apiRequest('/api/controlled-documents/import/csv', {
         method: 'POST',
         body: formData,
+        timeout: 120000,
       });
     },
     onSuccess: (data: any) => {

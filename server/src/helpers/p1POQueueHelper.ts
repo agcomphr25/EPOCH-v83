@@ -14,6 +14,7 @@ export interface ProductionOrderRow {
 export interface FulfillmentStats {
   total: number;
   fulfilled: number;
+  activeP1Queue: number;
 }
 
 /**
@@ -51,12 +52,20 @@ export function buildFulfillmentMap(
     const itemMap = poFulfillmentMap.get(poId)!;
 
     if (!itemMap.has(poItemId)) {
-      itemMap.set(poItemId, { total: 0, fulfilled: 0 });
+      itemMap.set(poItemId, { total: 0, fulfilled: 0, activeP1Queue: 0 });
     }
     const stats = itemMap.get(poItemId)!;
     stats.total++;
     if (isProductionOrderFulfilled(row)) {
       stats.fulfilled++;
+    }
+    if (
+      row.current_department === 'P1 Production Queue' &&
+      ['PENDING', 'IN_PROGRESS', 'Pending', 'In Progress'].includes(
+        row.production_status ?? '',
+      )
+    ) {
+      stats.activeP1Queue++;
     }
   }
 
@@ -140,7 +149,11 @@ export function computeP1Queue(
           (specs.stock_model as string | null) ??
           null;
         const orderCount = item.orderCount ?? 0;
-        const remainingQuantity = item.quantity - orderCount;
+        const fulfillmentStats = itemFulfillmentMap.get(item.id);
+        const remainingQuantity = Math.max(
+          item.quantity - orderCount,
+          fulfillmentStats?.activeP1Queue ?? 0,
+        );
 
         return {
           id: item.id,

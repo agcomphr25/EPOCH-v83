@@ -314,6 +314,9 @@ export default function MasterDocumentRegister() {
   const isPdfDocument = (doc: ControlledDocument) =>
     Boolean(doc.filePath?.toLowerCase().endsWith('.pdf'));
 
+  const isExternalDocument = (doc: ControlledDocument) =>
+    Boolean(doc.filePath && /^https?:\/\//i.test(doc.filePath));
+
   const openDocumentFile = (doc: ControlledDocument, mode: 'view' | 'download') => {
     const path = `/api/controlled-documents/${doc.id}/${mode}`;
     window.open(path, '_blank', 'noopener,noreferrer');
@@ -689,13 +692,13 @@ export default function MasterDocumentRegister() {
                           <div className="flex items-center gap-2">
                             {doc.filePath && (
                               <>
-                                {isPdfDocument(doc) && (
+                                {(isPdfDocument(doc) || isExternalDocument(doc)) && (
                                   <Badge
                                     variant="outline"
                                     role="button"
                                     tabIndex={0}
                                     className="h-8 cursor-pointer gap-1 border-blue-300 px-2 text-blue-700 hover:bg-blue-50"
-                                    title="View PDF"
+                                    title={isExternalDocument(doc) ? 'Open linked document' : 'View PDF'}
                                     data-testid={`badge-view-pdf-${doc.id}`}
                                     onClick={() => openDocumentFile(doc, 'view')}
                                     onKeyDown={(event) => {
@@ -1372,7 +1375,8 @@ export default function MasterDocumentRegister() {
                 required
               />
               <p className="text-xs text-gray-500">
-                CSV should have columns: TITLE, CODE, Department, Version, Date, Record Retention Length, Summary of Changes
+                CSV should have columns: TITLE, CODE, Department, Version, Date, Record Retention Length, Summary of Changes.
+                Include Document Link, File URL, URL, Link, or File Path to attach document links.
               </p>
             </div>
 

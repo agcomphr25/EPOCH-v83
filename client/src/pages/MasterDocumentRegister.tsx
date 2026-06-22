@@ -179,6 +179,15 @@ export default function MasterDocumentRegister() {
   const [createNewVersion, setCreateNewVersion] = useState(false);
   const [newDocumentDepartment, setNewDocumentDepartment] = useState('');
   const [newDocumentType, setNewDocumentType] = useState('');
+  const [pendingDocumentAccess, setPendingDocumentAccess] = useState<{
+    doc: ControlledDocument;
+    mode: 'view' | 'download';
+  } | null>(null);
+  const [stepUpPassword, setStepUpPassword] = useState('');
+  const [stepUpError, setStepUpError] = useState<string | null>(null);
+  const [isStepUpOpen, setIsStepUpOpen] = useState(false);
+  const [isStepUpSubmitting, setIsStepUpSubmitting] = useState(false);
+  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch controlled documents
@@ -319,9 +328,153 @@ export default function MasterDocumentRegister() {
   const isExternalDocument = (doc: ControlledDocument) =>
     Boolean(doc.filePath && /^https?:\/\//i.test(doc.filePath));
 
-  const openDocumentFile = (doc: ControlledDocument, mode: 'view' | 'download') => {
+  const getAuthHeaders = (): Record<string, string> => {
+    const storedToken = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+    return storedToken ? { Authorization: `Bearer ${storedToken}` } : {};
+  };
+
+  const getFilenameFromDisposition = (disposition: string | null, fallback: string) => {
+    if (!disposition) return fallback;
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/"/g, ''));
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+    return filenameMatch?.[1] || fallback;
+  };
+
+  const openDocumentBlob = (blob: Blob, filename: string, mode: 'view' | 'download', targetWindow?: Window | null) => {
+    const blobUrl = URL.createObjectURL(blob);
+    if (mode === 'view') {
+      if (targetWindow) {
+        targetWindow.location.href = blobUrl;
+      } else {
+        window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      }
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  const openDocumentFile = async (doc: ControlledDocument, mode: 'view' | 'download', targetWindowOverride?: Window | null) => {
+    if (isExternalDocument(doc)) {
+      window.open(doc.filePath!, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     const path = `/api/controlled-documents/${doc.id}/${mode}`;
-    window.open(path, '_blank', 'noopener,noreferrer');
+    const targetWindow =
+      targetWindowOverride ?? (mode === 'view'
+        ? window.open('', '_blank')
+        : null);
+
+    if (targetWindow) {
+      targetWindow.opener = null;
+      targetWindow.document.write('<p style="font-family: sans-serif; padding: 1rem;">Loading document...</p>');
+    }
+
+    try {
+      setOpeningDocumentId(doc.id);
+      const response = await fetch(path, {
+        credentials: 'include',
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) {
+        let errorData: any = null;
+        try {
+          errorData = await response.json();
+        } catch {
+          // Keep default message below.
+        }
+
+        if (response.status === 401 && errorData?.requireStepUp) {
+          targetWindow?.close();
+          setPendingDocumentAccess({ doc, mode });
+          setStepUpPassword('');
+          setStepUpError(null);
+          setIsStepUpOpen(true);
+          return;
+        }
+
+        targetWindow?.close();
+        throw new Error(errorData?.error || `Failed to ${mode} document`);
+      }
+
+      const blob = await response.blob();
+      const filename = getFilenameFromDisposition(
+        response.headers.get('content-disposition'),
+        `${doc.documentNumber || 'document'}.pdf`
+      );
+      openDocumentBlob(blob, filename, mode, targetWindow);
+    } catch (error: any) {
+      targetWindow?.close();
+      toast({
+        title: 'Unable to open document',
+        description: error.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setOpeningDocumentId(null);
+    }
+  };
+
+  const handleStepUpSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pendingDocumentAccess) return;
+    if (!stepUpPassword.trim()) {
+      setStepUpError('Enter your password to verify your credentials.');
+      return;
+    }
+
+    try {
+      setIsStepUpSubmitting(true);
+      setStepUpError(null);
+      const targetWindow =
+        pendingDocumentAccess.mode === 'view'
+          ? window.open('', '_blank')
+          : null;
+      if (targetWindow) {
+        targetWindow.opener = null;
+        targetWindow.document.write('<p style="font-family: sans-serif; padding: 1rem;">Verifying credentials...</p>');
+      }
+
+      const response = await fetch('/api/auth/step-up', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ password: stepUpPassword }),
+      });
+
+      if (!response.ok) {
+        targetWindow?.close();
+        let errorData: any = null;
+        try {
+          errorData = await response.json();
+        } catch {
+          // Keep default message below.
+        }
+        throw new Error(errorData?.error || 'Credential verification failed');
+      }
+
+      const access = pendingDocumentAccess;
+      setIsStepUpOpen(false);
+      setPendingDocumentAccess(null);
+      setStepUpPassword('');
+      await openDocumentFile(access.doc, access.mode, targetWindow);
+    } catch (error: any) {
+      setStepUpError(error.message || 'Credential verification failed');
+    } finally {
+      setIsStepUpSubmitting(false);
+    }
   };
 
   // Create document mutation
@@ -712,14 +865,15 @@ export default function MasterDocumentRegister() {
                                     }}
                                   >
                                     <Eye className="h-3.5 w-3.5" />
-                                    View
+                                    {openingDocumentId === doc.id ? 'Opening' : isExternalDocument(doc) ? 'Open' : 'View'}
                                   </Badge>
                                 )}
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   className="h-8 w-8 p-0"
-                                  title="Download"
+                                  title={isExternalDocument(doc) ? 'Open linked document' : 'Download'}
+                                  disabled={openingDocumentId === doc.id}
                                   onClick={() => openDocumentFile(doc, 'download')}
                                   data-testid={`button-download-${doc.id}`}
                                 >
@@ -1353,6 +1507,74 @@ export default function MasterDocumentRegister() {
               </Table>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Credential Verification Dialog */}
+      <Dialog open={isStepUpOpen} onOpenChange={(open) => {
+        setIsStepUpOpen(open);
+        if (!open) {
+          setPendingDocumentAccess(null);
+          setStepUpPassword('');
+          setStepUpError(null);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verify Credentials</DialogTitle>
+            <DialogDescription>
+              Controlled document access requires recent credential verification.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleStepUpSubmit} className="space-y-4">
+            {pendingDocumentAccess && (
+              <div className="rounded-md border bg-gray-50 p-3 text-sm">
+                <div className="font-medium">{pendingDocumentAccess.doc.documentName}</div>
+                <div className="text-xs text-gray-500">
+                  {pendingDocumentAccess.mode === 'view' ? 'View PDF' : 'Download file'}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="stepUpPassword">Password</Label>
+              <Input
+                id="stepUpPassword"
+                type="password"
+                value={stepUpPassword}
+                onChange={(event) => setStepUpPassword(event.target.value)}
+                autoComplete="current-password"
+                autoFocus
+                disabled={isStepUpSubmitting}
+                data-testid="input-step-up-password"
+              />
+              {stepUpError && (
+                <p className="text-sm text-red-600" data-testid="text-step-up-error">
+                  {stepUpError}
+                </p>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isStepUpSubmitting}
+                onClick={() => {
+                  setIsStepUpOpen(false);
+                  setPendingDocumentAccess(null);
+                  setStepUpPassword('');
+                  setStepUpError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isStepUpSubmitting}>
+                {isStepUpSubmitting ? 'Verifying...' : 'Verify and Continue'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

@@ -429,6 +429,16 @@ function getDepartmentVariants(department: string): string[] {
   return DEPARTMENT_ALIASES[department] || [department];
 }
 
+function decodeScanParam(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    return decodeURIComponent(trimmed).trim();
+  } catch {
+    return trimmed;
+  }
+}
+
 function getBasePartNumberWithoutRevision(partNumber?: string | null): string | null {
   const match = partNumber?.match(/^(.+?)\s*Rev\s*\w+$/i);
   return match ? match[1].trim() : null;
@@ -1616,7 +1626,10 @@ async function ensureExistingTravelerHasRoutingDetails(params: {
 // Look up employee by badge code (badge_scan_code UUID or employee_code)
 router.get('/badge-lookup/:employeeCode', async (req: Request, res: Response) => {
   try {
-    const { employeeCode } = req.params;
+    const employeeCode = decodeScanParam(req.params.employeeCode);
+    if (!employeeCode) {
+      return res.status(400).json({ error: 'Invalid badge code. Please rescan the employee badge.' });
+    }
     // Normalize: strip dashes so UUID badges work whether or not they include hyphens.
     const normalized = employeeCode.replace(/-/g, '');
 
@@ -1690,10 +1703,16 @@ router.get('/employee-lookup', async (req: Request, res: Response) => {
 // Verify employee certification for part's next department
 router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, res: Response) => {
   try {
-    const { employeeCode } = req.params;
-    const barcode = decodeURIComponent(req.params.barcode).trim();
+    const employeeCode = decodeScanParam(req.params.employeeCode);
+    const barcode = decodeScanParam(req.params.barcode);
+    if (!employeeCode) {
+      return res.status(400).json({ error: 'Invalid badge code. Please rescan the employee badge.' });
+    }
+    if (!barcode) {
+      return res.status(400).json({ error: 'Invalid part barcode. Please rescan the part label.' });
+    }
 
-    // Get employee — check badge_scan_code (REPLACE strips dashes) then employee_code fallback
+    // Get employee - check badge_scan_code (REPLACE strips dashes) then employee_code fallback
     const normalized = employeeCode.replace(/-/g, '');
     const empCols = { id: employees.id, name: employees.name, employeeCode: employees.employeeCode };
     let empRows = await db
@@ -1819,7 +1838,10 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
 // Get part info and next department requirements
 router.get('/part-info/:barcode', async (req: Request, res: Response) => {
   try {
-    const barcode = decodeURIComponent(req.params.barcode).trim();
+    const barcode = decodeScanParam(req.params.barcode);
+    if (!barcode) {
+      return res.status(400).json({ error: 'Invalid part barcode. Please rescan the part label.' });
+    }
 
     const serializedItem = await db.query.p2SerializedItems.findFirst({
       where: or(

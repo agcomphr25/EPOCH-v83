@@ -116,6 +116,8 @@ describe('P2TravelerPage — badge forwarding on traveler generate', () => {
   });
 
   it('navigates to /travelers/:id/execute?badge=<code> after successful generate', async () => {
+    const scannedPartBarcode = 'PART/001%LAYUP';
+
     vi.mocked(apiRequest).mockImplementation(async (url: string) => {
       if (String(url).includes('badge-lookup')) {
         return { id: 1, employeeCode: 'EMP123', name: 'Alice' };
@@ -152,10 +154,13 @@ describe('P2TravelerPage — badge forwarding on traveler generate', () => {
     fireEvent.submit(screen.getByTestId('form-badge-scan'));
 
     const partInput = await screen.findByTestId('input-part-barcode');
-    fireEvent.change(partInput, { target: { value: 'PART-001' } });
+    fireEvent.change(partInput, { target: { value: scannedPartBarcode } });
     fireEvent.submit(screen.getByTestId('form-part-scan'));
 
     await waitFor(() => {
+      expect(apiRequest).toHaveBeenCalledWith(
+        `/api/p2-traveler/verify-certification/${encodeURIComponent('EMP123')}/${encodeURIComponent(scannedPartBarcode)}`
+      );
       expect(mockNavigate).toHaveBeenCalledWith(
         expect.stringMatching(/\/travelers\/T-42\/execute\?badge=EMP123/),
       );

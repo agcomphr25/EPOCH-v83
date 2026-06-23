@@ -42,9 +42,20 @@ function parseBuiltPacketBarcode(barcode: string | null | undefined): { sku: str
   return { sku, queueId, packetNumber };
 }
 
-function parseManufacturingPacketBarcode(barcode: string | null | undefined): { queueId: number; sku: string; sequence: number | null } | null {
+function parseManufacturingPacketBarcode(barcode: string | null | undefined): { queueId: number; sku: string; sequence: number | null; builtPacketBarcode?: string } | null {
   if (!barcode) return null;
-  const parts = barcode.trim().split('-');
+  const trimmed = barcode.trim();
+  const builtPacket = parseBuiltPacketBarcode(trimmed);
+  if (builtPacket) {
+    return {
+      queueId: builtPacket.queueId,
+      sku: builtPacket.sku,
+      sequence: builtPacket.packetNumber,
+      builtPacketBarcode: trimmed,
+    };
+  }
+
+  const parts = trimmed.split('-');
   if (parts.length < 3 || parts[0] !== 'MFG') return null;
 
   const queueId = Number(parts[1]);
@@ -1524,11 +1535,12 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Barcode is required' });
     }
     
-    // Parse the barcode format: MFG-{id}-{partNumber} or MFG-{id}-{partNumber}-{seq}.
-    // Part numbers can contain hyphens, so split from the stable prefix/id and optional numeric suffix.
+    // Parse packet barcodes. New labels use MFG-{id}-{partNumber}-{seq};
+    // existing production packet labels may still use PKT-{partNumber}-{id}-{packetNumber}-{timestamp}.
+    // Part numbers can contain hyphens, so split from stable id/sequence positions.
     const parsedBarcode = parseManufacturingPacketBarcode(barcode);
     if (!parsedBarcode) {
-      return res.status(400).json({ error: 'Invalid packet barcode format. Expected: MFG-{id}-{partNumber} or MFG-{id}-{partNumber}-{seq}' });
+      return res.status(400).json({ error: 'Invalid packet barcode format. Expected: MFG-{id}-{partNumber}-{seq} or existing PKT-{partNumber}-{id}-{packetNumber}-{timestamp}' });
     }
     
     const printedQueueId = parsedBarcode.queueId;
@@ -1786,10 +1798,16 @@ router.post('/scan-start', async (req: Request, res: Response) => {
         .orderBy(asc(cuttingBuiltPackets.id));
 
       let targetPacket: { id: number; status: string } | null = null;
-      if (scannedSeq !== null && scannedSeq >= 1 && scannedSeq <= builtPacketsForQueue.length) {
+      if (parsedBarcode.builtPacketBarcode) {
+        targetPacket = await db.query.cuttingBuiltPackets.findFirst({
+          where: eq(cuttingBuiltPackets.barcode, parsedBarcode.builtPacketBarcode),
+        }) ?? null;
+      }
+      if (!targetPacket && scannedSeq !== null && scannedSeq >= 1 && scannedSeq <= builtPacketsForQueue.length) {
         // Use rank-based lookup (1-indexed)
         targetPacket = builtPacketsForQueue[scannedSeq - 1];
-      } else {
+      }
+      if (!targetPacket) {
         // No sequence info — update the first AVAILABLE packet for this queue item
         targetPacket = builtPacketsForQueue.find(p => p.status === 'AVAILABLE') ?? null;
       }

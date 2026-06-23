@@ -902,11 +902,15 @@ export default function CuttingOperatorDashboard() {
       clearTimeout(packetScanTimerRef.current);
       packetScanTimerRef.current = null;
     }
-    if (packetScanBarcode && packetScanBarcode.length > 5 && packetScanBarcode.startsWith('MFG-') && /^MFG-\d+-[^-]+/.test(packetScanBarcode)) {
+    const normalizedPacketScan = packetScanBarcode.trim();
+    const isPacketScanBarcode =
+      /^MFG-\d+-.+/.test(normalizedPacketScan) ||
+      /^PKT-.+-\d+-\d+-\d+(?:-\d+)?$/.test(normalizedPacketScan);
+    if (isPacketScanBarcode) {
       packetScanTimerRef.current = setTimeout(() => {
-        if (packetScanBarcode !== lastSubmittedPacketRef.current) {
-          lastSubmittedPacketRef.current = packetScanBarcode;
-          handlePacketScan(packetScanBarcode);
+        if (normalizedPacketScan !== lastSubmittedPacketRef.current) {
+          lastSubmittedPacketRef.current = normalizedPacketScan;
+          handlePacketScan(normalizedPacketScan);
         }
       }, 400);
     }
@@ -1446,7 +1450,7 @@ export default function CuttingOperatorDashboard() {
                   id="packet-scan-barcode"
                   value={packetScanBarcode}
                   onChange={(val) => setPacketScanBarcode(val)}
-                  placeholder="Scan packet barcode (MFG-...)"
+                  placeholder="Scan packet barcode (MFG... or PKT...)"
                   data-testid="input-packet-scan"
                 />
                 <Button

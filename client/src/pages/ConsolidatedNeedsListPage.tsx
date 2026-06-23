@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,6 +42,7 @@ import {
   Users,
   Eye,
   Link as LinkIcon,
+  Send,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -147,6 +149,7 @@ type ConsolidatedPart = {
 
 export default function ConsolidatedNeedsListPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRequest, setSelectedRequest] = useState<PartsRequest | null>(null);
   const [isActionDialogOpen, setIsActionDialogOpen] = useState(false);
@@ -169,6 +172,7 @@ export default function ConsolidatedNeedsListPage() {
   const [batchExpectedDelivery, setBatchExpectedDelivery] = useState('');
   const [batchShipVia, setBatchShipVia] = useState('');
   const [isCreateBatchDialogOpen, setIsCreateBatchDialogOpen] = useState(false);
+  const [openIssueAfterCreate, setOpenIssueAfterCreate] = useState(false);
   const [batchVendorGroup, setBatchVendorGroup] = useState<VendorGroup | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [detailRequest, setDetailRequest] = useState<PartsRequest | null>(null);
@@ -275,19 +279,23 @@ export default function ConsolidatedNeedsListPage() {
       expectedDeliveryDate?: string | null;
       shipVia?: string | null;
       notes?: string;
+      openIssueAfterCreate?: boolean;
     }) => {
       return apiRequest('/api/inventory/parts-requests/create-vendor-po-draft', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
-    onSuccess: (result: any) => {
+    onSuccess: (result: any, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      const vendorPoId = result?.vendorPO?.id;
       toast({
         title: 'Vendor PO Draft Created',
-        description: result?.vendorPO?.id
-          ? `Draft Vendor PO internal #${result.vendorPO.id} was created. RFQ and PO numbers will follow the existing workflow.`
+        description: vendorPoId
+          ? variables.openIssueAfterCreate
+            ? `Draft Vendor PO internal #${vendorPoId} was created. Opening issue email now.`
+            : `Draft Vendor PO internal #${vendorPoId} was created. RFQ and PO numbers will follow the existing workflow.`
           : 'Selected parts were linked to a draft Vendor PO.',
       });
       setIsCreateBatchDialogOpen(false);
@@ -297,6 +305,10 @@ export default function ConsolidatedNeedsListPage() {
       setBatchExpectedDelivery('');
       setBatchShipVia('');
       setSelectedVendorRequests(new Set());
+      setOpenIssueAfterCreate(false);
+      if (variables.openIssueAfterCreate && vendorPoId) {
+        setLocation(`/vendor-pos?poId=${vendorPoId}&issue=1`);
+      }
     },
     onError: (error: any) => {
       toast({
@@ -375,7 +387,7 @@ export default function ConsolidatedNeedsListPage() {
     },
   });
 
-  const openCreateBatchDialog = (vendorGroup: VendorGroup) => {
+  const openCreateBatchDialog = (vendorGroup: VendorGroup, issueAfterCreate = false) => {
     if (vendorGroup.orderMethod === 'WEBSITE') {
       toast({
         title: 'Website Order',
@@ -392,7 +404,9 @@ export default function ConsolidatedNeedsListPage() {
       });
       return;
     }
-    const approvedRequests = vendorGroup.requests.filter(r => r.status === 'APPROVED' && !r.vendorPoId && r.orderMethod !== 'WEBSITE');
+    const selectableRequests = vendorGroup.requests.filter(r => r.status === 'APPROVED' && !r.vendorPoId && r.orderMethod !== 'WEBSITE');
+    const selectedRequests = selectableRequests.filter(r => selectedVendorRequests.has(r.id));
+    const approvedRequests = selectedRequests.length > 0 ? selectedRequests : selectableRequests;
     if (approvedRequests.length === 0) {
       toast({
         title: 'No Approved Requests',
@@ -401,10 +415,16 @@ export default function ConsolidatedNeedsListPage() {
       });
       return;
     }
-    setBatchVendorGroup(vendorGroup);
+    setBatchVendorGroup({
+      ...vendorGroup,
+      requests: approvedRequests,
+      totalQuantity: approvedRequests.reduce((sum, request) => sum + request.quantity, 0),
+      totalEstimatedCost: approvedRequests.reduce((sum, request) => sum + Number(request.estimatedCost || 0), 0),
+    });
     const defaultQuantities: Record<number, number> = {};
     approvedRequests.forEach(r => { defaultQuantities[r.id] = r.quantity; });
     setBatchQuantities(defaultQuantities);
+    setOpenIssueAfterCreate(issueAfterCreate);
     setIsCreateBatchDialogOpen(true);
   };
 
@@ -416,7 +436,7 @@ export default function ConsolidatedNeedsListPage() {
     return 'GENERAL';
   };
 
-  const openCreatePoDialogForRequest = (request: PartsRequest) => {
+  const openCreatePoDialogForRequest = (request: PartsRequest, issueAfterCreate = false) => {
     if (request.orderMethod === 'WEBSITE') {
       toast({
         title: 'Website Order',
@@ -461,6 +481,7 @@ export default function ConsolidatedNeedsListPage() {
     setBatchExpectedDelivery(request.expectedDelivery || '');
     setBatchNotes('');
     setBatchShipVia('');
+    setOpenIssueAfterCreate(issueAfterCreate);
     setIsCreateBatchDialogOpen(true);
   };
 
@@ -478,6 +499,7 @@ export default function ConsolidatedNeedsListPage() {
       expectedDeliveryDate: batchExpectedDelivery || null,
       shipVia: batchShipVia || null,
       notes: batchNotes || undefined,
+      openIssueAfterCreate,
     });
   };
 
@@ -971,6 +993,21 @@ export default function ConsolidatedNeedsListPage() {
     );
   };
 
+  const formatRequestDate = (value?: string | null) => {
+    if (!value) return 'Not recorded';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not recorded';
+    return date.toLocaleDateString();
+  };
+
+  const getOldestRequestDate = (requests: PartsRequest[]) => {
+    const timestamps = requests
+      .map((request) => new Date(request.requestDate).getTime())
+      .filter((time) => Number.isFinite(time));
+    if (timestamps.length === 0) return null;
+    return new Date(Math.min(...timestamps)).toISOString();
+  };
+
   const getOrderMethodBadge = (method: string | null) => {
     if (method === 'WEBSITE') {
       return (
@@ -1004,6 +1041,7 @@ export default function ConsolidatedNeedsListPage() {
           const isLowStock = consolidated.currentBalance !== undefined && 
                            consolidated.inventoryItem?.minStock !== undefined && 
                            consolidated.currentBalance < consolidated.inventoryItem.minStock;
+          const oldestRequestDate = getOldestRequestDate(consolidated.requests);
 
           return (
             <div key={consolidated.partNumber} className="border rounded-lg dark:border-gray-700">
@@ -1014,6 +1052,10 @@ export default function ConsolidatedNeedsListPage() {
                     <div className="col-span-2">
                       <div className="font-medium text-gray-900 dark:text-gray-100">{consolidated.partName}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">{consolidated.partNumber}</div>
+                      <div className="mt-1 flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                        <Clock className="h-3 w-3" />
+                        <span>Oldest request: {formatRequestDate(oldestRequestDate)}</span>
+                      </div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">Total Quantity</div>
@@ -1062,6 +1104,7 @@ export default function ConsolidatedNeedsListPage() {
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Department</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested By</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested For</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Created</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Qty</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Urgency</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Reason</th>
@@ -1074,6 +1117,7 @@ export default function ConsolidatedNeedsListPage() {
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.department}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedBy}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedForDisplayName || '—'}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{formatRequestDate(request.requestDate)}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.quantity}</td>
                           <td className="px-4 py-2 text-sm">{getUrgencyBadge(request.urgency)}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">{request.reason}</td>
@@ -1198,7 +1242,10 @@ export default function ConsolidatedNeedsListPage() {
         {filteredVendorGroups.map((vendorGroup) => {
           const vendorKey = vendorGroup.key;
           const isExpanded = expandedVendors.has(vendorKey);
-          const approvedCount = vendorGroup.requests.filter(r => r.status === 'APPROVED' && !r.vendorPoId && r.orderMethod !== 'WEBSITE').length;
+          const readyRequests = vendorGroup.requests.filter(r => r.status === 'APPROVED' && !r.vendorPoId && r.orderMethod !== 'WEBSITE');
+          const approvedCount = readyRequests.length;
+          const selectedReadyCount = readyRequests.filter(r => selectedVendorRequests.has(r.id)).length;
+          const actionCount = selectedReadyCount || approvedCount;
           const hasHighUrgency = vendorGroup.requests.some(r => r.urgency === 'HIGH' || r.urgency === 'CRITICAL');
           const isWebsiteGroup = vendorGroup.orderMethod === 'WEBSITE';
 
@@ -1241,11 +1288,20 @@ export default function ConsolidatedNeedsListPage() {
                         <Button
                           size="sm"
                           variant="default"
+                          onClick={() => openCreateBatchDialog(vendorGroup, true)}
+                          data-testid={`button-create-issue-batch-${vendorKey}`}
+                        >
+                          <Send className="w-4 h-4 mr-1" />
+                          Create & Send PO ({actionCount})
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
                           onClick={() => openCreateBatchDialog(vendorGroup)}
                           data-testid={`button-create-batch-${vendorKey}`}
                         >
                           <ShoppingCart className="w-4 h-4 mr-1" />
-                          Create Vendor PO Draft ({approvedCount})
+                          Draft Only ({actionCount})
                         </Button>
                         <Button
                           size="sm"
@@ -1303,6 +1359,7 @@ export default function ConsolidatedNeedsListPage() {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Department</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested By</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested For</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Created</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Urgency</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
                         <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400">Actions</th>
@@ -1354,6 +1411,7 @@ export default function ConsolidatedNeedsListPage() {
                           <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.department}</td>
                           <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedBy}</td>
                           <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedForDisplayName || '—'}</td>
+                          <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{formatRequestDate(request.requestDate)}</td>
                           <td className="px-3 py-2">{getUrgencyBadge(request.urgency)}</td>
                           <td className="px-3 py-2">
                             <div className="flex flex-col gap-1">
@@ -1388,9 +1446,15 @@ export default function ConsolidatedNeedsListPage() {
                               </>
                             )}
                             {canCreateNewPo && (
-                              <Button size="sm" variant="default" onClick={() => openCreatePoDialogForRequest(request)} data-testid={`button-create-po-${request.id}`}>
+                              <Button size="sm" variant="default" onClick={() => openCreatePoDialogForRequest(request, true)} data-testid={`button-create-issue-po-${request.id}`}>
+                                <Send className="w-3 h-3 mr-1" />
+                                Create & Send
+                              </Button>
+                            )}
+                            {canCreateNewPo && (
+                              <Button size="sm" variant="outline" onClick={() => openCreatePoDialogForRequest(request)} data-testid={`button-create-po-${request.id}`}>
                                 <ShoppingCart className="w-3 h-3 mr-1" />
-                                Create PO
+                                Draft
                               </Button>
                             )}
                             {canLinkExistingPo && (
@@ -1739,6 +1803,10 @@ export default function ConsolidatedNeedsListPage() {
                   <div className="font-medium">{detailRequest.requestedBy}</div>
                 </div>
                 <div>
+                  <div className="text-muted-foreground">Created</div>
+                  <div className="font-medium">{formatRequestDate(detailRequest.requestDate)}</div>
+                </div>
+                <div>
                   <div className="text-muted-foreground">Vendor</div>
                   <div className="font-medium">
                     {getResolvedVendorForRequest(detailRequest)?.name || detailRequest.inventoryItem?.vendorName || detailRequest.inventoryItem?.source || detailRequest.supplier || 'Unassigned'}
@@ -2039,12 +2107,22 @@ export default function ConsolidatedNeedsListPage() {
       </Dialog>
 
       {/* Create Vendor PO Draft Dialog */}
-      <Dialog open={isCreateBatchDialogOpen} onOpenChange={setIsCreateBatchDialogOpen}>
+      <Dialog
+        open={isCreateBatchDialogOpen}
+        onOpenChange={(open) => {
+          setIsCreateBatchDialogOpen(open);
+          if (!open) setOpenIssueAfterCreate(false);
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create Vendor PO Draft</DialogTitle>
+            <DialogTitle>{openIssueAfterCreate ? 'Create & Send Vendor PO' : 'Create Vendor PO Draft'}</DialogTitle>
             <DialogDescription>
-              {batchVendorGroup ? `Create a draft Vendor PO for ${batchVendorGroup.vendorName}. RFQ and PO numbers stay controlled by the existing workflow.` : 'Select items for the draft.'}
+              {batchVendorGroup
+                ? openIssueAfterCreate
+                  ? `Create a draft Vendor PO for ${batchVendorGroup.vendorName}, then open the issue email so you can confirm recipients and message.`
+                  : `Create a draft Vendor PO for ${batchVendorGroup.vendorName}. RFQ and PO numbers stay controlled by the existing workflow.`
+                : 'Select items for the draft.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -2141,7 +2219,7 @@ export default function ConsolidatedNeedsListPage() {
                     onClick={handleCreateBatch}
                     disabled={createBatchMutation.isPending}
                   >
-                    {createBatchMutation.isPending ? 'Creating...' : 'Create Vendor PO Draft'}
+                    {createBatchMutation.isPending ? 'Creating...' : openIssueAfterCreate ? 'Create & Open Email' : 'Create Vendor PO Draft'}
                   </Button>
                 </div>
               </>

@@ -122,6 +122,10 @@ interface SessionUser {
   role?: string;
 }
 
+interface PartsRequestsCardProps {
+  scope?: 'mine' | 'all';
+}
+
 function getDefaultRequestor(user: SessionUser | null | undefined): string {
   if (!user) return '';
   const fullName = [user.firstName, user.lastName]
@@ -131,7 +135,7 @@ function getDefaultRequestor(user: SessionUser | null | undefined): string {
   return user.username || fullName || '';
 }
 
-export default function PartsRequestsCard() {
+export default function PartsRequestsCard({ scope = 'mine' }: PartsRequestsCardProps = {}) {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -153,6 +157,8 @@ export default function PartsRequestsCard() {
     queryKey: ['/api/auth/session'],
   });
   const defaultRequestor = getDefaultRequestor(sessionUser);
+  const partsRequestsQueryKey =
+    scope === 'all' ? '/api/inventory/parts-requests' : '/api/inventory/parts-requests/my';
 
   const [formData, setFormData] = useState<PartsRequestFormData>({
     agPartNumber: '',
@@ -177,8 +183,8 @@ export default function PartsRequestsCard() {
 
   // Load parts requests
   const { data: requests = [], isLoading } = useQuery<PartsRequestWithProject[]>({
-    queryKey: ['/api/inventory/parts-requests'],
-    queryFn: () => apiRequest('/api/inventory/parts-requests'),
+    queryKey: [partsRequestsQueryKey],
+    queryFn: () => apiRequest(partsRequestsQueryKey),
   });
 
   const { data: projects = [] } = useQuery<ProjectOption[]>({
@@ -271,6 +277,7 @@ export default function PartsRequestsCard() {
       setIsCreateOpen(false);
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
     },
     onError: () => toast.error('Failed to create parts request'),
   });
@@ -288,6 +295,7 @@ export default function PartsRequestsCard() {
       setEditingRequest(null);
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
     },
     onError: () => toast.error('Failed to update parts request'),
   });
@@ -301,6 +309,7 @@ export default function PartsRequestsCard() {
     onSuccess: () => {
       toast.success('Parts request deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
     },
     onError: () => toast.error('Failed to delete parts request'),
   });
@@ -507,6 +516,13 @@ export default function PartsRequestsCard() {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const formatRequestDate = (value?: string | Date | null) => {
+    if (!value) return 'Not recorded';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not recorded';
+    return date.toLocaleDateString();
   };
 
   const dialogContentClass =
@@ -970,6 +986,11 @@ export default function PartsRequestsCard() {
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-gray-400" />
                             <span>For: {request.requestedForDisplayName || '—'}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-gray-400" />
+                            <span>Created: {formatRequestDate(request.requestDate)}</span>
                           </div>
 
                         {(request.productionLine || request.project) && (

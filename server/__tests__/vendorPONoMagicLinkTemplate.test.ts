@@ -15,6 +15,8 @@ const context = {
   vendor_contact_person: ' Glenn',
   po_number: '12345',
   requested_delivery_date: '6/17/2026',
+  vendor_message_html: '<p>Please see the attached purchase order PDF for details.</p>',
+  vendor_message_text: 'Please see the attached purchase order PDF for details.',
 };
 
 function expectNoVendorConfirmationLanguage(body: string) {

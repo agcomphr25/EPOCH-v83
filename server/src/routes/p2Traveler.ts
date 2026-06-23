@@ -439,6 +439,57 @@ function decodeScanParam(value: string): string | null {
   }
 }
 
+function buildP2PartScanVariants(scanValue: string): string[] {
+  const trimmed = scanValue.trim();
+  const compact = trimmed.replace(/\s+/g, '');
+  const variants = new Set<string>([trimmed, compact]);
+
+  for (const value of Array.from(variants)) {
+    if (/^rec/i.test(value)) variants.add(`ROC${value.slice(3)}`);
+    if (/^roc/i.test(value)) variants.add(`REC${value.slice(3)}`);
+  }
+
+  return Array.from(variants).filter(Boolean);
+}
+
+async function findSerializedItemByPartScan(scanValue: string) {
+  const variants = buildP2PartScanVariants(scanValue);
+  const fields = [
+    p2SerializedItems.barcode,
+    p2SerializedItems.travelerBarcode,
+    p2SerializedItems.serialNumber,
+    p2SerializedItems.customerSerialNumber,
+  ];
+
+  for (const variant of variants) {
+    const item = await db.query.p2SerializedItems.findFirst({
+      where: or(...fields.map(field => ilike(field, variant))),
+    });
+    if (item) return item;
+  }
+
+  for (const variant of variants) {
+    const item = await db.query.p2SerializedItems.findFirst({
+      where: or(...fields.map(field => ilike(field, `%${variant}%`))),
+    });
+    if (item) return item;
+  }
+
+  const numericSuffix = scanValue.match(/(\d{6,})$/)?.[1] ?? null;
+  if (numericSuffix) {
+    return await db.query.p2SerializedItems.findFirst({
+      where: or(
+        ilike(p2SerializedItems.barcode, `%${numericSuffix}`),
+        ilike(p2SerializedItems.travelerBarcode, `%${numericSuffix}`),
+        ilike(p2SerializedItems.serialNumber, `%${numericSuffix}`),
+        ilike(p2SerializedItems.customerSerialNumber, `%${numericSuffix}`)
+      ),
+    });
+  }
+
+  return null;
+}
+
 function getBasePartNumberWithoutRevision(partNumber?: string | null): string | null {
   const match = partNumber?.match(/^(.+?)\s*Rev\s*\w+$/i);
   return match ? match[1].trim() : null;
@@ -1733,24 +1784,7 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    // Get serialized item - check both system barcode and physical traveler barcode (case-insensitive)
-    let serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: or(
-        ilike(p2SerializedItems.barcode, barcode),
-        ilike(p2SerializedItems.travelerBarcode, barcode)
-      ),
-    });
-
-    // If not found, try suffix/contains match (physical labels may omit prefix like "SG0")
-    if (!serializedItem) {
-      serializedItem = await db.query.p2SerializedItems.findFirst({
-        where: or(
-          ilike(p2SerializedItems.barcode, `%${barcode}`),
-          ilike(p2SerializedItems.travelerBarcode, `%${barcode}`),
-          ilike(p2SerializedItems.serialNumber, `%${barcode}`)
-        ),
-      });
-    }
+    const serializedItem = await findSerializedItemByPartScan(barcode);
 
     if (!serializedItem) {
       const looksLikeBadge = /^EMP\d+$/i.test(barcode) || barcode.toUpperCase() === employeeCode.toUpperCase();
@@ -1843,12 +1877,7 @@ router.get('/part-info/:barcode', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid part barcode. Please rescan the part label.' });
     }
 
-    const serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: or(
-        ilike(p2SerializedItems.barcode, barcode),
-        ilike(p2SerializedItems.travelerBarcode, barcode)
-      ),
-    });
+    const serializedItem = await findSerializedItemByPartScan(barcode);
 
     if (!serializedItem) {
       return res.status(404).json({ error: 'Part not found' });

@@ -42,6 +42,27 @@ function parseBuiltPacketBarcode(barcode: string | null | undefined): { sku: str
   return { sku, queueId, packetNumber };
 }
 
+function parseManufacturingPacketBarcode(barcode: string | null | undefined): { queueId: number; sku: string; sequence: number | null } | null {
+  if (!barcode) return null;
+  const parts = barcode.trim().split('-');
+  if (parts.length < 3 || parts[0] !== 'MFG') return null;
+
+  const queueId = Number(parts[1]);
+  if (!Number.isInteger(queueId)) return null;
+
+  const maybeSequence = parts[parts.length - 1];
+  const hasSequence = parts.length > 3 && /^\d+$/.test(maybeSequence);
+  const skuParts = hasSequence ? parts.slice(2, -1) : parts.slice(2);
+  const sku = skuParts.join('-').trim();
+
+  if (!sku) return null;
+  return {
+    queueId,
+    sku,
+    sequence: hasSequence ? Number(maybeSequence) : null,
+  };
+}
+
 function parseQueueNotes(notes: string | null): Record<string, any> {
   if (!notes) return {};
   try {
@@ -1503,13 +1524,14 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Barcode is required' });
     }
     
-    // Parse the barcode format: MFG-{id}-{partNumber} or MFG-{id}-{partNumber}-{seq}
-    const match = barcode.match(/^MFG-(\d+)-([^-]+)(?:-(\d+))?$/);
-    if (!match) {
+    // Parse the barcode format: MFG-{id}-{partNumber} or MFG-{id}-{partNumber}-{seq}.
+    // Part numbers can contain hyphens, so split from the stable prefix/id and optional numeric suffix.
+    const parsedBarcode = parseManufacturingPacketBarcode(barcode);
+    if (!parsedBarcode) {
       return res.status(400).json({ error: 'Invalid packet barcode format. Expected: MFG-{id}-{partNumber} or MFG-{id}-{partNumber}-{seq}' });
     }
     
-    const printedQueueId = parseInt(match[1]);
+    const printedQueueId = parsedBarcode.queueId;
     
     if (isNaN(printedQueueId)) {
       return res.status(400).json({ error: 'Invalid queue ID in barcode' });
@@ -1753,7 +1775,7 @@ router.post('/scan-start', async (req: Request, res: Response) => {
     // Set the scanned built packet to ALLOCATED if it is currently AVAILABLE.
     // The optional seq segment in the MFG barcode identifies which packet (by
     // display rank = id-ascending order within this queue item) was physically scanned.
-    const scannedSeq = match[3] ? parseInt(match[3]) : null;
+    const scannedSeq = parsedBarcode.sequence;
     try {
       // Fetch all built packets for this queue item ordered by id ascending
       // so we can derive the same display rank used in the built-packets endpoint.

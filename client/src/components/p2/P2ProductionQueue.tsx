@@ -233,7 +233,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
 
   const scanMutation = useMutation({
     mutationFn: async (barcode: string) => {
-      const response = await fetch(`/api/p2-traveler/part-info/${barcode}`);
+      const response = await fetch(`/api/p2-traveler/part-info/${encodeURIComponent(barcode)}`);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to find part');

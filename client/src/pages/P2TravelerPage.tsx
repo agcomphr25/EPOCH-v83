@@ -502,7 +502,8 @@ export default function P2TravelerPage() {
     }
 
     try {
-      const data = await apiRequest(`/api/p2-traveler/badge-lookup/${badgeInput.trim()}`) as Employee;
+      const encodedBadge = encodeURIComponent(badgeInput.trim());
+      const data = await apiRequest(`/api/p2-traveler/badge-lookup/${encodedBadge}`) as Employee;
       setEmployee(data);
       setScanState('BADGE_SCANNED');
       toast({
@@ -532,8 +533,10 @@ export default function P2TravelerPage() {
     }
 
     try {
+      const encodedBadge = encodeURIComponent(badgeInput.trim());
+      const encodedPartBarcode = encodeURIComponent(partInput.trim());
       const data = await apiRequest(
-        `/api/p2-traveler/verify-certification/${badgeInput}/${partInput}`
+        `/api/p2-traveler/verify-certification/${encodedBadge}/${encodedPartBarcode}`
       ) as VerificationData;
 
       setEmployee(data.employee);

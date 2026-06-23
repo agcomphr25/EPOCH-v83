@@ -16523,6 +16523,95 @@ export class DatabaseStorage implements IStorage {
     return productionOrders;
   }
 
+  private normalizeP2SerialPrefix(preferredPrefix?: string | null, fallbackName?: string | null): string {
+    const source = preferredPrefix || fallbackName || 'UNK';
+    const normalized = source.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase();
+    return normalized || 'UNK';
+  }
+
+  private async allocateP2CustomerYearSerialRange(
+    po: Pick<P2PurchaseOrder, 'customerId' | 'customerName'>,
+    count: number,
+    dbClient: DbOrTx
+  ): Promise<{ prefix: string; yearSuffix: string; startSequence: number; endSequence: number }> {
+    if (count <= 0) {
+      throw new Error('Serial range allocation count must be greater than zero');
+    }
+
+    const currentYear = new Date().getFullYear().toString();
+    const yearSuffix = currentYear.slice(-2);
+
+    const customerResult = await dbClient.execute(sql`
+      SELECT rfq_prefix, customer_name
+      FROM p2_customers
+      WHERE customer_id = ${po.customerId}::text
+      LIMIT 1
+    `);
+    const customer = (customerResult.rows?.[0] || {}) as { rfq_prefix?: string | null; customer_name?: string | null };
+    const prefix = this.normalizeP2SerialPrefix(customer.rfq_prefix, customer.customer_name || po.customerName);
+    const serialPattern = `^${prefix}${yearSuffix}[0-9]{5}$`;
+
+    const seqResult = await dbClient.execute(sql`
+      WITH locked_customer AS (
+        SELECT
+          COALESCE((serial_sequences->>${currentYear}::text)::int, 0) AS stored_sequence
+        FROM p2_customers
+        WHERE customer_id = ${po.customerId}::text
+        FOR UPDATE
+      ),
+      existing_serials AS (
+        SELECT COALESCE(
+          MAX((substring(upper(serial_number) from ${`^${prefix}${yearSuffix}([0-9]{5})$`}))::int),
+          0
+        ) AS max_sequence
+        FROM p2_serialized_items
+        WHERE customer_id = ${po.customerId}::text
+          AND upper(serial_number) ~ ${serialPattern}
+      ),
+      base_sequence AS (
+        SELECT GREATEST(
+          COALESCE((SELECT stored_sequence FROM locked_customer), 0),
+          COALESCE((SELECT max_sequence FROM existing_serials), 0)
+        ) AS value
+      )
+      UPDATE p2_customers
+      SET serial_sequences = COALESCE(serial_sequences, '{}'::jsonb) ||
+        jsonb_build_object(${currentYear}::text, (SELECT value FROM base_sequence) + ${count})
+      WHERE customer_id = ${po.customerId}::text
+      RETURNING ((SELECT value FROM base_sequence) + ${count}) AS end_sequence
+    `);
+
+    const endSequence = Number((seqResult.rows?.[0] as { end_sequence?: unknown } | undefined)?.end_sequence);
+    if (Number.isFinite(endSequence) && endSequence > 0) {
+      return {
+        prefix,
+        yearSuffix,
+        startSequence: endSequence - count + 1,
+        endSequence,
+      };
+    }
+
+    const fallbackResult = await dbClient.execute(sql`
+      SELECT COALESCE(
+        MAX((substring(upper(serial_number) from ${`^${prefix}${yearSuffix}([0-9]{5})$`}))::int),
+        0
+      ) AS max_sequence
+      FROM p2_serialized_items
+      WHERE customer_id = ${po.customerId}::text
+        AND upper(serial_number) ~ ${serialPattern}
+    `);
+    const fallbackMax = Number(
+      (fallbackResult.rows?.[0] as { max_sequence?: unknown } | undefined)?.max_sequence || 0
+    );
+    const fallbackEnd = fallbackMax + count;
+    return {
+      prefix,
+      yearSuffix,
+      startSequence: fallbackMax + 1,
+      endSequence: fallbackEnd,
+    };
+  }
+
   async addP2SerializedItemsForPoItem(
     poItemId: number,
     addCount: number,
@@ -16546,12 +16635,8 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`P2 PO ${poItem.poId} not found`);
     }
 
-    // Continue the per-PO barcode sequence (max+1 across ALL items on this PO)
-    const maxSeqResult = await dbClient
-      .select({ maxSeq: max(p2SerializedItems.sequenceNumber) })
-      .from(p2SerializedItems)
-      .where(eq(p2SerializedItems.poId, po.id));
-    const startSeq = (maxSeqResult[0]?.maxSeq ?? 0) + 1;
+    const { prefix, yearSuffix, startSequence } =
+      await this.allocateP2CustomerYearSerialRange(po, addCount, dbClient);
 
     const [projectForPoItem] = await dbClient
       .select({ id: projects.id })
@@ -16634,13 +16719,12 @@ export class DatabaseStorage implements IStorage {
     };
     const itemsToCreate: SerializedInsertShape[] = [];
     for (let i = 0; i < addCount; i++) {
-      const seq = startSeq + i;
-      const seq4 = seq.toString().padStart(4, '0');
-      const barcode = `${po.poNumber}-UNIT-${seq4}`;
+      const seq = startSequence + i;
+      const serialNumber = `${prefix}${yearSuffix}${String(seq).padStart(5, '0')}`;
       itemsToCreate.push({
-        serialNumber: barcode,
-        barcode,
-        travelerBarcode: barcode,
+        serialNumber,
+        barcode: serialNumber,
+        travelerBarcode: serialNumber,
         poId: po.id,
         poItemId: poItem.id,
         poNumber: po.poNumber,
@@ -17299,40 +17383,8 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`PO ${poItem.poId} not found`);
       }
 
-      // Get the customer's RFQ prefix for serial number generation
-      const currentYear = new Date().getFullYear().toString();
-      const yearSuffix = currentYear.slice(-2);
-      let prefix = '';
-
-      // Look up customer by customerId to get rfqPrefix
-      const customerResult = await tx.execute(sql`
-        SELECT rfq_prefix, customer_name, serial_sequences
-        FROM p2_customers
-        WHERE customer_id = ${po.customerId}::text
-        LIMIT 1
-      `);
-
-      if (customerResult.rows && customerResult.rows.length > 0) {
-        const customer = customerResult.rows[0] as any;
-        prefix = customer.rfq_prefix || customer.customer_name.substring(0, 3).toUpperCase();
-      } else {
-        prefix = (po.customerName || 'UNK').substring(0, 3).toUpperCase();
-      }
-
-      // Atomically increment serial sequence counter for this customer+year
-      const seqResult = await tx.execute(sql`
-        UPDATE p2_customers
-        SET serial_sequences = COALESCE(serial_sequences, '{}'::jsonb) ||
-          jsonb_build_object(
-            ${currentYear}::text,
-            COALESCE((serial_sequences->>${currentYear}::text)::int, 0) + ${poItem.quantity}
-          )
-        WHERE customer_id = ${po.customerId}::text
-        RETURNING (COALESCE((serial_sequences->>${currentYear}::text)::int, 0)) as end_sequence
-      `);
-
-      const endSequence = seqResult.rows?.[0] ? (seqResult.rows[0] as any).end_sequence : poItem.quantity;
-      const startSequence = endSequence - poItem.quantity + 1;
+      const { prefix, yearSuffix, startSequence } =
+        await this.allocateP2CustomerYearSerialRange(po, poItem.quantity, tx);
 
       const serializedItems: P2SerializedItem[] = [];
 

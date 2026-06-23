@@ -7,11 +7,12 @@ import { requirePermission } from '../../../server/middleware/requirePermission'
 import { controlledDocuments, documentVersionHistory, insertControlledDocumentSchema, insertDocumentVersionHistorySchema } from '../../../server/schema';
 import { eq, desc, and, inArray } from 'drizzle-orm';
 import fs from 'fs/promises';
-import { createReadStream } from 'fs';
 import { z } from 'zod';
 import Papa from 'papaparse';
 import { requireStepUp } from '../../../server/middleware/auth';
 import { writeAccessLog } from './vault';
+import { fileURLToPath } from 'url';
+import { PDFDocument, PDFFont, StandardFonts, rgb } from 'pdf-lib';
 
 const router = Router();
 
@@ -168,6 +169,151 @@ const getCsvValue = (row: Record<string, unknown>, names: string[]) => {
   return '';
 };
 
+const toForwardSlashPath = (filePath: string) => filePath.replace(/\\/g, '/').toLowerCase();
+
+const isWindowsAbsolutePath = (filePath: string) => /^[a-zA-Z]:[\\/]/.test(filePath);
+
+const isUncPath = (filePath: string) => /^\\\\[^\\]+\\[^\\]+/.test(filePath);
+
+const isAllowedImportedAbsolutePath = (filePath: string) => {
+  const normalized = toForwardSlashPath(filePath);
+  return (
+    normalized.includes('/my drive/') ||
+    normalized.includes('/shared drives/') ||
+    normalized.includes('/onedrive/') ||
+    normalized.includes('/google drive/')
+  );
+};
+
+const getExternalRedirectUrl = (filePath: string | null | undefined) => {
+  const trimmed = String(filePath || '').trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^(?:drive|docs)\.google\.com\//i.test(trimmed)) return `https://${trimmed}`;
+  return null;
+};
+
+const getImportedFileReference = (filePath: string | null | undefined) => {
+  const trimmed = String(filePath || '').trim();
+  if (!trimmed) return null;
+  if (getExternalRedirectUrl(trimmed)) return getExternalRedirectUrl(trimmed);
+  if (trimmed.startsWith('/assets/documents/') || trimmed.startsWith('assets/documents/')) {
+    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  }
+
+  if (/^file:\/\//i.test(trimmed)) {
+    try {
+      const localPath = fileURLToPath(trimmed);
+      return isAllowedImportedAbsolutePath(localPath) ? localPath : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if ((isWindowsAbsolutePath(trimmed) || isUncPath(trimmed) || path.isAbsolute(trimmed)) && isAllowedImportedAbsolutePath(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
+};
+
+const resolveControlledDocumentFile = (filePath: string | null | undefined) => {
+  const trimmed = String(filePath || '').trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('/assets/documents/') || trimmed.startsWith('assets/documents/')) {
+    const relativePath = trimmed.replace(/^\//, '');
+    return path.join(process.cwd(), 'server/src', relativePath);
+  }
+
+  if (/^file:\/\//i.test(trimmed)) {
+    try {
+      const localPath = fileURLToPath(trimmed);
+      return isAllowedImportedAbsolutePath(localPath) ? localPath : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if ((isWindowsAbsolutePath(trimmed) || isUncPath(trimmed) || path.isAbsolute(trimmed)) && isAllowedImportedAbsolutePath(trimmed)) {
+    return trimmed;
+  }
+
+  if (/^[^\\/]+\.[a-z0-9]{2,5}$/i.test(trimmed)) {
+    return path.join(process.cwd(), 'server/src/assets/documents', path.basename(trimmed));
+  }
+
+  return null;
+};
+
+const formatControlledDocumentFooterDate = (value: Date | string | null | undefined) => {
+  if (!value) return 'N/A';
+  const date = value instanceof Date
+    ? value
+    : new Date(String(value).includes('T') ? String(value) : `${String(value)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  return date.toLocaleDateString('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+  });
+};
+
+const truncateTextToWidth = (text: string, maxWidth: number, font: PDFFont, size: number) => {
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text;
+
+  let truncated = text;
+  while (truncated.length > 0 && font.widthOfTextAtSize(`${truncated}...`, size) > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+
+  return truncated ? `${truncated}...` : text.slice(0, 12);
+};
+
+const addControlledDocumentFooter = async (
+  pdfBytes: Buffer,
+  doc: typeof controlledDocuments.$inferSelect
+) => {
+  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const pages = pdfDoc.getPages();
+
+  const footerDate = formatControlledDocumentFooterDate(doc.effectiveDate || doc.updatedAt || doc.createdAt);
+  const footerText = `Doc #: ${doc.documentNumber || 'N/A'} | Version: ${doc.currentVersion || 'N/A'} | Date: ${footerDate}`;
+
+  for (const page of pages) {
+    const { width } = page.getSize();
+    const marginX = 36;
+    const footerHeight = 24;
+    const fontSize = 8;
+    const text = truncateTextToWidth(footerText, width - marginX * 2, font, fontSize);
+
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width,
+      height: footerHeight,
+      color: rgb(1, 1, 1),
+      opacity: 0.92,
+    });
+    page.drawLine({
+      start: { x: marginX, y: footerHeight },
+      end: { x: width - marginX, y: footerHeight },
+      thickness: 0.5,
+      color: rgb(0.72, 0.72, 0.72),
+    });
+    page.drawText(text, {
+      x: marginX,
+      y: 8,
+      size: fontSize,
+      font,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+  }
+
+  return Buffer.from(await pdfDoc.save());
+};
+
 const normalizeImportedFilePath = async (row: Record<string, unknown>, documentName: string) => {
   const explicitLink = getCsvValue(row, [
     'Document Link',
@@ -180,8 +326,8 @@ const normalizeImportedFilePath = async (row: Record<string, unknown>, documentN
     'filePath',
   ]);
 
-  if (/^https?:\/\//i.test(explicitLink)) return explicitLink;
-  if (explicitLink.startsWith('/assets/documents/')) return explicitLink;
+  const importedFileReference = getImportedFileReference(explicitLink);
+  if (importedFileReference) return importedFileReference;
 
   const candidateName = explicitLink || documentName;
   if (!/\.[a-z0-9]{2,5}$/i.test(candidateName)) return null;
@@ -195,9 +341,6 @@ const normalizeImportedFilePath = async (row: Record<string, unknown>, documentN
     return null;
   }
 };
-
-const isExternalDocumentPath = (filePath: string | null | undefined) =>
-  Boolean(filePath && /^https?:\/\//i.test(filePath));
 
 // Get all controlled documents (authenticated users only)
 router.get('/', requireAuth, async (req: Request, res: Response) => {
@@ -584,20 +727,22 @@ router.get('/:id/view', requireAuth, requireStepUp(), async (req: Request, res: 
       return res.status(404).json({ error: 'No file attached to this document' });
     }
 
-    if (isExternalDocumentPath(doc.filePath)) {
+    const externalRedirectUrl = getExternalRedirectUrl(doc.filePath);
+    if (externalRedirectUrl) {
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
-      return res.redirect(doc.filePath);
+      return res.redirect(externalRedirectUrl);
     }
 
-    // Strip leading slash from filePath before joining
-    const relativePath = doc.filePath.replace(/^\//, '');
-    const filePath = path.join(process.cwd(), 'server/src', relativePath);
+    const filePath = resolveControlledDocumentFile(doc.filePath);
+    if (!filePath) {
+      return res.status(422).json({ error: 'Document file path is not a supported app-accessible location' });
+    }
     
     // Check if file exists
     try {
       await fs.access(filePath);
     } catch {
-      return res.status(404).json({ error: 'File not found on server' });
+      return res.status(404).json({ error: 'Document file is not accessible from this server' });
     }
 
     if (path.extname(filePath).toLowerCase() !== '.pdf') {
@@ -607,9 +752,11 @@ router.get('/:id/view', requireAuth, requireStepUp(), async (req: Request, res: 
     // Write view access log entry before sending the file
     await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
 
+    const stampedPdf = await addControlledDocumentFooter(await fs.readFile(filePath), doc);
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
-    createReadStream(filePath).pipe(res);
+    res.send(stampedPdf);
   } catch (error) {
     console.error('Error viewing document:', error);
     res.status(500).json({ error: 'Failed to view document' });
@@ -661,24 +808,33 @@ router.get('/:id/download', requireAuth, requireStepUp(), async (req: Request, r
       return res.status(404).json({ error: 'No file attached to this document' });
     }
 
-    if (isExternalDocumentPath(doc.filePath)) {
+    const externalRedirectUrl = getExternalRedirectUrl(doc.filePath);
+    if (externalRedirectUrl) {
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
-      return res.redirect(doc.filePath);
+      return res.redirect(externalRedirectUrl);
     }
 
-    // Strip leading slash from filePath before joining
-    const relativePath = doc.filePath.replace(/^\//, '');
-    const filePath = path.join(process.cwd(), 'server/src', relativePath);
+    const filePath = resolveControlledDocumentFile(doc.filePath);
+    if (!filePath) {
+      return res.status(422).json({ error: 'Document file path is not a supported app-accessible location' });
+    }
 
     // Check if file exists
     try {
       await fs.access(filePath);
     } catch {
-      return res.status(404).json({ error: 'File not found on server' });
+      return res.status(404).json({ error: 'Document file is not accessible from this server' });
     }
 
     // Write download access log entry before sending the file
     await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
+
+    if (path.extname(filePath).toLowerCase() === '.pdf') {
+      const stampedPdf = await addControlledDocumentFooter(await fs.readFile(filePath), doc);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
+      return res.send(stampedPdf);
+    }
 
     // Send file with appropriate content type
     res.download(filePath, path.basename(filePath));

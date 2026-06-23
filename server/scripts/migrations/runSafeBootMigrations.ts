@@ -206,6 +206,7 @@ const safeFiles = [
   '0177_inventory_item_primary_image.sql',
   '0179_inventory_item_order_url.sql',
   '0182_repair_rock_west_p2_customer_year_serials.sql',
+  '0183_wad_charge_code_requests.sql',
   'investigation_308_order_duplication.sql',
 ];
 

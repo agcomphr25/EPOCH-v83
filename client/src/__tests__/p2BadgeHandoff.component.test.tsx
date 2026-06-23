@@ -11,7 +11,7 @@
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 const mockNavigate = vi.fn();
 
@@ -97,7 +97,7 @@ function makeTravelerPayload(stepStatus: 'NOT_STARTED' | 'IN_PROGRESS') {
 }
 
 function setupFetch(overrides: Record<string, unknown> = {}) {
-  global.fetch = vi.fn().mockImplementation((url: string) => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
     const u = String(url);
     for (const [pattern, response] of Object.entries(overrides)) {
       if (u.includes(pattern)) {
@@ -105,8 +105,12 @@ function setupFetch(overrides: Record<string, unknown> = {}) {
       }
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(null) });
-  });
+  }));
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('P2TravelerPage — badge forwarding on traveler generate', () => {
   beforeEach(() => {

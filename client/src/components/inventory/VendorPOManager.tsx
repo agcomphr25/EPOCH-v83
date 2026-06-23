@@ -121,6 +121,12 @@ type EmailRecipient = {
   type: 'primary' | 'additional' | 'contact';
 };
 
+const DEFAULT_ISSUE_EMAIL_MESSAGE =
+  'AG Composites has issued a new Purchase Order to your company. Please see the attached purchase order PDF for details.';
+
+const DEFAULT_RESEND_EMAIL_MESSAGE =
+  'AG Composites is resending this Purchase Order. Please see the attached purchase order PDF for details.';
+
 function RecipientPickerList({
   recipients,
   selected,
@@ -2478,7 +2484,13 @@ function ComplianceReviewModal({
 }
 
 // Main component
-export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?: number } = {}) {
+export default function VendorPOManager({
+  preSelectedPoId,
+  autoOpenIssue = false,
+}: {
+  preSelectedPoId?: number;
+  autoOpenIssue?: boolean;
+} = {}) {
   const [selectedVendorPO, setSelectedVendorPO] = useState<VendorPO | null>(
     null
   );
@@ -2511,6 +2523,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   const [dialogRecipients, setDialogRecipients] = useState<EmailRecipient[]>([]);
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
+  const [emailMessage, setEmailMessage] = useState(DEFAULT_ISSUE_EMAIL_MESSAGE);
 
   // RFQ confirmation dialog state
   const [showRFQDialog, setShowRFQDialog] = useState(false);
@@ -2623,9 +2636,18 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     if (match) {
       setSelectedVendorPO(match);
       setShowDetailView(true);
+      if (autoOpenIssue && ['Draft', 'RFQ Sent', 'Quote Received'].includes(match.status)) {
+        setNoEmailMode(false);
+        setNoEmailReason('');
+        setNoEmailConfirmed(false);
+        setEmailMessage(DEFAULT_ISSUE_EMAIL_MESSAGE);
+        setPendingStatus('Sent');
+        setShowStatusChangeDialog(true);
+        loadRecipientsForPO(match.id);
+      }
       setPreSelectApplied(true);
     }
-  }, [preSelectedPoId, vendorPOs, preSelectApplied]);
+  }, [preSelectedPoId, vendorPOs, preSelectApplied, autoOpenIssue]);
 
   useEffect(() => {
     if (!draftBomHandoff || selectedVendorPO || showDetailView) return;
@@ -2765,10 +2787,10 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   // Issue PO mutation - sends PO email to vendor
   const issuePOMutation = useMutation({
-    mutationFn: ({ id, skipEmail = false, reason, recipients }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[] }) =>
+    mutationFn: ({ id, skipEmail = false, reason, recipients, message }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[]; message?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/issue`, {
         method: 'POST',
-        body: JSON.stringify({ skipEmail, reason, recipients }),
+        body: JSON.stringify({ skipEmail, reason, recipients, message }),
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
@@ -2829,10 +2851,10 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   });
 
   const resendPOMutation = useMutation({
-    mutationFn: ({ id, recipients }: { id: number; recipients: string[] }) =>
+    mutationFn: ({ id, recipients, message }: { id: number; recipients: string[]; message?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/resend`, {
         method: 'POST',
-        body: JSON.stringify({ recipients }),
+        body: JSON.stringify({ recipients, message }),
       }),
     onSuccess: (data: any, variables) => {
       queryClient.invalidateQueries({ queryKey: getResendConfirmationKey(variables.id) });
@@ -2952,7 +2974,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     deleteMutation.mutate({ id: deletePO.id, reason });
   };
 
-  const loadRecipientsForPO = async (poId: number) => {
+  async function loadRecipientsForPO(poId: number) {
     setIsLoadingRecipients(true);
     setDialogRecipients([]);
     setSelectedRecipients([]);
@@ -2975,7 +2997,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     } finally {
       setIsLoadingRecipients(false);
     }
-  };
+  }
 
   const handleOpenRFQDialog = () => {
     if (!selectedVendorPO) return;
@@ -2985,6 +3007,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   const handleOpenResendDialog = () => {
     if (!selectedVendorPO) return;
+    setEmailMessage(DEFAULT_RESEND_EMAIL_MESSAGE);
     setShowResendDialog(true);
     loadRecipientsForPO(selectedVendorPO.id);
   };
@@ -3037,6 +3060,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     setNoEmailMode(false);
     setNoEmailReason('');
     setNoEmailConfirmed(false);
+    setEmailMessage(DEFAULT_ISSUE_EMAIL_MESSAGE);
     setPendingStatus('Sent');
     setShowStatusChangeDialog(true);
     loadRecipientsForPO(id);
@@ -3076,6 +3100,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       setNoEmailMode(false);
       setNoEmailReason('');
       setNoEmailConfirmed(false);
+      setEmailMessage(DEFAULT_ISSUE_EMAIL_MESSAGE);
       setPendingStatus('Sent');
       setShowStatusChangeDialog(true);
       loadRecipientsForPO(selectedVendorPO.id);
@@ -3093,6 +3118,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           skipEmail,
           reason: skipEmail ? noEmailReason.trim() : undefined,
           recipients: skipEmail ? undefined : selectedRecipients,
+          message: skipEmail ? undefined : (emailMessage.trim() || DEFAULT_ISSUE_EMAIL_MESSAGE),
         });
         setShowStatusChangeDialog(false);
         setPendingStatus('');
@@ -3577,14 +3603,29 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                 </AlertDialogHeader>
 
                 {!noEmailMode && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Email Recipients</Label>
-                    <RecipientPickerList
-                      recipients={dialogRecipients}
-                      selected={selectedRecipients}
-                      onChange={setSelectedRecipients}
-                      isLoading={isLoadingRecipients}
-                    />
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Email Recipients</Label>
+                      <RecipientPickerList
+                        recipients={dialogRecipients}
+                        selected={selectedRecipients}
+                        onChange={setSelectedRecipients}
+                        isLoading={isLoadingRecipients}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="vendor-po-email-message" className="text-sm font-medium">
+                        Email Message
+                      </Label>
+                      <Textarea
+                        id="vendor-po-email-message"
+                        value={emailMessage}
+                        onChange={(e) => setEmailMessage(e.target.value)}
+                        rows={4}
+                        className="resize-none"
+                        data-testid="textarea-vendor-po-email-message"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -3706,6 +3747,17 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                 isLoading={isLoadingRecipients}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="vendor-po-resend-message" className="text-sm font-medium">Email Message</Label>
+              <Textarea
+                id="vendor-po-resend-message"
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+                rows={4}
+                className="resize-none"
+                data-testid="textarea-vendor-po-resend-message"
+              />
+            </div>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <Button
@@ -3768,7 +3820,11 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               <Button
                 onClick={() => {
                   if (selectedVendorPO) {
-                    resendPOMutation.mutate({ id: selectedVendorPO.id, recipients: selectedRecipients });
+                    resendPOMutation.mutate({
+                      id: selectedVendorPO.id,
+                      recipients: selectedRecipients,
+                      message: emailMessage.trim() || DEFAULT_RESEND_EMAIL_MESSAGE,
+                    });
                   }
                 }}
                 disabled={resendPOMutation.isPending || selectedRecipients.length === 0}

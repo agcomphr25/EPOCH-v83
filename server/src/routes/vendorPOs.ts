@@ -34,6 +34,31 @@ import { syncLinkedPartsRequestsReceivedForVendorPo } from '../services/partsReq
 
 const router = Router();
 
+const DEFAULT_VENDOR_PO_ISSUE_MESSAGE =
+  'AG Composites has issued a new Purchase Order to your company. Please see the attached purchase order PDF for details.';
+
+const DEFAULT_VENDOR_PO_RESEND_MESSAGE =
+  'AG Composites is resending this Purchase Order. Please see the attached purchase order PDF for details.';
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function normalizeVendorPoEmailMessage(raw: unknown, fallback: string): { text: string; html: string } {
+  const rawText = typeof raw === 'string' ? raw.trim() : '';
+  const text = (rawText || fallback).slice(0, 4000);
+  const html = text
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
+  return { text, html };
+}
+
 function parseLinkedPartsRequestIds(raw: unknown): number[] {
   if (!Array.isArray(raw)) return [];
   return Array.from(new Set(
@@ -2565,7 +2590,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
 
-    const { skipEmail, reason, recipients: additionalRecipients } = req.body ?? {};
+    const { skipEmail, reason, recipients: additionalRecipients, message: emailMessage } = req.body ?? {};
     const skip = Boolean(skipEmail);
 
     // Get the PO first for vendor lookup and pre-flight checks
@@ -2946,6 +2971,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       standardCc
     );
 
+    const normalizedIssueMessage = normalizeVendorPoEmailMessage(emailMessage, DEFAULT_VENDOR_PO_ISSUE_MESSAGE);
     const issueContext = {
       vendor_name: vendor.name,
       vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
@@ -2953,6 +2979,8 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       requested_delivery_date: issuedPO.expectedDeliveryDate
         ? new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()
         : '',
+      vendor_message_html: normalizedIssueMessage.html,
+      vendor_message_text: normalizedIssueMessage.text,
     };
 
     const emailResult = await sendCommunication({
@@ -2994,7 +3022,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
     await recordVendorPoAudit(req, id, 'VENDOR_PO_EMAIL_SENT', {
       after: issuedPO,
-      meta: { poNumber, to: issueToEmail, cc: issueCcList, templateKey: 'vendor_po_issue' },
+      meta: { poNumber, to: issueToEmail, cc: issueCcList, templateKey: 'vendor_po_issue', customMessage: issueContext.vendor_message_text },
     });
 
     console.log(`[VendorPOIssuedEmailSent] PO ${poNumber} issued by ${performedBy} — email sent to ${issueToEmail}, cc: ${issueCcList.join(', ')}`);
@@ -3232,7 +3260,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       });
     }
 
-    const { recipients: additionalRecipients } = req.body ?? {};
+    const { recipients: additionalRecipients, message: emailMessage } = req.body ?? {};
 
     const poNumber = vendorPO.poNumber;
 
@@ -3247,6 +3275,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       standardResendCc
     );
 
+    const normalizedResendMessage = normalizeVendorPoEmailMessage(emailMessage, DEFAULT_VENDOR_PO_RESEND_MESSAGE);
     const resendContext = {
       vendor_name: vendor.name,
       vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
@@ -3254,6 +3283,8 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       requested_delivery_date: vendorPO.expectedDeliveryDate
         ? new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()
         : '',
+      vendor_message_html: normalizedResendMessage.html,
+      vendor_message_text: normalizedResendMessage.text,
     };
 
     const emailResult = await sendCommunication({
@@ -3281,7 +3312,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
     console.log(`[VendorPOResent] PO ${poNumber} resent by user ${(req as any).user?.username ?? 'unknown'} — email sent to ${resendToEmail}, cc: ${resendCcList.join(', ')}`);
     await recordVendorPoAudit(req, id, 'VENDOR_PO_RESENT', {
       after: vendorPO,
-      meta: { poNumber, to: resendToEmail, cc: resendCcList, templateKey: 'vendor_po_resend' },
+      meta: { poNumber, to: resendToEmail, cc: resendCcList, templateKey: 'vendor_po_resend', customMessage: resendContext.vendor_message_text },
     });
 
     res.json({

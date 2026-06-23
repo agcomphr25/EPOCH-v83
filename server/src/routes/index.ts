@@ -5269,7 +5269,65 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         console.warn('P2 Production Queue optional serialized item lookup skipped:', error);
       }
       const visibleStatuses = new Set(['ACTIVE']);
-      const items = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
+      const activeSerializedItems = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
+      const poItemQuantityRows = await optionalP2Rows(
+        'PO item quantity',
+        dbPool.query(
+          `SELECT
+             poi.id AS "poItemId",
+             poi.quantity AS "orderedQuantity"
+           FROM p2_purchase_order_items poi
+           JOIN p2_purchase_orders po ON po.id = poi.po_id
+           WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')`
+        )
+      );
+      const orderedQuantityByPoItemId = new Map<number, number>(
+        poItemQuantityRows.map((row: any) => [
+          Number(row.poItemId),
+          Math.max(0, Number(row.orderedQuantity) || 0),
+        ])
+      );
+      const isPastLayupQueueStage = (item: any) => {
+        const dept = normalizeP2ControlDepartment(item.currentDepartment);
+        return dept !== '' && dept !== 'Pending Layup' && dept !== 'Layup';
+      };
+      const consumedPastLayupByPoItemId = new Map<number, number>();
+      for (const item of allItems || []) {
+        const poItemId = Number(item.poItemId ?? item.po_item_id);
+        if (!Number.isFinite(poItemId)) continue;
+
+        if (item.status === 'COMPLETED' || (item.status === 'ACTIVE' && isPastLayupQueueStage(item))) {
+          consumedPastLayupByPoItemId.set(
+            poItemId,
+            (consumedPastLayupByPoItemId.get(poItemId) ?? 0) + 1
+          );
+        }
+      }
+      const layupShownByPoItemId = new Map<number, number>();
+      const items = activeSerializedItems.filter((item: any) => {
+        const dept = normalizeP2ControlDepartment(item.currentDepartment);
+        if (dept === '' || dept === 'Pending Layup') {
+          return false;
+        }
+
+        const poItemId = Number(item.poItemId ?? item.po_item_id);
+        const orderedQuantity = orderedQuantityByPoItemId.get(poItemId);
+        if (!orderedQuantity || dept !== 'Layup') {
+          return true;
+        }
+
+        const remainingLayupCapacity = Math.max(
+          0,
+          orderedQuantity - (consumedPastLayupByPoItemId.get(poItemId) ?? 0)
+        );
+        const shownForLine = layupShownByPoItemId.get(poItemId) ?? 0;
+        if (shownForLine >= remainingLayupCapacity) {
+          return false;
+        }
+
+        layupShownByPoItemId.set(poItemId, shownForLine + 1);
+        return true;
+      });
       const legacyProductionRows: any[] = [];
       const legacyProjectProductionRows = await optionalP2Rows(
         'legacy project production',
@@ -5762,7 +5820,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // Format response with department summaries
       const departments = departmentOrder
-        .filter(dept => departmentsSet.has(dept) || dept === 'Pending Layup' || dept === 'Layup')
         .map(dept => {
           const queueItems = departmentQueues[dept] || [];
           const inProgressCount = queueItems.filter(i => i.hasActiveTask).length;
@@ -5775,7 +5832,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             waiting: waitingCount,
             items: queueItems,
           };
-        });
+        })
+        .filter(dept => dept.totalItems > 0);
       
       res.json({
         departments,

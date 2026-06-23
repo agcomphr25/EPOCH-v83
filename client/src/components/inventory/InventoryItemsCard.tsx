@@ -340,6 +340,13 @@ const TRACEABILITY_CONFIG_FIELDS: { key: string; label: string; type: 'text' | '
   { key: 'certReference', label: 'Cert Reference', type: 'text' },
 ];
 
+type CncMachineOption = {
+  id: number;
+  machineName: string;
+  machineNumber?: string | null;
+  active?: boolean;
+};
+
 interface InventoryFormData {
   agPartNumber: string;
   sku: string;
@@ -350,6 +357,7 @@ interface InventoryFormData {
   manufacturingLevel: string;
   manufacturingDepartment: string;
   machineType: string;
+  machiningTimeMinutes: string;
   source: string;
   vendorId: string;
   supplierPartNumber: string;
@@ -453,6 +461,42 @@ const InventoryForm = ({
 }) => {
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const sortedVendors = React.useMemo(
+    () =>
+      Array.isArray(vendors)
+        ? [...vendors].sort((a, b) => a.name.localeCompare(b.name))
+        : [],
+    [vendors]
+  );
+  const selectedSecondaryVendor = sortedVendors.find(
+    (vendor) => vendor.name === formData.secondarySource
+  );
+  const secondarySourceValue = selectedSecondaryVendor
+    ? selectedSecondaryVendor.id.toString()
+    : formData.secondarySource
+      ? `legacy:${formData.secondarySource}`
+      : 'none';
+  const { data: cncMachines = [] } = useQuery<CncMachineOption[]>({
+    queryKey: ['/api/cnc/machines'],
+  });
+  const activeCncMachines = React.useMemo(
+    () =>
+      cncMachines
+        .filter((machine) => machine.active !== false)
+        .sort((a, b) => a.machineName.localeCompare(b.machineName)),
+    [cncMachines]
+  );
+  const selectedInactiveMachine =
+    formData.machineType &&
+    !activeCncMachines.some((machine) => machine.machineName === formData.machineType)
+      ? cncMachines.find((machine) => machine.machineName === formData.machineType)
+      : undefined;
+  const selectedLegacyMachineName =
+    formData.machineType &&
+    !activeCncMachines.some((machine) => machine.machineName === formData.machineType) &&
+    !selectedInactiveMachine
+      ? formData.machineType
+      : undefined;
 
   const { data: allUnits = [] } = useQuery<Array<{ id: number; symbol: string; family: string; family_id: number }>>({
     queryKey: ['/api/units'],
@@ -581,6 +625,7 @@ const InventoryForm = ({
                 onSelectChange('manufacturedCategory', '');
                 onSelectChange('manufacturingLevel', '');
                 onSelectChange('machineType', '');
+                onSelectChange('machiningTimeMinutes', '');
               }
             }}
           >
@@ -603,6 +648,7 @@ const InventoryForm = ({
                   onSelectChange('manufacturedCategory', value);
                   if (value !== 'MACHINED_PART') {
                     onSelectChange('machineType', '');
+                    onSelectChange('machiningTimeMinutes', '');
                   }
                 }}
               >
@@ -623,23 +669,53 @@ const InventoryForm = ({
               </Select>
             </div>
             {formData.manufacturedCategory === 'MACHINED_PART' && (
-              <div>
-                <Label htmlFor="machineType">Machine Type</Label>
-                <Select
-                  value={formData.machineType || ''}
-                  onValueChange={(value) => onSelectChange('machineType', value === '_none' ? '' : value)}
-                >
-                  <SelectTrigger data-testid="select-machineType">
-                    <SelectValue placeholder="Select machine type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">None / Not specified</SelectItem>
-                    <SelectItem value="CNC Mill 3rd Axis">CNC Mill 3rd Axis</SelectItem>
-                    <SelectItem value="CNC Mill 4th Axis">CNC Mill 4th Axis</SelectItem>
-                    <SelectItem value="Lathe">Lathe</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div>
+                  <Label htmlFor="machineType">Machine</Label>
+                  <Select
+                    value={formData.machineType || '_none'}
+                    onValueChange={(value) => onSelectChange('machineType', value === '_none' ? '' : value)}
+                  >
+                    <SelectTrigger id="machineType" data-testid="select-machineType">
+                      <SelectValue placeholder="Select CNC machine" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">None / Not specified</SelectItem>
+                      {selectedInactiveMachine && (
+                        <SelectItem value={selectedInactiveMachine.machineName}>
+                          {selectedInactiveMachine.machineName}
+                          {selectedInactiveMachine.machineNumber ? ` (${selectedInactiveMachine.machineNumber})` : ''}
+                        </SelectItem>
+                      )}
+                      {selectedLegacyMachineName && (
+                        <SelectItem value={selectedLegacyMachineName}>
+                          {selectedLegacyMachineName}
+                        </SelectItem>
+                      )}
+                      {activeCncMachines.map((machine) => (
+                        <SelectItem key={machine.id} value={machine.machineName}>
+                          {machine.machineName}
+                          {machine.machineNumber ? ` (${machine.machineNumber})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="machiningTimeMinutes">Machining Time (minutes)</Label>
+                  <Input
+                    id="machiningTimeMinutes"
+                    name="machiningTimeMinutes"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.machiningTimeMinutes}
+                    onChange={onChange}
+                    placeholder="Enter machining time"
+                    data-testid="input-machiningTimeMinutes"
+                  />
+                </div>
+              </>
             )}
             <div>
               <Label htmlFor="manufacturingLevel">Manufacturing Level</Label>
@@ -832,12 +908,11 @@ const InventoryForm = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">None</SelectItem>
-              {Array.isArray(vendors) &&
-                [...vendors].sort((a, b) => a.name.localeCompare(b.name)).map((vendor) => (
-                  <SelectItem key={vendor.id} value={vendor.id.toString()}>
-                    {vendor.name}
-                  </SelectItem>
-                ))}
+              {sortedVendors.map((vendor) => (
+                <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                  {vendor.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -876,14 +951,42 @@ const InventoryForm = ({
         </div>
         <div>
           <Label htmlFor="secondarySource">Secondary Source</Label>
-          <Input
-            id="secondarySource"
-            name="secondarySource"
-            value={formData.secondarySource}
-            onChange={onChange}
-            placeholder="Enter secondary source"
-            data-testid="input-secondarySource"
-          />
+          <Select
+            value={secondarySourceValue}
+            onValueChange={(value) => {
+              if (value === 'none') {
+                onSelectChange('secondarySource', '');
+                return;
+              }
+
+              if (value.startsWith('legacy:')) {
+                onSelectChange('secondarySource', value.slice('legacy:'.length));
+                return;
+              }
+
+              const vendor = sortedVendors.find(
+                (option) => option.id.toString() === value
+              );
+              onSelectChange('secondarySource', vendor?.name || '');
+            }}
+          >
+            <SelectTrigger id="secondarySource" data-testid="select-secondarySource">
+              <SelectValue placeholder="Select secondary vendor (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              {formData.secondarySource && !selectedSecondaryVendor && (
+                <SelectItem value={`legacy:${formData.secondarySource}`}>
+                  {formData.secondarySource}
+                </SelectItem>
+              )}
+              {sortedVendors.map((vendor) => (
+                <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                  {vendor.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label htmlFor="secondarySupplierPartNumber">Secondary Supplier Part #</Label>
@@ -1550,6 +1653,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     manufacturingLevel: '',
     manufacturingDepartment: '',
     machineType: '',
+    machiningTimeMinutes: '',
     source: '',
     vendorId: 'none',
     supplierPartNumber: '',
@@ -2209,6 +2313,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       manufacturingLevel: '',
       manufacturingDepartment: '',
       machineType: '',
+      machiningTimeMinutes: '',
       source: '',
       vendorId: 'none',
       supplierPartNumber: '',
@@ -2360,6 +2465,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       manufacturingLevel: item.manufacturingLevel || '',
       manufacturingDepartment: item.manufacturingDepartment || '',
       machineType: item.machineType || '',
+      machiningTimeMinutes: (item as any).machiningTimeMinutes != null ? String((item as any).machiningTimeMinutes) : '',
       source: item.source || '',
       vendorId: item.vendorId ? item.vendorId.toString() : 'none',
       supplierPartNumber: item.supplierPartNumber || '',
@@ -2487,6 +2593,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         defaultOrderMethod: formData.defaultOrderMethod || null,
         machineType: formData.manufacturedCategory === 'MACHINED_PART' && formData.machineType
           ? formData.machineType
+          : null,
+        machiningTimeMinutes: formData.manufacturedCategory === 'MACHINED_PART' && formData.machiningTimeMinutes !== ''
+          ? parseInt(formData.machiningTimeMinutes, 10)
           : null,
         shelfLifeControlled: formData.shelfLifeControlled,
         frozenShelfLifeDays: formData.frozenShelfLifeDays !== '' ? parseInt(formData.frozenShelfLifeDays, 10) : null,

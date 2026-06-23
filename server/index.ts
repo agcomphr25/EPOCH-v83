@@ -2365,7 +2365,8 @@ async function initializeBackgroundServices() {
       try {
         const { sql: sqlMachineType } = await import('drizzle-orm');
         await db.execute(sqlMachineType`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS machine_type TEXT`);
-        console.log('✅ Ensured inventory_items has machine_type column');
+        await db.execute(sqlMachineType`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS machining_time_minutes INTEGER`);
+        console.log('✅ Ensured inventory_items has machine_type and machining_time_minutes columns');
       } catch (machineTypeErr: any) {
         console.warn('⚠️ machine_type migration:', machineTypeErr.message);
       }

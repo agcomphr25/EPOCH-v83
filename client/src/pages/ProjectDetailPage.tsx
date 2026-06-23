@@ -974,6 +974,12 @@ export default function ProjectDetailPage() {
       }),
     enabled: !!id,
   });
+  const linkedProjectQuoteId =
+    projectSteps.find((step) => step.stepType === 'quote')?.linkedQuoteId ??
+    quoteFeedback?.quoteId ??
+    hubLabor.quoteFeedback?.quoteId ??
+    hubLabor.quoteFeedback?.quote_id ??
+    null;
 
   useEffect(() => {
     const hydrateKey = `${id ?? ''}:${romDraft?.id ?? 'default'}:${romSummary.updatedAt ?? ''}:${JSON.stringify(hubRom.categories ?? {})}`;
@@ -3430,7 +3436,13 @@ export default function ProjectDetailPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setLocation(`/p2-quote-form?projectId=${encodeURIComponent(project.id)}`)}>
+                <Button
+                  onClick={() => setLocation(
+                    linkedProjectQuoteId
+                      ? `/p2-quote-form?id=${encodeURIComponent(linkedProjectQuoteId)}`
+                      : `/p2-quote-form?projectId=${encodeURIComponent(project.id)}`
+                  )}
+                >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Open Quote
                 </Button>

@@ -712,7 +712,8 @@ export const inventoryItems = pgTable('inventory_items', {
   // Manufactured items only — production level independent of category
   manufacturingLevel: inventoryManufacturingLevelEnum('manufacturing_level'), // COMPONENT | INTERMEDIATE | FINAL
   // Machined parts only — type of machine required to produce the part
-  machineType: text('machine_type'), // CNC Mill 3rd Axis | CNC Mill 4th Axis | Lathe
+  machineType: text('machine_type'),
+  machiningTimeMinutes: integer('machining_time_minutes'),
   // Required receiving documents — enforced on acceptance in Receiving Control Center
   requiresSds: boolean('requires_sds').notNull().default(false),
   requiresTds: boolean('requires_tds').notNull().default(false),
@@ -2486,7 +2487,8 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
     manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
     manufacturingLevel: z.enum(['COMPONENT', 'INTERMEDIATE', 'FINAL']).optional().nullable(),
-    machineType: z.enum(['CNC Mill 3rd Axis', 'CNC Mill 4th Axis', 'Lathe']).optional().nullable(),
+    machineType: z.string().optional().nullable(),
+    machiningTimeMinutes: z.number().int().min(0).optional().nullable(),
     shelfLifeControlled: z.boolean().default(false),
     frozenShelfLifeDays: z.number().int().min(0).optional().nullable(),
     roomTempShelfLifeDays: z.number().int().min(0).optional().nullable(),

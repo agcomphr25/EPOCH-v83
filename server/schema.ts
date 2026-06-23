@@ -6086,6 +6086,33 @@ export const chargeCodeEmployeeAssignments = pgTable('charge_code_employee_assig
 
 export type ChargeCodeEmployeeAssignment = typeof chargeCodeEmployeeAssignments.$inferSelect;
 
+export const wadChargeCodeRequests = pgTable('wad_charge_code_requests', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  wadId: uuid('wad_id').references((): AnyPgColumn => productionWorkOrders.id, { onDelete: 'cascade' }),
+  department: text('department').notNull(),
+  operation: text('operation').notNull(),
+  laborCategory: text('labor_category'),
+  classification: text('classification').notNull().default('DIRECT'),
+  budgetedHours: numeric('budgeted_hours'),
+  requestedByUserId: integer('requested_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  requestedByDisplayName: text('requested_by_display_name').notNull().default('Unknown'),
+  requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),
+  status: text('status').notNull().default('PENDING'),
+  assignedChargeCodeId: integer('assigned_charge_code_id').references(() => chargeCodes.id, { onDelete: 'set null' }),
+  assignedByUserId: integer('assigned_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  assignedAt: timestamp('assigned_at', { withTimezone: true }),
+  notes: text('notes'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  statusIdx: index('wad_charge_code_requests_status_idx').on(table.status, table.requestedAt),
+  wadIdx: index('wad_charge_code_requests_wad_idx').on(table.wadId),
+  openOperationIdx: uniqueIndex('wad_charge_code_requests_open_operation_idx')
+    .on(table.wadId, table.department, table.operation)
+    .where(sql`status = 'PENDING'`),
+}));
+
+export type WadChargeCodeRequest = typeof wadChargeCodeRequests.$inferSelect;
+
 // ============================================================================
 // TRAVELER SYSTEM - AS9100 Digital Travelers (Execution Records)
 // ============================================================================

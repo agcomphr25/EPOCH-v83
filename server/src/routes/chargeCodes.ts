@@ -8,6 +8,7 @@ import { pgPool, pool } from '../../db';
 const router: IRouter = Router();
 
 let chargeCodeAssignmentTableReady: Promise<void> | null = null;
+let chargeCodeRequestTableReady: Promise<void> | null = null;
 
 function ensureChargeCodeAssignmentTable(): Promise<void> {
   if (!chargeCodeAssignmentTableReady) {
@@ -33,6 +34,44 @@ function ensureChargeCodeAssignmentTable(): Promise<void> {
     });
   }
   return chargeCodeAssignmentTableReady;
+}
+
+function ensureChargeCodeRequestTable(): Promise<void> {
+  if (!chargeCodeRequestTableReady) {
+    chargeCodeRequestTableReady = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS wad_charge_code_requests (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          wad_id UUID REFERENCES production_work_orders(id) ON DELETE CASCADE,
+          department TEXT NOT NULL,
+          operation TEXT NOT NULL,
+          labor_category TEXT,
+          classification TEXT NOT NULL DEFAULT 'DIRECT',
+          budgeted_hours NUMERIC,
+          requested_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          requested_by_display_name TEXT NOT NULL DEFAULT 'Unknown',
+          requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          assigned_charge_code_id INTEGER REFERENCES charge_codes(id) ON DELETE SET NULL,
+          assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          assigned_at TIMESTAMPTZ,
+          notes TEXT,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS wad_charge_code_requests_status_idx ON wad_charge_code_requests(status, requested_at DESC)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS wad_charge_code_requests_wad_idx ON wad_charge_code_requests(wad_id)`);
+      await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS wad_charge_code_requests_open_operation_idx
+        ON wad_charge_code_requests(wad_id, department, operation)
+        WHERE status = 'PENDING'
+      `);
+    })().catch((error) => {
+      chargeCodeRequestTableReady = null;
+      throw error;
+    });
+  }
+  return chargeCodeRequestTableReady;
 }
 
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
@@ -115,6 +154,61 @@ async function getChargeCodeAssignments(chargeCodeId: number) {
   );
 }
 
+function normalizeRequestStatus(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? value.trim().toUpperCase() : 'PENDING';
+}
+
+function normalizeRequestText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+async function listChargeCodeRequests(filters: { status?: string; wadId?: string }) {
+  await ensureChargeCodeRequestTable();
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (filters.status) {
+    params.push(filters.status);
+    conditions.push(`wccr.status = $${params.length}`);
+  }
+  if (filters.wadId) {
+    params.push(filters.wadId);
+    conditions.push(`wccr.wad_id = $${params.length}::uuid`);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  return pool.query(
+    `SELECT
+       wccr.id,
+       wccr.wad_id AS "wadId",
+       pwo.work_order_number AS "workOrderNumber",
+       pwo.project_id AS "projectId",
+       wccr.department,
+       wccr.operation,
+       wccr.labor_category AS "laborCategory",
+       wccr.classification,
+       wccr.budgeted_hours::text AS "budgetedHours",
+       wccr.requested_by_user_id AS "requestedByUserId",
+       wccr.requested_by_display_name AS "requestedByDisplayName",
+       wccr.requested_at AS "requestedAt",
+       wccr.status,
+       wccr.assigned_charge_code_id AS "assignedChargeCodeId",
+       cc.code AS "assignedChargeCode",
+       wccr.assigned_by_user_id AS "assignedByUserId",
+       wccr.assigned_at AS "assignedAt",
+       wccr.notes,
+       wccr.updated_at AS "updatedAt"
+     FROM wad_charge_code_requests wccr
+     LEFT JOIN production_work_orders pwo ON pwo.id = wccr.wad_id
+     LEFT JOIN charge_codes cc ON cc.id = wccr.assigned_charge_code_id
+     ${where}
+     ORDER BY
+       CASE wccr.status WHEN 'PENDING' THEN 0 ELSE 1 END,
+       wccr.requested_at DESC`,
+    params
+  );
+}
+
 // GET /api/charge-codes — list all charge codes; supports ?active=true filter
 router.get('/', authenticateToken, h(async (req, res) => {
   const activeOnly = req.query.active === 'true';
@@ -123,6 +217,163 @@ router.get('/', authenticateToken, h(async (req, res) => {
 }));
 
 // POST /api/charge-codes — admin create
+router.get('/requests', authenticateToken, h(async (req, res) => {
+  const status = req.query.status === 'all' ? undefined : normalizeRequestStatus(req.query.status);
+  const wadId = normalizeRequestText(req.query.wadId);
+  const requests = await listChargeCodeRequests({ status, wadId: wadId || undefined });
+  res.json(requests);
+}));
+
+router.post('/requests', authenticateToken, h(async (req, res) => {
+  await ensureChargeCodeRequestTable();
+  const wadId = normalizeRequestText(req.body?.wadId);
+  const department = normalizeRequestText(req.body?.department);
+  const operation = normalizeRequestText(req.body?.operation);
+  const laborCategory = normalizeRequestText(req.body?.laborCategory);
+  const classification = normalizeRequestText(req.body?.classification) || 'DIRECT';
+  const notes = normalizeRequestText(req.body?.notes);
+  const budgetedHoursRaw = req.body?.budgetedHours;
+  const budgetedHours = budgetedHoursRaw === null || budgetedHoursRaw === undefined || budgetedHoursRaw === ''
+    ? null
+    : Number(budgetedHoursRaw);
+
+  if (!wadId || !department || !operation) {
+    res.status(400).json({ error: 'wadId, department, and operation are required' });
+    return;
+  }
+  if (budgetedHours !== null && (!Number.isFinite(budgetedHours) || budgetedHours < 0)) {
+    res.status(400).json({ error: 'budgetedHours must be a positive number' });
+    return;
+  }
+
+  const wadRows = await pool.query(`SELECT id FROM production_work_orders WHERE id = $1::uuid LIMIT 1`, [wadId]);
+  if (wadRows.length === 0) {
+    res.status(404).json({ error: 'WAD not found' });
+    return;
+  }
+
+  const { actorId, actorName, actorRole } = extractActor(req);
+  const rows = await pool.query(
+    `INSERT INTO wad_charge_code_requests (
+       wad_id, department, operation, labor_category, classification, budgeted_hours,
+       requested_by_user_id, requested_by_display_name, notes
+     )
+     VALUES ($1::uuid, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, NULLIF($9, ''))
+     ON CONFLICT (wad_id, department, operation) WHERE status = 'PENDING'
+     DO UPDATE SET
+       labor_category = EXCLUDED.labor_category,
+       classification = EXCLUDED.classification,
+       budgeted_hours = EXCLUDED.budgeted_hours,
+       notes = EXCLUDED.notes,
+       updated_at = NOW()
+     RETURNING id`,
+    [wadId, department, operation, laborCategory, classification, budgetedHours, actorId, actorName, notes]
+  );
+
+  await recordAuditEvent({
+    eventType: 'WAD_CHARGE_CODE_REQUESTED',
+    subjectType: 'wad_charge_code_request',
+    subjectId: String(rows[0].id),
+    sourceService: 'chargeCodes.routes',
+    actor: { id: actorId, username: actorName, role: actorRole },
+    meta: { wadId, department, classification },
+    ipAddress: req.ip ?? null,
+    userAgent: req.headers['user-agent'] ?? null,
+    payload: { wadId, department, operation, laborCategory, classification, budgetedHours },
+  });
+
+  const requests = await listChargeCodeRequests({ wadId, status: 'PENDING' });
+  res.status(201).json(requests.find((request: any) => request.id === rows[0].id) ?? rows[0]);
+}));
+
+router.patch('/requests/:requestId/assign', authenticateToken, requireRole('ADMIN'), h(async (req, res) => {
+  await ensureChargeCodeRequestTable();
+  const requestId = normalizeRequestText(req.params.requestId);
+  const chargeCodeId = Number(req.body?.chargeCodeId);
+  if (!requestId || !Number.isInteger(chargeCodeId) || chargeCodeId <= 0) {
+    res.status(400).json({ error: 'Valid requestId and chargeCodeId are required' });
+    return;
+  }
+
+  const chargeCode = await storage.getChargeCodeById(chargeCodeId);
+  if (!chargeCode || !chargeCode.active) {
+    res.status(400).json({ error: 'Selected charge code is not active' });
+    return;
+  }
+
+  const existing = await pool.query(
+    `SELECT id, status, wad_id AS "wadId", department, operation
+       FROM wad_charge_code_requests
+      WHERE id = $1::uuid
+      LIMIT 1`,
+    [requestId]
+  );
+  if (existing.length === 0) {
+    res.status(404).json({ error: 'Charge code request not found' });
+    return;
+  }
+  if (existing[0].status !== 'PENDING') {
+    res.status(400).json({ error: 'Only pending requests can be assigned' });
+    return;
+  }
+
+  const { actorId, actorName, actorRole } = extractActor(req);
+  await pool.query(
+    `UPDATE wad_charge_code_requests
+        SET status = 'ASSIGNED',
+            assigned_charge_code_id = $2,
+            assigned_by_user_id = $3,
+            assigned_at = NOW(),
+            updated_at = NOW()
+      WHERE id = $1::uuid`,
+    [requestId, chargeCodeId, actorId]
+  );
+  await pool.query(
+    `UPDATE production_work_orders pwo
+        SET wizard_data = jsonb_set(
+              COALESCE(pwo.wizard_data, '{}'::jsonb),
+              '{step4,chargeCodes}',
+              COALESCE((
+                SELECT jsonb_agg(
+                  CASE
+                    WHEN charge_row->>'department' = $2
+                     AND charge_row->>'operation' = $3
+                      THEN jsonb_set(charge_row, '{chargeCode}', to_jsonb($4::text), true)
+                    ELSE charge_row
+                  END
+                  ORDER BY ordinality
+                )
+                FROM jsonb_array_elements(
+                  CASE
+                    WHEN jsonb_typeof(pwo.wizard_data->'step4'->'chargeCodes') = 'array'
+                      THEN pwo.wizard_data->'step4'->'chargeCodes'
+                    ELSE '[]'::jsonb
+                  END
+                ) WITH ORDINALITY AS rows(charge_row, ordinality)
+              ), '[]'::jsonb),
+              true
+            ),
+            updated_at = NOW()
+      WHERE pwo.id = $1::uuid`,
+    [existing[0].wadId, existing[0].department, existing[0].operation, chargeCode.code]
+  );
+
+  await recordAuditEvent({
+    eventType: 'WAD_CHARGE_CODE_REQUEST_ASSIGNED',
+    subjectType: 'wad_charge_code_request',
+    subjectId: requestId,
+    sourceService: 'chargeCodes.routes',
+    actor: { id: actorId, username: actorName, role: actorRole },
+    meta: { chargeCodeId, chargeCode: chargeCode.code },
+    ipAddress: req.ip ?? null,
+    userAgent: req.headers['user-agent'] ?? null,
+    payload: { requestId, chargeCodeId, chargeCode: chargeCode.code },
+  });
+
+  const rows = await listChargeCodeRequests({});
+  res.json(rows.find((request: any) => request.id === requestId));
+}));
+
 router.get('/:id/assignments', authenticateToken, h(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) {

@@ -1520,12 +1520,9 @@ export default function ProjectDetailPage() {
 
   const deleteAttachmentMutation = useMutation({
     mutationFn: async (attachmentId: number) => {
-      const response = await fetch(`/api/project-step-attachments/${attachmentId}`, {
+      return apiRequest(`/api/project-step-attachments/${attachmentId}`, {
         method: 'DELETE',
-        credentials: 'include',
       });
-      if (!response.ok) throw new Error('Failed to delete attachment');
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments', selectedStep?.id] });
@@ -1544,24 +1541,16 @@ export default function ProjectDetailPage() {
     
     setIsUploading(true);
     try {
-      const urlResponse = await fetch('/api/project-step-attachments/request-upload-url', {
+      const { uploadURL, objectPath } = await apiRequest('/api/project-step-attachments/request-upload-url', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
+        body: {
           name: file.name,
           size: file.size,
           contentType: file.type || 'application/octet-stream',
           projectId: project.id,
           stepId: selectedStep.id,
-        }),
-      });
-
-      if (!urlResponse.ok) {
-        throw new Error('Failed to get upload URL');
-      }
-
-      const { uploadURL, objectPath } = await urlResponse.json();
+        },
+      }) as { uploadURL: string; objectPath: string };
 
       const uploadResponse = await fetch(uploadURL, {
         method: 'PUT',
@@ -1573,11 +1562,9 @@ export default function ProjectDetailPage() {
         throw new Error('Failed to upload file');
       }
 
-      const completeResponse = await fetch('/api/project-step-attachments/complete-upload', {
+      await apiRequest('/api/project-step-attachments/complete-upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
+        body: {
           objectPath,
           projectId: project.id,
           stepId: selectedStep.id,
@@ -1585,12 +1572,8 @@ export default function ProjectDetailPage() {
           fileSize: file.size,
           mimeType: file.type || 'application/octet-stream',
           notes: uploadNotes || null,
-        }),
+        },
       });
-
-      if (!completeResponse.ok) {
-        throw new Error('Failed to complete upload');
-      }
 
       queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments', selectedStep.id] });
       queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments/by-project', id] });

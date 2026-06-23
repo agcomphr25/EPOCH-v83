@@ -16672,6 +16672,44 @@ export const insertCncJobOperationSchema = createInsertSchema(cncJobOperations).
 export type CncJobOperation = typeof cncJobOperations.$inferSelect;
 export type InsertCncJobOperation = z.infer<typeof insertCncJobOperationSchema>;
 
+export const cncOperationBatches = pgTable('cnc_operation_batches', {
+  id: serial('id').primaryKey(),
+  workOrderId: uuid('work_order_id').notNull().references((): AnyPgColumn => productionWorkOrders.id, { onDelete: 'cascade' }),
+  travelerStepId: varchar('traveler_step_id', { length: 255 }).notNull().references(() => travelerSteps.id, { onDelete: 'cascade' }),
+  operationId: integer('operation_id').references(() => cncJobOperations.id, { onDelete: 'set null' }),
+  batchCode: text('batch_code').notNull().unique(),
+  batchNumber: integer('batch_number').notNull(),
+  batchQty: integer('batch_qty').notNull(),
+  qtyCompleted: integer('qty_completed').notNull().default(0),
+  qtyScrapped: integer('qty_scrapped').notNull().default(0),
+  assignedMachineId: integer('assigned_machine_id').references(() => cncMachines.id, { onDelete: 'set null' }),
+  assignedMachineName: text('assigned_machine_name'),
+  assignedEmployeeId: integer('assigned_employee_id').references(() => employees.id, { onDelete: 'set null' }),
+  assignedEmployeeDisplayName: text('assigned_employee_display_name'),
+  status: text('status').notNull().default('queued'),
+  barcodeValue: text('barcode_value').notNull().unique(),
+  priority: text('priority').notNull().default('medium'),
+  dueDate: date('due_date'),
+  notes: text('notes'),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  workOrderStepIdx: index('cnc_operation_batches_work_order_step_idx').on(table.workOrderId, table.travelerStepId),
+  statusIdx: index('cnc_operation_batches_status_idx').on(table.status),
+  barcodeIdx: uniqueIndex('cnc_operation_batches_barcode_idx').on(table.barcodeValue),
+  batchCodeIdx: uniqueIndex('cnc_operation_batches_batch_code_idx').on(table.batchCode),
+}));
+
+export const insertCncOperationBatchSchema = createInsertSchema(cncOperationBatches).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CncOperationBatch = typeof cncOperationBatches.$inferSelect;
+export type InsertCncOperationBatch = z.infer<typeof insertCncOperationBatchSchema>;
+
 export const cncPrograms = pgTable('cnc_programs', {
   id: serial('id').primaryKey(),
   operationId: integer('operation_id').notNull().references(() => cncJobOperations.id, { onDelete: 'cascade' }),

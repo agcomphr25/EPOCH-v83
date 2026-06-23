@@ -24,7 +24,7 @@ import {
 import {
   Check, ChevronRight, ChevronLeft, AlertTriangle, FileText, Users, ClipboardList,
   DollarSign, Package, Route, ShieldCheck, Calendar, AlertCircle, FolderOpen,
-  Star, Loader2, CheckCircle, XCircle, Plus, Trash2
+  Star, Loader2, CheckCircle, XCircle, Plus, Trash2, Send
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -94,6 +94,22 @@ interface ChargeCodeRow {
   overrunRule: 'WARN' | 'REQUIRE_APPROVAL' | 'HARD_STOP';
   seeded?: boolean;
   seededFrom?: string;
+}
+
+interface ChargeCodeRequest {
+  id: string;
+  wadId: string;
+  workOrderNumber?: string | null;
+  department: string;
+  operation: string;
+  laborCategory?: string | null;
+  classification: string;
+  budgetedHours?: string | null;
+  requestedByDisplayName: string;
+  requestedAt: string;
+  status: 'PENDING' | 'ASSIGNED' | string;
+  assignedChargeCodeId?: number | null;
+  assignedChargeCode?: string | null;
 }
 
 interface RiskEntry {
@@ -1053,6 +1069,7 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
           {/* ── Step 4: Charge Codes ─────────────────────────────────── */}
           {step === 4 && (
             <Step4ChargeCodes
+              wadId={wadId}
               rows={data.step3?.rows ?? []}
               data={data.step4}
               onChange={(v) => patch('step4', v)}
@@ -1761,12 +1778,45 @@ function Step3WorkBreakdown({ departments, scopeDescription, data, onChange, onR
 }
 
 // ─── Step 4: Charge Codes ─────────────────────────────────────────────────────
-function Step4ChargeCodes({ rows: wbRows, data, onChange }: {
+function Step4ChargeCodes({ wadId, rows: wbRows, data, onChange }: {
+  wadId: string;
   rows: WorkBreakdownRow[];
   data?: WizardData['step4'];
   onChange: (v: WizardData['step4']) => void;
 }) {
+  const { toast } = useToast();
   const deptLabels = Object.fromEntries(WAD_DEPARTMENTS.map(d => [d.key, d.label]));
+  const { data: chargeCodeRequests = [] } = useQuery<ChargeCodeRequest[]>({
+    queryKey: ['/api/charge-codes/requests', wadId],
+    queryFn: () => apiRequest(`/api/charge-codes/requests?wadId=${encodeURIComponent(wadId)}&status=all`),
+  });
+  const requestMutation = useMutation({
+    mutationFn: (row: ChargeCodeRow) => apiRequest('/api/charge-codes/requests', {
+      method: 'POST',
+      body: {
+        wadId,
+        department: row.department,
+        operation: row.operation || deptLabels[row.department] || row.department,
+        laborCategory: row.laborCategory,
+        classification: row.classification,
+        budgetedHours: row.budgetedHours,
+        notes: row.chargeCode ? `Requested while current WAD code field held ${row.chargeCode}` : '',
+      },
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/charge-codes/requests', wadId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/charge-codes/requests'] });
+      toast({ title: 'Charge code request sent' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Request failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const requestKey = (department: string, operation: string) => `${department}::${operation || deptLabels[department] || department}`;
+  const requestByOperation = new Map(
+    chargeCodeRequests.map(request => [requestKey(request.department, request.operation), request])
+  );
 
   const buildDefault = (): ChargeCodeRow[] =>
     wbRows.map(r => ({
@@ -1829,7 +1879,17 @@ function Step4ChargeCodes({ rows: wbRows, data, onChange }: {
                   </Badge>
                 )}
               </div>
-              <Badge variant="outline" className="text-xs">{row.classification}</Badge>
+              <div className="flex items-center gap-2">
+                {requestByOperation.get(requestKey(row.department, row.operation))?.status === 'PENDING' && (
+                  <Badge variant="secondary" className="text-xs">Request pending</Badge>
+                )}
+                {requestByOperation.get(requestKey(row.department, row.operation))?.status === 'ASSIGNED' && (
+                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">
+                    Assigned {requestByOperation.get(requestKey(row.department, row.operation))?.assignedChargeCode}
+                  </Badge>
+                )}
+                <Badge variant="outline" className="text-xs">{row.classification}</Badge>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -1887,6 +1947,24 @@ function Step4ChargeCodes({ rows: wbRows, data, onChange }: {
                 <BoolField label="Overtime Allowed" value={row.overtimeAllowed} onChange={v => setRow(idx, { overtimeAllowed: v })} />
                 <BoolField label="Operator Override" value={row.operatorOverrideAllowed} onChange={v => setRow(idx, { operatorOverrideAllowed: v })} />
               </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3">
+              <p className="text-xs text-muted-foreground">
+                Need finance to create or select the cost objective for this direct labor row?
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => requestMutation.mutate(row)}
+                disabled={
+                  requestMutation.isPending ||
+                  requestByOperation.get(requestKey(row.department, row.operation))?.status === 'PENDING'
+                }
+              >
+                {requestMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                Request Charge Code
+              </Button>
             </div>
           </Card>
         ))}

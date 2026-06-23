@@ -6627,11 +6627,36 @@ export class DatabaseStorage implements IStorage {
   // Inventory Items CRUD
   async getAllInventoryItems(): Promise<InventoryItem[]> {
     // Include items where isActive is true OR isActive is null (treat null as active)
-    return await db
-      .select()
-      .from(inventoryItems)
-      .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)))
-      .orderBy(inventoryItems.name);
+    try {
+      return await db
+        .select()
+        .from(inventoryItems)
+        .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)))
+        .orderBy(inventoryItems.name);
+    } catch (error: any) {
+      const message = String(error?.message || error);
+      const code = error?.code || error?.cause?.code;
+      if (code !== '42703' && !/column .* does not exist/i.test(message)) {
+        throw error;
+      }
+
+      console.warn('[Inventory] Falling back to runtime inventory_items columns:', message);
+      const result = await db.execute(sql`
+        SELECT *
+        FROM inventory_items
+        WHERE is_active = TRUE OR is_active IS NULL
+        ORDER BY name
+      `);
+
+      const rows = Array.isArray(result) ? result : ((result as any).rows || []);
+      return rows.map((row: Record<string, unknown>) => {
+        const item: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(row)) {
+          item[key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())] = value;
+        }
+        return item as InventoryItem;
+      });
+    }
   }
 
   async getInventoryItem(id: number): Promise<InventoryItem | undefined> {

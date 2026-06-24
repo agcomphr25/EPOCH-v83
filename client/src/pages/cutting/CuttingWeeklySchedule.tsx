@@ -138,7 +138,7 @@ export default function CuttingWeeklySchedule() {
     },
   });
 
-  const { data: stockLevels = { carbon_fiber: 0, fiberglass: 0, mesa: 0 } } = useQuery({
+  const { data: stockLevels = { carbon_fiber: 0, fiberglass: 0, mesa: 0 }, refetch: refetchStockLevels } = useQuery({
     queryKey: ['/api/cutting-table/stock-levels'],
     queryFn: async () => {
       const res = await fetch('/api/cutting-table/stock-levels');
@@ -506,7 +506,14 @@ export default function CuttingWeeklySchedule() {
             Week of {formatWeekRange(currentWeek)} • P1 Stock Packets + P2 PO Packets
           </p>
         </div>
-        <Button variant="outline" onClick={() => refetch()} data-testid="button-refresh">
+        <Button
+          variant="outline"
+          onClick={() => {
+            refetch();
+            refetchStockLevels();
+          }}
+          data-testid="button-refresh"
+        >
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>

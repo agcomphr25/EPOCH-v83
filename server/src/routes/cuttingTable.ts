@@ -473,9 +473,20 @@ router.get('/packet-items', async (req, res) => {
   }
 });
 
-// Packet Part Items - Get inventory items with manufacturedCategory = 'PACKET'
+// Packet Part Items - Get inventory items that can be components of a packet BOM
 router.get('/packet-part-items', async (req, res) => {
   try {
+    const manufacturedComponentCondition = and(
+      or(
+        eq(inventoryItems.itemType, 'MANUFACTURED'),
+        ilike(inventoryItems.type, '%manufactur%')
+      ),
+      or(
+        eq(inventoryItems.manufacturedCategory, 'COMPONENT'),
+        eq(inventoryItems.manufacturingLevel, 'COMPONENT')
+      )
+    );
+
     const rows = await db
       .select({
         id: inventoryItems.id,
@@ -484,7 +495,7 @@ router.get('/packet-part-items', async (req, res) => {
         sku: inventoryItems.sku,
       })
       .from(inventoryItems)
-      .where(and(eq(inventoryItems.manufacturedCategory, 'PACKET'), inventoryActiveCondition))
+      .where(and(or(eq(inventoryItems.isPacketPart, true), manufacturedComponentCondition), inventoryActiveCondition))
       .orderBy(inventoryItems.name)
       .limit(CUTTING_LIST_MAX_ROWS);
 

@@ -63,6 +63,56 @@ function syncFabricStockFields<T extends Record<string, any>>(data: T): T {
   return next as T;
 }
 
+type CuttingPacketStockLevels = {
+  carbon_fiber: number;
+  fiberglass: number;
+  mesa: number;
+};
+
+function classifyPacketMaterial(item: any): keyof CuttingPacketStockLevels | null {
+  const haystack = [
+    item?.name,
+    item?.agPartNumber,
+    item?.description,
+    item?.category,
+    item?.manufacturedCategory,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (haystack.includes('mesa')) return 'mesa';
+  if (haystack.includes('fiberglass') || /\bfg\b/.test(haystack) || haystack.includes('fg stock')) return 'fiberglass';
+  if (haystack.includes('carbon') || haystack.includes('carbon_fiber') || /\bcf\b/.test(haystack) || haystack.includes('cf stock')) return 'carbon_fiber';
+  return null;
+}
+
+async function getCuttingPacketStockLevels(): Promise<CuttingPacketStockLevels> {
+  const levels: CuttingPacketStockLevels = {
+    carbon_fiber: 0,
+    fiberglass: 0,
+    mesa: 0,
+  };
+
+  const allItems = await storage.getAllInventoryItems();
+  const packetItems = allItems.filter((item: any) =>
+    item.isPacket === true ||
+    item.manufacturedCategory === 'PACKET' ||
+    item.category === 'packet' ||
+    String(item.name ?? '').toLowerCase().includes('packet')
+  );
+
+  for (const item of packetItems) {
+    const material = classifyPacketMaterial(item);
+    if (!material) continue;
+    const rawQty = (item as any).onHand ?? (item as any).quantityInStock ?? (item as any).available ?? 0;
+    const qty = Number(rawQty);
+    levels[material] += Number.isFinite(qty) ? qty : 0;
+  }
+
+  return levels;
+}
+
 // Materials endpoints
 router.get('/materials', async (req, res) => {
   try {
@@ -1848,14 +1898,7 @@ router.post('/quick-production-entry', async (req, res) => {
 // Stock Levels - Get current packet stock counts
 router.get('/stock-levels', async (req, res) => {
   try {
-    // Query completed packets from manufacturing queue or a dedicated stock table
-    // For now, return mock data that can be replaced with actual queries
-    const stockLevels = {
-      carbon_fiber: 385,
-      fiberglass: 38,
-    };
-    
-    res.json(stockLevels);
+    res.json(await getCuttingPacketStockLevels());
   } catch (error) {
     console.error('Error fetching stock levels:', error);
     res.status(500).json({ error: 'Failed to fetch stock levels' });
@@ -2000,44 +2043,11 @@ router.get('/weekly-cutting-queue', async (req, res) => {
     let cfInventoryUsed = 0;
     let fgInventoryUsed = 0;
 
-    // Get on-hand stock levels from stock-levels endpoint data or default
+    // Get on-hand stock levels from the same packet inventory source used by the stock-levels endpoint.
     const { pool } = await import('../../db');
-    let cfOnHand = 0;
-    let fgOnHand = 0;
-    
-    // Try to get stock levels from the existing stock_levels API data (inventory_items table)
-    try {
-      const stockResult = await pool.query(`
-        SELECT 
-          CASE 
-            WHEN name ILIKE '%carbon%' OR name ILIKE '%cf%' THEN 'carbon_fiber'
-            WHEN name ILIKE '%fiberglass%' OR name ILIKE '%fg%' THEN 'fiberglass'
-            ELSE 'other'
-          END as material_type,
-          SUM(COALESCE(quantity_in_stock, 0)) as count
-        FROM inventory_items
-        WHERE category = 'packet' OR name ILIKE '%packet%'
-        GROUP BY material_type
-      `);
-      const stockRows = Array.isArray(stockResult) ? stockResult : (stockResult as any).rows || [];
-      for (const row of stockRows) {
-        if (row.material_type === 'carbon_fiber') cfOnHand = parseInt(row.count) || 0;
-        if (row.material_type === 'fiberglass') fgOnHand = parseInt(row.count) || 0;
-      }
-    } catch (stockErr) {
-      // If inventory_items doesn't have packet data, use the existing stock-levels values
-      try {
-        const sl = await pool.query(`SELECT * FROM cutting_stock_levels LIMIT 1`);
-        const slRows = Array.isArray(sl) ? sl : (sl as any).rows || [];
-        if (slRows.length > 0) {
-          cfOnHand = parseInt(slRows[0].carbon_fiber) || 0;
-          fgOnHand = parseInt(slRows[0].fiberglass) || 0;
-        }
-      } catch (e) {
-        // Default to 0 if no stock data available
-        console.log('Stock levels query skipped - using defaults');
-      }
-    }
+    const stockLevels = await getCuttingPacketStockLevels();
+    const cfOnHand = stockLevels.carbon_fiber;
+    const fgOnHand = stockLevels.fiberglass;
 
     // 1. P1 Layup Schedule - Regular orders that need packets from inventory
     try {

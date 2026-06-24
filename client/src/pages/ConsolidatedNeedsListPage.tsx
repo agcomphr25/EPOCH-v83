@@ -117,9 +117,11 @@ type PartsRequest = {
     externalPoNumber?: string | null;
     status?: string | null;
   };
-  orderMethod?: 'PO' | 'WEBSITE';
+  orderMethod?: 'PO' | 'WEBSITE' | 'LOCAL_PICKUP';
   vendorPartNumber?: string;
   productUrl?: string;
+  qtyOrdered?: number;
+  qtyReceived?: number;
   notes?: string;
   inventoryItem?: InventoryItem;
   department_details?: Department;
@@ -177,6 +179,10 @@ export default function ConsolidatedNeedsListPage() {
   const [isCreateBatchDialogOpen, setIsCreateBatchDialogOpen] = useState(false);
   const [openIssueAfterCreate, setOpenIssueAfterCreate] = useState(false);
   const [batchVendorGroup, setBatchVendorGroup] = useState<VendorGroup | null>(null);
+  const [localPickupVendorGroup, setLocalPickupVendorGroup] = useState<VendorGroup | null>(null);
+  const [localPickupQuantities, setLocalPickupQuantities] = useState<Record<number, number>>({});
+  const [localPickupNotes, setLocalPickupNotes] = useState('');
+  const [isLocalPickupDialogOpen, setIsLocalPickupDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [detailRequest, setDetailRequest] = useState<PartsRequest | null>(null);
   const [linkPoRequest, setLinkPoRequest] = useState<PartsRequest | null>(null);
@@ -207,6 +213,20 @@ export default function ConsolidatedNeedsListPage() {
     queryFn: () => apiRequest('/api/vendor-pos?pageSize=200&status=any&archived=false'),
   });
   const vendorPOs = vendorPOsResponse?.data ?? [];
+
+  const getRemainingRequestQuantity = (request: PartsRequest) =>
+    Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || request.qtyReceived || 0));
+
+  const isPoDraftableRequest = (request: PartsRequest) =>
+    ['APPROVED', 'RECEIVED_PARTIAL'].includes(request.status)
+    && request.orderMethod !== 'WEBSITE'
+    && !request.vendorPoId
+    && getRemainingRequestQuantity(request) > 0;
+
+  const isLocalPickupRequest = (request: PartsRequest) =>
+    ['APPROVED', 'RECEIVED_PARTIAL'].includes(request.status)
+    && !request.vendorPoId
+    && getRemainingRequestQuantity(request) > 0;
 
   // Update parts request mutation
   const updateRequestMutation = useMutation({
@@ -322,6 +342,41 @@ export default function ConsolidatedNeedsListPage() {
     },
   });
 
+  const localPickupMutation = useMutation({
+    mutationFn: async (data: {
+      vendorId: number | null;
+      vendorName: string;
+      quantities: Record<number, number>;
+      notes?: string;
+      receivedBy?: string;
+    }) => {
+      return apiRequest('/api/inventory/parts-requests/local-pickup', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      toast({
+        title: 'Local Pickup Recorded',
+        description: 'Picked-up quantities were received and remaining quantities stay open as backorders.',
+      });
+      setIsLocalPickupDialogOpen(false);
+      setLocalPickupVendorGroup(null);
+      setLocalPickupQuantities({});
+      setLocalPickupNotes('');
+      setSelectedVendorRequests(new Set());
+      setStatusView('OPEN');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Could not record local pickup',
+        description: error?.message || 'Failed to record local pickup.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const linkVendorPoMutation = useMutation({
     mutationFn: async (data: {
       requestId: number;
@@ -407,7 +462,7 @@ export default function ConsolidatedNeedsListPage() {
       });
       return;
     }
-    const selectableRequests = vendorGroup.requests.filter(r => r.status === 'APPROVED' && !r.vendorPoId && r.orderMethod !== 'WEBSITE');
+    const selectableRequests = vendorGroup.requests.filter(isPoDraftableRequest);
     const selectedRequests = selectableRequests.filter(r => selectedVendorRequests.has(r.id));
     const approvedRequests = selectedRequests.length > 0 ? selectedRequests : selectableRequests;
     if (approvedRequests.length === 0) {
@@ -421,14 +476,74 @@ export default function ConsolidatedNeedsListPage() {
     setBatchVendorGroup({
       ...vendorGroup,
       requests: approvedRequests,
-      totalQuantity: approvedRequests.reduce((sum, request) => sum + request.quantity, 0),
+      totalQuantity: approvedRequests.reduce((sum, request) => sum + getRemainingRequestQuantity(request), 0),
       totalEstimatedCost: approvedRequests.reduce((sum, request) => sum + Number(request.estimatedCost || 0), 0),
     });
     const defaultQuantities: Record<number, number> = {};
-    approvedRequests.forEach(r => { defaultQuantities[r.id] = r.quantity; });
+    approvedRequests.forEach(r => { defaultQuantities[r.id] = getRemainingRequestQuantity(r); });
     setBatchQuantities(defaultQuantities);
     setOpenIssueAfterCreate(issueAfterCreate);
     setIsCreateBatchDialogOpen(true);
+  };
+
+  const openLocalPickupDialog = (vendorGroup: VendorGroup, request?: PartsRequest) => {
+    const candidates = request
+      ? [request].filter(isLocalPickupRequest)
+      : vendorGroup.requests.filter(isLocalPickupRequest);
+    const selectedCandidates = candidates.filter(r => selectedVendorRequests.has(r.id));
+    const pickupRequests = request ? candidates : (selectedCandidates.length > 0 ? selectedCandidates : candidates);
+
+    if (pickupRequests.length === 0) {
+      toast({
+        title: 'No Pickup-Ready Requests',
+        description: 'Approve the request first, or choose a partially received request with remaining quantity.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const defaultQuantities: Record<number, number> = {};
+    pickupRequests.forEach((pickupRequest) => {
+      defaultQuantities[pickupRequest.id] = Math.min(1, getRemainingRequestQuantity(pickupRequest));
+    });
+
+    setLocalPickupVendorGroup({
+      ...vendorGroup,
+      requests: pickupRequests,
+      totalQuantity: pickupRequests.reduce((sum, pickupRequest) => sum + getRemainingRequestQuantity(pickupRequest), 0),
+      totalEstimatedCost: pickupRequests.reduce((sum, pickupRequest) => sum + Number(pickupRequest.estimatedCost || 0), 0),
+    });
+    setLocalPickupQuantities(defaultQuantities);
+    setLocalPickupNotes('');
+    setIsLocalPickupDialogOpen(true);
+  };
+
+  const handleLocalPickupSubmit = () => {
+    if (!localPickupVendorGroup) return;
+    const quantities: Record<number, number> = {};
+    Object.entries(localPickupQuantities).forEach(([id, qty]) => {
+      const requestId = Number(id);
+      const pickupQty = Number(qty || 0);
+      if (Number.isInteger(requestId) && pickupQty > 0) {
+        quantities[requestId] = pickupQty;
+      }
+    });
+    if (Object.keys(quantities).length === 0) {
+      toast({
+        title: 'No Pickup Quantities',
+        description: 'Enter at least one quantity to pick up.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    localPickupMutation.mutate({
+      vendorId: localPickupVendorGroup.vendorId,
+      vendorName: localPickupVendorGroup.vendorName,
+      quantities,
+      notes: localPickupNotes || undefined,
+      receivedBy: user ? `${user.firstName} ${user.lastName}` : undefined,
+    });
   };
 
   const inferPurchasingCategory = (request: PartsRequest): 'P1' | 'P2' | 'GENERAL' | 'R_AND_D' => {
@@ -449,10 +564,10 @@ export default function ConsolidatedNeedsListPage() {
       return;
     }
 
-    if (request.status !== 'APPROVED') {
+    if (!isPoDraftableRequest(request)) {
       toast({
         title: 'Approval Required',
-        description: 'Approve the request before creating a Vendor PO draft.',
+        description: 'Approve the request before creating a Vendor PO draft, or choose a partially received request with remaining quantity.',
         variant: 'destructive',
       });
       return;
@@ -476,10 +591,10 @@ export default function ConsolidatedNeedsListPage() {
       orderMethod: 'PO',
       websiteUrl: vendor?.website || null,
       requests: [request],
-      totalQuantity: request.quantity,
+      totalQuantity: getRemainingRequestQuantity(request),
       totalEstimatedCost: request.estimatedCost || 0,
     });
-    setBatchQuantities({ [request.id]: request.quantity });
+    setBatchQuantities({ [request.id]: getRemainingRequestQuantity(request) });
     setBatchPurchasingCategory(inferPurchasingCategory(request));
     setBatchExpectedDelivery(request.expectedDelivery || '');
     setBatchNotes('');
@@ -989,7 +1104,7 @@ export default function ConsolidatedNeedsListPage() {
 
   const selectAllInVendor = (vendorGroup: VendorGroup) => {
     const approvedIds = vendorGroup.requests
-      .filter(r => r.status === 'APPROVED' && r.orderMethod !== 'WEBSITE' && !r.vendorPoId)
+      .filter(isPoDraftableRequest)
       .map(r => r.id);
     setSelectedVendorRequests(new Set(approvedIds));
   };
@@ -1283,7 +1398,8 @@ export default function ConsolidatedNeedsListPage() {
         {filteredVendorGroups.map((vendorGroup) => {
           const vendorKey = vendorGroup.key;
           const isExpanded = expandedVendors.has(vendorKey);
-          const readyRequests = vendorGroup.requests.filter(r => r.status === 'APPROVED' && !r.vendorPoId && r.orderMethod !== 'WEBSITE');
+          const readyRequests = vendorGroup.requests.filter(isPoDraftableRequest);
+          const pickupReadyRequests = vendorGroup.requests.filter(isLocalPickupRequest);
           const approvedCount = readyRequests.length;
           const selectedReadyCount = readyRequests.filter(r => selectedVendorRequests.has(r.id)).length;
           const actionCount = selectedReadyCount || approvedCount;
@@ -1354,6 +1470,17 @@ export default function ConsolidatedNeedsListPage() {
                         </Button>
                       </>
                     )}
+                    {pickupReadyRequests.length > 0 && !isWebsiteGroup && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openLocalPickupDialog(vendorGroup)}
+                        data-testid={`button-local-pickup-${vendorKey}`}
+                      >
+                        <Package className="w-4 h-4 mr-1" />
+                        Local Pickup ({pickupReadyRequests.filter(r => selectedVendorRequests.has(r.id)).length || pickupReadyRequests.length})
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1374,11 +1501,11 @@ export default function ConsolidatedNeedsListPage() {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 w-10">
                           <Checkbox
                             checked={
-                              vendorGroup.requests.filter(r => r.status === 'APPROVED' && r.orderMethod !== 'WEBSITE' && !r.vendorPoId).length > 0
-                              && vendorGroup.requests.filter(r => r.status === 'APPROVED' && r.orderMethod !== 'WEBSITE' && !r.vendorPoId).every(r => selectedVendorRequests.has(r.id))
+                              vendorGroup.requests.filter(isPoDraftableRequest).length > 0
+                              && vendorGroup.requests.filter(isPoDraftableRequest).every(r => selectedVendorRequests.has(r.id))
                             }
                             onCheckedChange={(checked) => {
-                              const selectable = vendorGroup.requests.filter(r => r.status === 'APPROVED' && r.orderMethod !== 'WEBSITE' && !r.vendorPoId);
+                              const selectable = vendorGroup.requests.filter(isPoDraftableRequest);
                               if (checked) {
                                 setSelectedVendorRequests(new Set([
                                   ...Array.from(selectedVendorRequests),
@@ -1408,7 +1535,8 @@ export default function ConsolidatedNeedsListPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                       {vendorGroup.requests.map((request) => {
-                        const selectableForPo = request.status === 'APPROVED' && request.orderMethod !== 'WEBSITE' && !request.vendorPoId;
+                        const selectableForPo = isPoDraftableRequest(request);
+                        const canLocalPickup = isLocalPickupRequest(request);
                         const canCreateNewPo = selectableForPo;
                         const canLinkExistingPo = !request.vendorPoId
                           && request.orderMethod !== 'WEBSITE'
@@ -1496,6 +1624,12 @@ export default function ConsolidatedNeedsListPage() {
                               <Button size="sm" variant="outline" onClick={() => openCreatePoDialogForRequest(request)} data-testid={`button-create-po-${request.id}`}>
                                 <ShoppingCart className="w-3 h-3 mr-1" />
                                 Draft
+                              </Button>
+                            )}
+                            {canLocalPickup && (
+                              <Button size="sm" variant="outline" onClick={() => openLocalPickupDialog(vendorGroup, request)} data-testid={`button-local-pickup-${request.id}`}>
+                                <Package className="w-3 h-3 mr-1" />
+                                Pickup
                               </Button>
                             )}
                             {canLinkExistingPo && (
@@ -1949,7 +2083,7 @@ export default function ConsolidatedNeedsListPage() {
               )}
 
               <div className="flex justify-end gap-2">
-                {!detailRequest.vendorPoId && detailRequest.orderMethod !== 'WEBSITE' && detailRequest.status === 'APPROVED' && (
+                {isPoDraftableRequest(detailRequest) && (
                   <Button
                     onClick={() => {
                       openCreatePoDialogForRequest(detailRequest);
@@ -1958,6 +2092,28 @@ export default function ConsolidatedNeedsListPage() {
                   >
                     <ShoppingCart className="w-4 h-4 mr-2" />
                     Create PO
+                  </Button>
+                )}
+                {isLocalPickupRequest(detailRequest) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const vendor = getResolvedVendorForRequest(detailRequest);
+                      openLocalPickupDialog({
+                        key: `detail-${detailRequest.id}`,
+                        vendorId: detailRequest.vendorId ?? vendor?.id ?? null,
+                        vendorName: vendor?.name || getRequestVendorLabel(detailRequest) || 'Local Pickup',
+                        orderMethod: detailRequest.orderMethod || 'LOCAL_PICKUP',
+                        websiteUrl: vendor?.website || null,
+                        requests: [detailRequest],
+                        totalQuantity: getRemainingRequestQuantity(detailRequest),
+                        totalEstimatedCost: Number(detailRequest.estimatedCost || 0),
+                      }, detailRequest);
+                      setDetailRequest(null);
+                    }}
+                  >
+                    <Package className="w-4 h-4 mr-2" />
+                    Local Pickup
                   </Button>
                 )}
                 {!detailRequest.vendorPoId && detailRequest.orderMethod !== 'WEBSITE' && ['APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL'].includes(detailRequest.status) && (
@@ -2206,6 +2362,95 @@ export default function ConsolidatedNeedsListPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isLocalPickupDialogOpen} onOpenChange={setIsLocalPickupDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Record Local Pickup</DialogTitle>
+            <DialogDescription>
+              {localPickupVendorGroup
+                ? `Receive picked-up quantities from ${localPickupVendorGroup.vendorName}. Remaining quantities stay open as backorders.`
+                : 'Record picked-up quantities and keep the remainder open.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {localPickupVendorGroup && (
+            <div className="space-y-4 mt-4">
+              <div className="max-h-80 overflow-y-auto border rounded-lg">
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Part</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Requested</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Received</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Pick Up Now</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Backorder</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {localPickupVendorGroup.requests.map((request) => {
+                      const remainingQty = getRemainingRequestQuantity(request);
+                      const pickupQty = Math.min(localPickupQuantities[request.id] ?? 0, remainingQty);
+                      const backorderQty = Math.max(0, remainingQty - pickupQty);
+                      return (
+                        <tr key={request.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                          <td className="px-3 py-2">
+                            <div className="text-sm font-medium">{request.partName}</div>
+                            <div className="text-xs text-gray-500">{request.partNumber}</div>
+                          </td>
+                          <td className="px-3 py-2 text-sm">{request.department}</td>
+                          <td className="px-3 py-2 text-center text-sm">{request.quantity}</td>
+                          <td className="px-3 py-2 text-center text-sm">{request.qtyReceived || 0}</td>
+                          <td className="px-3 py-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              max={remainingQty}
+                              value={pickupQty}
+                              onChange={(e) => {
+                                const nextQty = Math.min(parseInt(e.target.value) || 0, remainingQty);
+                                setLocalPickupQuantities(prev => ({ ...prev, [request.id]: nextQty }));
+                              }}
+                              className="w-20 text-center mx-auto"
+                              data-testid={`input-local-pickup-${request.id}`}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-center text-sm font-medium">{backorderQty}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Notes (optional)</label>
+                <Textarea
+                  value={localPickupNotes}
+                  onChange={(e) => setLocalPickupNotes(e.target.value)}
+                  placeholder="Receipt number, store location, backorder notes..."
+                  rows={2}
+                  data-testid="textarea-local-pickup-notes"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsLocalPickupDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleLocalPickupSubmit}
+                  disabled={localPickupMutation.isPending}
+                  data-testid="button-confirm-local-pickup"
+                >
+                  {localPickupMutation.isPending ? 'Recording...' : 'Record Pickup'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Create Vendor PO Draft Dialog */}
       <Dialog
         open={isCreateBatchDialogOpen}
@@ -2274,7 +2519,7 @@ export default function ConsolidatedNeedsListPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                       {batchVendorGroup.requests
-                        .filter(r => r.status === 'APPROVED' && r.orderMethod !== 'WEBSITE' && !r.vendorPoId)
+                        .filter(isPoDraftableRequest)
                         .map(request => (
                           <tr key={request.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                             <td className="px-3 py-2">
@@ -2282,14 +2527,15 @@ export default function ConsolidatedNeedsListPage() {
                               <div className="text-xs text-gray-500">{request.partNumber}</div>
                             </td>
                             <td className="px-3 py-2 text-sm">{request.department}</td>
-                            <td className="px-3 py-2 text-center text-sm">{request.quantity}</td>
+                            <td className="px-3 py-2 text-center text-sm">{getRemainingRequestQuantity(request)}</td>
                             <td className="px-3 py-2">
                               <Input
                                 type="number"
                                 min="0"
-                                value={batchQuantities[request.id] ?? request.quantity}
+                                max={getRemainingRequestQuantity(request)}
+                                value={batchQuantities[request.id] ?? getRemainingRequestQuantity(request)}
                                 onChange={(e) => {
-                                  const val = parseInt(e.target.value) || 0;
+                                  const val = Math.min(parseInt(e.target.value) || 0, getRemainingRequestQuantity(request));
                                   setBatchQuantities(prev => ({ ...prev, [request.id]: val }));
                                 }}
                                 className="w-20 text-center mx-auto"

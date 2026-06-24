@@ -88,10 +88,11 @@ async function linkPartsRequestsToVendorPO(params: {
   quantitiesByRequestId: Map<number, number>;
   vendorPoId: number;
   vendorId: number;
+  vendorPoStatus: string | null | undefined;
   orderedQuantityFallback: number;
   changedBy: string;
 }) {
-  const { requestIds, quantitiesByRequestId, vendorPoId, vendorId, orderedQuantityFallback, changedBy } = params;
+  const { requestIds, quantitiesByRequestId, vendorPoId, vendorId, vendorPoStatus, orderedQuantityFallback, changedBy } = params;
   if (requestIds.length === 0) return;
 
   const linkedRequests = await db
@@ -106,20 +107,23 @@ async function linkPartsRequestsToVendorPO(params: {
       continue;
     }
 
+    const isIssuedPo = ['Sent', 'Partially Received', 'Fully Received'].includes(vendorPoStatus || '');
     const remainingRequested = Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || 0));
     const explicitQty = quantitiesByRequestId.get(request.id);
     const allocatedQty = explicitQty ?? (remainingRequested > 0 ? remainingRequested : 0);
     const qtyFromFallback = explicitQty == null && fallbackRemaining > 0
       ? Math.min(remainingRequested || fallbackRemaining, fallbackRemaining)
       : allocatedQty;
-    const qtyToApply = Math.max(0, Math.ceil(qtyFromFallback));
-    if (explicitQty == null && fallbackRemaining > 0) {
+    const qtyToApply = isIssuedPo ? Math.max(0, Math.ceil(qtyFromFallback)) : 0;
+    if (isIssuedPo && explicitQty == null && fallbackRemaining > 0) {
       fallbackRemaining = Math.max(0, fallbackRemaining - qtyToApply);
     }
 
     const nextQtyOrdered = Number(request.qtyOrdered || 0) + qtyToApply;
-    const shouldMoveStatus = ['PENDING', 'APPROVED', 'ORDERED_PARTIAL', 'ORDERED'].includes(request.status);
-    const nextStatus = nextQtyOrdered >= Number(request.quantity || 0) ? 'ORDERED' : 'ORDERED_PARTIAL';
+    const canMoveToOrdered = isIssuedPo && ['PENDING', 'APPROVED', 'ORDERED_PARTIAL', 'ORDERED'].includes(request.status);
+    const nextStatus = canMoveToOrdered
+      ? (nextQtyOrdered >= Number(request.quantity || 0) ? 'ORDERED' : 'ORDERED_PARTIAL')
+      : request.status;
 
     await db
       .update(partsRequests)
@@ -127,9 +131,9 @@ async function linkPartsRequestsToVendorPO(params: {
         vendorPoId,
         vendorId,
         orderMethod: request.orderMethod || 'PO',
-        qtyOrdered: nextQtyOrdered,
-        status: shouldMoveStatus ? nextStatus : request.status,
-        orderDate: request.orderDate || new Date(),
+        qtyOrdered: isIssuedPo ? nextQtyOrdered : request.qtyOrdered,
+        status: nextStatus,
+        orderDate: isIssuedPo ? (request.orderDate || new Date()) : request.orderDate,
         updatedAt: new Date(),
       })
       .where(eq(partsRequests.id, request.id));
@@ -137,9 +141,11 @@ async function linkPartsRequestsToVendorPO(params: {
     await db.insert(partsRequestStatusHistory).values({
       partsRequestId: request.id,
       fromStatus: request.status,
-      toStatus: shouldMoveStatus ? nextStatus : request.status,
+      toStatus: nextStatus,
       changedBy,
-      reason: `Linked to vendor PO #${vendorPoId}${qtyToApply > 0 ? ` - ${qtyToApply} ordered` : ''}`,
+      reason: isIssuedPo
+        ? `Linked to issued vendor PO #${vendorPoId}${qtyToApply > 0 ? ` - ${qtyToApply} ordered` : ''}`
+        : `Linked to vendor PO #${vendorPoId}; request remains ${request.status} until the PO is issued.`,
     });
   }
 }
@@ -1755,6 +1761,7 @@ router.post('/:id/items', async (req: Request, res: Response) => {
       quantitiesByRequestId: linkedPartsRequestQuantities,
       vendorPoId,
       vendorId: vendorPOForLink.vendorId,
+      vendorPoStatus: vendorPOForLink.status,
       orderedQuantityFallback: Number(data.purchaseQty ?? data.quantity ?? 0),
       changedBy: (req as any).user?.username ?? (req as any).user?.email ?? 'system',
     });

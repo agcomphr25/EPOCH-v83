@@ -2359,10 +2359,11 @@ router.post(
           return { ...request, vendorId: resolvedVendorId };
         });
 
-        const badStatus = selectedWithResolvedVendors.filter((r) => r.status !== 'APPROVED');
+        const poDraftableStatuses = ['APPROVED', 'RECEIVED_PARTIAL'];
+        const badStatus = selectedWithResolvedVendors.filter((r) => !poDraftableStatuses.includes(r.status));
         if (badStatus.length > 0) {
           throw Object.assign(
-            new Error(`Only APPROVED parts requests can start RFQ/PO flow. Invalid request id(s): ${badStatus.map((r) => `${r.id} (${r.status})`).join(', ')}`),
+            new Error(`Only APPROVED or partially received parts requests can start RFQ/PO flow. Invalid request id(s): ${badStatus.map((r) => `${r.id} (${r.status})`).join(', ')}`),
             { status: 422 }
           );
         }
@@ -2429,17 +2430,26 @@ router.post(
         let lineNumber = 1;
         for (const requests of grouped.values()) {
           const first = requests[0];
-          const totalRequestedQty = requests.reduce((sum, request) => sum + request.quantity, 0);
-          const totalQty = requests.reduce((sum, request) => {
+          const getRemainingQty = (request: typeof requests[number]) =>
+            Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || request.qtyReceived || 0));
+          const getOrderQty = (request: typeof requests[number]) => {
             const override = payload.quantities?.[String(request.id)] ?? payload.quantities?.[request.id as any];
-            return sum + Number(override || request.quantity);
+            return Number(override ?? getRemainingQty(request));
+          };
+          const totalRequestedQty = requests.reduce((sum, request) => sum + getRemainingQty(request), 0);
+          const totalQty = requests.reduce((sum, request) => {
+            return sum + getOrderQty(request);
           }, 0);
-          const estimatedLineCost = requests.reduce((sum, request) => sum + Number(request.estimatedCost || 0), 0);
+          const estimatedLineCost = requests.reduce((sum, request) => {
+            const qty = getOrderQty(request);
+            const unitEstimate = request.quantity > 0 ? Number(request.estimatedCost || 0) / Number(request.quantity) : 0;
+            return sum + qty * unitEstimate;
+          }, 0);
           const unitPrice = totalQty > 0 ? estimatedLineCost / totalQty : 0;
           const extraQty = Math.max(0, totalQty - totalRequestedQty);
           const allocationNotes = requests
             .map((request) => {
-              const qty = payload.quantities?.[String(request.id)] ?? payload.quantities?.[request.id as any] ?? request.quantity;
+              const qty = getOrderQty(request);
               return `PR-${request.id}: ${qty} requested by ${request.requestedBy}${request.department ? ` (${request.department})` : ''}${request.reason ? ` - ${request.reason}` : ''}`;
             })
             .join('\n');
@@ -2469,7 +2479,7 @@ router.post(
             orderMethod: 'PO',
             updatedAt: new Date(),
           })
-          .where(dAnd(dInArray(partsRequests.id, uniqueRequestIds), dEq(partsRequests.status, 'APPROVED')));
+          .where(dAnd(dInArray(partsRequests.id, uniqueRequestIds), dInArray(partsRequests.status, poDraftableStatuses)));
 
         await tx.insert(partsRequestStatusHistory).values(
           selectedWithResolvedVendors.map((request) => ({
@@ -2610,6 +2620,228 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Create order batch error:', error);
     res.status(500).json({ error: 'Failed to create order batch' });
+  }
+});
+
+router.post('/parts-requests/local-pickup', requirePermission('inventory.manage_requests'), async (req: Request, res: Response) => {
+  try {
+    const {
+      partsRequests,
+      partsRequestBatches,
+      partsRequestOrderLines,
+      partsRequestOrderAllocations,
+      partsRequestReceipts,
+      partsRequestReceiptLines,
+      partsRequestStatusHistory,
+      inventoryBalances: inventoryBalancesTable,
+      inventoryTransactionLedger: inventoryTransactionLedgerTable,
+    } = await import('../../schema');
+    const { recordInventoryLedgerEntry } = await import('../services/inventoryTransactionLedgerService');
+    const { and, eq, inArray } = await import('drizzle-orm');
+
+    const payload = z.object({
+      vendorId: z.number().int().positive().nullable().optional(),
+      vendorName: z.string().trim().min(1),
+      receivedBy: z.string().trim().min(1).optional(),
+      notes: z.string().trim().optional().nullable(),
+      quantities: z.record(z.coerce.number().int().min(0)),
+    }).parse(req.body ?? {});
+
+    const requestIds = Object.entries(payload.quantities)
+      .filter(([, qty]) => qty > 0)
+      .map(([id]) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+
+    if (requestIds.length === 0) {
+      return res.status(400).json({ error: 'At least one pickup quantity is required.' });
+    }
+
+    const actor = payload.receivedBy || String(req.user?.username ?? req.user?.email ?? 'system');
+
+    const result = await db.transaction(async (tx) => {
+      const selected = await tx
+        .select()
+        .from(partsRequests)
+        .where(inArray(partsRequests.id, requestIds))
+        .for('update');
+
+      if (selected.length !== requestIds.length) {
+        const found = new Set(selected.map((request) => request.id));
+        const missing = requestIds.filter((id) => !found.has(id));
+        throw Object.assign(new Error(`Parts request(s) not found: ${missing.join(', ')}`), { status: 404 });
+      }
+
+      const invalid = selected.filter((request) => !['APPROVED', 'RECEIVED_PARTIAL'].includes(request.status));
+      if (invalid.length > 0) {
+        throw Object.assign(
+          new Error(`Only APPROVED or partially received requests can be picked up locally. Invalid request id(s): ${invalid.map((request) => `${request.id} (${request.status})`).join(', ')}`),
+          { status: 422 }
+        );
+      }
+
+      const [batch] = await tx.insert(partsRequestBatches).values({
+        vendorId: payload.vendorId ?? null,
+        vendorName: payload.vendorName,
+        orderMethod: 'LOCAL_PICKUP',
+        status: 'RECEIVED',
+        createdBy: actor,
+        notes: payload.notes || null,
+        orderDate: new Date(),
+      }).returning();
+
+      const [receipt] = await tx.insert(partsRequestReceipts).values({
+        batchId: batch.id,
+        vendorId: payload.vendorId ?? null,
+        receivedBy: actor,
+        notes: payload.notes || 'Local pickup recorded from consolidated needs',
+      }).returning();
+
+      const statusNotifications: Array<{ request: any; fromStatus: string; toStatus: string; reason: string }> = [];
+
+      for (const request of selected) {
+        const requestedPickupQty = Number(payload.quantities[String(request.id)] ?? 0);
+        const remainingQty = Math.max(0, Number(request.quantity || 0) - Number(request.qtyReceived || 0));
+        const pickupQty = Math.min(requestedPickupQty, remainingQty);
+        if (pickupQty <= 0) continue;
+
+        const [orderLine] = await tx.insert(partsRequestOrderLines).values({
+          batchId: batch.id,
+          vendorId: payload.vendorId ?? null,
+          partNumber: request.partNumber,
+          partName: request.partName,
+          agPartNumber: request.agPartNumber,
+          qtyOrdered: pickupQty,
+          qtyReceived: pickupQty,
+          unitCost: request.estimatedCost && request.quantity ? Number(request.estimatedCost) / Number(request.quantity) : null,
+          status: 'RECEIVED',
+        }).returning();
+
+        await tx.insert(partsRequestOrderAllocations).values({
+          orderLineId: orderLine.id,
+          partsRequestId: request.id,
+          qtyAllocated: pickupQty,
+          qtyReceivedApplied: pickupQty,
+          departmentId: request.departmentId,
+          status: 'RECEIVED',
+        });
+
+        await tx.insert(partsRequestReceiptLines).values({
+          receiptId: receipt.id,
+          orderLineId: orderLine.id,
+          partsRequestId: request.id,
+          qtyReceived: pickupQty,
+          allocatedDepartmentId: request.departmentId,
+          allocationNotes: payload.notes || null,
+        });
+
+        if (request.agPartNumber) {
+          const { ensureInventoryItemForReceipt } = await import('../services/ensureInventoryItemForReceipt');
+          const invItem = await ensureInventoryItemForReceipt(tx, {
+            agPartNumber: request.agPartNumber,
+            fallbackName: request.partName ?? request.partNumber ?? null,
+            createdBy: actor,
+          });
+
+          const ledgerSourceModule = 'receiving:local-pickup';
+          const ledgerSourceRecordId = `${receipt.id}:${orderLine.id}`;
+          const [existingLedger] = await tx
+            .select({ id: inventoryTransactionLedgerTable.id })
+            .from(inventoryTransactionLedgerTable)
+            .where(and(
+              eq(inventoryTransactionLedgerTable.sourceModule, ledgerSourceModule),
+              eq(inventoryTransactionLedgerTable.sourceRecordId, ledgerSourceRecordId),
+            ))
+            .limit(1);
+
+          if (!existingLedger) {
+            const balanceRows = await tx
+              .select({ quantityOnHand: inventoryBalancesTable.quantityOnHand })
+              .from(inventoryBalancesTable)
+              .where(eq(inventoryBalancesTable.agPartNumber, invItem.agPartNumber));
+            const quantityBefore = balanceRows.reduce((sum, balance) => sum + Number(balance.quantityOnHand ?? 0), 0);
+            const quantityAfter = quantityBefore + pickupQty;
+
+            await recordInventoryLedgerEntry({
+              transactionType: 'RECEIVE',
+              inventoryItemId: invItem.id,
+              agPartNumber: invItem.agPartNumber,
+              unitOfMeasure: invItem.purchaseUnit ?? invItem.usageUnit ?? 'EA',
+              quantityBefore,
+              quantityDelta: pickupQty,
+              quantityAfter,
+              performedByDisplayName: actor,
+              reasonCode: 'LOCAL_PICKUP',
+              notes: payload.notes ?? null,
+              sourceModule: ledgerSourceModule,
+              sourceRecordId: ledgerSourceRecordId,
+              metadata: {
+                receiptId: receipt.id,
+                orderLineId: orderLine.id,
+                batchId: batch.id,
+                partsRequestId: request.id,
+                vendorName: payload.vendorName,
+              },
+            }, tx);
+          }
+        }
+
+        const newQtyOrdered = Number(request.qtyOrdered || 0) + pickupQty;
+        const newQtyReceived = Number(request.qtyReceived || 0) + pickupQty;
+        const newStatus = newQtyReceived >= Number(request.quantity || 0) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+        const reason = `Local pickup received ${pickupQty}; ${Math.max(0, Number(request.quantity || 0) - newQtyReceived)} backordered.`;
+
+        const [updatedRequest] = await tx.update(partsRequests).set({
+          batchId: batch.id,
+          vendorId: payload.vendorId ?? request.vendorId ?? null,
+          orderMethod: 'LOCAL_PICKUP',
+          qtyOrdered: newQtyOrdered,
+          qtyReceived: newQtyReceived,
+          status: newStatus,
+          orderDate: request.orderDate || new Date(),
+          actualDelivery: new Date().toISOString().split('T')[0],
+          updatedAt: new Date(),
+        }).where(eq(partsRequests.id, request.id)).returning();
+
+        await tx.insert(partsRequestStatusHistory).values({
+          partsRequestId: request.id,
+          fromStatus: request.status,
+          toStatus: newStatus,
+          changedBy: actor,
+          reason,
+        });
+
+        if (updatedRequest) {
+          statusNotifications.push({
+            request: updatedRequest,
+            fromStatus: request.status,
+            toStatus: newStatus,
+            reason,
+          });
+        }
+      }
+
+      if (statusNotifications.length === 0) {
+        throw Object.assign(new Error('No remaining quantity was available to pick up for the selected request(s).'), { status: 422 });
+      }
+
+      return { batch, receipt, statusNotifications };
+    });
+
+    for (const notification of result.statusNotifications) {
+      await notifyPartsRequestParticipants({
+        ...notification,
+        changedBy: actor,
+      });
+    }
+
+    res.status(201).json({ batch: result.batch, receipt: result.receipt });
+  } catch (error: any) {
+    console.error('Local pickup parts request error:', error);
+    const status = error?.status || 500;
+    res.status(status).json({
+      error: status === 500 ? 'Failed to record local pickup' : error.message,
+      message: error?.message,
+    });
   }
 });
 

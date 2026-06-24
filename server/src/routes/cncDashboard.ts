@@ -97,6 +97,8 @@ const batchSelectSql = `
     b.id AS "id",
     b.work_order_id AS "workOrderId",
     pwo.work_order_number AS "workOrderNumber",
+    COALESCE(t.part_number, pwo.part_number) AS "partNumber",
+    COALESCE(t.part_name, pwo.description) AS "partName",
     b.traveler_step_id AS "travelerStepId",
     ts.step_number AS "travelerStepNumber",
     ts.department_name AS "travelerStepDepartment",
@@ -1331,7 +1333,7 @@ router.get('/jobs/:id/traveler-info', async (req, res) => {
     const result = await pool.query(
       `SELECT t.id, t.traveler_number AS "travelerNumber", t.status,
               t.part_name AS "partName", t.part_number AS "partNumber",
-              t.work_order_id AS "workOrderId", t.quantity,
+              t.work_order_id AS "workOrderId", t.production_work_order_id AS "productionWorkOrderId", t.quantity,
               s.id AS "currentStepId", s.department_name AS "currentStepDept",
               s.status AS "currentStepStatus", s.step_number AS "currentStepNumber"
        FROM travelers t

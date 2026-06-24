@@ -95,6 +95,7 @@ let sessionExpiryNotified = false;
 // redirect to /login — that would disrupt workers mid-task.
 const KIOSK_ROUTES = [
   '/kiosk',
+  '/app/production/stations',
   '/p2-traveler',
   '/p2-traveler-viewer',
   '/traveler',

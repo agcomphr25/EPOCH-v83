@@ -92,11 +92,56 @@ export interface TravelerInfo {
   partName: string | null;
   partNumber: string | null;
   workOrderId: string | null;
+  productionWorkOrderId: string | null;
   quantity: number | null;
   currentStepId: string | null;
   currentStepDept: string | null;
   currentStepStatus: string | null;
   currentStepNumber: number | null;
+}
+
+export interface EmployeeOption {
+  id: number;
+  name: string;
+  preferredName?: string | null;
+  employeeCode?: string | null;
+  department?: string | null;
+  employmentStatus?: string | null;
+  isActive?: boolean | null;
+}
+
+export interface CncOperationBatch {
+  id: number;
+  workOrderId: string;
+  workOrderNumber: string;
+  partNumber: string | null;
+  partName: string | null;
+  travelerStepId: string;
+  travelerStepNumber: number;
+  travelerStepDepartment: string;
+  travelerId: string;
+  travelerNumber: string;
+  operationId: number | null;
+  operationSequence: number | null;
+  operationName: string | null;
+  batchCode: string;
+  batchNumber: number;
+  batchQty: number;
+  qtyCompleted: number;
+  qtyScrapped: number;
+  assignedMachineId: number | null;
+  assignedMachineName: string | null;
+  assignedEmployeeId: number | null;
+  assignedEmployeeDisplayName: string | null;
+  status: 'queued' | 'assigned' | 'in_progress' | 'hold' | 'completed' | 'cancelled' | string;
+  barcodeValue: string;
+  priority: 'critical' | 'high' | 'medium' | 'low' | string;
+  dueDate: string | null;
+  notes: string | null;
+  createdByUserId: number | null;
+  createdByDisplayName: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CncJob {
@@ -371,6 +416,42 @@ export interface CreateTimeLogPayload {
   operationId: number;
   type: string;
   reason?: string | null;
+}
+
+export interface CreateOperationBatchPayload {
+  workOrderId: string;
+  travelerStepId: string;
+  operationId?: number | null;
+  batchQty: number;
+  assignedMachineId?: number | null;
+  assignedMachineName?: string | null;
+  assignedEmployeeId?: number | null;
+  assignedEmployeeDisplayName?: string | null;
+  priority?: string;
+  dueDate?: string | null;
+  notes?: string | null;
+}
+
+export interface BulkCreateOperationBatchPayload {
+  workOrderId: string;
+  travelerStepId: string;
+  operationId?: number | null;
+  batchQtys: number[];
+  assignedMachineId?: number | null;
+  assignedMachineName?: string | null;
+  assignedEmployeeId?: number | null;
+  assignedEmployeeDisplayName?: string | null;
+  priority?: string;
+  dueDate?: string | null;
+  notes?: string | null;
+}
+
+export interface AssignOperationBatchPayload {
+  assignedMachineId?: number | null;
+  assignedMachineName?: string | null;
+  assignedEmployeeId?: number | null;
+  assignedEmployeeDisplayName?: string | null;
+  notes?: string | null;
 }
 
 // ── Work order search result from authoritative all_orders table ──────────────

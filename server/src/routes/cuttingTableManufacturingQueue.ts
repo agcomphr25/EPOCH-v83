@@ -3,6 +3,7 @@ import { storage } from '../../storage';
 import { db } from '../../db';
 import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingFabricInventoryTransactions, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
 import { eq, and, or, asc, desc, inArray, like, count } from 'drizzle-orm';
+import { adjustPacketInventoryItem } from '../utils/p1PacketInventory';
 
 const router = express.Router();
 
@@ -82,6 +83,15 @@ function parseQueueNotes(notes: string | null): Record<string, any> {
   } catch {
     return { rawNotes: notes };
   }
+}
+
+function isP1PacketInventoryQueueItem(notes: Record<string, any>): boolean {
+  const source = String(notes.source || '').toUpperCase();
+  const materialType = String(notes.materialType || '').toLowerCase();
+  return notes.isP2Packet !== true
+    && source !== 'P2'
+    && source !== 'P2_SYNC'
+    && !materialType.startsWith('p2_');
 }
 
 type QueueBomMatch = {
@@ -644,6 +654,8 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
 
     const productCategoryId = productCategory.id;
     const barcodePrefix = `PKT-${inventoryItem.agPartNumber}-${id}-%`;
+    const queueNotes = parseQueueNotes(currentItem.notes);
+    const shouldAddToP1PacketInventory = isP1PacketInventoryQueueItem(queueNotes);
 
     const { updated, createdPackets, isFullyCompleted, newTotalCompleted } = await db.transaction(async (tx) => {
       const [lockedItem] = await tx
@@ -689,6 +701,10 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
           .returning();
 
         createdPackets.push(builtPacket);
+      }
+
+      if (shouldAddToP1PacketInventory && currentItem.inventoryItemId) {
+        await adjustPacketInventoryItem(tx, currentItem.inventoryItemId, quantityCompleted);
       }
 
       const [updated] = await tx
@@ -976,6 +992,8 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
     // sequentially from the correct offset.
     const barcodePrefix = `PKT-${inventoryItem.agPartNumber}-${id}-%`;
     const isMixedFabric = fabricSources.length > 1;
+    const queueNotes = parseQueueNotes(currentItem.notes);
+    const shouldAddToP1PacketInventory = isP1PacketInventoryQueueItem(queueNotes);
 
     // Wrap count + inserts + queue update in a transaction, using a row-level
     // lock on the queue item to prevent concurrent submissions from reading the
@@ -1106,6 +1124,10 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
           performedBy: completedBy || 'unknown',
           notes: `Cutting table completion ${id}: ${usage.quantityUsed} used for ${quantityCompleted} packet(s)${usage.rollNumber ? ` from roll ${usage.rollNumber}` : ''}`,
         });
+      }
+
+      if (shouldAddToP1PacketInventory && currentItem.inventoryItemId) {
+        await adjustPacketInventoryItem(tx, currentItem.inventoryItemId, quantityCompleted);
       }
 
       // Update the manufacturing queue item inside the same transaction.

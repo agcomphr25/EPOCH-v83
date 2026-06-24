@@ -67,6 +67,7 @@ type CuttingPacketStockLevels = {
   carbon_fiber: number;
   fiberglass: number;
   mesa: number;
+  cheek_riser: number;
 };
 
 function classifyPacketMaterial(item: any): keyof CuttingPacketStockLevels | null {
@@ -81,6 +82,7 @@ function classifyPacketMaterial(item: any): keyof CuttingPacketStockLevels | nul
     .join(' ')
     .toLowerCase();
 
+  if (haystack.includes('cheek riser') || haystack.includes('cheekriser') || haystack.includes('cheek_riser')) return 'cheek_riser';
   if (haystack.includes('mesa')) return 'mesa';
   if (haystack.includes('fiberglass') || /\bfg\b/.test(haystack) || haystack.includes('fg stock')) return 'fiberglass';
   if (haystack.includes('carbon') || haystack.includes('carbon_fiber') || /\bcf\b/.test(haystack) || haystack.includes('cf stock')) return 'carbon_fiber';
@@ -92,6 +94,7 @@ async function getCuttingPacketStockLevels(): Promise<CuttingPacketStockLevels> 
     carbon_fiber: 0,
     fiberglass: 0,
     mesa: 0,
+    cheek_riser: 0,
   };
 
   const allItems = await storage.getAllInventoryItems();
@@ -470,9 +473,20 @@ router.get('/packet-items', async (req, res) => {
   }
 });
 
-// Packet Part Items - Get inventory items with manufacturedCategory = 'PACKET'
+// Packet Part Items - Get inventory items that can be components of a packet BOM
 router.get('/packet-part-items', async (req, res) => {
   try {
+    const manufacturedComponentCondition = and(
+      or(
+        eq(inventoryItems.itemType, 'MANUFACTURED'),
+        ilike(inventoryItems.type, '%manufactur%')
+      ),
+      or(
+        eq(inventoryItems.manufacturedCategory, 'COMPONENT'),
+        eq(inventoryItems.manufacturingLevel, 'COMPONENT')
+      )
+    );
+
     const rows = await db
       .select({
         id: inventoryItems.id,
@@ -481,7 +495,7 @@ router.get('/packet-part-items', async (req, res) => {
         sku: inventoryItems.sku,
       })
       .from(inventoryItems)
-      .where(and(eq(inventoryItems.manufacturedCategory, 'PACKET'), inventoryActiveCondition))
+      .where(and(or(eq(inventoryItems.isPacketPart, true), manufacturedComponentCondition), inventoryActiveCondition))
       .orderBy(inventoryItems.name)
       .limit(CUTTING_LIST_MAX_ROWS);
 
@@ -2519,6 +2533,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
       const packetTypeName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
                              materialType === 'fiberglass' ? 'Fiberglass Packet' :
                              materialType === 'mesa' ? 'Mesa Packet' :
+                             materialType === 'cheek_riser' ? 'Cheek Riser' :
                              materialType === 'p2_disruptor' ? 'Disruptor' :
                              materialType === 'p2_disruptor_packet' ? 'Disruptor' :
                              materialType === 'p2_antenna' ? 'Antenna Cover' :
@@ -2547,6 +2562,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
                        materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
                        materialType === 'fiberglass' ? 'Fiberglass Packet' :
                        materialType === 'mesa' ? 'Mesa Packet' :
+                       materialType === 'cheek_riser' ? 'Cheek Riser' :
                        materialType === 'p2_disruptor' ? 'Disruptor Packet' :
                        materialType === 'p2_disruptor_packet' ? 'Disruptor Packet' :
                        materialType === 'p2_antenna' ? 'Antenna Cover Packet' :

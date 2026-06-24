@@ -936,8 +936,21 @@ function componentAssemblyKey(component: DraftBomComponent) {
   return assemblyPartKey(component.partNumber);
 }
 
+function draftBomRootPart(bom: DraftPartBom) {
+  return bom.parts[0] ?? bom.rootPart;
+}
+
 function draftBomChildComponents(bom: DraftPartBom) {
-  return bom.rootPart.bomItems?.length ? bom.rootPart.bomItems : bom.parts[0]?.bomItems ?? [];
+  const rootPart = draftBomRootPart(bom);
+  return rootPart.bomItems?.length ? rootPart.bomItems : bom.rootPart.bomItems ?? [];
+}
+
+function addDraftBomPartEntries(partLookup: Map<string, DraftBomPart>, bom: DraftPartBom) {
+  bom.parts.forEach((part) => {
+    const key = assemblyPartKey(part.partNumber);
+    if (!key || !part.bomItems?.length || partLookup.has(key)) return;
+    partLookup.set(key, part);
+  });
 }
 
 function bomMatchesAssemblyPart(
@@ -969,6 +982,7 @@ function buildAssemblyTreeNode(
   requiredQuantity: number,
   children: DraftBomComponent[] = [],
   entryLookup = new Map<string, AssemblyLineEntry[]>(),
+  partLookup = new Map<string, DraftBomPart>(),
   visited: Set<string> = new Set(),
   sourceEntry?: AssemblyLineEntry,
 ): AssemblyTreeNode {
@@ -978,8 +992,23 @@ function buildAssemblyTreeNode(
   const entries = entryLookup.get(key) ?? [];
   const entry = sourceEntry ?? entries[0];
   const nextVisited = key ? new Set([...visited, key]) : visited;
-  const childComponents = entry ? (visited.has(key) ? [] : entry.childComponents) : children;
+  const childComponents = visited.has(key) ? [] : (children.length > 0 ? children : entry?.childComponents ?? []);
   const nodeChildren = childComponents.flatMap((component) => {
+    const configuredPart = partLookup.get(componentAssemblyKey(component));
+    if (configuredPart) {
+      const childQuantity = nodeQuantity * (component.quantity || 1);
+      return buildAssemblyTreeNode(
+        configuredPart,
+        inventoryItems,
+        partsRequestLines,
+        childQuantity,
+        configuredPart.bomItems ?? [],
+        entryLookup,
+        partLookup,
+        nextVisited,
+      );
+    }
+
     const componentEntries = entryLookup.get(componentAssemblyKey(component)) ?? [];
     const childQuantity = nodeQuantity * (component.quantity || 1);
     if (componentEntries.length > 0 && !visited.has(componentAssemblyKey(component))) {
@@ -991,6 +1020,7 @@ function buildAssemblyTreeNode(
           childQuantity,
           componentEntry.childComponents,
           entryLookup,
+          partLookup,
           nextVisited,
           componentEntry,
         ),
@@ -1004,6 +1034,7 @@ function buildAssemblyTreeNode(
         childQuantity,
         [],
         entryLookup,
+        partLookup,
         nextVisited,
       ),
     ];
@@ -1032,13 +1063,16 @@ function buildAssemblyTreeNode(
 }
 
 function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption[], savedDraftBoms: DraftPartBom[]) {
+  const partLookup = new Map<string, DraftBomPart>();
+  savedDraftBoms.forEach((bom) => addDraftBomPartEntries(partLookup, bom));
+
   const entries = savedDraftBoms.flatMap<AssemblyLineEntry>((bom) => {
     const line = findPartsRequestLineForAssemblyPart(bom.rootPart, lines);
     if (!line) return [];
     return [{
       line,
       bom,
-      part: bom.rootPart ?? draftLineToPart(line),
+      part: { ...bom.rootPart, id: `${bom.rootPart.id}-${bom.id}`, bomItems: draftBomRootPart(bom).bomItems ?? [] },
       childComponents: draftBomChildComponents(bom),
     }];
   });
@@ -1062,6 +1096,7 @@ function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption
       asNumber(entry.line.qtyNeeded) || 1,
       entry.childComponents,
       entryLookup,
+      partLookup,
       new Set(),
       entry,
     ),
@@ -1218,6 +1253,61 @@ function saveDrafts(drafts: BomDraft[]) {
 function savedDraftListWith(drafts: BomDraft[], draft: BomDraft) {
   const withoutCurrent = drafts.filter((item) => item.id !== draft.id);
   return [draft, ...withoutCurrent].slice(0, 12);
+}
+
+function projectMatchValue(value?: string | number | null) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function draftMatchesProject(draft: BomDraft, selectedProject: ProjectSelectOption) {
+  if (draft.projectType === selectedProject.projectType && draft.projectId === selectedProject.id) {
+    return true;
+  }
+
+  const typeMatches = !draft.projectType || draft.projectType === selectedProject.projectType;
+  if (!typeMatches) return false;
+
+  const draftValues = [
+    draft.projectId,
+    draft.projectCode,
+    draft.projectName,
+    draft.project,
+  ].map(projectMatchValue).filter(Boolean);
+  const selectedValues = [
+    selectedProject.id,
+    selectedProject.projectCode,
+    selectedProject.projectName,
+    selectedProject.project,
+    selectedProject.label,
+  ].map(projectMatchValue).filter(Boolean);
+
+  return draftValues.some((value) => selectedValues.includes(value));
+}
+
+function createBlankDraftForProject(selectedProject: ProjectSelectOption): BomDraft {
+  return {
+    id: crypto.randomUUID(),
+    name: selectedProject.projectName,
+    revision: 'Draft A',
+    owner: '',
+    project: selectedProject.project,
+    projectId: selectedProject.id,
+    projectCode: selectedProject.projectCode,
+    projectName: selectedProject.projectName,
+    projectType: selectedProject.projectType,
+    notes: '',
+    updatedAt: new Date().toISOString(),
+    lines: [newLine()],
+    laborEstimateLines: [newLaborEstimateLine()],
+    customLaborDepartments: [],
+    poVisibleColumns: defaultPoColumns,
+    partsRequestVisibleColumns: defaultPartsRequestColumns,
+    directLaborVisibleColumns: defaultDirectLaborColumns,
+    assemblyVisibleColumns: defaultSourcingColumns,
+    customColumns: [],
+    customPoColumns: [],
+    workspaceTabs: defaultWorkspaceTabs,
+  };
 }
 
 export default function DraftBOMBuilderPage() {
@@ -1944,26 +2034,11 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
-  function applyProjectToDraft(current: BomDraft, selectedProject: ProjectSelectOption): BomDraft {
-    const unnamedDraft = current.name === 'New Draft BOM' || current.name === current.project || current.name.trim() === '';
-    return {
-      ...current,
-      name: unnamedDraft ? selectedProject.projectName : current.name,
-      project: selectedProject.project,
-      projectId: selectedProject.id,
-      projectCode: selectedProject.projectCode,
-      projectName: selectedProject.projectName,
-      projectType: selectedProject.projectType,
-    };
-  }
-
   function updateDraftProject(value: string) {
     const selectedProject = combinedProjectOptions.find((project) => project.value === value);
     if (!selectedProject) return;
 
-    const savedProjectDraft = savedDrafts.find(
-      (item) => item.projectType === selectedProject.projectType && item.projectId === selectedProject.id,
-    );
+    const savedProjectDraft = savedDrafts.find((item) => draftMatchesProject(item, selectedProject));
 
     if (savedProjectDraft) {
       loadDraft(savedProjectDraft.id);
@@ -1971,7 +2046,7 @@ export default function DraftBOMBuilderPage() {
     }
 
     setSelectedDraftId('');
-    setDraft((current) => applyProjectToDraft(current, selectedProject));
+    applyDraftSelection(createBlankDraftForProject(selectedProject));
   }
 
   function startBlankDraft() {

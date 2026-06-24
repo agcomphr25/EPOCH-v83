@@ -68,6 +68,41 @@ const INVENTORY_UPLOAD_ROOT = process.env.INVENTORY_UPLOAD_DIR
     ? path.join(os.tmpdir(), 'epoch-inventory-documents')
     : path.join(process.cwd(), 'uploads', 'inventory-documents');
 
+const draftBuilderInventoryItemSchema = z.object({
+  name: z.string().min(1, 'Part name is required'),
+  description: z.string().optional().nullable(),
+  supplier: z.string().optional().nullable(),
+  supplierPartNumber: z.string().optional().nullable(),
+  manufacturer: z.string().optional().nullable(),
+  costPer: z.number().min(0).optional().nullable(),
+  usageUnit: z.string().optional().nullable(),
+  department: z.string().optional().nullable(),
+  isManufactured: z.boolean().default(false),
+  manufacturedCategory: z
+    .enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT'])
+    .optional()
+    .nullable(),
+  project: z.string().optional().nullable(),
+  draftName: z.string().optional().nullable(),
+  draftLineId: z.string().optional().nullable(),
+});
+
+async function nextNumericInventoryPartNumber() {
+  const result = await db.execute(
+    sql`SELECT ag_part_number FROM inventory_items WHERE ag_part_number ~ '^[0-9]+$' ORDER BY CAST(ag_part_number AS INTEGER) DESC LIMIT 1`
+  );
+  const maxNum = result.rows?.[0]?.ag_part_number ? parseInt(result.rows[0].ag_part_number as string, 10) : 0;
+  return String(maxNum + 1);
+}
+
+function duplicateInventoryPartNumberError(error: unknown) {
+  return typeof error === 'object' && error !== null && (
+    (error as any).code === '23505' ||
+    (error as any).cause?.code === '23505' ||
+    String((error as any).message || '').includes('inventory_items_ag_part_number')
+  );
+}
+
 // Keep legacy locations readable so existing DB file paths still work.
 const LEGACY_SDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/sds');
 const LEGACY_TDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/tds');
@@ -255,14 +290,73 @@ router.get('/items', async (req: Request, res: Response) => {
 // Get next available AG Part Number
 router.get('/items/next-part-number', async (req: Request, res: Response) => {
   try {
-    const result = await db.execute(
-      sql`SELECT ag_part_number FROM inventory_items WHERE ag_part_number ~ '^[0-9]+$' ORDER BY CAST(ag_part_number AS INTEGER) DESC LIMIT 1`
-    );
-    const maxNum = result.rows?.[0]?.ag_part_number ? parseInt(result.rows[0].ag_part_number as string, 10) : 0;
-    res.json({ nextPartNumber: String(maxNum + 1) });
+    res.json({ nextPartNumber: await nextNumericInventoryPartNumber() });
   } catch (error) {
     console.error('Get next part number error:', error);
     res.status(500).json({ error: 'Failed to get next part number' });
+  }
+});
+
+router.post('/items/from-draft-builder', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
+  try {
+    const draftPart = draftBuilderInventoryItemSchema.parse(req.body);
+    const manufacturedCategory = draftPart.isManufactured
+      ? draftPart.manufacturedCategory ?? 'COMPONENT'
+      : null;
+    const itemType = draftPart.isManufactured ? 'MANUFACTURED' : 'PURCHASED';
+    const notes = [
+      'Created from Draft Builder finalization.',
+      draftPart.project ? `Project: ${draftPart.project}` : null,
+      draftPart.draftName ? `Draft: ${draftPart.draftName}` : null,
+      draftPart.draftLineId ? `Draft line: ${draftPart.draftLineId}` : null,
+      draftPart.manufacturer ? `Manufacturer: ${draftPart.manufacturer}` : null,
+      draftPart.description && draftPart.description !== draftPart.name ? `Description: ${draftPart.description}` : null,
+    ].filter(Boolean).join('\n');
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const agPartNumber = await nextNumericInventoryPartNumber();
+      const itemData = insertInventoryItemSchema.parse({
+        agPartNumber,
+        name: draftPart.name,
+        description: draftPart.description || draftPart.name,
+        source: draftPart.supplier || null,
+        supplier: draftPart.supplier || null,
+        supplierPartNumber: draftPart.supplierPartNumber || null,
+        costPer: draftPart.costPer ?? null,
+        unitCost: draftPart.costPer ?? null,
+        usageUnit: draftPart.usageUnit || 'EA',
+        purchaseUnit: draftPart.usageUnit || 'EA',
+        department: draftPart.department || null,
+        assignedDepartments: draftPart.department ? [draftPart.department] : [],
+        notes,
+        itemType,
+        type: draftPart.isManufactured ? 'Manufactured' : 'Purchased',
+        manufacturedCategory,
+        manufacturingLevel: draftPart.isManufactured ? 'COMPONENT' : null,
+        isActive: true,
+      });
+
+      try {
+        const newItem = await storage.createInventoryItem(itemData);
+        return res.status(201).json(withSupplySourceDashboard(newItem));
+      } catch (error) {
+        if (duplicateInventoryPartNumberError(error) && attempt < 4) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return res.status(409).json({ error: 'Unable to allocate a unique AG part number. Please retry finalization.' });
+  } catch (error) {
+    console.error('Create Draft Builder inventory item error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid draft inventory item payload' });
+    }
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create inventory item from Draft Builder' });
   }
 });
 

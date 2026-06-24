@@ -16339,6 +16339,32 @@ export type InsertImprovementNote = z.infer<typeof insertImprovementNoteSchema>;
 
 // ─── Schema Governance Audit Log ────────────────────────────────────────────
 
+// Draft Builder BOM drafts shared across users with Draft Builder access.
+export const draftBomDrafts = pgTable('draft_bom_drafts', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  revision: text('revision').notNull().default('Draft A'),
+  project: text('project').notNull().default(''),
+  projectId: text('project_id'),
+  projectCode: text('project_code'),
+  projectName: text('project_name'),
+  projectType: text('project_type'),
+  data: jsonb('data').notNull().$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  createdByUserId: integer('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByDisplayName: text('created_by_display_name').notNull().default('unknown'),
+  updatedByUserId: integer('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  updatedByDisplayName: text('updated_by_display_name').notNull().default('unknown'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const insertDraftBomDraftSchema = createInsertSchema(draftBomDrafts).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+export type DraftBomDraft = typeof draftBomDrafts.$inferSelect;
+export type InsertDraftBomDraft = z.infer<typeof insertDraftBomDraftSchema>;
+
 export const schemaChangeLog = pgTable('schema_change_log', {
   id: serial('id').primaryKey(),
   timestamp: timestamp('timestamp').defaultNow().notNull(),

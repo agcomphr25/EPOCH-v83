@@ -230,6 +230,7 @@ import {
 import cncDashboardRoutes from './cncDashboard';
 import receivingRoutes from './receiving';
 import estimatingRoutes from './estimating';
+import draftBomDraftsRoutes from './draftBomDrafts';
 import rfqRiskSessionsRoutes from './rfqRiskSessions';
 import auditsRoutes from './audits';
 import commandCenterRoutes from './commandCenter';
@@ -13875,6 +13876,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Estimating / RFQ Builder routes
   app.use('/api/estimating', authenticateToken, estimatingRoutes);
+  app.use('/api/draft-bom-drafts', authenticateToken, draftBomDraftsRoutes);
 
   // Conversational RFQ Risk Assessment routes
   app.use('/api/rfq-risk-sessions', authenticateToken, rfqRiskSessionsRoutes);

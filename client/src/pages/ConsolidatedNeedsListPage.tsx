@@ -147,6 +147,8 @@ type ConsolidatedPart = {
   currentBalance?: number;
 };
 
+type StatusView = 'OPEN' | 'PENDING' | 'APPROVED' | 'ORDERED' | 'RECEIVED' | 'DELIVERED_TO_DEPT' | 'ALL';
+
 export default function ConsolidatedNeedsListPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -160,6 +162,7 @@ export default function ConsolidatedNeedsListPage() {
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
   const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor'>('by-vendor');
   const [vendorFilterTab, setVendorFilterTab] = useState<'all' | 'po' | 'website'>('all');
+  const [statusView, setStatusView] = useState<StatusView>('OPEN');
   const [selectedVendorRequests, setSelectedVendorRequests] = useState<Set<number>>(new Set());
   const [isVendorAssignDialogOpen, setIsVendorAssignDialogOpen] = useState(false);
   const [isBulkOrderDialogOpen, setIsBulkOrderDialogOpen] = useState(false);
@@ -569,9 +572,22 @@ export default function ConsolidatedNeedsListPage() {
 
   const pendingRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'PENDING')), [filteredRequests]);
   const approvedRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'APPROVED')), [filteredRequests]);
-  const orderedRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'ORDERED')), [filteredRequests]);
-  const receivedRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'RECEIVED')), [filteredRequests]);
+  const orderedRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => ['ORDERED', 'ORDERED_PARTIAL'].includes(r.status))), [filteredRequests]);
+  const receivedRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => ['RECEIVED', 'RECEIVED_PARTIAL'].includes(r.status))), [filteredRequests]);
   const deliveredRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'DELIVERED_TO_DEPT')), [filteredRequests]);
+  const statusFilteredRequests = useMemo(() => {
+    const statusesByView: Record<StatusView, string[]> = {
+      OPEN: ['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL', 'CANCEL_REQUESTED'],
+      PENDING: ['PENDING'],
+      APPROVED: ['APPROVED'],
+      ORDERED: ['ORDERED', 'ORDERED_PARTIAL'],
+      RECEIVED: ['RECEIVED', 'RECEIVED_PARTIAL'],
+      DELIVERED_TO_DEPT: ['DELIVERED_TO_DEPT'],
+      ALL: ['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT', 'CANCEL_REQUESTED'],
+    };
+    const allowedStatuses = statusesByView[statusView];
+    return filteredRequests.filter((request) => allowedStatuses.includes(request.status));
+  }, [filteredRequests, statusView]);
 
   const vendorMap = useMemo(() => {
     const map = new Map<number, Vendor>();
@@ -641,8 +657,7 @@ export default function ConsolidatedNeedsListPage() {
   };
 
   const vendorGroups = useMemo(() => {
-    const activeStatuses = ['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'CANCEL_REQUESTED'];
-    const activeRequests = filteredRequests.filter(r => activeStatuses.includes(r.status));
+    const activeRequests = statusFilteredRequests;
 
     const groups: Record<string, VendorGroup> = {};
 
@@ -734,7 +749,7 @@ export default function ConsolidatedNeedsListPage() {
         if (b.vendorName === 'Website Orders') return -1;
         return a.vendorName.localeCompare(b.vendorName);
       });
-  }, [filteredRequests, getRequestVendorLabel, getResolvedVendorForRequest, normalizeVendorName]);
+  }, [statusFilteredRequests, getRequestVendorLabel, getResolvedVendorForRequest, normalizeVendorName]);
 
   const filteredVendorGroups = useMemo(() => {
     if (vendorFilterTab === 'po') {
@@ -744,6 +759,32 @@ export default function ConsolidatedNeedsListPage() {
     }
     return vendorGroups;
   }, [vendorGroups, vendorFilterTab]);
+
+  const setStatusViewAndClearSelection = (nextStatusView: StatusView) => {
+    setStatusView(nextStatusView);
+    setSelectedVendorRequests(new Set());
+  };
+
+  const getStatusViewLabel = (view: StatusView) => {
+    switch (view) {
+      case 'OPEN':
+        return 'Open';
+      case 'PENDING':
+        return 'Pending';
+      case 'APPROVED':
+        return 'Approved';
+      case 'ORDERED':
+        return 'Ordered';
+      case 'RECEIVED':
+        return 'Received';
+      case 'DELIVERED_TO_DEPT':
+        return 'Delivered';
+      case 'ALL':
+        return 'All';
+      default:
+        return 'Open';
+    }
+  };
 
   const linkRequestVendor = linkPoRequest ? getResolvedVendorForRequest(linkPoRequest) : null;
   const availableVendorPOsForLink = useMemo(() => {
@@ -1528,36 +1569,95 @@ export default function ConsolidatedNeedsListPage() {
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card>
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => setStatusViewAndClearSelection('PENDING')}
+          onKeyDown={(event) => event.key === 'Enter' && setStatusViewAndClearSelection('PENDING')}
+          className={`cursor-pointer transition-colors ${statusView === 'PENDING' ? 'border-yellow-400 bg-yellow-50/60 dark:bg-yellow-950/20' : ''}`}
+          data-testid="card-filter-pending"
+        >
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{pendingRequests.length}</div>
             <p className="text-sm text-muted-foreground">Pending Parts</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => setStatusViewAndClearSelection('APPROVED')}
+          onKeyDown={(event) => event.key === 'Enter' && setStatusViewAndClearSelection('APPROVED')}
+          className={`cursor-pointer transition-colors ${statusView === 'APPROVED' ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-950/20' : ''}`}
+          data-testid="card-filter-approved"
+        >
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{approvedRequests.length}</div>
             <p className="text-sm text-muted-foreground">Approved Parts</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => setStatusViewAndClearSelection('ORDERED')}
+          onKeyDown={(event) => event.key === 'Enter' && setStatusViewAndClearSelection('ORDERED')}
+          className={`cursor-pointer transition-colors ${statusView === 'ORDERED' ? 'border-purple-400 bg-purple-50/60 dark:bg-purple-950/20' : ''}`}
+          data-testid="card-filter-ordered"
+        >
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{orderedRequests.length}</div>
             <p className="text-sm text-muted-foreground">Ordered Parts</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => setStatusViewAndClearSelection('RECEIVED')}
+          onKeyDown={(event) => event.key === 'Enter' && setStatusViewAndClearSelection('RECEIVED')}
+          className={`cursor-pointer transition-colors ${statusView === 'RECEIVED' ? 'border-green-400 bg-green-50/60 dark:bg-green-950/20' : ''}`}
+          data-testid="card-filter-received"
+        >
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">{receivedRequests.length}</div>
             <p className="text-sm text-muted-foreground">Received Parts</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => setStatusViewAndClearSelection('DELIVERED_TO_DEPT')}
+          onKeyDown={(event) => event.key === 'Enter' && setStatusViewAndClearSelection('DELIVERED_TO_DEPT')}
+          className={`cursor-pointer transition-colors ${statusView === 'DELIVERED_TO_DEPT' ? 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20' : ''}`}
+          data-testid="card-filter-delivered"
+        >
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{deliveredRequests.length}</div>
             <p className="text-sm text-muted-foreground">Delivered Parts</p>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          Showing <span className="font-medium text-foreground">{getStatusViewLabel(statusView)}</span> requests in vendor view
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={statusView === 'OPEN' ? 'default' : 'outline'}
+            onClick={() => setStatusViewAndClearSelection('OPEN')}
+            data-testid="button-filter-open"
+          >
+            Open
+          </Button>
+          <Button
+            size="sm"
+            variant={statusView === 'ALL' ? 'default' : 'outline'}
+            onClick={() => setStatusViewAndClearSelection('ALL')}
+            data-testid="button-filter-all"
+          >
+            All
+          </Button>
+        </div>
       </div>
 
       {/* Main View Tabs */}

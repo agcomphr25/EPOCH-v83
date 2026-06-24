@@ -33,9 +33,6 @@ const p1ProductionStatusExpectationSql = `
       THEN 'CANCELLED'
     WHEN COALESCE(is_fulfilled, false)
       THEN 'SHIPPED'
-    WHEN UPPER(COALESCE(NULLIF(TRIM(production_status), ''), '')) = 'SHIPPED'
-      AND LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'shipping qc'
-      THEN 'SHIPPED'
     WHEN LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'p1 production queue'
       THEN 'PENDING'
     WHEN COALESCE(NULLIF(TRIM(current_department), ''), '') = ''

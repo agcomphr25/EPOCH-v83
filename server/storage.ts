@@ -14050,21 +14050,14 @@ export class DatabaseStorage implements IStorage {
     try {
       // Departments that are initial queue placements — orders there may keep FINALIZED.
       // Any other department is a real production department and must be IN_PROGRESS.
-      const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue', 'Shipping QC'];
+      const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue'];
       const resolvedStatus = INITIAL_QUEUE_DEPARTMENTS.includes(department)
         ? status
         : 'IN_PROGRESS';
-      const normalizedDepartment = department.trim().toLowerCase();
-      const normalizedStatus = status.trim().toUpperCase();
-      const resolvedProductionStatus =
-        normalizedDepartment === 'p1 production queue'
-          ? 'PENDING'
-          : normalizedDepartment === 'fulfilled' ||
-            normalizedDepartment === 'shipped' ||
-            normalizedStatus === 'FULFILLED' ||
-            normalizedStatus === 'SHIPPED'
-            ? 'SHIPPED'
-            : 'LAID_UP';
+      const resolvedProductionStatus = deriveP1ProductionStatus({
+        currentDepartment: department,
+        currentStatus: status,
+      });
 
       console.log(
         ` প্রক্র PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${resolvedStatus}`

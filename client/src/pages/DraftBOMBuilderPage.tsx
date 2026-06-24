@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import {
   ArrowUpDown,
@@ -201,6 +201,11 @@ type InventoryItemOption = {
   type?: string | null;
   isPacket?: boolean | null;
   manufacturedCategory?: string | null;
+};
+type DraftFinalizedInventoryItem = InventoryItemOption & {
+  id: number;
+  agPartNumber: string;
+  name: string;
 };
 
 type InventoryDepartmentOption = {
@@ -479,6 +484,34 @@ function draftLineToPart(line: BomLine): DraftBomPart {
     bomItems: [],
     hasBOM: false,
   };
+}
+
+function draftLineNeedsInventoryItem(line: BomLine) {
+  return line.isDraftPart !== false && !line.inventoryItemId;
+}
+
+async function createInventoryItemFromDraftLine(
+  line: BomLine,
+  draft: BomDraft,
+): Promise<DraftFinalizedInventoryItem> {
+  return await apiRequest('/api/inventory/items/from-draft-builder', {
+    method: 'POST',
+    body: {
+      name: lineDescription(line),
+      description: lineDescription(line),
+      supplier: line.supplier || null,
+      supplierPartNumber: line.supplierItemId || null,
+      manufacturer: line.manufacturer || null,
+      costPer: asNumber(line.actualCost) || asNumber(line.unitCost) || null,
+      usageUnit: line.unit || 'EA',
+      department: line.firstDepartment || line.department || defaultDepartment,
+      isManufactured: line.isManufactured === true,
+      manufacturedCategory: line.isManufactured === true ? 'COMPONENT' : null,
+      project: draft.projectName || draft.project || null,
+      draftName: `${draft.name} ${draft.revision}`.trim(),
+      draftLineId: line.id,
+    },
+  }) as DraftFinalizedInventoryItem;
 }
 
 function inventoryItemToPart(item: InventoryItemOption): DraftBomPart {
@@ -1312,6 +1345,7 @@ function createBlankDraftForProject(selectedProject: ProjectSelectOption): BomDr
 
 export default function DraftBOMBuilderPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [savedDrafts, setSavedDrafts] = useState<BomDraft[]>(() => loadDrafts());
   const [selectedDraftId, setSelectedDraftId] = useState<string>(PRIVATEER_DRAFT_ID);
@@ -1338,6 +1372,7 @@ export default function DraftBOMBuilderPage() {
   const [newWorkspaceTabName, setNewWorkspaceTabName] = useState('');
   const [newLaborDepartmentName, setNewLaborDepartmentName] = useState('');
   const [wizardSeedLineId, setWizardSeedLineId] = useState<string | null>(null);
+  const [isFinalizingParts, setIsFinalizingParts] = useState(false);
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
     queryKey: ['/api/projects'],
@@ -2086,7 +2121,7 @@ export default function DraftBOMBuilderPage() {
     setActiveWorkspaceTab('po-draft');
   }
 
-  function markSelectedFinalized() {
+  async function markSelectedFinalized() {
     if (!draft.project) {
       toast({
         title: 'Select a project first',
@@ -2096,16 +2131,59 @@ export default function DraftBOMBuilderPage() {
       return;
     }
 
-    setDraft((current) => ({
-      ...current,
-      lines: current.lines.map((line) =>
-        line.include ? { ...line, finalized: true, include: false, action: 'Do Not Order' } : line,
-      ),
-    }));
-    toast({
-      title: 'Inventory finalization staged',
-      description: 'Selected lines are marked final and ready for inventory-item creation when backend submission is wired.',
-    });
+    const selectedDraftLines = draft.lines.filter((line) => line.include);
+    const linesToCreate = selectedDraftLines.filter(draftLineNeedsInventoryItem);
+    const createdByLineId = new Map<string, DraftFinalizedInventoryItem>();
+
+    setIsFinalizingParts(true);
+    try {
+      for (const line of linesToCreate) {
+        const createdItem = await createInventoryItemFromDraftLine(line, draft);
+        createdByLineId.set(line.id, createdItem);
+      }
+
+      setDraft((current) => ({
+        ...current,
+        lines: current.lines.map((line) => {
+          if (!line.include) return line;
+          const createdItem = createdByLineId.get(line.id);
+          if (draftLineNeedsInventoryItem(line) && !createdItem) return line;
+          return {
+            ...line,
+            finalized: true,
+            include: false,
+            action: 'Do Not Order',
+            agPartNumber: createdItem?.agPartNumber ?? line.agPartNumber,
+            inventoryItemId: createdItem?.id ?? line.inventoryItemId ?? null,
+            inventoryItemName: createdItem?.name ?? line.inventoryItemName ?? lineDescription(line),
+            isDraftPart: false,
+            note: createdItem
+              ? `Finalized to inventory item #${createdItem.id} (${createdItem.agPartNumber})`
+              : line.note,
+          };
+        }),
+      }));
+
+      if (createdByLineId.size > 0) {
+        await queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      }
+
+      toast({
+        title: 'Inventory finalization complete',
+        description: createdByLineId.size > 0
+          ? `${selectedDraftLines.length} line(s) finalized, ${createdByLineId.size} new inventory item(s) created with AG part numbers.`
+          : `${selectedDraftLines.length} line(s) finalized.`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create inventory items from the selected draft lines.';
+      toast({
+        title: 'Inventory finalization failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsFinalizingParts(false);
+    }
   }
 
   function createVendorPoHandoff() {
@@ -2289,9 +2367,9 @@ export default function DraftBOMBuilderPage() {
                 <Save className="mr-2 h-4 w-4" />
                 Save draft
               </Button>
-              <Button onClick={markSelectedFinalized} disabled={!isEditMode || selectedLines.length === 0}>
+              <Button onClick={markSelectedFinalized} disabled={!isEditMode || selectedLines.length === 0 || isFinalizingParts}>
                 <Check className="mr-2 h-4 w-4" />
-                Finalize to inventory
+                {isFinalizingParts ? 'Finalizing...' : 'Finalize to inventory'}
               </Button>
             </div>
           </div>
@@ -2668,6 +2746,7 @@ export default function DraftBOMBuilderPage() {
                   onFinalizeSelected={markSelectedFinalized}
                   onDeleteLine={deleteLine}
                   isEditMode={isEditMode}
+                  isFinalizingParts={isFinalizingParts}
                 />
               </TabsContent>
             ) : null}
@@ -3062,6 +3141,7 @@ function PartsRequestWorkspace({
   onFinalizeSelected,
   onDeleteLine,
   isEditMode,
+  isFinalizingParts,
 }: {
   lines: BomLine[];
   visibleColumns: PartsRequestColumnId[];
@@ -3075,9 +3155,10 @@ function PartsRequestWorkspace({
   onUpdateNumberLine: (id: string, field: 'unitCost' | 'actualCost' | 'qtyNeeded', value: string) => void;
   onImportCsv: (file: File, linkInventoryMatches: boolean) => Promise<void>;
   onCreateVendorPoDraft: () => void;
-  onFinalizeSelected: () => void;
+  onFinalizeSelected: () => Promise<void>;
   onDeleteLine: (lineId: string) => void;
   isEditMode: boolean;
+  isFinalizingParts: boolean;
 }) {
   const typedDescription = description.trim();
   const selectedCount = lines.filter((line) => line.include).length;
@@ -3282,9 +3363,9 @@ function PartsRequestWorkspace({
               <PackagePlus className="mr-2 h-4 w-4" />
               Create Vendor PO draft
             </Button>
-            <Button type="button" onClick={onFinalizeSelected} disabled={!isEditMode || selectedCount === 0}>
+            <Button type="button" onClick={onFinalizeSelected} disabled={!isEditMode || selectedCount === 0 || isFinalizingParts}>
               <Check className="mr-2 h-4 w-4" />
-              Finalize checked
+              {isFinalizingParts ? 'Finalizing...' : 'Finalize checked'}
             </Button>
           </div>
         </div>

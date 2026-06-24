@@ -44,6 +44,7 @@ import {
   OrderConfirmationOutcome,
 } from '../../utils/notifications';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
+import { consumeP1PacketInventoryForOrder } from '../utils/p1PacketInventory';
 
 const router = Router();
 
@@ -889,6 +890,26 @@ router.post('/finalized', async (req: Request, res: Response) => {
       currentDepartment: orderDepartment,
       bottomMetalSource,
     });
+
+    if (order.currentDepartment === 'P1 Production Queue') {
+      try {
+        const packetInventoryAdjustments = await consumeP1PacketInventoryForOrder(order);
+        const consumed = packetInventoryAdjustments.filter(adj => adj.appliedQuantity < 0);
+        if (consumed.length > 0) {
+          console.log(
+            `P1 packet inventory consumed for ${order.orderId}: ${consumed.map(adj => `${adj.packetName} ${Math.abs(adj.appliedQuantity)}`).join(', ')}`
+          );
+        }
+        const shortages = packetInventoryAdjustments.filter(adj => adj.reason);
+        if (shortages.length > 0) {
+          console.warn(
+            `P1 packet inventory shortage for ${order.orderId}: ${shortages.map(adj => `${adj.packetName} (${adj.reason})`).join(', ')}`
+          );
+        }
+      } catch (packetInventoryErr: any) {
+        console.warn(`P1 packet inventory consumption skipped for ${order.orderId}:`, packetInventoryErr?.message || packetInventoryErr);
+      }
+    }
     
     // Use idempotent helper to create demand record (skip order update since already set)
     await reconcileBottomMetalDemand(order, false);

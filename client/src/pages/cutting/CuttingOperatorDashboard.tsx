@@ -287,6 +287,14 @@ const P1_PACKET_RECIPES: P1PacketRecipe[] = [
       { label: 'Pillar Seam', partsPerPacket: 1, programName: 'Pillar Seams', yieldPerRun: 156, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
     ],
   },
+  {
+    name: 'Cheek Riser',
+    matchers: ['cheek riser', 'cheek risers', 'cheekriser', 'cheek_riser'],
+    materialTypes: ['cheek_riser'],
+    components: [
+      { label: 'Cheek Risers', partsPerPacket: 1, programName: 'Cheekrisers', yieldPerRun: 110, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+    ],
+  },
 ];
 
 function normalizePacketText(value: string | null | undefined): string {
@@ -620,6 +628,7 @@ export default function CuttingOperatorDashboard() {
         'carbon_fiber': 'carbon fiber packet',
         'fiberglass': 'fiberglass packet',
         'mesa': 'mesa packet',
+        'cheek_riser': 'cheek riser',
         'p2_disruptor': 'disruptor',
         'p2_disruptor_packet': 'disruptor packet',
         'p2_antenna': 'antenna cover',

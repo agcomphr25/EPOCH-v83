@@ -77,7 +77,7 @@ type WeeklyCuttingQueueItem = {
   stockModel: string;
   source: 'P1' | 'P1_PO' | 'P2';
   orderType: 'regular' | 'oem' | 'p2_po';
-  materialType: 'carbon_fiber' | 'fiberglass' | 'mesa' | 'unknown';
+  materialType: 'carbon_fiber' | 'fiberglass' | 'mesa' | 'cheek_riser' | 'unknown';
   scheduledDate: string;
   dueDate: string;
   customer: string;
@@ -86,6 +86,7 @@ type WeeklyCuttingQueueItem = {
   usesInventory: boolean;
   requiresNewCut: boolean;
   bomId?: string;
+  specifications?: any;
 };
 
 type WeeklySummary = {
@@ -101,6 +102,17 @@ function getMondayOfWeek(date: Date): string {
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
   return d.toISOString().split('T')[0];
+}
+
+function hasAdjustableStockDemand(item: Pick<WeeklyCuttingQueueItem, 'stockModel'> & { specifications?: any }): boolean {
+  const values = [
+    item.stockModel,
+    typeof item.specifications === 'string' ? item.specifications : JSON.stringify(item.specifications || {}),
+  ];
+  return values.some(value => {
+    const normalized = String(value || '').toLowerCase().replace(/[_-]+/g, ' ');
+    return /\badjustable\b/.test(normalized) || /\badj\b/.test(normalized);
+  });
 }
 
 function formatWeekRange(startDate: string): string {
@@ -138,11 +150,11 @@ export default function CuttingWeeklySchedule() {
     },
   });
 
-  const { data: stockLevels = { carbon_fiber: 0, fiberglass: 0, mesa: 0 }, refetch: refetchStockLevels } = useQuery({
+  const { data: stockLevels = { carbon_fiber: 0, fiberglass: 0, mesa: 0, cheek_riser: 0 }, refetch: refetchStockLevels } = useQuery({
     queryKey: ['/api/cutting-table/stock-levels'],
     queryFn: async () => {
       const res = await fetch('/api/cutting-table/stock-levels');
-      if (!res.ok) return { carbon_fiber: 0, fiberglass: 0, mesa: 0 };
+      if (!res.ok) return { carbon_fiber: 0, fiberglass: 0, mesa: 0, cheek_riser: 0 };
       return res.json();
     },
   });
@@ -157,33 +169,34 @@ export default function CuttingWeeklySchedule() {
   });
 
   const p1Demand = useMemo(() => {
-    if (!weeklyQueueData?.items) return { 
-      cf: 0, fg: 0, mesa: 0, total: 0, byCustomer: [],
-      regularOrders: { cf: 0, fg: 0, mesa: 0, total: 0 },
-      oemOrders: { cf: 0, fg: 0, mesa: 0, total: 0 }
+    if (!weeklyQueueData?.items) return {
+      cf: 0, fg: 0, mesa: 0, cheekRiser: 0, total: 0, byCustomer: [],
+      regularOrders: { cf: 0, fg: 0, mesa: 0, cheekRiser: 0, total: 0 },
+      oemOrders: { cf: 0, fg: 0, mesa: 0, cheekRiser: 0, total: 0 }
     };
     
     const p1Items = weeklyQueueData.items.filter(i => i.source === 'P1' || i.source === 'P1_PO');
     
-    let cf = 0, fg = 0, mesa = 0;
-    const regularOrders = { cf: 0, fg: 0, mesa: 0, total: 0 };
-    const oemOrders = { cf: 0, fg: 0, mesa: 0, total: 0 };
+    let cf = 0, fg = 0, mesa = 0, cheekRiser = 0;
+    const regularOrders = { cf: 0, fg: 0, mesa: 0, cheekRiser: 0, total: 0 };
+    const oemOrders = { cf: 0, fg: 0, mesa: 0, cheekRiser: 0, total: 0 };
     const customerMap: Record<string, { 
-      cf: number; fg: number; mesa: number;
-      poCf: number; poFg: number; poMesa: number;
-      regCf: number; regFg: number; regMesa: number;
+      cf: number; fg: number; mesa: number; cheekRiser: number;
+      poCf: number; poFg: number; poMesa: number; poCheekRiser: number;
+      regCf: number; regFg: number; regMesa: number; regCheekRiser: number;
     }> = {};
     
     p1Items.forEach(item => {
       const customer = item.customer || 'Unknown';
       if (!customerMap[customer]) customerMap[customer] = { 
-        cf: 0, fg: 0, mesa: 0,
-        poCf: 0, poFg: 0, poMesa: 0,
-        regCf: 0, regFg: 0, regMesa: 0
+        cf: 0, fg: 0, mesa: 0, cheekRiser: 0,
+        poCf: 0, poFg: 0, poMesa: 0, poCheekRiser: 0,
+        regCf: 0, regFg: 0, regMesa: 0, regCheekRiser: 0
       };
       
       const stockModel = (item.stockModel || '').toLowerCase();
       const isP1PO = item.source === 'P1_PO';
+      const adjustableQty = hasAdjustableStockDemand(item) ? item.packetsNeeded : 0;
       
       // Mesa packets are only for PO orders - regular P1 orders never need mesa packets
       if (isP1PO && (stockModel.includes('mesa') || item.materialType === 'mesa')) {
@@ -212,22 +225,34 @@ export default function CuttingWeeklySchedule() {
           customerMap[customer].regFg += item.packetsNeeded;
         }
       }
+
+      if (adjustableQty > 0) {
+        cheekRiser += adjustableQty;
+        customerMap[customer].cheekRiser += adjustableQty;
+        if (isP1PO) {
+          oemOrders.cheekRiser += adjustableQty;
+          customerMap[customer].poCheekRiser += adjustableQty;
+        } else {
+          regularOrders.cheekRiser += adjustableQty;
+          customerMap[customer].regCheekRiser += adjustableQty;
+        }
+      }
     });
     
-    regularOrders.total = regularOrders.cf + regularOrders.fg + regularOrders.mesa;
-    oemOrders.total = oemOrders.cf + oemOrders.fg + oemOrders.mesa;
+    regularOrders.total = regularOrders.cf + regularOrders.fg + regularOrders.mesa + regularOrders.cheekRiser;
+    oemOrders.total = oemOrders.cf + oemOrders.fg + oemOrders.mesa + oemOrders.cheekRiser;
     
     const byCustomer = Object.entries(customerMap)
       .map(([customer, counts]) => ({ 
         customer, 
         ...counts, 
-        total: counts.cf + counts.fg + counts.mesa,
-        poTotal: counts.poCf + counts.poFg + counts.poMesa,
-        regTotal: counts.regCf + counts.regFg + counts.regMesa
+        total: counts.cf + counts.fg + counts.mesa + counts.cheekRiser,
+        poTotal: counts.poCf + counts.poFg + counts.poMesa + counts.poCheekRiser,
+        regTotal: counts.regCf + counts.regFg + counts.regMesa + counts.regCheekRiser
       }))
       .sort((a, b) => b.total - a.total);
     
-    return { cf, fg, mesa, total: cf + fg + mesa, byCustomer, regularOrders, oemOrders };
+    return { cf, fg, mesa, cheekRiser, total: cf + fg + mesa + cheekRiser, byCustomer, regularOrders, oemOrders };
   }, [weeklyQueueData?.items]);
 
   const p2Demand = useMemo(() => {
@@ -264,7 +289,7 @@ export default function CuttingWeeklySchedule() {
   }, [weeklyQueueData?.items]);
 
   const scheduledCounts = useMemo(() => {
-    let cf = 0, fg = 0, mesa = 0;
+    let cf = 0, fg = 0, mesa = 0, cheekRiser = 0;
     (mfgQueueData || []).forEach((item: any) => {
       try {
         const notes = item.notes ? JSON.parse(item.notes) : {};
@@ -273,25 +298,28 @@ export default function CuttingWeeklySchedule() {
         if (materialType === 'carbon_fiber') cf += remaining;
         else if (materialType === 'fiberglass') fg += remaining;
         else if (materialType === 'mesa') mesa += remaining;
+        else if (materialType === 'cheek_riser') cheekRiser += remaining;
       } catch {
         const materialType = item.materialType;
         const remaining = item.quantityRequested - (item.quantityCompleted || 0);
         if (materialType === 'carbon_fiber') cf += remaining;
         else if (materialType === 'fiberglass') fg += remaining;
         else if (materialType === 'mesa') mesa += remaining;
+        else if (materialType === 'cheek_riser') cheekRiser += remaining;
       }
     });
-    return { carbon_fiber: cf, fiberglass: fg, mesa };
+    return { carbon_fiber: cf, fiberglass: fg, mesa, cheek_riser: cheekRiser };
   }, [mfgQueueData]);
 
   const remainingDemand = useMemo(() => ({
     carbon_fiber: Math.max(0, p1Demand.cf - scheduledCounts.carbon_fiber),
     fiberglass: Math.max(0, p1Demand.fg - scheduledCounts.fiberglass),
     mesa: Math.max(0, p1Demand.mesa - scheduledCounts.mesa),
+    cheek_riser: Math.max(0, p1Demand.cheekRiser - scheduledCounts.cheek_riser),
   }), [p1Demand, scheduledCounts]);
 
   const p2ScheduledByName = useMemo(() => {
-    const p1MaterialTypes = new Set(['carbon_fiber', 'fiberglass', 'mesa']);
+    const p1MaterialTypes = new Set(['carbon_fiber', 'fiberglass', 'mesa', 'cheek_riser']);
     const activeStatuses = new Set(['PENDING', 'IN_PROGRESS']);
     const result: Record<string, number> = {};
     (mfgQueueData || []).forEach((item: any) => {
@@ -390,6 +418,7 @@ export default function CuttingWeeklySchedule() {
         'Carbon Fiber Packet': 'carbon_fiber',
         'Fiberglass Packet': 'fiberglass',
         'Mesa Packet': 'mesa',
+        'Cheek Riser': 'cheek_riser',
       };
       const materialType = materialTypeMap[data.packetType] || 'unknown';
       const description = data.poNumber
@@ -442,7 +471,7 @@ export default function CuttingWeeklySchedule() {
     });
   };
 
-  const p1MaterialKeys = ['carbon_fiber', 'fiberglass', 'mesa'] as const;
+  const p1MaterialKeys = ['carbon_fiber', 'fiberglass', 'mesa', 'cheek_riser'] as const;
   type P1MaterialKey = typeof p1MaterialKeys[number];
 
   const updateQuantity = (key: string, delta: number) => {
@@ -526,11 +555,11 @@ export default function CuttingWeeklySchedule() {
             <CardTitle>P1 Stock Packet Demand</CardTitle>
           </div>
           <CardDescription>
-            3 standard packet types for P1 orders: CF, FG, and Mesa
+            P1 cutting demand for stock packets plus adjustable-stock cheek risers
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
             <div className="p-4 bg-gray-900 text-white rounded-lg">
               <div className="flex justify-between items-start mb-3">
                 <div>
@@ -689,6 +718,59 @@ export default function CuttingWeeklySchedule() {
                 )}
               </div>
             </div>
+
+            <div className="p-4 bg-slate-700 text-white rounded-lg">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <p className="text-sm opacity-80">Cheek Risers</p>
+                  <p className="text-3xl font-bold">{Math.max(0, p1Demand.cheekRiser - scheduledCounts.cheek_riser)}</p>
+                  <p className="text-xs opacity-70">Adjustable stocks</p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-gray-200">Demand: {p1Demand.cheekRiser}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-green-200">Scheduled: {scheduledCounts.cheek_riser}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.cheek_riser || 0}</span></p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-red-100">PO: {p1Demand.oemOrders.cheekRiser}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-blue-100">Reg: {p1Demand.regularOrders.cheekRiser}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="icon" className="h-8 w-8" disabled={remainingDemand.cheek_riser === 0} onClick={() => updateQuantity('cheek_riser', -10)}>
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <Input
+                  type="number"
+                  value={scheduleQuantities['cheek_riser'] || 0}
+                  onChange={(e) => setQuantity('cheek_riser', e.target.value)}
+                  className="text-center font-bold w-20 h-8 bg-white text-black"
+                  disabled={remainingDemand.cheek_riser === 0}
+                  data-testid="input-qty-cheek-riser"
+                />
+                <Button variant="secondary" size="icon" className="h-8 w-8" disabled={remainingDemand.cheek_riser === 0} onClick={() => updateQuantity('cheek_riser', 10)}>
+                  <Plus className="h-3 w-3" />
+                </Button>
+                {remainingDemand.cheek_riser === 0 ? (
+                  <Badge className="bg-green-500 text-white" data-testid="badge-demand-met-cheek-riser">Demand Met</Badge>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() => handleSchedule('Cheek Riser', 'cheek_riser')}
+                    disabled={!scheduleQuantities['cheek_riser'] || schedulePacketsMutation.isPending}
+                    className="bg-white text-black hover:bg-gray-200"
+                    data-testid="button-schedule-cheek-riser"
+                  >
+                    <Send className="h-3 w-3 mr-1" />
+                    Schedule
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
 
           {(p1Demand.oemOrders.total > 0 || p1Demand.regularOrders.total > 0) && (
@@ -700,6 +782,7 @@ export default function CuttingWeeklySchedule() {
                     <TableHead className="text-center">CF</TableHead>
                     <TableHead className="text-center">FG</TableHead>
                     <TableHead className="text-center">Mesa</TableHead>
+                    <TableHead className="text-center">Cheek Risers</TableHead>
                     <TableHead className="text-center">Total</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -718,6 +801,9 @@ export default function CuttingWeeklySchedule() {
                       <TableCell className="text-center">
                         {p1Demand.oemOrders.mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{p1Demand.oemOrders.mesa}</Badge>}
                       </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.oemOrders.cheekRiser > 0 && <Badge variant="outline" className="bg-slate-100 text-slate-800">{p1Demand.oemOrders.cheekRiser}</Badge>}
+                      </TableCell>
                       <TableCell className="text-center font-bold text-red-700">{p1Demand.oemOrders.total}</TableCell>
                     </TableRow>
                   )}
@@ -734,6 +820,9 @@ export default function CuttingWeeklySchedule() {
                       </TableCell>
                       <TableCell className="text-center">
                         {p1Demand.regularOrders.mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{p1Demand.regularOrders.mesa}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.regularOrders.cheekRiser > 0 && <Badge variant="outline" className="bg-slate-100 text-slate-800">{p1Demand.regularOrders.cheekRiser}</Badge>}
                       </TableCell>
                       <TableCell className="text-center font-bold text-blue-700">{p1Demand.regularOrders.total}</TableCell>
                     </TableRow>
@@ -929,6 +1018,7 @@ export default function CuttingWeeklySchedule() {
                   <SelectItem value="Carbon Fiber Packet">Carbon Fiber Packet</SelectItem>
                   <SelectItem value="Fiberglass Packet">Fiberglass Packet</SelectItem>
                   <SelectItem value="Mesa Packet">Mesa Packet</SelectItem>
+                  <SelectItem value="Cheek Riser">Cheek Riser</SelectItem>
                   <SelectItem value="Disruptor Packet">Disruptor Packet</SelectItem>
                   <SelectItem value="Antenna Cover Packet">Antenna Cover Packet</SelectItem>
                 </SelectContent>
@@ -1034,7 +1124,8 @@ export default function CuttingWeeklySchedule() {
                       const typeMap: Record<string, string> = {
                         'carbon_fiber': 'Carbon Fiber Packets',
                         'fiberglass': 'Fiberglass Packets',
-                        'mesa': 'Mesa Packets'
+                        'mesa': 'Mesa Packets',
+                        'cheek_riser': 'Cheek Risers'
                       };
                       return typeMap[notes.materialType] || notes.materialType;
                     }
@@ -1043,7 +1134,8 @@ export default function CuttingWeeklySchedule() {
                       const typeMap: Record<string, string> = {
                         'carbon_fiber': 'Carbon Fiber Packets',
                         'fiberglass': 'Fiberglass Packets',
-                        'mesa': 'Mesa Packets'
+                        'mesa': 'Mesa Packets',
+                        'cheek_riser': 'Cheek Risers'
                       };
                       return typeMap[item.materialType] || item.materialType;
                     }

@@ -1283,9 +1283,26 @@ function saveDrafts(drafts: BomDraft[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts));
 }
 
+async function saveSharedDraft(draft: BomDraft) {
+  return await apiRequest(`/api/draft-bom-drafts/${encodeURIComponent(draft.id)}`, {
+    method: 'PUT',
+    body: draft,
+  }) as BomDraft;
+}
+
+async function deleteSharedDraft(id: string) {
+  try {
+    await apiRequest(`/api/draft-bom-drafts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  } catch (error) {
+    if ((error as any)?.status !== 404) throw error;
+  }
+}
+
 function savedDraftListWith(drafts: BomDraft[], draft: BomDraft) {
   const withoutCurrent = drafts.filter((item) => item.id !== draft.id);
-  return [draft, ...withoutCurrent].slice(0, 12);
+  return [draft, ...withoutCurrent];
 }
 
 function projectMatchValue(value?: string | number | null) {
@@ -1373,9 +1390,15 @@ export default function DraftBOMBuilderPage() {
   const [newLaborDepartmentName, setNewLaborDepartmentName] = useState('');
   const [wizardSeedLineId, setWizardSeedLineId] = useState<string | null>(null);
   const [isFinalizingParts, setIsFinalizingParts] = useState(false);
+  const [hasLoadedSharedDrafts, setHasLoadedSharedDrafts] = useState(false);
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
     queryKey: ['/api/projects'],
+  });
+
+  const { data: sharedDrafts = [], isFetched: sharedDraftsFetched } = useQuery<BomDraft[]>({
+    queryKey: ['/api/draft-bom-drafts'],
+    queryFn: () => apiRequest('/api/draft-bom-drafts'),
   });
 
   const { data: inventoryItems = [] } = useQuery<InventoryItemOption[]>({
@@ -1513,6 +1536,19 @@ export default function DraftBOMBuilderPage() {
   }, []);
 
   useEffect(() => {
+    if (!sharedDraftsFetched || hasLoadedSharedDrafts) return;
+    const sourceDrafts = sharedDrafts.length > 0 ? sharedDrafts : loadDrafts();
+    const normalizedDrafts = sourceDrafts.map(normalizeDraft);
+    const nextDrafts = normalizedDrafts.length > 0 ? normalizedDrafts : [createPrivateerDraft()];
+    const selectedDraft = nextDrafts.find((item) => item.id === selectedDraftId) ?? nextDrafts[0];
+
+    setSavedDrafts(nextDrafts);
+    saveDrafts(nextDrafts);
+    applyDraftSelection(selectedDraft);
+    setHasLoadedSharedDrafts(true);
+  }, [hasLoadedSharedDrafts, selectedDraftId, sharedDrafts, sharedDraftsFetched]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const nextDraft = normalizeDraft({
       ...draft,
@@ -1532,12 +1568,27 @@ export default function DraftBOMBuilderPage() {
       return nextDrafts;
     });
 
+    if (hasLoadedSharedDrafts) {
+      void saveSharedDraft(nextDraft)
+        .then((savedDraft) => {
+          const normalizedSavedDraft = normalizeDraft(savedDraft);
+          queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+            savedDraftListWith(current.map(normalizeDraft), normalizedSavedDraft),
+          );
+        })
+        .catch((error) => {
+          console.error('Failed to save shared Draft Builder draft:', error);
+        });
+    }
+
     if (selectedDraftId !== nextDraft.id) {
       setSelectedDraftId(nextDraft.id);
     }
   }, [
     customColumns,
     draft,
+    hasLoadedSharedDrafts,
+    queryClient,
     selectedDraftId,
     visibleAssemblyColumns,
     visibleDirectLaborColumns,
@@ -1948,7 +1999,7 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
-  function saveDraft() {
+  async function saveDraft() {
     const nextDraft = normalizeDraft({
       ...draft,
       poVisibleColumns: visiblePoColumns,
@@ -1965,6 +2016,20 @@ export default function DraftBOMBuilderPage() {
     setSavedDrafts(nextDrafts);
     setSelectedDraftId(nextDraft.id);
     setDraft(nextDraft);
+    try {
+      const savedDraft = normalizeDraft(await saveSharedDraft(nextDraft));
+      queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+        savedDraftListWith(current.map(normalizeDraft), savedDraft),
+      );
+    } catch (error) {
+      console.error('Failed to save shared Draft Builder draft:', error);
+      toast({
+        title: 'Draft saved locally',
+        description: 'The shared draft save failed, so this browser kept the latest local copy.',
+        variant: 'destructive',
+      });
+      return;
+    }
     toast({ title: 'Draft saved', description: `${nextDraft.name} is available in saved BOM drafts.` });
   }
 
@@ -1992,7 +2057,7 @@ export default function DraftBOMBuilderPage() {
     applyDraftSelection(match);
   }
 
-  function deleteCurrentDraft() {
+  async function deleteCurrentDraft() {
     if (!selectedDraftId) {
       toast({
         title: 'Save the draft first',
@@ -2027,14 +2092,23 @@ export default function DraftBOMBuilderPage() {
     const remainingDrafts = savedDrafts.filter((item) => item.id !== draft.id);
     const fallbackDraft = remainingDrafts[0] ?? createPrivateerDraft();
 
-    saveDrafts(remainingDrafts);
-    setSavedDrafts(remainingDrafts);
-    applyDraftSelection(fallbackDraft);
-    setIsDetailsOpen(false);
-    toast({ title: 'Draft deleted', description: `${draft.name} was removed from saved draft BOMs.` });
+    try {
+      await deleteSharedDraft(draft.id);
+      queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+        current.filter((item) => item.id !== draft.id),
+      );
+      saveDrafts(remainingDrafts);
+      setSavedDrafts(remainingDrafts);
+      applyDraftSelection(fallbackDraft);
+      setIsDetailsOpen(false);
+      toast({ title: 'Draft deleted', description: `${draft.name} was removed from saved draft BOMs.` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The shared draft could not be deleted.';
+      toast({ title: 'Delete failed', description: message, variant: 'destructive' });
+    }
   }
 
-  function clearCurrentDraft() {
+  async function clearCurrentDraft() {
     const confirmed = window.confirm(`Clear "${draft.name} - ${draft.revision}" and start over? This cannot be undone.`);
     if (!confirmed) return;
 
@@ -2060,6 +2134,14 @@ export default function DraftBOMBuilderPage() {
       const nextDrafts = savedDrafts.map((item) => (item.id === draft.id ? clearedDraft : item));
       saveDrafts(nextDrafts);
       setSavedDrafts(nextDrafts);
+      try {
+        const savedDraft = normalizeDraft(await saveSharedDraft(clearedDraft));
+        queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+          savedDraftListWith(current.map(normalizeDraft), savedDraft),
+        );
+      } catch (error) {
+        console.error('Failed to save cleared shared Draft Builder draft:', error);
+      }
     }
 
     applyDraftSelection(clearedDraft);

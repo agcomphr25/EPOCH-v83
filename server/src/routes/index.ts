@@ -11550,7 +11550,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }
 
           // Departments that are initial queue placements — orders there can keep FINALIZED
-          const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue', 'Shipping QC'];
+          const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue'];
 
           // If the destination is a real production department (not an initial queue),
           // always force status to IN_PROGRESS regardless of what the caller sent.
@@ -11574,13 +11574,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           // Update the appropriate table based on order type
           let updatedOrder;
           if (isProductionOrder) {
+            const productionStatus = deriveP1ProductionStatus({
+              currentDepartment: department,
+              isFulfilled: (currentOrder as any).isFulfilled,
+              currentStatus: (currentOrder as any).productionStatus,
+            });
+            const productionUpdateData = {
+              ...updateData,
+              productionStatus,
+              updatedAt: now,
+            };
+            delete (productionUpdateData as any).status;
+
             // Update production order table
             updatedOrder = await storage.updateProductionOrder(
               (currentOrder as any).id,
-              {
-                ...updateData,
-                updatedAt: now,
-              }
+              productionUpdateData
             );
             console.log(`[PROGRESSION SUCCESS] ${orderId} → ${department}`);
           } else if (isFinalized) {

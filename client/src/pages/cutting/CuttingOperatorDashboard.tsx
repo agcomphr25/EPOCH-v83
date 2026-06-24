@@ -247,6 +247,7 @@ type P1PacketRecipeComponent = {
   partsPerPacket: number;
   programName: string;
   yieldPerRun: number;
+  squareMetersPerRun: number;
 };
 
 type P1PacketRecipe = {
@@ -260,11 +261,15 @@ type P1PacketRunPlan = {
   packetName: string;
   packetsNeeded: number;
   totalRuns: number;
+  totalSquareMeters: number;
   requirements: Array<P1PacketRecipeComponent & {
     totalParts: number;
     runsNeeded: number;
+    squareMetersNeeded: number;
   }>;
 };
+
+const STOCK_PROGRAM_SQUARE_METERS_PER_RUN = 3;
 
 const P1_PACKET_RECIPES: P1PacketRecipe[] = [
   {
@@ -272,14 +277,14 @@ const P1_PACKET_RECIPES: P1PacketRecipe[] = [
     matchers: ['carbon fiber packet', 'carbon fiber stock packet', 'carbon fiber stock', 'carbon_fiber'],
     materialTypes: ['carbon_fiber'],
     components: [
-      { label: 'Shells', partsPerPacket: 2, programName: 'Shells', yieldPerRun: 26 },
-      { label: 'Wrist Reinforcements', partsPerPacket: 10, programName: 'Wrists reinforcement', yieldPerRun: 500 },
-      { label: 'BSRs', partsPerPacket: 6, programName: 'BSRs', yieldPerRun: 946 },
-      { label: 'Buttstock Reinforcements', partsPerPacket: 2, programName: 'Buttstock reinforcements', yieldPerRun: 70 },
-      { label: 'Forends', partsPerPacket: 2, programName: 'Forends', yieldPerRun: 68 },
-      { label: 'Half Gridle', partsPerPacket: 1, programName: 'Half Gridle', yieldPerRun: 440 },
-      { label: 'Seam', partsPerPacket: 1, programName: 'Seams', yieldPerRun: 39 },
-      { label: 'Pillar Seam', partsPerPacket: 1, programName: 'Pillar Seams', yieldPerRun: 156 },
+      { label: 'Shells', partsPerPacket: 2, programName: 'Shells', yieldPerRun: 26, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Wrist Reinforcements', partsPerPacket: 10, programName: 'Wrists reinforcement', yieldPerRun: 500, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'BSRs', partsPerPacket: 6, programName: 'BSRs', yieldPerRun: 946, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Buttstock Reinforcements', partsPerPacket: 2, programName: 'Buttstock reinforcements', yieldPerRun: 70, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Forends', partsPerPacket: 2, programName: 'Forends', yieldPerRun: 68, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Half Gridle', partsPerPacket: 1, programName: 'Half Gridle', yieldPerRun: 440, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Seam', partsPerPacket: 1, programName: 'Seams', yieldPerRun: 39, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Pillar Seam', partsPerPacket: 1, programName: 'Pillar Seams', yieldPerRun: 156, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
     ],
   },
 ];
@@ -337,6 +342,7 @@ function getP1PacketRunPlan(item: ManufacturingQueueItem): P1PacketRunPlan | nul
       ...component,
       totalParts,
       runsNeeded: Math.ceil(totalParts / component.yieldPerRun),
+      squareMetersNeeded: Math.ceil(totalParts / component.yieldPerRun) * component.squareMetersPerRun,
     };
   });
 
@@ -344,6 +350,7 @@ function getP1PacketRunPlan(item: ManufacturingQueueItem): P1PacketRunPlan | nul
     packetName: recipe.name,
     packetsNeeded,
     totalRuns: requirements.reduce((sum, requirement) => sum + requirement.runsNeeded, 0),
+    totalSquareMeters: requirements.reduce((sum, requirement) => sum + requirement.squareMetersNeeded, 0),
     requirements,
   };
 }
@@ -2446,6 +2453,7 @@ export default function CuttingOperatorDashboard() {
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="font-medium">{p1RunPlan.packetsNeeded} packets</span>
                                 <span>{p1RunPlan.totalRuns} total program runs</span>
+                                <span>{p1RunPlan.totalSquareMeters} m² total</span>
                               </div>
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {p1RunPlan.requirements.map(requirement => (
@@ -2474,7 +2482,7 @@ export default function CuttingOperatorDashboard() {
                         {p1RunPlan ? (
                           <div className="space-y-1">
                             <Badge variant="outline" className="font-mono">{p1RunPlan.totalRuns} runs</Badge>
-                            <div className="text-[11px] text-muted-foreground">{p1RunPlan.requirements.length} programs</div>
+                            <div className="text-[11px] text-muted-foreground">{p1RunPlan.totalSquareMeters} m²</div>
                           </div>
                         ) : (
                           <Badge variant="outline" className="font-mono">{item.estimatedCuts}</Badge>
@@ -3023,6 +3031,9 @@ export default function CuttingOperatorDashboard() {
                       <Badge variant="outline" className="bg-background font-mono">
                         {selectedP1RunPlan.totalRuns} total runs
                       </Badge>
+                      <Badge variant="outline" className="bg-background font-mono">
+                        {selectedP1RunPlan.totalSquareMeters} m² total
+                      </Badge>
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {selectedP1RunPlan.requirements.map(requirement => (
@@ -3032,7 +3043,7 @@ export default function CuttingOperatorDashboard() {
                             <Badge>{requirement.runsNeeded} run{requirement.runsNeeded === 1 ? '' : 's'}</Badge>
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {requirement.totalParts} {requirement.label.toLowerCase()} needed at {requirement.yieldPerRun}/run
+                            {requirement.totalParts} {requirement.label.toLowerCase()} needed at {requirement.yieldPerRun}/run; {requirement.squareMetersPerRun} m²/run
                           </p>
                         </div>
                       ))}
@@ -3231,9 +3242,10 @@ export default function CuttingOperatorDashboard() {
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="font-mono text-sm">{requirement.programName}</p>
                           <Badge>{requirement.runsNeeded} run{requirement.runsNeeded === 1 ? '' : 's'}</Badge>
+                          <Badge variant="outline">{requirement.squareMetersNeeded} m²</Badge>
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Make {requirement.totalParts} {requirement.label.toLowerCase()} for {selectedP1RunPlan.packetsNeeded} packets ({requirement.partsPerPacket}/packet; yield {requirement.yieldPerRun}/run).
+                          Make {requirement.totalParts} {requirement.label.toLowerCase()} for {selectedP1RunPlan.packetsNeeded} packets ({requirement.partsPerPacket}/packet; yield {requirement.yieldPerRun}/run; {requirement.squareMetersPerRun} m²/run).
                         </p>
                       </div>
                     ))}

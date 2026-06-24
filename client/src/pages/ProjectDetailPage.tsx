@@ -1552,7 +1552,7 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
     };
-    const uploadViaLocalFallback = async () => {
+    const uploadProjectStepAttachment = async () => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('projectId', project.id);
@@ -1564,70 +1564,14 @@ export default function ProjectDetailPage() {
         body: formData,
       });
     };
-    const isSigningUnavailable = (error: any) => {
-      const reason = String(error?.responseData?.reason || error?.responseData?.details || error?.message || '').toLowerCase();
-      return (
-        error?.status === 401 ||
-        error?.status === 403 ||
-        error?.status === 502 ||
-        error?.status === 503 ||
-        reason.includes('storage signing unauthorized') ||
-        reason.includes('failed to sign object url')
-      );
-    };
 
     try {
-      const { uploadURL, objectPath } = await apiRequest('/api/project-step-attachments/request-upload-url', {
-        method: 'POST',
-        body: {
-          name: file.name,
-          size: file.size,
-          contentType: file.type || 'application/octet-stream',
-          projectId: project.id,
-          stepId: selectedStep.id,
-        },
-      }) as { uploadURL: string; objectPath: string };
-
-      const uploadResponse = await fetch(uploadURL, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file');
-      }
-
-      await apiRequest('/api/project-step-attachments/complete-upload', {
-        method: 'POST',
-        body: {
-          objectPath,
-          projectId: project.id,
-          stepId: selectedStep.id,
-          originalFileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type || 'application/octet-stream',
-          notes: uploadNotes || null,
-        },
-      });
-
+      await uploadProjectStepAttachment();
       invalidateAttachmentQueries();
       setUploadNotes('');
       toast({ title: 'Document uploaded', description: `${file.name} has been attached to this step.` });
     } catch (error: any) {
       console.error('Upload error:', error);
-      if (isSigningUnavailable(error)) {
-        try {
-          console.warn('Object storage signing unavailable; using local project step upload fallback.', error);
-          await uploadViaLocalFallback();
-          invalidateAttachmentQueries();
-          setUploadNotes('');
-          toast({ title: 'Document uploaded', description: `${file.name} has been attached to this step.` });
-          return;
-        } catch (fallbackError) {
-          console.error('Local upload fallback failed:', fallbackError);
-        }
-      }
       toast({ title: 'Upload failed', description: 'There was an error uploading the document.', variant: 'destructive' });
     } finally {
       setIsUploading(false);

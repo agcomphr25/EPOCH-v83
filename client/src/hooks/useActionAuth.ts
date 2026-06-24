@@ -17,6 +17,20 @@ interface ActionAuthState {
 const ACTION_TOKEN_KEY = 'epoch_action_token';
 const ACTION_TOKEN_EXPIRY_KEY = 'epoch_action_token_expiry';
 const ACTION_TOKEN_USER_KEY = 'epoch_action_token_user';
+const ACTION_AUTH_KIOSK_ROUTES = [
+  '/app/production/stations',
+  '/production/timers',
+  '/p2-traveler',
+  '/p2-traveler-viewer',
+  '/traveler',
+  '/travelers',
+];
+
+function isActionAuthKioskRoute() {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname;
+  return ACTION_AUTH_KIOSK_ROUTES.some((route) => path === route || path.startsWith(`${route}/`));
+}
 
 function getStoredAuth(): ActionAuthState {
   try {
@@ -61,10 +75,13 @@ export function useActionAuth() {
   const [actionDescription, setActionDescription] = useState('perform this action');
   const pendingActionRef = useRef<(() => void) | null>(null);
   const authSuccessCloseRef = useRef(false);
+  const skipWebSessionProbe = isActionAuthKioskRoute();
 
   const { data: sessionUser } = useQuery<ActionAuthUser | null>({
     queryKey: ['/api/auth/session'],
+    enabled: !skipWebSessionProbe,
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
     retry: false,
   });
 
@@ -99,8 +116,8 @@ export function useActionAuth() {
     }
   }, [authState.isAuthenticated, authState.token]);
 
-  const isAuthenticated = !!sessionUser || authState.isAuthenticated;
-  const currentUser = sessionUser || authState.user;
+  const isAuthenticated = (!skipWebSessionProbe && !!sessionUser) || authState.isAuthenticated;
+  const currentUser = skipWebSessionProbe ? authState.user : sessionUser || authState.user;
 
   const requireAuth = useCallback((action: () => void, actionDescription?: string) => {
     if (isAuthenticated) {

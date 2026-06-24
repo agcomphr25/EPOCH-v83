@@ -13,11 +13,22 @@ import reviewConfig from '@/config/financialReviewConfig.json';
 
 interface SummaryData {
   fetchedAt: string;
+  reviewPeriod?: { monthKey: string; startDate?: string; endDate?: string };
   revenue: {
     currentMonthAr: number; total6Mo: number; recent3Mo: number; prior3Mo: number;
     growthPct: number | null; lastUpdated: string;
   };
   otdPercent: number | null;
+  otd?: {
+    monthKey: string;
+    startDate: string;
+    endDate: string;
+    totalCount: number;
+    onTimeCount: number;
+    lateCount: number;
+    otdPercent: number | null;
+    source: string;
+  };
   otdLastUpdated: string;
   ncrCount: number;
   ncrLastUpdated: string;
@@ -57,11 +68,13 @@ function fmtTs(ts: string | null | undefined): string {
 
 function currentMonthKey(): string {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const previous = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function currentMonthLabel(): string {
-  return format(new Date(), 'MMMM yyyy');
+  const [year, month] = currentMonthKey().split('-');
+  return format(new Date(Number(year), Number(month) - 1, 1), 'MMMM yyyy');
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -133,7 +146,12 @@ export default function FinancialReviewPage() {
   const monthLabel = currentMonthLabel();
 
   const { data: summary, isLoading: summaryLoading } = useQuery<SummaryData>({
-    queryKey: ['/api/financial-review/summary'],
+    queryKey: ['/api/financial-review/summary', monthKey],
+    queryFn: async () => {
+      const res = await fetch(`/api/financial-review/summary?monthKey=${encodeURIComponent(monthKey)}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load business review summary');
+      return res.json();
+    },
   });
 
   const { data: session } = useQuery<Session>({
@@ -352,7 +370,7 @@ export default function FinancialReviewPage() {
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle className="h-4 w-4 text-green-400" />
-                    <div className="text-sm font-medium text-gray-500">OTD Rate (3 mo)</div>
+                    <div className="text-sm font-medium text-gray-500">OTD Rate ({monthLabel})</div>
                   </div>
                   <div className={`text-3xl font-bold ${otd != null && otd >= 95 ? 'text-green-600' : 'text-red-600'}`}>
                     {otd != null ? `${otd}%` : '—'}

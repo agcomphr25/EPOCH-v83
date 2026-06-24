@@ -25,13 +25,26 @@ function monthLabel(monthKey: string): string {
   return format(d, 'MMMM yyyy');
 }
 
+function previousFullMonthKey(): string {
+  const now = new Date();
+  const previous = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function secondThursdayAfterReviewMonth(monthKey: string): string {
+  const [year, month] = monthKey.split('-').map(Number);
+  const firstOfFollowingMonth = new Date(year, month, 1);
+  const firstDay = firstOfFollowingMonth.getDay();
+  const daysUntilThursday = (4 - firstDay + 7) % 7;
+  const secondThursday = new Date(year, month, 1 + daysUntilThursday + 7);
+  return format(secondThursday, 'yyyy-MM-dd');
+}
+
 export default function FinancialReviewListPage() {
   const [, navigate] = useLocation();
   const [showNew, setShowNew] = useState(false);
-  const [newMonth, setNewMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
+  const [newMonth, setNewMonth] = useState(previousFullMonthKey);
+  const [newReviewDate, setNewReviewDate] = useState(() => secondThursdayAfterReviewMonth(previousFullMonthKey()));
 
   const { data: sessions = [], isLoading } = useQuery<FinancialReviewSession[]>({
     queryKey: ['/api/financial-review'],
@@ -39,7 +52,12 @@ export default function FinancialReviewListPage() {
 
   const createMutation = useMutation({
     mutationFn: () =>
-      apiRequest('PUT', `/api/financial-review/${newMonth}`, {}),
+      apiRequest(`/api/financial-review/${newMonth}`, {
+        method: 'PUT',
+        body: {
+          review_date: newReviewDate || null,
+        },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/financial-review'] });
       navigate(`/business-review/sessions/${newMonth}`);
@@ -125,9 +143,23 @@ export default function FinancialReviewListPage() {
               id="month-key"
               type="month"
               value={newMonth}
-              onChange={(e) => setNewMonth(e.target.value)}
+              onChange={(e) => {
+                setNewMonth(e.target.value);
+                setNewReviewDate(secondThursdayAfterReviewMonth(e.target.value));
+              }}
               className="mt-1"
             />
+            <Label htmlFor="review-date" className="mt-4 block">Planned Review Date</Label>
+            <Input
+              id="review-date"
+              type="date"
+              value={newReviewDate}
+              onChange={(e) => setNewReviewDate(e.target.value)}
+              className="mt-1"
+            />
+            <p className="mt-2 text-xs text-gray-500">
+              Defaults to the second Thursday after the review month.
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>

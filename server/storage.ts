@@ -17415,6 +17415,7 @@ export class DatabaseStorage implements IStorage {
         const itemData: InsertP2SerializedItem = {
           serialNumber,
           barcode,
+          travelerBarcode: barcode,
           poId: po.id,
           poItemId: poItem.id,
           poNumber: po.poNumber,

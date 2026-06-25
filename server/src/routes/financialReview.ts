@@ -2,15 +2,88 @@ import { Router } from 'express';
 import { authenticateToken } from '../../middleware/auth';
 import { requireFinanceAccess } from '../../middleware/routeAuthorization';
 import { pool } from '../../db';
+import { storage } from '../../storage';
 
 const router = Router();
 
 router.use(authenticateToken);
 router.use(requireFinanceAccess);
 
+function toDateOnly(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    return value.includes('T') ? value.split('T')[0] : value;
+  }
+  if (value instanceof Date) {
+    return value.toISOString().split('T')[0];
+  }
+  try {
+    return new Date(value as any).toISOString().split('T')[0];
+  } catch {
+    return null;
+  }
+}
+
+function getPreviousFullMonthKey(now = new Date()): string {
+  const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${previousMonth.getFullYear()}-${String(previousMonth.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthRange(monthKey: string) {
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) {
+    throw Object.assign(new Error('Invalid month key format (expected YYYY-MM)'), { status: 400 });
+  }
+
+  const [yearText, monthText] = monthKey.split('-');
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  const start = new Date(year, monthIndex, 1);
+  const end = new Date(year, monthIndex + 1, 0);
+
+  return {
+    startDate: toDateOnly(start)!,
+    endDate: toDateOnly(end)!,
+  };
+}
+
+async function calculateOtdForMonth(monthKey = getPreviousFullMonthKey()) {
+  const { startDate, endDate } = getMonthRange(monthKey);
+  const orders = await storage.getFulfilledShippedOrdersWithPaymentStatus(10000);
+  const considered = orders
+    .map((order: any) => {
+      const completionDate = toDateOnly(order.shippedDate) || toDateOnly(order.shippingCompletedAt) || toDateOnly(order.updatedAt);
+      const dueDate = toDateOnly(order.dueDate);
+      return { order, completionDate, dueDate };
+    })
+    .filter(({ order, completionDate, dueDate }) => {
+      const status = String(order.status || '').toUpperCase();
+      if (status !== 'SHIPPED' && status !== 'FULFILLED') return false;
+      if (!completionDate || !dueDate) return false;
+      if (completionDate < startDate || completionDate > endDate) return false;
+      return true;
+    });
+
+  const onTimeCount = considered.filter(({ completionDate, dueDate }) => completionDate! <= dueDate!).length;
+  const totalCount = considered.length;
+  const lateCount = totalCount - onTimeCount;
+  const otdPercent = totalCount > 0 ? Math.round((onTimeCount / totalCount) * 1000) / 10 : null;
+
+  return {
+    monthKey,
+    startDate,
+    endDate,
+    otdPercent,
+    totalCount,
+    onTimeCount,
+    lateCount,
+    source: '/otd-report',
+  };
+}
+
 // GET /api/financial-review/summary — aggregated live dashboard data
 router.get('/summary', async (req, res) => {
   try {
+    const monthKey = typeof req.query.monthKey === 'string' ? req.query.monthKey : getPreviousFullMonthKey();
     const dataErrors: string[] = []; // collects any query failures for client visibility
 
     // Revenue (last 6 months) — payments.payment_amount (CC payments)
@@ -40,18 +113,9 @@ router.get('/summary', async (req, res) => {
       currentMonthArRevenue = Number(arRevRows[0]?.current_month_ar) || 0;
     } catch (err: any) { const msg = `AR revenue query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
-    // OTD — all_orders.shipped_date vs due_date (consistent with OTD widget)
-    let otdRows: any[] = [];
+    let otdSummary: Awaited<ReturnType<typeof calculateOtdForMonth>> | null = null;
     try {
-      otdRows = await pool.query(`
-        SELECT
-          COUNT(*) FILTER (WHERE shipped_date <= due_date OR due_date IS NULL) AS on_time,
-          COUNT(*) AS total
-        FROM all_orders
-        WHERE shipped_date IS NOT NULL
-          AND created_at >= NOW() - INTERVAL '3 months'
-          AND status NOT IN ('cancelled', 'draft')
-      `) as any[];
+      otdSummary = await calculateOtdForMonth(monthKey);
     } catch (err: any) { const msg = `OTD query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // NCR
@@ -169,7 +233,6 @@ router.get('/summary', async (req, res) => {
     const fetchedAt = new Date().toISOString();
 
     const rev = revRows[0] || {};
-    const otd = otdRows[0] || { on_time: 0, total: 0 };
     const ncr = ncrRows[0] || { ncr_count: 0 };
     const cs = csRows[0] || {};
 
@@ -189,7 +252,13 @@ router.get('/summary', async (req, res) => {
         growthPct: revenueGrowthPct,
         lastUpdated: fetchedAt,
       },
-      otdPercent: otd.total > 0 ? Math.round((Number(otd.on_time) / Number(otd.total)) * 100) : null,
+      reviewPeriod: otdSummary ? {
+        monthKey: otdSummary.monthKey,
+        startDate: otdSummary.startDate,
+        endDate: otdSummary.endDate,
+      } : { monthKey },
+      otdPercent: otdSummary?.otdPercent ?? null,
+      otd: otdSummary,
       otdLastUpdated: fetchedAt,
       ncrCount: Number(ncr.ncr_count) || 0,
       ncrLastUpdated: fetchedAt,
@@ -266,16 +335,8 @@ router.get('/live/revenue', async (req, res) => {
 // GET /api/financial-review/live/kpis — OTD %, NCR count, revenue growth
 router.get('/live/kpis', async (req, res) => {
   try {
-    // OTD: orders shipped on or before due date (last 3 months)
-    const otdRows = await pool.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE shipped_date <= due_date OR due_date IS NULL) AS on_time,
-        COUNT(*) AS total
-      FROM all_orders
-      WHERE shipped_date IS NOT NULL
-        AND created_at >= NOW() - INTERVAL '3 months'
-        AND status NOT IN ('cancelled', 'draft')
-    `) as any[];
+    const monthKey = typeof req.query.monthKey === 'string' ? req.query.monthKey : getPreviousFullMonthKey();
+    const otd = await calculateOtdForMonth(monthKey);
 
     // NCR count (last 3 months)
     const ncrRows = await pool.query(`
@@ -294,13 +355,8 @@ router.get('/live/kpis', async (req, res) => {
       WHERE payment_date >= NOW() - INTERVAL '6 months'
     `) as any[];
 
-    const otd = otdRows[0] || { on_time: 0, total: 0 };
     const ncr = ncrRows[0] || { ncr_count: 0 };
     const rev = revRows[0] || { recent: 0, prior: 0 };
-
-    const otdPct = otd.total > 0
-      ? Math.round((Number(otd.on_time) / Number(otd.total)) * 100)
-      : null;
 
     const recentRev = Number(rev.recent) || 0;
     const priorRev = Number(rev.prior) || 0;
@@ -309,7 +365,8 @@ router.get('/live/kpis', async (req, res) => {
       : null;
 
     res.json({
-      otdPercent: otdPct,
+      otdPercent: otd.otdPercent,
+      otd,
       ncrCount: Number(ncr.ncr_count) || 0,
       revenueGrowthPct,
       recentRevenue: recentRev,
@@ -318,6 +375,17 @@ router.get('/live/kpis', async (req, res) => {
   } catch (err: any) {
     console.error('financial-review live/kpis error:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/financial-review/live/otd?monthKey=YYYY-MM — OTD summary matching /otd-report calculation
+router.get('/live/otd', async (req, res) => {
+  try {
+    const monthKey = typeof req.query.monthKey === 'string' ? req.query.monthKey : getPreviousFullMonthKey();
+    res.json(await calculateOtdForMonth(monthKey));
+  } catch (err: any) {
+    console.error('financial-review live/otd error:', err);
+    res.status(err?.status || 500).json({ error: err.message });
   }
 });
 

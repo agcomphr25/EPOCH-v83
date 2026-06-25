@@ -11,6 +11,7 @@ import { evaluateTravelerTrainingGate, evaluateQcTrainingGate } from '../lib/tra
 import { resolveChargeCode, deriveProjectId, resolveCertificationStatus, resolveBudgetOverrunState } from '../lib/resolveChargeCode';
 import { resolvePacketBarcode } from '../lib/packetResolution';
 import { getActiveRoutingStep } from '../services/routingStepService';
+import { adjustPacketInventoryItem } from '../utils/p1PacketInventory';
 import { laborAllocationsEnabled } from '../lib/featureFlags';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import * as allocationService from '../services/laborAllocationService';
@@ -42,6 +43,7 @@ import {
   manufacturingQueue,
   productionWorkOrders,
   cuttingBuiltPackets,
+  cuttingPacketBOMs,
   getSupplySourceDashboard,
   supplySourceDashboardToLegacyDept,
 } from '../../schema';
@@ -80,6 +82,100 @@ const TRACE_FIELD_ALIASES: Record<string, string[]> = {
   trace_expirationdate: ['expirationDate', 'material_expiration_date'],
   trace_receiveddate: ['receivedDate'],
 };
+
+function parseQueueIdFromPacketBarcode(barcode: string | null | undefined): number | null {
+  if (!barcode) return null;
+  const trimmed = barcode.trim();
+  const mfgMatch = trimmed.match(/^MFG-(\d+)-/);
+  if (mfgMatch) {
+    const queueId = Number(mfgMatch[1]);
+    return Number.isInteger(queueId) ? queueId : null;
+  }
+
+  const parts = trimmed.split('-');
+  if (parts.length < 5 || parts[0] !== 'PKT') return null;
+
+  const maybeRepairIndex = parts[parts.length - 1];
+  const maybeTimestamp = parts[parts.length - 2];
+  const hasRepairIndex = /^\d+$/.test(maybeRepairIndex) && /^\d{10,}$/.test(maybeTimestamp);
+  const queueIndex = hasRepairIndex ? parts.length - 4 : parts.length - 3;
+  const queueId = Number(parts[queueIndex]);
+  return Number.isInteger(queueId) ? queueId : null;
+}
+
+async function resolvePacketInventoryItemIdForCommit(
+  tx: any,
+  packet: typeof cuttingBuiltPackets.$inferSelect,
+  scannedBarcode: string,
+): Promise<number | null> {
+  const queueId = parseQueueIdFromPacketBarcode(packet.barcode) ?? parseQueueIdFromPacketBarcode(scannedBarcode);
+  if (queueId != null) {
+    const [queueRow] = await tx
+      .select({ inventoryItemId: manufacturingQueue.inventoryItemId })
+      .from(manufacturingQueue)
+      .where(eq(manufacturingQueue.id, queueId))
+      .limit(1);
+    if (queueRow?.inventoryItemId) return queueRow.inventoryItemId;
+  }
+
+  if (packet.productCategoryId) {
+    const [bom] = await tx
+      .select({ inventoryItemId: cuttingPacketBOMs.inventoryItemId })
+      .from(cuttingPacketBOMs)
+      .where(eq(cuttingPacketBOMs.productCategoryId, packet.productCategoryId))
+      .limit(1);
+    if (bom?.inventoryItemId) return bom.inventoryItemId;
+  }
+
+  return null;
+}
+
+async function commitPacketToTravelerInventory(params: {
+  packet: typeof cuttingBuiltPackets.$inferSelect;
+  scannedBarcode: string;
+  allocationTarget: string;
+  intendedRoutingStepId: string | null;
+}): Promise<void> {
+  const { packet, scannedBarcode, allocationTarget, intendedRoutingStepId } = params;
+
+  await db.transaction(async (tx) => {
+    const [lockedPacket] = await tx
+      .select()
+      .from(cuttingBuiltPackets)
+      .where(eq(cuttingBuiltPackets.id, packet.id))
+      .limit(1)
+      .for('update');
+
+    if (!lockedPacket) {
+      throw new Error(`Cutting packet ${packet.id} disappeared before allocation`);
+    }
+
+    const alreadyCommittedToThisTraveler =
+      lockedPacket.status === 'ALLOCATED' &&
+      lockedPacket.allocatedToOrder === allocationTarget;
+
+    const shouldRemoveFromInventory = lockedPacket.status === 'AVAILABLE';
+    if (shouldRemoveFromInventory) {
+      const inventoryItemId = await resolvePacketInventoryItemIdForCommit(tx, lockedPacket, scannedBarcode);
+      if (!inventoryItemId) {
+        throw new Error(`Unable to resolve inventory packet item for ${lockedPacket.barcode || scannedBarcode}`);
+      }
+      await adjustPacketInventoryItem(tx, inventoryItemId, -1);
+    }
+
+    if (!alreadyCommittedToThisTraveler) {
+      await tx
+        .update(cuttingBuiltPackets)
+        .set({
+          status: lockedPacket.status === 'CONSUMED' ? lockedPacket.status : 'ALLOCATED',
+          allocatedToOrder: allocationTarget,
+          intendedRoutingStepId,
+          updatedAt: new Date(),
+        })
+        .where(eq(cuttingBuiltPackets.id, lockedPacket.id));
+    }
+  });
+}
 
 const LEGACY_ROC_BACKFILL_DEFAULT_SERIALS = [
   'ROC2600084',
@@ -3443,8 +3539,9 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
           });
 
           if (p2Item) {
-            if (!resolution.packetRecord.allocatedToOrder) {
-              const allocationTarget = p2Item.barcode || p2Item.serialNumber;
+            const allocationTarget = p2Item.barcode || p2Item.serialNumber;
+            const allocatedToThisTraveler = resolution.packetRecord.allocatedToOrder === allocationTarget;
+            if (!resolution.packetRecord.allocatedToOrder || allocatedToThisTraveler || resolution.packetRecord.status === 'AVAILABLE') {
               // Phase-2 (Task #144): pin the packet to the traveler's
               // currently active routing step so downstream material draws
               // can hard-block out-of-order consumption against this packet.
@@ -3455,13 +3552,12 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
               const intendedRoutingStepId = activeStep?.inProgress
                 ? activeStep.step.id
                 : null;
-              await db.update(cuttingBuiltPackets)
-                .set({
-                  allocatedToOrder: allocationTarget,
-                  intendedRoutingStepId,
-                  updatedAt: new Date(),
-                })
-                .where(eq(cuttingBuiltPackets.id, resolution.packetRecord.id));
+              await commitPacketToTravelerInventory({
+                packet: resolution.packetRecord,
+                scannedBarcode: preFlightBarcode,
+                allocationTarget,
+                intendedRoutingStepId,
+              });
               console.log(`[Packet Allocation] Allocated cutting packet "${preFlightBarcode}" → "${allocationTarget}" (traveler ${travelerId}, intendedRoutingStepId=${intendedRoutingStepId ?? 'null'})`);
             } else {
               console.log(`[Packet Allocation] Packet "${preFlightBarcode}" already allocated to "${resolution.packetRecord.allocatedToOrder}" — skipping overwrite`);

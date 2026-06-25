@@ -5,7 +5,6 @@ import {
   p2SerializedItemEvents, 
   p2WorkTasks,
   partRoutings,
-  p2EmployeePartCertifications,
   p2SerializedItemTraceability,
   p2SerializedItemCustomData,
   employees,
@@ -1808,29 +1807,21 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
 
     const nextDepartment = departmentSequence[currentIndex];
 
-    const deptVariants = getDepartmentVariants(nextDepartment);
     const certificationPartNumber =
       inventoryIdentity.internalPartNumber ||
       routing?.partNumber ||
       serializedItem.partNumber;
-    const certification = await db.query.p2EmployeePartCertifications.findFirst({
-      where: and(
-        eq(p2EmployeePartCertifications.employeeId, employee.id),
-        or(
-          eq(p2EmployeePartCertifications.partNumber, certificationPartNumber),
-          eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber)
-        ),
-        or(
-          inArray(p2EmployeePartCertifications.department, deptVariants),
-          sql`lower(trim(${p2EmployeePartCertifications.department})) = lower(trim(${nextDepartment}))`
-        ),
-        eq(p2EmployeePartCertifications.drawingKnowledge, true),
-        eq(p2EmployeePartCertifications.specSheetUnderstanding, true),
-        eq(p2EmployeePartCertifications.procedureCompletion, true)
-      ),
-    });
-
-    const isCertified = !!certification;
+    const certificationCandidateInputs = [certificationPartNumber, serializedItem.partNumber];
+    const certificationPartCandidates = Array.from(
+      new Set(certificationCandidateInputs.filter((value): value is string => Boolean(value)))
+    );
+    let isCertified = false;
+    for (const candidate of certificationPartCandidates) {
+      if (await storage.checkEmployeeP2PartCertification(employee.id, candidate, nextDepartment)) {
+        isCertified = true;
+        break;
+      }
+    }
 
     const departmentConfig = routing ? (routing.departmentConfig as any) : {};
     const config = departmentConfig?.[nextDepartment] || {};
@@ -2158,31 +2149,26 @@ router.post('/start-task', async (req: Request, res: Response) => {
     const config = departmentConfig?.[department] || {};
 
     // BACKEND CERTIFICATION ENFORCEMENT - Critical for AS9100 compliance
-    const startDeptVariants = getDepartmentVariants(department);
     const certificationPartNumber =
       inventoryIdentity.internalPartNumber ||
       routing?.partNumber ||
       serializedItem.partNumber;
-    const certification = await db.query.p2EmployeePartCertifications.findFirst({
-      where: and(
-        eq(p2EmployeePartCertifications.employeeId, parseInt(employeeId)),
-        or(
-          eq(p2EmployeePartCertifications.partNumber, certificationPartNumber),
-          eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber)
-        ),
-        or(
-          inArray(p2EmployeePartCertifications.department, startDeptVariants),
-          sql`lower(trim(${p2EmployeePartCertifications.department})) = lower(trim(${department}))`
-        ),
-        eq(p2EmployeePartCertifications.drawingKnowledge, true),
-        eq(p2EmployeePartCertifications.specSheetUnderstanding, true),
-        eq(p2EmployeePartCertifications.procedureCompletion, true)
-      ),
-    });
+    const employeeIdNumber = parseInt(employeeId);
+    const certificationCandidateInputs = [certificationPartNumber, serializedItem.partNumber];
+    const certificationPartCandidates = Array.from(
+      new Set(certificationCandidateInputs.filter((value): value is string => Boolean(value)))
+    );
+    let isCertified = false;
+    for (const candidate of certificationPartCandidates) {
+      if (await storage.checkEmployeeP2PartCertification(employeeIdNumber, candidate, department)) {
+        isCertified = true;
+        break;
+      }
+    }
 
-    if (!certification) {
+    if (!isCertified) {
       return res.status(403).json({ 
-        error: `Employee ${employeeName} is not certified for ${department} on part ${partNumber}`,
+        error: `Employee ${employeeName} is not certified for ${department} on part ${certificationPartNumber || partNumber}`,
         code: 'NOT_CERTIFIED'
       });
     }

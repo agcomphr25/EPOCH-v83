@@ -19529,10 +19529,44 @@ export class DatabaseStorage implements IStorage {
 
   // Training enforcement helpers
 
+  private getP2PartNumberVariants(partNumber: string): string[] {
+    const variants = new Set<string>();
+    const add = (value?: string | null) => {
+      const trimmed = value?.trim();
+      if (trimmed) variants.add(trimmed);
+    };
+
+    add(partNumber);
+    add(partNumber.replace(/\s+/g, ' '));
+
+    for (const value of Array.from(variants)) {
+      const base = value.match(/^(.+?)(?:\s+|\s*-\s*)(?:rev|revision)\.?\s*[a-z0-9]+$/i)?.[1]?.trim();
+      add(base);
+    }
+
+    return Array.from(variants);
+  }
+
+  private getP2DepartmentKeys(department: string): string[] {
+    const normalize = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const keys = new Set<string>([normalize(department)]);
+    const [compact] = Array.from(keys);
+
+    if (compact === 'assembledisassembly') {
+      keys.add('assemblydisassembly');
+    }
+    if (compact === 'assemblydisassembly') {
+      keys.add('assembledisassembly');
+    }
+
+    return Array.from(keys);
+  }
+
   async getP2PartCertificationForStep(
     partNumber: string,
     department: string
   ): Promise<{ id: number; partNumber: string; departments: string[] } | undefined> {
+    const partVariants = this.getP2PartNumberVariants(partNumber);
     const rows = await db
       .select({
         id: p2PartCertifications.id,
@@ -19540,12 +19574,18 @@ export class DatabaseStorage implements IStorage {
         departments: p2PartCertifications.departments,
       })
       .from(p2PartCertifications)
-      .where(eq(p2PartCertifications.partNumber, partNumber));
+      .where(
+        or(
+          ...partVariants.map((variant) =>
+            sql`lower(trim(${p2PartCertifications.partNumber})) = lower(trim(${variant}))`
+          )
+        )
+      );
 
-    const deptLower = department.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const deptKeys = this.getP2DepartmentKeys(department);
     return rows.find((r) => {
       const depts = (r.departments as string[]) || [];
-      return depts.some((d) => d.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === deptLower);
+      return depts.some((d) => deptKeys.includes(d.toLowerCase().trim().replace(/[^a-z0-9]/g, '')));
     });
   }
 
@@ -19554,6 +19594,7 @@ export class DatabaseStorage implements IStorage {
     partNumber: string,
     department: string
   ): Promise<boolean> {
+    const partVariants = this.getP2PartNumberVariants(partNumber);
     const rows = await db
       .select({
         id: p2EmployeePartCertifications.id,
@@ -19567,13 +19608,17 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(p2EmployeePartCertifications.employeeId, employeeId),
-          eq(p2EmployeePartCertifications.partNumber, partNumber)
+          or(
+            ...partVariants.map((variant) =>
+              sql`lower(trim(${p2EmployeePartCertifications.partNumber})) = lower(trim(${variant}))`
+            )
+          )
         )
       );
 
-    const deptLower = department.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const deptKeys = this.getP2DepartmentKeys(department);
     const match = rows.find(
-      (r) => r.department.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === deptLower
+      (r) => deptKeys.includes(r.department.toLowerCase().trim().replace(/[^a-z0-9]/g, ''))
     );
 
     if (!match) return false;
@@ -19590,6 +19635,7 @@ export class DatabaseStorage implements IStorage {
     partNumber: string
   ): Promise<{ id: number; expiresAt: Date | null } | undefined> {
     const now = new Date();
+    const partVariants = this.getP2PartNumberVariants(partNumber);
     const rows = await db
       .select({
         id: travelerAuthorizations.id,
@@ -19599,7 +19645,11 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(travelerAuthorizations.employeeId, employeeId),
-          eq(travelerAuthorizations.partNumber, partNumber),
+          or(
+            ...partVariants.map((variant) =>
+              sql`lower(trim(${travelerAuthorizations.partNumber})) = lower(trim(${variant}))`
+            )
+          ),
           eq(travelerAuthorizations.isActive, true)
         )
       );
@@ -19613,12 +19663,17 @@ export class DatabaseStorage implements IStorage {
    * bypass the check) from "auth records exist but this employee doesn't have one" (block).
    */
   async anyAuthorizationsExistForPart(partNumber: string): Promise<boolean> {
+    const partVariants = this.getP2PartNumberVariants(partNumber);
     const rows = await db
       .select({ id: travelerAuthorizations.id })
       .from(travelerAuthorizations)
       .where(
         and(
-          eq(travelerAuthorizations.partNumber, partNumber),
+          or(
+            ...partVariants.map((variant) =>
+              sql`lower(trim(${travelerAuthorizations.partNumber})) = lower(trim(${variant}))`
+            )
+          ),
           eq(travelerAuthorizations.isActive, true)
         )
       )

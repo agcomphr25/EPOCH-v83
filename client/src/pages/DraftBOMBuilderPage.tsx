@@ -1334,6 +1334,33 @@ function draftMatchesProject(draft: BomDraft, selectedProject: ProjectSelectOpti
   return draftValues.some((value) => selectedValues.includes(value));
 }
 
+function draftSavedBomCount(draft: BomDraft) {
+  return (draft.savedDraftBoms ?? []).length + draft.lines.flatMap((line) => line.childDraftBoms ?? []).length;
+}
+
+function draftUpdatedTime(draft: BomDraft) {
+  const time = new Date(draft.updatedAt).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function projectDraftMatchScore(draft: BomDraft, selectedProject: ProjectSelectOption) {
+  const structuredMatch = draft.projectType === selectedProject.projectType && draft.projectId === selectedProject.id ? 4 : 0;
+  const savedBomScore = draftSavedBomCount(draft) > 0 ? 3 : 0;
+  const specificProjectScore = draft.projectType && draft.projectId ? 2 : 0;
+  const builtInSeedPenalty = draft.id === PRIVATEER_DRAFT_ID ? -1 : 0;
+  return structuredMatch + savedBomScore + specificProjectScore + builtInSeedPenalty;
+}
+
+function selectBestDraftForProject(drafts: BomDraft[], selectedProject: ProjectSelectOption) {
+  return drafts
+    .filter((item) => draftMatchesProject(item, selectedProject))
+    .sort((a, b) => {
+      const scoreDelta = projectDraftMatchScore(b, selectedProject) - projectDraftMatchScore(a, selectedProject);
+      if (scoreDelta !== 0) return scoreDelta;
+      return draftUpdatedTime(b) - draftUpdatedTime(a);
+    })[0] ?? null;
+}
+
 function createBlankDraftForProject(selectedProject: ProjectSelectOption): BomDraft {
   return {
     id: crypto.randomUUID(),
@@ -2155,7 +2182,7 @@ export default function DraftBOMBuilderPage() {
     const selectedProject = combinedProjectOptions.find((project) => project.value === value);
     if (!selectedProject) return;
 
-    const savedProjectDraft = savedDrafts.find((item) => draftMatchesProject(item, selectedProject));
+    const savedProjectDraft = selectBestDraftForProject(savedDrafts, selectedProject);
 
     if (savedProjectDraft) {
       loadDraft(savedProjectDraft.id);

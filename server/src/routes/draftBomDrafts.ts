@@ -7,6 +7,10 @@ import { resolveUserSnapshot } from '../../utils/userSnapshot';
 
 const router = Router();
 
+const defaultWorkspaceTabs = ['po-draft', 'parts-request', 'direct-labor', 'nrc', 'bom-wizard', 'assembly-tree'] as const;
+type BuiltInWorkspaceTabId = typeof defaultWorkspaceTabs[number];
+type WorkspaceTabId = BuiltInWorkspaceTabId | `custom:${string}`;
+
 const draftPayloadSchema = z.object({
   id: z.string().trim().min(1),
   name: z.string().trim().min(1).default('New Draft BOM'),
@@ -26,6 +30,38 @@ type DraftBomActor = {
   role?: string | null;
 };
 
+function isWorkspaceTabId(value: unknown): value is WorkspaceTabId {
+  return (
+    typeof value === 'string' &&
+    (defaultWorkspaceTabs.includes(value as BuiltInWorkspaceTabId) || value.startsWith('custom:'))
+  );
+}
+
+function normalizeWorkspaceTabs(value: unknown): WorkspaceTabId[] {
+  const sourceTabs = Array.isArray(value) ? value.filter(isWorkspaceTabId) : defaultWorkspaceTabs;
+  const nextTabs = [...sourceTabs];
+
+  for (const tabId of defaultWorkspaceTabs) {
+    if (nextTabs.includes(tabId)) continue;
+    const defaultIndex = defaultWorkspaceTabs.indexOf(tabId);
+    const previousVisibleDefault = defaultWorkspaceTabs
+      .slice(0, defaultIndex)
+      .reverse()
+      .find((candidate) => nextTabs.includes(candidate));
+    const insertIndex = previousVisibleDefault ? nextTabs.indexOf(previousVisibleDefault) + 1 : nextTabs.length;
+    nextTabs.splice(insertIndex, 0, tabId);
+  }
+
+  return nextTabs.filter((tabId, index, allTabs) => allTabs.indexOf(tabId) === index);
+}
+
+function normalizeDraftData<T extends Record<string, unknown>>(data: T): T & { workspaceTabs: WorkspaceTabId[] } {
+  return {
+    ...data,
+    workspaceTabs: normalizeWorkspaceTabs(data.workspaceTabs),
+  };
+}
+
 function isAdminActor(actor: DraftBomActor) {
   const role = String(actor.role ?? '').toUpperCase();
   return role === 'ADMIN' || role === 'OWNER';
@@ -40,7 +76,7 @@ function canEditDraft(row: typeof draftBomDrafts.$inferSelect, actor: DraftBomAc
 }
 
 function toClientDraft(row: typeof draftBomDrafts.$inferSelect, actor: DraftBomActor) {
-  const data = row.data && typeof row.data === 'object' ? row.data : {};
+  const data = normalizeDraftData(row.data && typeof row.data === 'object' ? row.data as Record<string, unknown> : {});
   const canManageAccess = canManageDraft(row, actor);
   return {
     ...data,
@@ -54,8 +90,8 @@ function toClientDraft(row: typeof draftBomDrafts.$inferSelect, actor: DraftBomA
     projectType: row.projectType,
     visibility: row.visibility,
     allowPublicEdit: row.allowPublicEdit,
-    updatedAt: row.updatedAt?.toISOString?.() ?? (data as any).updatedAt,
-    createdAt: row.createdAt?.toISOString?.() ?? (data as any).createdAt,
+    updatedAt: row.updatedAt?.toISOString?.() ?? data.updatedAt,
+    createdAt: row.createdAt?.toISOString?.() ?? data.createdAt,
     createdByUserId: row.createdByUserId,
     createdByDisplayName: row.createdByDisplayName,
     updatedByDisplayName: row.updatedByDisplayName,
@@ -119,11 +155,11 @@ router.put('/:id', async (req: Request, res: Response) => {
     const canManageExisting = existing ? canManageDraft(existing, snapshot) : true;
     const visibility = canManageExisting ? parsed.visibility : existing?.visibility ?? 'public';
     const allowPublicEdit = canManageExisting ? parsed.allowPublicEdit : existing?.allowPublicEdit ?? false;
-    const data = {
+    const data = normalizeDraftData({
       ...parsed,
       visibility,
       allowPublicEdit,
-    };
+    });
 
     const [row] = await db
       .insert(draftBomDrafts)

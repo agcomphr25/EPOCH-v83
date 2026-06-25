@@ -2,8 +2,10 @@ import { eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { inventoryItems } from '../../schema';
 
+export type P1PacketMaterialType = 'carbon_fiber' | 'fiberglass' | 'mesa' | 'cheek_riser';
+
 type PacketDemand = {
-  materialType: 'carbon_fiber' | 'fiberglass' | 'mesa' | 'cheek_riser';
+  materialType: P1PacketMaterialType;
   packetName: string;
   quantity: number;
 };
@@ -40,6 +42,20 @@ function normalizeText(value: unknown): string {
   return String(value || '').toLowerCase().replace(/[_-]+/g, ' ').trim();
 }
 
+export function normalizeP1PacketMaterialType(value: unknown): P1PacketMaterialType | null {
+  const normalized = normalizeText(value);
+  if (!normalized || normalized === 'unknown') return null;
+  if (normalized.includes('cheek riser') || normalized.includes('cheekriser')) return 'cheek_riser';
+  if (normalized === 'mesa' || normalized.includes('mesa packet') || normalized.includes('mesa stock')) return 'mesa';
+  if (normalized === 'cf' || normalized.includes('carbon') || normalized.includes('carbon fiber')) return 'carbon_fiber';
+  if (normalized === 'fg' || normalized.includes('fiberglass') || normalized.includes('fiber glass')) return 'fiberglass';
+  return null;
+}
+
+export function getP1PacketName(materialType: P1PacketMaterialType): string {
+  return MATERIAL_PACKET_NAMES[materialType];
+}
+
 function hasAdjustableStock(value: unknown): boolean {
   const normalized = normalizeText(value);
   return /\badjustable\b/.test(normalized) || /\badj\b/.test(normalized);
@@ -48,11 +64,7 @@ function hasAdjustableStock(value: unknown): boolean {
 function materialTypeFromStockModel(modelId: unknown): PacketDemand['materialType'] | null {
   const normalized = normalizeText(modelId);
   if (!normalized || normalized === 'none' || normalized === 'no stock') return null;
-  if (normalized.includes('cheek riser') || normalized.includes('cheekriser')) return 'cheek_riser';
-  if (normalized.includes('mesa')) return 'mesa';
-  if (normalized.startsWith('cf ') || normalized.includes('carbon')) return 'carbon_fiber';
-  if (normalized.startsWith('fg ') || normalized.includes('fiberglass')) return 'fiberglass';
-  return null;
+  return normalizeP1PacketMaterialType(normalized);
 }
 
 export function getP1PacketDemandsForOrder(order: {
@@ -159,6 +171,24 @@ export async function adjustPacketInventoryItem(
     previousOnHand,
     nextOnHand,
   };
+}
+
+export async function adjustPacketInventoryForMaterial(
+  tx: any,
+  materialType: P1PacketMaterialType,
+  quantityDelta: number
+): Promise<PacketInventoryAdjustment> {
+  const demand = {
+    materialType,
+    packetName: MATERIAL_PACKET_NAMES[materialType],
+  };
+  const item = await resolvePacketInventoryItem(tx, demand);
+
+  if (!item) {
+    throw new Error(`Packet inventory item not found for ${demand.packetName}`);
+  }
+
+  return adjustPacketInventoryItem(tx, item.id, quantityDelta);
 }
 
 export async function consumeP1PacketInventoryForOrder(order: {

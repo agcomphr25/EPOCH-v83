@@ -10479,6 +10479,46 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
+  private getVendorPOInventoryCost(poLineItem: any): number | null {
+    const purchaseUnitCost = Number(poLineItem?.purchaseUnitPrice);
+    if (Number.isFinite(purchaseUnitCost) && purchaseUnitCost > 0) {
+      return purchaseUnitCost;
+    }
+
+    const vendorUnitCost = Number(poLineItem?.unitPrice);
+    return Number.isFinite(vendorUnitCost) && vendorUnitCost > 0 ? vendorUnitCost : null;
+  }
+
+  private async syncInventoryItemCostFromVendorPOLine(poLineItem: any): Promise<void> {
+    const agPartNumber = poLineItem?.agPartNumber;
+    const nextCost = this.getVendorPOInventoryCost(poLineItem);
+    if (!agPartNumber || nextCost === null) return;
+
+    const [inventoryItem] = await db
+      .select({
+        id: inventoryItems.id,
+        costPer: inventoryItems.costPer,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, agPartNumber))
+      .limit(1);
+
+    if (!inventoryItem) return;
+
+    const currentCost = inventoryItem.costPer == null ? null : Number(inventoryItem.costPer);
+    if (currentCost !== null && Number.isFinite(currentCost) && Math.abs(currentCost - nextCost) < 0.0001) {
+      return;
+    }
+
+    await db
+      .update(inventoryItems)
+      .set({
+        costPer: nextCost,
+        updatedAt: new Date(),
+      })
+      .where(eq(inventoryItems.id, inventoryItem.id));
+  }
+
   async createVendorPOItem(data: any): Promise<any> {
     // If purchase unit data is provided, derive vendor unit values server-side
     let processedData = { ...data };
@@ -10531,6 +10571,8 @@ export class DatabaseStorage implements IStorage {
         throw err;
       }
     }
+
+    await this.syncInventoryItemCostFromVendorPOLine(item);
 
     // Reopen a fully-received (closed) PO when a new item is added
     if (data.vendorPoId) {
@@ -10598,6 +10640,10 @@ export class DatabaseStorage implements IStorage {
       .set({ ...processedData, updatedAt: new Date() })
       .where(eq(vendorPOItems.id, id))
       .returning();
+
+    if (item) {
+      await this.syncInventoryItemCostFromVendorPOLine(item);
+    }
     
     // Sync manufacturing queue if quantity changed
     const newQuantity = processedData.quantity !== undefined ? processedData.quantity : data.quantity;

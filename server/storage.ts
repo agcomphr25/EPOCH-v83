@@ -19593,7 +19593,20 @@ export class DatabaseStorage implements IStorage {
     partNumber: string,
     department: string
   ): Promise<boolean> {
+    const [employee] = await db
+      .select({ name: employees.name })
+      .from(employees)
+      .where(eq(employees.id, employeeId))
+      .limit(1);
     const partVariants = this.getP2PartNumberVariants(partNumber);
+    const employeeIdentityFilters: SQL<unknown>[] = [
+      eq(p2EmployeePartCertifications.employeeId, employeeId),
+    ];
+    if (employee?.name?.trim()) {
+      employeeIdentityFilters.push(
+        sql`lower(regexp_replace(trim(${p2EmployeePartCertifications.employeeName}), '[^a-z0-9]', '', 'g')) = lower(regexp_replace(trim(${employee.name}), '[^a-z0-9]', '', 'g'))`
+      );
+    }
     const rows = await db
       .select({
         id: p2EmployeePartCertifications.id,
@@ -19606,7 +19619,7 @@ export class DatabaseStorage implements IStorage {
       .from(p2EmployeePartCertifications)
       .where(
         and(
-          eq(p2EmployeePartCertifications.employeeId, employeeId),
+          or(...employeeIdentityFilters),
           or(
             ...partVariants.map((variant) =>
               sql`lower(trim(${p2EmployeePartCertifications.partNumber})) = lower(trim(${variant}))`

@@ -451,6 +451,19 @@ function buildP2PartScanVariants(scanValue: string): string[] {
   return Array.from(variants).filter(Boolean);
 }
 
+function getP2CertificationCandidateParts(values: Array<string | null | undefined>): string[] {
+  const candidates = new Set<string>();
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (!trimmed) continue;
+    candidates.add(trimmed);
+    for (const variant of buildP2PartScanVariants(trimmed)) {
+      candidates.add(variant);
+    }
+  }
+  return Array.from(candidates);
+}
+
 async function findSerializedItemByPartScan(scanValue: string) {
   const variants = buildP2PartScanVariants(scanValue);
   const fields = [
@@ -1811,10 +1824,15 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       inventoryIdentity.internalPartNumber ||
       routing?.partNumber ||
       serializedItem.partNumber;
-    const certificationCandidateInputs = [certificationPartNumber, serializedItem.partNumber];
-    const certificationPartCandidates = Array.from(
-      new Set(certificationCandidateInputs.filter((value): value is string => Boolean(value)))
-    );
+    const certificationPartCandidates = getP2CertificationCandidateParts([
+      certificationPartNumber,
+      serializedItem.partNumber,
+      serializedItem.barcode,
+      serializedItem.travelerBarcode,
+      serializedItem.serialNumber,
+      serializedItem.customerSerialNumber,
+      barcode,
+    ]);
     let isCertified = false;
     for (const candidate of certificationPartCandidates) {
       if (await storage.checkEmployeeP2PartCertification(employee.id, candidate, nextDepartment)) {
@@ -2154,10 +2172,15 @@ router.post('/start-task', async (req: Request, res: Response) => {
       routing?.partNumber ||
       serializedItem.partNumber;
     const employeeIdNumber = parseInt(employeeId);
-    const certificationCandidateInputs = [certificationPartNumber, serializedItem.partNumber];
-    const certificationPartCandidates = Array.from(
-      new Set(certificationCandidateInputs.filter((value): value is string => Boolean(value)))
-    );
+    const certificationPartCandidates = getP2CertificationCandidateParts([
+      certificationPartNumber,
+      serializedItem.partNumber,
+      serializedItem.barcode,
+      serializedItem.travelerBarcode,
+      serializedItem.serialNumber,
+      serializedItem.customerSerialNumber,
+      partNumber,
+    ]);
     let isCertified = false;
     for (const candidate of certificationPartCandidates) {
       if (await storage.checkEmployeeP2PartCertification(employeeIdNumber, candidate, department)) {

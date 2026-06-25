@@ -5,8 +5,11 @@ import {
   ArrowUpDown,
   Calculator,
   Check,
+  Clock,
   FileSpreadsheet,
+  FilePlus,
   Filter,
+  FolderOpen,
   Layers,
   PackagePlus,
   Plus,
@@ -15,11 +18,13 @@ import {
   SlidersHorizontal,
   Trash2,
   Upload,
+  Users,
   X,
 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
@@ -153,6 +158,8 @@ type BomDraft = {
   customColumns?: string[];
   customPoColumns?: string[];
   workspaceTabs?: WorkspaceTabId[];
+  createdByDisplayName?: string | null;
+  updatedByDisplayName?: string | null;
 };
 
 type ProjectOption = {
@@ -241,6 +248,12 @@ type AssemblyLineEntry = {
   bom: DraftPartBom;
   part: DraftBomPart;
   childComponents: DraftBomComponent[];
+};
+type DraftProjectGroup = {
+  key: string;
+  label: string;
+  projectType: string;
+  drafts: BomDraft[];
 };
 
 type CsvImportResult = {
@@ -1343,6 +1356,52 @@ function draftUpdatedTime(draft: BomDraft) {
   return Number.isFinite(time) ? time : 0;
 }
 
+function draftProjectLabel(draft: BomDraft) {
+  return draft.projectName || draft.project || draft.projectCode || 'Unlinked project';
+}
+
+function draftProjectKey(draft: BomDraft) {
+  return [
+    draft.projectType || 'UNLINKED',
+    draft.projectId || '',
+    projectMatchValue(draft.projectCode),
+    projectMatchValue(draftProjectLabel(draft)),
+  ].join(':');
+}
+
+function draftProjectTypeLabel(draft: BomDraft) {
+  if (draft.projectType === 'P2_PROJECT') return 'P2 Project';
+  if (draft.projectType === 'R_AND_D') return 'R&D Project';
+  return 'Unlinked draft project';
+}
+
+function groupDraftsByProject(drafts: BomDraft[]): DraftProjectGroup[] {
+  const groups = new Map<string, DraftProjectGroup>();
+
+  drafts.forEach((draft) => {
+    const key = draftProjectKey(draft);
+    const group = groups.get(key) ?? {
+      key,
+      label: draftProjectLabel(draft),
+      projectType: draftProjectTypeLabel(draft),
+      drafts: [],
+    };
+    group.drafts.push(draft);
+    groups.set(key, group);
+  });
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      drafts: group.drafts.slice().sort((a, b) => draftUpdatedTime(b) - draftUpdatedTime(a)),
+    }))
+    .sort((a, b) => {
+      const timeDelta = draftUpdatedTime(b.drafts[0]) - draftUpdatedTime(a.drafts[0]);
+      if (timeDelta !== 0) return timeDelta;
+      return a.label.localeCompare(b.label);
+    });
+}
+
 function projectDraftMatchScore(draft: BomDraft, selectedProject: ProjectSelectOption) {
   const structuredMatch = draft.projectType === selectedProject.projectType && draft.projectId === selectedProject.id ? 4 : 0;
   const savedBomScore = draftSavedBomCount(draft) > 0 ? 3 : 0;
@@ -1387,6 +1446,41 @@ function createBlankDraftForProject(selectedProject: ProjectSelectOption): BomDr
   };
 }
 
+function createBlankDraftForTemporaryProject(projectName: string): BomDraft {
+  const cleanProjectName = projectName.trim();
+  return {
+    id: crypto.randomUUID(),
+    name: cleanProjectName || 'New Draft BOM',
+    revision: 'Draft A',
+    owner: '',
+    project: cleanProjectName,
+    projectId: null,
+    projectCode: null,
+    projectName: cleanProjectName || null,
+    projectType: null,
+    notes: cleanProjectName
+      ? 'Temporary project draft. Link it to a formal project when the project record exists.'
+      : '',
+    updatedAt: new Date().toISOString(),
+    lines: [newLine()],
+    laborEstimateLines: [newLaborEstimateLine()],
+    customLaborDepartments: [],
+    poVisibleColumns: defaultPoColumns,
+    partsRequestVisibleColumns: defaultPartsRequestColumns,
+    directLaborVisibleColumns: defaultDirectLaborColumns,
+    assemblyVisibleColumns: defaultSourcingColumns,
+    customColumns: [],
+    customPoColumns: [],
+    workspaceTabs: defaultWorkspaceTabs,
+  };
+}
+
+function formatDraftUpdatedAt(value: string) {
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) return 'Unknown';
+  return time.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export default function DraftBOMBuilderPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1395,7 +1489,13 @@ export default function DraftBOMBuilderPage() {
   const [selectedDraftId, setSelectedDraftId] = useState<string>(PRIVATEER_DRAFT_ID);
   const [draft, setDraft] = useState<BomDraft>(() => loadDrafts()[0] ?? createPrivateerDraft());
   const [rdProjects, setRdProjects] = useState<RDProjectOption[]>(() => readRDProjectOptions());
+  const [isLibraryView, setIsLibraryView] = useState(true);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isCreateDraftOpen, setIsCreateDraftOpen] = useState(false);
+  const [newDraftProjectMode, setNewDraftProjectMode] = useState<'existing' | 'temporary'>('existing');
+  const [newDraftProjectValue, setNewDraftProjectValue] = useState('');
+  const [newDraftProjectName, setNewDraftProjectName] = useState('');
+  const [newDraftName, setNewDraftName] = useState('');
   const [isEditMode, setIsEditMode] = useState(true);
   const [visibleWorkspaceTabs, setVisibleWorkspaceTabs] = useState<WorkspaceTabId[]>(() => draft.workspaceTabs ?? defaultWorkspaceTabs);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTabId>('po-draft');
@@ -1472,6 +1572,7 @@ export default function DraftBOMBuilderPage() {
     }));
     return [...rdOptions, ...p2Options];
   }, [projectOptions, rdProjectOptions]);
+  const draftProjectGroups = useMemo(() => groupDraftsByProject(savedDrafts), [savedDrafts]);
   const selectedProjectValue =
     draft.projectType === 'P2_PROJECT' && draft.projectId
       ? `${P2_PROJECT_VALUE_PREFIX}${draft.projectId}`
@@ -2385,6 +2486,268 @@ export default function DraftBOMBuilderPage() {
     setNewWorkspaceTabName('');
   }
 
+  function openDraftFromLibrary(nextDraft: BomDraft) {
+    applyDraftSelection(nextDraft);
+    setIsLibraryView(false);
+  }
+
+  function openCreateDraftPrompt() {
+    setNewDraftProjectMode(combinedProjectOptions.length > 0 ? 'existing' : 'temporary');
+    setNewDraftProjectValue(combinedProjectOptions[0]?.value ?? '');
+    setNewDraftProjectName('');
+    setNewDraftName('');
+    setIsCreateDraftOpen(true);
+  }
+
+  function createDraftFromPrompt() {
+    let nextDraft: BomDraft;
+
+    if (newDraftProjectMode === 'existing') {
+      const selectedProject = combinedProjectOptions.find((project) => project.value === newDraftProjectValue);
+      if (!selectedProject) {
+        toast({
+          title: 'Select a project',
+          description: 'Choose an existing project or create a temporary project draft.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      nextDraft = createBlankDraftForProject(selectedProject);
+    } else {
+      const projectName = newDraftProjectName.trim();
+      if (!projectName) {
+        toast({
+          title: 'Project name required',
+          description: 'Name the temporary project before creating the draft.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      nextDraft = createBlankDraftForTemporaryProject(projectName);
+    }
+
+    const cleanDraftName = newDraftName.trim();
+    if (cleanDraftName) {
+      nextDraft = { ...nextDraft, name: cleanDraftName };
+    }
+
+    applyDraftSelection(nextDraft);
+    setSelectedDraftId('');
+    setIsLibraryView(false);
+    setIsCreateDraftOpen(false);
+  }
+
+  const createDraftSheet = (
+    <Sheet open={isCreateDraftOpen} onOpenChange={setIsCreateDraftOpen}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-[520px]">
+        <SheetHeader>
+          <SheetTitle>Create draft BOM</SheetTitle>
+          <SheetDescription>
+            Start from an existing project or create a temporary project draft that can be linked later.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="mt-6 space-y-5">
+          <div className="grid gap-2">
+            <Label>Project source</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant={newDraftProjectMode === 'existing' ? 'default' : 'outline'}
+                className="justify-start"
+                onClick={() => setNewDraftProjectMode('existing')}
+                disabled={combinedProjectOptions.length === 0}
+              >
+                <FolderOpen className="mr-2 h-4 w-4" />
+                Existing project
+              </Button>
+              <Button
+                type="button"
+                variant={newDraftProjectMode === 'temporary' ? 'default' : 'outline'}
+                className="justify-start"
+                onClick={() => setNewDraftProjectMode('temporary')}
+              >
+                <FilePlus className="mr-2 h-4 w-4" />
+                New temporary project
+              </Button>
+            </div>
+          </div>
+
+          {newDraftProjectMode === 'existing' ? (
+            <div className="grid gap-1.5">
+              <Label htmlFor="new-draft-project">Project</Label>
+              <Select value={newDraftProjectValue} onValueChange={setNewDraftProjectValue}>
+                <SelectTrigger id="new-draft-project">
+                  <SelectValue placeholder="Select a project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__new_rd_projects_header__" disabled>
+                    R&D Projects
+                  </SelectItem>
+                  {rdProjectOptions.length === 0 ? (
+                    <SelectItem value="__new_no_rd_projects__" disabled>
+                      No R&D projects
+                    </SelectItem>
+                  ) : (
+                    rdProjectOptions.map((project) => (
+                      <SelectItem key={`new-rd-${project.id}`} value={`${RD_PROJECT_VALUE_PREFIX}${project.id}`}>
+                        {project.projectName}
+                      </SelectItem>
+                    ))
+                  )}
+                  <SelectItem value="__new_p2_projects_header__" disabled>
+                    P2 Projects
+                  </SelectItem>
+                  {projectsLoading ? (
+                    <SelectItem value="__new_projects_loading__" disabled>
+                      Loading P2 projects...
+                    </SelectItem>
+                  ) : projectOptions.length === 0 ? (
+                    <SelectItem value="__new_no_p2_projects__" disabled>
+                      No P2 projects
+                    </SelectItem>
+                  ) : (
+                    projectOptions.map((project) => (
+                      <SelectItem key={`new-p2-${project.id}`} value={`${P2_PROJECT_VALUE_PREFIX}${project.id}`}>
+                        {projectLabel(project)}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="grid gap-1.5">
+              <Label htmlFor="new-draft-project-name">Temporary project name</Label>
+              <Input
+                id="new-draft-project-name"
+                value={newDraftProjectName}
+                onChange={(event) => setNewDraftProjectName(event.target.value)}
+                placeholder="Project name"
+              />
+            </div>
+          )}
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="new-draft-name">Draft name</Label>
+            <Input
+              id="new-draft-name"
+              value={newDraftName}
+              onChange={(event) => setNewDraftName(event.target.value)}
+              placeholder="Defaults to the project name"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsCreateDraftOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={createDraftFromPrompt}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create draft
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+
+  if (isLibraryView) {
+    return (
+      <main className="min-h-screen bg-slate-50">
+        <div className="mx-auto max-w-[1800px] space-y-5 p-4 lg:p-6">
+          <section className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="h-7 w-7 text-teal-700" aria-hidden="true" />
+                <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Draft Builder</h1>
+                <Badge variant="outline" className="border-teal-300 bg-teal-50 text-teal-800">
+                  Shared drafts
+                </Badge>
+              </div>
+              <p className="mt-1 text-sm text-slate-600">
+                Open a draft by project, or create a new draft for an existing or temporary project.
+              </p>
+            </div>
+            <Button type="button" onClick={openCreateDraftPrompt}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create draft
+            </Button>
+          </section>
+
+          {draftProjectGroups.length === 0 ? (
+            <section className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
+              <FilePlus className="mx-auto h-10 w-10 text-slate-400" aria-hidden="true" />
+              <h2 className="mt-4 text-lg font-semibold text-slate-950">No draft BOMs yet</h2>
+              <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
+                Create the first shared draft BOM so other users with Draft Builder access can view it.
+              </p>
+              <Button type="button" className="mt-5" onClick={openCreateDraftPrompt}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create draft
+              </Button>
+            </section>
+          ) : (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {draftProjectGroups.map((group) => (
+                <Card key={group.key} className="overflow-hidden rounded-lg">
+                  <CardHeader className="border-b border-slate-100 bg-white">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <CardTitle className="truncate text-base">{group.label}</CardTitle>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Badge variant="secondary">{group.projectType}</Badge>
+                          <Badge variant="outline">{group.drafts.length} draft{group.drafts.length === 1 ? '' : 's'}</Badge>
+                        </div>
+                      </div>
+                      <Button type="button" variant="outline" size="sm" onClick={() => openDraftFromLibrary(group.drafts[0])}>
+                        <FolderOpen className="mr-2 h-4 w-4" />
+                        Open latest
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3 p-4">
+                    {group.drafts.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="block w-full rounded-md border border-slate-200 bg-white p-3 text-left transition hover:border-teal-300 hover:bg-teal-50"
+                        onClick={() => openDraftFromLibrary(item)}
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-slate-950">{item.name}</div>
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                              <span>{item.revision || 'Draft'}</span>
+                              <span>{item.lines.length} line{item.lines.length === 1 ? '' : 's'}</span>
+                              <span>{draftSavedBomCount(item)} BOM{draftSavedBomCount(item) === 1 ? '' : 's'}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                            {item.updatedByDisplayName ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                {item.updatedByDisplayName}
+                              </span>
+                            ) : null}
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {formatDraftUpdatedAt(item.updatedAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+        {createDraftSheet}
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-[1800px] space-y-4 p-4 lg:p-6">
@@ -2464,7 +2827,11 @@ export default function DraftBOMBuilderPage() {
                 <SlidersHorizontal className="mr-2 h-4 w-4" />
                 BOM details
               </Button>
-              <Button type="button" variant="outline" onClick={startBlankDraft} disabled={!isEditMode}>
+              <Button type="button" variant="outline" onClick={() => setIsLibraryView(true)}>
+                <FolderOpen className="mr-2 h-4 w-4" />
+                Draft library
+              </Button>
+              <Button type="button" variant="outline" onClick={openCreateDraftPrompt} disabled={!isEditMode}>
                 <Plus className="mr-2 h-4 w-4" />
                 New draft
               </Button>
@@ -2483,6 +2850,7 @@ export default function DraftBOMBuilderPage() {
             </div>
           </div>
         </section>
+        {createDraftSheet}
 
         <Sheet open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
           <SheetContent className="w-full overflow-y-auto sm:max-w-[480px]">

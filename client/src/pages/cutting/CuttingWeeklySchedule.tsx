@@ -83,6 +83,8 @@ type WeeklyCuttingQueueItem = {
   customer: string;
   priority: number;
   packetsNeeded: number;
+  inventoryApplied?: number;
+  packetsToCut?: number;
   usesInventory: boolean;
   requiresNewCut: boolean;
   bomId?: string;
@@ -196,33 +198,38 @@ export default function CuttingWeeklySchedule() {
       
       const stockModel = (item.stockModel || '').toLowerCase();
       const isP1PO = item.source === 'P1_PO';
+      const demandQty = Math.max(0, item.packetsToCut ?? item.packetsNeeded ?? 0);
       const adjustableQty = hasAdjustableStockDemand(item) ? item.packetsNeeded : 0;
       
       // Mesa packets are only for PO orders - regular P1 orders never need mesa packets
-      if (isP1PO && (stockModel.includes('mesa') || item.materialType === 'mesa')) {
-        mesa += item.packetsNeeded;
-        customerMap[customer].mesa += item.packetsNeeded;
-        oemOrders.mesa += item.packetsNeeded;
-        customerMap[customer].poMesa += item.packetsNeeded;
+      if (demandQty > 0 && isP1PO && (stockModel.includes('mesa') || item.materialType === 'mesa')) {
+        mesa += demandQty;
+        customerMap[customer].mesa += demandQty;
+        oemOrders.mesa += demandQty;
+        customerMap[customer].poMesa += demandQty;
       } else if (item.materialType === 'carbon_fiber' || stockModel.includes('cf')) {
-        cf += item.packetsNeeded;
-        customerMap[customer].cf += item.packetsNeeded;
-        if (isP1PO) {
-          oemOrders.cf += item.packetsNeeded;
-          customerMap[customer].poCf += item.packetsNeeded;
-        } else {
-          regularOrders.cf += item.packetsNeeded;
-          customerMap[customer].regCf += item.packetsNeeded;
+        if (demandQty > 0) {
+          cf += demandQty;
+          customerMap[customer].cf += demandQty;
+          if (isP1PO) {
+            oemOrders.cf += demandQty;
+            customerMap[customer].poCf += demandQty;
+          } else {
+            regularOrders.cf += demandQty;
+            customerMap[customer].regCf += demandQty;
+          }
         }
       } else if (item.materialType === 'fiberglass' || stockModel.includes('fg')) {
-        fg += item.packetsNeeded;
-        customerMap[customer].fg += item.packetsNeeded;
-        if (isP1PO) {
-          oemOrders.fg += item.packetsNeeded;
-          customerMap[customer].poFg += item.packetsNeeded;
-        } else {
-          regularOrders.fg += item.packetsNeeded;
-          customerMap[customer].regFg += item.packetsNeeded;
+        if (demandQty > 0) {
+          fg += demandQty;
+          customerMap[customer].fg += demandQty;
+          if (isP1PO) {
+            oemOrders.fg += demandQty;
+            customerMap[customer].poFg += demandQty;
+          } else {
+            regularOrders.fg += demandQty;
+            customerMap[customer].regFg += demandQty;
+          }
         }
       }
 

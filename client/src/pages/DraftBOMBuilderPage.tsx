@@ -1303,18 +1303,24 @@ function laborDepartmentValue(label: string) {
     .replace(/^_+|_+$/g, '');
 }
 
-function normalizeWorkspaceTabs(tabs?: WorkspaceTabId[]) {
+function normalizeWorkspaceTabs(tabs?: readonly WorkspaceTabId[] | null) {
   const sourceTabs = tabs?.length ? tabs : defaultWorkspaceTabs;
   const nextTabs = [...sourceTabs];
-  if (!nextTabs.includes('direct-labor')) {
-    const partsRequestIndex = nextTabs.indexOf('parts-request');
-    nextTabs.splice(partsRequestIndex >= 0 ? partsRequestIndex + 1 : nextTabs.length, 0, 'direct-labor');
+
+  for (const tabId of defaultWorkspaceTabs) {
+    if (nextTabs.includes(tabId)) continue;
+    const defaultIndex = defaultWorkspaceTabs.indexOf(tabId);
+    const previousVisibleDefault = defaultWorkspaceTabs
+      .slice(0, defaultIndex)
+      .reverse()
+      .find((candidate) => nextTabs.includes(candidate));
+    const insertIndex = previousVisibleDefault ? nextTabs.indexOf(previousVisibleDefault) + 1 : nextTabs.length;
+    nextTabs.splice(insertIndex, 0, tabId);
   }
-  if (!nextTabs.includes('nrc')) {
-    const directLaborIndex = nextTabs.indexOf('direct-labor');
-    nextTabs.splice(directLaborIndex >= 0 ? directLaborIndex + 1 : nextTabs.length, 0, 'nrc');
-  }
-  return nextTabs;
+
+  return nextTabs.filter((tabId, index, allTabs) =>
+    allTabs.indexOf(tabId) === index && (defaultWorkspaceTabs.includes(tabId as BuiltInWorkspaceTabId) || tabId.startsWith('custom:')),
+  );
 }
 
 function uniqueColumnNames(columns: string[]) {

@@ -2217,6 +2217,8 @@ export default function CNCDashboardPage() {
               dueDate={barcodeBatch.dueDate ?? undefined}
               status={BATCH_STATUS_LABELS[barcodeBatch.status] ?? barcodeBatch.status}
               isHighPriority={barcodeBatch.priority === 'critical' || barcodeBatch.priority === 'high'}
+              titleLabel="Operation Batch Barcode"
+              printHeaderLabel="CNC OP BATCH"
             />
           )}
         </DialogContent>

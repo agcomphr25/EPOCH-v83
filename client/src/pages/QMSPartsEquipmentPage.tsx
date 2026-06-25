@@ -8,15 +8,20 @@ import {
   ClipboardList,
   Download,
   ExternalLink,
+  Factory,
+  FileText,
   FileInput,
   History,
   Lock,
+  Network,
   PackageCheck,
   Plus,
   Printer,
   ShieldCheck,
   Upload,
+  Wrench,
 } from 'lucide-react';
+import { Link } from 'wouter';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -90,6 +95,61 @@ type Summary = {
     needsReview?: number;
     multiSourceRecords?: number;
   };
+};
+
+type QmsIntegrationSummary = {
+  stats: {
+    productionUses: number;
+    productionBlocks: number;
+    maintenanceSchedules: number;
+    maintenanceLogs: number;
+    openNcrs: number;
+    openCapas: number;
+    controlledDocuments: number;
+  };
+  production: {
+    latestUseLogs: Array<{
+      id: string;
+      assetTag: string;
+      travelerId?: string | null;
+      orderId?: string | null;
+      usedByDisplayName?: string | null;
+      useStatus: string;
+      gateMessage?: string | null;
+      usedAt: string;
+    }>;
+    blockedUse: Array<{
+      id: string;
+      assetTag: string;
+      travelerId?: string | null;
+      gateMessage?: string | null;
+      usedAt: string;
+    }>;
+  };
+  maintenance: {
+    schedules: Array<{
+      id: number;
+      equipment: string;
+      frequency: string;
+      startDate: string;
+      description?: string | null;
+      isActive?: boolean | null;
+    }>;
+    latestLogs: Array<{
+      id: number;
+      scheduleId: number;
+      completedAt: string;
+      completedBy?: string | null;
+      notes?: string | null;
+      nextDueDate?: string | null;
+    }>;
+  };
+  quality: {
+    ncrs: Array<{ id: number; rmaNumber?: string | null; status?: string | null; issueCause?: string | null; createdAt?: string | null }>;
+    capas: Array<{ id: string; capaNumber: string; status: string; title: string; dueDate?: string | null; ownerDisplayName?: string | null }>;
+    documents: Array<{ id: string; documentNumber: string; documentName: string; status: string; expirationDate?: string | null; documentOwner?: string | null }>;
+  };
+  links: Record<string, string>;
 };
 
 const fallbackTabs: QmsTab[] = [
@@ -213,6 +273,9 @@ export default function QMSPartsEquipmentPage() {
 
   const { data: summary, isLoading } = useQuery<Summary>({
     queryKey: ['/api/quality/qms/parts-equipment/summary'],
+  });
+  const { data: integration } = useQuery<QmsIntegrationSummary>({
+    queryKey: ['/api/quality/qms/parts-equipment/integration'],
   });
 
   const assets = summary?.assets ?? [];
@@ -541,6 +604,112 @@ export default function QMSPartsEquipmentPage() {
         </CardContent>
       </Card>
 
+      <Card className="qms-screen-only">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Network className="h-5 w-5" />
+            Epoch Integration
+          </CardTitle>
+          <CardDescription>Operational touchpoints that use or support the QMS parts and equipment register.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-md border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">Production gates</p>
+                <Factory className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold">{integration?.stats.productionUses ?? 0}</p>
+              <p className="text-sm text-muted-foreground">{integration?.stats.productionBlocks ?? 0} blocked starts logged</p>
+              <Button variant="outline" size="sm" className="mt-3" asChild>
+                <Link href={integration?.links.p2Travelers ?? '/p2-traveler-viewer'}>Open Travelers</Link>
+              </Button>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">Maintenance</p>
+                <Wrench className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold">{integration?.stats.maintenanceSchedules ?? 0}</p>
+              <p className="text-sm text-muted-foreground">{integration?.stats.maintenanceLogs ?? 0} recent completion logs</p>
+              <Button variant="outline" size="sm" className="mt-3" asChild>
+                <Link href={integration?.links.maintenance ?? '/maintenance'}>Open Maintenance</Link>
+              </Button>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">NCR / CAPA</p>
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold">{(integration?.stats.openNcrs ?? 0) + (integration?.stats.openCapas ?? 0)}</p>
+              <p className="text-sm text-muted-foreground">{integration?.stats.openNcrs ?? 0} NCR, {integration?.stats.openCapas ?? 0} CAPA open</p>
+              <Button variant="outline" size="sm" className="mt-3" asChild>
+                <Link href={integration?.links.nonconformance ?? '/nonconformance'}>Open NCR</Link>
+              </Button>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">Controlled docs</p>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold">{integration?.stats.controlledDocuments ?? 0}</p>
+              <p className="text-sm text-muted-foreground">Quality, calibration, and equipment documents</p>
+              <Button variant="outline" size="sm" className="mt-3" asChild>
+                <Link href={integration?.links.controlledDocuments ?? '/master-document-register'}>Open Documents</Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="space-y-2">
+              <p className="font-medium">Recent Traveler Gate Use</p>
+              {(integration?.production.latestUseLogs ?? []).slice(0, 4).map((log) => (
+                <div key={log.id} className="rounded-md border px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium">{log.assetTag}</p>
+                    <Badge variant={log.useStatus === 'accepted' ? 'secondary' : 'destructive'}>{log.useStatus}</Badge>
+                  </div>
+                  <p className="text-muted-foreground">{log.usedByDisplayName || 'Traveler gate'} - {dateOnly(log.usedAt)}</p>
+                  {log.gateMessage && <p className="mt-1 text-muted-foreground">{log.gateMessage}</p>}
+                </div>
+              ))}
+              {(integration?.production.latestUseLogs.length ?? 0) === 0 && <p className="text-sm text-muted-foreground">No traveler gate usage has been logged yet.</p>}
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium">Maintenance Coverage</p>
+              {(integration?.maintenance.schedules ?? []).slice(0, 4).map((schedule) => (
+                <div key={schedule.id} className="rounded-md border px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium">{schedule.equipment}</p>
+                    <Badge variant="outline">{schedule.frequency}</Badge>
+                  </div>
+                  <p className="text-muted-foreground">{schedule.description || 'No description'} - starts {dateOnly(schedule.startDate)}</p>
+                </div>
+              ))}
+              {(integration?.maintenance.schedules.length ?? 0) === 0 && <p className="text-sm text-muted-foreground">No related maintenance schedules were found.</p>}
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium">Quality Records</p>
+              {(integration?.quality.documents ?? []).slice(0, 2).map((doc) => (
+                <div key={doc.id} className="rounded-md border px-3 py-2 text-sm">
+                  <p className="font-medium">{doc.documentNumber} - {doc.documentName}</p>
+                  <p className="text-muted-foreground">{doc.status} - owner {doc.documentOwner || 'unassigned'}</p>
+                </div>
+              ))}
+              {(integration?.quality.capas ?? []).slice(0, 2).map((capa) => (
+                <div key={capa.id} className="rounded-md border px-3 py-2 text-sm">
+                  <p className="font-medium">{capa.capaNumber} - {capa.title}</p>
+                  <p className="text-muted-foreground">{capa.status} - due {dateOnly(capa.dueDate) || 'not set'}</p>
+                </div>
+              ))}
+              {(integration?.quality.documents.length ?? 0) + (integration?.quality.capas.length ?? 0) === 0 && (
+                <p className="text-sm text-muted-foreground">No related controlled documents or CAPA records were found.</p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs
         className="qms-screen-only"
         value={selectedTab}
@@ -718,6 +887,20 @@ export default function QMSPartsEquipmentPage() {
                     <AlertDescription>{selectedAsset.lockoutReason}</AlertDescription>
                   </Alert>
                 )}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/maintenance?equipment=${encodeURIComponent(selectedAsset.assetTag)}`}>Maintenance</Link>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/assets">Asset Mgmt</Link>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/p2-traveler-viewer">Travelers</Link>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/master-document-register">Docs</Link>
+                  </Button>
+                </div>
               </>
             ) : (
               <p className="text-sm text-muted-foreground">Select a record from the register to manage it.</p>

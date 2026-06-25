@@ -16,9 +16,14 @@ import {
   capaRecords,
   calibrationAssets,
   calibrationEvents,
+  calibrationUseLogs,
+  controlledDocuments,
   insertCapaRecordSchema,
   insertCalibrationAssetSchema,
   insertCalibrationEventSchema,
+  maintenanceLogs,
+  maintenanceSchedules,
+  nonconformanceRecords,
 } from '../../schema';
 import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
@@ -241,6 +246,15 @@ function sourceTabsForAsset(value: unknown): string[] {
 
 function assetHasEvidence(asset: { evidenceUrl?: string | null; metadata?: unknown }) {
   return Boolean(compactString(asset.evidenceUrl) || metadataList(asset.metadata, 'evidenceItems').length > 0);
+}
+
+function qmsTextMatch(values: unknown[], terms: string[]) {
+  const haystack = values
+    .map((value) => compactString(value))
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return terms.some((term) => haystack.includes(term));
 }
 
 function reviewStatusFromAction(action: string) {
@@ -576,6 +590,156 @@ router.get('/qms/parts-equipment/summary', async (_req: Request, res: Response) 
   } catch (error) {
     console.error('QMS parts/equipment summary error:', error);
     res.status(500).json({ error: 'Failed to fetch QMS parts and equipment summary' });
+  }
+});
+
+router.get('/qms/parts-equipment/integration', async (_req: Request, res: Response) => {
+  try {
+    const assets = await db
+      .select()
+      .from(calibrationAssets)
+      .orderBy(calibrationAssets.assetTag);
+    const assetTags = new Set(assets.map((asset) => asset.assetTag));
+    const assetNames = new Set(assets.map((asset) => asset.name.toLowerCase()));
+    const qmsTerms = ['qms', 'calibration', 'calibrate', 'gage', 'gauge', 'equipment', 'measuring device', 'validation'];
+
+    const useLogs = await db
+      .select()
+      .from(calibrationUseLogs)
+      .orderBy(desc(calibrationUseLogs.usedAt))
+      .limit(100);
+    const linkedUseLogs = useLogs.filter((log) => assetTags.has(log.assetTag));
+
+    const schedules = await db
+      .select()
+      .from(maintenanceSchedules)
+      .orderBy(desc(maintenanceSchedules.createdAt));
+    const relatedSchedules = schedules.filter((schedule) => {
+      const equipment = schedule.equipment.toLowerCase();
+      return assetTags.has(schedule.equipment) || assetNames.has(equipment) || qmsTextMatch([schedule.equipment, schedule.description], qmsTerms);
+    });
+
+    const logs = await db
+      .select()
+      .from(maintenanceLogs)
+      .orderBy(desc(maintenanceLogs.completedAt))
+      .limit(100);
+    const relatedScheduleIds = new Set(relatedSchedules.map((schedule) => schedule.id));
+    const relatedMaintenanceLogs = logs.filter((log) => relatedScheduleIds.has(log.scheduleId));
+
+    const ncrs = await db
+      .select({
+        id: nonconformanceRecords.id,
+        rmaNumber: nonconformanceRecords.rmaNumber,
+        status: nonconformanceRecords.status,
+        issueCause: nonconformanceRecords.issueCause,
+        disposition: nonconformanceRecords.disposition,
+        notes: nonconformanceRecords.notes,
+        containmentAction: nonconformanceRecords.containmentAction,
+        rootCause: nonconformanceRecords.rootCause,
+        correctiveAction: nonconformanceRecords.correctiveAction,
+        createdAt: nonconformanceRecords.createdAt,
+      })
+      .from(nonconformanceRecords)
+      .orderBy(desc(nonconformanceRecords.createdAt))
+      .limit(250);
+    const relatedNcrs = ncrs.filter((record) => qmsTextMatch([
+      record.rmaNumber,
+      record.issueCause,
+      record.disposition,
+      record.notes,
+      record.containmentAction,
+      record.rootCause,
+      record.correctiveAction,
+    ], qmsTerms));
+
+    const capas = await db
+      .select({
+        id: capaRecords.id,
+        capaNumber: capaRecords.capaNumber,
+        sourceType: capaRecords.sourceType,
+        status: capaRecords.status,
+        title: capaRecords.title,
+        problemStatement: capaRecords.problemStatement,
+        dueDate: capaRecords.dueDate,
+        ownerDisplayName: capaRecords.ownerDisplayName,
+        createdAt: capaRecords.createdAt,
+      })
+      .from(capaRecords)
+      .orderBy(desc(capaRecords.createdAt))
+      .limit(250);
+    const relatedCapas = capas.filter((record) => qmsTextMatch([
+      record.sourceType,
+      record.title,
+      record.problemStatement,
+    ], qmsTerms));
+
+    const docs = await db
+      .select({
+        id: controlledDocuments.id,
+        documentNumber: controlledDocuments.documentNumber,
+        documentName: controlledDocuments.documentName,
+        documentType: controlledDocuments.documentType,
+        department: controlledDocuments.department,
+        category: controlledDocuments.category,
+        status: controlledDocuments.status,
+        expirationDate: controlledDocuments.expirationDate,
+        documentOwner: controlledDocuments.documentOwner,
+        description: controlledDocuments.description,
+      })
+      .from(controlledDocuments)
+      .orderBy(desc(controlledDocuments.updatedAt))
+      .limit(250);
+    const relatedDocuments = docs.filter((doc) => qmsTextMatch([
+      doc.documentNumber,
+      doc.documentName,
+      doc.documentType,
+      doc.department,
+      doc.category,
+      doc.description,
+    ], qmsTerms));
+
+    const acceptedUse = linkedUseLogs.filter((log) => log.useStatus === 'accepted');
+    const blockedUse = linkedUseLogs.filter((log) => log.useStatus === 'blocked');
+    const openNcrs = relatedNcrs.filter((record) => String(record.status ?? '').toLowerCase() !== 'resolved');
+    const openCapas = relatedCapas.filter((record) => !['closed', 'complete', 'completed'].includes(String(record.status ?? '').toLowerCase()));
+
+    res.json({
+      stats: {
+        productionUses: acceptedUse.length,
+        productionBlocks: blockedUse.length,
+        maintenanceSchedules: relatedSchedules.filter((schedule) => schedule.isActive !== false).length,
+        maintenanceLogs: relatedMaintenanceLogs.length,
+        openNcrs: openNcrs.length,
+        openCapas: openCapas.length,
+        controlledDocuments: relatedDocuments.length,
+      },
+      production: {
+        latestUseLogs: linkedUseLogs.slice(0, 25),
+        blockedUse: blockedUse.slice(0, 10),
+      },
+      maintenance: {
+        schedules: relatedSchedules.slice(0, 25),
+        latestLogs: relatedMaintenanceLogs.slice(0, 25),
+      },
+      quality: {
+        ncrs: relatedNcrs.slice(0, 25),
+        capas: relatedCapas.slice(0, 25),
+        documents: relatedDocuments.slice(0, 25),
+      },
+      links: {
+        assets: '/assets',
+        assetDashboard: '/asset-dashboard',
+        maintenance: '/maintenance',
+        maintenanceEvents: '/maintenance-events',
+        nonconformance: '/nonconformance',
+        controlledDocuments: '/master-document-register',
+        p2Travelers: '/p2-traveler-viewer',
+      },
+    });
+  } catch (error) {
+    console.error('QMS parts/equipment integration error:', error);
+    res.status(500).json({ error: 'Failed to fetch QMS integration summary' });
   }
 });
 

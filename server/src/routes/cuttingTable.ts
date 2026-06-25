@@ -2287,6 +2287,28 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       console.log('Regular production queue query skipped:', err);
     }
 
+    const applyP1PacketInventory = (materialType: 'carbon_fiber' | 'fiberglass' | 'mesa' | 'cheek_riser', onHand: number) => {
+      let remainingOnHand = Math.max(0, Number(onHand) || 0);
+      for (const item of queueItems) {
+        if (item.materialType !== materialType) continue;
+        if (item.source !== 'P1' && item.source !== 'P1_PO') continue;
+
+        const packetsNeeded = Math.max(0, Number(item.packetsNeeded) || 0);
+        const inventoryApplied = Math.min(remainingOnHand, packetsNeeded);
+        remainingOnHand -= inventoryApplied;
+
+        item.inventoryApplied = inventoryApplied;
+        item.packetsToCut = Math.max(0, packetsNeeded - inventoryApplied);
+        item.usesInventory = inventoryApplied > 0;
+        item.requiresNewCut = item.packetsToCut > 0;
+      }
+    };
+
+    applyP1PacketInventory('carbon_fiber', cfOnHand);
+    applyP1PacketInventory('fiberglass', fgOnHand);
+    applyP1PacketInventory('mesa', stockLevels.mesa);
+    applyP1PacketInventory('cheek_riser', stockLevels.cheek_riser);
+
     // 4. P2 PO Items - Purchase order items with BOMs requiring cutting (packets only)
     try {
       const p2CountResult = await pool.query(`
@@ -2450,28 +2472,32 @@ router.get('/weekly-cutting-queue', async (req, res) => {
     const p2ItemCount = queueItems.filter(i => i.orderType === 'p2_po').length;
 
     // Calculate totals reconciled with inventory
-    const cfTotal = queueItems.filter(i => i.materialType === 'carbon_fiber').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0);
-    const fgTotal = queueItems.filter(i => i.materialType === 'fiberglass').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0);
-    const cfFromInventory = Math.min(cfOnHand, queueItems.filter(i => i.materialType === 'carbon_fiber' && i.usesInventory).length);
-    const fgFromInventory = Math.min(fgOnHand, queueItems.filter(i => i.materialType === 'fiberglass' && i.usesInventory).length);
+    const quantityForDemand = (item: any) => item.source === 'P1' || item.source === 'P1_PO'
+      ? Math.max(0, Number(item.packetsToCut ?? item.packetsNeeded ?? 1))
+      : Math.max(0, Number(item.packetsNeeded ?? 1));
+
+    const cfTotal = queueItems.filter(i => i.materialType === 'carbon_fiber').reduce((sum, i) => sum + quantityForDemand(i), 0);
+    const fgTotal = queueItems.filter(i => i.materialType === 'fiberglass').reduce((sum, i) => sum + quantityForDemand(i), 0);
+    const cfFromInventory = queueItems.filter(i => i.materialType === 'carbon_fiber').reduce((sum, i) => sum + (Number(i.inventoryApplied) || 0), 0);
+    const fgFromInventory = queueItems.filter(i => i.materialType === 'fiberglass').reduce((sum, i) => sum + (Number(i.inventoryApplied) || 0), 0);
 
     const summary = {
       carbon_fiber: {
-        regular: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'regular').length,
-        oem: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'oem').length,
+        regular: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'regular').reduce((sum, i) => sum + quantityForDemand(i), 0),
+        oem: queueItems.filter(i => i.materialType === 'carbon_fiber' && (i.orderType === 'oem' || i.orderType === 'p1_po')).reduce((sum, i) => sum + quantityForDemand(i), 0),
         p2: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'p2_po').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0),
         total: cfTotal,
         fromInventory: cfFromInventory,
-        needsCutting: cfTotal - cfFromInventory,
+        needsCutting: cfTotal,
         onHand: cfOnHand,
       },
       fiberglass: {
-        regular: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'regular').length,
-        oem: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'oem').length,
+        regular: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'regular').reduce((sum, i) => sum + quantityForDemand(i), 0),
+        oem: queueItems.filter(i => i.materialType === 'fiberglass' && (i.orderType === 'oem' || i.orderType === 'p1_po')).reduce((sum, i) => sum + quantityForDemand(i), 0),
         p2: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'p2_po').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0),
         total: fgTotal,
         fromInventory: fgFromInventory,
-        needsCutting: fgTotal - fgFromInventory,
+        needsCutting: fgTotal,
         onHand: fgOnHand,
       },
       weekStart: startDate.toISOString().split('T')[0],

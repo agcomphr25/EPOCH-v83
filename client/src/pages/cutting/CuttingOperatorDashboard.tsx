@@ -110,6 +110,8 @@ type BuiltPacket = {
   sku: string | null;
   queueId: string | null;
   quantityOrdered: number | null;
+  batchQuantity?: number;
+  isBatchEntry?: boolean;
   fabricSources: BuiltPacketFabricSource[];
 };
 
@@ -2669,11 +2671,13 @@ export default function CuttingOperatorDashboard() {
                       <div>
                         {(() => {
                           const mfgParsed = parseMfgBarcode(packet.barcode);
-                          const mfgBarcode = mfgParsed.isMfgFormat
+                          const mfgBarcode = packet.isBatchEntry
+                            ? packet.barcode
+                            : mfgParsed.isMfgFormat
                             ? mfgParsed.raw
                             : buildMfgBarcode(packet.queueId, packet.sku, packet.printedPacketNumber ?? packet.displayPacketNumber ?? packet.packetNumber);
                           const segments = mfgBarcode ? parseMfgBarcode(mfgBarcode) : null;
-                          const isInternalBarcode = !mfgParsed.isMfgFormat;
+                          const isInternalBarcode = !packet.isBatchEntry && !mfgParsed.isMfgFormat;
 
                           const totalPackets = packet.quantityOrdered
                             ?? builtPackets.filter((p) => p.queueId && p.queueId === packet.queueId).length;
@@ -2690,6 +2694,7 @@ export default function CuttingOperatorDashboard() {
                                   variant={
                                     packet.status === 'AVAILABLE' ? 'secondary'
                                     : packet.status === 'CONSUMED' ? 'destructive'
+                                    : packet.status === 'BATCH' ? 'outline'
                                     : 'default'
                                   }
                                   className={cn(
@@ -2717,7 +2722,11 @@ export default function CuttingOperatorDashboard() {
                                 </div>
                               )}
                               <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                                {totalPackets > 0 && (
+                                {packet.isBatchEntry ? (
+                                  <span className="text-xs font-medium text-foreground">
+                                    Batch {packet.batchQuantity ?? packet.quantityOrdered ?? 0} packets
+                                  </span>
+                                ) : totalPackets > 0 && (
                                   <span className="text-xs font-medium text-foreground">
                                     Packet {packet.displayPacketNumber ?? packet.packetNumber} of {totalPackets}
                                   </span>
@@ -2741,12 +2750,15 @@ export default function CuttingOperatorDashboard() {
                       </div>
                     </div>
                     <div className="text-xs text-muted-foreground shrink-0">
-                      {packet.fabricSources.length} fabric {packet.fabricSources.length === 1 ? 'source' : 'sources'}
+                      {packet.isBatchEntry
+                        ? `${packet.batchQuantity ?? packet.quantityOrdered ?? 0} packet batch`
+                        : `${packet.fabricSources.length} fabric ${packet.fabricSources.length === 1 ? 'source' : 'sources'}`}
                     </div>
                   </button>
 
                   {expandedPacketId === packet.id && (
                     <div className="border-t bg-muted/20 px-4 py-3">
+                      {!packet.isBatchEntry && (
                       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
                         <div className="flex-1 space-y-1">
                           <Label className="text-xs">Scan Material Into Packet</Label>
@@ -2778,8 +2790,13 @@ export default function CuttingOperatorDashboard() {
                           Add Material
                         </Button>
                       </div>
+                      )}
                       {packet.fabricSources.length === 0 ? (
-                        <p className="text-sm text-muted-foreground italic">No fabric source records for this packet.</p>
+                        <p className="text-sm text-muted-foreground italic">
+                          {packet.isBatchEntry
+                            ? 'P1 stock packet batch added to inventory. Individual packet records are not created for this batch.'
+                            : 'No fabric source records for this packet.'}
+                        </p>
                       ) : (
                         <div className="space-y-2">
                           {packet.fabricSources.map((source) => (

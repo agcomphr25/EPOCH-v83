@@ -752,7 +752,7 @@ export default function P2TravelerPage() {
           employeeId: verificationData.employee.id,
           employeeCode: verificationData.employee.employeeCode,
           employeeName: verificationData.employee.name,
-          barcode: item.barcode,
+          barcode: partInput.trim() || item.barcode,
           serializedItemId: item.id,
           department: verificationData.nextDepartment,
           partNumber: item.partNumber,

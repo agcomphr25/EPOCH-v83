@@ -58,6 +58,7 @@ router.use(async (_req, res, next) => {
  * so the caller does NOT create or resume a p2_work_tasks row.
  */
 async function runAutoPunchForP2Task(params: {
+  travelerId?: string | null;
   serialNumber: string;
   partNumber: string;
   inventoryItemId?: string | number | null;
@@ -79,12 +80,65 @@ async function runAutoPunchForP2Task(params: {
     }
   | { ok: false; status: number; body: Record<string, unknown> }
 > {
-  // Mirror the identity match that `generate-traveler` uses when checking
-  // for an existing traveler row (see same file, ~line 1425). The OR-set
-  // must accept any of: partRoutingId, partNumber (cert vs raw serialized
-  // item), internal part number, or inventoryItemId (compared as strings).
-  // serialNumber stays a hard AND so we never accept a different serial's
-  // traveler.
+  // Prefer the traveler already resolved for this serialized item. If a caller
+  // cannot pass one, fall back to the older serial+part lookup.
+  if (params.travelerId) {
+    const linkedTravelerById = await db
+      .select({
+        id: travelers.id,
+        travelerNumber: travelers.travelerNumber,
+        productionWorkOrderId: travelers.productionWorkOrderId,
+      })
+      .from(travelers)
+      .where(eq(travelers.id, params.travelerId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+
+    if (linkedTravelerById) {
+      const ctxResult = await buildChargeContextFromTraveler(linkedTravelerById);
+      if (!ctxResult.ok) {
+        return {
+          ok: false,
+          status: 400,
+          body: {
+            error: ctxResult.error.code || 'CHARGE_CODE_UNRESOLVED',
+            message: ctxResult.error.message,
+          },
+        };
+      }
+      const autoPunch: TravelerAutoPunchResult = await executeTravelerAutoPunch({
+        context: ctxResult.context,
+        employeeIdString: String(params.employeeId),
+        parsedApprovalId: params.laborApprovalId ?? null,
+        ptoOverride:
+          params.adminPtoOverride
+            ? {
+                requested: true,
+                reason: params.adminOverrideReason ?? null,
+                user: params.user ?? null,
+                ip: params.ip ?? null,
+              }
+            : undefined,
+      });
+      if (!autoPunch.ok) {
+        return { ok: false, status: autoPunch.status, body: autoPunch.body };
+      }
+      return {
+        ok: true,
+        entry: autoPunch.entry,
+        chargeContext: autoPunch.chargeContext,
+        punch: {
+          action: autoPunch.action,
+          chargeCode:
+            autoPunch.chargeContext?.resolvedChargeCode ??
+            autoPunch.chargeContext?.chargeCode ??
+            null,
+          warning: autoPunch.warning,
+        },
+      };
+    }
+  }
+
   const partNumberCandidates = new Set<string>();
   const addPart = (val?: string | null) => {
     if (val == null) return;
@@ -464,6 +518,45 @@ function getP2CertificationCandidateParts(values: Array<string | null | undefine
   return Array.from(candidates);
 }
 
+async function getPrintedTravelerCertificationParts(traveler: typeof travelers.$inferSelect | null | undefined): Promise<string[]> {
+  if (!traveler) return [];
+
+  const values: Array<string | null | undefined> = [
+    traveler.partNumber,
+    traveler.serialNumber,
+    traveler.lotNumber,
+    traveler.internalControlNumber,
+  ];
+
+  const inventoryItemIds = new Set<number>();
+  const travelerInventoryItemId = Number(traveler.inventoryItemId);
+  if (Number.isFinite(travelerInventoryItemId)) inventoryItemIds.add(travelerInventoryItemId);
+
+  if (traveler.partRoutingId) {
+    const routing = await db.query.partRoutings.findFirst({
+      where: eq(partRoutings.id, traveler.partRoutingId),
+    });
+    values.push(routing?.partNumber, routing?.partName);
+    const routingInventoryItemId = Number(routing?.inventoryItemId);
+    if (Number.isFinite(routingInventoryItemId)) inventoryItemIds.add(routingInventoryItemId);
+  }
+
+  if (inventoryItemIds.size > 0) {
+    const items = await db
+      .select({
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+      })
+      .from(inventoryItems)
+      .where(inArray(inventoryItems.id, Array.from(inventoryItemIds)));
+    for (const item of items) {
+      values.push(item.agPartNumber, item.name);
+    }
+  }
+
+  return getP2CertificationCandidateParts(values);
+}
+
 async function findSerializedItemByPartScan(scanValue: string) {
   const variants = buildP2PartScanVariants(scanValue);
   const fields = [
@@ -489,7 +582,7 @@ async function findSerializedItemByPartScan(scanValue: string) {
 
   const numericSuffix = scanValue.match(/(\d{6,})$/)?.[1] ?? null;
   if (numericSuffix) {
-    return await db.query.p2SerializedItems.findFirst({
+    const item = await db.query.p2SerializedItems.findFirst({
       where: or(
         ilike(p2SerializedItems.barcode, `%${numericSuffix}`),
         ilike(p2SerializedItems.travelerBarcode, `%${numericSuffix}`),
@@ -497,9 +590,10 @@ async function findSerializedItemByPartScan(scanValue: string) {
         ilike(p2SerializedItems.customerSerialNumber, `%${numericSuffix}`)
       ),
     });
+    if (item) return item;
   }
 
-  return null;
+  return findSerializedItemByPrintedTravelerScan(scanValue);
 }
 
 function getBasePartNumberWithoutRevision(partNumber?: string | null): string | null {
@@ -510,6 +604,7 @@ function getBasePartNumberWithoutRevision(partNumber?: string | null): string | 
 async function getSerializedItemInventoryIdentity(serializedItem: any) {
   let poItem: typeof p2PurchaseOrderItems.$inferSelect | null = null;
   let inventoryItem: typeof inventoryItems.$inferSelect | null = null;
+  let linkedRouting: typeof partRoutings.$inferSelect | null = null;
 
   if (serializedItem?.poItemId) {
     poItem = await db.query.p2PurchaseOrderItems.findFirst({
@@ -523,6 +618,18 @@ async function getSerializedItemInventoryIdentity(serializedItem: any) {
     }) ?? null;
   }
 
+  if (!inventoryItem && serializedItem?.partRoutingId) {
+    linkedRouting = await db.query.partRoutings.findFirst({
+      where: eq(partRoutings.id, serializedItem.partRoutingId),
+    }) ?? null;
+    const routingInventoryItemId = Number(linkedRouting?.inventoryItemId);
+    if (Number.isFinite(routingInventoryItemId)) {
+      inventoryItem = await db.query.inventoryItems.findFirst({
+        where: eq(inventoryItems.id, routingInventoryItemId),
+      }) ?? null;
+    }
+  }
+
   if (!inventoryItem && serializedItem?.partNumber) {
     inventoryItem = await db.query.inventoryItems.findFirst({
       where: eq(inventoryItems.agPartNumber, serializedItem.partNumber),
@@ -533,9 +640,107 @@ async function getSerializedItemInventoryIdentity(serializedItem: any) {
     poItem,
     inventoryItem,
     inventoryItemId: poItem?.inventoryItemId ?? inventoryItem?.id ?? null,
-    internalPartNumber: inventoryItem?.agPartNumber ?? poItem?.partNumber ?? serializedItem?.partNumber ?? null,
-    partName: inventoryItem?.name ?? poItem?.partName ?? serializedItem?.partName ?? null,
+    internalPartNumber: inventoryItem?.agPartNumber ?? poItem?.partNumber ?? linkedRouting?.partNumber ?? serializedItem?.partNumber ?? null,
+    partName: inventoryItem?.name ?? poItem?.partName ?? linkedRouting?.partName ?? serializedItem?.partName ?? null,
   };
+}
+
+async function findTravelerByPrintedScan(scanValue: string) {
+  const variants = buildP2PartScanVariants(scanValue);
+  const travelerFields = [
+    travelers.serialNumber,
+    travelers.travelerNumber,
+    travelers.lotNumber,
+    travelers.internalControlNumber,
+  ];
+
+  for (const variant of variants) {
+    const [traveler] = await db
+      .select()
+      .from(travelers)
+      .where(or(...travelerFields.map((field) => ilike(field, variant))))
+      .orderBy(desc(travelers.updatedAt))
+      .limit(1);
+    if (traveler) return traveler;
+  }
+
+  for (const variant of variants) {
+    const [traveler] = await db
+      .select()
+      .from(travelers)
+      .where(or(...travelerFields.map((field) => ilike(field, `%${variant}%`))))
+      .orderBy(desc(travelers.updatedAt))
+      .limit(1);
+    if (traveler) return traveler;
+  }
+
+  const numericSuffix = scanValue.match(/(\d{6,})$/)?.[1] ?? null;
+  if (numericSuffix) {
+    const [traveler] = await db
+      .select()
+      .from(travelers)
+      .where(or(...travelerFields.map((field) => ilike(field, `%${numericSuffix}`))))
+      .orderBy(desc(travelers.updatedAt))
+      .limit(1);
+    if (traveler) return traveler;
+  }
+
+  return null;
+}
+
+async function findSerializedItemByPrintedTravelerScan(scanValue: string) {
+  const printedTraveler = await findTravelerByPrintedScan(scanValue);
+  if (!printedTraveler) return null;
+
+  const projectIds = new Set<string>();
+  if (printedTraveler.projectId) projectIds.add(printedTraveler.projectId);
+  if (printedTraveler.productionWorkOrderId) {
+    const [workOrder] = await db
+      .select({ projectId: productionWorkOrders.projectId })
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, printedTraveler.productionWorkOrderId))
+      .limit(1);
+    if (workOrder?.projectId) projectIds.add(workOrder.projectId);
+  }
+
+  if (projectIds.size === 0) return null;
+
+  const projectRows = await db
+    .select({ poId: projects.poId })
+    .from(projects)
+    .where(inArray(projects.id, Array.from(projectIds)));
+  const poIds = projectRows.map((project) => project.poId).filter((poId): poId is number => poId != null);
+  if (poIds.length === 0) return null;
+
+  const candidateRows = await db
+    .select()
+    .from(p2SerializedItems)
+    .where(inArray(p2SerializedItems.poId, poIds))
+    .orderBy(desc(p2SerializedItems.updatedAt))
+    .limit(250);
+
+  for (const candidate of candidateRows) {
+    const identity = await getSerializedItemInventoryIdentity(candidate);
+    const routing = await findActiveRoutingForSerializedItem(candidate);
+    const partMatches = buildTravelerPartIdentityMatches({
+      serializedItem: candidate,
+      routing,
+      inventoryIdentity: identity,
+    });
+    if (partMatches.length === 0) continue;
+
+    const [matchingTraveler] = await db
+      .select({ id: travelers.id })
+      .from(travelers)
+      .where(and(eq(travelers.id, printedTraveler.id), or(...partMatches)))
+      .limit(1);
+    if (!matchingTraveler) continue;
+
+    if (routing?.id && printedTraveler.partRoutingId && routing.id !== printedTraveler.partRoutingId) continue;
+    return candidate;
+  }
+
+  return null;
 }
 
 async function findActiveRoutingForSerializedItem(serializedItem: any) {
@@ -673,13 +878,93 @@ async function findProductionWorkOrderForSerializedItem(params: {
   }
 
   const [workOrder] = await db
-    .select({ id: productionWorkOrders.id })
+    .select({ id: productionWorkOrders.id, projectId: productionWorkOrders.projectId })
     .from(productionWorkOrders)
     .where(and(...whereParts))
     .orderBy(desc(productionWorkOrders.createdAt))
     .limit(1);
 
   return workOrder ?? null;
+}
+
+function buildTravelerPartIdentityMatches(params: {
+  serializedItem: typeof p2SerializedItems.$inferSelect;
+  routing?: typeof partRoutings.$inferSelect | null;
+  inventoryIdentity: Awaited<ReturnType<typeof getSerializedItemInventoryIdentity>>;
+}): SQL<unknown>[] {
+  const { serializedItem, routing, inventoryIdentity } = params;
+  const partNumberCandidates = new Set<string>();
+  const addPart = (value?: string | null) => {
+    const trimmed = value?.trim();
+    if (trimmed) partNumberCandidates.add(trimmed);
+  };
+
+  addPart(serializedItem.partNumber);
+  addPart(inventoryIdentity.internalPartNumber);
+  addPart(routing?.partNumber ?? null);
+
+  const matches: SQL<unknown>[] = [];
+  if (routing?.id) {
+    matches.push(eq(travelers.partRoutingId, routing.id));
+  }
+  if (inventoryIdentity.inventoryItemId != null) {
+    matches.push(
+      sql`${travelers.inventoryItemId} IS NOT NULL AND ${travelers.inventoryItemId}::text = ${String(inventoryIdentity.inventoryItemId)}`,
+    );
+  }
+  for (const partNumber of Array.from(partNumberCandidates)) {
+    matches.push(eq(travelers.partNumber, partNumber));
+    matches.push(sql`lower(trim(${travelers.partNumber})) = lower(trim(${partNumber}))`);
+  }
+
+  return matches;
+}
+
+async function findTravelerForSerializedItemIdentity(params: {
+  serializedItem: typeof p2SerializedItems.$inferSelect;
+  routing?: typeof partRoutings.$inferSelect | null;
+  inventoryIdentity: Awaited<ReturnType<typeof getSerializedItemInventoryIdentity>>;
+  workOrder?: { id: string; projectId?: string | null } | null;
+}) {
+  const { serializedItem, routing, inventoryIdentity, workOrder } = params;
+  const partMatches = buildTravelerPartIdentityMatches({ serializedItem, routing, inventoryIdentity });
+  if (partMatches.length === 0) return null;
+
+  const identityMatches: SQL<unknown>[] = [
+    and(
+      sql`lower(trim(${travelers.serialNumber})) = lower(trim(${serializedItem.serialNumber}))`,
+      or(...partMatches),
+    )!,
+  ];
+
+  const projectId = workOrder?.projectId ?? routing?.projectId ?? null;
+  if (workOrder?.id || projectId) {
+    const projectOrWorkOrderMatches = [
+      workOrder?.id ? eq(travelers.productionWorkOrderId, workOrder.id) : null,
+      projectId ? eq(travelers.projectId, projectId) : null,
+    ].filter((condition): condition is SQL<unknown> => Boolean(condition));
+
+    if (projectOrWorkOrderMatches.length > 0) {
+      identityMatches.push(
+        and(
+          or(...projectOrWorkOrderMatches),
+          or(...partMatches),
+        )!,
+      );
+    }
+  }
+
+  const rows = await db
+    .select()
+    .from(travelers)
+    .where(or(...identityMatches))
+    .orderBy(
+      sql`CASE WHEN lower(trim(${travelers.serialNumber})) = lower(trim(${serializedItem.serialNumber})) THEN 0 ELSE 1 END`,
+      desc(travelers.updatedAt),
+    )
+    .limit(1);
+
+  return rows[0] ?? null;
 }
 
 async function ensureTravelerForSerializedItem(params: {
@@ -689,31 +974,16 @@ async function ensureTravelerForSerializedItem(params: {
   actor: string;
 }) {
   const { serializedItem, routing, inventoryIdentity, actor } = params;
-  const travelerPartMatches: SQL<unknown>[] = [
-    eq(travelers.partRoutingId, routing.id),
-    eq(travelers.partNumber, serializedItem.partNumber),
-  ];
-  if (inventoryIdentity.inventoryItemId != null) {
-    travelerPartMatches.push(
-      sql`${travelers.inventoryItemId} IS NOT NULL AND ${travelers.inventoryItemId}::text = ${String(inventoryIdentity.inventoryItemId)}`,
-    );
-  }
-  if (inventoryIdentity.internalPartNumber) {
-    travelerPartMatches.push(eq(travelers.partNumber, inventoryIdentity.internalPartNumber));
-    travelerPartMatches.push(sql`lower(trim(${travelers.partNumber})) = lower(trim(${inventoryIdentity.internalPartNumber}))`);
-  }
-
-  const existingTraveler = await db.query.travelers.findFirst({
-    where: and(
-      eq(travelers.serialNumber, serializedItem.serialNumber),
-      or(...travelerPartMatches),
-    ),
-  });
-
   const workOrder = await findProductionWorkOrderForSerializedItem({
     serializedItem,
     routing,
     inventoryIdentity,
+  });
+  const existingTraveler = await findTravelerForSerializedItemIdentity({
+    serializedItem,
+    routing,
+    inventoryIdentity,
+    workOrder,
   });
 
   if (existingTraveler) {
@@ -1796,6 +2066,7 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       return res.status(404).json({ error: 'Employee not found' });
     }
 
+    const printedTraveler = await findTravelerByPrintedScan(barcode);
     const serializedItem = await findSerializedItemByPartScan(barcode);
 
     if (!serializedItem) {
@@ -1824,6 +2095,7 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       inventoryIdentity.internalPartNumber ||
       routing?.partNumber ||
       serializedItem.partNumber;
+    const printedTravelerCertificationParts = await getPrintedTravelerCertificationParts(printedTraveler);
     const certificationPartCandidates = getP2CertificationCandidateParts([
       certificationPartNumber,
       serializedItem.partNumber,
@@ -1832,7 +2104,8 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       serializedItem.serialNumber,
       serializedItem.customerSerialNumber,
       barcode,
-    ]);
+      printedTraveler?.partNumber,
+    ]).concat(printedTravelerCertificationParts);
     let isCertified = false;
     for (const candidate of certificationPartCandidates) {
       if (await storage.checkEmployeeP2PartCertification(employee.id, candidate, nextDepartment)) {
@@ -1998,23 +2271,16 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
       }
     }
 
-    const travelerPartMatches = [
-      eq(travelers.partRoutingId, routing.id),
-      eq(travelers.partNumber, serializedItem.partNumber),
-    ];
-    if (inventoryIdentity.inventoryItemId != null) {
-      travelerPartMatches.push(eq(travelers.inventoryItemId, String(inventoryIdentity.inventoryItemId)));
-    }
-    if (inventoryIdentity.internalPartNumber) {
-      travelerPartMatches.push(eq(travelers.partNumber, inventoryIdentity.internalPartNumber));
-    }
-
-    // Check if a traveler already exists for this serialized item and inventory part identity.
-    const existingTraveler = await db.query.travelers.findFirst({
-      where: and(
-        eq(travelers.serialNumber, serializedItem.serialNumber),
-        or(...travelerPartMatches)
-      ),
+    const workOrder = await findProductionWorkOrderForSerializedItem({
+      serializedItem,
+      routing,
+      inventoryIdentity,
+    });
+    const existingTraveler = await findTravelerForSerializedItemIdentity({
+      serializedItem,
+      routing,
+      inventoryIdentity,
+      workOrder,
     });
 
     if (existingTraveler) {
@@ -2022,11 +2288,6 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
         traveler: existingTraveler,
         routing,
         actor: resolvedDisplayName,
-      });
-      const workOrder = await findProductionWorkOrderForSerializedItem({
-        serializedItem,
-        routing,
-        inventoryIdentity,
       });
       if (workOrder && existingTraveler.productionWorkOrderId !== workOrder.id) {
         await storage.linkTravelerToProductionWorkOrder(existingTraveler.id, workOrder.id);
@@ -2047,11 +2308,6 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
     });
 
     await storage.updateTraveler(traveler.id, { status: 'IN_PROGRESS' });
-    const workOrder = await findProductionWorkOrderForSerializedItem({
-      serializedItem,
-      routing,
-      inventoryIdentity,
-    });
     if (workOrder) {
       await storage.linkTravelerToProductionWorkOrder(traveler.id, workOrder.id);
     }
@@ -2172,6 +2428,8 @@ router.post('/start-task', async (req: Request, res: Response) => {
       routing?.partNumber ||
       serializedItem.partNumber;
     const employeeIdNumber = parseInt(employeeId);
+    const printedTraveler = barcode ? await findTravelerByPrintedScan(barcode) : null;
+    const printedTravelerCertificationParts = await getPrintedTravelerCertificationParts(printedTraveler);
     const certificationPartCandidates = getP2CertificationCandidateParts([
       certificationPartNumber,
       serializedItem.partNumber,
@@ -2180,7 +2438,9 @@ router.post('/start-task', async (req: Request, res: Response) => {
       serializedItem.serialNumber,
       serializedItem.customerSerialNumber,
       partNumber,
-    ]);
+      barcode,
+      printedTraveler?.partNumber,
+    ]).concat(printedTravelerCertificationParts);
     let isCertified = false;
     for (const candidate of certificationPartCandidates) {
       if (await storage.checkEmployeeP2PartCertification(employeeIdNumber, candidate, department)) {
@@ -2196,14 +2456,14 @@ router.post('/start-task', async (req: Request, res: Response) => {
       });
     }
 
-    if (routing) {
-      await ensureTravelerForSerializedItem({
+    const ensuredTravelerResult = routing
+      ? await ensureTravelerForSerializedItem({
         serializedItem,
         routing,
         inventoryIdentity,
         actor: displayName,
-      });
-    }
+      })
+      : null;
 
     const incomingTraceabilityData = Array.isArray(traceabilityData)
       ? traceabilityData.filter((item: any) => getTraceValue(item))
@@ -2228,6 +2488,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
       // Task #188: also auto-switch the punch on resume so the operator's
       // active punch_ledger session is on the correct WAD/charge-code.
       const resumedPunch = await runAutoPunchForP2Task({
+        travelerId: ensuredTravelerResult?.traveler?.id ?? null,
         serialNumber: serializedItem.serialNumber,
         partNumber: certificationPartNumber,
         inventoryItemId: inventoryIdentity.inventoryItemId,
@@ -2339,6 +2600,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
     // p2_work_tasks row so the operator is not "started" against an
     // unauthorized charge code.
     const startPunch = await runAutoPunchForP2Task({
+      travelerId: ensuredTravelerResult?.traveler?.id ?? null,
       serialNumber: serializedItem.serialNumber,
       partNumber: certificationPartNumber,
       inventoryItemId: inventoryIdentity.inventoryItemId,

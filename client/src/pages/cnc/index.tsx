@@ -449,6 +449,24 @@ export default function CNCDashboardPage() {
   }, [selectedOpId, selectedStepBatches]);
   const alreadyBatchedQty = activeStepBatches.reduce((sum, b) => sum + b.batchQty, 0);
   const availableToBatchQty = Math.max(stepQty - alreadyBatchedQty, 0);
+  const selectedStepRollups = useMemo(() => {
+    const serverRollup = activeStepBatches.find(b => b.totalStepQty !== undefined);
+    const completedQty = serverRollup?.completedQty ?? activeStepBatches.reduce((sum, b) => sum + b.qtyCompleted, 0);
+    const scrappedQty = serverRollup?.scrappedQty ?? activeStepBatches.reduce((sum, b) => sum + b.qtyScrapped, 0);
+    const totalStepQty = serverRollup?.totalStepQty ?? stepQty;
+    const batchedQty = serverRollup?.batchedQty ?? alreadyBatchedQty;
+    return {
+      totalStepQty,
+      batchedQty,
+      availableToBatchQty: serverRollup?.availableToBatchQty ?? Math.max(totalStepQty - batchedQty, 0),
+      inProgressQty: serverRollup?.inProgressQty ?? activeStepBatches
+        .filter(b => b.status === 'in_progress' || b.status === 'paused')
+        .reduce((sum, b) => sum + Math.max(b.batchQty - b.qtyCompleted - b.qtyScrapped, 0), 0),
+      completedQty,
+      scrappedQty,
+      remainingQty: serverRollup?.remainingQty ?? Math.max(totalStepQty - completedQty - scrappedQty, 0),
+    };
+  }, [activeStepBatches, alreadyBatchedQty, stepQty]);
   const batchStatusRollups = useMemo(() => selectedJobBatches.reduce<Record<string, number>>((acc, b) => {
     acc[b.status] = (acc[b.status] ?? 0) + 1;
     return acc;
@@ -1735,7 +1753,7 @@ export default function CNCDashboardPage() {
                   <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
                     <div>
                       <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><Layers className="w-4 h-4 text-blue-600" />Operation Batches</h3>
-                      <p className="text-xs text-gray-500">Active qty {alreadyBatchedQty} of {stepQty}; {availableToBatchQty} available</p>
+                      <p className="text-xs text-gray-500">Total {selectedStepRollups.totalStepQty}; batched {selectedStepRollups.batchedQty}; available {selectedStepRollups.availableToBatchQty}</p>
                     </div>
                     <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!travelerInfo?.productionWorkOrderId || !selectedJob.linkedTravelerStepId || availableToBatchQty <= 0} onClick={() => openBatchDialog(executionOp)}>
                       <Plus className="w-3 h-3 mr-1" />Create Partial Job
@@ -1744,33 +1762,44 @@ export default function CNCDashboardPage() {
                   {selectedJobBatches.length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-6">No operation batches created for this job</p>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <div className="min-w-[1120px]">
-                        <div className="grid items-center border-b bg-gray-50 px-2 py-1.5 text-[11px] font-semibold text-gray-500" style={{ gridTemplateColumns: '118px 74px 112px 96px 64px 76px 64px 100px 126px 86px 72px 74px 118px' }}>
-                          <span>Batch code</span><span>WO</span><span>Part</span><span>Step</span><span>Batch qty</span><span>Completed</span><span>Scrap</span><span>Machine</span><span>Technician</span><span>Status</span><span>Priority</span><span>Due</span><span>Actions</span>
-                        </div>
-                        {selectedJobBatches.map(batch => (
-                          <div key={batch.id} className="grid items-center border-b last:border-b-0 px-2 py-2 text-xs" style={{ gridTemplateColumns: '118px 74px 112px 96px 64px 76px 64px 100px 126px 86px 72px 74px 118px' }}>
-                            <span className="font-semibold text-blue-700 truncate">{batch.batchCode}</span>
-                            <span className="truncate">{batch.workOrderNumber}</span>
-                            <span className="truncate" title={batch.partName ?? batch.partNumber ?? ''}>{batch.partNumber ?? batch.partName ?? '-'}</span>
-                            <span className="truncate">{batch.operationSequence ? `Op ${batch.operationSequence}` : `Step ${batch.travelerStepNumber}`}</span>
-                            <span>{batch.batchQty}</span>
-                            <span>{batch.qtyCompleted}</span>
-                            <span className={batch.qtyScrapped > 0 ? 'text-red-600 font-semibold' : ''}>{batch.qtyScrapped}</span>
-                            <span className="truncate">{batch.assignedMachineName ?? '-'}</span>
-                            <span className="truncate">{batch.assignedEmployeeDisplayName ?? '-'}</span>
-                            <BatchStatusBadge status={batch.status} />
-                            <span className="capitalize">{batch.priority}</span>
-                            <span>{batch.dueDate ? format(new Date(batch.dueDate), 'MM/dd') : '-'}</span>
-                            <span className="flex gap-1">
-                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Assign" onClick={() => openAssignBatchDialog(batch)}><User className="w-3 h-3" /></Button>
-                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Hold" disabled={batch.status === 'cancelled' || batch.status === 'completed' || holdOperationBatch.isPending} onClick={() => holdOperationBatch.mutate(batch.id)}><PauseCircle className="w-3 h-3" /></Button>
-                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" title="Cancel" disabled={batch.status === 'cancelled' || batch.status === 'completed' || cancelOperationBatch.isPending} onClick={() => { if (confirm(`Cancel ${batch.batchCode}?`)) cancelOperationBatch.mutate(batch.id); }}><Ban className="w-3 h-3" /></Button>
-                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Print barcode" onClick={() => setBarcodeBatch(batch)}><Printer className="w-3 h-3" /></Button>
-                            </span>
+                    <div>
+                      <div className="grid grid-cols-3 gap-2 border-b bg-gray-50 px-3 py-2 text-xs md:grid-cols-7">
+                        <div><p className="text-[10px] uppercase text-gray-400">Total step</p><p className="font-semibold">{selectedStepRollups.totalStepQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">Batched</p><p className="font-semibold">{selectedStepRollups.batchedQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">Available</p><p className="font-semibold">{selectedStepRollups.availableToBatchQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">In progress</p><p className="font-semibold">{selectedStepRollups.inProgressQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">Completed</p><p className="font-semibold">{selectedStepRollups.completedQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">Scrap</p><p className="font-semibold text-red-600">{selectedStepRollups.scrappedQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">Remaining</p><p className="font-semibold">{selectedStepRollups.remainingQty}</p></div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[1120px]">
+                          <div className="grid items-center border-b bg-gray-50 px-2 py-1.5 text-[11px] font-semibold text-gray-500" style={{ gridTemplateColumns: '118px 74px 112px 96px 64px 76px 64px 100px 126px 86px 72px 74px 118px' }}>
+                            <span>Batch code</span><span>WO</span><span>Part</span><span>Step</span><span>Batch qty</span><span>Completed</span><span>Scrap</span><span>Machine</span><span>Technician</span><span>Status</span><span>Priority</span><span>Due</span><span>Actions</span>
                           </div>
-                        ))}
+                          {selectedJobBatches.map(batch => (
+                            <div key={batch.id} className="grid items-center border-b last:border-b-0 px-2 py-2 text-xs" style={{ gridTemplateColumns: '118px 74px 112px 96px 64px 76px 64px 100px 126px 86px 72px 74px 118px' }}>
+                              <span className="font-semibold text-blue-700 truncate">{batch.batchCode}</span>
+                              <span className="truncate">{batch.workOrderNumber}</span>
+                              <span className="truncate" title={batch.partName ?? batch.partNumber ?? ''}>{batch.partNumber ?? batch.partName ?? '-'}</span>
+                              <span className="truncate">{batch.operationSequence ? `Op ${batch.operationSequence}` : `Step ${batch.travelerStepNumber}`}</span>
+                              <span>{batch.batchQty}</span>
+                              <span>{batch.qtyCompleted}</span>
+                              <span className={batch.qtyScrapped > 0 ? 'text-red-600 font-semibold' : ''}>{batch.qtyScrapped}</span>
+                              <span className="truncate">{batch.assignedMachineName ?? '-'}</span>
+                              <span className="truncate">{batch.assignedEmployeeDisplayName ?? '-'}</span>
+                              <BatchStatusBadge status={batch.status} />
+                              <span className="capitalize">{batch.priority}</span>
+                              <span>{batch.dueDate ? format(new Date(batch.dueDate), 'MM/dd') : '-'}</span>
+                              <span className="flex gap-1">
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Assign" onClick={() => openAssignBatchDialog(batch)}><User className="w-3 h-3" /></Button>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Hold" disabled={batch.status === 'cancelled' || batch.status === 'completed' || holdOperationBatch.isPending} onClick={() => holdOperationBatch.mutate(batch.id)}><PauseCircle className="w-3 h-3" /></Button>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" title="Cancel" disabled={batch.status === 'cancelled' || batch.status === 'completed' || cancelOperationBatch.isPending} onClick={() => { if (confirm(`Cancel ${batch.batchCode}?`)) cancelOperationBatch.mutate(batch.id); }}><Ban className="w-3 h-3" /></Button>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Print barcode" onClick={() => setBarcodeBatch(batch)}><Printer className="w-3 h-3" /></Button>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   )}

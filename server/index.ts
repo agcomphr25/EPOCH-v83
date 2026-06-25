@@ -6858,6 +6858,12 @@ async function initializeBackgroundServices() {
       await pool.query(`ALTER TABLE travelers ADD COLUMN IF NOT EXISTS production_work_order_id UUID`);
       await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS production_work_order_id UUID`);
       await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS traveler_id UUID`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS traveler_step_id VARCHAR(255)`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS operation_batch_id INTEGER`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS machine_id INTEGER`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS machine_name TEXT`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS time_clock_entries_operation_batch_id_idx ON time_clock_entries (operation_batch_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS time_clock_entries_traveler_step_id_idx ON time_clock_entries (traveler_step_id)`);
       // If column was previously created as TEXT, upgrade to UUID
       await pool.query(`
         DO $$

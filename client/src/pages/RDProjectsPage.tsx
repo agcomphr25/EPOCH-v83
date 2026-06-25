@@ -94,6 +94,7 @@ interface DraftBomRecord {
   name: string;
   revision?: string;
   projectId?: string | null;
+  projectCode?: string | null;
   projectType?: 'P2_PROJECT' | 'R_AND_D' | null;
   projectName?: string | null;
   project?: string | null;
@@ -273,6 +274,18 @@ function normalizedPartKey(value?: string | null) {
   return value?.trim().toLowerCase() ?? '';
 }
 
+function normalizedProjectKey(value?: string | null) {
+  return value?.trim().toLowerCase().replace(/[\s_-]+/g, '') ?? '';
+}
+
+function mergeDraftRecords(localRecords: DraftBomRecord[], sharedRecords: DraftBomRecord[]) {
+  const byId = new Map<string, DraftBomRecord>();
+  for (const record of [...localRecords, ...sharedRecords]) {
+    if (record?.id) byId.set(record.id, record);
+  }
+  return [...byId.values()].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+}
+
 function findDraftLineForComponent(component: DraftBomComponent | DraftBomPart, lines: DraftBomLine[]) {
   if (component.sourceLineId) {
     const match = lines.find((line) => line.id === component.sourceLineId);
@@ -312,8 +325,11 @@ function getDraftTabs(records: DraftBomRecord[]): DraftBuilderTab[] {
 }
 
 function isDraftLinkedToProject(project: RDProject, draft: DraftBomRecord) {
+  const projectName = normalizedProjectKey(project.projectName);
+  const draftProjectValues = [draft.projectName, draft.project, draft.projectCode].map(normalizedProjectKey);
   return project.draftTabIds.includes(draft.id)
-    || (draft.projectType === 'R_AND_D' && draft.projectId === project.id);
+    || (draft.projectType === 'R_AND_D' && draft.projectId === project.id)
+    || (!!projectName && draftProjectValues.includes(projectName));
 }
 
 function getDraftRecordsForProject(project: RDProject | null, records: DraftBomRecord[]) {
@@ -441,12 +457,26 @@ export default function RDProjectsPage() {
   const { data: employees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ['/api/employees'],
   });
+  const { data: sharedDraftRecords = [] } = useQuery<DraftBomRecord[]>({
+    queryKey: ['/api/draft-bom-drafts'],
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch('/api/draft-bom-drafts', { credentials: 'include' });
+      if (!response.ok) return [];
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyProject);
-  const [draftRecords, setDraftRecords] = useState<DraftBomRecord[]>(() => readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
+  const [localDraftRecords, setLocalDraftRecords] = useState<DraftBomRecord[]>(() => readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
   const [projects, setProjects] = useState<RDProject[]>(() => readJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, []));
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
+  const draftRecords = useMemo(
+    () => mergeDraftRecords(localDraftRecords, sharedDraftRecords),
+    [localDraftRecords, sharedDraftRecords],
+  );
   const draftTabs = useMemo(() => getDraftTabs(draftRecords), [draftRecords]);
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
   const selectedDraftTabs = useMemo(
@@ -470,7 +500,7 @@ export default function RDProjectsPage() {
   }, [projects]);
 
   useEffect(() => {
-    const refreshDraftRecords = () => setDraftRecords(readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
+    const refreshDraftRecords = () => setLocalDraftRecords(readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
     window.addEventListener('storage', refreshDraftRecords);
     window.addEventListener('focus', refreshDraftRecords);
     return () => {

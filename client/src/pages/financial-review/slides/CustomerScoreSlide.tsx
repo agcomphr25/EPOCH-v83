@@ -5,10 +5,12 @@ import { Star } from 'lucide-react';
 interface CustomerScoreData {
   avgScore: number | null;
   responseCount: number;
+  totalResponses?: number;
+  scale?: number;
 }
 
 function StarRating({ score }: { score: number }) {
-  const filled = Math.round(score);
+  const filled = Math.round(score / 10);
   return (
     <div className="flex gap-2">
       {[1, 2, 3, 4, 5].map((i) => (
@@ -27,6 +29,7 @@ export default function CustomerScoreSlide() {
   });
 
   const score = data?.avgScore;
+  const scale = data?.scale ?? 50;
 
   return (
     <div className="h-full flex flex-col px-10 py-8">
@@ -41,10 +44,11 @@ export default function CustomerScoreSlide() {
             <>
               <div className="text-8xl font-bold text-gray-900 dark:text-white">
                 {score.toFixed(1)}
+                <span className="text-4xl text-gray-400">/{scale}</span>
               </div>
               <StarRating score={score} />
               <div className="text-gray-500 dark:text-gray-400 text-lg">
-                Based on {data?.responseCount ?? 0} responses (last 12 months)
+                Based on {data?.responseCount ?? 0} scored responses from /customer-satisfaction
               </div>
             </>
           ) : (

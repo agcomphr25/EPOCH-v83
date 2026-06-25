@@ -80,6 +80,48 @@ async function calculateOtdForMonth(monthKey = getPreviousFullMonthKey()) {
   };
 }
 
+function calculateCustomerSatisfactionScore(rows: any[]) {
+  let totalScores = 0;
+  let scoredResponseCount = 0;
+  let completedResponses = 0;
+  let promoters = 0;
+  let detractors = 0;
+
+  rows.forEach((response) => {
+    if (response.is_complete) completedResponses += 1;
+
+    const answers = response.responses;
+    if (answers && typeof answers === 'object') {
+      let responseScore = 0;
+      Object.values(answers).forEach((value) => {
+        if (typeof value === 'number' && value >= 1 && value <= 10) {
+          responseScore += value;
+        }
+      });
+      if (responseScore > 0) {
+        totalScores += responseScore;
+        scoredResponseCount += 1;
+      }
+    }
+
+    const nps = Number(response.nps_score);
+    if (Number.isFinite(nps)) {
+      if (nps >= 9) promoters += 1;
+      if (nps <= 6) detractors += 1;
+    }
+  });
+
+  const totalResponses = rows.length;
+  return {
+    avgScore: scoredResponseCount > 0 ? Math.round((totalScores / scoredResponseCount) * 100) / 100 : null,
+    responseCount: scoredResponseCount,
+    totalResponses,
+    completedResponses,
+    netPromoterScore: totalResponses > 0 ? Math.round(((promoters - detractors) / totalResponses) * 10000) / 100 : null,
+    scale: 50,
+  };
+}
+
 // GET /api/financial-review/summary — aggregated live dashboard data
 router.get('/summary', async (req, res) => {
   try {
@@ -127,15 +169,21 @@ router.get('/summary', async (req, res) => {
       `) as any[];
     } catch (err: any) { const msg = `NCR query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
-    // Customer satisfaction — 12-month + 30-day (overall_satisfaction column)
-    let csRows: any[] = [];
+    // Customer satisfaction — same score calculation used by /customer-satisfaction analytics
+    let customerSatisfaction = {
+      avgScore: null as number | null,
+      responseCount: 0,
+      totalResponses: 0,
+      completedResponses: 0,
+      netPromoterScore: null as number | null,
+      scale: 50,
+    };
     try {
-      csRows = await pool.query(`
-        SELECT ROUND(AVG(overall_satisfaction)::numeric, 1) AS avg_score, COUNT(*) AS count
+      const csRows = await pool.query(`
+        SELECT responses, nps_score, is_complete
         FROM customer_satisfaction_responses
-        WHERE created_at >= NOW() - INTERVAL '12 months'
-          AND is_complete = true
       `) as any[];
+      customerSatisfaction = calculateCustomerSatisfactionScore(csRows);
     } catch (err: any) { const msg = `CS 12mo query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // AR aging using balance (total_amount - payments allocated) per existing AR aging endpoint pattern
@@ -167,16 +215,21 @@ router.get('/summary', async (req, res) => {
       };
     } catch (err: any) { const msg = `AR aging query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
-    // Customer satisfaction — 30-day window
-    let cs30: any = {};
+    let customerSatisfaction30Day = {
+      avgScore: null as number | null,
+      responseCount: 0,
+      totalResponses: 0,
+      completedResponses: 0,
+      netPromoterScore: null as number | null,
+      scale: 50,
+    };
     try {
       const cs30Rows = await pool.query(`
-        SELECT ROUND(AVG(overall_satisfaction)::numeric, 1) AS avg_score, COUNT(*) AS count
+        SELECT responses, nps_score, is_complete
         FROM customer_satisfaction_responses
         WHERE created_at >= NOW() - INTERVAL '30 days'
-          AND is_complete = true
       `) as any[];
-      cs30 = cs30Rows[0] || {};
+      customerSatisfaction30Day = calculateCustomerSatisfactionScore(cs30Rows);
     } catch (err: any) { const msg = `CS 30d query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // Customer return rate — refund_requests in last 12 months
@@ -234,8 +287,6 @@ router.get('/summary', async (req, res) => {
 
     const rev = revRows[0] || {};
     const ncr = ncrRows[0] || { ncr_count: 0 };
-    const cs = csRows[0] || {};
-
     const recentRev = Number(rev.recent_rev) || 0;
     const priorRev = Number(rev.prior_rev) || 0;
     const revenueGrowthPct = priorRev > 0
@@ -263,10 +314,14 @@ router.get('/summary', async (req, res) => {
       ncrCount: Number(ncr.ncr_count) || 0,
       ncrLastUpdated: fetchedAt,
       customerSatisfaction: {
-        avgScore: cs.avg_score ? Number(cs.avg_score) : null,
-        responseCount: Number(cs.count) || 0,
-        avg30Day: cs30.avg_score ? Number(cs30.avg_score) : null,
-        responseCount30Day: Number(cs30.count) || 0,
+        avgScore: customerSatisfaction.avgScore,
+        responseCount: customerSatisfaction.responseCount,
+        totalResponses: customerSatisfaction.totalResponses,
+        completedResponses: customerSatisfaction.completedResponses,
+        netPromoterScore: customerSatisfaction.netPromoterScore,
+        scale: customerSatisfaction.scale,
+        avg30Day: customerSatisfaction30Day.avgScore,
+        responseCount30Day: customerSatisfaction30Day.responseCount,
         lastUpdated: fetchedAt,
       },
       arAging: { ...arAging, lastUpdated: fetchedAt },
@@ -394,17 +449,12 @@ router.get('/live/customer-score', async (req, res) => {
   try {
     const rows = await pool.query(`
       SELECT
-        ROUND(AVG(overall_satisfaction)::numeric, 1) AS avg_score,
-        COUNT(*) AS response_count
+        responses,
+        nps_score,
+        is_complete
       FROM customer_satisfaction_responses
-      WHERE created_at >= NOW() - INTERVAL '12 months'
-        AND is_complete = true
     `) as any[];
-    const r = rows[0] || {};
-    res.json({
-      avgScore: r.avg_score ? Number(r.avg_score) : null,
-      responseCount: Number(r.response_count) || 0,
-    });
+    res.json(calculateCustomerSatisfactionScore(rows));
   } catch (err: any) {
     console.error('financial-review live/customer-score error:', err);
     res.status(500).json({ error: err.message });

@@ -32,6 +32,13 @@ export interface MachinedPartRouting {
   createdByDisplayName: string | null;
   createdAt: string;
   updatedAt: string;
+  totalStepQty?: number;
+  batchedQty?: number;
+  availableToBatchQty?: number;
+  inProgressQty?: number;
+  completedQty?: number;
+  scrappedQty?: number;
+  remainingQty?: number;
 }
 
 export interface MachinedPartRoutingOp {

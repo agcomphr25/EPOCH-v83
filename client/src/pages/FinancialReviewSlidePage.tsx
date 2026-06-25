@@ -58,11 +58,11 @@ const SLIDES: Slide[] = [
   },
   {
     title: 'Credit Card Sales',
-    render: () => <CreditCardSalesSlide />,
+    render: ({ monthKey }) => <CreditCardSalesSlide monthKey={monthKey} />,
   },
   {
     title: 'Revenue Trend',
-    render: () => <RevenueTrendSlide />,
+    render: ({ monthKey }) => <RevenueTrendSlide monthKey={monthKey} />,
   },
   {
     title: 'Combined Financial Highlights',

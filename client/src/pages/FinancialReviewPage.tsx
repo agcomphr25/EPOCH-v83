@@ -9,13 +9,12 @@ import {
   CheckCircle,
   ChevronRight,
   ClipboardList,
+  CreditCard,
   DollarSign,
   Layout,
   Printer,
   RefreshCw,
   Star,
-  TrendingDown,
-  TrendingUp,
   Users,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -29,6 +28,16 @@ interface SummaryData {
     recent3Mo: number;
     prior3Mo: number;
     growthPct: number | null;
+    lastUpdated: string;
+  };
+  paymentAnalytics?: {
+    currentMonthKey: string;
+    mtdAmount: number;
+    transactionCount: number;
+    fullMonthEstimate: number;
+    elapsedDays: number;
+    daysInMonth: number;
+    source: string;
     lastUpdated: string;
   };
   otdPercent: number | null;
@@ -82,6 +91,7 @@ interface SummaryData {
     ncr?: TrendPoint[];
     customerSatisfaction?: TrendPoint[];
     revenue?: TrendPoint[];
+    creditCards?: TrendPoint[];
   };
   dataErrors?: string[];
 }
@@ -117,10 +127,6 @@ function formatTimestamp(value: string | null | undefined): string {
   } catch {
     return 'Not fetched yet';
   }
-}
-
-function trendTotal(points: TrendPoint[] | undefined): number {
-  return (points ?? []).reduce((sum, point) => sum + (Number(point.value) || 0), 0);
 }
 
 function previousFullMonthKey(): string {
@@ -410,12 +416,12 @@ export default function FinancialReviewPage() {
                 trend={summary?.trends?.customerSatisfaction}
               />
               <StatusCard
-                title="Current Month AR"
-                value={money(summary?.revenue?.currentMonthAr)}
-                detail={`6-month AR invoices: ${money(trendTotal(summary?.trends?.revenue))}`}
-                icon={(summary?.revenue?.growthPct ?? 0) >= 0 ? TrendingUp : TrendingDown}
-                good={summary?.revenue?.currentMonthAr != null ? summary.revenue.currentMonthAr > 0 : undefined}
-                trend={summary?.trends?.revenue}
+                title="MTD Credit Cards"
+                value={money(summary?.paymentAnalytics?.mtdAmount)}
+                detail={`Est. full month: ${money(summary?.paymentAnalytics?.fullMonthEstimate)} from ${summary?.paymentAnalytics?.source ?? '/payment-analytics'}`}
+                icon={CreditCard}
+                good={summary?.paymentAnalytics?.mtdAmount != null ? summary.paymentAnalytics.mtdAmount > 0 : undefined}
+                trend={summary?.trends?.creditCards}
               />
             </>
           )}

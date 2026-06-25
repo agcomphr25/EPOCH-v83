@@ -48,6 +48,10 @@ interface SummaryData {
   customerSatisfaction: {
     avgScore: number | null;
     responseCount: number;
+    totalResponses?: number;
+    completedResponses?: number;
+    netPromoterScore?: number | null;
+    scale?: number;
     avg30Day: number | null;
     responseCount30Day: number;
     lastUpdated: string;
@@ -184,7 +188,8 @@ export default function FinancialReviewPage() {
   });
 
   const otd = summary?.otdPercent;
-  const satisfaction = summary?.customerSatisfaction?.avg30Day;
+  const satisfaction = summary?.customerSatisfaction?.avgScore;
+  const satisfactionScale = summary?.customerSatisfaction?.scale ?? 50;
   const reviewDate = session?.review_date
     ? format(new Date(`${session.review_date}T00:00:00`), 'MMM d, yyyy')
     : plannedReviewDate;
@@ -322,10 +327,10 @@ export default function FinancialReviewPage() {
               />
               <StatusCard
                 title="Customer Satisfaction"
-                value={satisfaction != null ? `${satisfaction} / 5` : '-'}
-                detail={`${summary?.customerSatisfaction?.responseCount30Day ?? 0} responses in last 30 days`}
+                value={satisfaction != null ? `${satisfaction.toFixed(1)} / ${satisfactionScale}` : '-'}
+                detail={`${summary?.customerSatisfaction?.responseCount ?? 0} scored responses from /customer-satisfaction`}
                 icon={Star}
-                good={satisfaction != null ? satisfaction >= 4 : undefined}
+                good={satisfaction != null ? satisfaction >= 45 : undefined}
               />
               <StatusCard
                 title="Current Month AR"

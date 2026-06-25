@@ -133,7 +133,7 @@ export interface CncOperationBatch {
   assignedMachineName: string | null;
   assignedEmployeeId: number | null;
   assignedEmployeeDisplayName: string | null;
-  status: 'queued' | 'assigned' | 'in_progress' | 'hold' | 'completed' | 'cancelled' | string;
+  status: 'queued' | 'assigned' | 'in_progress' | 'paused' | 'hold' | 'completed' | 'cancelled' | string;
   barcodeValue: string;
   priority: 'critical' | 'high' | 'medium' | 'low' | string;
   dueDate: string | null;

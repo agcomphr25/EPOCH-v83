@@ -102,6 +102,7 @@ const KIOSK_ROUTES = [
   '/travelers',
   '/production/timers',
   '/badge-scan',
+  '/cnc/batch-station',
 ];
 
 function isKioskRoute(): boolean {

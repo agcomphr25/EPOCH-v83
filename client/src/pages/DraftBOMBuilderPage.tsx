@@ -150,6 +150,7 @@ type BomDraft = {
   notes: string;
   updatedAt: string;
   lines: BomLine[];
+  partsRequestLines?: BomLine[];
   savedDraftBoms?: DraftPartBom[];
   laborEstimateLines?: DraftLaborEstimateLine[];
   nrcRows?: NrcCostRow[];
@@ -495,6 +496,19 @@ function lineDescription(line: BomLine) {
   return line.description || line.inventoryItemName || linePartNumber(line);
 }
 
+function normalizeBomLine(line: BomLine): BomLine {
+  return {
+    ...line,
+    isDraftPart: line.isDraftPart ?? !line.inventoryItemId,
+    isManufactured: line.isManufactured ?? false,
+    firstDepartment: line.firstDepartment ?? defaultDepartment,
+    childDraftBoms: line.childDraftBoms ?? [],
+    customFields: line.customFields ?? {},
+    actualCost: line.actualCost ?? '',
+    service: line.service ?? false,
+  };
+}
+
 function draftLineToPart(line: BomLine): DraftBomPart {
   return {
     id: `draft-line-${line.id}`,
@@ -580,6 +594,15 @@ function createDraftPartBom(rootPart: DraftBomPart, existingCount = 0): DraftPar
 }
 
 function createPrivateerDraft(): BomDraft {
+  const privateerLines = privateerDraftBomLines.map((line) =>
+    normalizeBomLine({
+      ...line,
+      isDraftPart: true,
+      isManufactured: false,
+      firstDepartment: defaultDepartment,
+      childDraftBoms: [],
+    } as BomLine),
+  );
   return {
     id: PRIVATEER_DRAFT_ID,
     name: 'Privateer',
@@ -592,13 +615,8 @@ function createPrivateerDraft(): BomDraft {
     projectType: null,
     notes: 'First draft sourcing BOM modeled after the Google Sheet layout.',
     updatedAt: new Date().toISOString(),
-    lines: privateerDraftBomLines.map((line) => ({
-      ...line,
-      isDraftPart: true,
-      isManufactured: false,
-      firstDepartment: defaultDepartment,
-      childDraftBoms: [],
-    })),
+    lines: privateerLines,
+    partsRequestLines: privateerLines.map((line) => ({ ...line })),
     savedDraftBoms: [],
     laborEstimateLines: [newLaborEstimateLine()],
     nrcRows: [],
@@ -632,13 +650,8 @@ function readRDProjectOptions(): RDProjectOption[] {
 }
 
 function normalizeDraft(draft: BomDraft): BomDraft {
-  const lines = (draft.lines ?? []).map((line) => ({
-    ...line,
-    isDraftPart: line.isDraftPart ?? !line.inventoryItemId,
-    isManufactured: line.isManufactured ?? false,
-    firstDepartment: line.firstDepartment ?? defaultDepartment,
-    childDraftBoms: line.childDraftBoms ?? [],
-  }));
+  const lines = (draft.lines ?? []).map(normalizeBomLine);
+  const partsRequestLines = (draft.partsRequestLines ?? draft.lines ?? []).map(normalizeBomLine);
 
   return {
     ...draft,
@@ -647,9 +660,11 @@ function normalizeDraft(draft: BomDraft): BomDraft {
     projectName: draft.projectName ?? draft.project ?? null,
     projectType: draft.projectType ?? null,
     lines,
+    partsRequestLines,
     savedDraftBoms: mergeDraftBoms([
       ...(draft.savedDraftBoms ?? []),
       ...lines.flatMap((line) => line.childDraftBoms ?? []),
+      ...partsRequestLines.flatMap((line) => line.childDraftBoms ?? []),
     ]),
     laborEstimateLines: (draft.laborEstimateLines?.length ? draft.laborEstimateLines : [newLaborEstimateLine()]).map((line) => ({
       ...line,
@@ -963,6 +978,26 @@ function assemblyOrderStatus(
   return findPartsRequestLineForAssemblyPart(part, lines)?.status ?? 'Needs Quote';
 }
 
+function assemblyLineIdentity(line: BomLine) {
+  return [
+    line.inventoryItemId ? `inventory:${line.inventoryItemId}` : '',
+    normalizedAssemblyPartKey(linePartNumber(line)),
+    normalizedAssemblyPartKey(lineDescription(line)),
+  ]
+    .filter(Boolean)
+    .join('|');
+}
+
+function mergeAssemblySourceLines(...lineGroups: BomLine[][]) {
+  const merged = new Map<string, BomLine>();
+  for (const line of lineGroups.flat()) {
+    const key = assemblyLineIdentity(line) || line.id;
+    const existing = merged.get(key);
+    merged.set(key, existing ? { ...existing, ...line, include: existing.include || line.include } : line);
+  }
+  return [...merged.values()];
+}
+
 function isOnHandStatus(status: BomStatus) {
   return status === 'On Hand';
 }
@@ -1268,18 +1303,24 @@ function laborDepartmentValue(label: string) {
     .replace(/^_+|_+$/g, '');
 }
 
-function normalizeWorkspaceTabs(tabs?: WorkspaceTabId[]) {
+function normalizeWorkspaceTabs(tabs?: readonly WorkspaceTabId[] | null) {
   const sourceTabs = tabs?.length ? tabs : defaultWorkspaceTabs;
   const nextTabs = [...sourceTabs];
-  if (!nextTabs.includes('direct-labor')) {
-    const partsRequestIndex = nextTabs.indexOf('parts-request');
-    nextTabs.splice(partsRequestIndex >= 0 ? partsRequestIndex + 1 : nextTabs.length, 0, 'direct-labor');
+
+  for (const tabId of defaultWorkspaceTabs) {
+    if (nextTabs.includes(tabId)) continue;
+    const defaultIndex = defaultWorkspaceTabs.indexOf(tabId);
+    const previousVisibleDefault = defaultWorkspaceTabs
+      .slice(0, defaultIndex)
+      .reverse()
+      .find((candidate) => nextTabs.includes(candidate));
+    const insertIndex = previousVisibleDefault ? nextTabs.indexOf(previousVisibleDefault) + 1 : nextTabs.length;
+    nextTabs.splice(insertIndex, 0, tabId);
   }
-  if (!nextTabs.includes('nrc')) {
-    const directLaborIndex = nextTabs.indexOf('direct-labor');
-    nextTabs.splice(directLaborIndex >= 0 ? directLaborIndex + 1 : nextTabs.length, 0, 'nrc');
-  }
-  return nextTabs;
+
+  return nextTabs.filter((tabId, index, allTabs) =>
+    allTabs.indexOf(tabId) === index && (defaultWorkspaceTabs.includes(tabId as BuiltInWorkspaceTabId) || tabId.startsWith('custom:')),
+  );
 }
 
 function uniqueColumnNames(columns: string[]) {
@@ -1363,7 +1404,9 @@ function draftMatchesProject(draft: BomDraft, selectedProject: ProjectSelectOpti
 }
 
 function draftSavedBomCount(draft: BomDraft) {
-  return (draft.savedDraftBoms ?? []).length + draft.lines.flatMap((line) => line.childDraftBoms ?? []).length;
+  return (draft.savedDraftBoms ?? []).length
+    + draft.lines.flatMap((line) => line.childDraftBoms ?? []).length
+    + (draft.partsRequestLines ?? []).flatMap((line) => line.childDraftBoms ?? []).length;
 }
 
 function draftUpdatedTime(draft: BomDraft) {
@@ -1449,6 +1492,7 @@ function createBlankDraftForProject(selectedProject: ProjectSelectOption): BomDr
     notes: '',
     updatedAt: new Date().toISOString(),
     lines: [newLine()],
+    partsRequestLines: [newLine()],
     laborEstimateLines: [newLaborEstimateLine()],
     customLaborDepartments: [],
     poVisibleColumns: defaultPoColumns,
@@ -1480,6 +1524,7 @@ function createBlankDraftForTemporaryProject(projectName: string): BomDraft {
       : '',
     updatedAt: new Date().toISOString(),
     lines: [newLine()],
+    partsRequestLines: [newLine()],
     laborEstimateLines: [newLaborEstimateLine()],
     customLaborDepartments: [],
     poVisibleColumns: defaultPoColumns,
@@ -1609,7 +1654,9 @@ export default function DraftBOMBuilderPage() {
   const canManageActiveDraftAccess = draft.canManageAccess !== false;
   const effectiveEditMode = isEditMode && canEditActiveDraft;
 
-  const selectedLines = useMemo(() => draft.lines.filter((line) => line.include), [draft.lines]);
+  const draftPoLines = draft.lines;
+  const partsRequestLines = draft.partsRequestLines ?? [];
+  const selectedLines = useMemo(() => partsRequestLines.filter((line) => line.include), [partsRequestLines]);
   const laborDepartments = useMemo(() => {
     const customDepartments = draft.customLaborDepartments ?? [];
     return [
@@ -1621,8 +1668,8 @@ export default function DraftBOMBuilderPage() {
     ];
   }, [draft.customLaborDepartments]);
   const orderableLines = useMemo(
-    () => draft.lines.filter((line) => line.action !== 'Do Not Order' && !line.finalized),
-    [draft.lines],
+    () => partsRequestLines.filter((line) => line.action !== 'Do Not Order' && !line.finalized),
+    [partsRequestLines],
   );
   const activeInventoryItems = useMemo(
     () => inventoryItems.filter((item) => item.isActive !== false),
@@ -1670,10 +1717,13 @@ export default function DraftBOMBuilderPage() {
       })
       .slice(0, 6);
   }, [activeInventoryItems, partsRequestDescription]);
-  const partsRequestLines = draft.lines;
+  const assemblySourceLines = useMemo(
+    () => mergeAssemblySourceLines(draftPoLines, partsRequestLines),
+    [draftPoLines, partsRequestLines],
+  );
   const assemblyTree = useMemo(
-    () => buildAssemblyTree(partsRequestLines, activeInventoryItems, draft.savedDraftBoms ?? []),
-    [activeInventoryItems, draft.savedDraftBoms, partsRequestLines],
+    () => buildAssemblyTree(assemblySourceLines, activeInventoryItems, draft.savedDraftBoms ?? []),
+    [activeInventoryItems, assemblySourceLines, draft.savedDraftBoms],
   );
   const partsRequestSelectedCount = partsRequestLines.filter((line) => line.include).length;
   const allPartsRequestVisibleSelected = partsRequestLines.length > 0 && partsRequestSelectedCount === partsRequestLines.length;
@@ -1804,10 +1854,24 @@ export default function DraftBOMBuilderPage() {
     }));
   }
 
-  function deleteLine(id: string) {
+  function updatePartsRequestLine(id: string, patch: Partial<BomLine>) {
+    setDraft((current) => ({
+      ...current,
+      partsRequestLines: (current.partsRequestLines ?? []).map((line) => (line.id === id ? { ...line, ...patch } : line)),
+    }));
+  }
+
+  function deleteDraftPoLine(id: string) {
     setDraft((current) => ({
       ...current,
       lines: current.lines.filter((line) => line.id !== id),
+    }));
+  }
+
+  function deletePartsRequestLine(id: string) {
+    setDraft((current) => ({
+      ...current,
+      partsRequestLines: (current.partsRequestLines ?? []).filter((line) => line.id !== id),
     }));
   }
 
@@ -1900,7 +1964,7 @@ export default function DraftBOMBuilderPage() {
   function selectOrderable() {
     setDraft((current) => ({
       ...current,
-      lines: current.lines.map((line) => ({
+      partsRequestLines: (current.partsRequestLines ?? []).map((line) => ({
         ...line,
         include: line.action !== 'Do Not Order' && line.status !== 'On Hand' && !line.finalized,
       })),
@@ -1911,7 +1975,7 @@ export default function DraftBOMBuilderPage() {
     const visibleLineIds = new Set(lineIds);
     setDraft((current) => ({
       ...current,
-      lines: current.lines.map((line) => (visibleLineIds.has(line.id) ? { ...line, include } : line)),
+      partsRequestLines: (current.partsRequestLines ?? []).map((line) => (visibleLineIds.has(line.id) ? { ...line, include } : line)),
     }));
   }
 
@@ -1926,7 +1990,10 @@ export default function DraftBOMBuilderPage() {
   function saveWizardBom(part: DraftBomPart, bom: DraftPartBom) {
     setDraft((current) => {
       const rootLineId = part.sourceLineId ?? part.id;
-      const sourceLine = current.lines.find((line) => line.id === rootLineId) ?? null;
+      const sourceLine =
+        current.lines.find((line) => line.id === rootLineId) ??
+        (current.partsRequestLines ?? []).find((line) => line.id === rootLineId) ??
+        null;
       const shouldCreateRootLine = !sourceLine && !part.sourceLineId;
       const rootLine =
         sourceLine ??
@@ -1961,15 +2028,19 @@ export default function DraftBOMBuilderPage() {
         updatedAt: new Date().toISOString(),
       };
 
-      const nextLines = rootLine && !sourceLine ? [rootLine, ...current.lines] : current.lines;
-      const nextSavedDraftBoms = mergeDraftBoms([
-        linkedBom,
-        ...(current.savedDraftBoms ?? []).filter((item) => item.id !== linkedBom.id),
-      ]);
-      return {
-        ...current,
-        savedDraftBoms: nextSavedDraftBoms,
-        lines: nextLines.map((line) => {
+      const nextLines = current.lines.map((line) => {
+        if (!rootLine || line.id !== rootLine.id) return line;
+        const childDraftBoms = line.childDraftBoms ?? [];
+        const withoutCurrentBom = childDraftBoms.filter((item) => item.id !== linkedBom.id);
+        return {
+          ...line,
+          isManufactured: true,
+          firstDepartment: line.firstDepartment ?? defaultDepartment,
+          childDraftBoms: [linkedBom, ...withoutCurrentBom],
+        };
+      });
+      const nextPartsRequestLines = (rootLine && !sourceLine ? [rootLine, ...(current.partsRequestLines ?? [])] : (current.partsRequestLines ?? []))
+        .map((line) => {
           if (!rootLine || line.id !== rootLine.id) return line;
           const childDraftBoms = line.childDraftBoms ?? [];
           const withoutCurrentBom = childDraftBoms.filter((item) => item.id !== linkedBom.id);
@@ -1979,7 +2050,16 @@ export default function DraftBOMBuilderPage() {
             firstDepartment: line.firstDepartment ?? defaultDepartment,
             childDraftBoms: [linkedBom, ...withoutCurrentBom],
           };
-        }),
+        });
+      const nextSavedDraftBoms = mergeDraftBoms([
+        linkedBom,
+        ...(current.savedDraftBoms ?? []).filter((item) => item.id !== linkedBom.id),
+      ]);
+      return {
+        ...current,
+        savedDraftBoms: nextSavedDraftBoms,
+        lines: nextLines,
+        partsRequestLines: nextPartsRequestLines,
       };
     });
 
@@ -1995,6 +2075,10 @@ export default function DraftBOMBuilderPage() {
       ...current,
       savedDraftBoms: (current.savedDraftBoms ?? []).filter((bom) => bom.id !== bomId),
       lines: current.lines.map((line) => ({
+        ...line,
+        childDraftBoms: (line.childDraftBoms ?? []).filter((bom) => bom.id !== bomId),
+      })),
+      partsRequestLines: (current.partsRequestLines ?? []).map((line) => ({
         ...line,
         childDraftBoms: (line.childDraftBoms ?? []).filter((bom) => bom.id !== bomId),
       })),
@@ -2076,7 +2160,7 @@ export default function DraftBOMBuilderPage() {
       customFields: {},
     };
 
-    setDraft((current) => ({ ...current, lines: [nextLine, ...current.lines] }));
+    setDraft((current) => ({ ...current, partsRequestLines: [nextLine, ...(current.partsRequestLines ?? [])] }));
     setPartsRequestDescription('');
     toast({
       title: item ? 'Inventory item added' : 'Draft part created',
@@ -2100,7 +2184,7 @@ export default function DraftBOMBuilderPage() {
     setCustomColumns((current) => sanitizeCustomColumns([...current, ...result.customColumns]));
     setDraft((current) => ({
       ...current,
-      lines: [...result.lines, ...current.lines],
+      partsRequestLines: [...result.lines, ...(current.partsRequestLines ?? [])],
       customColumns: sanitizeCustomColumns([...(current.customColumns ?? []), ...result.customColumns]),
       customPoColumns: sanitizeCustomColumns([...(current.customPoColumns ?? []), ...result.customColumns]),
       updatedAt: new Date().toISOString(),
@@ -2153,6 +2237,29 @@ export default function DraftBOMBuilderPage() {
         [columnName]: value,
       },
     });
+  }
+
+  function updatePartsRequestLineCustomField(lineId: string, columnName: string, value: string) {
+    updatePartsRequestLine(lineId, {
+      customFields: {
+        ...(partsRequestLines.find((line) => line.id === lineId)?.customFields ?? {}),
+        [columnName]: value,
+      },
+    });
+  }
+
+  function updateAssemblySourceLineCustomField(lineId: string, columnName: string, value: string) {
+    const draftPoLine = draftPoLines.find((line) => line.id === lineId);
+    if (draftPoLine) {
+      updateLine(lineId, {
+        customFields: {
+          ...(draftPoLine.customFields ?? {}),
+          [columnName]: value,
+        },
+      });
+      return;
+    }
+    updatePartsRequestLineCustomField(lineId, columnName, value);
   }
 
   async function saveDraft() {
@@ -2299,6 +2406,7 @@ export default function DraftBOMBuilderPage() {
       ...draft,
       updatedAt: new Date().toISOString(),
       lines: [newLine()],
+      partsRequestLines: [newLine()],
       savedDraftBoms: [],
       laborEstimateLines: [newLaborEstimateLine()],
       nrcRows: [],
@@ -2363,6 +2471,7 @@ export default function DraftBOMBuilderPage() {
       notes: '',
       updatedAt: new Date().toISOString(),
       lines: [newLine()],
+      partsRequestLines: [newLine()],
       savedDraftBoms: [],
       laborEstimateLines: [newLaborEstimateLine()],
       nrcRows: [],
@@ -2405,7 +2514,7 @@ export default function DraftBOMBuilderPage() {
       return;
     }
 
-    const selectedDraftLines = draft.lines.filter((line) => line.include);
+    const selectedDraftLines = partsRequestLines.filter((line) => line.include);
     const linesToCreate = selectedDraftLines.filter(draftLineNeedsInventoryItem);
     const createdByLineId = new Map<string, DraftFinalizedInventoryItem>();
 
@@ -2418,7 +2527,7 @@ export default function DraftBOMBuilderPage() {
 
       setDraft((current) => ({
         ...current,
-        lines: current.lines.map((line) => {
+        partsRequestLines: (current.partsRequestLines ?? []).map((line) => {
           if (!line.include) return line;
           const createdItem = createdByLineId.get(line.id);
           if (draftLineNeedsInventoryItem(line) && !createdItem) return line;
@@ -2461,7 +2570,7 @@ export default function DraftBOMBuilderPage() {
   }
 
   function createVendorPoHandoff() {
-    const selectedRequestLines = draft.lines.filter((line) => line.include);
+    const selectedRequestLines = partsRequestLines.filter((line) => line.include);
     if (selectedRequestLines.length === 0) {
       toast({
         title: 'Select parts first',
@@ -2518,9 +2627,9 @@ export default function DraftBOMBuilderPage() {
     setLocation('/vendor-pos?draftBomHandoff=1');
   }
 
-  function showHandoffToast(target: 'RFQ package' | 'PO draft' | 'parts request' | 'inventory items' | 'assembly tree') {
+  function showHandoffToast(target: 'RFQ package' | 'PO draft' | 'parts request' | 'inventory items' | 'assembly tree', lineCount = selectedLines.length) {
     toast({
-      title: `${selectedLines.length} line(s) ready`,
+      title: `${lineCount} line(s) ready`,
       description: `The ${target} handoff is staged in the UI and ready for backend wiring.`,
     });
   }
@@ -3372,7 +3481,7 @@ export default function DraftBOMBuilderPage() {
             {visibleWorkspaceTabs.includes('po-draft') ? (
               <TabsContent value="po-draft" className="mt-4">
                 <PoDraftWorkspace
-                  lines={selectedLines}
+                  lines={draftPoLines}
                   description={poDescription}
                   matches={poDescriptionMatches}
                   visibleColumns={visiblePoColumns}
@@ -3381,9 +3490,9 @@ export default function DraftBOMBuilderPage() {
                   onCreateLine={createLineFromPoDescription}
                   onToggleColumn={togglePoColumn}
                   onUpdateCustomField={updateLineCustomField}
-                  onGeneratePoDraft={() => showHandoffToast('PO draft')}
+                  onGeneratePoDraft={() => showHandoffToast('PO draft', draftPoLines.length)}
                   onCreateDraftBom={startDraftBomForLine}
-                  onDeleteLine={deleteLine}
+                  onDeleteLine={deleteDraftPoLine}
                   isEditMode={effectiveEditMode}
                 />
               </TabsContent>
@@ -3399,13 +3508,13 @@ export default function DraftBOMBuilderPage() {
                   matches={partsRequestMatches}
                   onDescriptionChange={setPartsRequestDescription}
                   onCreateLine={createLineFromPartsRequestDescription}
-                  onUpdateLine={updateLine}
-                  onUpdateCustomField={updateLineCustomField}
-                  onUpdateNumberLine={(id, field, value) => updateLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
+                  onUpdateLine={updatePartsRequestLine}
+                  onUpdateCustomField={updatePartsRequestLineCustomField}
+                  onUpdateNumberLine={(id, field, value) => updatePartsRequestLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
                   onImportCsv={importPartsRequestCsv}
                   onCreateVendorPoDraft={createVendorPoHandoff}
                   onFinalizeSelected={markSelectedFinalized}
-                  onDeleteLine={deleteLine}
+                  onDeleteLine={deletePartsRequestLine}
                   isEditMode={effectiveEditMode}
                   isFinalizingParts={isFinalizingParts}
                 />
@@ -3450,7 +3559,7 @@ export default function DraftBOMBuilderPage() {
             {visibleWorkspaceTabs.includes('bom-wizard') ? (
               <TabsContent value="bom-wizard" className="mt-4">
                 <DraftBomWizardWorkspace
-                  draftLines={draft.lines}
+                  draftLines={assemblySourceLines}
                   savedDraftBoms={draft.savedDraftBoms ?? []}
                   inventoryItems={activeInventoryItems}
                   departmentOptions={bomDepartmentOptions}
@@ -3481,9 +3590,9 @@ export default function DraftBOMBuilderPage() {
                       </p>
                     </div>
                     <CustomColumnLineTable
-                      lines={draft.lines}
+                      lines={assemblySourceLines}
                       customColumns={customColumns}
-                      onUpdateCustomField={updateLineCustomField}
+                      onUpdateCustomField={updateAssemblySourceLineCustomField}
                       isEditMode={effectiveEditMode}
                     />
                   </section>

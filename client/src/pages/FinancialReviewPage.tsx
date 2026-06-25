@@ -77,7 +77,19 @@ interface SummaryData {
     rate: number | null;
     lastUpdated: string;
   };
+  trends?: {
+    otd?: TrendPoint[];
+    ncr?: TrendPoint[];
+    customerSatisfaction?: TrendPoint[];
+    revenue?: TrendPoint[];
+  };
   dataErrors?: string[];
+}
+
+interface TrendPoint {
+  month: string;
+  label: string;
+  value: number | null;
 }
 
 interface Session {
@@ -107,6 +119,10 @@ function formatTimestamp(value: string | null | undefined): string {
   }
 }
 
+function trendTotal(points: TrendPoint[] | undefined): number {
+  return (points ?? []).reduce((sum, point) => sum + (Number(point.value) || 0), 0);
+}
+
 function previousFullMonthKey(): string {
   const now = new Date();
   const previous = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -133,18 +149,75 @@ function secondThursdayAfterReviewMonth(monthKey: string): string {
   return format(new Date(year, month, 1 + daysUntilThursday + 7), 'MMM d, yyyy');
 }
 
+function MiniTrend({
+  data,
+  good,
+}: {
+  data?: TrendPoint[];
+  good?: boolean;
+}) {
+  const points = (data ?? []).filter((point) => typeof point.value === 'number');
+  const labels = data && data.length > 0 ? `${data[0].label} to ${data[data.length - 1].label}` : 'Last 6 months';
+  const stroke = good == null ? '#64748b' : good ? '#16a34a' : '#dc2626';
+
+  if (points.length < 2) {
+    return (
+      <div className="mt-4 rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-900/60">
+        <div className="h-10 border-b border-dashed border-gray-300 dark:border-gray-700" />
+        <div className="mt-1 text-[11px] text-gray-400">Trend unavailable</div>
+      </div>
+    );
+  }
+
+  const values = points.map((point) => point.value as number);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const spread = max - min || 1;
+  const coordinates = points.map((point, index) => {
+    const x = points.length === 1 ? 60 : (index / (points.length - 1)) * 120;
+    const y = 34 - (((point.value as number) - min) / spread) * 28;
+    return `${x},${y}`;
+  });
+
+  return (
+    <div className="mt-4 rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-900/60">
+      <svg viewBox="0 0 120 40" className="h-10 w-full overflow-visible" role="img" aria-label={`Six month trend: ${labels}`}>
+        <line x1="0" y1="34" x2="120" y2="34" stroke="currentColor" className="text-gray-200 dark:text-gray-700" strokeWidth="1" />
+        <polyline
+          fill="none"
+          points={coordinates.join(' ')}
+          stroke={stroke}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="3"
+        />
+        {coordinates.map((coordinate, index) => {
+          const [cx, cy] = coordinate.split(',');
+          return <circle key={`${coordinate}-${index}`} cx={cx} cy={cy} r="2.5" fill={stroke} />;
+        })}
+      </svg>
+      <div className="mt-1 flex justify-between text-[11px] text-gray-400">
+        <span>{data?.[0]?.label ?? ''}</span>
+        <span>{data && data.length > 0 ? data[data.length - 1].label : ''}</span>
+      </div>
+    </div>
+  );
+}
+
 function StatusCard({
   title,
   value,
   detail,
   icon: Icon,
   good,
+  trend,
 }: {
   title: string;
   value: string;
   detail: string;
   icon: any;
   good?: boolean;
+  trend?: TrendPoint[];
 }) {
   const color = good == null ? 'text-gray-500' : good ? 'text-green-600' : 'text-red-600';
   return (
@@ -155,6 +228,7 @@ function StatusCard({
       </div>
       <div className="mt-3 text-2xl font-bold text-gray-900 dark:text-white">{value}</div>
       <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{detail}</div>
+      <MiniTrend data={trend} good={good} />
     </div>
   );
 }
@@ -317,6 +391,7 @@ export default function FinancialReviewPage() {
                 detail={summary?.otd ? `${summary.otd.onTimeCount} on time / ${summary.otd.totalCount} shipped` : 'No completed orders for period'}
                 icon={CheckCircle}
                 good={otd != null ? otd >= 95 : undefined}
+                trend={summary?.trends?.otd}
               />
               <StatusCard
                 title="NCR Count"
@@ -324,6 +399,7 @@ export default function FinancialReviewPage() {
                 detail="Target below 5"
                 icon={AlertTriangle}
                 good={summary?.ncrCount != null ? summary.ncrCount < 5 : undefined}
+                trend={summary?.trends?.ncr}
               />
               <StatusCard
                 title="Customer Satisfaction"
@@ -331,13 +407,15 @@ export default function FinancialReviewPage() {
                 detail={`${summary?.customerSatisfaction?.responseCount ?? 0} scored responses from /customer-satisfaction`}
                 icon={Star}
                 good={satisfaction != null ? satisfaction >= 45 : undefined}
+                trend={summary?.trends?.customerSatisfaction}
               />
               <StatusCard
                 title="Current Month AR"
                 value={money(summary?.revenue?.currentMonthAr)}
-                detail={`6-month CC total: ${money(summary?.revenue?.total6Mo)}`}
+                detail={`6-month AR invoices: ${money(trendTotal(summary?.trends?.revenue))}`}
                 icon={(summary?.revenue?.growthPct ?? 0) >= 0 ? TrendingUp : TrendingDown}
                 good={summary?.revenue?.currentMonthAr != null ? summary.revenue.currentMonthAr > 0 : undefined}
+                trend={summary?.trends?.revenue}
               />
             </>
           )}

@@ -11,8 +11,16 @@ import {
   cuttingPacketBOMCuts,
   cuttingFabricInventory,
   cuttingFabricInventoryTransactions,
+  manufacturingQueue,
+  getDashboardCategories,
+  supplySourceDashboardToLegacyDept,
 } from '../../schema';
-import { and, gte, lte, eq, desc, ilike, or, isNull } from 'drizzle-orm';
+import { and, gte, lte, eq, desc, ilike, or, isNull, inArray } from 'drizzle-orm';
+import {
+  adjustPacketInventoryForMaterial,
+  normalizeP1PacketMaterialType,
+  type P1PacketMaterialType,
+} from '../utils/p1PacketInventory';
 import {
   insertCuttingMaterialSchema,
   insertCuttingFabricTypeSchema,
@@ -89,7 +97,97 @@ function classifyPacketMaterial(item: any): keyof CuttingPacketStockLevels | nul
   return null;
 }
 
+function parseP1PacketQueueNotes(notes: string | null): Record<string, any> {
+  if (!notes) return {};
+  try {
+    const parsed = JSON.parse(notes);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return { rawNotes: notes };
+  }
+}
+
+function stringifyP1PacketQueueNotes(notes: Record<string, any>): string {
+  const { rawNotes, ...serializableNotes } = notes;
+  return JSON.stringify(serializableNotes);
+}
+
+function getP1PacketMaterialFromQueueNotes(notes: Record<string, any>): P1PacketMaterialType | null {
+  const source = String(notes.source || '').toUpperCase();
+  const materialType = String(notes.materialType || '').toLowerCase();
+  if (notes.isP2Packet === true || source === 'P2' || source === 'P2_SYNC' || materialType.startsWith('p2_')) {
+    return null;
+  }
+  return normalizeP1PacketMaterialType(notes.materialType)
+    || normalizeP1PacketMaterialType(notes.packetName)
+    || normalizeP1PacketMaterialType(notes.rawNotes);
+}
+
+async function ensureP1PacketInventoryForCompletedQueueRows(): Promise<void> {
+  const cuttingTableDept = supplySourceDashboardToLegacyDept('CUTTING_TABLE')!;
+  const cuttingTableCategories = getDashboardCategories('CUTTING_TABLE');
+  const completedRows = await db
+    .select({
+      queue: manufacturingQueue,
+      item: inventoryItems,
+    })
+    .from(manufacturingQueue)
+    .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+    .where(and(
+      or(
+        eq(manufacturingQueue.department, cuttingTableDept),
+        inArray(inventoryItems.manufacturedCategory, cuttingTableCategories)
+      ),
+      eq(manufacturingQueue.status, 'COMPLETED')
+    ))
+    .orderBy(desc(manufacturingQueue.completedAt), desc(manufacturingQueue.updatedAt))
+    .limit(500);
+
+  for (const row of completedRows) {
+    const notes = parseP1PacketQueueNotes(row.queue.notes);
+    const materialType = getP1PacketMaterialFromQueueNotes(notes);
+    const completedQuantity = row.queue.quantityCompleted || 0;
+    const alreadyAdded = Number(notes.p1PacketInventoryAdded || 0);
+    const missingQuantity = completedQuantity - alreadyAdded;
+    if (!materialType || missingQuantity <= 0) continue;
+
+    await db.transaction(async (tx) => {
+      const [lockedRow] = await tx
+        .select({
+          notes: manufacturingQueue.notes,
+          quantityCompleted: manufacturingQueue.quantityCompleted,
+        })
+        .from(manufacturingQueue)
+        .where(eq(manufacturingQueue.id, row.queue.id))
+        .for('update');
+
+      if (!lockedRow) return;
+      const lockedNotes = parseP1PacketQueueNotes(lockedRow.notes);
+      const lockedMaterialType = getP1PacketMaterialFromQueueNotes(lockedNotes);
+      const lockedCompletedQuantity = lockedRow.quantityCompleted || 0;
+      const lockedAlreadyAdded = Number(lockedNotes.p1PacketInventoryAdded || 0);
+      const lockedMissingQuantity = lockedCompletedQuantity - lockedAlreadyAdded;
+      if (!lockedMaterialType || lockedMissingQuantity <= 0) return;
+
+      await adjustPacketInventoryForMaterial(tx, lockedMaterialType, lockedMissingQuantity);
+      await tx
+        .update(manufacturingQueue)
+        .set({
+          notes: stringifyP1PacketQueueNotes({
+            ...lockedNotes,
+            p1PacketInventoryAdded: lockedAlreadyAdded + lockedMissingQuantity,
+            p1PacketInventoryMaterialType: lockedMaterialType,
+          }),
+          updatedAt: new Date(),
+        })
+        .where(eq(manufacturingQueue.id, row.queue.id));
+    });
+  }
+}
+
 async function getCuttingPacketStockLevels(): Promise<CuttingPacketStockLevels> {
+  await ensureP1PacketInventoryForCompletedQueueRows();
+
   const levels: CuttingPacketStockLevels = {
     carbon_fiber: 0,
     fiberglass: 0,

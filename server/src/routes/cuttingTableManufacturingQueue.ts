@@ -3,7 +3,12 @@ import { storage } from '../../storage';
 import { db } from '../../db';
 import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingFabricInventoryTransactions, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
 import { eq, and, or, asc, desc, inArray, like, count } from 'drizzle-orm';
-import { adjustPacketInventoryItem } from '../utils/p1PacketInventory';
+import {
+  adjustPacketInventoryForMaterial,
+  getP1PacketName,
+  normalizeP1PacketMaterialType,
+  type P1PacketMaterialType,
+} from '../utils/p1PacketInventory';
 
 const router = express.Router();
 
@@ -85,13 +90,24 @@ function parseQueueNotes(notes: string | null): Record<string, any> {
   }
 }
 
-function isP1PacketInventoryQueueItem(notes: Record<string, any>): boolean {
+function stringifyQueueNotes(notes: Record<string, any>): string {
+  const { rawNotes, ...serializableNotes } = notes;
+  return JSON.stringify(serializableNotes);
+}
+
+function getP1PacketMaterialFromQueueNotes(notes: Record<string, any>): P1PacketMaterialType | null {
   const source = String(notes.source || '').toUpperCase();
   const materialType = String(notes.materialType || '').toLowerCase();
-  return notes.isP2Packet !== true
-    && source !== 'P2'
-    && source !== 'P2_SYNC'
-    && !materialType.startsWith('p2_');
+  if (notes.isP2Packet === true || source === 'P2' || source === 'P2_SYNC' || materialType.startsWith('p2_')) {
+    return null;
+  }
+  return normalizeP1PacketMaterialType(notes.materialType)
+    || normalizeP1PacketMaterialType(notes.packetName)
+    || normalizeP1PacketMaterialType(notes.rawNotes);
+}
+
+function isP1PacketInventoryQueueItem(notes: Record<string, any>): boolean {
+  return getP1PacketMaterialFromQueueNotes(notes) !== null;
 }
 
 type QueueBomMatch = {
@@ -242,6 +258,68 @@ async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
         })
         .onConflictDoNothing();
     }
+  }
+}
+
+async function ensureP1PacketInventoryForCompletedQueueRows(): Promise<void> {
+  const cuttingTableDept = supplySourceDashboardToLegacyDept('CUTTING_TABLE')!;
+  const cuttingTableCategories = getDashboardCategories('CUTTING_TABLE');
+  const completedRows = await db
+    .select({
+      queue: manufacturingQueue,
+      item: inventoryItems,
+    })
+    .from(manufacturingQueue)
+    .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+    .where(and(
+      or(
+        eq(manufacturingQueue.department, cuttingTableDept),
+        inArray(inventoryItems.manufacturedCategory, cuttingTableCategories)
+      ),
+      eq(manufacturingQueue.status, 'COMPLETED')
+    ))
+    .orderBy(desc(manufacturingQueue.completedAt), desc(manufacturingQueue.updatedAt))
+    .limit(500);
+
+  for (const row of completedRows) {
+    const notes = parseQueueNotes(row.queue.notes);
+    const materialType = getP1PacketMaterialFromQueueNotes(notes);
+    const completedQuantity = row.queue.quantityCompleted || 0;
+    const alreadyAdded = Number(notes.p1PacketInventoryAdded || 0);
+    const missingQuantity = completedQuantity - alreadyAdded;
+    if (!materialType || missingQuantity <= 0) continue;
+
+    await db.transaction(async (tx) => {
+      const [lockedRow] = await tx
+        .select({
+          notes: manufacturingQueue.notes,
+          quantityCompleted: manufacturingQueue.quantityCompleted,
+        })
+        .from(manufacturingQueue)
+        .where(eq(manufacturingQueue.id, row.queue.id))
+        .for('update');
+
+      if (!lockedRow) return;
+      const lockedNotes = parseQueueNotes(lockedRow.notes);
+      const lockedMaterialType = getP1PacketMaterialFromQueueNotes(lockedNotes);
+      const lockedCompletedQuantity = lockedRow.quantityCompleted || 0;
+      const lockedAlreadyAdded = Number(lockedNotes.p1PacketInventoryAdded || 0);
+      const lockedMissingQuantity = lockedCompletedQuantity - lockedAlreadyAdded;
+      if (!lockedMaterialType || lockedMissingQuantity <= 0) return;
+
+      await adjustPacketInventoryForMaterial(tx, lockedMaterialType, lockedMissingQuantity);
+      await tx
+        .update(manufacturingQueue)
+        .set({
+          notes: stringifyQueueNotes({
+            ...lockedNotes,
+            p1PacketInventoryAdded: lockedAlreadyAdded + lockedMissingQuantity,
+            p1PacketInventoryMaterialType: lockedMaterialType,
+          }),
+          updatedAt: new Date(),
+        })
+        .where(eq(manufacturingQueue.id, row.queue.id));
+    });
   }
 }
 
@@ -656,7 +734,8 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
     const productCategoryId = productCategory.id;
     const barcodePrefix = `PKT-${inventoryItem.agPartNumber}-${id}-%`;
     const queueNotes = parseQueueNotes(currentItem.notes);
-    const shouldAddToP1PacketInventory = isP1PacketInventoryQueueItem(queueNotes);
+    const p1PacketMaterialType = getP1PacketMaterialFromQueueNotes(queueNotes);
+    const shouldAddToP1PacketInventory = p1PacketMaterialType !== null;
 
     const { updated, createdPackets, isFullyCompleted, newTotalCompleted } = await db.transaction(async (tx) => {
       const [lockedItem] = await tx
@@ -706,9 +785,17 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
         }
       }
 
-      if (shouldAddToP1PacketInventory && currentItem.inventoryItemId) {
-        await adjustPacketInventoryItem(tx, currentItem.inventoryItemId, quantityCompleted);
+      if (p1PacketMaterialType) {
+        await adjustPacketInventoryForMaterial(tx, p1PacketMaterialType, quantityCompleted);
       }
+
+      const nextNotes = p1PacketMaterialType
+        ? stringifyQueueNotes({
+            ...queueNotes,
+            p1PacketInventoryAdded: (Number(queueNotes.p1PacketInventoryAdded) || 0) + quantityCompleted,
+            p1PacketInventoryMaterialType: p1PacketMaterialType,
+          })
+        : currentItem.notes;
 
       const [updated] = await tx
         .update(manufacturingQueue)
@@ -722,6 +809,7 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
           materialDetails,
           completionNotes,
           completedBy,
+          notes: nextNotes,
           updatedAt: new Date(),
         })
         .where(eq(manufacturingQueue.id, parseInt(id)))
@@ -997,7 +1085,8 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
     const barcodePrefix = `PKT-${inventoryItem.agPartNumber}-${id}-%`;
     const isMixedFabric = fabricSources.length > 1;
     const queueNotes = parseQueueNotes(currentItem.notes);
-    const shouldAddToP1PacketInventory = isP1PacketInventoryQueueItem(queueNotes);
+    const p1PacketMaterialType = getP1PacketMaterialFromQueueNotes(queueNotes);
+    const shouldAddToP1PacketInventory = p1PacketMaterialType !== null;
 
     // Wrap count + inserts + queue update in a transaction, using a row-level
     // lock on the queue item to prevent concurrent submissions from reading the
@@ -1131,9 +1220,17 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
         });
       }
 
-      if (shouldAddToP1PacketInventory && currentItem.inventoryItemId) {
-        await adjustPacketInventoryItem(tx, currentItem.inventoryItemId, quantityCompleted);
+      if (p1PacketMaterialType) {
+        await adjustPacketInventoryForMaterial(tx, p1PacketMaterialType, quantityCompleted);
       }
+
+      const nextNotes = p1PacketMaterialType
+        ? stringifyQueueNotes({
+            ...queueNotes,
+            p1PacketInventoryAdded: (Number(queueNotes.p1PacketInventoryAdded) || 0) + quantityCompleted,
+            p1PacketInventoryMaterialType: p1PacketMaterialType,
+          })
+        : currentItem.notes;
 
       // Update the manufacturing queue item inside the same transaction.
       // Use values from the locked row to prevent a lost-update when concurrent
@@ -1155,6 +1252,7 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
           materialDetails: JSON.stringify(fabricSources),
           completionNotes,
           completedBy,
+          notes: nextNotes,
           updatedAt: new Date(),
         })
         .where(eq(manufacturingQueue.id, parseInt(id)))
@@ -2256,6 +2354,7 @@ router.get('/built-packets', async (req: Request, res: Response) => {
     const parsedLimit = parseInt(limit as string);
     const parsedOffset = parseInt(offset as string);
 
+    await ensureP1PacketInventoryForCompletedQueueRows();
     await ensureBuiltPacketsForCompletedQueueRows();
 
     const packets = await db
@@ -2305,11 +2404,33 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       return { ...packet, sku, queueId, printedPacketNumber: parsedBarcode?.packetNumber ?? packet.packetNumber };
     });
 
+    const parsedQueueIds = [...new Set(
+      parsedPackets.map(p => p.queueId).filter((id): id is string => id !== null)
+    )].map(id => parseInt(id)).filter(id => !isNaN(id));
+    const p1StockPacketQueueIds = new Set<number>();
+    if (parsedQueueIds.length > 0) {
+      const referencedQueueRows = await db
+        .select({ id: manufacturingQueue.id, notes: manufacturingQueue.notes })
+        .from(manufacturingQueue)
+        .where(inArray(manufacturingQueue.id, parsedQueueIds));
+      for (const row of referencedQueueRows) {
+        if (isP1PacketInventoryQueueItem(parseQueueNotes(row.notes))) {
+          p1StockPacketQueueIds.add(row.id);
+        }
+      }
+    }
+
+    const visiblePackets = parsedPackets.filter(packet => {
+      if (!packet.queueId) return true;
+      const queueId = parseInt(packet.queueId);
+      return Number.isNaN(queueId) || !p1StockPacketQueueIds.has(queueId);
+    });
+
     // Batch-fetch quantityRequested for all referenced queue items so the
     // frontend can show an accurate "Packet X of Y" without relying on a
     // filtered mfgQueueItems list.
     const uniqueQueueIds = [...new Set(
-      parsedPackets.map(p => p.queueId).filter((id): id is string => id !== null)
+      visiblePackets.map(p => p.queueId).filter((id): id is string => id !== null)
     )].map(id => parseInt(id)).filter(id => !isNaN(id));
 
     const queueTotals: Record<string, number> = {};
@@ -2328,7 +2449,7 @@ router.get('/built-packets', async (req: Request, res: Response) => {
     // relevant queue IDs — not just the current page — so ranks remain correct
     // even when earlier packets are outside the paginated window.
     const relevantQueueIds = [...new Set(
-      parsedPackets.map(p => p.queueId).filter((id): id is string => id !== null)
+      visiblePackets.map(p => p.queueId).filter((id): id is string => id !== null)
     )];
 
     const displayPacketNumberMap: Record<number, number> = {};
@@ -2364,7 +2485,7 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       }
     }
 
-    const result = parsedPackets.map(packet => ({
+    const result = visiblePackets.map(packet => ({
       ...packet,
       displayPacketNumber: displayPacketNumberMap[packet.id] ?? packet.packetNumber,
       quantityOrdered: packet.queueId ? (queueTotals[packet.queueId] ?? null) : null,
@@ -2392,9 +2513,11 @@ router.get('/built-packets', async (req: Request, res: Response) => {
         .orderBy(desc(manufacturingQueue.completedAt), desc(manufacturingQueue.updatedAt))
         .limit(parsedLimit);
 
-      batchRows = completedStockRows
-        .filter((row) => row.item && isP1PacketInventoryQueueItem(parseQueueNotes(row.queue.notes)))
-        .map((row) => ({
+      batchRows = completedStockRows.flatMap((row) => {
+        const materialType = getP1PacketMaterialFromQueueNotes(parseQueueNotes(row.queue.notes));
+        if (!row.item || !materialType) return [];
+        const packetName = getP1PacketName(materialType);
+        return [{
           id: -row.queue.id,
           barcode: `BATCH-${row.queue.id}`,
           packetNumber: 1,
@@ -2406,14 +2529,15 @@ router.get('/built-packets', async (req: Request, res: Response) => {
           notes: row.queue.completionNotes || row.queue.notes,
           createdBy: row.queue.completedBy,
           allocatedToOrder: null,
-          categoryName: row.item?.name || 'P1 Stock Packet',
+          categoryName: packetName,
           sku: row.item?.agPartNumber || null,
           queueId: String(row.queue.id),
           quantityOrdered: row.queue.quantityCompleted || row.queue.quantityRequested || 0,
           batchQuantity: row.queue.quantityCompleted || row.queue.quantityRequested || 0,
           isBatchEntry: true,
           fabricSources: [],
-        }));
+        }];
+      });
     }
 
     const combined = [...result, ...batchRows]

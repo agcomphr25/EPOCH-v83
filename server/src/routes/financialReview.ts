@@ -158,8 +158,7 @@ router.get('/summary', async (req, res) => {
     const monthKeys = getRecentMonthKeys(monthKey);
     const now = new Date();
     const currentMonthKey = getMonthKeyFromDate(now);
-    const previousFullPaymentMonthKey = getPreviousFullMonthKey(now);
-    const paymentTrendMonthKeys = getRecentMonthKeys(previousFullPaymentMonthKey);
+    const paymentTrendMonthKeys = getRecentMonthKeys(monthKey);
     const { startDate: trendStartDate } = getMonthRange(monthKeys[0]);
     const { endDate: trendEndDate } = getMonthRange(monthKeys[monthKeys.length - 1]);
     const trendEnd = new Date(`${trendEndDate}T00:00:00`);
@@ -291,6 +290,8 @@ router.get('/summary', async (req, res) => {
 
     let paymentAnalytics = {
       currentMonthKey,
+      reviewMonthKey: monthKey,
+      reviewMonthAmount: 0,
       mtdAmount: 0,
       transactionCount: 0,
       fullMonthEstimate: 0,
@@ -327,6 +328,8 @@ router.get('/summary', async (req, res) => {
 
       paymentAnalytics = {
         currentMonthKey,
+        reviewMonthKey: monthKey,
+        reviewMonthAmount: 0,
         mtdAmount: Math.round(paymentMtdAmount * 100) / 100,
         transactionCount: Number(paymentRows[0]?.transaction_count) || 0,
         fullMonthEstimate: elapsedDays > 0 ? Math.round(((paymentMtdAmount / elapsedDays) * daysInMonth) * 100) / 100 : 0,
@@ -351,6 +354,7 @@ router.get('/summary', async (req, res) => {
         GROUP BY 1
       `, [paymentTrendStartDate, paymentTrendEndExclusive]) as any[];
       const paymentByMonth = new Map(paymentTrendRows.map((row: any) => [row.month, Number(row.value) || 0]));
+      paymentAnalytics.reviewMonthAmount = Math.round((paymentByMonth.get(monthKey) ?? 0) * 100) / 100;
       creditCardTrend = paymentTrendMonthKeys.map((key) => ({
         month: key,
         label: monthShortLabel(key),

@@ -4,6 +4,8 @@ import TrendSparkline, { type TrendPoint } from './TrendSparkline';
 
 interface SummaryData {
   paymentAnalytics?: {
+    reviewMonthKey: string;
+    reviewMonthAmount: number;
     mtdAmount: number;
     transactionCount: number;
     fullMonthEstimate: number;
@@ -38,6 +40,7 @@ export default function CreditCardSalesSlide({ monthKey }: { monthKey?: string }
   const trend = data?.trends?.creditCards ?? [];
   const trendTotal = trend.reduce((sum, point) => sum + (Number(point.value) || 0), 0);
   const trendAverage = trend.length > 0 ? trendTotal / trend.length : 0;
+  const reviewPoint = trend.find((point) => point.month === analytics?.reviewMonthKey) ?? trend[trend.length - 1];
 
   return (
     <div className="h-full flex flex-col px-10 py-8">
@@ -49,23 +52,29 @@ export default function CreditCardSalesSlide({ monthKey }: { monthKey?: string }
       ) : (
         <>
           <div className="flex gap-6 mb-6">
-            <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg px-6 py-3">
+            <div className="flex-[1.15] bg-blue-50 dark:bg-blue-900/30 rounded-lg px-6 py-3">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                Review Month{reviewPoint?.label ? ` (${reviewPoint.label})` : ''}
+              </div>
+              <div className="text-4xl font-bold text-blue-600 dark:text-blue-300">{fmt(analytics?.reviewMonthAmount ?? reviewPoint?.value)}</div>
+              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">Closed month total</div>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg px-6 py-3">
               <div className="text-sm text-gray-500 dark:text-gray-400">Current MTD</div>
-              <div className="text-3xl font-bold text-blue-600 dark:text-blue-300">{fmt(analytics?.mtdAmount)}</div>
+              <div className="text-3xl font-bold text-gray-700 dark:text-gray-200">
+                {fmt(analytics?.mtdAmount)}
+                <span className="ml-2 text-xl font-semibold text-gray-400">({fmt(analytics?.fullMonthEstimate)} est.)</span>
+              </div>
               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 {analytics?.transactionCount ?? 0} transaction{analytics?.transactionCount === 1 ? '' : 's'}
               </div>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg px-6 py-3">
-              <div className="text-sm text-gray-500 dark:text-gray-400">Full Month Estimate</div>
-              <div className="text-3xl font-bold text-gray-700 dark:text-gray-200">{fmt(analytics?.fullMonthEstimate)}</div>
-              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Day {analytics?.elapsedDays ?? '-'} of {analytics?.daysInMonth ?? '-'}
-              </div>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg px-6 py-3">
               <div className="text-sm text-gray-500 dark:text-gray-400">6-Month Average</div>
               <div className="text-3xl font-bold text-gray-700 dark:text-gray-200">{fmt(trendAverage)}</div>
+              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Previous full months
+              </div>
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -31,11 +31,24 @@ function formatCurrency(value: string | number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
 }
 
-function parseCurrency(value: string): string {
-  const cleaned = value.replace(/[$,\s]/g, '');
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return '0';
-  return num.toString();
+function getDefaultComparisonMonthKey(): string {
+  const now = new Date();
+  const previousFullMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${previousFullMonth.getFullYear()}-${String(previousFullMonth.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function parseMonthKey(monthKey: string): { year: number; month: number } {
+  const [yearText, monthText] = monthKey.split('-');
+  return { year: Number(yearText), month: Number(monthText) };
+}
+
+function shiftMonth(year: number, month: number, offset: number): { year: number; month: number } {
+  const date = new Date(year, month - 1 + offset, 1);
+  return { year: date.getFullYear(), month: date.getMonth() + 1 };
+}
+
+function formatPeriodLabel(start: { year: number; month: number }, end: { year: number; month: number }): string {
+  return `${MONTHS[start.month - 1]} ${start.year} - ${MONTHS[end.month - 1]} ${end.year}`;
 }
 
 export default function HistoricalDataEntry() {
@@ -45,6 +58,7 @@ export default function HistoricalDataEntry() {
   const [editedData, setEditedData] = useState<Record<string, string>>({});
   const [hasChanges, setHasChanges] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [comparisonMonthKey, setComparisonMonthKey] = useState(getDefaultComparisonMonthKey);
 
   const { data: historicalData, isLoading, refetch } = useQuery<HistoricalEntry[]>({
     queryKey: ['/api/historical-data'],
@@ -143,17 +157,16 @@ export default function HistoricalDataEntry() {
     return cats.reduce((sum, cat) => sum + (parseFloat(getValue(year, month, cat)) || 0), 0);
   };
 
-  const getFiscalYearTotal = (
-    startYear: number,
-    startMonth: number,
+  const getRollingPeriodTotal = (
+    endYear: number,
+    endMonth: number,
     cats: string[],
   ): number => {
     let total = 0;
-    for (let i = 0; i < 12; i++) {
-      const m = ((startMonth - 1 + i) % 12) + 1;
-      const y = startYear + Math.floor((startMonth - 1 + i) / 12);
+    for (let i = 11; i >= 0; i--) {
+      const { year, month } = shiftMonth(endYear, endMonth, -i);
       total += cats.reduce(
-        (sum, cat) => sum + (parseFloat(getValue(y, m, cat)) || 0),
+        (sum, cat) => sum + (parseFloat(getValue(year, month, cat)) || 0),
         0,
       );
     }
@@ -161,8 +174,14 @@ export default function HistoricalDataEntry() {
   };
 
   const renderCreditCardTab = () => {
-    const currentFY = getFiscalYearTotal(2025, 5, ['online', 'phone']);
-    const priorFY = getFiscalYearTotal(2024, 5, ['online', 'phone']);
+    const comparisonEnd = parseMonthKey(comparisonMonthKey);
+    const currentStart = shiftMonth(comparisonEnd.year, comparisonEnd.month, -11);
+    const priorEnd = shiftMonth(comparisonEnd.year, comparisonEnd.month, -12);
+    const priorStart = shiftMonth(comparisonEnd.year, comparisonEnd.month, -23);
+    const currentLabel = formatPeriodLabel(currentStart, comparisonEnd);
+    const priorLabel = formatPeriodLabel(priorStart, priorEnd);
+    const currentFY = getRollingPeriodTotal(comparisonEnd.year, comparisonEnd.month, ['online', 'phone']);
+    const priorFY = getRollingPeriodTotal(priorEnd.year, priorEnd.month, ['online', 'phone']);
     const ratio = priorFY > 0 ? currentFY / priorFY : null;
     const pctChange = priorFY > 0 ? ((currentFY - priorFY) / priorFY) * 100 : null;
     const isUp = pctChange !== null && pctChange >= 0;
@@ -173,14 +192,30 @@ export default function HistoricalDataEntry() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">YoY Comparison</CardTitle>
             <CardDescription>
-              May 2025 – Apr 2026 vs May 2024 – Apr 2025 (Total)
+              {currentLabel} vs {priorLabel} (Total)
             </CardDescription>
+            <div className="flex flex-col gap-1 pt-2 sm:w-48">
+              <label htmlFor="comparison-ending-month" className="text-xs font-medium text-muted-foreground">
+                Ending month
+              </label>
+              <Input
+                id="comparison-ending-month"
+                type="month"
+                value={comparisonMonthKey}
+                max={getDefaultComparisonMonthKey()}
+                onChange={(event) => {
+                  if (event.target.value) setComparisonMonthKey(event.target.value);
+                }}
+                className="h-9"
+                data-testid="input-yoy-ending-month"
+              />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground mb-1">
-                  May 2025 – Apr 2026
+                  {currentLabel}
                 </div>
                 <div
                   className="text-lg font-bold"
@@ -191,7 +226,7 @@ export default function HistoricalDataEntry() {
               </div>
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground mb-1">
-                  May 2024 – Apr 2025
+                  {priorLabel}
                 </div>
                 <div
                   className="text-lg font-bold"

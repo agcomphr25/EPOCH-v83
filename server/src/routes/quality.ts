@@ -1,5 +1,8 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import multer from 'multer';
+import path from 'path';
 import {
   insertQcDefinitionSchema,
   insertQcSubmissionSchema,
@@ -21,6 +24,48 @@ import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
+const qmsEvidenceUploadDir = path.join(process.cwd(), 'uploads', 'qms-calibration-evidence');
+
+type UploadedFile = {
+  originalname: string;
+  filename: string;
+  mimetype: string;
+  size: number;
+  path: string;
+};
+
+if (!fs.existsSync(qmsEvidenceUploadDir)) {
+  fs.mkdirSync(qmsEvidenceUploadDir, { recursive: true });
+}
+
+const qmsEvidenceUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, qmsEvidenceUploadDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const safeBase = path
+        .basename(file.originalname, ext)
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 80);
+      cb(null, `${Date.now()}_${crypto.randomBytes(8).toString('hex')}_${safeBase}${ext}`);
+    },
+  }),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const allowedOfficeFiles = [
+      'application/pdf',
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+    if (file.mimetype.startsWith('image/') || allowedOfficeFiles.includes(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Evidence uploads must be PDF, image, CSV, Excel, or Word files.'));
+  },
+});
 
 const qmsPartsEquipmentTabs = [
   {
@@ -174,6 +219,28 @@ function appendMetadataList(metadata: Record<string, unknown>, key: string, item
     ...metadata,
     [key]: [...current, item],
   };
+}
+
+function metadataList(value: unknown, key: string): Record<string, unknown>[] {
+  const metadata = metadataRecord(value);
+  return Array.isArray(metadata[key])
+    ? (metadata[key] as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    : [];
+}
+
+function sourceTabsForAsset(value: unknown): string[] {
+  const metadata = metadataRecord(value);
+  if (Array.isArray(metadata.qmsSourceTabs)) {
+    return metadata.qmsSourceTabs
+      .map((item) => compactString(item))
+      .filter((item): item is string => Boolean(item));
+  }
+  const source = compactString(metadata.qmsSheetName);
+  return source ? [source] : [];
+}
+
+function assetHasEvidence(asset: { evidenceUrl?: string | null; metadata?: unknown }) {
+  return Boolean(compactString(asset.evidenceUrl) || metadataList(asset.metadata, 'evidenceItems').length > 0);
 }
 
 function reviewStatusFromAction(action: string) {
@@ -473,6 +540,21 @@ router.get('/qms/parts-equipment/summary', async (_req: Request, res: Response) 
       ...tab,
       count: assets.filter((asset) => (asset.metadata as Record<string, unknown> | null)?.qmsSheetName === tab.sheetName || asset.assetType === tab.assetType).length,
     }));
+    const calibrationScopedAssets = assets.filter((asset) => (
+      ['measuring_device', 'calibration_gage', 'validation_asset', 'calibration_archive'].includes(asset.assetType)
+    ));
+    const missingEvidence = calibrationScopedAssets.filter((asset) => !assetHasEvidence(asset));
+    const multiSourceAssets = assets.filter((asset) => sourceTabsForAsset(asset.metadata).length > 1);
+    const needsReview = assets.filter((asset) => (
+      asset.status === 'expired' ||
+      asset.status === 'locked_out' ||
+      missingEvidence.some((missing) => missing.id === asset.id)
+    ));
+    const cleanup = {
+      missingEvidence: missingEvidence.slice(0, 25),
+      needsReview: needsReview.slice(0, 25),
+      multiSourceAssets: multiSourceAssets.slice(0, 25),
+    };
 
     res.json({
       tabs: byTab,
@@ -480,11 +562,15 @@ router.get('/qms/parts-equipment/summary', async (_req: Request, res: Response) 
       events: events.slice(0, 200),
       upcoming,
       overdue,
+      cleanup,
       stats: {
         totalAssets: assets.length,
         dueSoon: upcoming.length,
         overdue: overdue.length,
         lockedOut: assets.filter((asset) => asset.status === 'locked_out').length,
+        missingEvidence: missingEvidence.length,
+        needsReview: needsReview.length,
+        multiSourceRecords: multiSourceAssets.length,
       },
     });
   } catch (error) {
@@ -721,6 +807,97 @@ router.post('/qms/parts-equipment/assets/:id/evidence', requirePermission('quali
     console.error('Attach QMS evidence error:', error);
     if (error instanceof Error) return res.status(400).json({ error: error.message });
     res.status(500).json({ error: 'Failed to attach evidence' });
+  }
+});
+
+router.post('/qms/parts-equipment/assets/:id/evidence/upload', requirePermission('quality.manage_calibration'), qmsEvidenceUpload.single('file'), async (req: Request, res: Response) => {
+  const file = req.file as UploadedFile | undefined;
+  try {
+    if (!file) return res.status(400).json({ error: 'Evidence file is required' });
+
+    const [existing] = await db
+      .select()
+      .from(calibrationAssets)
+      .where(eq(calibrationAssets.id, req.params.id))
+      .limit(1);
+    if (!existing) {
+      fs.unlink(file.path, () => undefined);
+      return res.status(404).json({ error: 'Calibration asset not found' });
+    }
+
+    const evidenceItem = {
+      id: crypto.randomUUID(),
+      label: compactString(req.body?.label) ?? path.basename(file.originalname),
+      evidenceUrl: '',
+      originalFileName: file.originalname,
+      storedFileName: file.filename,
+      mimeType: file.mimetype,
+      fileSizeBytes: file.size,
+      filePath: file.path,
+      notes: compactString(req.body?.notes),
+      attachedBy: compactString(req.body?.attachedBy),
+      attachedAt: new Date().toISOString(),
+    };
+    evidenceItem.evidenceUrl = `/api/quality/qms/parts-equipment/assets/${existing.id}/evidence/${evidenceItem.id}/download`;
+
+    const metadata = appendMetadataList(metadataRecord(existing.metadata), 'evidenceItems', evidenceItem);
+
+    const [asset] = await db
+      .update(calibrationAssets)
+      .set({
+        evidenceUrl: evidenceItem.evidenceUrl,
+        metadata,
+        updatedAt: new Date(),
+      })
+      .where(eq(calibrationAssets.id, existing.id))
+      .returning();
+
+    await db
+      .insert(calibrationEvents)
+      .values({
+        assetId: existing.id,
+        eventType: 'evidence_uploaded',
+        eventDate: new Date().toISOString().slice(0, 10),
+        result: 'pass',
+        performedBy: compactString(req.body?.attachedBy),
+        evidenceUrl: evidenceItem.evidenceUrl,
+        notes: compactString(req.body?.notes) ?? `Evidence uploaded: ${evidenceItem.label}`,
+      });
+
+    res.status(201).json({ asset, evidenceItem });
+  } catch (error) {
+    if (file) fs.unlink(file.path, () => undefined);
+    console.error('Upload QMS evidence error:', error);
+    if (error instanceof Error) return res.status(400).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to upload evidence' });
+  }
+});
+
+router.get('/qms/parts-equipment/assets/:id/evidence/:evidenceId/download', requirePermission('quality.manage_calibration'), async (req: Request, res: Response) => {
+  try {
+    const [existing] = await db
+      .select()
+      .from(calibrationAssets)
+      .where(eq(calibrationAssets.id, req.params.id))
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: 'Calibration asset not found' });
+
+    const evidenceItem = metadataList(existing.metadata, 'evidenceItems')
+      .find((item) => item.id === req.params.evidenceId);
+    const storedPath = compactString(evidenceItem?.filePath);
+    if (!evidenceItem || !storedPath) return res.status(404).json({ error: 'Evidence file not found' });
+
+    const resolvedBase = path.resolve(qmsEvidenceUploadDir);
+    const resolvedPath = path.resolve(storedPath);
+    if (!resolvedPath.startsWith(`${resolvedBase}${path.sep}`) && resolvedPath !== resolvedBase) {
+      return res.status(400).json({ error: 'Invalid evidence file path' });
+    }
+    if (!fs.existsSync(resolvedPath)) return res.status(404).json({ error: 'Evidence file is missing from storage' });
+
+    res.download(resolvedPath, compactString(evidenceItem.originalFileName) ?? path.basename(resolvedPath));
+  } catch (error) {
+    console.error('Download QMS evidence error:', error);
+    res.status(500).json({ error: 'Failed to download evidence' });
   }
 });
 

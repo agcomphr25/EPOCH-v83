@@ -61,6 +61,10 @@ function getRecentMonthKeys(monthKey: string, count = 6): string[] {
   });
 }
 
+function getMonthKeyFromDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function monthShortLabel(monthKey: string): string {
   const [yearText, monthText] = monthKey.split('-');
   const date = new Date(Number(yearText), Number(monthText) - 1, 1);
@@ -152,12 +156,17 @@ router.get('/summary', async (req, res) => {
   try {
     const monthKey = typeof req.query.monthKey === 'string' ? req.query.monthKey : getPreviousFullMonthKey();
     const monthKeys = getRecentMonthKeys(monthKey);
+    const now = new Date();
+    const currentMonthKey = getMonthKeyFromDate(now);
+    const previousFullPaymentMonthKey = getPreviousFullMonthKey(now);
+    const paymentTrendMonthKeys = getRecentMonthKeys(previousFullPaymentMonthKey);
     const { startDate: trendStartDate } = getMonthRange(monthKeys[0]);
     const { endDate: trendEndDate } = getMonthRange(monthKeys[monthKeys.length - 1]);
     const trendEnd = new Date(`${trendEndDate}T00:00:00`);
     trendEnd.setDate(trendEnd.getDate() + 1);
     const trendEndExclusive = toDateOnly(trendEnd)!;
     const emptyTrend = () => monthKeys.map((key) => ({ month: key, label: monthShortLabel(key), value: null as number | null }));
+    const emptyPaymentTrend = () => paymentTrendMonthKeys.map((key) => ({ month: key, label: monthShortLabel(key), value: null as number | null }));
     const dataErrors: string[] = []; // collects any query failures for client visibility
 
     // Revenue (last 6 months) — payments.payment_amount (CC payments)
@@ -280,6 +289,75 @@ router.get('/summary', async (req, res) => {
       }));
     } catch (err: any) { const msg = `revenue trend query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
+    let paymentAnalytics = {
+      currentMonthKey,
+      mtdAmount: 0,
+      transactionCount: 0,
+      fullMonthEstimate: 0,
+      elapsedDays: now.getDate(),
+      daysInMonth: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
+      source: '/payment-analytics',
+    };
+    let creditCardTrend = emptyPaymentTrend();
+    try {
+      const { startDate: paymentTrendStartDate } = getMonthRange(paymentTrendMonthKeys[0]);
+      const { endDate: paymentTrendEndDate } = getMonthRange(paymentTrendMonthKeys[paymentTrendMonthKeys.length - 1]);
+      const paymentTrendEnd = new Date(`${paymentTrendEndDate}T00:00:00`);
+      paymentTrendEnd.setDate(paymentTrendEnd.getDate() + 1);
+      const paymentTrendEndExclusive = toDateOnly(paymentTrendEnd)!;
+      const { startDate: currentPaymentStartDate } = getMonthRange(currentMonthKey);
+
+      const paymentRows = await pool.query(`
+        SELECT
+          COALESCE(SUM(p.payment_amount), 0) AS mtd_amount,
+          COUNT(*) AS transaction_count
+        FROM payments p
+        LEFT JOIN credit_card_transactions cct ON cct.payment_id = p.id
+        WHERE p.payment_date >= $1::date
+          AND p.payment_date <= NOW()
+          AND p.payment_type IN ('credit_card', 'aaaa', 'agr')
+          AND (
+            p.payment_type != 'credit_card'
+            OR cct.status = 'completed'
+          )
+      `, [currentPaymentStartDate]) as any[];
+      const paymentMtdAmount = Number(paymentRows[0]?.mtd_amount) || 0;
+      const elapsedDays = now.getDate();
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+      paymentAnalytics = {
+        currentMonthKey,
+        mtdAmount: Math.round(paymentMtdAmount * 100) / 100,
+        transactionCount: Number(paymentRows[0]?.transaction_count) || 0,
+        fullMonthEstimate: elapsedDays > 0 ? Math.round(((paymentMtdAmount / elapsedDays) * daysInMonth) * 100) / 100 : 0,
+        elapsedDays,
+        daysInMonth,
+        source: '/payment-analytics',
+      };
+
+      const paymentTrendRows = await pool.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', p.payment_date), 'YYYY-MM') AS month,
+          COALESCE(SUM(p.payment_amount), 0) AS value
+        FROM payments p
+        LEFT JOIN credit_card_transactions cct ON cct.payment_id = p.id
+        WHERE p.payment_date >= $1::date
+          AND p.payment_date < $2::date
+          AND p.payment_type IN ('credit_card', 'aaaa', 'agr')
+          AND (
+            p.payment_type != 'credit_card'
+            OR cct.status = 'completed'
+          )
+        GROUP BY 1
+      `, [paymentTrendStartDate, paymentTrendEndExclusive]) as any[];
+      const paymentByMonth = new Map(paymentTrendRows.map((row: any) => [row.month, Number(row.value) || 0]));
+      creditCardTrend = paymentTrendMonthKeys.map((key) => ({
+        month: key,
+        label: monthShortLabel(key),
+        value: paymentByMonth.get(key) ?? 0,
+      }));
+    } catch (err: any) { const msg = `payment analytics query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
+
     // AR aging using balance (total_amount - payments allocated) per existing AR aging endpoint pattern
     let arAging = { current: 0, days30: 0, days60: 0, days90plus: 0, totalOutstanding: 0 };
     try {
@@ -397,6 +475,7 @@ router.get('/summary', async (req, res) => {
         growthPct: revenueGrowthPct,
         lastUpdated: fetchedAt,
       },
+      paymentAnalytics: { ...paymentAnalytics, lastUpdated: fetchedAt },
       reviewPeriod: otdSummary ? {
         monthKey: otdSummary.monthKey,
         startDate: otdSummary.startDate,
@@ -426,6 +505,7 @@ router.get('/summary', async (req, res) => {
         ncr: ncrTrend,
         customerSatisfaction: customerSatisfactionTrend,
         revenue: revenueTrend,
+        creditCards: creditCardTrend,
       },
       dataErrors: dataErrors.length > 0 ? dataErrors : undefined,
     });

@@ -19625,8 +19625,7 @@ export class DatabaseStorage implements IStorage {
     return !!(
       match.drawingKnowledge &&
       match.specSheetUnderstanding &&
-      match.procedureCompletion &&
-      match.certifiedDate
+      match.procedureCompletion
     );
   }
 

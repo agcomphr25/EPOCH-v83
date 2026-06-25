@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import {
   insertQcDefinitionSchema,
   insertQcSubmissionSchema,
@@ -159,6 +160,33 @@ function eventResult(row: QmsImportRow): 'pass' | 'fail' | 'limited_use' {
 
 function tabConfigForSheet(sheetName: string) {
   return qmsPartsEquipmentTabs.find((tab) => tab.sheetName === sheetName);
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function appendMetadataList(metadata: Record<string, unknown>, key: string, item: Record<string, unknown>) {
+  const current = Array.isArray(metadata[key]) ? metadata[key] as unknown[] : [];
+  return {
+    ...metadata,
+    [key]: [...current, item],
+  };
+}
+
+function reviewStatusFromAction(action: string) {
+  if (action === 'approve') return 'active';
+  if (action === 'limited_use') return 'due_soon';
+  if (action === 'retire') return 'retired';
+  return 'locked_out';
+}
+
+function reviewResultFromAction(action: string): 'pass' | 'fail' | 'limited_use' {
+  if (action === 'approve') return 'pass';
+  if (action === 'limited_use') return 'limited_use';
+  return 'fail';
 }
 
 async function nextCapaNumber(): Promise<string> {
@@ -641,6 +669,123 @@ router.post('/qms/parts-equipment/import', requirePermission('quality.manage_cal
     console.error('QMS parts/equipment import error:', error);
     if (error instanceof Error) return res.status(400).json({ error: error.message });
     res.status(500).json({ error: 'Failed to import QMS parts and equipment' });
+  }
+});
+
+router.post('/qms/parts-equipment/assets/:id/evidence', requirePermission('quality.manage_calibration'), async (req: Request, res: Response) => {
+  try {
+    const [existing] = await db
+      .select()
+      .from(calibrationAssets)
+      .where(eq(calibrationAssets.id, req.params.id))
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: 'Calibration asset not found' });
+
+    const evidenceUrl = compactString(req.body?.evidenceUrl);
+    if (!evidenceUrl) return res.status(400).json({ error: 'Evidence URL or reference is required' });
+
+    const evidenceItem = {
+      id: crypto.randomUUID(),
+      label: compactString(req.body?.label) ?? 'Evidence',
+      evidenceUrl,
+      notes: compactString(req.body?.notes),
+      attachedBy: compactString(req.body?.attachedBy),
+      attachedAt: new Date().toISOString(),
+    };
+    const metadata = appendMetadataList(metadataRecord(existing.metadata), 'evidenceItems', evidenceItem);
+
+    const [asset] = await db
+      .update(calibrationAssets)
+      .set({
+        evidenceUrl,
+        metadata,
+        updatedAt: new Date(),
+      })
+      .where(eq(calibrationAssets.id, existing.id))
+      .returning();
+
+    await db
+      .insert(calibrationEvents)
+      .values({
+        assetId: existing.id,
+        eventType: 'evidence_attached',
+        eventDate: new Date().toISOString().slice(0, 10),
+        result: 'pass',
+        performedBy: compactString(req.body?.attachedBy),
+        evidenceUrl,
+        notes: compactString(req.body?.notes) ?? `Evidence attached: ${evidenceItem.label}`,
+      });
+
+    res.status(201).json(asset);
+  } catch (error) {
+    console.error('Attach QMS evidence error:', error);
+    if (error instanceof Error) return res.status(400).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to attach evidence' });
+  }
+});
+
+router.post('/qms/parts-equipment/assets/:id/review', requirePermission('quality.manage_calibration'), async (req: Request, res: Response) => {
+  try {
+    const action = compactString(req.body?.action) ?? '';
+    if (!['approve', 'limited_use', 'lock_out', 'retire'].includes(action)) {
+      return res.status(400).json({ error: 'Review action must be approve, limited_use, lock_out, or retire' });
+    }
+
+    const [existing] = await db
+      .select()
+      .from(calibrationAssets)
+      .where(eq(calibrationAssets.id, req.params.id))
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: 'Calibration asset not found' });
+
+    const result = reviewResultFromAction(action);
+    const status = reviewStatusFromAction(action);
+    const reviewedAt = new Date();
+    const reviewItem = {
+      id: crypto.randomUUID(),
+      action,
+      result,
+      status,
+      reviewedBy: compactString(req.body?.reviewedBy),
+      reason: compactString(req.body?.reason),
+      evidenceUrl: compactString(req.body?.evidenceUrl),
+      nextDueDate: parseDateValue(req.body?.nextDueDate),
+      reviewedAt: reviewedAt.toISOString(),
+    };
+    const metadata = appendMetadataList(metadataRecord(existing.metadata), 'reviewActions', reviewItem);
+
+    const [asset] = await db
+      .update(calibrationAssets)
+      .set({
+        status,
+        lockoutReason: status === 'locked_out' ? reviewItem.reason ?? 'Quality review lockout' : null,
+        lockedOutAt: status === 'locked_out' ? reviewedAt : null,
+        calibrationDueDate: reviewItem.nextDueDate ?? existing.calibrationDueDate,
+        evidenceUrl: reviewItem.evidenceUrl ?? existing.evidenceUrl,
+        metadata,
+        updatedAt: reviewedAt,
+      })
+      .where(eq(calibrationAssets.id, existing.id))
+      .returning();
+
+    await db
+      .insert(calibrationEvents)
+      .values({
+        assetId: existing.id,
+        eventType: `review_${action}`,
+        eventDate: reviewedAt.toISOString().slice(0, 10),
+        result,
+        performedBy: reviewItem.reviewedBy as string | undefined,
+        evidenceUrl: reviewItem.evidenceUrl as string | undefined,
+        nextDueDate: reviewItem.nextDueDate as string | undefined,
+        notes: reviewItem.reason as string | undefined,
+      });
+
+    res.status(201).json(asset);
+  } catch (error) {
+    console.error('QMS review action error:', error);
+    if (error instanceof Error) return res.status(400).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to record review action' });
   }
 });
 

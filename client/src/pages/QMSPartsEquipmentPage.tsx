@@ -6,11 +6,14 @@ import {
   CalendarClock,
   CheckSquare,
   ClipboardList,
+  ExternalLink,
   FileInput,
   History,
+  Lock,
   PackageCheck,
   Plus,
   Printer,
+  ShieldCheck,
   Upload,
 } from 'lucide-react';
 
@@ -141,10 +144,24 @@ function assetsForTab(assets: CalibrationAsset[], tab: QmsTab) {
   return assets.filter((asset) => asset.assetType === tab.assetType || asset.metadata?.qmsSheetName === tab.sheetName);
 }
 
+function metadataList<T = Record<string, unknown>>(asset: CalibrationAsset | undefined, key: string): T[] {
+  const value = asset?.metadata?.[key];
+  return Array.isArray(value) ? value as T[] : [];
+}
+
+function sourceCount(asset: CalibrationAsset) {
+  return Array.isArray(asset.metadata?.qmsSourceTabs)
+    ? asset.metadata.qmsSourceTabs.length
+    : asset.metadata?.qmsSheetName
+      ? 1
+      : 0;
+}
+
 export default function QMSPartsEquipmentPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [selectedTab, setSelectedTab] = useState(unifiedTab.key);
+  const [selectedAssetId, setSelectedAssetId] = useState('');
   const [importFileName, setImportFileName] = useState('');
   const [newAsset, setNewAsset] = useState({
     assetTag: '',
@@ -170,6 +187,19 @@ export default function QMSPartsEquipmentPage() {
     },
     notes: '',
   });
+  const [evidence, setEvidence] = useState({
+    label: '',
+    evidenceUrl: '',
+    attachedBy: '',
+    notes: '',
+  });
+  const [review, setReview] = useState({
+    action: 'approve',
+    reviewedBy: '',
+    reason: '',
+    nextDueDate: '',
+    evidenceUrl: '',
+  });
 
   const { data: summary, isLoading } = useQuery<Summary>({
     queryKey: ['/api/quality/qms/parts-equipment/summary'],
@@ -189,6 +219,9 @@ export default function QMSPartsEquipmentPage() {
   const activeTab = tabs.find((tab) => tab.key === selectedTab) ?? tabs[0];
   const createTab = activeTab.key === 'all' ? sourceTabs[0] : activeTab;
   const visibleAssets = useMemo(() => assetsForTab(assets, activeTab), [assets, activeTab]);
+  const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? visibleAssets[0];
+  const selectedEvidence = metadataList<{ id?: string; label?: string; evidenceUrl?: string; attachedBy?: string; attachedAt?: string; notes?: string }>(selectedAsset, 'evidenceItems');
+  const selectedReviews = metadataList<{ id?: string; action?: string; reviewedBy?: string; reviewedAt?: string; reason?: string; status?: string }>(selectedAsset, 'reviewActions');
   const auditAssetOptions = useMemo(
     () => assets.filter((asset) => ['measuring_device', 'calibration_gage', 'validation_asset', 'calibration_archive'].includes(asset.assetType)),
     [assets]
@@ -270,9 +303,76 @@ export default function QMSPartsEquipmentPage() {
     onError: (error: any) => toast({ title: 'Audit failed', description: error.message, variant: 'destructive' }),
   });
 
+  const evidenceMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/quality/qms/parts-equipment/assets/${selectedAsset?.id}/evidence`, {
+        method: 'POST',
+        body: evidence,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/quality/qms/parts-equipment/summary'] });
+      setEvidence({ label: '', evidenceUrl: '', attachedBy: '', notes: '' });
+      toast({ title: 'Evidence attached' });
+    },
+    onError: (error: any) => toast({ title: 'Evidence failed', description: error.message, variant: 'destructive' }),
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/quality/qms/parts-equipment/assets/${selectedAsset?.id}/review`, {
+        method: 'POST',
+        body: review,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/quality/qms/parts-equipment/summary'] });
+      setReview({ action: 'approve', reviewedBy: '', reason: '', nextDueDate: '', evidenceUrl: '' });
+      toast({ title: 'Review action recorded' });
+    },
+    onError: (error: any) => toast({ title: 'Review failed', description: error.message, variant: 'destructive' }),
+  });
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <style>{`
+        .qms-print-packet { display: none; }
+        @media print {
+          .qms-screen-only { display: none !important; }
+          .qms-print-packet { display: block !important; color: #111827; }
+          .qms-print-packet table { width: 100%; border-collapse: collapse; }
+          .qms-print-packet th, .qms-print-packet td { border: 1px solid #d1d5db; padding: 6px; text-align: left; }
+        }
+      `}</style>
+      <div className="qms-print-packet space-y-4">
+        <h1 className="text-2xl font-bold">QMS Calibration Audit Packet</h1>
+        {selectedAsset ? (
+          <>
+            <table>
+              <tbody>
+                <tr><th>Asset tag</th><td>{selectedAsset.assetTag}</td></tr>
+                <tr><th>Name</th><td>{selectedAsset.name}</td></tr>
+                <tr><th>Location</th><td>{selectedAsset.location || selectedAsset.ownerDepartment || '-'}</td></tr>
+                <tr><th>Status</th><td>{selectedAsset.status.replace('_', ' ')}</td></tr>
+                <tr><th>Calibration due</th><td>{dateOnly(selectedAsset.calibrationDueDate) || '-'}</td></tr>
+                <tr><th>Evidence</th><td>{selectedAsset.evidenceUrl || '-'}</td></tr>
+              </tbody>
+            </table>
+            <h2 className="text-lg font-semibold">Checklist</h2>
+            <table>
+              <tbody>
+                {Object.entries(audit.checklist).map(([key, checked]) => (
+                  <tr key={key}><td>{key.replace(/([A-Z])/g, ' $1').toLowerCase()}</td><td>{checked ? 'Yes' : 'No'}</td></tr>
+                ))}
+              </tbody>
+            </table>
+            <h2 className="text-lg font-semibold">Latest notes</h2>
+            <p>{audit.notes || review.reason || '-'}</p>
+          </>
+        ) : (
+          <p>No QMS asset selected.</p>
+        )}
+      </div>
+
+      <div className="qms-screen-only flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
           <Badge variant="outline" className="w-fit">QMS</Badge>
           <h1 className="text-3xl font-bold tracking-normal">Parts and Equipment</h1>
@@ -312,7 +412,7 @@ export default function QMSPartsEquipmentPage() {
         </Alert>
       )}
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="qms-screen-only grid gap-3 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total controlled items</CardDescription>
@@ -340,6 +440,7 @@ export default function QMSPartsEquipmentPage() {
       </div>
 
       <Tabs
+        className="qms-screen-only"
         value={selectedTab}
         onValueChange={(value) => {
           setSelectedTab(value);
@@ -380,13 +481,14 @@ export default function QMSPartsEquipmentPage() {
                           <TableHead>Sources</TableHead>
                           <TableHead>Due</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead>Action</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {isLoading ? (
-                          <TableRow><TableCell colSpan={6}>Loading QMS records...</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={7}>Loading QMS records...</TableCell></TableRow>
                         ) : assetsForTab(assets, tab).length === 0 ? (
-                          <TableRow><TableCell colSpan={6}>No records in this tab yet.</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={7}>No records in this tab yet.</TableCell></TableRow>
                         ) : (
                           assetsForTab(assets, tab).slice(0, 80).map((asset) => (
                             <TableRow key={asset.id}>
@@ -394,17 +496,25 @@ export default function QMSPartsEquipmentPage() {
                               <TableCell>{asset.name}</TableCell>
                               <TableCell>{asset.location || asset.ownerDepartment || '-'}</TableCell>
                               <TableCell>
-                                {Array.isArray(asset.metadata?.qmsSourceTabs)
-                                  ? asset.metadata.qmsSourceTabs.length
-                                  : asset.metadata?.qmsSheetName
-                                    ? 1
-                                    : '-'}
+                                {sourceCount(asset) || '-'}
                               </TableCell>
                               <TableCell>{dateOnly(asset.calibrationDueDate) || '-'}</TableCell>
                               <TableCell>
                                 <Badge variant="outline" className={statusClasses[asset.status] ?? ''}>
                                   {asset.status.replace('_', ' ')}
                                 </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedAssetId(asset.id);
+                                    setAudit((prev) => ({ ...prev, assetId: asset.id }));
+                                  }}
+                                >
+                                  Manage
+                                </Button>
                               </TableCell>
                             </TableRow>
                           ))
@@ -465,7 +575,160 @@ export default function QMSPartsEquipmentPage() {
         ))}
       </Tabs>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="qms-screen-only grid gap-4 xl:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <PackageCheck className="h-5 w-5" />
+              Selected Record
+            </CardTitle>
+            <CardDescription>Review the item before attaching evidence or changing status.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {selectedAsset ? (
+              <>
+                <div>
+                  <p className="text-sm text-muted-foreground">Asset</p>
+                  <p className="font-medium">{selectedAsset.assetTag} - {selectedAsset.name}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Status</p>
+                    <Badge variant="outline" className={statusClasses[selectedAsset.status] ?? ''}>{selectedAsset.status.replace('_', ' ')}</Badge>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Due</p>
+                    <p>{dateOnly(selectedAsset.calibrationDueDate) || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Sources</p>
+                    <p>{sourceCount(selectedAsset) || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Evidence</p>
+                    <p>{selectedEvidence.length}</p>
+                  </div>
+                </div>
+                {selectedAsset.lockoutReason && (
+                  <Alert variant="destructive">
+                    <Lock className="h-4 w-4" />
+                    <AlertTitle>Lockout reason</AlertTitle>
+                    <AlertDescription>{selectedAsset.lockoutReason}</AlertDescription>
+                  </Alert>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Select a record from the register to manage it.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ExternalLink className="h-5 w-5" />
+              Evidence Attachments
+            </CardTitle>
+            <CardDescription>Attach certificate, report, or storage reference evidence.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Label</Label>
+                <Input value={evidence.label} onChange={(e) => setEvidence((prev) => ({ ...prev, label: e.target.value }))} placeholder="Calibration cert" />
+              </div>
+              <div className="space-y-2">
+                <Label>Attached by</Label>
+                <Input value={evidence.attachedBy} onChange={(e) => setEvidence((prev) => ({ ...prev, attachedBy: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>URL or file reference</Label>
+              <Input value={evidence.evidenceUrl} onChange={(e) => setEvidence((prev) => ({ ...prev, evidenceUrl: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Evidence notes</Label>
+              <Textarea value={evidence.notes} onChange={(e) => setEvidence((prev) => ({ ...prev, notes: e.target.value }))} />
+            </div>
+            <Button
+              className="w-full"
+              disabled={!selectedAsset || !evidence.evidenceUrl || evidenceMutation.isPending}
+              onClick={() => evidenceMutation.mutate()}
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Attach Evidence
+            </Button>
+            <div className="space-y-2">
+              {selectedEvidence.slice(-3).map((item, index) => (
+                <div key={item.id ?? index} className="rounded-md border px-3 py-2 text-sm">
+                  <p className="font-medium">{item.label || 'Evidence'}</p>
+                  <p className="break-all text-muted-foreground">{item.evidenceUrl}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ShieldCheck className="h-5 w-5" />
+              Review and Lockout
+            </CardTitle>
+            <CardDescription>Approve, limit, lock out, or retire the selected item.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <Label>Action</Label>
+              <Select value={review.action} onValueChange={(value) => setReview((prev) => ({ ...prev, action: value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="approve">Approve / release</SelectItem>
+                  <SelectItem value="limited_use">Limited use</SelectItem>
+                  <SelectItem value="lock_out">Lock out</SelectItem>
+                  <SelectItem value="retire">Retire</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Reviewed by</Label>
+                <Input value={review.reviewedBy} onChange={(e) => setReview((prev) => ({ ...prev, reviewedBy: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Next due</Label>
+                <Input type="date" value={review.nextDueDate} onChange={(e) => setReview((prev) => ({ ...prev, nextDueDate: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Evidence reference</Label>
+              <Input value={review.evidenceUrl} onChange={(e) => setReview((prev) => ({ ...prev, evidenceUrl: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Reason</Label>
+              <Textarea value={review.reason} onChange={(e) => setReview((prev) => ({ ...prev, reason: e.target.value }))} />
+            </div>
+            <Button
+              className="w-full"
+              disabled={!selectedAsset || !review.reviewedBy || reviewMutation.isPending}
+              onClick={() => reviewMutation.mutate()}
+            >
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              Record Review
+            </Button>
+            <div className="space-y-2">
+              {selectedReviews.slice(-3).map((item, index) => (
+                <div key={item.id ?? index} className="rounded-md border px-3 py-2 text-sm">
+                  <p className="font-medium">{(item.action || 'review').replace('_', ' ')}</p>
+                  <p className="text-muted-foreground">{item.reviewedBy || 'Unknown'} - {dateOnly(item.reviewedAt) || '-'}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="qms-screen-only grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -501,7 +764,13 @@ export default function QMSPartsEquipmentPage() {
           <CardContent className="space-y-3">
             <div className="space-y-2">
               <Label>Asset</Label>
-              <Select value={audit.assetId} onValueChange={(value) => setAudit((prev) => ({ ...prev, assetId: value }))}>
+              <Select
+                value={audit.assetId}
+                onValueChange={(value) => {
+                  setSelectedAssetId(value);
+                  setAudit((prev) => ({ ...prev, assetId: value }));
+                }}
+              >
                 <SelectTrigger><SelectValue placeholder="Select calibrated item" /></SelectTrigger>
                 <SelectContent>
                   {auditAssetOptions.map((asset) => (
@@ -570,7 +839,7 @@ export default function QMSPartsEquipmentPage() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="qms-screen-only">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <History className="h-5 w-5" />
@@ -617,7 +886,7 @@ export default function QMSPartsEquipmentPage() {
       </Card>
 
       {(summary?.stats.overdue ?? 0) > 0 && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="qms-screen-only">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Expired calibration exists</AlertTitle>
           <AlertDescription>Review overdue items before releasing equipment for production or inspection use.</AlertDescription>

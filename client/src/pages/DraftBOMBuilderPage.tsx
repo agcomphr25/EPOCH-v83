@@ -6,15 +6,18 @@ import {
   Calculator,
   Check,
   Clock,
+  Eye,
   FileSpreadsheet,
   FilePlus,
   Filter,
   FolderOpen,
   Layers,
+  Lock,
   PackagePlus,
   Plus,
   Save,
   Search,
+  Send,
   SlidersHorizontal,
   Trash2,
   Upload,
@@ -158,6 +161,12 @@ type BomDraft = {
   customColumns?: string[];
   customPoColumns?: string[];
   workspaceTabs?: WorkspaceTabId[];
+  visibility?: 'public' | 'private';
+  allowPublicEdit?: boolean;
+  canEdit?: boolean;
+  canManageAccess?: boolean;
+  createdAt?: string;
+  createdByUserId?: number | null;
   createdByDisplayName?: string | null;
   updatedByDisplayName?: string | null;
 };
@@ -265,6 +274,7 @@ type CsvImportResult = {
 const STORAGE_KEY = 'epoch:draft-boms';
 const RD_PROJECTS_STORAGE_KEY = 'epoch.rdProjects.v1';
 const VENDOR_PO_HANDOFF_KEY = 'epoch:draft-bom-vendor-po-handoff';
+const DRAFT_TAB_HANDOFF_KEY = 'epoch:draft-builder-tab-handoff';
 const PRIVATEER_DRAFT_ID = 'privateer';
 const NEW_DRAFT_VALUE = '__new_draft__';
 const LEGACY_R_AND_D_PROJECT_VALUE = '__r_and_d__';
@@ -600,6 +610,8 @@ function createPrivateerDraft(): BomDraft {
     customColumns: [],
     customPoColumns: [],
     workspaceTabs: defaultWorkspaceTabs,
+    visibility: 'public',
+    allowPublicEdit: false,
   };
 }
 
@@ -678,6 +690,10 @@ function normalizeDraft(draft: BomDraft): BomDraft {
     customColumns: sanitizeCustomColumns([...(draft.customColumns ?? []), ...(draft.customPoColumns ?? [])]),
     customPoColumns: sanitizeCustomColumns(draft.customPoColumns ?? []),
     workspaceTabs: normalizeWorkspaceTabs(draft.workspaceTabs),
+    visibility: draft.visibility === 'private' ? 'private' : 'public',
+    allowPublicEdit: draft.allowPublicEdit === true,
+    canEdit: draft.canEdit,
+    canManageAccess: draft.canManageAccess,
   };
 }
 
@@ -883,7 +899,6 @@ function findInventoryMatch(partNumber: string, inventoryItems: InventoryItemOpt
     ) ?? null
   );
 }
-
 function inventoryStockQuantity(item?: InventoryItemOption | null) {
   if (!item) return 0;
   const quantity = Number(item.available ?? item.onHand ?? item.quantityInStock ?? 0);
@@ -1443,6 +1458,8 @@ function createBlankDraftForProject(selectedProject: ProjectSelectOption): BomDr
     customColumns: [],
     customPoColumns: [],
     workspaceTabs: defaultWorkspaceTabs,
+    visibility: 'public',
+    allowPublicEdit: false,
   };
 }
 
@@ -1472,6 +1489,8 @@ function createBlankDraftForTemporaryProject(projectName: string): BomDraft {
     customColumns: [],
     customPoColumns: [],
     workspaceTabs: defaultWorkspaceTabs,
+    visibility: 'public',
+    allowPublicEdit: false,
   };
 }
 
@@ -1479,6 +1498,11 @@ function formatDraftUpdatedAt(value: string) {
   const time = new Date(value);
   if (Number.isNaN(time.getTime())) return 'Unknown';
   return time.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function draftVisibilityLabel(draft: BomDraft) {
+  if (draft.visibility === 'private') return 'Private';
+  return draft.allowPublicEdit ? 'Public edit' : 'Public view';
 }
 
 export default function DraftBOMBuilderPage() {
@@ -1581,6 +1605,9 @@ export default function DraftBOMBuilderPage() {
         : draft.projectType === 'R_AND_D'
           ? LEGACY_R_AND_D_PROJECT_VALUE
           : '';
+  const canEditActiveDraft = draft.canEdit !== false;
+  const canManageActiveDraftAccess = draft.canManageAccess !== false;
+  const effectiveEditMode = isEditMode && canEditActiveDraft;
 
   const selectedLines = useMemo(() => draft.lines.filter((line) => line.include), [draft.lines]);
   const laborDepartments = useMemo(() => {
@@ -1696,7 +1723,7 @@ export default function DraftBOMBuilderPage() {
       return nextDrafts;
     });
 
-    if (hasLoadedSharedDrafts) {
+    if (hasLoadedSharedDrafts && canEditActiveDraft) {
       void saveSharedDraft(nextDraft)
         .then((savedDraft) => {
           const normalizedSavedDraft = normalizeDraft(savedDraft);
@@ -1714,6 +1741,7 @@ export default function DraftBOMBuilderPage() {
     }
   }, [
     customColumns,
+    canEditActiveDraft,
     draft,
     hasLoadedSharedDrafts,
     queryClient,
@@ -2128,6 +2156,15 @@ export default function DraftBOMBuilderPage() {
   }
 
   async function saveDraft() {
+    if (!canEditActiveDraft) {
+      toast({
+        title: 'View-only draft',
+        description: 'The creator has not allowed shared editing for this draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const nextDraft = normalizeDraft({
       ...draft,
       poVisibleColumns: visiblePoColumns,
@@ -2186,6 +2223,15 @@ export default function DraftBOMBuilderPage() {
   }
 
   async function deleteCurrentDraft() {
+    if (!canManageActiveDraftAccess) {
+      toast({
+        title: 'Creator access required',
+        description: 'Only the creator can delete or manage access for this draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!selectedDraftId) {
       toast({
         title: 'Save the draft first',
@@ -2237,6 +2283,15 @@ export default function DraftBOMBuilderPage() {
   }
 
   async function clearCurrentDraft() {
+    if (!canEditActiveDraft) {
+      toast({
+        title: 'View-only draft',
+        description: 'The creator has not allowed shared editing for this draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const confirmed = window.confirm(`Clear "${draft.name} - ${draft.revision}" and start over? This cannot be undone.`);
     if (!confirmed) return;
 
@@ -2332,6 +2387,15 @@ export default function DraftBOMBuilderPage() {
   }
 
   async function markSelectedFinalized() {
+    if (!canEditActiveDraft) {
+      toast({
+        title: 'View-only draft',
+        description: 'The creator has not allowed shared editing for this draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!draft.project) {
       toast({
         title: 'Select a project first',
@@ -2459,6 +2523,48 @@ export default function DraftBOMBuilderPage() {
       title: `${selectedLines.length} line(s) ready`,
       description: `The ${target} handoff is staged in the UI and ready for backend wiring.`,
     });
+  }
+
+  function pushActiveTabTo(target: 'rom' | 'p2-project' | 'rd-project') {
+    const payload = {
+      source: 'draft-builder',
+      draftId: draft.id,
+      draftName: draft.name,
+      revision: draft.revision,
+      project: draft.project,
+      projectId: draft.projectId,
+      projectCode: draft.projectCode,
+      projectName: draft.projectName,
+      projectType: draft.projectType,
+      tabId: activeWorkspaceTab,
+      tabLabel: workspaceTabLabel(activeWorkspaceTab),
+      createdAt: new Date().toISOString(),
+      draft,
+    };
+    window.localStorage.setItem(DRAFT_TAB_HANDOFF_KEY, JSON.stringify(payload));
+
+    if (target === 'rom') {
+      toast({ title: 'Tab pushed to ROM Builder', description: `${workspaceTabLabel(activeWorkspaceTab)} is ready for ROM import.` });
+      setLocation(`/rfq-builder?draftBuilderHandoff=1&draftId=${encodeURIComponent(draft.id)}&tab=${encodeURIComponent(activeWorkspaceTab)}`);
+      return;
+    }
+
+    if (target === 'p2-project') {
+      if (draft.projectType !== 'P2_PROJECT' || !draft.projectId) {
+        toast({
+          title: 'Link a P2 project first',
+          description: 'Select a P2 project before pushing this tab to a P2 project folder.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      toast({ title: 'Tab pushed to P2 project', description: `${workspaceTabLabel(activeWorkspaceTab)} is ready in the project context.` });
+      setLocation(`/projects/${draft.projectId}?draftBuilderHandoff=1&tab=${encodeURIComponent(activeWorkspaceTab)}`);
+      return;
+    }
+
+    toast({ title: 'Tab pushed to R&D projects', description: `${workspaceTabLabel(activeWorkspaceTab)} is ready for R&D project attachment.` });
+    setLocation(`/rd-projects?draftBuilderHandoff=1&draftId=${encodeURIComponent(draft.id)}&tab=${encodeURIComponent(activeWorkspaceTab)}`);
   }
 
   function setWorkspaceTabVisible(tabId: WorkspaceTabId, visible: boolean) {
@@ -2723,10 +2829,20 @@ export default function DraftBOMBuilderPage() {
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                            <span className="inline-flex items-center gap-1">
+                              {item.visibility === 'private' ? <Lock className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                              {draftVisibilityLabel(item)}
+                            </span>
+                            {item.createdByDisplayName ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                Created by {item.createdByDisplayName}
+                              </span>
+                            ) : null}
                             {item.updatedByDisplayName ? (
                               <span className="inline-flex items-center gap-1">
                                 <Users className="h-3 w-3" />
-                                {item.updatedByDisplayName}
+                                Updated by {item.updatedByDisplayName}
                               </span>
                             ) : null}
                             <span className="inline-flex items-center gap-1">
@@ -2759,16 +2875,22 @@ export default function DraftBOMBuilderPage() {
               <Badge variant="outline" className="border-orange-300 bg-orange-50 text-orange-800">
                 Spreadsheet style
               </Badge>
+              <Badge variant={draft.visibility === 'private' ? 'secondary' : 'outline'}>
+                {draftVisibilityLabel(draft)}
+              </Badge>
             </div>
             <p className="mt-1 text-sm text-slate-600">
               Draft reusable BOMs, select sourcing lines, and prepare RFQ or order picklists from one working grid.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Created by {draft.createdByDisplayName || 'unknown'}{canEditActiveDraft ? '' : ' - view only'}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <div className="flex min-w-[280px] flex-col gap-1.5">
               <Label htmlFor="active-project">Project</Label>
-              <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!isEditMode}>
+              <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!effectiveEditMode}>
                 <SelectTrigger id="active-project" className="bg-white">
                   <SelectValue placeholder="Select an R&D or P2 project" />
                 </SelectTrigger>
@@ -2815,9 +2937,10 @@ export default function DraftBOMBuilderPage() {
               <div className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm">
                 <Switch
                   id="draft-edit-mode"
-                  checked={isEditMode}
+                  checked={effectiveEditMode}
                   onCheckedChange={setIsEditMode}
                   aria-label="Toggle draft editing"
+                  disabled={!canEditActiveDraft}
                 />
                 <Label htmlFor="draft-edit-mode" className="cursor-pointer">
                   Editing
@@ -2831,19 +2954,19 @@ export default function DraftBOMBuilderPage() {
                 <FolderOpen className="mr-2 h-4 w-4" />
                 Draft library
               </Button>
-              <Button type="button" variant="outline" onClick={openCreateDraftPrompt} disabled={!isEditMode}>
+              <Button type="button" variant="outline" onClick={openCreateDraftPrompt} disabled={!effectiveEditMode}>
                 <Plus className="mr-2 h-4 w-4" />
                 New draft
               </Button>
-              <Button variant="outline" onClick={selectOrderable}>
+              <Button variant="outline" onClick={selectOrderable} disabled={!effectiveEditMode}>
                 <Filter className="mr-2 h-4 w-4" />
                 Select orderable
               </Button>
-              <Button variant="outline" onClick={saveDraft} disabled={!isEditMode}>
+              <Button variant="outline" onClick={saveDraft} disabled={!effectiveEditMode}>
                 <Save className="mr-2 h-4 w-4" />
                 Save draft
               </Button>
-              <Button onClick={markSelectedFinalized} disabled={!isEditMode || selectedLines.length === 0 || isFinalizingParts}>
+              <Button onClick={markSelectedFinalized} disabled={!effectiveEditMode || selectedLines.length === 0 || isFinalizingParts}>
                 <Check className="mr-2 h-4 w-4" />
                 {isFinalizingParts ? 'Finalizing...' : 'Finalize to inventory'}
               </Button>
@@ -2874,7 +2997,7 @@ export default function DraftBOMBuilderPage() {
                     id="draft-name"
                     value={draft.name}
                     onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-                    disabled={!isEditMode}
+                    disabled={!effectiveEditMode}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -2884,12 +3007,12 @@ export default function DraftBOMBuilderPage() {
                       id="draft-revision"
                       value={draft.revision}
                       onChange={(event) => setDraft((current) => ({ ...current, revision: event.target.value }))}
-                      disabled={!isEditMode}
+                      disabled={!effectiveEditMode}
                     />
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="draft-project">Project</Label>
-                    <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!isEditMode}>
+                    <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!effectiveEditMode}>
                       <SelectTrigger id="draft-project">
                         <SelectValue placeholder={draft.project || 'Select an R&D or P2 project'} />
                       </SelectTrigger>
@@ -2940,8 +3063,57 @@ export default function DraftBOMBuilderPage() {
                     value={draft.owner}
                     onChange={(event) => setDraft((current) => ({ ...current, owner: event.target.value }))}
                     placeholder="Inventory, Engineering, PM..."
-                    disabled={!isEditMode}
+                    disabled={!effectiveEditMode}
                   />
+                </div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <Label>Draft access</Label>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Created by {draft.createdByDisplayName || 'unknown'}. Public drafts are visible to users with Draft Builder access.
+                      </p>
+                    </div>
+                    <Badge variant={draft.visibility === 'private' ? 'secondary' : 'outline'}>
+                      {draftVisibilityLabel(draft)}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 grid gap-3">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="draft-visibility">Visibility</Label>
+                      <Select
+                        value={draft.visibility ?? 'public'}
+                        onValueChange={(value) =>
+                          setDraft((current) => ({
+                            ...current,
+                            visibility: value as 'public' | 'private',
+                            allowPublicEdit: value === 'private' ? false : current.allowPublicEdit,
+                          }))
+                        }
+                        disabled={!canManageActiveDraftAccess}
+                      >
+                        <SelectTrigger id="draft-visibility">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="public">Public - visible to Draft Builder users</SelectItem>
+                          <SelectItem value="private">Private - creator only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+                      <span>
+                        <span className="block font-medium text-slate-800">Allow public edits</span>
+                        <span className="block text-xs text-slate-500">Off means other users can view but not edit.</span>
+                      </span>
+                      <Switch
+                        checked={draft.allowPublicEdit === true}
+                        onCheckedChange={(checked) => setDraft((current) => ({ ...current, allowPublicEdit: checked === true }))}
+                        disabled={!canManageActiveDraftAccess || draft.visibility === 'private'}
+                        aria-label="Allow other users to edit this public draft"
+                      />
+                    </label>
+                  </div>
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="draft-notes">Notes</Label>
@@ -2950,7 +3122,7 @@ export default function DraftBOMBuilderPage() {
                     value={draft.notes}
                     onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
                     rows={3}
-                    disabled={!isEditMode}
+                    disabled={!effectiveEditMode}
                   />
                 </div>
               </div>
@@ -2984,7 +3156,7 @@ export default function DraftBOMBuilderPage() {
                   value={newColumnName}
                   onChange={(event) => setNewColumnName(event.target.value)}
                   placeholder="New column name"
-                  disabled={!isEditMode}
+                  disabled={!effectiveEditMode}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault();
@@ -2992,7 +3164,7 @@ export default function DraftBOMBuilderPage() {
                     }
                   }}
                 />
-                <Button type="button" variant="outline" onClick={addCustomColumn} disabled={!isEditMode || !newColumnName.trim()}>
+                <Button type="button" variant="outline" onClick={addCustomColumn} disabled={!effectiveEditMode || !newColumnName.trim()}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add column
                 </Button>
@@ -3036,7 +3208,7 @@ export default function DraftBOMBuilderPage() {
                     type="button"
                     variant="outline"
                     onClick={clearCurrentDraft}
-                    disabled={!isEditMode}
+                    disabled={!effectiveEditMode}
                     className="border-red-300 bg-white text-red-700 hover:bg-red-100 hover:text-red-800"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
@@ -3075,6 +3247,18 @@ export default function DraftBOMBuilderPage() {
               </TabsList>
 
               <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => pushActiveTabTo('rom')}>
+                  <Send className="mr-2 h-4 w-4" />
+                  Push tab to ROM
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => pushActiveTabTo('p2-project')}>
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  Push tab to P2
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => pushActiveTabTo('rd-project')}>
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  Push tab to R&D
+                </Button>
                 {activeWorkspaceTab === 'parts-request' ? (
                   <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm">
                     <Checkbox
@@ -3200,7 +3384,7 @@ export default function DraftBOMBuilderPage() {
                   onGeneratePoDraft={() => showHandoffToast('PO draft')}
                   onCreateDraftBom={startDraftBomForLine}
                   onDeleteLine={deleteLine}
-                  isEditMode={isEditMode}
+                  isEditMode={effectiveEditMode}
                 />
               </TabsContent>
             ) : null}
@@ -3222,7 +3406,7 @@ export default function DraftBOMBuilderPage() {
                   onCreateVendorPoDraft={createVendorPoHandoff}
                   onFinalizeSelected={markSelectedFinalized}
                   onDeleteLine={deleteLine}
-                  isEditMode={isEditMode}
+                  isEditMode={effectiveEditMode}
                   isFinalizingParts={isFinalizingParts}
                 />
               </TabsContent>
@@ -3243,7 +3427,7 @@ export default function DraftBOMBuilderPage() {
                   onRemoveLine={removeLaborEstimateLine}
                   onUpdateLine={updateLaborEstimateLine}
                   onUpdateNumberLine={updateLaborEstimateNumberLine}
-                  isEditMode={isEditMode}
+                  isEditMode={effectiveEditMode}
                 />
               </TabsContent>
             ) : null}
@@ -3258,7 +3442,7 @@ export default function DraftBOMBuilderPage() {
                   onRemoveRow={removeNrcRow}
                   onUpdateRow={updateNrcRow}
                   onUpdateNumberRow={updateNrcNumberRow}
-                  isEditMode={isEditMode}
+                  isEditMode={effectiveEditMode}
                 />
               </TabsContent>
             ) : null}
@@ -3274,7 +3458,7 @@ export default function DraftBOMBuilderPage() {
                   onSeedLineConsumed={() => setWizardSeedLineId(null)}
                   onSaveWizardBom={saveWizardBom}
                   onDeleteWizardBom={deleteWizardBom}
-                  isEditMode={isEditMode}
+                  isEditMode={effectiveEditMode}
                 />
               </TabsContent>
             ) : null}
@@ -3300,7 +3484,7 @@ export default function DraftBOMBuilderPage() {
                       lines={draft.lines}
                       customColumns={customColumns}
                       onUpdateCustomField={updateLineCustomField}
-                      isEditMode={isEditMode}
+                      isEditMode={effectiveEditMode}
                     />
                   </section>
                 </TabsContent>

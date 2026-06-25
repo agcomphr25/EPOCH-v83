@@ -16354,6 +16354,8 @@ export const draftBomDrafts = pgTable('draft_bom_drafts', {
   projectName: text('project_name'),
   projectType: text('project_type'),
   data: jsonb('data').notNull().$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  visibility: text('visibility').notNull().default('public'),
+  allowPublicEdit: boolean('allow_public_edit').notNull().default(false),
   createdByUserId: integer('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdByDisplayName: text('created_by_display_name').notNull().default('unknown'),
   updatedByUserId: integer('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),

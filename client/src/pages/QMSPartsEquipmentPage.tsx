@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CheckSquare,
   ClipboardList,
+  Download,
   ExternalLink,
   FileInput,
   History,
@@ -75,11 +76,19 @@ type Summary = {
   events: CalibrationEvent[];
   upcoming: CalibrationAsset[];
   overdue: CalibrationAsset[];
+  cleanup?: {
+    missingEvidence: CalibrationAsset[];
+    needsReview: CalibrationAsset[];
+    multiSourceAssets: CalibrationAsset[];
+  };
   stats: {
     totalAssets: number;
     dueSoon: number;
     overdue: number;
     lockedOut: number;
+    missingEvidence?: number;
+    needsReview?: number;
+    multiSourceRecords?: number;
   };
 };
 
@@ -193,6 +202,7 @@ export default function QMSPartsEquipmentPage() {
     attachedBy: '',
     notes: '',
   });
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [review, setReview] = useState({
     action: 'approve',
     reviewedBy: '',
@@ -220,7 +230,16 @@ export default function QMSPartsEquipmentPage() {
   const createTab = activeTab.key === 'all' ? sourceTabs[0] : activeTab;
   const visibleAssets = useMemo(() => assetsForTab(assets, activeTab), [assets, activeTab]);
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? visibleAssets[0];
-  const selectedEvidence = metadataList<{ id?: string; label?: string; evidenceUrl?: string; attachedBy?: string; attachedAt?: string; notes?: string }>(selectedAsset, 'evidenceItems');
+  const selectedEvidence = metadataList<{
+    id?: string;
+    label?: string;
+    evidenceUrl?: string;
+    attachedBy?: string;
+    attachedAt?: string;
+    notes?: string;
+    originalFileName?: string;
+    fileSizeBytes?: number;
+  }>(selectedAsset, 'evidenceItems');
   const selectedReviews = metadataList<{ id?: string; action?: string; reviewedBy?: string; reviewedAt?: string; reason?: string; status?: string }>(selectedAsset, 'reviewActions');
   const auditAssetOptions = useMemo(
     () => assets.filter((asset) => ['measuring_device', 'calibration_gage', 'validation_asset', 'calibration_archive'].includes(asset.assetType)),
@@ -315,6 +334,28 @@ export default function QMSPartsEquipmentPage() {
       toast({ title: 'Evidence attached' });
     },
     onError: (error: any) => toast({ title: 'Evidence failed', description: error.message, variant: 'destructive' }),
+  });
+
+  const evidenceUploadMutation = useMutation({
+    mutationFn: () => {
+      if (!evidenceFile) throw new Error('Select an evidence file first.');
+      const formData = new FormData();
+      formData.append('file', evidenceFile);
+      formData.append('label', evidence.label || evidenceFile.name);
+      formData.append('attachedBy', evidence.attachedBy);
+      formData.append('notes', evidence.notes);
+      return apiRequest(`/api/quality/qms/parts-equipment/assets/${selectedAsset?.id}/evidence/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/quality/qms/parts-equipment/summary'] });
+      setEvidence({ label: '', evidenceUrl: '', attachedBy: '', notes: '' });
+      setEvidenceFile(null);
+      toast({ title: 'Evidence file uploaded' });
+    },
+    onError: (error: any) => toast({ title: 'Upload failed', description: error.message, variant: 'destructive' }),
   });
 
   const reviewMutation = useMutation({
@@ -412,7 +453,7 @@ export default function QMSPartsEquipmentPage() {
         </Alert>
       )}
 
-      <div className="qms-screen-only grid gap-3 md:grid-cols-4">
+      <div className="qms-screen-only grid gap-3 md:grid-cols-2 xl:grid-cols-7">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total controlled items</CardDescription>
@@ -437,7 +478,68 @@ export default function QMSPartsEquipmentPage() {
             <CardTitle className="text-2xl text-red-800">{summary?.stats.lockedOut ?? 0}</CardTitle>
           </CardHeader>
         </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Missing evidence</CardDescription>
+            <CardTitle className="text-2xl text-amber-700">{summary?.stats.missingEvidence ?? 0}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Needs review</CardDescription>
+            <CardTitle className="text-2xl text-red-700">{summary?.stats.needsReview ?? 0}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Multi-source</CardDescription>
+            <CardTitle className="text-2xl">{summary?.stats.multiSourceRecords ?? 0}</CardTitle>
+          </CardHeader>
+        </Card>
       </div>
+
+      <Card className="qms-screen-only">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ShieldCheck className="h-5 w-5" />
+            Register Cleanup Queue
+          </CardTitle>
+          <CardDescription>Focused review lists for evidence gaps, lockouts, expired calibrations, and records that were merged from more than one spreadsheet tab.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-3">
+          {[
+            { title: 'Evidence Gaps', items: summary?.cleanup?.missingEvidence ?? [] },
+            { title: 'Review Required', items: summary?.cleanup?.needsReview ?? [] },
+            { title: 'Merged Sources', items: summary?.cleanup?.multiSourceAssets ?? [] },
+          ].map((group) => (
+            <div key={group.title} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="font-medium">{group.title}</p>
+                <Badge variant="secondary">{group.items.length}</Badge>
+              </div>
+              <div className="space-y-2">
+                {group.items.slice(0, 5).map((asset) => (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    className="w-full rounded-md border px-3 py-2 text-left text-sm hover:bg-muted"
+                    onClick={() => {
+                      setSelectedAssetId(asset.id);
+                      setAudit((prev) => ({ ...prev, assetId: asset.id }));
+                    }}
+                  >
+                    <span className="block font-medium">{asset.assetTag} - {asset.name}</span>
+                    <span className="block text-muted-foreground">
+                      {asset.location || asset.ownerDepartment || 'No location'} - {dateOnly(asset.calibrationDueDate) || 'no due date'}
+                    </span>
+                  </button>
+                ))}
+                {group.items.length === 0 && <p className="text-sm text-muted-foreground">Nothing needs attention here.</p>}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <Tabs
         className="qms-screen-only"
@@ -643,26 +745,61 @@ export default function QMSPartsEquipmentPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>URL or file reference</Label>
+              <Label>Upload certificate or report</Label>
+              <Label className="flex cursor-pointer items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted">
+                <span className="truncate">{evidenceFile?.name ?? 'Select PDF, image, Excel, Word, or CSV file'}</span>
+                <Upload className="ml-2 h-4 w-4 shrink-0" />
+                <Input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.xls,.xlsx,.docx"
+                  className="hidden"
+                  onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)}
+                />
+              </Label>
+            </div>
+            <div className="space-y-2">
+              <Label>URL or storage reference</Label>
               <Input value={evidence.evidenceUrl} onChange={(e) => setEvidence((prev) => ({ ...prev, evidenceUrl: e.target.value }))} />
             </div>
             <div className="space-y-2">
               <Label>Evidence notes</Label>
               <Textarea value={evidence.notes} onChange={(e) => setEvidence((prev) => ({ ...prev, notes: e.target.value }))} />
             </div>
-            <Button
-              className="w-full"
-              disabled={!selectedAsset || !evidence.evidenceUrl || evidenceMutation.isPending}
-              onClick={() => evidenceMutation.mutate()}
-            >
-              <ExternalLink className="mr-2 h-4 w-4" />
-              Attach Evidence
-            </Button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                variant="outline"
+                disabled={!selectedAsset || !evidenceFile || evidenceUploadMutation.isPending}
+                onClick={() => evidenceUploadMutation.mutate()}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Upload File
+              </Button>
+              <Button
+                disabled={!selectedAsset || !evidence.evidenceUrl || evidenceMutation.isPending}
+                onClick={() => evidenceMutation.mutate()}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Attach Link
+              </Button>
+            </div>
             <div className="space-y-2">
               {selectedEvidence.slice(-3).map((item, index) => (
                 <div key={item.id ?? index} className="rounded-md border px-3 py-2 text-sm">
-                  <p className="font-medium">{item.label || 'Evidence'}</p>
-                  <p className="break-all text-muted-foreground">{item.evidenceUrl}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium">{item.label || item.originalFileName || 'Evidence'}</p>
+                      <p className="break-all text-muted-foreground">{item.originalFileName || item.evidenceUrl}</p>
+                    </div>
+                    {item.evidenceUrl && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => window.open(item.evidenceUrl, '_blank', 'noopener,noreferrer')}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

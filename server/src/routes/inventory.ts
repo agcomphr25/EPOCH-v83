@@ -2227,7 +2227,7 @@ router.post(
 
       const payload = linkExistingVendorPoSchema.parse(req.body);
       const actor = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
-      const { partsRequests, partsRequestStatusHistory, vendorPOs, vendorPOItems } = await import('../../schema');
+      const { partsRequests, partsRequestStatusHistory, vendorPOs, vendorPOItems, inventoryItems } = await import('../../schema');
       const { eq: dEq, and: dAnd, or: dOr, sql: dSql } = await import('drizzle-orm');
 
       const result = await db.transaction(async (tx) => {
@@ -2322,6 +2322,16 @@ router.post(
               ].filter(Boolean).join('\n'),
             })
             .returning();
+
+          if (createdLine?.agPartNumber && unitPrice > 0) {
+            await tx
+              .update(inventoryItems)
+              .set({ costPer: unitPrice, updatedAt: new Date() })
+              .where(dAnd(
+                dEq(inventoryItems.agPartNumber, createdLine.agPartNumber),
+                dSql`${inventoryItems.costPer} IS DISTINCT FROM ${unitPrice}`
+              ));
+          }
         }
 
         const nextStatus = statusFromLinkedVendorPo(vendorPO.status, request.status);
@@ -2548,7 +2558,7 @@ router.post(
             })
             .join('\n');
 
-          await tx.insert(vendorPOItems).values({
+          const [createdLine] = await tx.insert(vendorPOItems).values({
             vendorPoId: vendorPO.id,
             lineNumber,
             agPartNumber: first.agPartNumber || null,
@@ -2561,7 +2571,17 @@ router.post(
               extraQty > 0 ? `Includes ${extraQty} extra unit(s) for stock.` : null,
               requests.some((r) => r.vendorPartNumber) ? `Vendor part refs: ${requests.map((r) => r.vendorPartNumber).filter(Boolean).join(', ')}` : null,
             ].filter(Boolean).join('\n'),
-          });
+          }).returning();
+
+          if (createdLine?.agPartNumber && unitPrice > 0) {
+            await tx
+              .update(inventoryItems)
+              .set({ costPer: unitPrice, updatedAt: new Date() })
+              .where(dAnd(
+                dEq(inventoryItems.agPartNumber, createdLine.agPartNumber),
+                dSql`${inventoryItems.costPer} IS DISTINCT FROM ${unitPrice}`
+              ));
+          }
           lineNumber += 1;
         }
 

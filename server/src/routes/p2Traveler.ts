@@ -518,6 +518,45 @@ function getP2CertificationCandidateParts(values: Array<string | null | undefine
   return Array.from(candidates);
 }
 
+async function getPrintedTravelerCertificationParts(traveler: typeof travelers.$inferSelect | null | undefined): Promise<string[]> {
+  if (!traveler) return [];
+
+  const values: Array<string | null | undefined> = [
+    traveler.partNumber,
+    traveler.serialNumber,
+    traveler.lotNumber,
+    traveler.internalControlNumber,
+  ];
+
+  const inventoryItemIds = new Set<number>();
+  const travelerInventoryItemId = Number(traveler.inventoryItemId);
+  if (Number.isFinite(travelerInventoryItemId)) inventoryItemIds.add(travelerInventoryItemId);
+
+  if (traveler.partRoutingId) {
+    const routing = await db.query.partRoutings.findFirst({
+      where: eq(partRoutings.id, traveler.partRoutingId),
+    });
+    values.push(routing?.partNumber, routing?.partName);
+    const routingInventoryItemId = Number(routing?.inventoryItemId);
+    if (Number.isFinite(routingInventoryItemId)) inventoryItemIds.add(routingInventoryItemId);
+  }
+
+  if (inventoryItemIds.size > 0) {
+    const items = await db
+      .select({
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+      })
+      .from(inventoryItems)
+      .where(inArray(inventoryItems.id, Array.from(inventoryItemIds)));
+    for (const item of items) {
+      values.push(item.agPartNumber, item.name);
+    }
+  }
+
+  return getP2CertificationCandidateParts(values);
+}
+
 async function findSerializedItemByPartScan(scanValue: string) {
   const variants = buildP2PartScanVariants(scanValue);
   const fields = [
@@ -565,6 +604,7 @@ function getBasePartNumberWithoutRevision(partNumber?: string | null): string | 
 async function getSerializedItemInventoryIdentity(serializedItem: any) {
   let poItem: typeof p2PurchaseOrderItems.$inferSelect | null = null;
   let inventoryItem: typeof inventoryItems.$inferSelect | null = null;
+  let linkedRouting: typeof partRoutings.$inferSelect | null = null;
 
   if (serializedItem?.poItemId) {
     poItem = await db.query.p2PurchaseOrderItems.findFirst({
@@ -578,6 +618,18 @@ async function getSerializedItemInventoryIdentity(serializedItem: any) {
     }) ?? null;
   }
 
+  if (!inventoryItem && serializedItem?.partRoutingId) {
+    linkedRouting = await db.query.partRoutings.findFirst({
+      where: eq(partRoutings.id, serializedItem.partRoutingId),
+    }) ?? null;
+    const routingInventoryItemId = Number(linkedRouting?.inventoryItemId);
+    if (Number.isFinite(routingInventoryItemId)) {
+      inventoryItem = await db.query.inventoryItems.findFirst({
+        where: eq(inventoryItems.id, routingInventoryItemId),
+      }) ?? null;
+    }
+  }
+
   if (!inventoryItem && serializedItem?.partNumber) {
     inventoryItem = await db.query.inventoryItems.findFirst({
       where: eq(inventoryItems.agPartNumber, serializedItem.partNumber),
@@ -588,8 +640,8 @@ async function getSerializedItemInventoryIdentity(serializedItem: any) {
     poItem,
     inventoryItem,
     inventoryItemId: poItem?.inventoryItemId ?? inventoryItem?.id ?? null,
-    internalPartNumber: inventoryItem?.agPartNumber ?? poItem?.partNumber ?? serializedItem?.partNumber ?? null,
-    partName: inventoryItem?.name ?? poItem?.partName ?? serializedItem?.partName ?? null,
+    internalPartNumber: inventoryItem?.agPartNumber ?? poItem?.partNumber ?? linkedRouting?.partNumber ?? serializedItem?.partNumber ?? null,
+    partName: inventoryItem?.name ?? poItem?.partName ?? linkedRouting?.partName ?? serializedItem?.partName ?? null,
   };
 }
 
@@ -2014,6 +2066,7 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       return res.status(404).json({ error: 'Employee not found' });
     }
 
+    const printedTraveler = await findTravelerByPrintedScan(barcode);
     const serializedItem = await findSerializedItemByPartScan(barcode);
 
     if (!serializedItem) {
@@ -2042,6 +2095,7 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       inventoryIdentity.internalPartNumber ||
       routing?.partNumber ||
       serializedItem.partNumber;
+    const printedTravelerCertificationParts = await getPrintedTravelerCertificationParts(printedTraveler);
     const certificationPartCandidates = getP2CertificationCandidateParts([
       certificationPartNumber,
       serializedItem.partNumber,
@@ -2050,7 +2104,8 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       serializedItem.serialNumber,
       serializedItem.customerSerialNumber,
       barcode,
-    ]);
+      printedTraveler?.partNumber,
+    ]).concat(printedTravelerCertificationParts);
     let isCertified = false;
     for (const candidate of certificationPartCandidates) {
       if (await storage.checkEmployeeP2PartCertification(employee.id, candidate, nextDepartment)) {
@@ -2373,6 +2428,8 @@ router.post('/start-task', async (req: Request, res: Response) => {
       routing?.partNumber ||
       serializedItem.partNumber;
     const employeeIdNumber = parseInt(employeeId);
+    const printedTraveler = barcode ? await findTravelerByPrintedScan(barcode) : null;
+    const printedTravelerCertificationParts = await getPrintedTravelerCertificationParts(printedTraveler);
     const certificationPartCandidates = getP2CertificationCandidateParts([
       certificationPartNumber,
       serializedItem.partNumber,
@@ -2381,7 +2438,9 @@ router.post('/start-task', async (req: Request, res: Response) => {
       serializedItem.serialNumber,
       serializedItem.customerSerialNumber,
       partNumber,
-    ]);
+      barcode,
+      printedTraveler?.partNumber,
+    ]).concat(printedTravelerCertificationParts);
     let isCertified = false;
     for (const candidate of certificationPartCandidates) {
       if (await storage.checkEmployeeP2PartCertification(employeeIdNumber, candidate, department)) {

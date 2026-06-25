@@ -544,11 +544,9 @@ export default function P2TravelerPage() {
 
       if (!data.isCertified) {
         toast({
-          title: 'Not Certified',
-          description: `${data.employee.name} is not certified for ${data.nextDepartment}`,
-          variant: 'destructive',
+          title: 'Certification Check',
+          description: `Opening traveler for ${data.nextDepartment}. Certification will be enforced at start.`,
         });
-        return;
       }
 
       // Initialize traceability fields based on requirements
@@ -661,7 +659,7 @@ export default function P2TravelerPage() {
 
       setScanState('PART_SCANNED');
 
-      if (data.isCertified && data.routing?.id) {
+      if (data.routing?.id) {
         setScanState('GENERATING_TRAVELER');
         toast({
           title: 'Part Verified',
@@ -1272,23 +1270,22 @@ export default function P2TravelerPage() {
               </Alert>
 
               {/* Certification Status */}
-              <Alert variant={verificationData.isCertified ? 'default' : 'destructive'}>
+              <Alert>
                 {verificationData.isCertified ? (
                   <CheckCircle className="h-4 w-4" />
                 ) : (
-                  <XCircle className="h-4 w-4" />
+                  <AlertCircle className="h-4 w-4" />
                 )}
                 <AlertDescription>
                   {verificationData.isCertified ? (
                     `${verificationData.employee.name} is certified for ${verificationData.nextDepartment}`
                   ) : (
-                    `${verificationData.employee.name} is NOT certified for ${verificationData.nextDepartment}`
+                    `Certification will be checked again when ${verificationData.employee.name} starts ${verificationData.nextDepartment}.`
                   )}
                 </AlertDescription>
               </Alert>
 
-              {verificationData.isCertified && (
-                <>
+              <>
                   {/* Work Instructions - Prominently displayed */}
                   {verificationData.departmentConfig.instructionPack && (
                     (() => {
@@ -1931,14 +1928,7 @@ export default function P2TravelerPage() {
                       {startTaskMutation.isPending ? 'Starting...' : 'Start Task'}
                     </Button>
                   </div>
-                </>
-              )}
-
-              {!verificationData.isCertified && (
-                <Button variant="outline" onClick={resetScanner} className="w-full" data-testid="button-reset">
-                  Start Over
-                </Button>
-              )}
+              </>
 
               <Button
                 variant="outline"

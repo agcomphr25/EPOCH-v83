@@ -601,6 +601,10 @@ function getBasePartNumberWithoutRevision(partNumber?: string | null): string | 
   return match ? match[1].trim() : null;
 }
 
+function normalizeP2RoutingText(value?: string | null): string {
+  return (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 async function getSerializedItemInventoryIdentity(serializedItem: any) {
   let poItem: typeof p2PurchaseOrderItems.$inferSelect | null = null;
   let inventoryItem: typeof inventoryItems.$inferSelect | null = null;
@@ -835,6 +839,40 @@ async function findActiveRoutingForSerializedItem(serializedItem: any) {
         ));
       if (allRoutings.length > 0) {
         routing = allRoutings[0];
+      }
+    }
+  }
+
+  if (!routing && serializedItem.poId) {
+    const projectRows = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.poId, serializedItem.poId));
+
+    if (projectRows.length > 0) {
+      const projectRoutings = await db
+        .select()
+        .from(partRoutings)
+        .where(and(
+          inArray(partRoutings.projectId, projectRows.map((project) => project.id)),
+          eq(partRoutings.isActive, true)
+        ));
+
+      const itemPartName = normalizeP2RoutingText(identity.partName || serializedItem.partName);
+      const itemPartNumber = normalizeP2RoutingText(serializedItem.partNumber);
+      const namedMatches = projectRoutings.filter((candidate) => {
+        const routingName = normalizeP2RoutingText(candidate.partName);
+        const routingPart = normalizeP2RoutingText(candidate.partNumber);
+        return Boolean(
+          (itemPartName && (routingName.includes(itemPartName) || itemPartName.includes(routingName))) ||
+          (itemPartNumber && (routingPart.includes(itemPartNumber) || itemPartNumber.includes(routingPart)))
+        );
+      });
+
+      if (namedMatches.length === 1) {
+        routing = namedMatches[0];
+      } else if (projectRoutings.length === 1) {
+        routing = projectRoutings[0];
       }
     }
   }
@@ -2092,8 +2130,8 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
     const nextDepartment = departmentSequence[currentIndex];
 
     const certificationPartNumber =
-      inventoryIdentity.internalPartNumber ||
       routing?.partNumber ||
+      inventoryIdentity.internalPartNumber ||
       serializedItem.partNumber;
     const printedTravelerCertificationParts = await getPrintedTravelerCertificationParts(printedTraveler);
     const certificationPartCandidates = getP2CertificationCandidateParts([
@@ -2181,7 +2219,7 @@ router.get('/part-info/:barcode', async (req: Request, res: Response) => {
         id: serializedItem.id,
         barcode: serializedItem.barcode,
         serialNumber: serializedItem.serialNumber,
-        partNumber: inventoryIdentity.internalPartNumber || routing?.partNumber || serializedItem.partNumber,
+        partNumber: routing?.partNumber || inventoryIdentity.internalPartNumber || serializedItem.partNumber,
         partName: inventoryIdentity.partName || serializedItem.partName,
         customerName: serializedItem.customerName,
         currentDepartment: serializedItem.currentDepartment,
@@ -2424,8 +2462,8 @@ router.post('/start-task', async (req: Request, res: Response) => {
 
     // BACKEND CERTIFICATION ENFORCEMENT - Critical for AS9100 compliance
     const certificationPartNumber =
-      inventoryIdentity.internalPartNumber ||
       routing?.partNumber ||
+      inventoryIdentity.internalPartNumber ||
       serializedItem.partNumber;
     const employeeIdNumber = parseInt(employeeId);
     const printedTraveler = barcode ? await findTravelerByPrintedScan(barcode) : null;

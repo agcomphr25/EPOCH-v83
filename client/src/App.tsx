@@ -241,6 +241,7 @@ const BulkBarcodeReprint = React.lazy(() => import('./pages/BulkBarcodeReprint')
 const CNCQueuePage = React.lazy(() => import('./pages/CNCQueuePage'));
 const CNCDashboardPage = React.lazy(() => import('./pages/CNCDashboardPage'));
 const CNCPartRoutingsPage = React.lazy(() => import('./pages/CNCPartRoutingsPage'));
+const CNCOperationBatchStation = React.lazy(() => import('./pages/CNCOperationBatchStation'));
 const FinishQCQueuePage = React.lazy(() => import('./pages/FinishQCQueuePage'));
 const FinishQueuePage = React.lazy(() => import('./pages/FinishQueuePage'));
 const FinishQCPage = React.lazy(() => import('./pages/FinishQCPage'));
@@ -396,6 +397,7 @@ function useIsEmbedMode() {
 function isFloorOperatorRoute(location: string) {
   return (
     location.startsWith('/kiosk') ||
+    location.startsWith('/cnc/batch-station') ||
     location.startsWith('/p2-traveler') ||
     location.startsWith('/travelers/')
   );
@@ -1376,6 +1378,7 @@ function App() {
                     component={CNCQueuePage}
                   />
                   <Route path="/cnc-dashboard" component={CNCDashboardPage} />
+                  <Route path="/cnc/batch-station" component={CNCOperationBatchStation} />
                   <Route path="/cnc-part-routings" component={CNCPartRoutingsPage} />
                   <Route
                     path="/department-queue/finish"

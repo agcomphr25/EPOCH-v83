@@ -10739,6 +10739,47 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       const { storage } = await import('../../storage');
 
+      if (/^OPB-[A-Za-z0-9]+-\d+-\d+$/i.test(barcode)) {
+        const { pool } = await import('../../db');
+        const batchResult = await pool.query(
+          `SELECT
+             b.id AS "id",
+             b.batch_code AS "batchCode",
+             b.barcode_value AS "barcodeValue",
+             b.batch_qty AS "batchQty",
+             b.qty_completed AS "qtyCompleted",
+             b.qty_scrapped AS "qtyScrapped",
+             b.status AS "status",
+             b.priority AS "priority",
+             pwo.work_order_number AS "workOrderNumber",
+             COALESCE(t.part_number, pwo.part_number) AS "partNumber",
+             COALESCE(t.part_name, pwo.description) AS "partName",
+             ts.step_number AS "stepNumber",
+             ts.department_name AS "stepDepartment"
+           FROM cnc_operation_batches b
+           JOIN production_work_orders pwo ON pwo.id = b.work_order_id
+           JOIN traveler_steps ts ON ts.id = b.traveler_step_id
+           JOIN travelers t ON t.id = ts.traveler_id
+           WHERE b.barcode_value = $1 OR b.batch_code = $1
+           LIMIT 1`,
+          [barcode],
+        );
+        const batchRows = Array.isArray(batchResult) ? batchResult : batchResult.rows ?? [];
+        if (batchRows[0]) {
+          return res.json({
+            type: 'cnc_operation_batch',
+            ...batchRows[0],
+            qtyRemaining: Math.max(
+              Number(batchRows[0].batchQty ?? 0) -
+              Number(batchRows[0].qtyCompleted ?? 0) -
+              Number(batchRows[0].qtyScrapped ?? 0),
+              0,
+            ),
+          });
+        }
+        return res.status(404).json({ error: 'CNC operation batch barcode not found' });
+      }
+
       // Try to find the order in various tables
       let order = null;
       let orderSource = 'unknown';
@@ -13859,7 +13900,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/governance', authenticateToken, requireExecutiveAccess, governanceRoutes);
 
   // CNC Dashboard routes - job queue, setup packages, tooling, QC
-  app.use('/api/cnc', authenticateToken, cncDashboardRoutes);
+  app.use('/api/cnc', (req, res, next) => {
+    if (req.path.startsWith('/operation-batches/station')) return next();
+    return authenticateToken(req, res, next);
+  }, cncDashboardRoutes);
 
   // Receiving Control Center routes
   app.use('/api/receipts', authenticateToken, receivingRoutes);

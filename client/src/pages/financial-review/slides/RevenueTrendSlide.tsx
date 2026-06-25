@@ -55,7 +55,7 @@ export default function RevenueTrendSlide() {
           </div>
         </>
       )}
-      <div className="text-xs text-gray-400 mt-2 text-right">Live from EPOCH · Credit card payments only</div>
+      <div className="text-xs text-gray-400 mt-2 text-right">Credit card payments only</div>
     </div>
   );
 }

@@ -114,7 +114,6 @@ export default function KPIsSlide({ monthKey }: { monthKey?: string }) {
           </table>
         </div>
       )}
-      <div className="text-xs text-gray-400 mt-2 text-right">Live from EPOCH</div>
     </div>
   );
 }

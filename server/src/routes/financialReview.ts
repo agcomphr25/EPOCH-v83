@@ -46,9 +46,29 @@ function getMonthRange(monthKey: string) {
   };
 }
 
-async function calculateOtdForMonth(monthKey = getPreviousFullMonthKey()) {
+function getRecentMonthKeys(monthKey: string, count = 6): string[] {
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) {
+    throw Object.assign(new Error('Invalid month key format (expected YYYY-MM)'), { status: 400 });
+  }
+
+  const [yearText, monthText] = monthKey.split('-');
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+
+  return Array.from({ length: count }, (_, index) => {
+    const month = new Date(year, monthIndex - (count - 1 - index), 1);
+    return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+  });
+}
+
+function monthShortLabel(monthKey: string): string {
+  const [yearText, monthText] = monthKey.split('-');
+  const date = new Date(Number(yearText), Number(monthText) - 1, 1);
+  return date.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+}
+
+function calculateOtdForMonthFromOrders(monthKey: string, orders: any[]) {
   const { startDate, endDate } = getMonthRange(monthKey);
-  const orders = await storage.getFulfilledShippedOrdersWithPaymentStatus(10000);
   const considered = orders
     .map((order: any) => {
       const completionDate = toDateOnly(order.shippedDate) || toDateOnly(order.shippingCompletedAt) || toDateOnly(order.updatedAt);
@@ -78,6 +98,11 @@ async function calculateOtdForMonth(monthKey = getPreviousFullMonthKey()) {
     lateCount,
     source: '/otd-report',
   };
+}
+
+async function calculateOtdForMonth(monthKey = getPreviousFullMonthKey()) {
+  const orders = await storage.getFulfilledShippedOrdersWithPaymentStatus(10000);
+  return calculateOtdForMonthFromOrders(monthKey, orders);
 }
 
 function calculateCustomerSatisfactionScore(rows: any[]) {
@@ -126,6 +151,13 @@ function calculateCustomerSatisfactionScore(rows: any[]) {
 router.get('/summary', async (req, res) => {
   try {
     const monthKey = typeof req.query.monthKey === 'string' ? req.query.monthKey : getPreviousFullMonthKey();
+    const monthKeys = getRecentMonthKeys(monthKey);
+    const { startDate: trendStartDate } = getMonthRange(monthKeys[0]);
+    const { endDate: trendEndDate } = getMonthRange(monthKeys[monthKeys.length - 1]);
+    const trendEnd = new Date(`${trendEndDate}T00:00:00`);
+    trendEnd.setDate(trendEnd.getDate() + 1);
+    const trendEndExclusive = toDateOnly(trendEnd)!;
+    const emptyTrend = () => monthKeys.map((key) => ({ month: key, label: monthShortLabel(key), value: null as number | null }));
     const dataErrors: string[] = []; // collects any query failures for client visibility
 
     // Revenue (last 6 months) — payments.payment_amount (CC payments)
@@ -156,17 +188,40 @@ router.get('/summary', async (req, res) => {
     } catch (err: any) { const msg = `AR revenue query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     let otdSummary: Awaited<ReturnType<typeof calculateOtdForMonth>> | null = null;
+    let otdTrend = emptyTrend();
     try {
-      otdSummary = await calculateOtdForMonth(monthKey);
+      const otdOrders = await storage.getFulfilledShippedOrdersWithPaymentStatus(10000);
+      otdSummary = calculateOtdForMonthFromOrders(monthKey, otdOrders);
+      otdTrend = monthKeys.map((key) => ({
+        month: key,
+        label: monthShortLabel(key),
+        value: calculateOtdForMonthFromOrders(key, otdOrders).otdPercent,
+      }));
     } catch (err: any) { const msg = `OTD query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // NCR
     let ncrRows: any[] = [];
+    let ncrTrend = emptyTrend();
     try {
       ncrRows = await pool.query(`
         SELECT COUNT(*) AS ncr_count FROM nonconformance_records
         WHERE created_at >= NOW() - INTERVAL '3 months'
       `) as any[];
+      const ncrTrendRows = await pool.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+          COUNT(*) AS value
+        FROM nonconformance_records
+        WHERE created_at >= $1::date
+          AND created_at < $2::date
+        GROUP BY 1
+      `, [trendStartDate, trendEndExclusive]) as any[];
+      const ncrByMonth = new Map(ncrTrendRows.map((row: any) => [row.month, Number(row.value) || 0]));
+      ncrTrend = monthKeys.map((key) => ({
+        month: key,
+        label: monthShortLabel(key),
+        value: ncrByMonth.get(key) ?? 0,
+      }));
     } catch (err: any) { const msg = `NCR query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // Customer satisfaction — same score calculation used by /customer-satisfaction analytics
@@ -178,13 +233,52 @@ router.get('/summary', async (req, res) => {
       netPromoterScore: null as number | null,
       scale: 50,
     };
+    let customerSatisfactionTrend = emptyTrend();
     try {
       const csRows = await pool.query(`
         SELECT responses, nps_score, is_complete
         FROM customer_satisfaction_responses
       `) as any[];
       customerSatisfaction = calculateCustomerSatisfactionScore(csRows);
+      const csTrendRows = await pool.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+          responses,
+          nps_score,
+          is_complete
+        FROM customer_satisfaction_responses
+        WHERE created_at >= $1::date
+          AND created_at < $2::date
+      `, [trendStartDate, trendEndExclusive]) as any[];
+      customerSatisfactionTrend = monthKeys.map((key) => {
+        const rowsForMonth = csTrendRows.filter((row: any) => row.month === key);
+        return {
+          month: key,
+          label: monthShortLabel(key),
+          value: calculateCustomerSatisfactionScore(rowsForMonth).avgScore,
+        };
+      });
     } catch (err: any) { const msg = `CS 12mo query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
+
+    let revenueTrend = emptyTrend();
+    try {
+      const revenueTrendRows = await pool.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', invoice_date), 'YYYY-MM') AS month,
+          COALESCE(SUM(total_amount), 0) AS value
+        FROM ar_invoices
+        WHERE invoice_date >= $1::date
+          AND invoice_date < $2::date
+          AND status NOT IN ('VOID', 'void')
+        GROUP BY 1
+      `, [trendStartDate, trendEndExclusive]) as any[];
+      const revenueByMonth = new Map(revenueTrendRows.map((row: any) => [row.month, Number(row.value) || 0]));
+      revenueTrend = monthKeys.map((key) => ({
+        month: key,
+        label: monthShortLabel(key),
+        value: revenueByMonth.get(key) ?? 0,
+      }));
+    } catch (err: any) { const msg = `revenue trend query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // AR aging using balance (total_amount - payments allocated) per existing AR aging endpoint pattern
     let arAging = { current: 0, days30: 0, days60: 0, days90plus: 0, totalOutstanding: 0 };
@@ -327,6 +421,12 @@ router.get('/summary', async (req, res) => {
       arAging: { ...arAging, lastUpdated: fetchedAt },
       pipeline: { ...pipelineTotals, lastUpdated: fetchedAt },
       returnRate: { ...returnRate, lastUpdated: fetchedAt },
+      trends: {
+        otd: otdTrend,
+        ncr: ncrTrend,
+        customerSatisfaction: customerSatisfactionTrend,
+        revenue: revenueTrend,
+      },
       dataErrors: dataErrors.length > 0 ? dataErrors : undefined,
     });
   } catch (err: any) {

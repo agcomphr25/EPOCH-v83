@@ -56,7 +56,7 @@ export default function ShipmentsSlide() {
           </div>
         </>
       )}
-      <div className="text-xs text-gray-400 mt-2 text-right">Live from EPOCH · All non-cancelled orders</div>
+      <div className="text-xs text-gray-400 mt-2 text-right">All non-cancelled orders</div>
     </div>
   );
 }

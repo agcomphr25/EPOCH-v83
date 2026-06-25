@@ -192,6 +192,11 @@ export default function FinancialReviewPage() {
   const pipelineCount = session?.bd_pipeline?.length ?? 0;
   const calendarCount = session?.calendar_events?.length ?? 0;
   const hasNarrative = Boolean(session?.risk_opportunity_text?.trim());
+  const pipelinePWeighted = (session?.bd_pipeline ?? []).reduce((sum, item) => {
+    const value = Number(item?.value) || 0;
+    const probability = Number(item?.pwin) || 0;
+    return sum + value * (probability / 100);
+  }, 0);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

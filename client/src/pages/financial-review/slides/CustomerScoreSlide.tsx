@@ -56,7 +56,7 @@ export default function CustomerScoreSlide() {
           )}
         </div>
       )}
-      <div className="text-xs text-gray-400 mt-2 text-right">Live from EPOCH · customer_satisfaction_responses</div>
+      <div className="text-xs text-gray-400 mt-2 text-right">customer_satisfaction_responses</div>
     </div>
   );
 }

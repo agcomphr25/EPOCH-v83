@@ -71,7 +71,7 @@ export default function CreditCardSalesSlide() {
           </div>
         </>
       )}
-      <div className="text-xs text-gray-400 mt-2 text-right">Live from EPOCH · payments table</div>
+      <div className="text-xs text-gray-400 mt-2 text-right">payments table</div>
     </div>
   );
 }

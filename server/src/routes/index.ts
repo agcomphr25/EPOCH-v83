@@ -6695,9 +6695,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               .where(eq(p2PurchaseOrders.id, poItem.poId));
             
             // Create serialized items for scheduling when BOM is complete
-            const { p2SerializedItems, partRoutings: partRoutingsTable, projects: projectsTable } = await import('../../schema');
-            const { v4: uuidv4 } = await import('uuid');
-            const { and: andOp, eq: eqOp, ilike: ilikeOp, isNull: isNullOp } = await import('drizzle-orm');
+            const { p2SerializedItems } = await import('../../schema');
+            const { eq: eqOp } = await import('drizzle-orm');
             
             // Get the PO for additional info
             const [po] = await db
@@ -6717,88 +6716,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               console.log(`Creating serialized items for PO ${po?.poNumber} with ${allItems.length} line items`);
               
               for (const lineItem of allItems) {
-                const [projectForPoItem] = await db
-                  .select({ id: projectsTable.id })
-                  .from(projectsTable)
-                  .where(andOp(eqOp(projectsTable.poId, poItem.poId), eqOp(projectsTable.p2PoItemId, lineItem.id)))
-                  .limit(1);
-                const [projectForPo] = projectForPoItem
-                  ? [projectForPoItem]
-                  : await db
-                      .select({ id: projectsTable.id })
-                      .from(projectsTable)
-                      .where(eqOp(projectsTable.poId, poItem.poId))
-                      .limit(1);
-                const projectId = projectForPo?.id ?? null;
-
-                let itemRouting = projectId
-                  ? await db.query.partRoutings.findFirst({
-                      where: andOp(
-                        eqOp(partRoutingsTable.projectId, projectId),
-                        eqOp(partRoutingsTable.partNumber, lineItem.partNumber),
-                        eqOp(partRoutingsTable.isActive, true)
-                      ),
-                    })
-                  : null;
-                if (!itemRouting && projectId) {
-                  itemRouting = await db.query.partRoutings.findFirst({
-                    where: andOp(
-                      eqOp(partRoutingsTable.projectId, projectId),
-                      ilikeOp(partRoutingsTable.partNumber, lineItem.partNumber),
-                      eqOp(partRoutingsTable.isActive, true)
-                    ),
-                  });
-                }
-                if (!itemRouting) {
-                  itemRouting = await db.query.partRoutings.findFirst({
-                    where: andOp(
-                      isNullOp(partRoutingsTable.projectId),
-                      eqOp(partRoutingsTable.partNumber, lineItem.partNumber),
-                      eqOp(partRoutingsTable.isActive, true)
-                    ),
-                  });
-                }
-                if (!itemRouting) {
-                  itemRouting = await db.query.partRoutings.findFirst({
-                    where: andOp(
-                      isNullOp(partRoutingsTable.projectId),
-                      ilikeOp(partRoutingsTable.partNumber, lineItem.partNumber),
-                      eqOp(partRoutingsTable.isActive, true)
-                    ),
-                  });
-                }
-                const baseMatch = lineItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
-                const familyKey = baseMatch ? baseMatch[1].trim() : lineItem.partNumber;
-
-                for (let i = 0; i < (lineItem.quantity || 1); i++) {
-                  const sequenceNum = i + 1;
-                  const seq4 = String(sequenceNum).padStart(4, '0');
-                  const barcode = `${po?.poNumber || 'P2'}-UNIT-${seq4}`;
-                  const serialNumber = barcode;
-                  
-                  await db.insert(p2SerializedItems).values({
-                    id: uuidv4(),
-                    poId: poItem.poId,
-                    poItemId: lineItem.id,
-                    poNumber: po?.poNumber || 'Unknown',
-                    partNumber: lineItem.partNumber,
-                    partName: lineItem.partName || lineItem.partNumber,
-                    customerId: po?.customerId || 'Unknown',
-                    customerName: po?.customerName || 'Unknown',
-                    sequenceNumber: sequenceNum,
-                    serialNumber,
-                    barcode,
-                    travelerBarcode: barcode,
-                    buildFamilyKey: familyKey,
-                    partRoutingId: itemRouting?.id || null,
-                    partRoutingRevision: itemRouting ? ((itemRouting as any).routingRevision || 1) : null,
-                    status: 'ACTIVE',
-                    currentDepartment: 'Pending Layup',
-                    currentStageIndex: 0,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                  });
-                }
+                await storage.addP2SerializedItemsForPoItem(lineItem.id, lineItem.quantity || 1);
               }
               
               console.log(`Created serialized items for PO ${po?.poNumber}`);

@@ -210,6 +210,7 @@ const safeFiles = [
   '0184_cnc_operation_batches.sql',
   '0185_draft_bom_drafts.sql',
   '0186_inventory_items_machined_part_fields.sql',
+  '0187_repair_p2_po_unit_serials.sql',
   'investigation_308_order_duplication.sql',
 ];
 

@@ -170,6 +170,17 @@ const unifiedTab: QmsTab = {
   assetType: 'all',
 };
 
+const tabSheetAliases: Record<string, string[]> = {
+  equipment: ['Equipment', 'Equipment TAB 1', 'Equipment Tab 1'],
+  'measuring-devices': ['Measuring Devices', 'Measuring Device List', 'Measuring Device'],
+  'as9100-calibration': ['AS9100 Calibration', 'AS9100 Calibration TAB 2', 'Calibration TAB 2', 'Calibration'],
+  'as9100-validation': ['AS9100 Validation', 'AS9100 Validation TAB 3', 'Validation TAB 3', 'Validation'],
+  'customer-property': ['Customer Property', 'Customer Property TAB 4'],
+  'serialized-items': ['Serialized Items', 'Serialized Items TAB 5', 'Serialized Item'],
+  'returned-items': ['Returned Items', 'Returned Items TAB 6', 'Returned Item'],
+  'calibration-archive': ['Calibration Register (ARCHIVE)', 'Calibration Register ARCHIVE', 'Calibration Archive', 'Archive'],
+};
+
 const statusClasses: Record<CalibrationAsset['status'], string> = {
   active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   due_soon: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -183,23 +194,46 @@ function dateOnly(value?: string | null) {
   return String(value).slice(0, 10);
 }
 
+function normalizeSheetName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\btab\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findWorkbookSheet(tab: QmsTab, sheetNames: string[]) {
+  const candidates = [tab.sheetName, tab.label, tab.key, ...(tabSheetAliases[tab.key] ?? [])]
+    .map(normalizeSheetName)
+    .filter(Boolean);
+  return sheetNames.find((sheetName) => {
+    const normalized = normalizeSheetName(sheetName);
+    return candidates.some((candidate) => normalized === candidate || normalized.includes(candidate) || candidate.includes(normalized));
+  });
+}
+
 function readWorkbookTabs(file: File, allowedTabs: QmsTab[]) {
-  return new Promise<Array<{ sheetName: string; rows: Record<string, unknown>[] }>>((resolve, reject) => {
+  return new Promise<{ tabs: Array<{ sheetName: string; sourceSheetName: string; rows: Record<string, unknown>[] }>; sheetNames: string[] }>((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Unable to read workbook'));
     reader.onload = () => {
       try {
         const workbook = XLSX.read(reader.result, { type: 'array', cellDates: true });
         const tabs = allowedTabs
-          .filter((tab) => workbook.SheetNames.includes(tab.sheetName))
+          .filter((tab) => tab.key !== unifiedTab.key)
+          .map((tab) => ({ tab, sourceSheetName: findWorkbookSheet(tab, workbook.SheetNames) }))
+          .filter((match): match is { tab: QmsTab; sourceSheetName: string } => Boolean(match.sourceSheetName))
           .map((tab) => ({
-            sheetName: tab.sheetName,
-            rows: XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[tab.sheetName], {
+            sheetName: tab.tab.sheetName,
+            sourceSheetName: tab.sourceSheetName,
+            rows: XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[tab.sourceSheetName], {
               defval: null,
               raw: false,
             }),
           }));
-        resolve(tabs);
+        resolve({ tabs, sheetNames: workbook.SheetNames });
       } catch (error) {
         reject(error instanceof Error ? error : new Error('Unable to parse workbook'));
       }
@@ -311,8 +345,10 @@ export default function QMSPartsEquipmentPage() {
 
   const importMutation = useMutation({
     mutationFn: async (file: File) => {
-      const workbookTabs = await readWorkbookTabs(file, tabs);
-      if (workbookTabs.length === 0) throw new Error('No matching QMS tabs were found in this workbook.');
+      const { tabs: workbookTabs, sheetNames } = await readWorkbookTabs(file, tabs);
+      if (workbookTabs.length === 0) {
+        throw new Error(`No matching QMS tabs were found. Found sheets: ${sheetNames.join(', ') || 'none'}.`);
+      }
       return apiRequest('/api/quality/qms/parts-equipment/import', {
         method: 'POST',
         body: { sourceName: file.name, tabs: workbookTabs },

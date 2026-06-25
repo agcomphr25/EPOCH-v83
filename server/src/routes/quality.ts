@@ -78,62 +78,69 @@ const qmsPartsEquipmentTabs = [
     sheetName: 'Equipment TAB 1',
     label: 'Equipment',
     assetType: 'equipment',
-    tagFields: ['Serial #', 'Serial'],
-    nameFields: ['Item', 'Description', 'Type'],
-    dateFields: ['Annual Maintenance Date', 'Inventory Date'],
+    aliases: ['Equipment', 'Equipment TAB 1', 'Equipment Tab 1'],
+    tagFields: ['Serial #', 'Serial', 'Serial Number', 'Serial No', 'Asset ID', 'Asset Tag', 'ID'],
+    nameFields: ['Item', 'Description', 'Type', 'Equipment', 'Name'],
+    dateFields: ['Annual Maintenance Date', 'Inventory Date', 'Maintenance Date', 'Date'],
   },
   {
     key: 'measuring-devices',
     sheetName: 'Measuring Device List',
     label: 'Measuring Devices',
     assetType: 'measuring_device',
-    tagFields: ['Serial #', 'Serial'],
-    nameFields: ['Type', 'Item', 'Description'],
-    dateFields: ['Next Inspection Date', 'Date'],
+    aliases: ['Measuring Devices', 'Measuring Device List', 'Measuring Device'],
+    tagFields: ['Serial #', 'Serial', 'Serial Number', 'Serial No', 'Asset ID', 'Asset Tag', 'ID'],
+    nameFields: ['Type', 'Item', 'Description', 'Name', 'Gage Description'],
+    dateFields: ['Next Inspection Date', 'Inspection Date', 'Next Due Date', 'Due Date', 'Date'],
   },
   {
     key: 'as9100-calibration',
     sheetName: 'AS9100 Calibration TAB 2',
     label: 'AS9100 Calibration',
     assetType: 'calibration_gage',
-    tagFields: ['Serial #', 'Serial'],
-    nameFields: ['Type', 'Item', 'Description'],
-    dateFields: ['Next Calibration Date (1 year)', 'Date'],
+    aliases: ['AS9100 Calibration', 'AS9100 Calibration TAB 2', 'Calibration TAB 2', 'Calibration'],
+    tagFields: ['Serial #', 'Serial', 'Serial Number', 'Serial No', 'Asset ID', 'Asset Tag', 'ID'],
+    nameFields: ['Type', 'Item', 'Description', 'Name', 'Gage Description'],
+    dateFields: ['Next Calibration Date (1 year)', 'Next Calibration Date', 'Calibration Due Date', 'Next Due Date', 'Due Date', 'Date'],
   },
   {
     key: 'as9100-validation',
     sheetName: 'AS9100 Validation TAB 3',
     label: 'AS9100 Validation',
     assetType: 'validation_asset',
-    tagFields: ['Asset ID', 'Serial #'],
-    nameFields: ['Description', 'Type'],
-    dateFields: ['Maintenance Date', 'Validation Date'],
+    aliases: ['AS9100 Validation', 'AS9100 Validation TAB 3', 'Validation TAB 3', 'Validation'],
+    tagFields: ['Asset ID', 'Asset Tag', 'Serial #', 'Serial', 'Serial Number', 'Serial No', 'ID'],
+    nameFields: ['Description', 'Type', 'Item', 'Name'],
+    dateFields: ['Maintenance Date', 'Validation Date', 'Next Validation Date', 'Next Due Date', 'Due Date', 'Date'],
   },
   {
     key: 'customer-property',
     sheetName: 'Customer Property TAB 4',
     label: 'Customer Property',
     assetType: 'customer_property',
-    tagFields: ['Serial #', 'Asset ID'],
-    nameFields: ['Description', 'Item'],
-    dateFields: ['Validation Date', 'Inventory Date'],
+    aliases: ['Customer Property', 'Customer Property TAB 4'],
+    tagFields: ['Serial #', 'Serial', 'Serial Number', 'Serial No', 'Asset ID', 'Asset Tag', 'ID'],
+    nameFields: ['Description', 'Item', 'Type', 'Name'],
+    dateFields: ['Validation Date', 'Inventory Date', 'Date'],
   },
   {
     key: 'serialized-items',
     sheetName: 'Serialized Items TAB 5',
     label: 'Serialized Items',
     assetType: 'serialized_item',
-    tagFields: ['Serial #', 'Asset ID'],
-    nameFields: ['Item', 'Description'],
-    dateFields: ['Inventory Date', 'Inventory Date (qtrly)'],
+    aliases: ['Serialized Items', 'Serialized Items TAB 5', 'Serialized Item'],
+    tagFields: ['Serial #', 'Serial', 'Serial Number', 'Serial No', 'Asset ID', 'Asset Tag', 'ID'],
+    nameFields: ['Item', 'Description', 'Type', 'Name'],
+    dateFields: ['Inventory Date', 'Inventory Date (qtrly)', 'Quarterly Inventory Date', 'Date'],
   },
   {
     key: 'returned-items',
     sheetName: 'Returned Items TAB 6',
     label: 'Returned Items',
     assetType: 'returned_item',
-    tagFields: ['Serial #', 'Asset ID'],
-    nameFields: ['Item', 'Description'],
+    aliases: ['Returned Items', 'Returned Items TAB 6', 'Returned Item'],
+    tagFields: ['Serial #', 'Serial', 'Serial Number', 'Serial No', 'Asset ID', 'Asset Tag', 'ID'],
+    nameFields: ['Item', 'Description', 'Type', 'Name'],
     dateFields: ['Return Date'],
   },
   {
@@ -141,9 +148,10 @@ const qmsPartsEquipmentTabs = [
     sheetName: 'Calibration Register (ARCHIVE)',
     label: 'Calibration Archive',
     assetType: 'calibration_archive',
-    tagFields: ['Serial #', 'Asset ID'],
-    nameFields: ['Type', 'Description'],
-    dateFields: ['Date'],
+    aliases: ['Calibration Register (ARCHIVE)', 'Calibration Register ARCHIVE', 'Calibration Archive', 'Archive'],
+    tagFields: ['Serial #', 'Serial', 'Serial Number', 'Serial No', 'Asset ID', 'Asset Tag', 'ID'],
+    nameFields: ['Type', 'Description', 'Item', 'Name', 'Gage Description'],
+    dateFields: ['Date', 'Calibration Date', 'Last Calibration Date'],
   },
 ] as const;
 
@@ -155,12 +163,34 @@ function compactString(value: unknown): string | null {
   return text.length > 0 ? text : null;
 }
 
+function normalizeImportKey(value: unknown): string {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/#/g, 'number')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\btab\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizedRowValue(row: QmsImportRow, fields: readonly string[]): string | null {
+  const entries = Object.entries(row).map(([key, value]) => [normalizeImportKey(key), value] as const);
+  for (const field of fields) {
+    const target = normalizeImportKey(field);
+    const match = entries.find(([key]) => key === target);
+    const value = compactString(match?.[1]);
+    if (value) return value;
+  }
+  return null;
+}
+
 function firstValue(row: QmsImportRow, fields: readonly string[]): string | null {
   for (const field of fields) {
     const value = compactString(row[field]);
     if (value) return value;
   }
-  return null;
+  return normalizedRowValue(row, fields);
 }
 
 function parseDateValue(value: unknown): string | null {
@@ -182,6 +212,10 @@ function parseDateValue(value: unknown): string | null {
 function firstDate(row: QmsImportRow, fields: readonly string[]): string | null {
   for (const field of fields) {
     const dateValue = parseDateValue(row[field]);
+    if (dateValue) return dateValue;
+  }
+  for (const field of fields) {
+    const dateValue = parseDateValue(normalizedRowValue(row, [field]));
     if (dateValue) return dateValue;
   }
   return null;
@@ -209,7 +243,11 @@ function eventResult(row: QmsImportRow): 'pass' | 'fail' | 'limited_use' {
 }
 
 function tabConfigForSheet(sheetName: string) {
-  return qmsPartsEquipmentTabs.find((tab) => tab.sheetName === sheetName);
+  const normalized = normalizeImportKey(sheetName);
+  return qmsPartsEquipmentTabs.find((tab) => {
+    const candidates = [tab.sheetName, tab.label, tab.key, ...tab.aliases].map(normalizeImportKey);
+    return candidates.some((candidate) => normalized === candidate || normalized.includes(candidate) || candidate.includes(normalized));
+  });
 }
 
 function metadataRecord(value: unknown): Record<string, unknown> {
@@ -799,6 +837,7 @@ router.post('/qms/parts-equipment/import', requirePermission('quality.manage_cal
 
     for (const tab of tabs) {
       const sheetName = compactString(tab.sheetName);
+      const sourceSheetName = compactString(tab.sourceSheetName) ?? sheetName;
       const config = sheetName ? tabConfigForSheet(sheetName) : null;
       const rows: QmsImportRow[] = Array.isArray(tab.rows) ? tab.rows : [];
       let imported = 0;
@@ -828,23 +867,25 @@ router.post('/qms/parts-equipment/import', requirePermission('quality.manage_cal
         const dueDate = firstDate(row, config.dateFields);
         const eventDate = firstDate(row, ['Date', 'Validation Date', 'Inventory Date', 'Annual Maintenance Date', 'Return Date']) ?? dueDate;
         const existingMetadata = (existing?.metadata ?? {}) as Record<string, unknown>;
+        const canonicalSheetName = config.sheetName;
         const qmsSourceTabs = Array.from(new Set([
           ...(
             Array.isArray(existingMetadata.qmsSourceTabs)
               ? existingMetadata.qmsSourceTabs.map((value) => compactString(value)).filter(Boolean)
               : []
           ),
-          sheetName,
+          canonicalSheetName,
         ]));
         const latestRowsBySheet = {
           ...((existingMetadata.latestRowsBySheet as Record<string, unknown> | undefined) ?? {}),
-          [sheetName]: row,
+          [canonicalSheetName]: row,
         };
         const metadata = {
           ...existingMetadata,
           qmsSourceName: sourceName,
-          qmsSheetName: existingMetadata.qmsSheetName ?? sheetName,
+          qmsSheetName: existingMetadata.qmsSheetName ?? canonicalSheetName,
           qmsTabKey: existingMetadata.qmsTabKey ?? config.key,
+          qmsOriginalSheetName: sourceSheetName,
           qmsSourceTabs,
           latestRowsBySheet,
           importedAt: new Date().toISOString(),
@@ -880,7 +921,7 @@ router.post('/qms/parts-equipment/import', requirePermission('quality.manage_cal
         imported += 1;
 
         if (eventDate) {
-          const notes = `Imported from ${sheetName}: ${compactString(row.Notes) ?? sourceName}`;
+          const notes = `Imported from ${sourceSheetName ?? canonicalSheetName}: ${compactString(row.Notes) ?? sourceName}`;
           const [duplicateEvent] = await db
             .select({ id: calibrationEvents.id })
             .from(calibrationEvents)
@@ -911,7 +952,7 @@ router.post('/qms/parts-equipment/import', requirePermission('quality.manage_cal
         }
       }
 
-      summary.tabs.push({ sheetName, imported, skipped });
+      summary.tabs.push({ sheetName: config.sheetName, imported, skipped });
     }
 
     res.status(201).json(summary);

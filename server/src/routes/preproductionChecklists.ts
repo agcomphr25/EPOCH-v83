@@ -65,6 +65,57 @@ router.get('/templates/departments', async (req: Request, res: Response) => {
   }
 });
 
+// Get reusable department task options from existing active templates.
+router.get('/templates/department-task-options', async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        departmentName: preproductionTemplateSections.name,
+        taskDescription: preproductionTemplateTasks.description,
+      })
+      .from(preproductionTemplateSections)
+      .innerJoin(
+        preproductionTemplates,
+        eq(preproductionTemplateSections.templateId, preproductionTemplates.id)
+      )
+      .innerJoin(
+        preproductionTemplateTasks,
+        eq(preproductionTemplateTasks.sectionId, preproductionTemplateSections.id)
+      )
+      .where(eq(preproductionTemplates.isActive, true))
+      .orderBy(asc(preproductionTemplateSections.name), asc(preproductionTemplateTasks.description));
+
+    const departments = new Map<string, Map<string, string>>();
+
+    for (const row of rows) {
+      const departmentName = normalizeDepartmentName(row.departmentName);
+      const taskDescription =
+        typeof row.taskDescription === 'string' ? row.taskDescription.trim().replace(/\s+/g, ' ') : '';
+
+      if (!departmentName || !taskDescription) continue;
+
+      if (!departments.has(departmentName)) {
+        departments.set(departmentName, new Map());
+      }
+
+      const normalizedTaskKey = taskDescription.toLowerCase();
+      if (!departments.get(departmentName)!.has(normalizedTaskKey)) {
+        departments.get(departmentName)!.set(normalizedTaskKey, taskDescription);
+      }
+    }
+
+    res.json(
+      Array.from(departments.entries()).map(([name, taskMap]) => ({
+        name,
+        tasks: Array.from(taskMap.values()),
+      }))
+    );
+  } catch (error) {
+    console.error('Error fetching preproduction department task options:', error);
+    res.status(500).json({ error: 'Failed to fetch department task options' });
+  }
+});
+
 // Create a complete template with department sections and task rows.
 router.post('/templates/wizard', async (req: Request, res: Response) => {
   try {

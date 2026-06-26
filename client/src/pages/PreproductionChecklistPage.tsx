@@ -174,6 +174,11 @@ interface WizardDepartment {
   tasks: { id: string; description: string }[];
 }
 
+interface DepartmentTaskOption {
+  name: string;
+  tasks: string[];
+}
+
 export default function PreproductionChecklistPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('checklists');
@@ -274,6 +279,7 @@ function PreproductionChecklistWizard({
   onOpenChange,
   projects,
   departmentOptions,
+  departmentTaskOptions,
   initialProjectId,
   initialProjectName,
   initialPoNumber,
@@ -284,6 +290,7 @@ function PreproductionChecklistWizard({
   onOpenChange: (open: boolean) => void;
   projects: ProjectOption[];
   departmentOptions: string[];
+  departmentTaskOptions: DepartmentTaskOption[];
   initialProjectId: string;
   initialProjectName: string;
   initialPoNumber: string;
@@ -305,6 +312,9 @@ function PreproductionChecklistWizard({
   const [departmentName, setDepartmentName] = useState('');
   const [customDepartmentName, setCustomDepartmentName] = useState('');
   const [departments, setDepartments] = useState<WizardDepartment[]>([]);
+  const taskOptionsByDepartment = new Map(
+    departmentTaskOptions.map((department) => [department.name.toLowerCase(), department.tasks])
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -548,11 +558,31 @@ function PreproductionChecklistWizard({
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {department.tasks.map((task, index) => (
-                      <div key={task.id} className="flex gap-2">
+                      <div key={task.id} className="grid gap-2 md:grid-cols-[minmax(180px,260px)_1fr_auto]">
+                        <Select
+                          value="__new_task__"
+                          onValueChange={(value) => {
+                            if (value.startsWith('saved:')) {
+                              updateTask(department.id, task.id, value.slice('saved:'.length));
+                            }
+                          }}
+                        >
+                          <SelectTrigger data-testid={`select-wizard-task-option-${department.id}-${index}`}>
+                            <SelectValue placeholder="Use saved task" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__new_task__">New task</SelectItem>
+                            {(taskOptionsByDepartment.get(department.name.toLowerCase()) || []).map((taskOption) => (
+                              <SelectItem key={taskOption} value={`saved:${taskOption}`}>
+                                {taskOption}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Input
                           value={task.description}
                           onChange={(event) => updateTask(department.id, task.id, event.target.value)}
-                          placeholder={`Task ${index + 1}`}
+                          placeholder="Choose a saved task or type a new task"
                           data-testid={`input-wizard-task-${department.id}-${index}`}
                         />
                         <Button
@@ -664,6 +694,10 @@ function ChecklistsTab({
     queryKey: ['/api/preproduction-checklists/templates/departments'],
   });
 
+  const { data: departmentTaskOptions = [] } = useQuery<DepartmentTaskOption[]>({
+    queryKey: ['/api/preproduction-checklists/templates/department-task-options'],
+  });
+
   const [newChecklist, setNewChecklist] = useState({
     projectName: initialProjectName,
     poNumber: initialPoNumber,
@@ -748,6 +782,7 @@ function ChecklistsTab({
       qc.invalidateQueries({ queryKey: ['/api/preproduction-checklists'] });
       qc.invalidateQueries({ queryKey: ['/api/preproduction-checklists/templates'] });
       qc.invalidateQueries({ queryKey: ['/api/preproduction-checklists/templates/departments'] });
+      qc.invalidateQueries({ queryKey: ['/api/preproduction-checklists/templates/department-task-options'] });
       qc.invalidateQueries({ queryKey: ['/api/projects'] });
       if (checklist?.projectId) {
         qc.invalidateQueries({ queryKey: ['/api/projects', checklist.projectId] });
@@ -827,6 +862,7 @@ function ChecklistsTab({
         onOpenChange={setIsWizardOpen}
         projects={projects}
         departmentOptions={departmentOptions}
+        departmentTaskOptions={departmentTaskOptions}
         initialProjectId={initialProjectId}
         initialProjectName={initialProjectName}
         initialPoNumber={initialPoNumber}
@@ -1792,7 +1828,7 @@ function TaskRow({
   onUpdateTask: (taskId: string, data: any) => void;
   onDeleteTask: (taskId: string) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(task.isCompleted || !!task.assignedTo);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [notes, setNotes] = useState(task.notes || '');
   const [link, setLink] = useState(task.link || '');
   const [hasChanges, setHasChanges] = useState(false);
@@ -1807,7 +1843,7 @@ function TaskRow({
   const handleTaskComplete = (checked: boolean | "indeterminate") => {
     onUpdateTask(task.id, { isCompleted: checked });
     if (checked === true) {
-      setIsExpanded(true);
+      setIsExpanded(false);
     }
   };
 
@@ -1911,69 +1947,85 @@ function TaskRow({
         </div>
       </div>
       
-      {showNotesLinkFields && isExpanded && (
-        <div className="px-3 pb-3 pt-0 border-t mx-3 mt-1">
-          <div className="space-y-3 pt-3">
-            <div className="space-y-2">
-              <Label className="text-sm flex items-center gap-2">
+      {showNotesLinkFields && (
+        <Accordion
+          type="single"
+          collapsible
+          value={isExpanded ? 'notes-link' : ''}
+          onValueChange={(value) => setIsExpanded(value === 'notes-link')}
+          className="border-t mx-3 mt-1"
+        >
+          <AccordionItem value="notes-link" className="border-0">
+            <AccordionTrigger className="py-2 text-sm hover:no-underline" data-testid={`accordion-notes-link-${task.id}`}>
+              <span className="flex items-center gap-2">
                 <StickyNote className="h-4 w-4" />
-                Notes
-              </Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => {
-                  setNotes(e.target.value);
-                  setHasChanges(true);
-                }}
-                placeholder="Add notes about this task..."
-                className="min-h-[80px] text-sm"
-                disabled={isSigned}
-                data-testid={`input-notes-${task.id}`}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm flex items-center gap-2">
-                <Link2 className="h-4 w-4" />
-                Link
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  value={link}
-                  onChange={(e) => {
-                    setLink(e.target.value);
-                    setHasChanges(true);
-                  }}
-                  placeholder="https://example.com/document"
-                  className="text-sm"
-                  disabled={isSigned}
-                  data-testid={`input-link-${task.id}`}
-                />
-                {link && (
+                Notes and link
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pb-3">
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-sm flex items-center gap-2">
+                    <StickyNote className="h-4 w-4" />
+                    Notes
+                  </Label>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => {
+                      setNotes(e.target.value);
+                      setHasChanges(true);
+                    }}
+                    placeholder="Add notes about this task..."
+                    className="min-h-[80px] text-sm"
+                    disabled={isSigned}
+                    data-testid={`input-notes-${task.id}`}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm flex items-center gap-2">
+                    <Link2 className="h-4 w-4" />
+                    Link
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={link}
+                      onChange={(e) => {
+                        setLink(e.target.value);
+                        setHasChanges(true);
+                      }}
+                      placeholder="https://example.com/document"
+                      className="text-sm"
+                      disabled={isSigned}
+                      data-testid={`input-link-${task.id}`}
+                    />
+                    {link && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        asChild
+                        className="shrink-0"
+                      >
+                        <a href={link} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {hasChanges && !isSigned && (
                   <Button
-                    variant="outline"
-                    size="icon"
-                    asChild
-                    className="shrink-0"
+                    size="sm"
+                    onClick={handleSaveNotesLink}
+                    data-testid={`button-save-notes-${task.id}`}
                   >
-                    <a href={link} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Notes & Link
                   </Button>
                 )}
               </div>
-            </div>
-            {hasChanges && !isSigned && (
-              <Button 
-                size="sm" 
-                onClick={handleSaveNotesLink}
-                data-testid={`button-save-notes-${task.id}`}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Save Notes & Link
-              </Button>
-            )}
-          </div>
-        </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       )}
     </div>
   );

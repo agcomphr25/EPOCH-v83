@@ -1490,15 +1490,39 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
         ps.packing_slip_number AS slip_number,
         NULL::uuid AS cert_id,
         NULL::text AS cert_number,
-        NULL::uuid AS invoice_id,
-        NULL::text AS invoice_number,
-        NULL::text AS invoice_status,
-        NULL::numeric AS invoice_total_amount,
-        NULL::integer AS journal_entry_id,
-        NULL::text AS journal_entry_status,
-        0::int AS journal_line_count
+        inv.id AS invoice_id,
+        inv.invoice_number,
+        inv.status AS invoice_status,
+        inv.total_amount AS invoice_total_amount,
+        inv.journal_entry_id,
+        inv.journal_entry_status,
+        COALESCE(inv.journal_line_count, 0)::int AS journal_line_count
       FROM p2_lot_numbers l
       JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
+      LEFT JOIN LATERAL (
+        SELECT
+          ar.id,
+          ar.invoice_number,
+          ar.status,
+          ar.total_amount,
+          je.id AS journal_entry_id,
+          je.status AS journal_entry_status,
+          (
+            SELECT COUNT(*)
+            FROM journal_lines jl
+            WHERE jl.journal_entry_id = je.id
+          ) AS journal_line_count
+        FROM ar_invoices ar
+        LEFT JOIN journal_entries je ON je.reference_uuid = ar.id
+        WHERE ar.lot_id = l.id
+          OR ar.packing_slip_id = ps.id
+          OR (
+            l.packing_slip_id IS NOT NULL
+            AND ar.packing_slip_id = l.packing_slip_id
+          )
+        ORDER BY ar.created_at DESC
+        LIMIT 1
+      ) inv ON TRUE
       LEFT JOIN LATERAL (
         SELECT
           ARRAY_AGG(DISTINCT si.po_id) FILTER (WHERE si.po_id IS NOT NULL) AS source_po_ids,

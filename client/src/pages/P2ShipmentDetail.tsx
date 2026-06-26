@@ -693,7 +693,6 @@ export default function P2ShipmentDetail() {
                 {packingSlip ? (
                   <p className="text-xs text-muted-foreground font-mono">
                     {packingSlip.packing_slip_number}
-                    <Badge className={`ml-2 text-xs ${statusColor(packingSlip.status)}`}>{packingSlip.status}</Badge>
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">

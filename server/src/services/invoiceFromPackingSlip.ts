@@ -550,8 +550,8 @@ export async function createInvoiceFromPackingSlip(
             sba.serialized_item_id::text,
             'LOCK_FOR_INVOICE',
             jsonb_build_object(
-              'invoiceId', ${invoice.id},
-              'invoiceNumber', ${preview.invoiceNumber},
+              'invoiceId', ${invoice.id}::text,
+              'invoiceNumber', ${preview.invoiceNumber}::text,
               'allocationId', sba.allocation_id
             ),
             'system:invoice-create',

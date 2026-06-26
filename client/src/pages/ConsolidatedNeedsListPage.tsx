@@ -769,6 +769,29 @@ export default function ConsolidatedNeedsListPage() {
     return displayNumber || `Vendor PO internal #${request.vendorPoId}`;
   }, []);
 
+  const getInventoryPartNumber = useCallback((request: Pick<PartsRequest, 'agPartNumber' | 'partNumber' | 'inventoryItem'>) => {
+    return request.agPartNumber || request.inventoryItem?.agPartNumber || request.partNumber;
+  }, []);
+
+  const getInventoryProfilePath = useCallback((partNumber?: string | null) => {
+    return `/inventory/enhanced-mrp?partNumber=${encodeURIComponent(partNumber || '')}`;
+  }, []);
+
+  const openInventoryProfile = useCallback((request: PartsRequest) => {
+    const partNumber = getInventoryPartNumber(request);
+    if (partNumber) setLocation(getInventoryProfilePath(partNumber));
+  }, [getInventoryPartNumber, getInventoryProfilePath, setLocation]);
+
+  const getVendorPartNumbersForRequests = useCallback((requests: PartsRequest[]) => {
+    return Array.from(
+      new Set(
+        requests
+          .map((request) => request.vendorPartNumber?.trim())
+          .filter((value): value is string => !!value)
+      )
+    );
+  }, []);
+
   const openLinkPoDialog = (request: PartsRequest) => {
     setLinkPoRequest(request);
     setSelectedVendorPoId(request.vendorPoId ? String(request.vendorPoId) : '');
@@ -1207,6 +1230,8 @@ export default function ConsolidatedNeedsListPage() {
                            consolidated.inventoryItem?.minStock !== undefined && 
                            consolidated.currentBalance < consolidated.inventoryItem.minStock;
           const oldestRequestDate = getOldestRequestDate(consolidated.requests);
+          const vendorPartNumbers = getVendorPartNumbersForRequests(consolidated.requests);
+          const inventoryPartNumber = consolidated.inventoryItem?.agPartNumber || consolidated.partNumber;
 
           return (
             <div key={consolidated.partNumber} className="border rounded-lg dark:border-gray-700">
@@ -1215,8 +1240,20 @@ export default function ConsolidatedNeedsListPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1 grid grid-cols-6 gap-4">
                     <div className="col-span-2">
-                      <div className="font-medium text-gray-900 dark:text-gray-100">{consolidated.partName}</div>
+                      <button
+                        type="button"
+                        onClick={() => setLocation(getInventoryProfilePath(inventoryPartNumber))}
+                        className="font-medium text-left text-gray-900 dark:text-gray-100 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
+                        data-testid={`link-inventory-profile-${consolidated.partNumber}`}
+                      >
+                        {consolidated.partName}
+                      </button>
                       <div className="text-xs text-gray-500 dark:text-gray-400">{consolidated.partNumber}</div>
+                      {vendorPartNumbers.length > 0 && (
+                        <div className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">
+                          Vendor part #: {vendorPartNumbers.join(', ')}
+                        </div>
+                      )}
                       <div className="mt-1 flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                         <Clock className="h-3 w-3" />
                         <span>Oldest request: {formatRequestDate(oldestRequestDate)}</span>
@@ -1564,9 +1601,9 @@ export default function ConsolidatedNeedsListPage() {
                           <td className="px-3 py-2">
                             <button
                               type="button"
-                              onClick={() => setDetailRequest(request)}
+                              onClick={() => openInventoryProfile(request)}
                               className="text-left group"
-                              data-testid={`button-view-part-${request.id}`}
+                              data-testid={`link-inventory-profile-request-${request.id}`}
                             >
                               <div className="font-medium text-sm text-gray-900 dark:text-gray-100 group-hover:text-blue-700 dark:group-hover:text-blue-300 group-hover:underline">
                                 {request.partName}

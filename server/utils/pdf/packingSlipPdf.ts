@@ -468,7 +468,7 @@ export async function generatePoPackingSlipPdf(data: PackingSlipData): Promise<B
     font: boldFont,
     color: COLORS.TEXT_PRIMARY,
   });
-  page.drawText(data.packingSlipNumber, {
+  page.drawText(invoiceNumber, {
     x: rightBlockX + halfW + 4,
     y: boxTop - boxHeight + 5,
     size: FONT_SIZES.BODY_SMALL,

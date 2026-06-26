@@ -263,7 +263,7 @@ export default function P2PackingSlipViewer() {
   const linkedInvoice = Array.isArray(linkedInvoices) && linkedInvoices.length > 0
     ? linkedInvoices[0]
     : null;
-  const displayInvoiceNumber = packingSlip.invoiceNumber || packingSlip.packingSlipNumber;
+  const displayInvoiceNumber = linkedInvoice?.invoiceNumber || packingSlip.invoiceNumber || packingSlip.packingSlipNumber;
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -445,9 +445,6 @@ export default function P2PackingSlipViewer() {
               <h2 className="text-xl font-bold text-gray-800">PACKING SLIP</h2>
               <p className="text-xs text-gray-500">Invoice #</p>
               <p className="font-mono font-bold text-lg" data-testid="text-packing-slip-number">{displayInvoiceNumber}</p>
-              <Badge className={packingSlip.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : packingSlip.status === 'DRAFT' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}>
-                {packingSlip.status}
-              </Badge>
             </div>
           </div>
 

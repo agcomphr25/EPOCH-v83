@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
+import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
 import { 
   preproductionTemplates, 
@@ -18,6 +19,9 @@ import { eq, desc, asc, and, sql } from 'drizzle-orm';
 
 const router = Router();
 
+const normalizeDepartmentName = (name: unknown) =>
+  typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : '';
+
 // =========================
 // TEMPLATES
 // =========================
@@ -34,6 +38,100 @@ router.get('/templates', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching templates:', error);
     res.status(500).json({ error: 'Failed to fetch templates' });
+  }
+});
+
+// Get reusable department names from existing active templates.
+router.get('/templates/departments', async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({ name: preproductionTemplateSections.name })
+      .from(preproductionTemplateSections)
+      .innerJoin(
+        preproductionTemplates,
+        eq(preproductionTemplateSections.templateId, preproductionTemplates.id)
+      )
+      .where(eq(preproductionTemplates.isActive, true))
+      .orderBy(asc(preproductionTemplateSections.name));
+
+    const departments = Array.from(
+      new Set(rows.map((row) => normalizeDepartmentName(row.name)).filter(Boolean))
+    );
+
+    res.json(departments);
+  } catch (error) {
+    console.error('Error fetching preproduction departments:', error);
+    res.status(500).json({ error: 'Failed to fetch departments' });
+  }
+});
+
+// Create a complete template with department sections and task rows.
+router.post('/templates/wizard', async (req: Request, res: Response) => {
+  try {
+    const { sections = [], ...templateData } = req.body;
+    const parsed = insertPreproductionTemplateSchema.safeParse(templateData);
+
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid template data', details: parsed.error });
+    }
+
+    const cleanSections = Array.isArray(sections)
+      ? sections
+          .map((section: any, index: number) => ({
+            name: normalizeDepartmentName(section?.name),
+            sortOrder: Number.isFinite(Number(section?.sortOrder))
+              ? Number(section.sortOrder)
+              : index + 1,
+            tasks: Array.isArray(section?.tasks)
+              ? section.tasks
+                  .map((task: any, taskIndex: number) => ({
+                    description: typeof task === 'string'
+                      ? task.trim()
+                      : typeof task?.description === 'string'
+                        ? task.description.trim()
+                        : '',
+                    sortOrder: Number.isFinite(Number(task?.sortOrder))
+                      ? Number(task.sortOrder)
+                      : taskIndex + 1,
+                  }))
+                  .filter((task: any) => task.description)
+              : [],
+          }))
+          .filter((section: any) => section.name && section.tasks.length > 0)
+      : [];
+
+    if (cleanSections.length === 0) {
+      return res.status(400).json({ error: 'Add at least one department with one task' });
+    }
+
+    const [template] = await db
+      .insert(preproductionTemplates)
+      .values(parsed.data)
+      .returning();
+
+    for (const section of cleanSections) {
+      const [createdSection] = await db
+        .insert(preproductionTemplateSections)
+        .values({
+          templateId: template.id,
+          name: section.name,
+          sortOrder: section.sortOrder,
+        })
+        .returning();
+
+      for (const task of section.tasks) {
+        await db.insert(preproductionTemplateTasks).values({
+          sectionId: createdSection.id,
+          description: task.description,
+          sortOrder: task.sortOrder,
+        });
+      }
+    }
+
+    res.status(201).json(template);
+  } catch (error) {
+    console.error('Error creating template from wizard:', error);
+    res.status(500).json({ error: 'Failed to create template from wizard' });
   }
 });
 
@@ -324,7 +422,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // Create checklist from template
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { templateId, ...checklistData } = req.body;
+    const { templateId, assignedProjectId, ...checklistData } = req.body;
     
     // Convert date strings to Date objects for timestamp fields
     const dateFields = [
@@ -342,7 +440,9 @@ router.post('/', async (req: Request, res: Response) => {
     }
     
     // Auto-generate projectId if not provided (format: PRE + timestamp)
-    if (!checklistData.projectId) {
+    if (!checklistData.projectId && assignedProjectId) {
+      checklistData.projectId = assignedProjectId;
+    } else if (!checklistData.projectId) {
       const timestamp = Date.now().toString(36).toUpperCase();
       checklistData.projectId = `PRE${timestamp}`;
     }
@@ -384,6 +484,19 @@ router.post('/', async (req: Request, res: Response) => {
             sortOrder: templateTask.sortOrder,
           });
         }
+      }
+    }
+
+    if (assignedProjectId) {
+      const steps = await storage.getProjectSteps(assignedProjectId);
+      const preproductionStep = steps.find((step) => step.stepType === 'preproduction_checklist');
+
+      if (preproductionStep) {
+        await storage.updateProjectStep(preproductionStep.id, {
+          linkedPreproductionChecklistId: checklist.id,
+          status: preproductionStep.status === 'pending' ? 'in_progress' : preproductionStep.status,
+          startedAt: preproductionStep.startedAt || new Date(),
+        } as any);
       }
     }
     

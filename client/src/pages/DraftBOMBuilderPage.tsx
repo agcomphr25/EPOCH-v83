@@ -733,6 +733,15 @@ function workspaceTabLabel(tabId: WorkspaceTabId) {
   return workspaceTabLabels[tabId as BuiltInWorkspaceTabId];
 }
 
+function customWorkspaceTabKey(label: string) {
+  return label.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function customWorkspaceTabId(label: string): WorkspaceTabId | null {
+  const normalizedLabel = label.trim().replace(/\s+/g, ' ');
+  return normalizedLabel ? (`custom:${normalizedLabel}` as WorkspaceTabId) : null;
+}
+
 function money(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 }
@@ -1303,24 +1312,40 @@ function laborDepartmentValue(label: string) {
     .replace(/^_+|_+$/g, '');
 }
 
-function normalizeWorkspaceTabs(tabs?: readonly WorkspaceTabId[] | null) {
-  const sourceTabs = tabs?.length ? tabs : defaultWorkspaceTabs;
-  const nextTabs = [...sourceTabs];
+function normalizeWorkspaceTabs(tabs?: readonly WorkspaceTabId[] | null): WorkspaceTabId[] {
+  const sourceTabs = tabs?.length ? [...tabs] : [...defaultWorkspaceTabs];
+  const normalized: WorkspaceTabId[] = [];
+  const customLabels = new Set<string>();
+
+  const appendTab = (tabId: WorkspaceTabId) => {
+    if ((defaultWorkspaceTabs as readonly string[]).includes(tabId)) {
+      if (!normalized.includes(tabId as BuiltInWorkspaceTabId)) normalized.push(tabId as BuiltInWorkspaceTabId);
+      return;
+    }
+
+    if (!tabId.startsWith('custom:')) return;
+    const customTabId = customWorkspaceTabId(workspaceTabLabel(tabId));
+    if (!customTabId) return;
+    const labelKey = customWorkspaceTabKey(workspaceTabLabel(customTabId));
+    if (customLabels.has(labelKey)) return;
+    customLabels.add(labelKey);
+    normalized.push(customTabId);
+  };
+
+  sourceTabs.forEach(appendTab);
 
   for (const tabId of defaultWorkspaceTabs) {
-    if (nextTabs.includes(tabId)) continue;
+    if (normalized.includes(tabId)) continue;
     const defaultIndex = defaultWorkspaceTabs.indexOf(tabId);
     const previousVisibleDefault = defaultWorkspaceTabs
       .slice(0, defaultIndex)
       .reverse()
-      .find((candidate) => nextTabs.includes(candidate));
-    const insertIndex = previousVisibleDefault ? nextTabs.indexOf(previousVisibleDefault) + 1 : nextTabs.length;
-    nextTabs.splice(insertIndex, 0, tabId);
+      .find((candidate) => normalized.includes(candidate));
+    const insertIndex = previousVisibleDefault ? normalized.indexOf(previousVisibleDefault) + 1 : normalized.length;
+    normalized.splice(insertIndex, 0, tabId);
   }
 
-  return nextTabs.filter((tabId, index, allTabs) =>
-    allTabs.indexOf(tabId) === index && (defaultWorkspaceTabs.includes(tabId as BuiltInWorkspaceTabId) || tabId.startsWith('custom:')),
-  );
+  return normalized;
 }
 
 function uniqueColumnNames(columns: string[]) {
@@ -1982,7 +2007,7 @@ export default function DraftBOMBuilderPage() {
   function startDraftBomForLine(lineId: string) {
     setWizardSeedLineId(lineId);
     if (!visibleWorkspaceTabs.includes('bom-wizard')) {
-      setVisibleWorkspaceTabs((current) => (current.includes('bom-wizard') ? current : [...current, 'bom-wizard']));
+      setVisibleWorkspaceTabs((current) => normalizeWorkspaceTabs(current.includes('bom-wizard') ? current : [...current, 'bom-wizard']));
     }
     setActiveWorkspaceTab('bom-wizard');
   }
@@ -2280,7 +2305,7 @@ export default function DraftBOMBuilderPage() {
       assemblyVisibleColumns: visibleAssemblyColumns,
       customColumns,
       customPoColumns: customColumns,
-      workspaceTabs: visibleWorkspaceTabs,
+      workspaceTabs: normalizeWorkspaceTabs(visibleWorkspaceTabs),
       updatedAt: new Date().toISOString(),
     });
     const nextDrafts = savedDraftListWith(savedDrafts, nextDraft);
@@ -2314,8 +2339,9 @@ export default function DraftBOMBuilderPage() {
     setVisibleDirectLaborColumns(normalizedDraft.directLaborVisibleColumns ?? defaultDirectLaborColumns);
     setVisibleAssemblyColumns(normalizedDraft.assemblyVisibleColumns ?? defaultSourcingColumns);
     setCustomColumns(normalizedDraft.customColumns ?? normalizedDraft.customPoColumns ?? []);
-    setVisibleWorkspaceTabs(normalizedDraft.workspaceTabs ?? defaultWorkspaceTabs);
-    setActiveWorkspaceTab((normalizedDraft.workspaceTabs ?? defaultWorkspaceTabs)[0] ?? 'po-draft');
+    const normalizedTabs = normalizeWorkspaceTabs(normalizedDraft.workspaceTabs);
+    setVisibleWorkspaceTabs(normalizedTabs);
+    setActiveWorkspaceTab(normalizedTabs[0] ?? 'po-draft');
   }
 
   function loadDraft(id: string) {
@@ -2678,13 +2704,14 @@ export default function DraftBOMBuilderPage() {
 
   function setWorkspaceTabVisible(tabId: WorkspaceTabId, visible: boolean) {
     setVisibleWorkspaceTabs((current) => {
+      const normalizedCurrent = normalizeWorkspaceTabs(current);
       if (visible) {
-        const next = current.includes(tabId) ? current : [...current, tabId];
+        const next = normalizeWorkspaceTabs(normalizedCurrent.includes(tabId) ? normalizedCurrent : [...normalizedCurrent, tabId]);
         setActiveWorkspaceTab(tabId);
         return next;
       }
 
-      const next = current.filter((item) => item !== tabId);
+      const next = normalizedCurrent.filter((item) => item !== tabId);
       if (activeWorkspaceTab === tabId && next.length > 0) {
         setActiveWorkspaceTab(next[0] ?? 'po-draft');
       }
@@ -2693,10 +2720,9 @@ export default function DraftBOMBuilderPage() {
   }
 
   function createWorkspaceTab() {
-    const label = newWorkspaceTabName.trim();
-    if (!label) return;
-    const tabId = `custom:${label}` as WorkspaceTabId;
-    setVisibleWorkspaceTabs((current) => (current.includes(tabId) ? current : [...current, tabId]));
+    const tabId = customWorkspaceTabId(newWorkspaceTabName);
+    if (!tabId) return;
+    setVisibleWorkspaceTabs((current) => normalizeWorkspaceTabs([...current, tabId]));
     setActiveWorkspaceTab(tabId);
     setNewWorkspaceTabName('');
   }
@@ -4170,9 +4196,8 @@ function PartsRequestWorkspace({
             ))}
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
+        <Table className="min-w-[1200px]" containerClassName="min-h-[260px] max-h-[min(70vh,720px)] overflow-auto">
+          <TableHeader className="sticky top-0 z-10 bg-white shadow-sm">
               <TableRow>
                 {sortableHeader('include', 'w-[112px]')}
                 {sortableHeader('description', 'min-w-[300px]')}
@@ -4301,7 +4326,6 @@ function PartsRequestWorkspace({
               )}
             </TableBody>
           </Table>
-        </div>
         <Separator />
         <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-slate-500">
           <span>{selectedCount} checked line{selectedCount === 1 ? '' : 's'} ready for Vendor PO/RFQ or inventory finalization.</span>
@@ -4486,7 +4510,6 @@ function DirectLaborEstimateWorkspace({
               )}
             </TableBody>
           </Table>
-        </div>
         <Separator />
         <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-slate-500">
           <span>

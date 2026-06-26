@@ -149,7 +149,11 @@ type ConsolidatedPart = {
   currentBalance?: number;
 };
 
-type StatusView = 'OPEN' | 'PENDING' | 'APPROVED' | 'ORDERED' | 'RECEIVED' | 'DELIVERED_TO_DEPT' | 'ALL';
+type StatusView = 'OPEN' | 'PENDING' | 'APPROVED' | 'ORDERED' | 'RECEIVED' | 'ALL';
+
+const isArchivedFromConsolidatedNeeds = (request: PartsRequest) => {
+  return request.status === 'RECEIVED' || request.status === 'DELIVERED_TO_DEPT';
+};
 
 export default function ConsolidatedNeedsListPage() {
   const { toast } = useToast();
@@ -685,24 +689,31 @@ export default function ConsolidatedNeedsListPage() {
     });
   }, [allRequests, searchTerm]);
 
-  const pendingRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'PENDING')), [filteredRequests]);
-  const approvedRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'APPROVED')), [filteredRequests]);
-  const orderedRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => ['ORDERED', 'ORDERED_PARTIAL'].includes(r.status))), [filteredRequests]);
-  const receivedRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => ['RECEIVED', 'RECEIVED_PARTIAL'].includes(r.status))), [filteredRequests]);
-  const deliveredRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'DELIVERED_TO_DEPT')), [filteredRequests]);
+  const activeNeedsRequests = useMemo(
+    () => filteredRequests.filter((request) => !isArchivedFromConsolidatedNeeds(request)),
+    [filteredRequests]
+  );
+  const archivedRequests = useMemo(
+    () => filteredRequests.filter(isArchivedFromConsolidatedNeeds),
+    [filteredRequests]
+  );
+  const archivedParts = useMemo(() => consolidateByPart(archivedRequests), [archivedRequests]);
+  const pendingRequests = useMemo(() => consolidateByPart(activeNeedsRequests.filter(r => r.status === 'PENDING')), [activeNeedsRequests]);
+  const approvedRequests = useMemo(() => consolidateByPart(activeNeedsRequests.filter(r => r.status === 'APPROVED')), [activeNeedsRequests]);
+  const orderedRequests = useMemo(() => consolidateByPart(activeNeedsRequests.filter(r => ['ORDERED', 'ORDERED_PARTIAL'].includes(r.status))), [activeNeedsRequests]);
+  const receivedRequests = useMemo(() => consolidateByPart(activeNeedsRequests.filter(r => r.status === 'RECEIVED_PARTIAL')), [activeNeedsRequests]);
   const statusFilteredRequests = useMemo(() => {
     const statusesByView: Record<StatusView, string[]> = {
       OPEN: ['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL', 'CANCEL_REQUESTED'],
       PENDING: ['PENDING'],
       APPROVED: ['APPROVED'],
       ORDERED: ['ORDERED', 'ORDERED_PARTIAL'],
-      RECEIVED: ['RECEIVED', 'RECEIVED_PARTIAL'],
-      DELIVERED_TO_DEPT: ['DELIVERED_TO_DEPT'],
-      ALL: ['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT', 'CANCEL_REQUESTED'],
+      RECEIVED: ['RECEIVED_PARTIAL'],
+      ALL: ['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL', 'CANCEL_REQUESTED'],
     };
     const allowedStatuses = statusesByView[statusView];
-    return filteredRequests.filter((request) => allowedStatuses.includes(request.status));
-  }, [filteredRequests, statusView]);
+    return activeNeedsRequests.filter((request) => allowedStatuses.includes(request.status));
+  }, [activeNeedsRequests, statusView]);
 
   const vendorMap = useMemo(() => {
     const map = new Map<number, Vendor>();
@@ -891,9 +902,7 @@ export default function ConsolidatedNeedsListPage() {
       case 'ORDERED':
         return 'Ordered';
       case 'RECEIVED':
-        return 'Received';
-      case 'DELIVERED_TO_DEPT':
-        return 'Delivered';
+        return 'Partially Received';
       case 'ALL':
         return 'All';
       default:
@@ -1752,20 +1761,13 @@ export default function ConsolidatedNeedsListPage() {
         >
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">{receivedRequests.length}</div>
-            <p className="text-sm text-muted-foreground">Received Parts</p>
+            <p className="text-sm text-muted-foreground">Partial Receipts</p>
           </CardContent>
         </Card>
-        <Card
-          role="button"
-          tabIndex={0}
-          onClick={() => setStatusViewAndClearSelection('DELIVERED_TO_DEPT')}
-          onKeyDown={(event) => event.key === 'Enter' && setStatusViewAndClearSelection('DELIVERED_TO_DEPT')}
-          className={`cursor-pointer transition-colors ${statusView === 'DELIVERED_TO_DEPT' ? 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20' : ''}`}
-          data-testid="card-filter-delivered"
-        >
+        <Card data-testid="card-archived-received">
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{deliveredRequests.length}</div>
-            <p className="text-sm text-muted-foreground">Delivered Parts</p>
+            <div className="text-2xl font-bold text-slate-600 dark:text-slate-300">{archivedParts.length}</div>
+            <p className="text-sm text-muted-foreground">Archived Parts</p>
           </CardContent>
         </Card>
       </div>
@@ -1837,10 +1839,7 @@ export default function ConsolidatedNeedsListPage() {
                       Ordered ({orderedRequests.length})
                     </TabsTrigger>
                     <TabsTrigger value="received" data-testid="tab-received">
-                      Received ({receivedRequests.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="delivered" data-testid="tab-delivered">
-                      Delivered ({deliveredRequests.length})
+                      Partial Receipts ({receivedRequests.length})
                     </TabsTrigger>
                   </TabsList>
 
@@ -1858,10 +1857,6 @@ export default function ConsolidatedNeedsListPage() {
 
                   <TabsContent value="received">
                     {renderConsolidatedTable(receivedRequests)}
-                  </TabsContent>
-
-                  <TabsContent value="delivered">
-                    {renderConsolidatedTable(deliveredRequests, false)}
                   </TabsContent>
                 </Tabs>
               )}

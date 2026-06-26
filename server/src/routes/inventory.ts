@@ -1895,8 +1895,9 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
     const { db } = await import('../../db');
     const { eq, and, inArray, isNotNull, isNull } = await import('drizzle-orm');
     
-    // Get all active parts requests that are not yet delivered
-    const activeStatuses = ['PENDING', 'APPROVED', 'ORDERED_PARTIAL', 'ORDERED', 'RECEIVED_PARTIAL', 'RECEIVED'];
+    // Fully received requests are treated as archived out of consolidated needs.
+    // Partially received requests remain visible because they still have backorder work.
+    const activeStatuses = ['PENDING', 'APPROVED', 'ORDERED_PARTIAL', 'ORDERED', 'RECEIVED_PARTIAL'];
     const requests = await db
       .select()
       .from(partsRequests)

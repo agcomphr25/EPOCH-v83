@@ -696,6 +696,24 @@ async function findSerializedItemByPrintedTravelerScan(scanValue: string) {
   const printedTraveler = await findTravelerByPrintedScan(scanValue);
   if (!printedTraveler) return null;
 
+  const scanVariants = new Set(buildP2PartScanVariants(scanValue).map((value) => value.toLowerCase()));
+  const printedTravelerSerialVariants = new Set(
+    buildP2PartScanVariants(printedTraveler.serialNumber || '').map((value) => value.toLowerCase()),
+  );
+
+  const candidateMatchesScannedIdentity = (candidate: typeof p2SerializedItems.$inferSelect): boolean => {
+    const candidateValues = [
+      candidate.barcode,
+      candidate.travelerBarcode,
+      candidate.serialNumber,
+      candidate.customerSerialNumber,
+    ]
+      .map((value) => value?.trim().toLowerCase())
+      .filter((value): value is string => Boolean(value));
+
+    return candidateValues.some((value) => scanVariants.has(value) || printedTravelerSerialVariants.has(value));
+  };
+
   const projectIds = new Set<string>();
   if (printedTraveler.projectId) projectIds.add(printedTraveler.projectId);
   if (printedTraveler.productionWorkOrderId) {
@@ -724,6 +742,8 @@ async function findSerializedItemByPrintedTravelerScan(scanValue: string) {
     .limit(250);
 
   for (const candidate of candidateRows) {
+    if (!candidateMatchesScannedIdentity(candidate)) continue;
+
     const identity = await getSerializedItemInventoryIdentity(candidate);
     const routing = await findActiveRoutingForSerializedItem(candidate);
     const partMatches = buildTravelerPartIdentityMatches({
@@ -991,22 +1011,6 @@ async function findTravelerForSerializedItemIdentity(params: {
       or(...partMatches),
     )!,
   ];
-
-  const projectId = workOrder?.projectId ?? routing?.projectId ?? null;
-  if (projectId) {
-    const projectOrWorkOrderMatches = [
-      projectId ? eq(travelers.projectId, projectId) : null,
-    ].filter((condition): condition is SQL<unknown> => Boolean(condition));
-
-    if (projectOrWorkOrderMatches.length > 0) {
-      identityMatches.push(
-        and(
-          or(...projectOrWorkOrderMatches),
-          or(...partMatches),
-        )!,
-      );
-    }
-  }
 
   const rows = await db
     .select()

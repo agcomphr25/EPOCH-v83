@@ -696,6 +696,24 @@ async function findSerializedItemByPrintedTravelerScan(scanValue: string) {
   const printedTraveler = await findTravelerByPrintedScan(scanValue);
   if (!printedTraveler) return null;
 
+  const scanVariants = new Set(buildP2PartScanVariants(scanValue).map((value) => value.toLowerCase()));
+  const printedTravelerSerialVariants = new Set(
+    buildP2PartScanVariants(printedTraveler.serialNumber || '').map((value) => value.toLowerCase()),
+  );
+
+  const candidateMatchesScannedIdentity = (candidate: typeof p2SerializedItems.$inferSelect): boolean => {
+    const candidateValues = [
+      candidate.barcode,
+      candidate.travelerBarcode,
+      candidate.serialNumber,
+      candidate.customerSerialNumber,
+    ]
+      .map((value) => value?.trim().toLowerCase())
+      .filter((value): value is string => Boolean(value));
+
+    return candidateValues.some((value) => scanVariants.has(value) || printedTravelerSerialVariants.has(value));
+  };
+
   const projectIds = new Set<string>();
   if (printedTraveler.projectId) projectIds.add(printedTraveler.projectId);
   if (printedTraveler.productionWorkOrderId) {
@@ -724,6 +742,8 @@ async function findSerializedItemByPrintedTravelerScan(scanValue: string) {
     .limit(250);
 
   for (const candidate of candidateRows) {
+    if (!candidateMatchesScannedIdentity(candidate)) continue;
+
     const identity = await getSerializedItemInventoryIdentity(candidate);
     const routing = await findActiveRoutingForSerializedItem(candidate);
     const partMatches = buildTravelerPartIdentityMatches({
@@ -909,7 +929,7 @@ async function findProductionWorkOrderForSerializedItem(params: {
 
   const whereParts: SQL<unknown>[] = [
     inArray(productionWorkOrders.projectId, projectRows.map((project) => project.id)),
-    sql`${productionWorkOrders.status} NOT IN ('CANCELLED', 'CANCELED', 'CLOSED', 'COMPLETE')`,
+    sql`${productionWorkOrders.status} NOT IN ('CANCELLED', 'CANCELED')`,
   ];
   if (partFilters.length > 0) {
     whereParts.push(or(...partFilters)!);
@@ -968,29 +988,29 @@ async function findTravelerForSerializedItemIdentity(params: {
   const partMatches = buildTravelerPartIdentityMatches({ serializedItem, routing, inventoryIdentity });
   if (partMatches.length === 0) return null;
 
+  if (workOrder?.id) {
+    const rows = await db
+      .select()
+      .from(travelers)
+      .where(
+        and(
+          eq(travelers.productionWorkOrderId, workOrder.id),
+          sql`lower(trim(${travelers.serialNumber})) = lower(trim(${serializedItem.serialNumber}))`,
+          or(...partMatches),
+        ),
+      )
+      .orderBy(desc(travelers.updatedAt))
+      .limit(1);
+
+    return rows[0] ?? null;
+  }
+
   const identityMatches: SQL<unknown>[] = [
     and(
       sql`lower(trim(${travelers.serialNumber})) = lower(trim(${serializedItem.serialNumber}))`,
       or(...partMatches),
     )!,
   ];
-
-  const projectId = workOrder?.projectId ?? routing?.projectId ?? null;
-  if (workOrder?.id || projectId) {
-    const projectOrWorkOrderMatches = [
-      workOrder?.id ? eq(travelers.productionWorkOrderId, workOrder.id) : null,
-      projectId ? eq(travelers.projectId, projectId) : null,
-    ].filter((condition): condition is SQL<unknown> => Boolean(condition));
-
-    if (projectOrWorkOrderMatches.length > 0) {
-      identityMatches.push(
-        and(
-          or(...projectOrWorkOrderMatches),
-          or(...partMatches),
-        )!,
-      );
-    }
-  }
 
   const rows = await db
     .select()
@@ -2309,114 +2329,22 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
       }
     }
 
-    const workOrder = await findProductionWorkOrderForSerializedItem({
+    const travelerResult = await ensureTravelerForSerializedItem({
       serializedItem,
       routing,
       inventoryIdentity,
+      actor: resolvedDisplayName,
     });
-    const existingTraveler = await findTravelerForSerializedItemIdentity({
-      serializedItem,
-      routing,
-      inventoryIdentity,
-      workOrder,
-    });
-
-    if (existingTraveler) {
-      const repaired = await ensureExistingTravelerHasRoutingDetails({
-        traveler: existingTraveler,
-        routing,
-        actor: resolvedDisplayName,
-      });
-      if (workOrder && existingTraveler.productionWorkOrderId !== workOrder.id) {
-        await storage.linkTravelerToProductionWorkOrder(existingTraveler.id, workOrder.id);
-      }
-
-      return res.json({
-        travelerId: existingTraveler.id,
-        travelerNumber: existingTraveler.travelerNumber,
-        created: false,
-        repaired,
-      });
-    }
-
-    const traveler = await storage.generateTravelerFromRouting(routing.id, {
-      serialNumber: serializedItem.serialNumber,
-      lotNumber: serializedItem.poNumber || undefined,
-      createdBy: resolvedDisplayName,
-    });
-
-    await storage.updateTraveler(traveler.id, { status: 'IN_PROGRESS' });
-    if (workOrder) {
-      await storage.linkTravelerToProductionWorkOrder(traveler.id, workOrder.id);
-    }
-
-    const currentStageIndex = serializedItem.currentStageIndex || 0;
-    if (currentStageIndex > 0) {
-      const steps = await db
-        .select()
-        .from(travelerSteps)
-        .where(eq(travelerSteps.travelerId, traveler.id))
-        .orderBy(asc(travelerSteps.stepNumber));
-
-      const now = new Date();
-
-      for (let i = 0; i < steps.length && i < currentStageIndex; i++) {
-        await db
-          .update(travelerSteps)
-          .set({
-            status: 'COMPLETED',
-            completedAt: now,
-            completedBy: resolvedDisplayName,
-          })
-          .where(eq(travelerSteps.id, steps[i].id));
-
-        await db
-          .update(travelerTasks)
-          .set({
-            status: 'COMPLETED',
-            completedAt: now,
-            completedBy: resolvedDisplayName,
-          })
-          .where(eq(travelerTasks.travelerStepId, steps[i].id));
-      }
-
-      if (steps[currentStageIndex]) {
-        await db
-          .update(travelerSteps)
-          .set({
-            status: 'IN_PROGRESS',
-            startedAt: new Date(),
-            startedBy: resolvedDisplayName,
-          })
-          .where(eq(travelerSteps.id, steps[currentStageIndex].id));
-      }
-
-      console.log(`[P2Traveler] Advanced traveler to step ${currentStageIndex + 1} of ${steps.length} (matching P2 item stage)`);
-    } else {
-      const steps = await db
-        .select()
-        .from(travelerSteps)
-        .where(eq(travelerSteps.travelerId, traveler.id))
-        .orderBy(asc(travelerSteps.stepNumber));
-
-      if (steps.length > 0) {
-        await db
-          .update(travelerSteps)
-          .set({
-            status: 'IN_PROGRESS',
-            startedAt: new Date(),
-            startedBy: resolvedDisplayName,
-          })
-          .where(eq(travelerSteps.id, steps[0].id));
-      }
-    }
-
-    console.log(`[P2Traveler] Generated traveler ${traveler.travelerNumber} for serialized item ${serializedItem.serialNumber}`);
+    console.log(
+      `[P2Traveler] ${travelerResult.created ? 'Generated' : 'Resolved'} traveler ${travelerResult.traveler.travelerNumber} for serialized item ${serializedItem.serialNumber}`,
+    );
 
     return res.json({
-      travelerId: traveler.id,
-      travelerNumber: traveler.travelerNumber,
-      created: true,
+      travelerId: travelerResult.traveler.id,
+      travelerNumber: travelerResult.traveler.travelerNumber,
+      created: travelerResult.created,
+      repaired: travelerResult.repaired,
+      linkedWorkOrderId: travelerResult.linkedWorkOrderId,
     });
   } catch (error: any) {
     console.error('[P2Traveler] Error generating traveler:', error);

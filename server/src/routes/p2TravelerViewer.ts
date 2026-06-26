@@ -62,6 +62,37 @@ function generateDocumentNumber(prefix: string): string {
   return `${prefix}-${dateStr}-${randomNum}`;
 }
 
+function buildP2ViewerScanVariants(scanValue: string): string[] {
+  const trimmed = scanValue.trim();
+  const compact = trimmed.replace(/\s+/g, '');
+  const variants = new Set<string>([trimmed, compact]);
+
+  for (const value of Array.from(variants)) {
+    if (/^rec/i.test(value)) variants.add(`ROC${value.slice(3)}`);
+    if (/^roc/i.test(value)) variants.add(`REC${value.slice(3)}`);
+  }
+
+  return Array.from(variants).filter(Boolean);
+}
+
+async function findSerializedItemForViewerScan(scanValue: string) {
+  const fields = [
+    p2SerializedItems.barcode,
+    p2SerializedItems.travelerBarcode,
+    p2SerializedItems.serialNumber,
+    p2SerializedItems.customerSerialNumber,
+  ];
+
+  for (const variant of buildP2ViewerScanVariants(scanValue)) {
+    const item = await db.query.p2SerializedItems.findFirst({
+      where: or(...fields.map((field) => ilike(field, variant))),
+    });
+    if (item) return item;
+  }
+
+  return null;
+}
+
 async function findProductionWorkOrderForTravelerViewer(params: {
   serializedItem: typeof p2SerializedItems.$inferSelect;
   routing: typeof partRoutings.$inferSelect | null;
@@ -191,13 +222,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
   try {
     const barcode = decodeURIComponent(req.params.barcode).trim();
 
-    // Get serialized item - check both system barcode and physical traveler barcode (case-insensitive)
-    const serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: or(
-        ilike(p2SerializedItems.barcode, barcode),
-        ilike(p2SerializedItems.travelerBarcode, barcode)
-      ),
-    });
+    const serializedItem = await findSerializedItemForViewerScan(barcode);
 
     if (!serializedItem) {
       return res.status(404).json({ error: 'Serialized item not found' });

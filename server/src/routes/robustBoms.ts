@@ -17,14 +17,82 @@ import {
   insertBomItemSchema
 } from '../../schema';
 import { eq, ilike, desc, count, or, and, inArray, sql } from 'drizzle-orm';
-import { 
+import {
   explodeBOMRevisionWithRollups, 
   whereUsed, 
   buildBOMTree,
   buildStockBOMTree
 } from '../db/queries/bom';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
+
+const draftBuilderBomComponentSchema = z.object({
+  id: z.string().optional(),
+  inventoryItemId: z.number().int().positive().nullable().optional(),
+  partNumber: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  quantity: z.number().positive().default(1),
+  isManufactured: z.boolean().optional().default(false),
+  firstDepartment: z.string().optional().nullable(),
+  sourceLineId: z.string().optional().nullable(),
+});
+
+const draftBuilderBomImportSchema = z.object({
+  draftId: z.string().min(1),
+  draftName: z.string().optional().nullable(),
+  revision: z.string().optional().nullable(),
+  projectId: z.string().optional().nullable(),
+  projectCode: z.string().optional().nullable(),
+  projectName: z.string().optional().nullable(),
+  activate: z.boolean().default(false),
+  rootPart: z.object({
+    inventoryItemId: z.number().int().positive().nullable().optional(),
+    partNumber: z.string().optional().nullable(),
+    description: z.string().optional().nullable(),
+    sourceLineId: z.string().optional().nullable(),
+  }),
+  bom: z.object({
+    id: z.string().min(1),
+    name: z.string().optional().nullable(),
+    revision: z.string().optional().nullable(),
+    parts: z.array(z.object({
+      id: z.string().optional(),
+      inventoryItemId: z.number().int().positive().nullable().optional(),
+      partNumber: z.string().optional().nullable(),
+      description: z.string().optional().nullable(),
+      bomItems: z.array(draftBuilderBomComponentSchema).optional().default([]),
+    })).optional().default([]),
+  }),
+});
+
+function cleanText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeBomCode(value: string): string {
+  return value.trim().replace(/\s+/g, '-').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 80);
+}
+
+function p2BomDepartment(value: unknown): string {
+  const normalized = cleanText(value).toLowerCase().replace(/[_-]+/g, ' ');
+  if (normalized.includes('assembly')) return 'Assembly/Disassembly';
+  if (normalized.includes('finish')) return 'Finish';
+  if (normalized.includes('paint')) return 'Paint';
+  if (normalized.includes('qc') || normalized.includes('quality')) return 'QC';
+  if (normalized.includes('ship')) return 'Shipping';
+  return 'Layup';
+}
+
+async function hasActiveP2BomForPart(partNumber: string): Promise<boolean> {
+  if (!partNumber) return false;
+  const [bom] = await db
+    .select({ id: bomDefinitions.id })
+    .from(bomDefinitions)
+    .where(and(eq(bomDefinitions.sku, partNumber), eq(bomDefinitions.isActive, true)))
+    .limit(1);
+  return !!bom;
+}
 
 // ========================================
 // PARTS MANAGEMENT ROUTES (Now uses Inventory Items)
@@ -174,6 +242,320 @@ router.get('/parts/:id/where-used', async (req, res) => {
 // ========================================
 // BOM MANAGEMENT ROUTES
 // ========================================
+
+router.post('/from-draft-builder', requirePermission('inventory.adjust'), async (req, res) => {
+  try {
+    const payload = draftBuilderBomImportSchema.parse(req.body);
+    const rootInventory = payload.rootPart.inventoryItemId
+      ? await db.query.inventoryItems.findFirst({
+          where: eq(inventoryItems.id, payload.rootPart.inventoryItemId),
+        })
+      : cleanText(payload.rootPart.partNumber)
+        ? await db.query.inventoryItems.findFirst({
+            where: eq(inventoryItems.agPartNumber, cleanText(payload.rootPart.partNumber)),
+          })
+        : null;
+
+    if (!rootInventory?.agPartNumber) {
+      return res.status(400).json({
+        error: 'Finalize the BOM root part to an inventory item before saving it to Robust BOM.',
+      });
+    }
+
+    const rootPartNumber = rootInventory.agPartNumber;
+    const rootDescription = cleanText(payload.rootPart.description) || rootInventory.name || rootPartNumber;
+    const bomCode = normalizeBomCode(`${rootPartNumber}-${payload.bom.id}`) || normalizeBomCode(rootPartNumber);
+    const revCode = cleanText(payload.bom.revision) || cleanText(payload.revision) || 'DRAFT';
+    const rootPart = payload.bom.parts[0] ?? null;
+    const componentCandidates = rootPart?.bomItems ?? [];
+    const inventoryIds = Array.from(new Set(componentCandidates
+      .map((component) => component.inventoryItemId)
+      .filter((id): id is number => Number.isInteger(id) && id > 0)));
+    const componentPartNumbers = Array.from(new Set(componentCandidates
+      .map((component) => cleanText(component.partNumber))
+      .filter(Boolean)));
+
+    const [componentInventoryByIdRows, componentInventoryByPartRows] = await Promise.all([
+      inventoryIds.length > 0
+        ? db.select({
+            id: inventoryItems.id,
+            agPartNumber: inventoryItems.agPartNumber,
+            name: inventoryItems.name,
+          })
+          .from(inventoryItems)
+          .where(inArray(inventoryItems.id, inventoryIds))
+        : Promise.resolve([]),
+      componentPartNumbers.length > 0
+        ? db.select({
+            id: inventoryItems.id,
+            agPartNumber: inventoryItems.agPartNumber,
+            name: inventoryItems.name,
+          })
+          .from(inventoryItems)
+          .where(inArray(inventoryItems.agPartNumber, componentPartNumbers))
+        : Promise.resolve([]),
+    ]);
+    const componentById = new Map(componentInventoryByIdRows.map((item) => [item.id, item]));
+    const componentByPartNumber = new Map(componentInventoryByPartRows.map((item) => [item.agPartNumber, item]));
+    const missingComponents: string[] = [];
+    const linesData = componentCandidates.map((component, index) => {
+      const inventoryItem = component.inventoryItemId ? componentById.get(component.inventoryItemId) : undefined;
+      const partNumber = inventoryItem?.agPartNumber ?? componentByPartNumber.get(cleanText(component.partNumber))?.agPartNumber ?? '';
+      if (!partNumber) {
+        missingComponents.push(cleanText(component.partNumber) || cleanText(component.description) || `component ${index + 1}`);
+      }
+      return {
+        childPartAgNumber: partNumber,
+        qtyPer: String(component.quantity || 1),
+        scrapPct: '0',
+        reference: cleanText(component.id) || `DB-${index + 1}`,
+        operationSeq: (index + 1) * 10,
+        notes: [
+          cleanText(component.description),
+          component.sourceLineId ? `Draft Builder line ${component.sourceLineId}` : null,
+        ].filter(Boolean).join('\n'),
+      };
+    });
+
+    if (missingComponents.length > 0) {
+      return res.status(400).json({
+        error: `Finalize or match these BOM components to inventory before saving to Robust BOM: ${missingComponents.join(', ')}`,
+      });
+    }
+
+    const [existingBom] = await db
+      .select()
+      .from(boms)
+      .where(and(eq(boms.parentPartAgNumber, rootPartNumber), eq(boms.code, bomCode)))
+      .limit(1);
+
+    const [savedBom] = existingBom
+      ? await db
+          .update(boms)
+          .set({
+            description: rootDescription,
+            isActive: payload.activate ? true : existingBom.isActive,
+            updatedAt: new Date(),
+          })
+          .where(eq(boms.id, existingBom.id))
+          .returning()
+      : await db
+          .insert(boms)
+          .values({
+            parentPartAgNumber: rootPartNumber,
+            code: bomCode,
+            description: rootDescription,
+            isActive: payload.activate,
+          })
+          .returning();
+
+    const notes = [
+      'Accepted from Draft Builder.',
+      `Draft: ${payload.draftName || payload.draftId}`,
+      payload.revision ? `Draft revision: ${payload.revision}` : null,
+      payload.projectName || payload.projectCode ? `Project: ${payload.projectCode || ''} ${payload.projectName || ''}`.trim() : null,
+      payload.projectId ? `Project ID: ${payload.projectId}` : null,
+      payload.rootPart.sourceLineId ? `Root draft line: ${payload.rootPart.sourceLineId}` : null,
+      payload.activate ? 'Pushed to P2 project BOM/Routing.' : 'Draft until pushed to P2 project.',
+    ].filter(Boolean).join('\n');
+
+    const [existingRevision] = await db
+      .select()
+      .from(bomRevisions)
+      .where(and(eq(bomRevisions.bomId, savedBom.id), eq(bomRevisions.revCode, revCode)))
+      .limit(1);
+
+    const [savedRevision] = existingRevision
+      ? await db
+          .update(bomRevisions)
+          .set({
+            notes,
+            isReleased: payload.activate ? true : existingRevision.isReleased,
+            updatedAt: new Date(),
+          })
+          .where(eq(bomRevisions.id, existingRevision.id))
+          .returning()
+      : await db
+          .insert(bomRevisions)
+          .values({
+            bomId: savedBom.id,
+            revCode,
+            notes,
+            isReleased: payload.activate,
+          })
+          .returning();
+
+    await db.delete(bomLines).where(eq(bomLines.revisionId, savedRevision.id));
+    if (linesData.length > 0) {
+      await db.insert(bomLines).values(linesData.map((line) => ({
+        ...line,
+        revisionId: savedRevision.id,
+      })));
+    }
+
+    let p2PoBom: typeof bomDefinitions.$inferSelect | null = null;
+    let p2PoBomItemCount = 0;
+    let linkedP2PoIds: number[] = [];
+    if (payload.activate) {
+      const [existingP2Bom] = await db
+        .select()
+        .from(bomDefinitions)
+        .where(eq(bomDefinitions.sku, rootPartNumber))
+        .limit(1);
+
+      const p2BomDescription = [
+        rootDescription,
+        payload.projectName || payload.projectCode ? `Project: ${payload.projectCode || ''} ${payload.projectName || ''}`.trim() : null,
+        `Source Robust BOM: ${savedBom.id}`,
+        `Source Draft Builder BOM: ${payload.bom.id}`,
+      ].filter(Boolean).join('\n');
+
+      const [savedP2Bom] = existingP2Bom
+        ? await db
+            .update(bomDefinitions)
+            .set({
+              modelName: rootInventory.name || rootDescription || rootPartNumber,
+              revision: revCode,
+              description: p2BomDescription,
+              isActive: true,
+              updatedAt: new Date(),
+            })
+            .where(eq(bomDefinitions.id, existingP2Bom.id))
+            .returning()
+        : await db
+            .insert(bomDefinitions)
+            .values({
+              sku: rootPartNumber,
+              modelName: rootInventory.name || rootDescription || rootPartNumber,
+              revision: revCode,
+              description: p2BomDescription,
+              isActive: true,
+            })
+            .returning();
+
+      p2PoBom = savedP2Bom ?? null;
+
+      if (p2PoBom) {
+        await db
+          .update(bomItems)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(eq(bomItems.bomId, p2PoBom.id));
+
+        const componentPartNumbers = componentCandidates
+          .map((component) => {
+            const inventoryItem = component.inventoryItemId ? componentById.get(component.inventoryItemId) : undefined;
+            return inventoryItem?.agPartNumber ?? componentByPartNumber.get(cleanText(component.partNumber))?.agPartNumber ?? '';
+          })
+          .filter(Boolean);
+        const manufacturedComponentNumbers = componentCandidates
+          .map((component, index) => component.isManufactured ? componentPartNumbers[index] : '')
+          .filter(Boolean);
+        const childBomRows = manufacturedComponentNumbers.length > 0
+          ? await db
+              .select()
+              .from(bomDefinitions)
+              .where(inArray(bomDefinitions.sku, manufacturedComponentNumbers))
+          : [];
+        const childBomBySku = new Map(childBomRows.map((childBom) => [childBom.sku, childBom]));
+
+        const p2BomItems = componentCandidates.map((component, index) => {
+          const partNumber = componentPartNumbers[index];
+          const linkedInventory = component.inventoryItemId ? componentById.get(component.inventoryItemId) : undefined;
+          const childBom = partNumber ? childBomBySku.get(partNumber) : undefined;
+          return {
+            bomId: p2PoBom!.id,
+            partName: partNumber,
+            quantity: component.quantity || 1,
+            firstDept: p2BomDepartment(component.firstDepartment),
+            itemType: component.isManufactured ? 'manufactured' : 'material',
+            referenceBomId: childBom?.id ?? null,
+            assemblyLevel: 0,
+            quantityMultiplier: 1,
+            notes: cleanText(component.description) || linkedInventory?.name || '',
+            isActive: true,
+            updatedAt: new Date(),
+          };
+        });
+
+        if (p2BomItems.length > 0) {
+          await db.insert(bomItems).values(p2BomItems);
+          p2PoBomItemCount = p2BomItems.length;
+        }
+
+        const matchingPoItems = await db
+          .select({
+            poId: p2PurchaseOrderItems.poId,
+          })
+          .from(p2PurchaseOrderItems)
+          .innerJoin(p2PurchaseOrders, eq(p2PurchaseOrderItems.poId, p2PurchaseOrders.id))
+          .where(payload.projectId
+            ? and(
+                eq(p2PurchaseOrders.projectId, payload.projectId),
+                or(
+                  eq(p2PurchaseOrderItems.inventoryItemId, rootInventory.id),
+                  eq(p2PurchaseOrderItems.partNumber, rootPartNumber),
+                ),
+              )
+            : or(
+                eq(p2PurchaseOrderItems.inventoryItemId, rootInventory.id),
+                eq(p2PurchaseOrderItems.partNumber, rootPartNumber),
+              ));
+
+        linkedP2PoIds = Array.from(new Set(matchingPoItems.map((item) => item.poId).filter(Boolean)));
+        for (const poId of linkedP2PoIds) {
+          const poItems = await db
+            .select({
+              partNumber: p2PurchaseOrderItems.partNumber,
+              inventoryItemId: p2PurchaseOrderItems.inventoryItemId,
+            })
+            .from(p2PurchaseOrderItems)
+            .where(eq(p2PurchaseOrderItems.poId, poId));
+          const inventoryIdsForPo = Array.from(new Set(poItems
+            .map((item) => item.inventoryItemId)
+            .filter((id): id is number => Number.isInteger(id) && id > 0)));
+          const inventoryRowsForPo = inventoryIdsForPo.length > 0
+            ? await db
+                .select({
+                  id: inventoryItems.id,
+                  agPartNumber: inventoryItems.agPartNumber,
+                })
+                .from(inventoryItems)
+                .where(inArray(inventoryItems.id, inventoryIdsForPo))
+            : [];
+          const inventoryPartById = new Map(inventoryRowsForPo.map((item) => [item.id, item.agPartNumber]));
+          const allHaveBom = await Promise.all(poItems.map((item) =>
+            hasActiveP2BomForPart(inventoryPartById.get(item.inventoryItemId ?? 0) || item.partNumber),
+          ));
+          if (allHaveBom.every(Boolean)) {
+            await db
+              .update(p2PurchaseOrders)
+              .set({ bomConfigured: true, updatedAt: new Date() })
+              .where(eq(p2PurchaseOrders.id, poId));
+          }
+        }
+      }
+    }
+
+    res.status(existingBom ? 200 : 201).json({
+      bom: savedBom,
+      revision: savedRevision,
+      lineCount: linesData.length,
+      p2PoBom,
+      p2PoBomItemCount,
+      linkedP2PoIds,
+      status: payload.activate ? 'active' : 'draft',
+    });
+  } catch (error) {
+    console.error('Accept Draft Builder BOM error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: 'Invalid Draft Builder BOM data',
+        details: error.errors,
+      });
+    }
+    res.status(500).json({ error: 'Failed to save Draft Builder BOM to Robust BOM' });
+  }
+});
 
 // Get all BOMs with pagination and search
 router.get('/boms', async (req, res) => {

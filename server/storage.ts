@@ -9394,6 +9394,7 @@ export class DatabaseStorage implements IStorage {
           v.approval_level as "approvalLevel", v.main_document_url as "mainDocumentUrl",
           v.terms_and_conditions as "termsAndConditions", v.payment_terms as "paymentTerms",
           v.shipping_instructions as "shippingInstructions",
+          v.default_order_method as "defaultOrderMethod",
           le.latest_total_score as "ytdTotalScore"
         FROM vendors v
         LEFT JOIN evaluation_rollup er ON er.vendor_id = v.id
@@ -9474,7 +9475,8 @@ export class DatabaseStorage implements IStorage {
         approval_expiration as "approvalExpiration",
         approval_level as "approvalLevel", main_document_url as "mainDocumentUrl",
         terms_and_conditions as "termsAndConditions", payment_terms as "paymentTerms",
-        shipping_instructions as "shippingInstructions"
+        shipping_instructions as "shippingInstructions",
+        default_order_method as "defaultOrderMethod"
       FROM vendors
       WHERE is_active = true
         AND (
@@ -9521,7 +9523,8 @@ export class DatabaseStorage implements IStorage {
         approval_expiration as "approvalExpiration",
         approval_level as "approvalLevel", main_document_url as "mainDocumentUrl",
         terms_and_conditions as "termsAndConditions", payment_terms as "paymentTerms",
-        shipping_instructions as "shippingInstructions"
+        shipping_instructions as "shippingInstructions",
+        default_order_method as "defaultOrderMethod"
       FROM vendors
       WHERE id = $1
       LIMIT 1

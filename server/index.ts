@@ -3068,6 +3068,7 @@ async function initializeBackgroundServices() {
         await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS validation_provider TEXT`);
         await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS dpv_match_code TEXT`);
         await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS override_reason TEXT`);
+        await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS default_order_method TEXT`);
         console.log('✅ Ensured address validation columns exist');
       } catch (addrErr: any) {
         console.warn('⚠️ Address validation columns migration:', addrErr.message);

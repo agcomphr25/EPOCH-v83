@@ -3661,6 +3661,7 @@ export const vendors = pgTable('vendors', {
   termsAndConditions: text('terms_and_conditions'), // Vendor-specific PO terms and conditions
   paymentTerms: text('payment_terms'), // Vendor-specific payment terms
   shippingInstructions: text('shipping_instructions'), // Vendor-specific shipping instructions
+  defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO' or 'WEBSITE'
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -4378,6 +4379,7 @@ export const insertVendorSchema = createInsertSchema(vendors)
     state: z.string().optional(),
     zipCode: z.string().optional(),
     country: z.string().optional(),
+    defaultOrderMethod: z.enum(['PO', 'WEBSITE']).optional().nullable(),
     scope: z.string().optional(),
     approvalSource: z.string().optional(),
     approvalPdfUrl: z.string().optional(),

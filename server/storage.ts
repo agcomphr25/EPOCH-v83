@@ -7143,6 +7143,7 @@ export class DatabaseStorage implements IStorage {
         invName: inventoryItems.name,
         invSource: inventoryItems.source,
         invVendorId: inventoryItems.vendorId,
+        invDefaultOrderMethod: inventoryItems.defaultOrderMethod,
         invSupplierPartNumber: inventoryItems.supplierPartNumber,
         invUsageUnit: inventoryItems.usageUnit,
         projectCode: projects.projectCode,
@@ -7173,6 +7174,7 @@ export class DatabaseStorage implements IStorage {
         source: r.invSource,
         vendorName: r.invSource,
         vendorId: r.invVendorId,
+        defaultOrderMethod: r.invDefaultOrderMethod,
         supplierPartNumber: r.invSupplierPartNumber,
         usageUnit: r.invUsageUnit,
       } : undefined,
@@ -7335,6 +7337,7 @@ export class DatabaseStorage implements IStorage {
         id: vendors.id,
         name: vendors.name,
         website: vendors.website,
+        defaultOrderMethod: vendors.defaultOrderMethod,
       })
       .from(vendors)
       .where(eq(vendors.isActive, true));
@@ -7367,15 +7370,18 @@ export class DatabaseStorage implements IStorage {
       const resolvedVendor = requestVendor ?? itemVendor ?? sourceVendor;
       const resolvedVendorId = r.request.vendorId ?? resolvedVendor?.id ?? r.inventoryItem?.vendorId ?? null;
       const resolvedVendorName = resolvedVendor?.name ?? r.request.supplier ?? r.inventoryItem?.source ?? null;
+      const effectiveOrderMethod = r.request.orderMethod || r.inventoryItem?.defaultOrderMethod || resolvedVendor?.defaultOrderMethod || null;
 
       return {
         ...r.request,
+        orderMethod: effectiveOrderMethod,
         vendorId: resolvedVendorId,
         supplier: resolvedVendorName,
         vendor: resolvedVendor ? {
           id: resolvedVendor.id,
           name: resolvedVendor.name,
           website: resolvedVendor.website,
+          defaultOrderMethod: resolvedVendor.defaultOrderMethod,
         } : undefined,
         inventoryItem: r.inventoryItem ? {
           ...r.inventoryItem,

@@ -53,6 +53,7 @@ type InventoryItem = {
   source?: string | null;
   vendorName?: string | null;
   vendorId?: number | null;
+  defaultOrderMethod?: 'PO' | 'WEBSITE' | null;
   supplierPartNumber?: string | null;
   currentBalance?: number;
   minStock?: number;
@@ -71,6 +72,7 @@ type Vendor = {
   email?: string;
   phone?: string;
   website?: string;
+  defaultOrderMethod?: 'PO' | 'WEBSITE' | null;
 };
 
 type VendorPO = {
@@ -156,6 +158,12 @@ const isArchivedFromConsolidatedNeeds = (request: PartsRequest) => {
   return request.status === 'RECEIVED' || request.status === 'DELIVERED_TO_DEPT';
 };
 
+const resolveEffectiveOrderMethod = (request: PartsRequest, vendor?: Vendor | null): 'PO' | 'WEBSITE' => {
+  if (request.orderMethod === 'WEBSITE') return 'WEBSITE';
+  if (request.orderMethod === 'PO') return 'PO';
+  return request.inventoryItem?.defaultOrderMethod || vendor?.defaultOrderMethod || 'PO';
+};
+
 export default function ConsolidatedNeedsListPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -222,9 +230,14 @@ export default function ConsolidatedNeedsListPage() {
   const getRemainingRequestQuantity = (request: PartsRequest) =>
     Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || request.qtyReceived || 0));
 
+  const isOrderMarkableRequest = (request: PartsRequest) =>
+    request.status === 'APPROVED'
+    && getRemainingRequestQuantity(request) > 0;
+
   const isPoDraftableRequest = (request: PartsRequest) =>
     ['APPROVED', 'RECEIVED_PARTIAL'].includes(request.status)
-    && request.orderMethod !== 'WEBSITE'
+    && resolveEffectiveOrderMethod(request, getResolvedVendorForRequest(request)) !== 'WEBSITE'
+    && request.orderMethod !== 'LOCAL_PICKUP'
     && !request.vendorPoId
     && getRemainingRequestQuantity(request) > 0;
 
@@ -833,6 +846,7 @@ export default function ConsolidatedNeedsListPage() {
     for (const request of activeRequests) {
       const vendor = getResolvedVendorForRequest(request);
       const vendorLabel = getRequestVendorLabel(request);
+      const effectiveOrderMethod = resolveEffectiveOrderMethod(request, vendor);
 
       if (vendor) {
         // Has a resolved vendor record — group under that vendor regardless of order method
@@ -842,7 +856,7 @@ export default function ConsolidatedNeedsListPage() {
             key,
             vendorId: vendor.id,
             vendorName: vendor.name,
-            orderMethod: request.orderMethod || null,
+            orderMethod: effectiveOrderMethod,
             websiteUrl: vendor.website || null,
             requests: [],
             totalQuantity: 0,
@@ -860,7 +874,7 @@ export default function ConsolidatedNeedsListPage() {
             key,
             vendorId: null,
             vendorName: vendorLabel,
-            orderMethod: request.orderMethod || null,
+            orderMethod: effectiveOrderMethod,
             websiteUrl: null,
             requests: [],
             totalQuantity: 0,
@@ -870,7 +884,7 @@ export default function ConsolidatedNeedsListPage() {
         groups[key].requests.push(request);
         groups[key].totalQuantity += request.quantity;
         groups[key].totalEstimatedCost += request.estimatedCost || 0;
-      } else if (request.orderMethod === 'WEBSITE') {
+      } else if (effectiveOrderMethod === 'WEBSITE') {
         // WEBSITE order with no resolved vendor — group by vendor text so buyers see per-site buckets.
         // Future improvement: once source_vendor_id FK exists, all WEBSITE items will resolve to a vendor and this fallback will be rarely needed.
         const vendorName = (request.inventoryItem?.vendorName || request.inventoryItem?.source || '').trim();
@@ -1415,7 +1429,6 @@ export default function ConsolidatedNeedsListPage() {
                 variant="default"
                 onClick={() => setIsBulkOrderDialogOpen(true)}
                 data-testid="button-bulk-mark-ordered"
-                className="hidden"
               >
                 <ShoppingCart className="w-4 h-4 mr-1" />
                 Mark Ordered
@@ -1556,11 +1569,11 @@ export default function ConsolidatedNeedsListPage() {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 w-10">
                           <Checkbox
                             checked={
-                              vendorGroup.requests.filter(isPoDraftableRequest).length > 0
-                              && vendorGroup.requests.filter(isPoDraftableRequest).every(r => selectedVendorRequests.has(r.id))
+                              vendorGroup.requests.filter(isOrderMarkableRequest).length > 0
+                              && vendorGroup.requests.filter(isOrderMarkableRequest).every(r => selectedVendorRequests.has(r.id))
                             }
                             onCheckedChange={(checked) => {
-                              const selectable = vendorGroup.requests.filter(isPoDraftableRequest);
+                              const selectable = vendorGroup.requests.filter(isOrderMarkableRequest);
                               if (checked) {
                                 setSelectedVendorRequests(new Set([
                                   ...Array.from(selectedVendorRequests),
@@ -1591,10 +1604,12 @@ export default function ConsolidatedNeedsListPage() {
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                       {vendorGroup.requests.map((request) => {
                         const selectableForPo = isPoDraftableRequest(request);
+                        const selectableForOrder = isOrderMarkableRequest(request);
+                        const effectiveOrderMethod = resolveEffectiveOrderMethod(request, getResolvedVendorForRequest(request));
                         const canLocalPickup = isLocalPickupRequest(request);
                         const canCreateNewPo = selectableForPo;
                         const canLinkExistingPo = !request.vendorPoId
-                          && request.orderMethod !== 'WEBSITE'
+                          && effectiveOrderMethod !== 'WEBSITE'
                           && ['APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL'].includes(request.status)
                           && !['REJECTED', 'CANCELED', 'DELIVERED_TO_DEPT'].includes(request.status);
                         return (
@@ -1603,7 +1618,7 @@ export default function ConsolidatedNeedsListPage() {
                             <Checkbox
                               checked={selectedVendorRequests.has(request.id)}
                               onCheckedChange={() => toggleRequestSelection(request.id)}
-                              disabled={!selectableForPo}
+                              disabled={!selectableForOrder}
                               data-testid={`checkbox-request-${request.id}`}
                             />
                           </td>
@@ -1640,7 +1655,7 @@ export default function ConsolidatedNeedsListPage() {
                           <td className="px-3 py-2">
                             <div className="flex flex-col gap-1">
                               {getStatusBadge(request.status)}
-                              {request.orderMethod === 'WEBSITE' && (
+                              {effectiveOrderMethod === 'WEBSITE' && (
                                 <Badge className="bg-teal-100 text-teal-800 w-fit">Website order</Badge>
                               )}
                               {request.vendorPoId && (
@@ -1693,7 +1708,12 @@ export default function ConsolidatedNeedsListPage() {
                                 Link PO
                               </Button>
                             )}
-                            {selectableForPo && (
+                            {selectableForOrder && (
+                              <Button size="sm" variant="default" onClick={() => handleAction(request, 'order')} data-testid={`button-order-vendor-${request.id}`}>
+                                Mark Ordered
+                              </Button>
+                            )}
+                            {selectableForOrder && (
                               <Button size="sm" variant="default" onClick={() => toggleRequestSelection(request.id)} data-testid={`button-select-request-${request.id}`}>
                                 {selectedVendorRequests.has(request.id) ? 'Selected' : 'Select'}
                               </Button>

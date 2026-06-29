@@ -1935,6 +1935,7 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
       .select({
         agPartNumber: inventoryItems.agPartNumber,
         vendorId: inventoryItems.vendorId,
+        defaultOrderMethod: inventoryItems.defaultOrderMethod,
         source: inventoryItems.source,
         name: inventoryItems.name,
       })
@@ -1961,6 +1962,7 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
           name: string;
           source: string | null;
           vendorId: number | null;
+          defaultOrderMethod: string | null;
           vendorName: string | null;
         };
       }>;
@@ -1990,8 +1992,10 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
           : sourceVendor;
       const vendorId = request.vendorId ?? resolvedVendor?.id ?? inventoryItem?.vendorId ?? null;
       const vendorName = resolvedVendor?.name ?? request.supplier ?? inventoryItem?.source ?? null;
+      const effectiveOrderMethod = request.orderMethod || inventoryItem?.defaultOrderMethod || resolvedVendor?.defaultOrderMethod || null;
       const enrichedRequest = {
         ...request,
+        orderMethod: effectiveOrderMethod,
         vendorId,
         supplier: vendorName,
         inventoryItem: inventoryItem ? {
@@ -2001,7 +2005,7 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
         } : undefined,
       };
 
-      if (!resolvedVendor && request.orderMethod === 'WEBSITE') {
+      if (!resolvedVendor && effectiveOrderMethod === 'WEBSITE') {
         const key = 'WEBSITE';
         if (!vendorGroups[key]) {
           vendorGroups[key] = {
@@ -2027,7 +2031,7 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
           vendorGroups[key] = {
             vendorId: vendor.id,
             vendorName: vendor.name,
-            orderMethod: request.orderMethod || null,
+            orderMethod: effectiveOrderMethod,
             websiteUrl: null,
             requests: [],
             totalQuantity: 0,

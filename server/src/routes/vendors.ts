@@ -5,7 +5,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 
 import { storage } from '../../storage';
 import { db } from '../../db';
@@ -35,6 +35,19 @@ const router = Router();
 
 router.use(authenticateToken);
 router.use(authorizeApiRoute());
+
+let vendorDefaultOrderMethodColumnPromise: Promise<void> | null = null;
+
+function ensureVendorDefaultOrderMethodColumn() {
+  vendorDefaultOrderMethodColumnPromise ??= db
+    .execute(sql`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS default_order_method TEXT`)
+    .then(() => undefined)
+    .catch((error) => {
+      vendorDefaultOrderMethodColumnPromise = null;
+      throw error;
+    });
+  return vendorDefaultOrderMethodColumnPromise;
+}
 
 // Ensure vendor-approvals and vendor-documents directories exist
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -559,6 +572,7 @@ const listVendorsQuerySchema = z.object({
 // GET /api/vendors - List all vendors with filtering and pagination
 router.get('/', async (req: Request, res: Response) => {
   try {
+    await ensureVendorDefaultOrderMethodColumn();
     const params = listVendorsQuerySchema.parse(req.query);
     const result = await storage.getAllVendors(params);
     res.json(result);
@@ -587,6 +601,7 @@ router.get('/documents/view', async (req: Request, res: Response) => {
 // GET /api/vendors/documents/all - Get all vendors that have an uploaded document
 router.get('/documents/all', async (req: Request, res: Response) => {
   try {
+    await ensureVendorDefaultOrderMethodColumn();
     const result = await storage.getAllVendors({ pageSize: 10000 });
     const withDocs = result.data
       .filter((v) => v.mainDocumentUrl && v.mainDocumentUrl.trim().length > 0)
@@ -718,6 +733,7 @@ router.post('/:vendorId/supplier-scorecards', async (req: Request, res: Response
 // GET /api/vendors/:id - Get a single vendor by ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
+    await ensureVendorDefaultOrderMethodColumn();
     const id = parseInt(req.params.id);
     if (!Number.isInteger(id)) {
       return res.status(400).json({ error: 'Invalid vendor ID' });
@@ -757,6 +773,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // POST /api/vendors - Create a new vendor
 router.post('/', async (req: Request, res: Response) => {
   try {
+    await ensureVendorDefaultOrderMethodColumn();
     const { allowOverride, overrideReason, skipValidation, ...bodyData } = req.body;
     const data = insertVendorSchema.parse(bodyData);
 
@@ -834,6 +851,7 @@ router.post('/', async (req: Request, res: Response) => {
 // PUT /api/vendors/:id - Update a vendor
 router.put('/:id', async (req: Request, res: Response) => {
   try {
+    await ensureVendorDefaultOrderMethodColumn();
     const id = parseInt(req.params.id);
     if (!Number.isInteger(id)) {
       return res.status(400).json({ error: 'Invalid vendor ID' });

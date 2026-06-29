@@ -203,7 +203,7 @@ export default function WADWizardLauncherPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Wand2 className="h-6 w-6 text-blue-600" />
-            WAD Wizard
+            WAD (Working Authorization Document)
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Pick a Production Work Order to author, edit, or review its Work Authorization Document.

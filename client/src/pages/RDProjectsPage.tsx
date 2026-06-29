@@ -30,6 +30,8 @@ import { Textarea } from '@/components/ui/textarea';
 interface EmployeeOption {
   id: number;
   name: string;
+  employeeCode?: string;
+  isActive?: boolean;
   userRole?: string;
 }
 
@@ -44,19 +46,58 @@ interface DraftBuilderTab {
 }
 
 interface DraftBomLine {
+  id?: string;
   agPartNumber?: string;
   supplierItemId?: string;
   description?: string;
   itemDescription?: string;
+  inventoryItemId?: number | null;
+  inventoryItemName?: string | null;
   qtyNeeded?: number | string;
   quantity?: number | string;
   status?: string;
   action?: string;
+  isManufactured?: boolean;
+  childDraftBoms?: DraftPartBom[];
+}
+
+interface DraftBomComponent {
+  id: string;
+  sourceLineId?: string | null;
+  inventoryItemId?: number | null;
+  partNumber: string;
+  description: string;
+  quantity: number;
+  isManufactured?: boolean;
+}
+
+interface DraftBomPart {
+  id: string;
+  sourceLineId?: string | null;
+  inventoryItemId?: number | null;
+  partNumber: string;
+  description: string;
+  quantity: number;
+  bomItems?: DraftBomComponent[];
+}
+
+interface DraftPartBom {
+  id: string;
+  name: string;
+  revision?: string;
+  rootPart: DraftBomPart;
+  parts?: DraftBomPart[];
 }
 
 interface DraftBomRecord {
   id: string;
   name: string;
+  revision?: string;
+  projectId?: string | null;
+  projectCode?: string | null;
+  projectType?: 'P2_PROJECT' | 'R_AND_D' | null;
+  projectName?: string | null;
+  project?: string | null;
   updatedAt?: string;
   lines?: DraftBomLine[];
 }
@@ -217,35 +258,107 @@ function normalizePartStatus(line: DraftBomLine): PartStatus {
   return 'manufacturing';
 }
 
+function hasPlanningGap(nodes: AssemblyNode[]) {
+  return nodes.some((node) => node.status === 'short' || hasPlanningGap(node.children ?? []));
+}
+
+function draftLinePartNumber(line: DraftBomLine, index = 0) {
+  return line.agPartNumber || line.supplierItemId || `RD-DRAFT-${String(index + 1).padStart(3, '0')}`;
+}
+
+function draftLineDescription(line: DraftBomLine) {
+  return line.description || line.itemDescription || line.inventoryItemName || 'Draft BOM line';
+}
+
+function normalizedPartKey(value?: string | null) {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function normalizedProjectKey(value?: string | null) {
+  return value?.trim().toLowerCase().replace(/[\s_-]+/g, '') ?? '';
+}
+
+function mergeDraftRecords(localRecords: DraftBomRecord[], sharedRecords: DraftBomRecord[]) {
+  const byId = new Map<string, DraftBomRecord>();
+  for (const record of [...localRecords, ...sharedRecords]) {
+    if (record?.id) byId.set(record.id, record);
+  }
+  return [...byId.values()].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+}
+
+function findDraftLineForComponent(component: DraftBomComponent | DraftBomPart, lines: DraftBomLine[]) {
+  if (component.sourceLineId) {
+    const match = lines.find((line) => line.id === component.sourceLineId);
+    if (match) return match;
+  }
+
+  if (component.inventoryItemId) {
+    const match = lines.find((line) => line.inventoryItemId === component.inventoryItemId);
+    if (match) return match;
+  }
+
+  const componentPart = normalizedPartKey(component.partNumber);
+  const componentDescription = normalizedPartKey(component.description);
+  return lines.find((line, index) => normalizedPartKey(draftLinePartNumber(line, index)) === componentPart)
+    ?? lines.find((line) => componentPart && normalizedPartKey(line.agPartNumber) === componentPart)
+    ?? lines.find((line) => componentDescription && normalizedPartKey(draftLineDescription(line)) === componentDescription);
+}
+
 function partReadiness(parts: RDPart[]) {
   const required = parts.reduce((sum, part) => sum + part.required, 0);
   const available = parts.reduce((sum, part) => sum + Math.min(part.required, part.onHand + part.manufactured), 0);
   return required === 0 ? 0 : Math.round((available / required) * 100);
 }
 
-function getDraftTabs(records: DraftBomRecord[]): DraftBuilderTab[] {
-  const tabs = records.map((draft) => ({
+function draftRecordToTab(draft: DraftBomRecord): DraftBuilderTab {
+  return {
     id: draft.id,
-    name: draft.name,
+    name: [draft.name, draft.revision].filter(Boolean).join(' - '),
     partCount: draft.lines?.length ?? 0,
     updatedAt: draft.updatedAt ?? 'Not saved',
-  }));
+  };
+}
+
+function getDraftTabs(records: DraftBomRecord[]): DraftBuilderTab[] {
+  const tabs = records.map(draftRecordToTab);
   return tabs.length > 0 ? tabs : fallbackDraftTabs;
+}
+
+function isDraftLinkedToProject(project: RDProject, draft: DraftBomRecord) {
+  const projectName = normalizedProjectKey(project.projectName);
+  const draftProjectValues = [draft.projectName, draft.project, draft.projectCode].map(normalizedProjectKey);
+  return project.draftTabIds.includes(draft.id)
+    || (draft.projectType === 'R_AND_D' && draft.projectId === project.id)
+    || (!!projectName && draftProjectValues.includes(projectName));
+}
+
+function getDraftRecordsForProject(project: RDProject | null, records: DraftBomRecord[]) {
+  if (!project) return [];
+  return records.filter((draft) => isDraftLinkedToProject(project, draft));
+}
+
+function getDraftTabsForProject(project: RDProject | null, records: DraftBomRecord[], allTabs: DraftBuilderTab[]) {
+  if (!project) return [];
+  const linkedRecords = getDraftRecordsForProject(project, records);
+  const linkedIds = new Set(linkedRecords.map((draft) => draft.id));
+  const linkedRecordTabs = linkedRecords.map(draftRecordToTab);
+  const manuallyAttachedTabs = allTabs.filter((tab) => project.draftTabIds.includes(tab.id) && !linkedIds.has(tab.id));
+  return [...linkedRecordTabs, ...manuallyAttachedTabs];
 }
 
 function getPartsForProject(project: RDProject | null, records: DraftBomRecord[]) {
   if (!project) return [];
-  const attachedRecords = records.filter((draft) => project.draftTabIds.includes(draft.id));
+  const attachedRecords = getDraftRecordsForProject(project, records);
   const lines = attachedRecords.flatMap((draft) => draft.lines ?? []);
 
-  if (lines.length === 0) return project.draftTabIds.length > 0 ? [] : fallbackParts;
+  if (lines.length === 0) return project.draftTabIds.length > 0 || attachedRecords.length > 0 ? [] : fallbackParts;
 
   return lines.slice(0, 80).map((line, index) => {
     const required = Math.max(1, asNumber(line.qtyNeeded ?? line.quantity));
     const status = normalizePartStatus(line);
     return {
-      partNumber: line.agPartNumber || line.supplierItemId || `RD-DRAFT-${String(index + 1).padStart(3, '0')}`,
-      description: line.description || line.itemDescription || 'Draft BOM line',
+      partNumber: draftLinePartNumber(line, index),
+      description: draftLineDescription(line),
       required,
       onHand: status === 'on_hand' ? required : 0,
       ordered: status === 'ordered' ? required : 0,
@@ -255,40 +368,71 @@ function getPartsForProject(project: RDProject | null, records: DraftBomRecord[]
   });
 }
 
-function getAssemblyTreeForProject(project: RDProject | null, parts: RDPart[]) {
+function getComponentChildren(
+  components: DraftBomComponent[],
+  lines: DraftBomLine[],
+  visited: Set<string>,
+): AssemblyNode[] {
+  return components.map((component) => {
+    const matchingLine = findDraftLineForComponent(component, lines);
+    const childBoms = matchingLine?.childDraftBoms ?? [];
+    const nextVisited = new Set(visited);
+    const componentKey = component.id || component.partNumber;
+    nextVisited.add(componentKey);
+    const children = childBoms.flatMap((bom) => getBomComponentNodes(bom, lines, nextVisited));
+    const status = component.isManufactured
+      ? (hasPlanningGap(children) ? 'short' : 'manufacturing')
+      : matchingLine ? normalizePartStatus(matchingLine) : 'short';
+
+    return {
+      id: componentKey,
+      label: `${component.partNumber} - ${component.description}`,
+      status,
+      children,
+    };
+  });
+}
+
+function getBomComponentNodes(bom: DraftPartBom, lines: DraftBomLine[], visited: Set<string>): AssemblyNode[] {
+  if (visited.has(bom.id)) return [];
+  const nextVisited = new Set([...visited, bom.id]);
+  const rootPart = bom.parts?.[0] ?? bom.rootPart;
+  const components = rootPart.bomItems ?? bom.rootPart.bomItems ?? [];
+  return getComponentChildren(components, lines, nextVisited);
+}
+
+function getDraftLineAssemblyNode(line: DraftBomLine, index: number, allLines: DraftBomLine[]): AssemblyNode {
+  const partNumber = draftLinePartNumber(line, index);
+  const children = (line.childDraftBoms ?? []).flatMap((bom) => getBomComponentNodes(bom, allLines, new Set([line.id ?? partNumber])));
+  const status = line.isManufactured
+    ? (hasPlanningGap(children) ? 'short' : 'manufacturing')
+    : normalizePartStatus(line);
+  return {
+    id: line.id ?? `${partNumber}-${index}`,
+    label: `${partNumber} - ${draftLineDescription(line)}`,
+    status,
+    children,
+  };
+}
+
+function getAssemblyTreeForProject(project: RDProject | null, records: DraftBomRecord[], parts: RDPart[]) {
   if (!project) return [];
-  if (parts.length === 0) return [];
+  const attachedRecords = getDraftRecordsForProject(project, records);
+  const attachedLines = attachedRecords.flatMap((draft) => draft.lines ?? []);
+  if (attachedRecords.length === 0) return parts === fallbackParts ? fallbackAssemblyTree : [];
+  if (attachedLines.length === 0) return [];
   if (parts === fallbackParts) return fallbackAssemblyTree;
 
-  const grouped = parts.reduce<Record<PartStatus, RDPart[]>>(
-    (groups, part) => {
-      groups[part.status].push(part);
-      return groups;
-    },
-    { on_hand: [], ordered: [], manufacturing: [], short: [] },
-  );
-
-  const children = (Object.entries(grouped) as [PartStatus, RDPart[]][])
-    .filter(([, items]) => items.length > 0)
-    .map(([status, items]) => ({
-      id: status,
-      label: statusLabels[status],
-      status,
-      children: items.slice(0, 12).map((item) => ({
-        id: item.partNumber,
-        label: `${item.partNumber} - ${item.description}`,
-        status: item.status,
-      })),
-    }));
-
-  return [
-    {
-      id: project.id,
-      label: project.projectName,
-      status: parts.some((part) => part.status === 'short') ? 'short' : 'manufacturing',
+  return attachedRecords.map((draft) => {
+    const lines = draft.lines ?? [];
+    const children = lines.map((line, index) => getDraftLineAssemblyNode(line, index, lines));
+    return {
+      id: draft.id,
+      label: [draft.name, draft.revision].filter(Boolean).join(' - '),
+      status: children.some((node) => node.status === 'short') ? 'short' : 'manufacturing',
       children,
-    } satisfies AssemblyNode,
-  ];
+    } satisfies AssemblyNode;
+  });
 }
 
 function AssemblyTreeNode({ node, depth = 0 }: { node: AssemblyNode; depth?: number }) {
@@ -313,43 +457,66 @@ export default function RDProjectsPage() {
   const { data: employees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ['/api/employees'],
   });
+  const { data: sharedDraftRecords = [] } = useQuery<DraftBomRecord[]>({
+    queryKey: ['/api/draft-bom-drafts'],
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch('/api/draft-bom-drafts', { credentials: 'include' });
+      if (!response.ok) return [];
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyProject);
-  const [draftRecords, setDraftRecords] = useState<DraftBomRecord[]>(() => readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
+  const [localDraftRecords, setLocalDraftRecords] = useState<DraftBomRecord[]>(() => readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
   const [projects, setProjects] = useState<RDProject[]>(() => readJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, []));
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
+  const draftRecords = useMemo(
+    () => mergeDraftRecords(localDraftRecords, sharedDraftRecords),
+    [localDraftRecords, sharedDraftRecords],
+  );
   const draftTabs = useMemo(() => getDraftTabs(draftRecords), [draftRecords]);
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
   const selectedDraftTabs = useMemo(
-    () => draftTabs.filter((tab) => selectedProject?.draftTabIds.includes(tab.id)),
-    [draftTabs, selectedProject],
+    () => getDraftTabsForProject(selectedProject, draftRecords, draftTabs),
+    [draftRecords, draftTabs, selectedProject],
   );
   const selectedParts = useMemo(() => getPartsForProject(selectedProject, draftRecords), [draftRecords, selectedProject]);
   const selectedAssemblyTree = useMemo(
-    () => getAssemblyTreeForProject(selectedProject, selectedParts),
-    [selectedParts, selectedProject],
+    () => getAssemblyTreeForProject(selectedProject, draftRecords, selectedParts),
+    [draftRecords, selectedParts, selectedProject],
   );
   const activeProjects = projects.filter((project) => project.status === 'active').length;
   const draftProjects = projects.filter((project) => project.status === 'draft').length;
+  const activeEmployees = useMemo(
+    () => employees.filter((employee) => employee.isActive !== false),
+    [employees],
+  );
 
   useEffect(() => {
     writeJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, projects);
   }, [projects]);
 
   useEffect(() => {
-    const refreshDraftRecords = () => setDraftRecords(readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
+    const refreshDraftRecords = () => setLocalDraftRecords(readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
     window.addEventListener('storage', refreshDraftRecords);
-    return () => window.removeEventListener('storage', refreshDraftRecords);
+    window.addEventListener('focus', refreshDraftRecords);
+    return () => {
+      window.removeEventListener('storage', refreshDraftRecords);
+      window.removeEventListener('focus', refreshDraftRecords);
+    };
   }, []);
 
   const resetForm = () => setForm(emptyProject);
 
   const createProject = () => {
+    const ownerEmployee = activeEmployees.find((employee) => String(employee.id) === form.owner);
     const project: RDProject = {
       id: `rd-${Date.now()}`,
       projectName: form.projectName.trim(),
-      owner: form.owner.trim(),
+      owner: ownerEmployee?.name ?? '',
       description: form.description.trim(),
       signoffRequired: form.signoffRequired,
       signoffUserId: form.signoffRequired ? form.signoffUserId : '',
@@ -442,7 +609,7 @@ export default function RDProjectsPage() {
               {projects.map((project) => {
                 const projectParts = getPartsForProject(project, draftRecords);
                 const readiness = partReadiness(projectParts);
-                const attachedTabCount = project.draftTabIds.length;
+                const attachedTabCount = getDraftTabsForProject(project, draftRecords, draftTabs).length;
                 const isSelected = selectedProject?.id === project.id;
 
                 return (
@@ -578,6 +745,38 @@ export default function RDProjectsPage() {
                           {selectedProject.description || 'No notes entered.'}
                         </CardContent>
                       </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Draft BOM Summary</CardTitle>
+                          <CardDescription>
+                            Draft Builder records linked to this R&amp;D project.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {selectedDraftTabs.length === 0 ? (
+                            <div className="flex flex-col items-start gap-3 text-sm text-muted-foreground">
+                              No Draft Builder tabs are linked to this project.
+                              <Button variant="outline" size="sm" onClick={() => setLocation('/estimating/bom-drafts')}>
+                                Open Draft Builder
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="grid gap-3 md:grid-cols-2">
+                              {selectedDraftTabs.map((tab) => (
+                                <div key={tab.id} className="rounded-md border bg-white px-3 py-2">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-medium text-slate-950">{tab.name}</p>
+                                      <p className="mt-1 text-xs text-muted-foreground">Updated {tab.updatedAt}</p>
+                                    </div>
+                                    <Badge variant="outline">{tab.partCount} parts</Badge>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
                     </TabsContent>
 
                     <TabsContent value="draft-tabs">
@@ -674,11 +873,28 @@ export default function RDProjectsPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="rd-project-owner">Owner</Label>
-                <Input
-                  id="rd-project-owner"
+                <Select
                   value={form.owner}
-                  onChange={(event) => setForm((current) => ({ ...current, owner: event.target.value }))}
-                />
+                  onValueChange={(value) => setForm((current) => ({ ...current, owner: value }))}
+                >
+                  <SelectTrigger id="rd-project-owner">
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeEmployees.length === 0 ? (
+                      <SelectItem value="__no_employees__" disabled>
+                        No employees available
+                      </SelectItem>
+                    ) : (
+                      activeEmployees.map((employee) => (
+                        <SelectItem key={employee.id} value={String(employee.id)}>
+                          {employee.name}
+                          {employee.employeeCode ? ` (${employee.employeeCode})` : ''}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="rd-project-description">Notes</Label>
@@ -710,7 +926,7 @@ export default function RDProjectsPage() {
                       <SelectValue placeholder="Select user" />
                     </SelectTrigger>
                     <SelectContent>
-                      {employees.map((employee) => (
+                      {activeEmployees.map((employee) => (
                         <SelectItem key={employee.id} value={String(employee.id)}>
                           {employee.name}
                         </SelectItem>

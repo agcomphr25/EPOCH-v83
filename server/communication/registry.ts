@@ -435,6 +435,8 @@ export const VENDOR_PO_ISSUE_TEMPLATE = {
     'vendor_contact_person',
     'po_number',
     'requested_delivery_date',
+    'vendor_message_html',
+    'vendor_message_text',
   ],
   attachmentRules: { attachVendorPOPDF: true, systemNotice: true },
   bodyHtml: `<!DOCTYPE html>
@@ -489,7 +491,7 @@ export const VENDOR_PO_ISSUE_TEMPLATE = {
     </div>
     <div class="content">
       <p>Hello{{vendor_contact_person}},</p>
-      <p>AG Composites has issued a new Purchase Order to your company. Please see the attached purchase order PDF for details.</p>
+      {{vendor_message_html}}
       <div class="po-details">
         <p><strong>PO Number:</strong> {{po_number}}</p>
         <p><strong>Vendor:</strong> {{vendor_name}}</p>
@@ -513,7 +515,7 @@ export const VENDOR_PO_ISSUE_TEMPLATE = {
 
 Hello{{vendor_contact_person}},
 
-AG Composites has issued a new Purchase Order to your company. Please see the attached purchase order PDF for details.
+{{vendor_message_text}}
 
 PO Number: {{po_number}}
 Vendor: {{vendor_name}}
@@ -538,6 +540,8 @@ export const VENDOR_PO_RESEND_TEMPLATE = {
     'vendor_contact_person',
     'po_number',
     'requested_delivery_date',
+    'vendor_message_html',
+    'vendor_message_text',
   ],
   attachmentRules: { attachVendorPOPDF: true, systemNotice: true },
   bodyHtml: `<!DOCTYPE html>
@@ -602,7 +606,7 @@ export const VENDOR_PO_RESEND_TEMPLATE = {
       <div class="resend-notice">
         <strong>Note:</strong> This is a resend of a previously issued Purchase Order.
       </div>
-      <p>AG Composites has issued a Purchase Order to your company. Please see the attached purchase order PDF for details.</p>
+      {{vendor_message_html}}
       <div class="po-details">
         <p><strong>PO Number:</strong> {{po_number}}</p>
         <p><strong>Vendor:</strong> {{vendor_name}}</p>
@@ -628,7 +632,7 @@ Hello{{vendor_contact_person}},
 
 Note: This is a resend of a previously issued Purchase Order.
 
-AG Composites has issued a Purchase Order to your company. Please see the attached purchase order PDF for details.
+{{vendor_message_text}}
 
 PO Number: {{po_number}}
 Vendor: {{vendor_name}}

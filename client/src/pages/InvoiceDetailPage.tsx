@@ -274,23 +274,6 @@ export default function InvoiceDetailPage() {
     enabled: !!invoice?.lotId && invoice?.invoiceSource !== 'P1',
   });
 
-  const markPaidMutation = useMutation({
-    mutationFn: () =>
-      apiRequest(`/api/ar-invoices/${id}`, {
-        method: 'PUT',
-        body: { status: 'PAID' },
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) =>
-        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
-      });
-      toast({ title: 'Invoice marked as paid' });
-    },
-    onError: (error: any) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    },
-  });
-
   const postInvoiceMutation = useMutation({
     mutationFn: () => apiRequest(`/api/ar-invoices/${id}/post`, { method: 'POST' }),
     onSuccess: () => {
@@ -355,6 +338,10 @@ export default function InvoiceDetailPage() {
   const handleManageAttachments = () => {
     setSendDialogOpen(false);
     setActiveTab('attachments');
+  };
+
+  const openAttachment = (mediaId: string) => {
+    window.open(`/api/media/${mediaId}/download`, '_blank', 'noopener,noreferrer');
   };
 
   const toggleAttachmentSelection = (mediaId: string) => {
@@ -582,7 +569,7 @@ export default function InvoiceDetailPage() {
   const lines = invoice.lines || [];
   const payments = invoice.payments || [];
   const isP1Invoice = invoice.invoiceSource === 'P1';
-  const sourcePoLabel = invoice.poOverride || invoice.poNumber || invoice.poId;
+  const sourcePoLabel = invoice.poOverride || invoice.poNumber || packingSlipInfo?.poNumber || invoice.poId;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -626,7 +613,7 @@ export default function InvoiceDetailPage() {
               </Badge>
             )}
           </Button>
-          {['DRAFT', 'REVIEW'].includes(invoice.status) && (
+          {(['DRAFT', 'REVIEW'].includes(invoice.status) || (invoice.status === 'SENT' && !invoice.journalEntryId)) && (
             <Button
               variant="outline"
               onClick={() => postInvoiceMutation.mutate()}
@@ -648,19 +635,10 @@ export default function InvoiceDetailPage() {
             </Button>
           )}
           {invoice.status !== 'PAID' && invoice.status !== 'VOID' && (
-            <>
-              <Button variant="outline" onClick={handleOpenPaymentDialog}>
-                <DollarSign className="mr-2 h-4 w-4" />
-                Apply Payment
-              </Button>
-              <Button
-                onClick={() => markPaidMutation.mutate()}
-                disabled={markPaidMutation.isPending}
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                {markPaidMutation.isPending ? 'Updating...' : 'Mark Paid'}
-              </Button>
-            </>
+            <Button variant="outline" onClick={handleOpenPaymentDialog}>
+              <DollarSign className="mr-2 h-4 w-4" />
+              Record Payment
+            </Button>
           )}
         </div>
       </div>
@@ -748,15 +726,15 @@ export default function InvoiceDetailPage() {
                   <p className="text-sm text-muted-foreground">Terms</p>
                   <p className="font-medium">{invoice.terms || '—'}</p>
                 </div>
-                {(invoice.poId || invoice.poOverride) && (
+                {sourcePoLabel && (
                   <div>
                     <p className="text-sm text-muted-foreground">PO</p>
-                    <p className="font-medium">{invoice.poOverride || invoice.poNumber || invoice.poId || '—'}</p>
+                    <p className="font-medium">{sourcePoLabel}</p>
                   </div>
                 )}
               </div>
 
-              {(invoice.packingSlipId || invoice.lotId || invoice.poOverride || invoice.poId) && (
+              {(invoice.packingSlipId || invoice.lotId || sourcePoLabel) && (
                 <>
                   <Separator className="my-4" />
                   <div>
@@ -789,14 +767,14 @@ export default function InvoiceDetailPage() {
                           </Link>
                         </Button>
                       )}
-                      {(invoice.poOverride || invoice.poId) && (
+                      {sourcePoLabel && (invoice.poOverride || invoice.poNumber || invoice.poId) && (
                         <Button variant="outline" size="sm" asChild>
                           <Link href={isP1Invoice
                             ? `/oem-shipments?search=${encodeURIComponent(sourcePoLabel || '')}`
                             : `/p2-control-center?tab=pos&search=${encodeURIComponent(sourcePoLabel || '')}`}
                           >
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
-                            {isP1Invoice ? 'P1 PO' : 'P2 PO'}: {sourcePoLabel || invoice.poId}
+                            {isP1Invoice ? 'P1 PO' : 'P2 PO'}: {sourcePoLabel}
                             <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
                           </Link>
                         </Button>
@@ -942,7 +920,7 @@ export default function InvoiceDetailPage() {
                 {invoice.status !== 'PAID' && invoice.status !== 'VOID' && (
                   <Button variant="outline" size="sm" onClick={handleOpenPaymentDialog}>
                     <DollarSign className="mr-2 h-4 w-4" />
-                    Apply Payment
+                    Record Payment
                   </Button>
                 )}
               </CardTitle>
@@ -1160,6 +1138,19 @@ export default function InvoiceDetailPage() {
                             {item.media.fileSize ? ` - ${formatFileSize(item.media.fileSize)}` : ''}
                           </div>
                         </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openAttachment(item.media.id);
+                          }}
+                          title="Open attachment"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
                       </div>
                     );
                   })

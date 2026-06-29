@@ -14,6 +14,7 @@ import {
   ChevronsUpDown,
   Search,
   Users,
+  CheckCircle,
 } from 'lucide-react';
 import { insertChargeCodeSchema, type ChargeCode } from '@shared/schema';
 
@@ -116,6 +117,22 @@ type ChargeCodeAssignments = {
   employeeIds: number[];
   defaultEmployeeIds: number[];
   assignedEmployees: EmployeeOption[];
+};
+
+type ChargeCodeRequest = {
+  id: string;
+  wadId: string | null;
+  workOrderNumber?: string | null;
+  department: string;
+  operation: string;
+  laborCategory?: string | null;
+  classification: string;
+  budgetedHours?: string | null;
+  requestedByDisplayName: string;
+  requestedAt: string;
+  status: 'PENDING' | 'ASSIGNED' | string;
+  assignedChargeCodeId?: number | null;
+  assignedChargeCode?: string | null;
 };
 
 const PRODUCTION_LINE_OPTIONS = [
@@ -947,6 +964,7 @@ function resolvePoolContext(
 }
 
 export default function ChargeCodeManagerPage() {
+  const { toast } = useToast();
   const [showInactive, setShowInactive] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ChargeCode | null>(null);
@@ -954,9 +972,14 @@ export default function ChargeCodeManagerPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [requestAssignments, setRequestAssignments] = useState<Record<string, string>>({});
 
   const { data: chargeCodes, isLoading } = useQuery<ChargeCode[]>({
     queryKey: ['/api/charge-codes'],
+  });
+  const { data: chargeCodeRequests = [] } = useQuery<ChargeCodeRequest[]>({
+    queryKey: ['/api/charge-codes/requests'],
+    queryFn: () => apiRequest('/api/charge-codes/requests?status=PENDING'),
   });
   const { data: pools = [] } = useQuery<IndirectCostPool[]>({
     queryKey: ['/api/burden-rates/pools'],
@@ -1060,6 +1083,40 @@ export default function ChargeCodeManagerPage() {
     setCopySource(null);
   }
 
+  const assignRequestMutation = useMutation({
+    mutationFn: ({ requestId, chargeCodeId }: { requestId: string; chargeCodeId: number }) =>
+      apiRequest(`/api/charge-codes/requests/${requestId}/assign`, {
+        method: 'PATCH',
+        body: { chargeCodeId },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/charge-codes/requests'] });
+      toast({ title: 'Charge code request assigned' });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to assign request',
+        description: err.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const activeChargeCodes = (chargeCodes ?? []).filter((code) => code.active);
+
+  function assignRequest(request: ChargeCodeRequest) {
+    const selected = Number(requestAssignments[request.id]);
+    if (!Number.isInteger(selected) || selected <= 0) {
+      toast({
+        title: 'Select a charge code',
+        description: 'Choose the charge code that should satisfy this WAD request.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    assignRequestMutation.mutate({ requestId: request.id, chargeCodeId: selected });
+  }
+
   const typeLabel: Record<string, string> = {
     DIRECT: 'Direct',
     OVERHEAD: 'Overhead',
@@ -1119,6 +1176,70 @@ export default function ChargeCodeManagerPage() {
           </Label>
         </div>
       </div>
+
+      {chargeCodeRequests.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Charge Code Requests</h2>
+            <Badge variant="secondary">{chargeCodeRequests.length}</Badge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {chargeCodeRequests.map((request) => (
+              <div key={request.id} className="rounded-md border p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {request.workOrderNumber ?? 'WAD'} - {request.operation}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {request.department} - {request.classification}
+                      {request.budgetedHours ? ` - ${request.budgetedHours} hrs` : ''}
+                    </p>
+                  </div>
+                  <Badge variant="outline">Pending</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Requested by {request.requestedByDisplayName}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Select
+                    value={requestAssignments[request.id] ?? ''}
+                    onValueChange={(value) =>
+                      setRequestAssignments((prev) => ({ ...prev, [request.id]: value }))
+                    }
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Assign charge code" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeChargeCodes.map((code) => (
+                        <SelectItem key={code.id} value={String(code.id)}>
+                          {code.code} - {code.description ?? code.department ?? 'No description'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => assignRequest(request)}
+                    disabled={assignRequestMutation.isPending}
+                    className="sm:w-auto"
+                  >
+                    {assignRequestMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                    )}
+                    Assign
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-md border">
         <Table>

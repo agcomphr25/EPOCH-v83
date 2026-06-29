@@ -100,7 +100,7 @@ async function getP2BillingTasksForUser(user: any) {
           inv_any.id AS invoice_id,
           inv_any.invoice_number,
           inv_any.status AS invoice_status,
-          inv_posted.id AS posted_invoice_id
+          posted_invoice.id AS posted_invoice_id
         FROM p2_packing_slips ps
         LEFT JOIN LATERAL (
           SELECT id, invoice_number, status
@@ -111,14 +111,24 @@ async function getP2BillingTasksForUser(user: any) {
           LIMIT 1
         ) inv_any ON true
         LEFT JOIN LATERAL (
-          SELECT id
-          FROM ar_invoices
-          WHERE packing_slip_id = ps.id
-            AND status = 'POSTED'
-          ORDER BY created_at DESC
+          SELECT inv.id
+          FROM ar_invoices inv
+          WHERE inv.packing_slip_id = ps.id
+            AND COALESCE(inv.status, '') <> 'VOID'
+            AND (
+              inv.status = 'POSTED'
+              OR EXISTS (
+                SELECT 1
+                FROM journal_entries je
+                WHERE je.reference_uuid = inv.id
+                  AND je.transaction_type = 'AR_INVOICE'
+                  AND COALESCE(je.status, 'POSTED') = 'POSTED'
+              )
+            )
+          ORDER BY inv.created_at DESC
           LIMIT 1
-        ) inv_posted ON true
-        WHERE inv_posted.id IS NULL
+        ) posted_invoice ON true
+        WHERE posted_invoice.id IS NULL
           AND COALESCE(ps.status, '') <> 'VOID'
           AND ps.created_at <= NOW() - ($1::int * INTERVAL '1 day')
       ),
@@ -165,7 +175,7 @@ async function getP2BillingTasksForUser(user: any) {
     const oldest = new Date(row.oldest_created_at);
     const ageDays = Math.max(0, Math.floor((Date.now() - oldest.getTime()) / 86_400_000));
     const count = Number(row.packing_slip_count ?? 0);
-    const label = count === 1 ? "packing slip" : "packing slips";
+    const label = count === 1 ? "shipment record" : "shipment records";
     return {
       id: `p2-billing-${row.customer_id}`,
       type: "p2_invoice_posting_group",

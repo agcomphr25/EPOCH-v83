@@ -17,6 +17,20 @@ interface ActionAuthState {
 const ACTION_TOKEN_KEY = 'epoch_action_token';
 const ACTION_TOKEN_EXPIRY_KEY = 'epoch_action_token_expiry';
 const ACTION_TOKEN_USER_KEY = 'epoch_action_token_user';
+const ACTION_AUTH_KIOSK_ROUTES = [
+  '/app/production/stations',
+  '/production/timers',
+  '/p2-traveler',
+  '/p2-traveler-viewer',
+  '/traveler',
+  '/travelers',
+];
+
+function isActionAuthKioskRoute() {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname;
+  return ACTION_AUTH_KIOSK_ROUTES.some((route) => path === route || path.startsWith(`${route}/`));
+}
 
 function getStoredAuth(): ActionAuthState {
   try {
@@ -58,11 +72,16 @@ function clearStoredAuth() {
 export function useActionAuth() {
   const [authState, setAuthState] = useState<ActionAuthState>(getStoredAuth);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [actionDescription, setActionDescription] = useState('perform this action');
   const pendingActionRef = useRef<(() => void) | null>(null);
+  const authSuccessCloseRef = useRef(false);
+  const skipWebSessionProbe = isActionAuthKioskRoute();
 
   const { data: sessionUser } = useQuery<ActionAuthUser | null>({
     queryKey: ['/api/auth/session'],
+    enabled: !skipWebSessionProbe,
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
     retry: false,
   });
 
@@ -97,8 +116,8 @@ export function useActionAuth() {
     }
   }, [authState.isAuthenticated, authState.token]);
 
-  const isAuthenticated = !!sessionUser || authState.isAuthenticated;
-  const currentUser = sessionUser || authState.user;
+  const isAuthenticated = (!skipWebSessionProbe && !!sessionUser) || authState.isAuthenticated;
+  const currentUser = skipWebSessionProbe ? authState.user : sessionUser || authState.user;
 
   const requireAuth = useCallback((action: () => void, actionDescription?: string) => {
     if (isAuthenticated) {
@@ -107,22 +126,37 @@ export function useActionAuth() {
     }
 
     pendingActionRef.current = action;
+    setActionDescription(actionDescription || 'perform this action');
     setShowAuthModal(true);
   }, [isAuthenticated]);
+
+  const requireFreshAuth = useCallback((action: () => void, actionDescription?: string) => {
+    clearStoredAuth();
+    setAuthState({ isAuthenticated: false, user: null, token: null, expiresAt: null });
+    pendingActionRef.current = action;
+    setActionDescription(actionDescription || 'perform this action');
+    setShowAuthModal(true);
+  }, []);
 
   const handleAuthSuccess = useCallback((token: string, user: ActionAuthUser, expiresAt?: string) => {
     const expiry = expiresAt || new Date(Date.now() + 15 * 60 * 1000).toISOString();
     storeAuth(token, expiry, user);
+    authSuccessCloseRef.current = true;
     setAuthState({
       isAuthenticated: true,
       user,
       token,
       expiresAt: new Date(expiry),
     });
+    setShowAuthModal(false);
   }, []);
 
   const handleAuthModalClose = useCallback(() => {
     setShowAuthModal(false);
+    if (authSuccessCloseRef.current) {
+      authSuccessCloseRef.current = false;
+      return;
+    }
     pendingActionRef.current = null;
   }, []);
 
@@ -144,7 +178,9 @@ export function useActionAuth() {
     user: currentUser,
     actionToken: authState.token,
     showAuthModal,
+    actionDescription,
     requireAuth,
+    requireFreshAuth,
     handleAuthSuccess,
     handleAuthModalClose,
     getAuthHeaders,

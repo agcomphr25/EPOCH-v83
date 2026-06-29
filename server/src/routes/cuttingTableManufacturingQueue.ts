@@ -3,6 +3,12 @@ import { storage } from '../../storage';
 import { db } from '../../db';
 import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingFabricInventoryTransactions, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
 import { eq, and, or, asc, desc, inArray, like, count } from 'drizzle-orm';
+import {
+  adjustPacketInventoryForMaterial,
+  getP1PacketName,
+  normalizeP1PacketMaterialType,
+  type P1PacketMaterialType,
+} from '../utils/p1PacketInventory';
 
 const router = express.Router();
 
@@ -42,6 +48,38 @@ function parseBuiltPacketBarcode(barcode: string | null | undefined): { sku: str
   return { sku, queueId, packetNumber };
 }
 
+function parseManufacturingPacketBarcode(barcode: string | null | undefined): { queueId: number; sku: string; sequence: number | null; builtPacketBarcode?: string } | null {
+  if (!barcode) return null;
+  const trimmed = barcode.trim();
+  const builtPacket = parseBuiltPacketBarcode(trimmed);
+  if (builtPacket) {
+    return {
+      queueId: builtPacket.queueId,
+      sku: builtPacket.sku,
+      sequence: builtPacket.packetNumber,
+      builtPacketBarcode: trimmed,
+    };
+  }
+
+  const parts = trimmed.split('-');
+  if (parts.length < 3 || parts[0] !== 'MFG') return null;
+
+  const queueId = Number(parts[1]);
+  if (!Number.isInteger(queueId)) return null;
+
+  const maybeSequence = parts[parts.length - 1];
+  const hasSequence = parts.length > 3 && /^\d+$/.test(maybeSequence);
+  const skuParts = hasSequence ? parts.slice(2, -1) : parts.slice(2);
+  const sku = skuParts.join('-').trim();
+
+  if (!sku) return null;
+  return {
+    queueId,
+    sku,
+    sequence: hasSequence ? Number(maybeSequence) : null,
+  };
+}
+
 function parseQueueNotes(notes: string | null): Record<string, any> {
   if (!notes) return {};
   try {
@@ -50,6 +88,26 @@ function parseQueueNotes(notes: string | null): Record<string, any> {
   } catch {
     return { rawNotes: notes };
   }
+}
+
+function stringifyQueueNotes(notes: Record<string, any>): string {
+  const { rawNotes, ...serializableNotes } = notes;
+  return JSON.stringify(serializableNotes);
+}
+
+function getP1PacketMaterialFromQueueNotes(notes: Record<string, any>): P1PacketMaterialType | null {
+  const source = String(notes.source || '').toUpperCase();
+  const materialType = String(notes.materialType || '').toLowerCase();
+  if (notes.isP2Packet === true || source === 'P2' || source === 'P2_SYNC' || materialType.startsWith('p2_')) {
+    return null;
+  }
+  return normalizeP1PacketMaterialType(notes.materialType)
+    || normalizeP1PacketMaterialType(notes.packetName)
+    || normalizeP1PacketMaterialType(notes.rawNotes);
+}
+
+function isP1PacketInventoryQueueItem(notes: Record<string, any>): boolean {
+  return getP1PacketMaterialFromQueueNotes(notes) !== null;
 }
 
 type QueueBomMatch = {
@@ -148,6 +206,7 @@ async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
   for (const row of completedRows) {
     const completedQuantity = row.queue.quantityCompleted || 0;
     if (completedQuantity <= 0 || !row.item) continue;
+    if (isP1PacketInventoryQueueItem(parseQueueNotes(row.queue.notes))) continue;
 
     const partNumber = row.item.agPartNumber || 'UNK';
     const barcodePrefix = `PKT-${partNumber}-${row.queue.id}-%`;
@@ -202,6 +261,68 @@ async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
   }
 }
 
+async function ensureP1PacketInventoryForCompletedQueueRows(): Promise<void> {
+  const cuttingTableDept = supplySourceDashboardToLegacyDept('CUTTING_TABLE')!;
+  const cuttingTableCategories = getDashboardCategories('CUTTING_TABLE');
+  const completedRows = await db
+    .select({
+      queue: manufacturingQueue,
+      item: inventoryItems,
+    })
+    .from(manufacturingQueue)
+    .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+    .where(and(
+      or(
+        eq(manufacturingQueue.department, cuttingTableDept),
+        inArray(inventoryItems.manufacturedCategory, cuttingTableCategories)
+      ),
+      eq(manufacturingQueue.status, 'COMPLETED')
+    ))
+    .orderBy(desc(manufacturingQueue.completedAt), desc(manufacturingQueue.updatedAt))
+    .limit(500);
+
+  for (const row of completedRows) {
+    const notes = parseQueueNotes(row.queue.notes);
+    const materialType = getP1PacketMaterialFromQueueNotes(notes);
+    const completedQuantity = row.queue.quantityCompleted || 0;
+    const alreadyAdded = Number(notes.p1PacketInventoryAdded || 0);
+    const missingQuantity = completedQuantity - alreadyAdded;
+    if (!materialType || missingQuantity <= 0) continue;
+
+    await db.transaction(async (tx) => {
+      const [lockedRow] = await tx
+        .select({
+          notes: manufacturingQueue.notes,
+          quantityCompleted: manufacturingQueue.quantityCompleted,
+        })
+        .from(manufacturingQueue)
+        .where(eq(manufacturingQueue.id, row.queue.id))
+        .for('update');
+
+      if (!lockedRow) return;
+      const lockedNotes = parseQueueNotes(lockedRow.notes);
+      const lockedMaterialType = getP1PacketMaterialFromQueueNotes(lockedNotes);
+      const lockedCompletedQuantity = lockedRow.quantityCompleted || 0;
+      const lockedAlreadyAdded = Number(lockedNotes.p1PacketInventoryAdded || 0);
+      const lockedMissingQuantity = lockedCompletedQuantity - lockedAlreadyAdded;
+      if (!lockedMaterialType || lockedMissingQuantity <= 0) return;
+
+      await adjustPacketInventoryForMaterial(tx, lockedMaterialType, lockedMissingQuantity);
+      await tx
+        .update(manufacturingQueue)
+        .set({
+          notes: stringifyQueueNotes({
+            ...lockedNotes,
+            p1PacketInventoryAdded: lockedAlreadyAdded + lockedMissingQuantity,
+            p1PacketInventoryMaterialType: lockedMaterialType,
+          }),
+          updatedAt: new Date(),
+        })
+        .where(eq(manufacturingQueue.id, row.queue.id));
+    });
+  }
+}
+
 // Get manufacturing queue items for cutting table.
 // DEMAND ROUTING: A record belongs to the Cutting Table dashboard when:
 //   (a) manufacturing_queue.department = 'Cutting Table'  — legacy + BOM-exploded records
@@ -228,7 +349,9 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
         routingSignal,
         or(
           eq(manufacturingQueue.status, 'PENDING'),
-          eq(manufacturingQueue.status, 'IN_PROGRESS')
+          eq(manufacturingQueue.status, 'IN_PROGRESS'),
+          eq(manufacturingQueue.status, 'LOCKED'),
+          eq(manufacturingQueue.status, 'locked')
         )
       );
     } else if (status && status !== 'ALL') {
@@ -610,6 +733,9 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
 
     const productCategoryId = productCategory.id;
     const barcodePrefix = `PKT-${inventoryItem.agPartNumber}-${id}-%`;
+    const queueNotes = parseQueueNotes(currentItem.notes);
+    const p1PacketMaterialType = getP1PacketMaterialFromQueueNotes(queueNotes);
+    const shouldAddToP1PacketInventory = p1PacketMaterialType !== null;
 
     const { updated, createdPackets, isFullyCompleted, newTotalCompleted } = await db.transaction(async (tx) => {
       const [lockedItem] = await tx
@@ -635,27 +761,41 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
         .where(like(cuttingBuiltPackets.barcode, barcodePrefix));
 
       const createdPackets = [];
-      for (let i = 0; i < quantityCompleted; i++) {
-        const packetNumber = existingCount + i + 1;
-        const barcode = `PKT-${inventoryItem.agPartNumber}-${id}-${packetNumber}-${Date.now()}`;
+      if (!shouldAddToP1PacketInventory) {
+        for (let i = 0; i < quantityCompleted; i++) {
+          const packetNumber = existingCount + i + 1;
+          const barcode = `PKT-${inventoryItem.agPartNumber}-${id}-${packetNumber}-${Date.now()}`;
 
-        const [builtPacket] = await tx
-          .insert(cuttingBuiltPackets)
-          .values({
-            productCategoryId,
-            barcode,
-            packetNumber,
-            buildDate: new Date(),
-            status: 'AVAILABLE',
-            isMixedFabric: false,
-            fabricSourceCount: 0,
-            notes: completionNotes || null,
-            createdBy: completedBy || null,
-          })
-          .returning();
+          const [builtPacket] = await tx
+            .insert(cuttingBuiltPackets)
+            .values({
+              productCategoryId,
+              barcode,
+              packetNumber,
+              buildDate: new Date(),
+              status: 'AVAILABLE',
+              isMixedFabric: false,
+              fabricSourceCount: 0,
+              notes: completionNotes || null,
+              createdBy: completedBy || null,
+            })
+            .returning();
 
-        createdPackets.push(builtPacket);
+          createdPackets.push(builtPacket);
+        }
       }
+
+      if (p1PacketMaterialType) {
+        await adjustPacketInventoryForMaterial(tx, p1PacketMaterialType, quantityCompleted);
+      }
+
+      const nextNotes = p1PacketMaterialType
+        ? stringifyQueueNotes({
+            ...queueNotes,
+            p1PacketInventoryAdded: (Number(queueNotes.p1PacketInventoryAdded) || 0) + quantityCompleted,
+            p1PacketInventoryMaterialType: p1PacketMaterialType,
+          })
+        : currentItem.notes;
 
       const [updated] = await tx
         .update(manufacturingQueue)
@@ -669,6 +809,7 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
           materialDetails,
           completionNotes,
           completedBy,
+          notes: nextNotes,
           updatedAt: new Date(),
         })
         .where(eq(manufacturingQueue.id, parseInt(id)))
@@ -685,6 +826,7 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
     res.json({
       ...updated,
       createdPackets,
+      batchInventoryAdded: shouldAddToP1PacketInventory ? quantityCompleted : 0,
       isPartialCompletion: !isFullyCompleted,
       remainingQuantity: isFullyCompleted ? 0 : currentItem.quantityRequested - newTotalCompleted,
     });
@@ -942,6 +1084,9 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
     // sequentially from the correct offset.
     const barcodePrefix = `PKT-${inventoryItem.agPartNumber}-${id}-%`;
     const isMixedFabric = fabricSources.length > 1;
+    const queueNotes = parseQueueNotes(currentItem.notes);
+    const p1PacketMaterialType = getP1PacketMaterialFromQueueNotes(queueNotes);
+    const shouldAddToP1PacketInventory = p1PacketMaterialType !== null;
 
     // Wrap count + inserts + queue update in a transaction, using a row-level
     // lock on the queue item to prevent concurrent submissions from reading the
@@ -973,56 +1118,57 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
         .from(cuttingBuiltPackets)
         .where(like(cuttingBuiltPackets.barcode, barcodePrefix));
 
-      // Create built packet records with full traceability
       const createdPackets = [];
 
-      for (let i = 0; i < quantityCompleted; i++) {
-        // Offset by existing packet count so each packet receives its true sequential
-        // position across all submissions (not just within this submission).
-        const packetNumber = existingCount + i + 1;
-        const timestamp = Date.now();
-        const barcode = `PKT-${inventoryItem.agPartNumber}-${id}-${packetNumber}-${timestamp}`;
+      if (!shouldAddToP1PacketInventory) {
+        for (let i = 0; i < quantityCompleted; i++) {
+          // Offset by existing packet count so each packet receives its true sequential
+          // position across all submissions (not just within this submission).
+          const packetNumber = existingCount + i + 1;
+          const timestamp = Date.now();
+          const barcode = `PKT-${inventoryItem.agPartNumber}-${id}-${packetNumber}-${timestamp}`;
 
-        // Create the built packet record
-        const [builtPacket] = await tx
-          .insert(cuttingBuiltPackets)
-          .values({
-            productCategoryId: productCategory.id,
-            barcode,
-            packetNumber,
-            buildDate: new Date(),
-            status: 'AVAILABLE',
-            isMixedFabric,
-            fabricSourceCount: fabricSources.length,
-            notes: completionNotes || null,
-            createdBy: completedBy || null,
-          })
-          .returning();
-
-        // Create fabric source records for each fabric used
-        for (let j = 0; j < fabricSources.length; j++) {
-          const source = fabricSources[j];
-          await tx
-            .insert(cuttingBuiltPacketFabricSources)
+          // Create the built packet record
+          const [builtPacket] = await tx
+            .insert(cuttingBuiltPackets)
             .values({
-              builtPacketId: builtPacket.id,
-              fabricInventoryId: source.fabricInventoryId || null,
-              fabricType: source.fabricType || null,
-              lotNumber: source.lotNumber || null,
-              batchNumber: source.batchNumber || null,
-              rollNumber: source.rollNumber || null,
-              supplierPartNumber: source.supplierPartNumber || null,
-              internalControlNumber: source.internalControlNumber || null,
-              expirationDate: source.expirationDate || null,
-              quantityUsed: source.quantityUsed || 1,
-              isPrimary: j === 0, // First source is primary
-            });
-        }
+              productCategoryId: productCategory.id,
+              barcode,
+              packetNumber,
+              buildDate: new Date(),
+              status: 'AVAILABLE',
+              isMixedFabric,
+              fabricSourceCount: fabricSources.length,
+              notes: completionNotes || null,
+              createdBy: completedBy || null,
+            })
+            .returning();
 
-        createdPackets.push({
-          ...builtPacket,
-          fabricSources,
-        });
+          // Create fabric source records for each fabric used
+          for (let j = 0; j < fabricSources.length; j++) {
+            const source = fabricSources[j];
+            await tx
+              .insert(cuttingBuiltPacketFabricSources)
+              .values({
+                builtPacketId: builtPacket.id,
+                fabricInventoryId: source.fabricInventoryId || null,
+                fabricType: source.fabricType || null,
+                lotNumber: source.lotNumber || null,
+                batchNumber: source.batchNumber || null,
+                rollNumber: source.rollNumber || null,
+                supplierPartNumber: source.supplierPartNumber || null,
+                internalControlNumber: source.internalControlNumber || null,
+                expirationDate: source.expirationDate || null,
+                quantityUsed: source.quantityUsed || 1,
+                isPrimary: j === 0, // First source is primary
+              });
+          }
+
+          createdPackets.push({
+            ...builtPacket,
+            fabricSources,
+          });
+        }
       }
 
       const fabricUsageByRoll = new Map<string, { quantityUsed: number; rollNumber: string | null }>();
@@ -1074,6 +1220,18 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
         });
       }
 
+      if (p1PacketMaterialType) {
+        await adjustPacketInventoryForMaterial(tx, p1PacketMaterialType, quantityCompleted);
+      }
+
+      const nextNotes = p1PacketMaterialType
+        ? stringifyQueueNotes({
+            ...queueNotes,
+            p1PacketInventoryAdded: (Number(queueNotes.p1PacketInventoryAdded) || 0) + quantityCompleted,
+            p1PacketInventoryMaterialType: p1PacketMaterialType,
+          })
+        : currentItem.notes;
+
       // Update the manufacturing queue item inside the same transaction.
       // Use values from the locked row to prevent a lost-update when concurrent
       // submissions race on quantityCompleted.
@@ -1094,6 +1252,7 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
           materialDetails: JSON.stringify(fabricSources),
           completionNotes,
           completedBy,
+          notes: nextNotes,
           updatedAt: new Date(),
         })
         .where(eq(manufacturingQueue.id, parseInt(id)))
@@ -1107,6 +1266,7 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
     res.json({
       queueItem: updated,
       createdPackets,
+      batchInventoryAdded: shouldAddToP1PacketInventory ? quantityCompleted : 0,
       isPartialCompletion: !isFullyCompleted,
       remainingQuantity: isFullyCompleted ? 0 : quantityRequested - newTotalCompleted,
       isMixedFabric,
@@ -1501,13 +1661,15 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Barcode is required' });
     }
     
-    // Parse the barcode format: MFG-{id}-{partNumber} or MFG-{id}-{partNumber}-{seq}
-    const match = barcode.match(/^MFG-(\d+)-([^-]+)(?:-(\d+))?$/);
-    if (!match) {
-      return res.status(400).json({ error: 'Invalid packet barcode format. Expected: MFG-{id}-{partNumber} or MFG-{id}-{partNumber}-{seq}' });
+    // Parse packet barcodes. New labels use MFG-{id}-{partNumber}-{seq};
+    // existing production packet labels may still use PKT-{partNumber}-{id}-{packetNumber}-{timestamp}.
+    // Part numbers can contain hyphens, so split from stable id/sequence positions.
+    const parsedBarcode = parseManufacturingPacketBarcode(barcode);
+    if (!parsedBarcode) {
+      return res.status(400).json({ error: 'Invalid packet barcode format. Expected: MFG-{id}-{partNumber}-{seq} or existing PKT-{partNumber}-{id}-{packetNumber}-{timestamp}' });
     }
     
-    const printedQueueId = parseInt(match[1]);
+    const printedQueueId = parsedBarcode.queueId;
     
     if (isNaN(printedQueueId)) {
       return res.status(400).json({ error: 'Invalid queue ID in barcode' });
@@ -1751,7 +1913,7 @@ router.post('/scan-start', async (req: Request, res: Response) => {
     // Set the scanned built packet to ALLOCATED if it is currently AVAILABLE.
     // The optional seq segment in the MFG barcode identifies which packet (by
     // display rank = id-ascending order within this queue item) was physically scanned.
-    const scannedSeq = match[3] ? parseInt(match[3]) : null;
+    const scannedSeq = parsedBarcode.sequence;
     try {
       // Fetch all built packets for this queue item ordered by id ascending
       // so we can derive the same display rank used in the built-packets endpoint.
@@ -1762,10 +1924,16 @@ router.post('/scan-start', async (req: Request, res: Response) => {
         .orderBy(asc(cuttingBuiltPackets.id));
 
       let targetPacket: { id: number; status: string } | null = null;
-      if (scannedSeq !== null && scannedSeq >= 1 && scannedSeq <= builtPacketsForQueue.length) {
+      if (parsedBarcode.builtPacketBarcode) {
+        targetPacket = await db.query.cuttingBuiltPackets.findFirst({
+          where: eq(cuttingBuiltPackets.barcode, parsedBarcode.builtPacketBarcode),
+        }) ?? null;
+      }
+      if (!targetPacket && scannedSeq !== null && scannedSeq >= 1 && scannedSeq <= builtPacketsForQueue.length) {
         // Use rank-based lookup (1-indexed)
         targetPacket = builtPacketsForQueue[scannedSeq - 1];
-      } else {
+      }
+      if (!targetPacket) {
         // No sequence info — update the first AVAILABLE packet for this queue item
         targetPacket = builtPacketsForQueue.find(p => p.status === 'AVAILABLE') ?? null;
       }
@@ -2183,7 +2351,10 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
 router.get('/built-packets', async (req: Request, res: Response) => {
   try {
     const { limit = '50', offset = '0', status } = req.query;
+    const parsedLimit = parseInt(limit as string);
+    const parsedOffset = parseInt(offset as string);
 
+    await ensureP1PacketInventoryForCompletedQueueRows();
     await ensureBuiltPacketsForCompletedQueueRows();
 
     const packets = await db
@@ -2204,8 +2375,8 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       .leftJoin(cuttingProductCategories, eq(cuttingProductCategories.id, cuttingBuiltPackets.productCategoryId))
       .where(status ? eq(cuttingBuiltPackets.status, status as string) : undefined)
       .orderBy(desc(cuttingBuiltPackets.buildDate))
-      .limit(parseInt(limit as string))
-      .offset(parseInt(offset as string));
+      .limit(parsedLimit)
+      .offset(parsedOffset);
 
     const packetIds = packets.map(p => p.id);
     let fabricSources: any[] = [];
@@ -2233,11 +2404,33 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       return { ...packet, sku, queueId, printedPacketNumber: parsedBarcode?.packetNumber ?? packet.packetNumber };
     });
 
+    const parsedQueueIds = [...new Set(
+      parsedPackets.map(p => p.queueId).filter((id): id is string => id !== null)
+    )].map(id => parseInt(id)).filter(id => !isNaN(id));
+    const p1StockPacketQueueIds = new Set<number>();
+    if (parsedQueueIds.length > 0) {
+      const referencedQueueRows = await db
+        .select({ id: manufacturingQueue.id, notes: manufacturingQueue.notes })
+        .from(manufacturingQueue)
+        .where(inArray(manufacturingQueue.id, parsedQueueIds));
+      for (const row of referencedQueueRows) {
+        if (isP1PacketInventoryQueueItem(parseQueueNotes(row.notes))) {
+          p1StockPacketQueueIds.add(row.id);
+        }
+      }
+    }
+
+    const visiblePackets = parsedPackets.filter(packet => {
+      if (!packet.queueId) return true;
+      const queueId = parseInt(packet.queueId);
+      return Number.isNaN(queueId) || !p1StockPacketQueueIds.has(queueId);
+    });
+
     // Batch-fetch quantityRequested for all referenced queue items so the
     // frontend can show an accurate "Packet X of Y" without relying on a
     // filtered mfgQueueItems list.
     const uniqueQueueIds = [...new Set(
-      parsedPackets.map(p => p.queueId).filter((id): id is string => id !== null)
+      visiblePackets.map(p => p.queueId).filter((id): id is string => id !== null)
     )].map(id => parseInt(id)).filter(id => !isNaN(id));
 
     const queueTotals: Record<string, number> = {};
@@ -2256,7 +2449,7 @@ router.get('/built-packets', async (req: Request, res: Response) => {
     // relevant queue IDs — not just the current page — so ranks remain correct
     // even when earlier packets are outside the paginated window.
     const relevantQueueIds = [...new Set(
-      parsedPackets.map(p => p.queueId).filter((id): id is string => id !== null)
+      visiblePackets.map(p => p.queueId).filter((id): id is string => id !== null)
     )];
 
     const displayPacketNumberMap: Record<number, number> = {};
@@ -2292,14 +2485,66 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       }
     }
 
-    const result = parsedPackets.map(packet => ({
+    const result = visiblePackets.map(packet => ({
       ...packet,
       displayPacketNumber: displayPacketNumberMap[packet.id] ?? packet.packetNumber,
       quantityOrdered: packet.queueId ? (queueTotals[packet.queueId] ?? null) : null,
       fabricSources: fabricSources.filter(s => s.builtPacketId === packet.id),
     }));
 
-    res.json(result);
+    let batchRows: any[] = [];
+    if (!status) {
+      const cuttingTableDept = supplySourceDashboardToLegacyDept('CUTTING_TABLE')!;
+      const cuttingTableCategories = getDashboardCategories('CUTTING_TABLE');
+      const completedStockRows = await db
+        .select({
+          queue: manufacturingQueue,
+          item: inventoryItems,
+        })
+        .from(manufacturingQueue)
+        .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+        .where(and(
+          or(
+            eq(manufacturingQueue.department, cuttingTableDept),
+            inArray(inventoryItems.manufacturedCategory, cuttingTableCategories)
+          ),
+          eq(manufacturingQueue.status, 'COMPLETED')
+        ))
+        .orderBy(desc(manufacturingQueue.completedAt), desc(manufacturingQueue.updatedAt))
+        .limit(parsedLimit);
+
+      batchRows = completedStockRows.flatMap((row) => {
+        const materialType = getP1PacketMaterialFromQueueNotes(parseQueueNotes(row.queue.notes));
+        if (!row.item || !materialType) return [];
+        const packetName = getP1PacketName(materialType);
+        return [{
+          id: -row.queue.id,
+          barcode: `BATCH-${row.queue.id}`,
+          packetNumber: 1,
+          displayPacketNumber: null,
+          buildDate: row.queue.completedAt || row.queue.updatedAt || row.queue.createdAt,
+          status: 'BATCH',
+          isMixedFabric: false,
+          fabricSourceCount: 0,
+          notes: row.queue.completionNotes || row.queue.notes,
+          createdBy: row.queue.completedBy,
+          allocatedToOrder: null,
+          categoryName: packetName,
+          sku: row.item?.agPartNumber || null,
+          queueId: String(row.queue.id),
+          quantityOrdered: row.queue.quantityCompleted || row.queue.quantityRequested || 0,
+          batchQuantity: row.queue.quantityCompleted || row.queue.quantityRequested || 0,
+          isBatchEntry: true,
+          fabricSources: [],
+        }];
+      });
+    }
+
+    const combined = [...result, ...batchRows]
+      .sort((a, b) => new Date(b.buildDate).getTime() - new Date(a.buildDate).getTime())
+      .slice(0, parsedLimit);
+
+    res.json(combined);
   } catch (error) {
     console.error('Error fetching built packets:', error);
     res.status(500).json({ error: 'Failed to fetch built packets' });

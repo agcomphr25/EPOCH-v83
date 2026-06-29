@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useParams, useLocation } from 'wouter';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -70,6 +70,26 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
+const ROM_CATEGORY_CONFIG = [
+  { key: 'labor', label: 'Labor', field: 'quotedHours', kind: 'hours', detail: 'Direct labor estimate from ROM/quote feedback' },
+  { key: 'material', label: 'Material', field: 'budgetAmount', kind: 'currency', detail: 'Material budget that will seed the WAD' },
+  { key: 'outsideProcessing', label: 'Outside Processing', field: 'budgetAmount', kind: 'currency', detail: 'Vendor services and outside operations' },
+  { key: 'nrc', label: 'NRC', field: 'budgetAmount', kind: 'currency', detail: 'Non-recurring cost' },
+  { key: 'tooling', label: 'Tooling', field: 'budgetAmount', kind: 'currency', detail: 'Tooling budget' },
+  { key: 'design', label: 'Design', field: 'budgetAmount', kind: 'currency', detail: 'Design labor and engineering budget' },
+  { key: 'capital', label: 'Capital', field: 'budgetAmount', kind: 'currency', detail: 'Assets, startup services, and startup labor' },
+  { key: 'generalAndAdmin', label: 'G&A', field: 'budgetAmount', kind: 'currency', detail: 'General and administrative burden' },
+  { key: 'overhead', label: 'Overhead', field: 'budgetAmount', kind: 'currency', detail: 'Indirect cost burden' },
+  { key: 'qualityAndCompliance', label: 'Quality and Compliance', field: 'budgetAmount', kind: 'currency', detail: 'Inspection, compliance, and quality planning' },
+  { key: 'shippingAndPackaging', label: 'Shipping and Packaging', field: 'budgetAmount', kind: 'currency', detail: 'Pack, ship, freight, and documentation' },
+  { key: 'contingency', label: 'Contingency', field: 'budgetAmount', kind: 'currency', detail: 'Risk reserve' },
+  { key: 'escalationAndInflation', label: 'Escalation and Inflation', field: 'budgetAmount', kind: 'currency', detail: 'Schedule and pricing escalation' },
+  { key: 'profitFee', label: 'Profit / Fee', field: 'budgetAmount', kind: 'currency', detail: 'Quote profit or fee target' },
+] as const;
+
+type RomCategoryKey = typeof ROM_CATEGORY_CONFIG[number]['key'];
+type RomCategoryField = typeof ROM_CATEGORY_CONFIG[number]['field'];
+
 interface ProjectStep {
   id: string;
   stepType: string;
@@ -117,6 +137,8 @@ interface Project {
   currentRevisionNumber: number;
   currentRevisionLabel: string;
   poId: number | null;
+  p2PoItemId: number | null;
+  p2BillingAllocationId: string | null;
   projectManagerId: number | null;
   reminderDays: number;
   notes: string | null;
@@ -146,6 +168,46 @@ interface P2PurchaseOrder {
   expectedDelivery?: string | null;
   createdAt?: string;
 }
+
+interface P2PoItemOption {
+  id: number;
+  poId: number;
+  partNumber: string;
+  partName: string;
+  quantity: number;
+  unitPrice: number | null;
+}
+
+interface P2BillingBucketOption {
+  id: string;
+  poId: number;
+  poItemId: number | null;
+  bucketLabel: string;
+  description: string | null;
+  customerPoLine: string | null;
+  quantityAuthorized: number;
+  unitPrice: string | number;
+}
+
+interface P2PoLinkOptions {
+  poItems: P2PoItemOption[];
+  billingBuckets: P2BillingBucketOption[];
+}
+
+interface P2PurchaseOrderItem {
+  id?: number | string;
+  partNumber: string;
+  partName: string;
+  description?: string | null;
+  quantity: number;
+  dueDate?: string | null;
+  unitPrice?: number | null;
+  specifications?: string | null;
+  notes?: string | null;
+  inventoryItemId?: number | null;
+}
+
+const EMPTY_P2_PO_ITEMS: P2PurchaseOrderItem[] = [];
 
 interface ProjectRevision {
   id: number;
@@ -362,7 +424,16 @@ export default function ProjectDetailPage() {
   const [, setLocation] = useLocation();
 
   // Read ?tab= from URL to support deep-links (e.g. from serial search)
-  const initialTab = new URLSearchParams(window.location.search).get('tab') ?? 'workflow';
+  const requestedTab = new URLSearchParams(window.location.search).get('tab') ?? 'workflow';
+  const tabAliases: Record<string, string> = {
+    'parts-request': 'material',
+    nre: 'rom',
+    'assembly-tree': 'production',
+    activity: 'workflow',
+    revisions: 'po',
+    closing: 'workflow',
+  };
+  const initialTab = tabAliases[requestedTab] ?? requestedTab;
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -419,6 +490,8 @@ export default function ProjectDetailPage() {
   const p2PurchaseOrderOptions = Array.isArray(p2PurchaseOrders) ? p2PurchaseOrders : [];
 
   const [linkPoId, setLinkPoId] = useState<string>('');
+  const [linkPoItemId, setLinkPoItemId] = useState<string>('');
+  const [linkBillingBucketId, setLinkBillingBucketId] = useState<string>('');
   const [linkPoSearch, setLinkPoSearch] = useState('');
   const [showManualLink, setShowManualLink] = useState(false);
   const [linkPoReason, setLinkPoReason] = useState('');
@@ -427,8 +500,104 @@ export default function ProjectDetailPage() {
     revisionDate: new Date().toISOString().split('T')[0],
     reason: '',
     hasPoChange: false,
+    revisedPoNumber: '',
+    revisedDueDate: '',
+    revisedLineItems: [] as P2PurchaseOrderItem[],
   });
   const [showProjectPOWizard, setShowProjectPOWizard] = useState(false);
+  const [romForm, setRomForm] = useState({
+    summary: '',
+    assumptions: '',
+    riskNotes: '',
+    categories: {} as Record<string, Record<string, string>>,
+  });
+  const [romFormHydratedKey, setRomFormHydratedKey] = useState('');
+
+  const linkedProjectPO = useMemo(() => {
+    if (!project?.poId) return null;
+    return p2PurchaseOrderOptions.find((po) => po.id === project.poId) ?? null;
+  }, [project?.poId, p2PurchaseOrderOptions]);
+
+  const { data: linkedPoItems = EMPTY_P2_PO_ITEMS } = useQuery<P2PurchaseOrderItem[]>({
+    queryKey: ['/api/p2-purchase-order-items', project?.poId],
+    enabled: !!project?.poId && revisionForm.hasPoChange,
+  });
+
+  const suggestedRevisionPoNumber = useMemo(() => {
+    const base = linkedProjectPO?.poNumber?.trim();
+    if (!base) return '';
+    return base;
+  }, [linkedProjectPO?.poNumber]);
+
+  useEffect(() => {
+    if (!revisionForm.hasPoChange) return;
+    setRevisionForm((prev) => ({
+      ...prev,
+      revisedPoNumber: prev.revisedPoNumber || suggestedRevisionPoNumber,
+      revisedDueDate: prev.revisedDueDate || linkedProjectPO?.expectedDelivery?.slice(0, 10) || '',
+      revisedLineItems:
+        prev.revisedLineItems.length > 0
+          ? prev.revisedLineItems
+          : linkedPoItems.map((item) => ({
+              id: item.id,
+              partNumber: item.partNumber || '',
+              partName: item.partName || item.description || item.partNumber || '',
+              quantity: Number(item.quantity) || 1,
+              unitPrice: Number(item.unitPrice) || 0,
+              dueDate: item.dueDate?.slice(0, 10) || linkedProjectPO?.expectedDelivery?.slice(0, 10) || '',
+              specifications: item.specifications || '',
+              notes: item.notes || '',
+              inventoryItemId: item.inventoryItemId ?? null,
+            })),
+    }));
+  }, [
+    revisionForm.hasPoChange,
+    linkedPoItems,
+    linkedProjectPO?.expectedDelivery,
+    suggestedRevisionPoNumber,
+  ]);
+
+  const updateRevisionLineItem = (
+    index: number,
+    updates: Partial<P2PurchaseOrderItem>
+  ) => {
+    setRevisionForm((prev) => ({
+      ...prev,
+      revisedLineItems: prev.revisedLineItems.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...updates } : item
+      ),
+    }));
+  };
+
+  const addRevisionLineItem = () => {
+    setRevisionForm((prev) => ({
+      ...prev,
+      revisedLineItems: [
+        ...prev.revisedLineItems,
+        {
+          id: `new-${Date.now()}`,
+          partNumber: '',
+          partName: '',
+          quantity: 1,
+          dueDate: prev.revisedDueDate || '',
+          unitPrice: 0,
+          specifications: '',
+          notes: '',
+        },
+      ],
+    }));
+  };
+
+  const removeRevisionLineItem = (index: number) => {
+    setRevisionForm((prev) => ({
+      ...prev,
+      revisedLineItems: prev.revisedLineItems.filter((_, itemIndex) => itemIndex !== index),
+    }));
+  };
+
+  const hasInvalidRevisedLineItems = revisionForm.hasPoChange && revisionForm.revisedLineItems.some((item) =>
+    !item.partNumber.trim() || !item.partName.trim() || Number(item.quantity) <= 0
+  );
 
   const suggestedPo = useMemo(() => {
     if (!project || p2PurchaseOrders.length === 0) return null;
@@ -453,12 +622,38 @@ export default function ProjectDetailPage() {
       });
   }, [project, p2PurchaseOrders]);
 
+  const activeLinkPoId = showManualLink ? linkPoId : (suggestedPo?.id.toString() ?? linkPoId);
+
+  const { data: poLinkOptions } = useQuery<P2PoLinkOptions>({
+    queryKey: ['/api/projects', id, 'po-link-options', activeLinkPoId],
+    queryFn: () => apiRequest(`/api/projects/${id}/po-link-options?poId=${encodeURIComponent(activeLinkPoId)}`),
+    enabled: !!id && !!activeLinkPoId,
+  });
+
+  const poItemOptions = poLinkOptions?.poItems ?? [];
+  const billingBucketOptions = (poLinkOptions?.billingBuckets ?? []).filter((bucket) => {
+    if (!linkPoItemId) return true;
+    return !bucket.poItemId || bucket.poItemId === Number(linkPoItemId);
+  });
+
   const linkPoMutation = useMutation({
-    mutationFn: ({ poId, reason }: { poId: number; reason?: string }) =>
+    mutationFn: ({
+      poId,
+      poItemId,
+      billingAllocationId,
+      reason,
+    }: {
+      poId: number;
+      poItemId?: number | null;
+      billingAllocationId?: string | null;
+      reason?: string;
+    }) =>
       apiRequest(`/api/projects/${id}/link-po`, {
         method: 'POST',
         body: {
           poId,
+          poItemId,
+          billingAllocationId,
           reason,
           createdByDisplayName: currentUser?.username,
         },
@@ -470,6 +665,8 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'revisions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
       setLinkPoId('');
+      setLinkPoItemId('');
+      setLinkBillingBucketId('');
       setLinkPoSearch('');
       setLinkPoReason('');
       setShowManualLink(false);
@@ -478,6 +675,16 @@ export default function ProjectDetailPage() {
       toast({ title: 'Link failed', description: err?.message || 'Failed to link PO.', variant: 'destructive' });
     },
   });
+
+  const linkSelectedPo = (poIdValue: string, reason?: string) => {
+    if (!poIdValue) return;
+    linkPoMutation.mutate({
+      poId: parseInt(poIdValue, 10),
+      poItemId: linkPoItemId ? parseInt(linkPoItemId, 10) : null,
+      billingAllocationId: linkBillingBucketId || null,
+      reason,
+    });
+  };
 
   const { data: projectRevisions = [] } = useQuery<ProjectRevision[]>({
     queryKey: ['/api/projects', id, 'revisions'],
@@ -494,7 +701,7 @@ export default function ProjectDetailPage() {
           createdByDisplayName: currentUser?.username,
         },
       }),
-    onSuccess: () => {
+    onSuccess: (createdRevision: ProjectRevision) => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'revisions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
@@ -503,8 +710,19 @@ export default function ProjectDetailPage() {
         revisionDate: new Date().toISOString().split('T')[0],
         reason: '',
         hasPoChange: false,
+        revisedPoNumber: '',
+        revisedDueDate: '',
+        revisedLineItems: [],
       });
       toast({ title: 'Revision created', description: 'Project revision history was updated.' });
+      const revisionMetadata = (createdRevision as any)?.metadata;
+      if (revisionMetadata?.source === 'project-bom-routing' && revisionMetadata?.pcfRecommended) {
+        setLocation(buildBomRoutingPcfUrl(createdRevision));
+        return;
+      }
+      if (createdRevision?.has_po_change && createdRevision.new_po_id) {
+        setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(id || '')}&editPoId=${encodeURIComponent(String(createdRevision.new_po_id))}`);
+      }
     },
     onError: (err: any) => toast({ title: 'Revision failed', description: err?.message || 'Could not create revision.', variant: 'destructive' }),
   });
@@ -539,6 +757,12 @@ export default function ProjectDetailPage() {
     enabled: !!id,
   });
 
+  const { data: p2Hub } = useQuery<any>({
+    queryKey: ['/api/projects', id, 'p2-hub'],
+    queryFn: () => fetch(`/api/projects/${id}/p2-hub`).then(r => r.json()),
+    enabled: !!id,
+  });
+
   interface GateStatus {
     gates?: { key: string; label: string; passed: boolean; status?: string; message?: string }[];
     allPassed: boolean;
@@ -560,6 +784,254 @@ export default function ProjectDetailPage() {
   const allProjectStepAttachments = Array.isArray(allStepAttachments) ? allStepAttachments : [];
   const gateStatusGates = Array.isArray(gateStatus?.gates) ? gateStatus.gates : [];
   const traceabilitySerials = Array.isArray(traceability?.serials) ? traceability.serials : [];
+  const hubTabs = p2Hub?.tabs ?? {};
+  const hubWad = hubTabs.wad ?? {};
+  const wadSummary = hubWad.summary ?? {};
+  const wadWorkOrders = Array.isArray(hubWad.workOrders) && hubWad.workOrders.length > 0
+    ? hubWad.workOrders
+    : projectWorkOrders;
+  const wadRevisions = Array.isArray(hubWad.revisions)
+    ? hubWad.revisions
+    : projectRevisions.filter((revision: any) => {
+        const type = String(revision.revision_type ?? revision.revisionType ?? '').toLowerCase();
+        return type === 'wad';
+      });
+  const latestWad = hubWad.latestWad ?? wadSummary.latestWad ?? wadWorkOrders[0] ?? null;
+  const hubRom = hubTabs.rom ?? {};
+  const hubProduction = hubTabs.production ?? {};
+  const productionSummary = hubProduction.summary ?? {};
+  const projectSerializedItems = Array.isArray(hubProduction.serializedItems) ? hubProduction.serializedItems : traceabilitySerials;
+  const productionLinePlacements = Array.isArray(hubProduction.poLinePlacements) ? hubProduction.poLinePlacements : [];
+  const productionAssemblyTree = hubProduction.assemblyTree ?? {};
+  const assemblyPoItems = Array.isArray(productionAssemblyTree.poItems) ? productionAssemblyTree.poItems : [];
+  const productionPlacementCounts = productionLinePlacements.reduce((counts: Record<string, number>, line: any) => {
+    Object.entries(line.placementCounts ?? {}).forEach(([placement, count]) => {
+      const numericCount = Number(count);
+      counts[placement] = (counts[placement] ?? 0) + (Number.isFinite(numericCount) ? numericCount : 0);
+    });
+    return counts;
+  }, {});
+  const hubMaterial = hubTabs.material ?? {};
+  const hubLabor = hubTabs.labor ?? {};
+  const hubShippingInvoicing = hubTabs.shippingInvoicing ?? {};
+  const hubDocumentCoverage = hubTabs.documentCoverage ?? {};
+  const documentCoverageSummary = hubDocumentCoverage.summary ?? {};
+  const documentCoverageItems = Array.isArray(hubDocumentCoverage.items) ? hubDocumentCoverage.items : [];
+  const hubBomRouting = hubTabs.bomRouting ?? {};
+  const bomRoutingSummary = hubBomRouting.summary ?? {};
+  const bomRoutingRecords = Array.isArray(hubBomRouting.bomRecords) ? hubBomRouting.bomRecords : [];
+  const assemblyBomRecords = Array.isArray(productionAssemblyTree.bomRecords) ? productionAssemblyTree.bomRecords : bomRoutingRecords;
+  const bomRoutingRoutings = Array.isArray(hubBomRouting.routings) ? hubBomRouting.routings : [];
+  const bomRoutingPartNumbers = Array.isArray(hubBomRouting.sourcePartNumbers) ? hubBomRouting.sourcePartNumbers : [];
+  const bomRoutingChangeLinks = Array.isArray(hubBomRouting.changeLinks)
+    ? hubBomRouting.changeLinks
+    : projectRevisions.filter((revision: any) => {
+        const type = String(revision.revision_type ?? revision.revisionType ?? '').toLowerCase();
+        return type === 'drawing' || type === 'contract';
+      });
+  const primaryBomRoutingPartNumber = bomRoutingPartNumbers[0] ?? bomRoutingRecords[0]?.parent_part_ag_number ?? bomRoutingRoutings[0]?.part_number ?? '';
+  const latestBomRevisionCode = bomRoutingRecords.find((bom: any) => bom.latest_rev_code)?.latest_rev_code;
+  const latestRoutingRevisionCode = bomRoutingRoutings.find((routing: any) => routing.routing_revision)?.routing_revision;
+  const currentBomRoutingRevision = [latestBomRevisionCode ? `BOM ${latestBomRevisionCode}` : '', latestRoutingRevisionCode ? `Routing ${latestRoutingRevisionCode}` : '']
+    .filter(Boolean)
+    .join(' / ');
+  const buildBomRoutingPcfUrl = (revision?: any) => {
+    const revisionLabel = revision?.revision_label ?? revision?.revisionLabel ?? '';
+    const revisionSummary = revision?.summary ?? '';
+    const params = new URLSearchParams({
+      tab: 'changes',
+      newPCF: '1',
+      changeType: 'BOM',
+      scope: project?.poId ? 'PO' : 'PART',
+      documents: 'BOM,ROUTING',
+      actions: 'UPDATE_BOM,UPDATE_ROUTING',
+      projectId: project?.id ?? '',
+      projectLabel: project?.projectCode || project?.projectName || project?.id || '',
+      proposedChange: revisionLabel
+        ? `${revisionLabel}: ${revisionSummary || 'Revise BOM/routing package'}`
+        : `Revise BOM/routing package for ${project?.projectCode || project?.projectName || 'this project'}.`,
+      reason: revision?.reason || 'Project BOM/routing revision requires controlled production change review.',
+      notes: [
+        project?.id ? `Project ID: ${project.id}` : '',
+        revision?.id ? `Project revision ID: ${revision.id}` : '',
+        revisionLabel ? `Project revision: ${revisionLabel}` : '',
+      ].filter(Boolean).join(' | '),
+    });
+    if (project?.poId) params.set('poId', String(project.poId));
+    if (primaryBomRoutingPartNumber) params.set('partNumber', primaryBomRoutingPartNumber);
+    if (currentBomRoutingRevision) params.set('currentRevision', currentBomRoutingRevision);
+    return `/p2-control-center?${params.toString()}`;
+  };
+  const recordBomRoutingRevision = (revisionType: 'drawing' | 'contract') => {
+    createRevisionMutation.mutate({
+      revisionType,
+      revisionDate: new Date().toISOString().split('T')[0],
+      hasPoChange: false,
+      revisedPoNumber: '',
+      revisedDueDate: '',
+      revisedLineItems: [],
+      summary: `${revisionType === 'drawing' ? 'Drawing' : 'Contract'} revision for BOM/routing`,
+      reason: `BOM/routing revision started from the P2 Project BOM/Routing summary for ${project?.projectCode || project?.projectName || 'this project'}.`,
+      metadata: {
+        source: 'project-bom-routing',
+        pcfRecommended: true,
+        currentBomRoutingRevision,
+      },
+    } as any);
+  };
+  const hubPo = hubTabs.po ?? {};
+  const currentProjectPo = hubPo.currentPo ?? linkedProjectPO ?? projectP2POs[0] ?? null;
+  const currentPoLineItems = Array.isArray(hubPo.lineItems) ? hubPo.lineItems : [];
+  const poRevisionFamily = Array.isArray(hubPo.revisionFamily) ? hubPo.revisionFamily : projectP2POs;
+  const poAuditRevisions = (Array.isArray(hubPo.projectRevisions) && hubPo.projectRevisions.length > 0
+    ? hubPo.projectRevisions
+    : projectRevisions.filter((revision: any) => {
+        const type = String(revision.revision_type ?? revision.revisionType ?? '').toLowerCase();
+        return type === 'po' || type === 'po_link_change';
+      }));
+  const currentPoNumber = currentProjectPo?.po_number ?? currentProjectPo?.poNumber ?? null;
+  const currentPoStatus = currentProjectPo?.status ?? 'Unknown';
+  const currentPoCustomer = currentProjectPo?.customer_name ?? currentProjectPo?.customerName ?? project?.customer?.name ?? project?.customerId ?? 'Not set';
+  const currentPoDueDate = currentProjectPo?.expected_delivery ?? currentProjectPo?.expectedDelivery ?? null;
+  const currentPoRevisionNumber = Number(currentProjectPo?.revision_number ?? 0);
+  const formatDateLabel = (value: unknown, fallback = 'Not set') => {
+    if (!value) return fallback;
+    const date = new Date(String(value));
+    return Number.isNaN(date.getTime()) ? fallback : format(date, 'MMM d, yyyy');
+  };
+  const formatCurrencyLabel = (value: unknown, fallback = 'Pending') => {
+    if (value === null || value === undefined || value === '') return fallback;
+    const amount = Number(value);
+    return Number.isFinite(amount)
+      ? amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
+      : fallback;
+  };
+  const formatHoursLabel = (value: unknown, fallback = 'Pending') => {
+    if (value === null || value === undefined || value === '') return fallback;
+    const hours = Number(value);
+    return Number.isFinite(hours) ? `${hours.toLocaleString()} hrs` : fallback;
+  };
+  const coverageStatusLabels: Record<string, string> = {
+    attached: 'Attached',
+    covered_by_project_data: 'Covered by project data',
+    needs_upload: 'Needs upload',
+    needs_setup: 'Needs setup',
+    needs_clarification: 'Needs clarification',
+    not_applicable: 'Not applicable',
+  };
+  const coverageStatusClass = (status: string) => {
+    switch (status) {
+      case 'attached':
+      case 'covered_by_project_data':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'needs_upload':
+      case 'needs_setup':
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'needs_clarification':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'not_applicable':
+        return 'bg-gray-100 text-gray-700 border-gray-200';
+      default:
+        return 'bg-gray-100 text-gray-700 border-gray-200';
+    }
+  };
+  const coverageStatusIcon = (status: string) => {
+    if (status === 'attached') return <Paperclip className="h-4 w-4" />;
+    if (status === 'covered_by_project_data' || status === 'not_applicable') return <CheckCircle2 className="h-4 w-4" />;
+    return <AlertCircle className="h-4 w-4" />;
+  };
+  const formatQuantityLabel = (value: unknown) => {
+    const quantity = Number(value ?? 0);
+    return Number.isFinite(quantity) ? quantity.toLocaleString() : '0';
+  };
+  const romSummary = hubRom.summary ?? {};
+  const romDraft = hubRom.draft ?? null;
+  const romLockState = hubRom.lockState ?? { locked: Boolean(romSummary.locked), reason: romSummary.lockedReason ?? null };
+  const isRomLocked = Boolean(romLockState.locked || romSummary.locked);
+  const getRomCategoryValue = (categoryKey: RomCategoryKey, field: RomCategoryField) => {
+    const value = hubRom.categories?.[categoryKey]?.[field];
+    return value === null || value === undefined ? '' : String(value);
+  };
+  const buildRomFormFromHub = () => {
+    const categories = ROM_CATEGORY_CONFIG.reduce((acc, category) => {
+      acc[category.key] = { [category.field]: getRomCategoryValue(category.key, category.field) };
+      return acc;
+    }, {} as Record<string, Record<string, string>>);
+    return {
+      summary: romSummary.draftSummary ?? romDraft?.summary ?? '',
+      assumptions: romSummary.assumptions ?? romDraft?.assumptions ?? '',
+      riskNotes: romSummary.riskNotes ?? romDraft?.risk_notes ?? romDraft?.riskNotes ?? '',
+      categories,
+    };
+  };
+  const { data: quoteFeedback, isLoading: isLoadingFeedback } = useQuery<QuoteExecutionFeedback | null>({
+    queryKey: ['/api/projects', id, 'quote-feedback'],
+    queryFn: () =>
+      fetch(`/api/projects/${id}/quote-feedback`, { credentials: 'include' }).then(async r => {
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error('Failed to fetch quote feedback');
+        return r.json();
+      }),
+    enabled: !!id,
+  });
+  const linkedProjectQuoteId =
+    projectSteps.find((step) => step.stepType === 'quote')?.linkedQuoteId ??
+    quoteFeedback?.quoteId ??
+    hubLabor.quoteFeedback?.quoteId ??
+    hubLabor.quoteFeedback?.quote_id ??
+    null;
+
+  useEffect(() => {
+    const hydrateKey = `${id ?? ''}:${romDraft?.id ?? 'default'}:${romSummary.updatedAt ?? ''}:${JSON.stringify(hubRom.categories ?? {})}`;
+    if (!id || hydrateKey === romFormHydratedKey) return;
+    setRomForm(buildRomFormFromHub());
+    setRomFormHydratedKey(hydrateKey);
+  }, [id, romDraft?.id, romSummary.updatedAt, hubRom.categories, romFormHydratedKey]);
+
+  const saveRomMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/projects/${id}/rom-draft`, {
+        method: 'PATCH',
+        body: {
+          summary: romForm.summary,
+          assumptions: romForm.assumptions,
+          riskNotes: romForm.riskNotes,
+          categories: romForm.categories,
+        },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'p2-hub'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders/project', id] });
+      toast({ title: 'ROM draft saved', description: 'WAD creation will use the updated ROM values.' });
+    },
+    onError: (err: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'p2-hub'] });
+      toast({ title: 'ROM save failed', description: err?.message || 'The ROM may be locked after award.', variant: 'destructive' });
+    },
+  });
+
+  const romCategories = [
+    {
+      label: 'Labor',
+      value: formatHoursLabel(hubRom.categories?.labor?.quotedHours ?? quoteFeedback?.quotedLaborHours),
+      detail: 'Direct labor estimate from ROM/quote feedback',
+    },
+    {
+      label: 'Material',
+      value: formatCurrencyLabel(hubRom.categories?.material?.budgetAmount, 'Not set'),
+      detail: 'Material budget from WAD/project work orders',
+    },
+    { label: 'Outside Processing', value: formatCurrencyLabel(hubRom.categories?.outsideProcessing?.budgetAmount), detail: 'Vendor services and outside operations' },
+    { label: 'NRC / Tooling / Design', value: formatCurrencyLabel(hubRom.categories?.nrc?.budgetAmount), detail: 'Non-recurring cost, tooling, and design labor' },
+    { label: 'Capital', value: formatCurrencyLabel(hubRom.categories?.capital?.budgetAmount), detail: 'Assets, startup services, and startup labor' },
+    { label: 'G&A', value: formatCurrencyLabel(hubRom.categories?.generalAndAdmin?.budgetAmount), detail: 'General and administrative burden' },
+    { label: 'Overhead', value: formatCurrencyLabel(hubRom.categories?.overhead?.budgetAmount), detail: 'Indirect cost burden' },
+    { label: 'Quality and Compliance', value: formatCurrencyLabel(hubRom.categories?.qualityAndCompliance?.budgetAmount), detail: 'Inspection, compliance, and quality planning' },
+    { label: 'Shipping and Packaging', value: formatCurrencyLabel(hubRom.categories?.shippingAndPackaging?.budgetAmount), detail: 'Pack, ship, freight, and documentation' },
+    { label: 'Contingency', value: formatCurrencyLabel(hubRom.categories?.contingency?.budgetAmount), detail: 'Risk reserve' },
+    { label: 'Escalation and Inflation', value: formatCurrencyLabel(hubRom.categories?.escalationAndInflation?.budgetAmount), detail: 'Schedule and pricing escalation' },
+    { label: 'Profit / Fee', value: formatCurrencyLabel(hubRom.categories?.profitFee?.budgetAmount), detail: 'Quote profit or fee target' },
+  ];
 
   const { data: projectFarFlowdowns = [] } = useQuery<ProjectFarFlowdown[]>({
     queryKey: ['/api/far-flowdown-clauses/project', id],
@@ -762,17 +1234,6 @@ export default function ProjectDetailPage() {
       toast({ title: 'Closing record updated', description: 'Lessons learned have been saved.' });
     },
     onError: (err: any) => toast({ title: 'Update failed', description: err?.message || 'Could not update closing record.', variant: 'destructive' }),
-  });
-
-  const { data: quoteFeedback, isLoading: isLoadingFeedback } = useQuery<QuoteExecutionFeedback | null>({
-    queryKey: ['/api/projects', id, 'quote-feedback'],
-    queryFn: () =>
-      fetch(`/api/projects/${id}/quote-feedback`, { credentials: 'include' }).then(async r => {
-        if (r.status === 404) return null;
-        if (!r.ok) throw new Error('Failed to fetch quote feedback');
-        return r.json();
-      }),
-    enabled: !!id,
   });
 
   const regenerateFeedbackMutation = useMutation({
@@ -1065,12 +1526,9 @@ export default function ProjectDetailPage() {
 
   const deleteAttachmentMutation = useMutation({
     mutationFn: async (attachmentId: number) => {
-      const response = await fetch(`/api/project-step-attachments/${attachmentId}`, {
+      return apiRequest(`/api/project-step-attachments/${attachmentId}`, {
         method: 'DELETE',
-        credentials: 'include',
       });
-      if (!response.ok) throw new Error('Failed to delete attachment');
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments', selectedStep?.id] });
@@ -1088,62 +1546,31 @@ export default function ProjectDetailPage() {
     if (!selectedStep || !project) return;
     
     setIsUploading(true);
-    try {
-      const urlResponse = await fetch('/api/project-step-attachments/request-upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type || 'application/octet-stream',
-          projectId: project.id,
-          stepId: selectedStep.id,
-        }),
-      });
-
-      if (!urlResponse.ok) {
-        throw new Error('Failed to get upload URL');
-      }
-
-      const { uploadURL, objectPath } = await urlResponse.json();
-
-      const uploadResponse = await fetch(uploadURL, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file');
-      }
-
-      const completeResponse = await fetch('/api/project-step-attachments/complete-upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          objectPath,
-          projectId: project.id,
-          stepId: selectedStep.id,
-          originalFileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type || 'application/octet-stream',
-          notes: uploadNotes || null,
-        }),
-      });
-
-      if (!completeResponse.ok) {
-        throw new Error('Failed to complete upload');
-      }
-
+    const invalidateAttachmentQueries = () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments', selectedStep.id] });
       queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments/by-project', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+    };
+    const uploadProjectStepAttachment = async () => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('projectId', project.id);
+      formData.append('stepId', selectedStep.id);
+      if (uploadNotes) formData.append('notes', uploadNotes);
+
+      return apiRequest('/api/project-step-attachments/local-upload', {
+        method: 'POST',
+        body: formData,
+      });
+    };
+
+    try {
+      await uploadProjectStepAttachment();
+      invalidateAttachmentQueries();
       setUploadNotes('');
       toast({ title: 'Document uploaded', description: `${file.name} has been attached to this step.` });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
       toast({ title: 'Upload failed', description: 'There was an error uploading the document.', variant: 'destructive' });
     } finally {
@@ -1265,6 +1692,27 @@ export default function ProjectDetailPage() {
     const query = params.toString();
     return query ? `${config.route}?${query}` : config.route;
   };
+
+  const completedFormSummaries = (Array.isArray(hubTabs.workflow?.completedForms)
+    ? hubTabs.workflow.completedForms
+    : projectSteps.filter(step => step.status === 'completed')
+  )
+    .filter((step: ProjectStep) => step.status === 'completed')
+    .sort((a: ProjectStep, b: ProjectStep) => a.stepOrder - b.stepOrder)
+    .map((step: ProjectStep) => {
+      const attachments = getAttachmentsForStep(step.id);
+      const linkedId = getLinkedId(step);
+      const route = getStepFormRoute(step, true);
+      return {
+        step,
+        label: STEP_CONFIG[step.stepType]?.label || step.stepType,
+        completedBy: step.completedByDisplayName || 'Unknown',
+        completedAt: step.completedAt,
+        attachments,
+        linkedId,
+        route,
+      };
+    });
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -1501,7 +1949,7 @@ export default function ProjectDetailPage() {
                 ))
               ) : (
                 <div className="space-y-2">
-                  {['PO Review', 'WAD (Work Authorization Document)', 'Preproduction'].map(label => (
+                  {['PO Review', 'WAD (Working Authorization Document)', 'Preproduction'].map(label => (
                     <div key={label} className="flex items-center gap-3 py-1">
                       <Clock className="h-5 w-5 text-gray-400 flex-shrink-0" />
                       <span className="text-sm text-muted-foreground">{label}</span>
@@ -1617,37 +2065,19 @@ export default function ProjectDetailPage() {
       <Tabs defaultValue={initialTab} className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
-          <TabsTrigger value="bom-routing" data-testid="tab-bom-routing">BOM/Routing</TabsTrigger>
-          <TabsTrigger value="parts-request" data-testid="tab-parts-request">Parts/Request</TabsTrigger>
-          <TabsTrigger value="labor" data-testid="tab-labor">Labor</TabsTrigger>
-          <TabsTrigger value="nre" data-testid="tab-nre">NRE</TabsTrigger>
-          <TabsTrigger value="assembly-tree" data-testid="tab-assembly-tree">Assembly Tree</TabsTrigger>
-          <TabsTrigger value="activity" data-testid="tab-activity">Activity Log</TabsTrigger>
+          <TabsTrigger value="document-coverage" data-testid="tab-document-coverage">Document Coverage</TabsTrigger>
           <TabsTrigger value="po" data-testid="tab-po">
             <Receipt className="h-4 w-4 mr-1.5" />
             PO
           </TabsTrigger>
-          <TabsTrigger value="revisions" data-testid="tab-revisions">
-            <History className="h-4 w-4 mr-1.5" />
-            Revisions
-          </TabsTrigger>
+          <TabsTrigger value="bom-routing" data-testid="tab-bom-routing">BOM/Routing</TabsTrigger>
+          <TabsTrigger value="wad" data-testid="tab-wad">WAD</TabsTrigger>
+          <TabsTrigger value="rom" data-testid="tab-rom">ROM</TabsTrigger>
+          <TabsTrigger value="production" data-testid="tab-production">Production</TabsTrigger>
+          <TabsTrigger value="material" data-testid="tab-material">Material</TabsTrigger>
+          <TabsTrigger value="labor" data-testid="tab-labor">Labor</TabsTrigger>
           <TabsTrigger value="traceability" data-testid="tab-traceability">Traceability</TabsTrigger>
-          <TabsTrigger value="closing" data-testid="tab-closing">
-            <BookOpen className="h-4 w-4 mr-1.5" />
-            Close Project
-            <span
-              className={`ml-1.5 inline-block w-2 h-2 rounded-full ${
-                project.closingStatus === 'APPROVED'
-                  ? 'bg-blue-500'
-                  : project.closingStatus === 'COMPLETE'
-                  ? 'bg-green-500'
-                  : project.closingStatus === 'INCOMPLETE'
-                  ? 'bg-yellow-500'
-                  : 'bg-red-400'
-              }`}
-              title={`Closing: ${project.closingStatus}`}
-            />
-          </TabsTrigger>
+          <TabsTrigger value="shipping-invoicing" data-testid="tab-shipping-invoicing">Shipping/Invoicing</TabsTrigger>
         </TabsList>
 
         <TabsContent value="workflow" className="space-y-4">
@@ -1747,6 +2177,83 @@ export default function ProjectDetailPage() {
               </div>
             );
           })()}
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckSquare className="h-5 w-5 text-green-600" />
+                    Completed Form Summaries
+                  </CardTitle>
+                  <CardDescription>
+                    Read-only summary of completed workflow forms and their audit links.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline">
+                  {completedFormSummaries.length} complete
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {completedFormSummaries.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  No workflow forms have been completed yet.
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {completedFormSummaries.map((summary) => (
+                    <div key={summary.step.id} className="rounded-md border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">{summary.label}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {summary.completedAt
+                              ? `Completed ${format(new Date(summary.completedAt), 'MMM d, yyyy')}`
+                              : 'Completed date unavailable'}
+                            {summary.completedBy ? ` by ${summary.completedBy}` : ''}
+                          </p>
+                        </div>
+                        <Badge className="bg-green-100 text-green-800">Complete</Badge>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                        <div className="rounded bg-muted/40 px-2 py-1">
+                          <span className="text-muted-foreground">Linked record: </span>
+                          <span className="font-medium">{summary.linkedId || 'None'}</span>
+                        </div>
+                        <div className="rounded bg-muted/40 px-2 py-1">
+                          <span className="text-muted-foreground">Attachments: </span>
+                          <span className="font-medium">{summary.attachments.length}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {summary.route && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setLocation(summary.route!)}
+                          >
+                            <Eye className="mr-1 h-4 w-4" />
+                            View Form
+                          </Button>
+                        )}
+                        {summary.attachments.length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleStepExpanded(summary.step.id)}
+                          >
+                            <Paperclip className="mr-1 h-4 w-4" />
+                            Show in Timeline
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -2279,32 +2786,290 @@ export default function ProjectDetailPage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="document-coverage" className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Covered</p>
+              <p className="font-medium">
+                {documentCoverageSummary.coveredItems ?? documentCoverageItems.filter((item: any) => ['attached', 'covered_by_project_data', 'not_applicable'].includes(item.status)).length}
+                {' / '}
+                {documentCoverageSummary.totalItems ?? documentCoverageItems.length}
+              </p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Needs Attention</p>
+              <p className="font-medium">{documentCoverageSummary.needsAttention ?? documentCoverageItems.filter((item: any) => !['attached', 'covered_by_project_data', 'not_applicable'].includes(item.status)).length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Attached Files</p>
+              <p className="font-medium">{documentCoverageSummary.attachedItems ?? documentCoverageItems.filter((item: any) => item.status === 'attached').length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Project Data Coverage</p>
+              <p className="font-medium">{documentCoverageSummary.coveredByProjectData ?? documentCoverageItems.filter((item: any) => item.status === 'covered_by_project_data').length}</p>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-green-600" />
+                    Required Document Coverage
+                  </CardTitle>
+                  <CardDescription>
+                    Shows whether each WAD/customer requirement is attached, covered by Epoch project data, or still needs setup.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(latestWad?.id ? `/work-orders/${latestWad.id}/wad-summary` : `/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}`)}
+                  data-testid="button-open-wad-from-coverage"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open WAD
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {documentCoverageItems.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  Coverage data is still loading or unavailable for this project.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {documentCoverageItems.map((item: any) => {
+                    const missingParts = Array.isArray(item.missingParts) ? item.missingParts : [];
+                    return (
+                      <div key={item.key} className="rounded-md border p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium">{item.label}</p>
+                              <Badge variant="outline" className={coverageStatusClass(item.status)}>
+                                <span className="mr-1">{coverageStatusIcon(item.status)}</span>
+                                {coverageStatusLabels[item.status] ?? item.status}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{item.detail}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {typeof item.relatedCount === 'number' && (
+                              <Badge variant="secondary">{item.relatedCount} source{item.relatedCount === 1 ? '' : 's'}</Badge>
+                            )}
+                            {item.route && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setLocation(item.route)}
+                                data-testid={`button-open-coverage-${item.key}`}
+                              >
+                                <ExternalLink className="h-4 w-4 mr-1.5" />
+                                Open
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span className="rounded bg-muted px-2 py-1">Source: {item.source || 'Project record'}</span>
+                          {missingParts.slice(0, 8).map((part: string) => (
+                            <span key={part} className="rounded bg-amber-50 px-2 py-1 text-amber-800">
+                              Missing: {part}
+                            </span>
+                          ))}
+                          {missingParts.length > 8 && (
+                            <span className="rounded bg-amber-50 px-2 py-1 text-amber-800">
+                              +{missingParts.length - 8} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="bom-routing" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">BOMs</p>
+              <p className="font-medium">{bomRoutingSummary.bomCount ?? bomRoutingRecords.length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Routings</p>
+              <p className="font-medium">{bomRoutingSummary.routingCount ?? bomRoutingRoutings.length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Manufactured Lines</p>
+              <p className="font-medium">{bomRoutingSummary.manufacturedLineCount ?? currentPoLineItems.length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Change Links</p>
+              <p className="font-medium">{bomRoutingChangeLinks.length}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${project.poId ? `&poId=${encodeURIComponent(String(project.poId))}` : ''}`)}
+              data-testid="button-open-project-bom-routing-setup"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Open P2 BOM Setup
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation('/estimating/bom-drafts')}
+              data-testid="button-open-project-draft-bom-builder"
+            >
+              <Layers className="h-4 w-4 mr-2" />
+              Draft Builder
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation('/robust-bom')}
+              data-testid="button-open-project-robust-bom"
+            >
+              <BookOpen className="h-4 w-4 mr-2" />
+              Robust BOM
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation('/p2-control-center?tab=routing')}
+              data-testid="button-open-project-routing"
+            >
+              <ListChecks className="h-4 w-4 mr-2" />
+              Routing
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation(buildBomRoutingPcfUrl())}
+              data-testid="button-start-project-bom-routing-pcf"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Start PCF
+            </Button>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ClipboardList className="h-4 w-4" />
+                Controlled BOM/Routing Revision
+              </CardTitle>
+              <CardDescription>
+                Record the drawing or contract revision that drives the BOM/routing update, then start the linked production change form.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Current Package</p>
+                  <p className="font-medium">{currentBomRoutingRevision || 'No revision recorded'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Primary Part</p>
+                  <p className="font-mono font-medium">{primaryBomRoutingPartNumber || 'Not found'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Revision Links</p>
+                  <p className="font-medium">{bomRoutingChangeLinks.length}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => recordBomRoutingRevision('drawing')}
+                  disabled={createRevisionMutation.isPending}
+                  data-testid="button-record-project-bom-drawing-revision"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Drawing Revision
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => recordBomRoutingRevision('contract')}
+                  disabled={createRevisionMutation.isPending}
+                  data-testid="button-record-project-bom-contract-revision"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Contract Revision
+                </Button>
+                <Button
+                  onClick={() => setLocation(buildBomRoutingPcfUrl())}
+                  data-testid="button-start-project-bom-routing-linked-pcf"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Start Production Change Form
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {bomRoutingPartNumbers.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Tag className="h-4 w-4" />
+                  Source Parts
+                </CardTitle>
+                <CardDescription>Manufactured PO parts used to find BOM and routing records.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {bomRoutingPartNumbers.map((partNumber: string) => (
+                    <Badge key={partNumber} variant="outline" className="font-mono">
+                      {partNumber}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="grid gap-4 xl:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Layers className="h-5 w-5" />
-                  BOM Setup
+                  BOM Records
                 </CardTitle>
                 <CardDescription>
-                  Project BOM work is managed in the P2 setup flow for the linked purchase order.
+                  BOMs found for manufactured parts on the linked PO family.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Linked PO</span>
-                    <span className="font-medium">{project.poId ? `#${project.poId}` : 'Not linked'}</span>
+                {bomRoutingRecords.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    No BOM records are linked to the manufactured PO parts yet.
                   </div>
-                </div>
-                <Button
-                  onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${project.poId ? `&poId=${encodeURIComponent(String(project.poId))}` : ''}`)}
-                  data-testid="button-open-project-bom-routing-setup"
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Open BOM Setup
-                </Button>
+                ) : (
+                  <div className="space-y-3">
+                    {bomRoutingRecords.map((bom: any) => (
+                      <div key={bom.id} className="rounded-md border p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-mono font-semibold">{bom.parent_part_ag_number ?? bom.code ?? 'Unknown part'}</p>
+                            <p className="truncate text-sm text-muted-foreground">{bom.description || 'No BOM description'}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={bom.is_active ? 'default' : 'secondary'}>{bom.is_active ? 'Active' : 'Inactive'}</Badge>
+                            {bom.latest_rev_code && <Badge variant="outline">Rev {bom.latest_rev_code}</Badge>}
+                          </div>
+                        </div>
+                        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                          <span>Lines: {Number(bom.line_count ?? 0).toLocaleString()}</span>
+                          <span>Revision ID: {bom.latest_revision_id ?? 'None'}</span>
+                          <span>Created: {formatDateLabel(bom.latest_rev_created_at, 'No revision date')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -2312,40 +3077,706 @@ export default function ProjectDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <ListChecks className="h-5 w-5" />
-                  Routing
+                  Routing Records
                 </CardTitle>
                 <CardDescription>
-                  Part routings and routing documents stay in the P2 routing hub.
+                  Active and historical part routings associated with the project or PO part numbers.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Project</span>
-                    <span className="font-medium">{project.projectCode}</span>
+                {bomRoutingRoutings.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    No part routings are linked to the project or PO parts yet.
                   </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setLocation('/p2-control-center?tab=routing')}
-                    data-testid="button-open-project-routing"
-                  >
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Open Routing
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setLocation('/p2-control-center?tab=documents')}
-                    data-testid="button-open-project-routing-documents"
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Routing Docs
-                  </Button>
-                </div>
+                ) : (
+                  <div className="space-y-3">
+                    {bomRoutingRoutings.map((routing: any) => (
+                      <div key={routing.id} className="rounded-md border p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-mono font-semibold">{routing.part_number ?? 'Unspecified part'}</p>
+                            <p className="truncate text-sm text-muted-foreground">
+                              {routing.routing_name || routing.part_name || 'Unnamed routing'}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={routing.is_active ? 'default' : 'secondary'}>{routing.is_active ? 'Active' : 'Inactive'}</Badge>
+                            {routing.routing_revision && <Badge variant="outline">Rev {routing.routing_revision}</Badge>}
+                          </div>
+                        </div>
+                        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                          <span>Type: {routing.routing_type || 'Not set'}</span>
+                          <span>Updated: {formatDateLabel(routing.updated_at ?? routing.created_at)}</span>
+                          <span>Project: {routing.project_id || 'Part master'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <History className="h-4 w-4" />
+                BOM/Routing Change Links
+              </CardTitle>
+              <CardDescription>
+                Drawing and contract revisions that may drive BOM or routing updates.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {bomRoutingChangeLinks.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No drawing or contract change links are recorded yet.</p>
+              ) : (
+                bomRoutingChangeLinks.map((revision: any) => {
+                  const revisionType = String(revision.revision_type ?? revision.revisionType ?? 'Change');
+                  return (
+                    <div key={revision.id} className="rounded-md border p-4 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="font-mono">{revision.revision_label ?? revision.revisionLabel}</Badge>
+                        <Badge variant="secondary">{revisionType}</Badge>
+                        <span className="text-xs text-muted-foreground">{formatDateLabel(revision.created_at ?? revision.createdAt)}</span>
+                      </div>
+                      <p className="text-sm font-medium">{revision.summary || 'Project change recorded'}</p>
+                      {revision.reason && <p className="text-sm text-muted-foreground">{revision.reason}</p>}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLocation(buildBomRoutingPcfUrl(revision))}
+                        data-testid={`button-start-pcf-for-bom-routing-revision-${revision.id}`}
+                      >
+                        <FileText className="h-4 w-4 mr-1.5" />
+                        Start linked PCF
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="wad" className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Latest WAD</p>
+              <p className="font-medium">{latestWad?.workOrderNumber || 'Not created'}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Total WADs</p>
+              <p className="font-medium">{wadSummary.totalWads ?? wadWorkOrders.length}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Released or Beyond</p>
+              <p className="font-medium">{wadSummary.releasedOrBeyond ?? 0}</p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Revision Events</p>
+              <p className="font-medium">{wadRevisions.length}</p>
+            </div>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5" />
+                Current WAD Summary
+              </CardTitle>
+              <CardDescription>Current WAD summary, project work orders, and WAD revision history.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Latest WAD</p>
+                  <p className="font-medium">{latestWad?.workOrderNumber || 'Not created'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Total WADs</p>
+                  <p className="font-medium">{wadSummary.totalWads ?? wadWorkOrders.length}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Released or Beyond</p>
+                  <p className="font-medium">{wadSummary.releasedOrBeyond ?? 0}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => setLocation(latestWad?.id ? `/work-orders/${latestWad.id}/wad-summary` : `/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}`)}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open WAD
+                </Button>
+                <Button variant="outline" onClick={() => setLocation(`/pm-control-center?project=${project.id}`)}>
+                  <BarChart2 className="h-4 w-4 mr-2" />
+                  PM Control Center
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(latestWad?.id ? `/work-orders/${latestWad.id}/wad-summary?tab=revisions&createRevision=1` : `/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}`)}
+                  disabled={!latestWad?.id}
+                  data-testid="button-add-project-wad-revision"
+                >
+                  <History className="h-4 w-4 mr-2" />
+                  Add WAD Revision
+                </Button>
+              </div>
+              {wadWorkOrders.length > 0 ? (
+                <div className="space-y-2">
+                  {wadWorkOrders.map((wo: any) => (
+                    <div key={wo.id} className="flex items-center justify-between rounded-md border p-3">
+                      <div>
+                        <p className="font-medium">{wo.workOrderNumber}</p>
+                        <p className="text-sm text-muted-foreground">{wo.partNumber} · {wo.description || 'WAD'}</p>
+                      </div>
+                      <Badge variant="secondary">{wo.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No WAD records are linked yet.</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-4 w-4" />
+                WAD Revision Events
+              </CardTitle>
+              <CardDescription>Project revision entries associated with WAD changes.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {wadRevisions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No WAD revision events have been recorded yet.</p>
+              ) : (
+                wadRevisions.map((revision: any) => (
+                  <div key={revision.id} className="rounded-md border p-4 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="font-mono">{revision.revision_label ?? revision.revisionLabel}</Badge>
+                      <Badge variant="secondary">WAD</Badge>
+                      <span className="text-xs text-muted-foreground">{formatDateLabel(revision.created_at ?? revision.createdAt)}</span>
+                    </div>
+                    <p className="text-sm font-medium">{revision.summary || 'WAD revision recorded'}</p>
+                    {revision.reason && <p className="text-sm text-muted-foreground">{revision.reason}</p>}
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="rom" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                Rough Order of Magnitude
+              </CardTitle>
+              <CardDescription>Quote estimate summary grouped by ROM cost categories.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Quote Feedback</p>
+                  <p className="font-medium">{quoteFeedback ? 'Available' : 'Not generated'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Quoted Labor</p>
+                  <p className="font-medium">{formatHoursLabel(hubRom.categories?.labor?.quotedHours ?? quoteFeedback?.quotedLaborHours, 'Not set')}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Material Budget</p>
+                  <p className="font-medium">{formatCurrencyLabel(hubRom.categories?.material?.budgetAmount, 'Not set')}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Labor Variance</p>
+                  <p className="font-medium">{formatHoursLabel(hubLabor.summary?.varianceHours ?? quoteFeedback?.laborHoursVariance)}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                {romCategories.map((category) => (
+                  <div key={category.label} className="rounded-md border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">{category.label}</p>
+                        <p className="text-xs text-muted-foreground">{category.detail}</p>
+                      </div>
+                      <Badge variant={category.value === 'Pending' || category.value === 'Not set' ? 'outline' : 'secondary'}>
+                        {category.value}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {quoteFeedback?.summary && (
+                <div className="rounded-md border bg-muted/30 p-4 space-y-2">
+                  <p className="text-sm font-medium">Quote Feedback Summary</p>
+                  <p className="text-sm text-muted-foreground">{quoteFeedback.summary}</p>
+                </div>
+              )}
+
+              <div className="rounded-md border p-4 space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">ROM Draft</p>
+                    <p className="text-sm text-muted-foreground">
+                      Editable until PO/contract award. Saved ROM values auto-fill the WAD when it is created.
+                    </p>
+                  </div>
+                  <Badge variant={isRomLocked ? 'secondary' : 'outline'} className="gap-1">
+                    {isRomLocked ? <Lock className="h-3 w-3" /> : <Edit className="h-3 w-3" />}
+                    {isRomLocked ? 'Locked after award' : 'Draft editable'}
+                  </Badge>
+                </div>
+                {isRomLocked && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    {romLockState.reason || romSummary.lockedReason || 'PO/contract award has locked this ROM.'}
+                  </div>
+                )}
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-2 md:col-span-3">
+                    <Label>ROM summary</Label>
+                    <Textarea
+                      value={romForm.summary}
+                      onChange={(event) => setRomForm((current) => ({ ...current, summary: event.target.value }))}
+                      disabled={isRomLocked}
+                      placeholder="Scope, pricing basis, and award assumptions"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-3">
+                    <Label>Assumptions</Label>
+                    <Textarea
+                      value={romForm.assumptions}
+                      onChange={(event) => setRomForm((current) => ({ ...current, assumptions: event.target.value }))}
+                      disabled={isRomLocked}
+                      placeholder="Customer, schedule, material, and routing assumptions"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-3">
+                    <Label>Risk notes</Label>
+                    <Textarea
+                      value={romForm.riskNotes}
+                      onChange={(event) => setRomForm((current) => ({ ...current, riskNotes: event.target.value }))}
+                      disabled={isRomLocked}
+                      placeholder="Risks that WAD planning should inherit"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {ROM_CATEGORY_CONFIG.map((category) => (
+                    <div key={category.key} className="space-y-2">
+                      <Label>{category.label}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step={category.kind === 'hours' ? '0.1' : '0.01'}
+                        value={romForm.categories[category.key]?.[category.field] ?? ''}
+                        onChange={(event) => setRomForm((current) => ({
+                          ...current,
+                          categories: {
+                            ...current.categories,
+                            [category.key]: {
+                              ...(current.categories[category.key] ?? {}),
+                              [category.field]: event.target.value,
+                            },
+                          },
+                        }))}
+                        disabled={isRomLocked}
+                        placeholder={category.kind === 'hours' ? 'Hours' : 'USD'}
+                      />
+                      <p className="text-xs text-muted-foreground">{category.detail}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => saveRomMutation.mutate()}
+                    disabled={isRomLocked || saveRomMutation.isPending}
+                  >
+                    {saveRomMutation.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                    Save ROM Draft
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Actual Labor</p>
+                  <p className="font-medium">{formatHoursLabel(hubLabor.summary?.actualHours ?? quoteFeedback?.actualLaborHours)}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Quoted Lead Time</p>
+                  <p className="font-medium">{quoteFeedback?.quotedLeadTimeDays != null ? `${quoteFeedback.quotedLeadTimeDays} days` : 'Pending'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Actual Lead Time</p>
+                  <p className="font-medium">{quoteFeedback?.actualLeadTimeDays != null ? `${quoteFeedback.actualLeadTimeDays} days` : 'Pending'}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => setLocation(
+                    linkedProjectQuoteId
+                      ? `/p2-quote-form?id=${encodeURIComponent(linkedProjectQuoteId)}`
+                      : `/p2-quote-form?projectId=${encodeURIComponent(project.id)}`
+                  )}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open Quote
+                </Button>
+                <Button variant="outline" onClick={() => regenerateFeedbackMutation.mutate()} disabled={regenerateFeedbackMutation.isPending}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${regenerateFeedbackMutation.isPending ? 'animate-spin' : ''}`} />
+                  Refresh Quote Feedback
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="production" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Layers className="h-5 w-5" />
+                Production
+              </CardTitle>
+              <CardDescription>P2 Control Center status, assembly tree, and manufactured work order progress.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">PO Quantity</p>
+                  <p className="font-medium">{formatQuantityLabel(productionSummary.orderedQuantity)}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">In Production</p>
+                  <p className="font-medium">{formatQuantityLabel(Number(productionSummary.serializedQuantity ?? projectSerializedItems.length) - Number(productionSummary.completedQuantity ?? productionSummary.completedSerializedCount ?? 0))}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Completed</p>
+                  <p className="font-medium">{formatQuantityLabel(productionSummary.completedQuantity ?? productionSummary.completedSerializedCount)}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Remaining on PO</p>
+                  <p className="font-medium">{formatQuantityLabel(productionSummary.remainingQuantity)}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setLocation('/p2-control-center')}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open P2 Control Center
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(`/p2-control-center?tab=production&projectId=${encodeURIComponent(project.id)}`)}
+                  data-testid="button-open-project-production-orders"
+                >
+                  <Layers className="h-4 w-4 mr-2" />
+                  Production Orders
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(`/projects/${project.id}?tab=bom-routing`)}
+                  data-testid="button-open-project-production-assembly"
+                >
+                  <ListChecks className="h-4 w-4 mr-2" />
+                  BOM/Routing
+                </Button>
+              </div>
+              {Object.keys(productionPlacementCounts).length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(productionPlacementCounts).map(([placement, count]) => (
+                    <Badge key={placement} variant="outline">
+                      {placement}: {formatQuantityLabel(count)}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-semibold">PO Line Production Placement</h3>
+                    <p className="text-sm text-muted-foreground">Current production placement, remaining PO quantity, and work orders by part.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">{formatQuantityLabel(productionLinePlacements.length)} PO lines</Badge>
+                    <Badge variant="outline">{formatQuantityLabel(productionSummary.workOrderCount ?? wadWorkOrders.length)} work orders</Badge>
+                  </div>
+                </div>
+                {productionLinePlacements.length === 0 ? (
+                  <p className="rounded-md border p-3 text-sm text-muted-foreground">No current PO line production placement is available yet.</p>
+                ) : (
+                  productionLinePlacements.map((line: any) => {
+                    const lineWorkOrders = Array.isArray(line.workOrders) ? line.workOrders : [];
+                    const lineProductionOrders = Array.isArray(line.productionOrders) ? line.productionOrders : [];
+                    const lineSerializedItems = Array.isArray(line.serializedItems) ? line.serializedItems : [];
+                    const inProductionQuantity = Math.max(0, Number(line.serializedQuantity ?? 0) - Number(line.completedQuantity ?? 0));
+
+                    return (
+                      <div key={line.poItemId ?? line.partNumber} className="rounded-md border p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-mono text-sm font-semibold">{line.partNumber ?? 'Unassigned part'}</p>
+                            <p className="text-sm text-muted-foreground">{line.partName ?? 'No description'}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground">PO Qty</p>
+                              <p className="font-medium">{formatQuantityLabel(line.orderedQuantity)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">In Prod</p>
+                              <p className="font-medium">{formatQuantityLabel(inProductionQuantity)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Complete</p>
+                              <p className="font-medium">{formatQuantityLabel(line.completedQuantity)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Remain</p>
+                              <p className="font-medium">{formatQuantityLabel(line.remainingQuantity)}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {Object.entries(line.placementCounts ?? {}).map(([placement, count]) => (
+                            <Badge key={placement} variant={placement === 'Completed' ? 'default' : 'outline'}>
+                              {placement}: {formatQuantityLabel(count)}
+                            </Badge>
+                          ))}
+                          {Object.keys(line.placementCounts ?? {}).length === 0 && (
+                            <Badge variant="outline">No production placement</Badge>
+                          )}
+                        </div>
+
+                        <div className="mt-4 grid gap-3 xl:grid-cols-3">
+                          <div className="rounded-md border bg-muted/20 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">Serialized / Traveler Status</p>
+                              <Badge variant="secondary">{formatQuantityLabel(lineSerializedItems.length)}</Badge>
+                            </div>
+                            {lineSerializedItems.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No serialized items have been released for this line.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {lineSerializedItems.slice(0, 5).map((item: any) => (
+                                  <div key={item.id} className="flex items-center justify-between gap-2 rounded-md border bg-background p-2">
+                                    <div className="min-w-0">
+                                      <p className="truncate font-mono text-sm">{item.serial_number ?? item.serialNumber ?? item.barcode}</p>
+                                      <p className="truncate text-xs text-muted-foreground">
+                                        Traveler {item.activeTravelerNumber ?? item.traveler_barcode ?? item.travelerBarcode ?? 'not linked'}
+                                      </p>
+                                    </div>
+                                    <Badge variant="outline">{item.productionPlacement ?? item.current_department ?? item.status ?? 'Unknown'}</Badge>
+                                  </div>
+                                ))}
+                                {lineSerializedItems.length > 5 && (
+                                  <p className="text-xs text-muted-foreground">+{formatQuantityLabel(lineSerializedItems.length - 5)} more serialized items</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="rounded-md border bg-muted/20 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">Associated Work Orders</p>
+                              <Badge variant="secondary">{formatQuantityLabel(lineWorkOrders.length)}</Badge>
+                            </div>
+                            {lineWorkOrders.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No WAD/work orders are linked to this part yet.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {lineWorkOrders.slice(0, 5).map((wo: any) => (
+                                  <div key={wo.id ?? wo.workOrderNumber} className="rounded-md border bg-background p-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="truncate font-medium">{wo.workOrderNumber ?? wo.work_order_number}</p>
+                                      <Badge variant="outline">{wo.status ?? 'Unknown'}</Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      Qty {formatQuantityLabel(wo.quantity)} - Due {formatDateLabel(wo.dueDate ?? wo.due_date)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="rounded-md border bg-muted/20 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">Production Orders</p>
+                              <Badge variant="secondary">{formatQuantityLabel(lineProductionOrders.length)}</Badge>
+                            </div>
+                            {lineProductionOrders.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No generated production-order rows are linked to this PO line.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {lineProductionOrders.slice(0, 5).map((order: any) => (
+                                  <div key={order.id} className="rounded-md border bg-background p-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="truncate font-medium">{order.order_id}</p>
+                                      <Badge variant="outline">{order.status ?? 'Unknown'}</Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      Qty {formatQuantityLabel(order.quantity)} - Made {formatQuantityLabel(order.quantity_manufactured)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                {assemblyBomRecords.length > 0 && (
+                  <div className="rounded-md border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">BOM Records Available</p>
+                    <p className="font-medium">{formatQuantityLabel(assemblyBomRecords.length)}</p>
+                  </div>
+                )}
+              </div>
+              {productionLinePlacements.length < 0 && (Array.isArray(hubProduction.productionOrders) && hubProduction.productionOrders.length > 0 ? (
+                <div className="space-y-2">
+                  {hubProduction.productionOrders.slice(0, 8).map((order: any) => (
+                    <div key={order.id} className="flex items-center justify-between rounded-md border p-3">
+                      <div>
+                        <p className="font-medium">{order.order_id}</p>
+                        <p className="text-sm text-muted-foreground">{order.sku} · {order.part_name}</p>
+                      </div>
+                      <Badge variant="secondary">{order.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No P2 production orders are linked yet.</p>
+              ))}
+              {productionLinePlacements.length < 0 && (
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Package className="h-4 w-4" />
+                      Assembly Source
+                    </CardTitle>
+                    <CardDescription>PO line items and BOM records feeding production.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {assemblyPoItems.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No PO assembly lines are linked yet.</p>
+                    ) : (
+                      assemblyPoItems.slice(0, 8).map((item: any) => (
+                        <div key={item.id} className="rounded-md border p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="font-mono font-medium">{item.part_number ?? item.partNumber}</p>
+                              <p className="text-sm text-muted-foreground">{item.part_name ?? item.partName ?? 'No description'}</p>
+                            </div>
+                            <Badge variant="outline">Qty {Number(item.quantity ?? 0).toLocaleString()}</Badge>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    {assemblyBomRecords.length > 0 && (
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">BOM Records Available</p>
+                        <p className="font-medium">{assemblyBomRecords.length}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Hash className="h-4 w-4" />
+                      Serialized Production Status
+                    </CardTitle>
+                    <CardDescription>Serialized part progress from P2 traceability records.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {projectSerializedItems.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No serialized production records are linked yet.</p>
+                    ) : (
+                      <div className="grid gap-2">
+                        {projectSerializedItems.slice(0, 8).map((item: any) => (
+                          <div key={item.id} className="flex items-center justify-between rounded-md border p-3">
+                            <div className="min-w-0">
+                              <p className="font-mono font-medium truncate">{item.serial_number ?? item.serialNumber ?? item.barcode}</p>
+                              <p className="text-sm text-muted-foreground truncate">{item.part_number ?? item.partNumber} - {item.part_name ?? item.partName}</p>
+                            </div>
+                            <Badge variant="secondary">{item.status || item.current_department || 'Unknown'}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="material" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Material
+              </CardTitle>
+              <CardDescription>Project part list, parts requests, purchasing status, material budget, and receiving evidence.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">PO Parts</p>
+                  <p className="font-medium">{Array.isArray(hubMaterial.parts) ? hubMaterial.parts.length : 0}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Parts Requests</p>
+                  <p className="font-medium">{hubMaterial.summary?.partsRequestCount ?? 0}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Received Materials</p>
+                  <p className="font-medium">{hubMaterial.summary?.receivedMaterialCount ?? 0}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Received Cost</p>
+                  <p className="font-medium">${Number(hubMaterial.summary?.receivedMaterialCost ?? 0).toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setLocation(`/inventory/parts-request?projectId=${encodeURIComponent(project.id)}`)}>
+                  <Package className="h-4 w-4 mr-2" />
+                  Create Parts Request
+                </Button>
+                <Button variant="outline" onClick={() => setLocation(`/pm-control-center?project=${project.id}`)}>
+                  <BarChart2 className="h-4 w-4 mr-2" />
+                  Material Budget
+                </Button>
+              </div>
+              {Array.isArray(hubMaterial.parts) && hubMaterial.parts.length > 0 && (
+                <div className="space-y-2">
+                  {hubMaterial.parts.map((part: any) => (
+                    <div key={part.id} className="flex items-center justify-between rounded-md border p-3">
+                      <div>
+                        <p className="font-medium">{part.part_number}</p>
+                        <p className="text-sm text-muted-foreground">{part.part_name}</p>
+                      </div>
+                      <Badge variant="outline">Qty {part.quantity}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="parts-request" className="space-y-4">
@@ -2557,6 +3988,108 @@ export default function ProjectDetailPage() {
 
         {/* P2 purchase orders assigned to this project */}
         <TabsContent value="po" className="space-y-4">
+          <Tabs defaultValue="current-po" className="space-y-4">
+            <TabsList className="flex h-auto flex-wrap justify-start">
+              <TabsTrigger value="current-po" data-testid="tab-project-current-po">Current PO</TabsTrigger>
+              <TabsTrigger value="po-revisions" data-testid="tab-project-po-revisions">Revisions</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="current-po" className="space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Receipt className="h-4 w-4" /> Current PO Summary
+                      </CardTitle>
+                      <CardDescription>Most recent/current P2 PO revision linked to this project.</CardDescription>
+                    </div>
+                    {currentProjectPo && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}&editPoId=${encodeURIComponent(String(currentProjectPo.id))}`)}
+                        data-testid="button-open-current-project-po"
+                      >
+                        <Eye className="h-4 w-4 mr-1.5" />
+                        View PO
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!currentProjectPo ? (
+                    <div className="rounded-md border border-dashed p-6 text-center text-muted-foreground">
+                      <Receipt className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                      <p className="text-sm font-medium">No current PO linked yet</p>
+                      <p className="text-xs">Create or link a P2 PO to start the project PO audit trail.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 md:grid-cols-5">
+                        <div className="rounded-md border bg-muted/30 p-3 md:col-span-2">
+                          <p className="text-xs text-muted-foreground">PO Number</p>
+                          <p className="font-mono font-semibold text-primary">{currentPoNumber}</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground">Revision</p>
+                          <p className="font-medium">Rev {Number.isFinite(currentPoRevisionNumber) ? currentPoRevisionNumber : 0}</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground">Status</p>
+                          <p className="font-medium">{currentPoStatus}</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground">Due Date</p>
+                          <p className="font-medium">{formatDateLabel(currentPoDueDate)}</p>
+                        </div>
+                      </div>
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">Customer</p>
+                        <p className="font-medium">{currentPoCustomer}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium">Current PO Lines</p>
+                          <Badge variant="outline">{currentPoLineItems.length} line{currentPoLineItems.length === 1 ? '' : 's'}</Badge>
+                        </div>
+                        {currentPoLineItems.length === 0 ? (
+                          <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                            No line items are available for the current PO revision.
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto rounded-md border">
+                            <table className="w-full text-sm">
+                              <thead className="bg-muted/50 text-xs text-muted-foreground">
+                                <tr>
+                                  <th className="px-3 py-2 text-left font-medium">Part</th>
+                                  <th className="px-3 py-2 text-left font-medium">Description</th>
+                                  <th className="px-3 py-2 text-right font-medium">Qty</th>
+                                  <th className="px-3 py-2 text-right font-medium">Unit Price</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {currentPoLineItems.map((item: any) => (
+                                  <tr key={item.id} className="border-t">
+                                    <td className="px-3 py-2 font-mono">{item.part_number ?? item.partNumber ?? 'Unspecified'}</td>
+                                    <td className="px-3 py-2">{item.part_name ?? item.partName ?? 'No description'}</td>
+                                    <td className="px-3 py-2 text-right">{Number(item.quantity ?? 0).toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right">
+                                      {Number(item.unit_price ?? item.unitPrice ?? 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-4">
             <Card>
               <CardHeader className="pb-3">
@@ -2580,14 +4113,25 @@ export default function ProjectDetailPage() {
                         <p className="text-sm text-muted-foreground truncate">{po.customerName}</p>
                         {po.projectName && <p className="text-xs text-muted-foreground truncate">{po.projectName}</p>}
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={po.status === 'OPEN' ? 'secondary' : 'default'}>{po.status}</Badge>
-                        {project.poId === po.id && <Badge variant="outline">Primary</Badge>}
-                        {po.expectedDelivery && (
-                          <span className="text-xs text-muted-foreground">
-                            Due {format(new Date(po.expectedDelivery), 'MMM d, yyyy')}
-                          </span>
-                        )}
+                      <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={po.status === 'OPEN' ? 'secondary' : 'default'}>{po.status}</Badge>
+                          {project.poId === po.id && <Badge variant="outline">Primary</Badge>}
+                          {po.expectedDelivery && (
+                            <span className="text-xs text-muted-foreground">
+                              Due {format(new Date(po.expectedDelivery), 'MMM d, yyyy')}
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}&editPoId=${encodeURIComponent(String(po.id))}`)}
+                          data-testid={`button-view-project-po-${po.id}`}
+                        >
+                          <Eye className="h-4 w-4 mr-1.5" />
+                          View PO
+                        </Button>
                       </div>
                     </div>
                   ))
@@ -2630,15 +4174,68 @@ export default function ProjectDetailPage() {
                           <p className="font-mono font-semibold text-blue-950">{suggestedPo.poNumber}</p>
                           <p className="text-sm text-blue-800">{suggestedPo.customerName}</p>
                         </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>PO Item</Label>
+                            <Select
+                              value={linkPoItemId}
+                              onValueChange={(value) => {
+                                setLinkPoItemId(value);
+                                setLinkBillingBucketId('');
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select an item from this PO" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {poItemOptions.map(item => (
+                                  <SelectItem key={item.id} value={item.id.toString()}>
+                                    {item.partNumber} - {item.partName} ({item.quantity})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CLIN / Bucket</Label>
+                            <Select
+                              value={linkBillingBucketId}
+                              onValueChange={setLinkBillingBucketId}
+                              disabled={!linkPoItemId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={linkPoItemId ? 'Select a bucket from this PO' : 'Choose a PO item first'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {billingBucketOptions.map(bucket => (
+                                  <SelectItem key={bucket.id} value={bucket.id}>
+                                    {bucket.bucketLabel}{bucket.customerPoLine ? ` - ${bucket.customerPoLine}` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {linkPoItemId && billingBucketOptions.length === 0 && (
+                              <p className="text-xs text-amber-700">No active CLIN/bucket allocations are set up for this PO item.</p>
+                            )}
+                          </div>
+                        </div>
                         <div className="flex gap-2">
                           <Button
                             size="sm"
-                            onClick={() => linkPoMutation.mutate({ poId: suggestedPo.id })}
-                            disabled={linkPoMutation.isPending}
+                            onClick={() => linkSelectedPo(suggestedPo.id.toString())}
+                            disabled={linkPoMutation.isPending || !linkPoItemId || !linkBillingBucketId}
                           >
                             {linkPoMutation.isPending ? 'Linking...' : 'Accept'}
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => setShowManualLink(true)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setShowManualLink(true);
+                              setLinkPoItemId('');
+                              setLinkBillingBucketId('');
+                            }}
+                          >
                             Choose Different
                           </Button>
                         </div>
@@ -2646,7 +4243,17 @@ export default function ProjectDetailPage() {
                     ) : (
                       <div className="space-y-3">
                         {showManualLink && suggestedPo && (
-                          <Button variant="ghost" size="sm" className="text-muted-foreground -mb-1" onClick={() => setShowManualLink(false)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground -mb-1"
+                            onClick={() => {
+                              setShowManualLink(false);
+                              setLinkPoId('');
+                              setLinkPoItemId('');
+                              setLinkBillingBucketId('');
+                            }}
+                          >
                             Back to suggestion
                           </Button>
                         )}
@@ -2660,7 +4267,14 @@ export default function ProjectDetailPage() {
                         </div>
                         <div className="space-y-2">
                           <Label>Purchase Order</Label>
-                          <Select value={linkPoId} onValueChange={setLinkPoId}>
+                          <Select
+                            value={linkPoId}
+                            onValueChange={(value) => {
+                              setLinkPoId(value);
+                              setLinkPoItemId('');
+                              setLinkBillingBucketId('');
+                            }}
+                          >
                             <SelectTrigger>
                               <SelectValue placeholder="Select a purchase order" />
                             </SelectTrigger>
@@ -2679,9 +4293,55 @@ export default function ProjectDetailPage() {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>PO Item</Label>
+                            <Select
+                              value={linkPoItemId}
+                              onValueChange={(value) => {
+                                setLinkPoItemId(value);
+                                setLinkBillingBucketId('');
+                              }}
+                              disabled={!linkPoId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={linkPoId ? 'Select an item from this PO' : 'Choose a PO first'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {poItemOptions.map(item => (
+                                  <SelectItem key={item.id} value={item.id.toString()}>
+                                    {item.partNumber} - {item.partName} ({item.quantity})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CLIN / Bucket</Label>
+                            <Select
+                              value={linkBillingBucketId}
+                              onValueChange={setLinkBillingBucketId}
+                              disabled={!linkPoItemId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={linkPoItemId ? 'Select a bucket from this PO' : 'Choose a PO item first'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {billingBucketOptions.map(bucket => (
+                                  <SelectItem key={bucket.id} value={bucket.id}>
+                                    {bucket.bucketLabel}{bucket.customerPoLine ? ` - ${bucket.customerPoLine}` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {linkPoItemId && billingBucketOptions.length === 0 && (
+                              <p className="text-xs text-amber-700">No active CLIN/bucket allocations are set up for this PO item.</p>
+                            )}
+                          </div>
+                        </div>
                         <Button
-                          disabled={!linkPoId || linkPoMutation.isPending}
-                          onClick={() => linkPoMutation.mutate({ poId: parseInt(linkPoId, 10) })}
+                          disabled={!linkPoId || !linkPoItemId || !linkBillingBucketId || linkPoMutation.isPending}
+                          onClick={() => linkSelectedPo(linkPoId)}
                         >
                           {linkPoMutation.isPending ? 'Linking...' : 'Link PO'}
                         </Button>
@@ -2692,6 +4352,308 @@ export default function ProjectDetailPage() {
               )}
             </div>
           </div>
+            </TabsContent>
+
+            <TabsContent value="po-revisions" className="space-y-4">
+              <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <History className="h-4 w-4" />
+                      PO Revision Audit Trail
+                    </CardTitle>
+                    <CardDescription>
+                      Current and previous PO revisions stay linked to the project without altering older PO records.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">Current PO</p>
+                        <p className="font-mono font-medium">{currentPoNumber || 'Not linked'}</p>
+                      </div>
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">PO Revisions</p>
+                        <p className="font-medium">{Math.max(poRevisionFamily.length - 1, 0)}</p>
+                      </div>
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground">Project Revision Events</p>
+                        <p className="font-medium">{poAuditRevisions.length}</p>
+                      </div>
+                    </div>
+
+                    {poRevisionFamily.length === 0 ? (
+                      <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                        No PO revision family is linked to this project yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {poRevisionFamily.map((po: any) => {
+                          const poId = po.id;
+                          const poNumber = po.po_number ?? po.poNumber;
+                          const revisionNumber = po.revision_number ?? 0;
+                          const isCurrent = po.is_current_revision ?? project.poId === poId;
+                          const changeReason = po.change_reason ?? po.changeReason;
+                          return (
+                            <div key={poId} className="rounded-md border p-4 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant={isCurrent ? 'default' : 'outline'}>{isCurrent ? 'Current' : 'Historical'}</Badge>
+                                  <span className="font-mono font-semibold">{poNumber}</span>
+                                  <span className="text-xs text-muted-foreground">Rev {revisionNumber}</span>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}&editPoId=${encodeURIComponent(String(poId))}`)}
+                                >
+                                  <Eye className="h-4 w-4 mr-1.5" />
+                                  View
+                                </Button>
+                              </div>
+                              <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-3">
+                                <span>Status: {po.status ?? 'Unknown'}</span>
+                                <span>Due: {formatDateLabel(po.expected_delivery ?? po.expectedDelivery)}</span>
+                                <span>Changed: {formatDateLabel(po.revised_at ?? po.updated_at ?? po.updatedAt ?? po.created_at ?? po.createdAt)}</span>
+                              </div>
+                              {changeReason && <p className="text-sm text-muted-foreground">{changeReason}</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <Separator />
+
+                    {poAuditRevisions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No PO revision events have been recorded yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {poAuditRevisions.map((revision: any) => (
+                          <div key={revision.id} className="rounded-md border p-4 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className="font-mono">{revision.revision_label ?? revision.revisionLabel}</Badge>
+                              <Badge>{revision.has_po_change || revision.hasPoChange ? 'PO Change' : 'PO Audit'}</Badge>
+                              <span className="text-xs text-muted-foreground">{formatDateLabel(revision.created_at ?? revision.createdAt)}</span>
+                            </div>
+                            <p className="text-sm font-medium">{revision.summary}</p>
+                            <p className="text-sm text-muted-foreground">{revision.reason}</p>
+                            {(revision.previous_po_number || revision.new_po_number || revision.previousPoNumber || revision.newPoNumber) && (
+                              <p className="text-xs text-muted-foreground font-mono">
+                                PO: {revision.previous_po_number ?? revision.previousPoNumber ?? 'none'} -&gt; {revision.new_po_number ?? revision.newPoNumber ?? 'none'}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Plus className="h-4 w-4" />
+                      Create Revision
+                    </CardTitle>
+                    <CardDescription>Create a project revision and optionally spin a copied P2 PO revision.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3">
+                      <div className="space-y-2">
+                        <Label>Revision Type</Label>
+                        <Select
+                          value={revisionForm.revisionType}
+                          onValueChange={(value: 'po' | 'drawing' | 'contract') =>
+                            setRevisionForm((prev) => ({
+                              ...prev,
+                              revisionType: value,
+                              hasPoChange: value === 'po' ? prev.hasPoChange : false,
+                              revisedPoNumber: value === 'po' ? prev.revisedPoNumber : '',
+                              revisedDueDate: value === 'po' ? prev.revisedDueDate : '',
+                              revisedLineItems: value === 'po' ? prev.revisedLineItems : [],
+                            }))
+                          }
+                        >
+                          <SelectTrigger data-testid="select-project-po-tab-revision-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="po">PO</SelectItem>
+                            <SelectItem value="drawing">Drawing</SelectItem>
+                            <SelectItem value="contract">Contract</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Revision Date</Label>
+                        <Input
+                          type="date"
+                          value={revisionForm.revisionDate}
+                          onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisionDate: e.target.value }))}
+                          data-testid="input-project-po-tab-revision-date"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Reason</Label>
+                        <Input
+                          value={revisionForm.reason}
+                          onChange={(e) => setRevisionForm((prev) => ({ ...prev, reason: e.target.value }))}
+                          placeholder="Why this revision is needed"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 rounded-md border p-3">
+                      <Checkbox
+                        id="project-po-tab-change"
+                        checked={revisionForm.hasPoChange}
+                        disabled={revisionForm.revisionType !== 'po' || !project.poId}
+                        onCheckedChange={(checked) =>
+                          setRevisionForm((prev) => ({
+                            ...prev,
+                            hasPoChange: checked === true,
+                            revisedPoNumber: checked === true ? prev.revisedPoNumber : '',
+                            revisedDueDate: checked === true ? prev.revisedDueDate : '',
+                            revisedLineItems: checked === true ? prev.revisedLineItems : [],
+                          }))
+                        }
+                        data-testid="checkbox-project-po-tab-change"
+                      />
+                      <div className="space-y-1">
+                        <Label htmlFor="project-po-tab-change" className="font-medium">PO change required</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Creates a copied editable P2 PO revision tied back to this audit event.
+                        </p>
+                        {!project.poId && (
+                          <p className="text-xs text-amber-700">Link a PO before creating a PO-change revision.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {revisionForm.hasPoChange && (
+                      <div className="space-y-3 rounded-md border p-3">
+                        <div className="grid gap-3">
+                          <div className="space-y-2">
+                            <Label>Revised PO Number</Label>
+                            <Input
+                              value={revisionForm.revisedPoNumber}
+                              onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisedPoNumber: e.target.value }))}
+                              placeholder="#####-RA"
+                              data-testid="input-project-po-tab-revised-po-number"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Revised Due Date</Label>
+                            <Input
+                              type="date"
+                              value={revisionForm.revisedDueDate}
+                              onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisedDueDate: e.target.value }))}
+                              data-testid="input-project-po-tab-revised-due-date"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <Label>Revised Line Items</Label>
+                          <Button type="button" variant="outline" size="sm" onClick={addRevisionLineItem}>
+                            <Plus className="h-4 w-4 mr-1.5" />
+                            Add Line
+                          </Button>
+                        </div>
+                        {revisionForm.revisedLineItems.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">Add at least one line item for the revised PO.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {revisionForm.revisedLineItems.map((item, index) => (
+                              <div key={item.id ?? index} className="grid gap-2 rounded-md border p-3">
+                                <div className="grid gap-2 md:grid-cols-2">
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Part Number</Label>
+                                    <Input
+                                      value={item.partNumber}
+                                      onChange={(e) => updateRevisionLineItem(index, { partNumber: e.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Qty</Label>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      value={item.quantity}
+                                      onChange={(e) => updateRevisionLineItem(index, { quantity: parseInt(e.target.value, 10) || 0 })}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Description</Label>
+                                  <Input
+                                    value={item.partName}
+                                    onChange={(e) => updateRevisionLineItem(index, { partName: e.target.value })}
+                                  />
+                                </div>
+                                <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Line Date</Label>
+                                    <Input
+                                      type="date"
+                                      value={item.dueDate?.slice(0, 10) || ''}
+                                      onChange={(e) => updateRevisionLineItem(index, { dueDate: e.target.value } as Partial<P2PurchaseOrderItem>)}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Unit Price</Label>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={item.unitPrice ?? 0}
+                                      onChange={(e) => updateRevisionLineItem(index, { unitPrice: parseFloat(e.target.value) || 0 })}
+                                    />
+                                  </div>
+                                  <div className="flex items-end">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeRevisionLineItem(index)}
+                                      aria-label="Remove revised PO line"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <Button
+                      className="w-full"
+                      disabled={
+                        !revisionForm.revisionDate ||
+                        revisionForm.reason.trim().length < 3 ||
+                        createRevisionMutation.isPending ||
+                        (revisionForm.hasPoChange && (
+                          !project.poId ||
+                          !revisionForm.revisedPoNumber.trim() ||
+                          !revisionForm.revisedDueDate ||
+                          revisionForm.revisedLineItems.length === 0 ||
+                          hasInvalidRevisedLineItems
+                        ))
+                      }
+                      onClick={() => createRevisionMutation.mutate(revisionForm)}
+                      data-testid="button-create-project-po-tab-revision"
+                    >
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      {createRevisionMutation.isPending ? 'Saving...' : 'Create Revision'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         {/* ── TRACEABILITY TAB ── */}
@@ -2717,6 +4679,9 @@ export default function ProjectDetailPage() {
                         ...prev,
                         revisionType: value,
                         hasPoChange: value === 'po' ? prev.hasPoChange : false,
+                        revisedPoNumber: value === 'po' ? prev.revisedPoNumber : '',
+                        revisedDueDate: value === 'po' ? prev.revisedDueDate : '',
+                        revisedLineItems: value === 'po' ? prev.revisedLineItems : [],
                       }))
                     }
                   >
@@ -2750,7 +4715,18 @@ export default function ProjectDetailPage() {
                 <div className="flex items-end">
                   <Button
                     className="w-full md:w-auto"
-                    disabled={!revisionForm.revisionDate || revisionForm.reason.trim().length < 3 || createRevisionMutation.isPending || (revisionForm.hasPoChange && !project.poId)}
+                    disabled={
+                      !revisionForm.revisionDate ||
+                      revisionForm.reason.trim().length < 3 ||
+                      createRevisionMutation.isPending ||
+                      (revisionForm.hasPoChange && (
+                        !project.poId ||
+                        !revisionForm.revisedPoNumber.trim() ||
+                        !revisionForm.revisedDueDate ||
+                        revisionForm.revisedLineItems.length === 0 ||
+                        hasInvalidRevisedLineItems
+                      ))
+                    }
                     onClick={() => createRevisionMutation.mutate(revisionForm)}
                   >
                     <Plus className="h-4 w-4 mr-1.5" />
@@ -2764,7 +4740,13 @@ export default function ProjectDetailPage() {
                   checked={revisionForm.hasPoChange}
                   disabled={revisionForm.revisionType !== 'po' || !project.poId}
                   onCheckedChange={(checked) =>
-                    setRevisionForm((prev) => ({ ...prev, hasPoChange: checked === true }))
+                    setRevisionForm((prev) => ({
+                      ...prev,
+                      hasPoChange: checked === true,
+                      revisedPoNumber: checked === true ? prev.revisedPoNumber : '',
+                      revisedDueDate: checked === true ? prev.revisedDueDate : '',
+                      revisedLineItems: checked === true ? prev.revisedLineItems : [],
+                    }))
                   }
                   data-testid="checkbox-project-po-change"
                 />
@@ -2778,6 +4760,108 @@ export default function ProjectDetailPage() {
                   )}
                 </div>
               </div>
+
+              {revisionForm.hasPoChange && (
+                <div className="rounded-md border p-4 space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Revised PO Number</Label>
+                      <Input
+                        value={revisionForm.revisedPoNumber}
+                        onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisedPoNumber: e.target.value }))}
+                        placeholder="#####-RA"
+                        data-testid="input-revised-po-number"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Revised Due Date</Label>
+                      <Input
+                        type="date"
+                        value={revisionForm.revisedDueDate}
+                        onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisedDueDate: e.target.value }))}
+                        data-testid="input-revised-po-due-date"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <Label>Revised Line Items</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={addRevisionLineItem}>
+                        <Plus className="h-4 w-4 mr-1.5" />
+                        Add Line
+                      </Button>
+                    </div>
+                    {revisionForm.revisedLineItems.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Add at least one line item for the revised PO.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {revisionForm.revisedLineItems.map((item, index) => (
+                          <div key={item.id ?? index} className="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_1.4fr_0.5fr_0.7fr_0.6fr_auto]">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Part Number</Label>
+                              <Input
+                                value={item.partNumber}
+                                onChange={(e) => updateRevisionLineItem(index, { partNumber: e.target.value })}
+                                data-testid={`input-revision-line-part-${index}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Description</Label>
+                              <Input
+                                value={item.partName}
+                                onChange={(e) => updateRevisionLineItem(index, { partName: e.target.value })}
+                                data-testid={`input-revision-line-name-${index}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Qty</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => updateRevisionLineItem(index, { quantity: parseInt(e.target.value, 10) || 0 })}
+                                data-testid={`input-revision-line-quantity-${index}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Line Date</Label>
+                              <Input
+                                type="date"
+                                value={item.dueDate?.slice(0, 10) || ''}
+                                onChange={(e) => updateRevisionLineItem(index, { dueDate: e.target.value } as Partial<P2PurchaseOrderItem>)}
+                                data-testid={`input-revision-line-due-date-${index}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Unit Price</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={item.unitPrice ?? 0}
+                                onChange={(e) => updateRevisionLineItem(index, { unitPrice: parseFloat(e.target.value) || 0 })}
+                                data-testid={`input-revision-line-unit-price-${index}`}
+                              />
+                            </div>
+                            <div className="flex items-end">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeRevisionLineItem(index)}
+                                aria-label="Remove revised PO line"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <Separator />
 
@@ -2816,7 +4900,7 @@ export default function ProjectDetailPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setLocation(`/p2-control-center?tab=pos&search=${encodeURIComponent(revision.new_po_number || String(revision.new_po_id))}`)}
+                          onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}&editPoId=${encodeURIComponent(String(revision.new_po_id))}`)}
                         >
                           <Edit className="h-4 w-4 mr-2" />
                           Edit Revised PO
@@ -2825,6 +4909,71 @@ export default function ProjectDetailPage() {
                     </div>
                   ))}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="shipping-invoicing" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="h-5 w-5" />
+                Shipping / Invoicing
+              </CardTitle>
+              <CardDescription>Packing lists, shipped CoCs, and invoice status for this project.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Packing Lists</p>
+                  <p className="font-medium">{hubShippingInvoicing.summary?.packingSlipCount ?? traceability?.packingSlips?.length ?? 0}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Invoices</p>
+                  <p className="font-medium">{hubShippingInvoicing.summary?.invoiceCount ?? (traceability?.invoice ? 1 : 0)}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Needed</p>
+                  <p className="font-medium">{hubShippingInvoicing.summary?.needsInvoice ? 'Yes' : 'No'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Received</p>
+                  <p className="font-medium">{hubShippingInvoicing.summary?.receivedInvoices ?? 0}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setLocation('/p2-control-center?tab=shipping')}>
+                  <Truck className="h-4 w-4 mr-2" />
+                  Open P2 Shipping
+                </Button>
+                <Button variant="outline" onClick={() => setLocation('/finance/invoices')}>
+                  <Receipt className="h-4 w-4 mr-2" />
+                  Open Invoices
+                </Button>
+              </div>
+              {Array.isArray(hubShippingInvoicing.packingSlips) && hubShippingInvoicing.packingSlips.length > 0 ? (
+                <div className="space-y-2">
+                  {hubShippingInvoicing.packingSlips.map((slip: any) => (
+                    <div key={slip.id} className="flex items-center justify-between rounded-md border p-3">
+                      <div>
+                        <p className="font-medium">{slip.packing_slip_number}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {slip.ship_date ? format(new Date(slip.ship_date), 'MMM d, yyyy') : 'Ship date pending'}
+                          {slip.tracking_number ? ` · ${slip.tracking_number}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{slip.status}</Badge>
+                        <Button variant="ghost" size="sm" onClick={() => setLocation(`/p2/packing-slip/${slip.id}`)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No packing lists are linked yet.</p>
               )}
             </CardContent>
           </Card>
@@ -2862,14 +5011,66 @@ export default function ProjectDetailPage() {
                         <p className="text-xs text-blue-500 dark:text-blue-400">Matched on customer</p>
                       )}
                     </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>PO Item</Label>
+                        <Select
+                          value={linkPoItemId}
+                          onValueChange={(value) => {
+                            setLinkPoItemId(value);
+                            setLinkBillingBucketId('');
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select an item from this PO" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {poItemOptions.map(item => (
+                              <SelectItem key={item.id} value={item.id.toString()}>
+                                {item.partNumber} - {item.partName} ({item.quantity})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>CLIN / Bucket</Label>
+                        <Select
+                          value={linkBillingBucketId}
+                          onValueChange={setLinkBillingBucketId}
+                          disabled={!linkPoItemId}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={linkPoItemId ? 'Select a bucket from this PO' : 'Choose a PO item first'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {billingBucketOptions.map(bucket => (
+                              <SelectItem key={bucket.id} value={bucket.id}>
+                                {bucket.bucketLabel}{bucket.customerPoLine ? ` - ${bucket.customerPoLine}` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {linkPoItemId && billingBucketOptions.length === 0 && (
+                          <p className="text-xs text-amber-700">No active CLIN/bucket allocations are set up for this PO item.</p>
+                        )}
+                      </div>
+                    </div>
                     <div className="flex gap-2">
                       <Button
-                        onClick={() => linkPoMutation.mutate({ poId: suggestedPo.id })}
-                        disabled={linkPoMutation.isPending}
+                        onClick={() => linkSelectedPo(suggestedPo.id.toString())}
+                        disabled={linkPoMutation.isPending || !linkPoItemId || !linkBillingBucketId}
                       >
                         {linkPoMutation.isPending ? 'Linking…' : 'Accept'}
                       </Button>
-                      <Button variant="outline" onClick={() => setShowManualLink(true)}>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowManualLink(true);
+                          setLinkPoItemId('');
+                          setLinkBillingBucketId('');
+                        }}
+                      >
                         Choose Different
                       </Button>
                     </div>
@@ -2877,7 +5078,17 @@ export default function ProjectDetailPage() {
                 ) : (
                   <div className="space-y-4">
                     {showManualLink && suggestedPo && (
-                      <Button variant="ghost" size="sm" className="text-muted-foreground -mb-2" onClick={() => setShowManualLink(false)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground -mb-2"
+                        onClick={() => {
+                          setShowManualLink(false);
+                          setLinkPoId('');
+                          setLinkPoItemId('');
+                          setLinkBillingBucketId('');
+                        }}
+                      >
                         ← Back to suggestion
                       </Button>
                     )}
@@ -2891,7 +5102,14 @@ export default function ProjectDetailPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>Purchase Order</Label>
-                      <Select value={linkPoId} onValueChange={setLinkPoId}>
+                      <Select
+                        value={linkPoId}
+                        onValueChange={(value) => {
+                          setLinkPoId(value);
+                          setLinkPoItemId('');
+                          setLinkBillingBucketId('');
+                        }}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select a purchase order" />
                         </SelectTrigger>
@@ -2909,6 +5127,52 @@ export default function ProjectDetailPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>PO Item</Label>
+                        <Select
+                          value={linkPoItemId}
+                          onValueChange={(value) => {
+                            setLinkPoItemId(value);
+                            setLinkBillingBucketId('');
+                          }}
+                          disabled={!linkPoId}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={linkPoId ? 'Select an item from this PO' : 'Choose a PO first'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {poItemOptions.map(item => (
+                              <SelectItem key={item.id} value={item.id.toString()}>
+                                {item.partNumber} - {item.partName} ({item.quantity})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>CLIN / Bucket</Label>
+                        <Select
+                          value={linkBillingBucketId}
+                          onValueChange={setLinkBillingBucketId}
+                          disabled={!linkPoItemId}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={linkPoItemId ? 'Select a bucket from this PO' : 'Choose a PO item first'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {billingBucketOptions.map(bucket => (
+                              <SelectItem key={bucket.id} value={bucket.id}>
+                                {bucket.bucketLabel}{bucket.customerPoLine ? ` - ${bucket.customerPoLine}` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {linkPoItemId && billingBucketOptions.length === 0 && (
+                          <p className="text-xs text-amber-700">No active CLIN/bucket allocations are set up for this PO item.</p>
+                        )}
+                      </div>
+                    </div>
                     <div className="space-y-2">
                       <Label>Revision Reason</Label>
                       <Textarea
@@ -2918,8 +5182,8 @@ export default function ProjectDetailPage() {
                       />
                     </div>
                     <Button
-                      disabled={!linkPoId || linkPoMutation.isPending}
-                      onClick={() => linkPoMutation.mutate({ poId: parseInt(linkPoId), reason: linkPoReason })}
+                      disabled={!linkPoId || !linkPoItemId || !linkBillingBucketId || linkPoMutation.isPending}
+                      onClick={() => linkSelectedPo(linkPoId, linkPoReason)}
                     >
                       {linkPoMutation.isPending ? 'Linking…' : 'Link PO'}
                     </Button>
@@ -2986,6 +5250,8 @@ export default function ProjectDetailPage() {
                             onClick={() => {
                               setShowManualLink(false);
                               setLinkPoId('');
+                              setLinkPoItemId('');
+                              setLinkBillingBucketId('');
                               setLinkPoReason('');
                             }}
                           >
@@ -2995,7 +5261,14 @@ export default function ProjectDetailPage() {
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="space-y-2">
                             <Label>New P2 PO</Label>
-                            <Select value={linkPoId} onValueChange={setLinkPoId}>
+                            <Select
+                              value={linkPoId}
+                              onValueChange={(value) => {
+                                setLinkPoId(value);
+                                setLinkPoItemId('');
+                                setLinkBillingBucketId('');
+                              }}
+                            >
                               <SelectTrigger>
                                 <SelectValue placeholder="Select replacement PO" />
                               </SelectTrigger>
@@ -3011,6 +5284,50 @@ export default function ProjectDetailPage() {
                             </Select>
                           </div>
                           <div className="space-y-2">
+                            <Label>PO Item</Label>
+                            <Select
+                              value={linkPoItemId}
+                              onValueChange={(value) => {
+                                setLinkPoItemId(value);
+                                setLinkBillingBucketId('');
+                              }}
+                              disabled={!linkPoId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={linkPoId ? 'Select an item from this PO' : 'Choose a PO first'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {poItemOptions.map(item => (
+                                  <SelectItem key={item.id} value={item.id.toString()}>
+                                    {item.partNumber} - {item.partName} ({item.quantity})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CLIN / Bucket</Label>
+                            <Select
+                              value={linkBillingBucketId}
+                              onValueChange={setLinkBillingBucketId}
+                              disabled={!linkPoItemId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={linkPoItemId ? 'Select a bucket from this PO' : 'Choose a PO item first'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {billingBucketOptions.map(bucket => (
+                                  <SelectItem key={bucket.id} value={bucket.id}>
+                                    {bucket.bucketLabel}{bucket.customerPoLine ? ` - ${bucket.customerPoLine}` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {linkPoItemId && billingBucketOptions.length === 0 && (
+                              <p className="text-xs text-amber-700">No active CLIN/bucket allocations are set up for this PO item.</p>
+                            )}
+                          </div>
+                          <div className="space-y-2">
                             <Label>Required Reason</Label>
                             <Textarea
                               placeholder="Why is this project moving to a different production PO?"
@@ -3020,8 +5337,8 @@ export default function ProjectDetailPage() {
                           </div>
                         </div>
                         <Button
-                          disabled={!linkPoId || linkPoReason.trim().length < 3 || linkPoMutation.isPending}
-                          onClick={() => linkPoMutation.mutate({ poId: parseInt(linkPoId), reason: linkPoReason })}
+                          disabled={!linkPoId || !linkPoItemId || !linkBillingBucketId || linkPoReason.trim().length < 3 || linkPoMutation.isPending}
+                          onClick={() => linkSelectedPo(linkPoId, linkPoReason)}
                         >
                           {linkPoMutation.isPending ? 'Saving Revision...' : 'Save PO Revision'}
                         </Button>

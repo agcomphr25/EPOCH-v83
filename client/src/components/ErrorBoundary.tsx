@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { recoverFromChunkLoadError } from '@/utils/chunkLoadRecovery';
 
 interface Props {
   children: ReactNode;
@@ -50,6 +51,8 @@ class ErrorBoundary extends Component<Props, State> {
       error,
       errorInfo,
     });
+
+    recoverFromChunkLoadError(error);
   }
 
   render() {

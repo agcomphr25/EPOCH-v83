@@ -1,5 +1,6 @@
 // Import React refresh fix FIRST before any other imports
 import './react-refresh-fix';
+import { recoverFromChunkLoadError } from './utils/chunkLoadRecovery';
 
 // Suppress Vite HMR WebSocket errors in the Replit proxied environment.
 // When accessed via HTTPS proxy, `location.port` resolves to empty/undefined,
@@ -15,6 +16,16 @@ window.addEventListener('unhandledrejection', (event) => {
   ) {
     event.preventDefault();
   }
+
+  if (recoverFromChunkLoadError(event.reason)) {
+    event.preventDefault();
+  }
+});
+
+window.addEventListener('error', (event) => {
+  if (recoverFromChunkLoadError(event.error ?? event.message)) {
+    event.preventDefault();
+  }
 });
 
 import React from 'react';
@@ -24,6 +35,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import App from './App.tsx';
 import './index.css';
+import ErrorBoundary from './components/ErrorBoundary';
 import { registerServiceWorker, setupInstallPrompt } from './utils/pwa';
 import { startSyncEngine } from './offline/syncEngine';
 
@@ -73,7 +85,9 @@ root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
         <Toaster position="top-right" />
       </BrowserRouter>
     </QueryClientProvider>

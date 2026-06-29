@@ -49,6 +49,12 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 
 interface PartsRequestFormData {
   agPartNumber: string;
@@ -61,6 +67,7 @@ interface PartsRequestFormData {
   department: string;
   quantity: string;
   urgency: string;
+  vendorId: string;
   supplier: string;
   estimatedCost: string;
   reason: string;
@@ -97,6 +104,12 @@ type PartsRequestWithProject = PartsRequest & {
     projectCode: string | null;
     projectName: string | null;
   };
+  vendorPO?: {
+    id: number | null;
+    poNumber: string | null;
+    externalPoNumber: string | null;
+    status: string | null;
+  };
 };
 
 const NONE_VALUE = '__none__';
@@ -109,6 +122,10 @@ interface SessionUser {
   role?: string;
 }
 
+interface PartsRequestsCardProps {
+  scope?: 'mine' | 'all';
+}
+
 function getDefaultRequestor(user: SessionUser | null | undefined): string {
   if (!user) return '';
   const fullName = [user.firstName, user.lastName]
@@ -118,7 +135,7 @@ function getDefaultRequestor(user: SessionUser | null | undefined): string {
   return user.username || fullName || '';
 }
 
-export default function PartsRequestsCard() {
+export default function PartsRequestsCard({ scope = 'mine' }: PartsRequestsCardProps = {}) {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -140,6 +157,8 @@ export default function PartsRequestsCard() {
     queryKey: ['/api/auth/session'],
   });
   const defaultRequestor = getDefaultRequestor(sessionUser);
+  const partsRequestsQueryKey =
+    scope === 'all' ? '/api/inventory/parts-requests' : '/api/inventory/parts-requests/my';
 
   const [formData, setFormData] = useState<PartsRequestFormData>({
     agPartNumber: '',
@@ -152,6 +171,7 @@ export default function PartsRequestsCard() {
     department: '',
     quantity: '',
     urgency: 'MEDIUM',
+    vendorId: '',
     supplier: '',
     estimatedCost: '',
     reason: '',
@@ -163,8 +183,8 @@ export default function PartsRequestsCard() {
 
   // Load parts requests
   const { data: requests = [], isLoading } = useQuery<PartsRequestWithProject[]>({
-    queryKey: ['/api/inventory/parts-requests'],
-    queryFn: () => apiRequest('/api/inventory/parts-requests'),
+    queryKey: [partsRequestsQueryKey],
+    queryFn: () => apiRequest(partsRequestsQueryKey),
   });
 
   const { data: projects = [] } = useQuery<ProjectOption[]>({
@@ -257,6 +277,7 @@ export default function PartsRequestsCard() {
       setIsCreateOpen(false);
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
     },
     onError: () => toast.error('Failed to create parts request'),
   });
@@ -274,6 +295,7 @@ export default function PartsRequestsCard() {
       setEditingRequest(null);
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
     },
     onError: () => toast.error('Failed to update parts request'),
   });
@@ -287,6 +309,7 @@ export default function PartsRequestsCard() {
     onSuccess: () => {
       toast.success('Parts request deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
     },
     onError: () => toast.error('Failed to delete parts request'),
   });
@@ -304,6 +327,7 @@ export default function PartsRequestsCard() {
       department: '',
       quantity: '',
       urgency: 'MEDIUM',
+      vendorId: '',
       supplier: '',
       estimatedCost: '',
       reason: '',
@@ -355,6 +379,8 @@ export default function PartsRequestsCard() {
       agPartNumber: item.agPartNumber,
       partNumber: item.agPartNumber,
       partName: item.name,
+      vendorId: item.vendorId ? String(item.vendorId) : '',
+      supplier: item.source || prev.supplier,
     }));
     setIsPartSelectOpen(false);
   };
@@ -389,8 +415,15 @@ export default function PartsRequestsCard() {
       status: isManagerResponse ? formData.status : 'PENDING',
     };
 
+    const selectedVendorId = formData.vendorId
+      ? parseInt(formData.vendorId)
+      : selectedInventoryItem?.vendorId ?? null;
+    if (selectedVendorId && !Number.isNaN(selectedVendorId)) {
+      submitData.vendorId = selectedVendorId;
+    }
+    submitData.supplier = formData.supplier || selectedInventoryItem?.source || null;
+
     if (isManagerResponse) {
-      submitData.supplier = formData.supplier || null;
       submitData.estimatedCost = formData.estimatedCost
         ? parseFloat(formData.estimatedCost)
         : null;
@@ -429,6 +462,7 @@ export default function PartsRequestsCard() {
       department: request.department || '',
       quantity: request.quantity.toString(),
       urgency: request.urgency,
+      vendorId: request.vendorId ? String(request.vendorId) : '',
       supplier: request.supplier || '',
       estimatedCost: request.estimatedCost
         ? request.estimatedCost.toString()
@@ -482,6 +516,13 @@ export default function PartsRequestsCard() {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const formatRequestDate = (value?: string | Date | null) => {
+    if (!value) return 'Not recorded';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not recorded';
+    return date.toLocaleDateString();
   };
 
   const dialogContentClass =
@@ -559,6 +600,7 @@ export default function PartsRequestsCard() {
           {formData.partNumber && formData.partName && (
             <p className="mt-2 text-xs text-muted-foreground">
               Selected part: {formData.partNumber} - {formData.partName}
+              {formData.supplier ? ` | Source: ${formData.supplier}` : ''}
             </p>
           )}
         </div>
@@ -863,80 +905,93 @@ export default function PartsRequestsCard() {
           No parts requests found
         </div>
       ) : (
-        <div className="space-y-6">
+        <Accordion
+          type="multiple"
+          defaultValue={Object.keys(requestsByDepartment)}
+          className="space-y-3"
+        >
           {Object.entries(requestsByDepartment).map(
             ([department, deptRequests]) => (
-              <div key={department} className="space-y-4">
-                {/* Department Header */}
-                <div className="bg-gray-50 px-4 py-3 rounded-lg border">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-lg font-semibold text-gray-800">
+              <AccordionItem
+                key={department}
+                value={department}
+                className="rounded-md border bg-white px-4"
+              >
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex w-full items-center justify-between pr-4">
+                    <span className="text-lg font-semibold text-gray-800">
                       {department}
-                    </h4>
-                    <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">
+                    </span>
+                    <span className="rounded bg-gray-50 px-2 py-1 text-sm text-gray-600">
                       {deptRequests.length} request
                       {deptRequests.length !== 1 ? 's' : ''}
                     </span>
                   </div>
-                </div>
+                </AccordionTrigger>
 
                 {/* Department Requests Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ml-4">
-                  {deptRequests.map((request) => (
-                    <div
-                      key={request.id}
-                      className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow bg-white"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h5 className="font-medium">{request.partName}</h5>
-                          <p className="text-sm text-gray-600">
-                            Part: {request.partNumber}
-                          </p>
+                <AccordionContent className="pt-1">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {deptRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow bg-white"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h5 className="font-medium">{request.partName}</h5>
+                            <p className="text-sm text-gray-600">
+                              Part: {request.partNumber}
+                            </p>
+                          </div>
+                          <div className="flex space-x-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(request)}
+                              title="Edit"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(request.id)}
+                              disabled={deleteMutation.isPending}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex space-x-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(request)}
-                            title="Edit"
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(request.id)}
-                            disabled={deleteMutation.isPending}
-                            title="Delete"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <Badge className={getStatusBadgeColor(request.status)}>
-                          {request.status === 'PENDING_OWNER_APPROVAL'
-                            ? 'OWNER APPROVAL'
-                            : request.status}
-                        </Badge>
-                        <Badge
-                          className={getUrgencyBadgeColor(request.urgency)}
-                        >
-                          {request.urgency}
-                        </Badge>
-                      </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={getStatusBadgeColor(request.status)}>
+                            {request.status === 'PENDING_OWNER_APPROVAL'
+                              ? 'OWNER APPROVAL'
+                              : request.status}
+                          </Badge>
+                          <Badge
+                            className={getUrgencyBadgeColor(request.urgency)}
+                          >
+                            {request.urgency}
+                          </Badge>
+                        </div>
 
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          <span>By: {request.requestedBy}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          <span>For: {request.requestedForDisplayName || '—'}</span>
-                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-400" />
+                            <span>By: {request.requestedBy}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-400" />
+                            <span>For: {request.requestedForDisplayName || '—'}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-gray-400" />
+                            <span>Created: {formatRequestDate(request.requestDate)}</span>
+                          </div>
 
                         {(request.productionLine || request.project) && (
                           <div className="flex flex-wrap gap-2">
@@ -1013,6 +1068,17 @@ export default function PartsRequestsCard() {
                           </div>
                         )}
 
+                        {request.vendorPO && (
+                          <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                            <Package className="h-3 w-3" />
+                            <span>
+                              Vendor PO:{' '}
+                              {request.vendorPO.poNumber || `Draft #${request.vendorPO.id}`}
+                              {request.vendorPO.status ? ` (${request.vendorPO.status})` : ''}
+                            </span>
+                          </div>
+                        )}
+
                         {request.reason && (
                           <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
                             {request.reason}
@@ -1022,10 +1088,11 @@ export default function PartsRequestsCard() {
                     </div>
                   ))}
                 </div>
-              </div>
+                </AccordionContent>
+              </AccordionItem>
             )
           )}
-        </div>
+        </Accordion>
       )}
 
       {/* Edit Dialog */}

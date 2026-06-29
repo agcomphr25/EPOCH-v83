@@ -87,6 +87,7 @@ export default function ProductionOrderInspector() {
         return <Badge className="bg-blue-100 text-blue-800">Pending</Badge>;
       case 'ACTIVE':
         return <Badge className="bg-yellow-100 text-yellow-800">Active</Badge>;
+      case 'IN_PROGRESS':
       case 'LAID_UP':
         return <Badge className="bg-orange-100 text-orange-800">Laid Up</Badge>;
       case 'SHIPPED':

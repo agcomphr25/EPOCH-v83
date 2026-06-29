@@ -1,7 +1,62 @@
+export {};
+
 type BootRepairContext = {
   db: any;
   pool: any;
 };
+
+export async function runP1ProductionStatusBackfill({ pool }: BootRepairContext) {
+  try {
+    const result = await pool.query(`
+      WITH candidates AS (
+        SELECT
+          id,
+          production_status AS current_status,
+          CASE
+            WHEN UPPER(COALESCE(NULLIF(TRIM(production_status), ''), '')) = 'CANCELLED'
+              THEN 'CANCELLED'
+            WHEN COALESCE(is_fulfilled, false)
+              THEN 'SHIPPED'
+            WHEN LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'p1 production queue'
+              THEN 'PENDING'
+            WHEN COALESCE(NULLIF(TRIM(current_department), ''), '') = ''
+              THEN 'PENDING'
+            WHEN LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) IN ('fulfilled', 'shipped')
+              THEN 'SHIPPED'
+            ELSE 'IN_PROGRESS'
+          END AS expected_status
+        FROM production_orders
+        WHERE po_id IS NOT NULL
+      ),
+      mismatches AS (
+        SELECT *
+        FROM candidates
+        WHERE UPPER(COALESCE(NULLIF(TRIM(current_status), ''), '')) <> expected_status
+      )
+      UPDATE production_orders prod
+      SET production_status = mismatches.expected_status,
+          updated_at = NOW()
+      FROM mismatches
+      WHERE prod.id = mismatches.id
+      RETURNING
+        prod.id,
+        prod.order_id,
+        mismatches.current_status AS previous_status,
+        prod.production_status AS new_status,
+        prod.current_department
+    `);
+    const updated = result.rowCount ?? result.rows?.length ?? 0;
+    if (updated > 0) {
+      console.log(`✅ P1 production status backfill corrected ${updated} row(s)`);
+    } else {
+      console.log('✅ P1 production status backfill found no mismatches');
+    }
+    return { updated };
+  } catch (err: any) {
+    console.warn('⚠️ P1 production status backfill skipped:', err?.message || err);
+    return { updated: 0, skipped: true, error: err?.message || String(err) };
+  }
+}
 
 export async function runEarlyBootRepairBackfills({ db, pool }: BootRepairContext) {
   // Backfill: ensure all customers have a customer_key derived from their name

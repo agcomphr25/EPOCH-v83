@@ -462,6 +462,7 @@ async function getProjectLinkedP2PoIds(projectId: string): Promise<number[]> {
       WHERE p.id = $1
         AND po.project_name IS NOT NULL
         AND TRIM(po.project_name) <> ''
+        AND po.is_current_revision IS NOT FALSE
     )
     SELECT DISTINCT po_id::text AS "poId" FROM project_po_link WHERE po_id IS NOT NULL
   `, [projectId]);
@@ -538,6 +539,7 @@ async function getProjectP2PoStatusSummaries(projectId: string): Promise<P2PoSta
     LEFT JOIN ordered_qty oq ON oq.po_id = po.id
     LEFT JOIN item_state psi ON psi.po_id = po.id
     WHERE po.id = ANY($1::int[])
+      AND po.is_current_revision IS NOT FALSE
     GROUP BY po.id, po.po_number, po.customer_name, po.expected_delivery, po.status, oq.ordered_qty
     ORDER BY po.po_number ASC
   `, [linkedPoIds]);
@@ -1103,6 +1105,10 @@ router.get('/:projectId/summary', h(async (req, res) => {
         AND NOT (
           work_order_number LIKE 'WAD-%'
           AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+          AND NOT EXISTS (
+            SELECT 1 FROM travelers t
+            WHERE t.production_work_order_id = production_work_orders.id
+          )
           AND EXISTS (
             SELECT 1 FROM p2_superseding_parts psp
             WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
@@ -1343,6 +1349,10 @@ ${materialBudgetExpression}
          AND NOT (
            work_order_number LIKE 'WAD-%'
            AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+           AND NOT EXISTS (
+             SELECT 1 FROM travelers t
+             WHERE t.production_work_order_id = production_work_orders.id
+           )
            AND EXISTS (
              SELECT 1 FROM p2_superseding_parts psp
              WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
@@ -1389,6 +1399,10 @@ ${materialBudgetExpression}
          AND NOT (
            work_order_number LIKE 'WAD-%'
            AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+           AND NOT EXISTS (
+             SELECT 1 FROM travelers t
+             WHERE t.production_work_order_id = production_work_orders.id
+           )
            AND EXISTS (
              SELECT 1 FROM p2_superseding_parts psp
              WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
@@ -1586,6 +1600,10 @@ router.get('/:projectId/production', h(async (req, res) => {
         AND NOT (
           wo.work_order_number LIKE 'WAD-%'
           AND wo.status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+          AND NOT EXISTS (
+            SELECT 1 FROM travelers t
+            WHERE t.production_work_order_id = wo.id
+          )
           AND EXISTS (
             SELECT 1 FROM p2_superseding_parts psp
             WHERE psp.part_number = LOWER(TRIM(wo.part_number))

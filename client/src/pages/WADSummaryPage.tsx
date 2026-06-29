@@ -24,10 +24,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -41,7 +44,81 @@ const REQUIRED_APPROVAL_ROLES = [
   { key: 'executive', label: 'Executive' },
 ];
 
+const WAD_REVISION_REASONS = [
+  'PO quantity change',
+  'Delivery date change',
+  'Drawing revision change',
+  'Routing change',
+  'Traveler change',
+  'Work instruction change',
+  'BOM/material change',
+  'Quality requirement change',
+  'Budget/labor change',
+  'Customer requirement change',
+  'NCR/CAR related change',
+  'Schedule/priority change',
+  'Other',
+] as const;
+
+const REVISION_APPROVAL_ROLES = [
+  { key: 'project_manager', label: 'Project Manager' },
+  { key: 'production_manager', label: 'Production Manager' },
+  { key: 'quality', label: 'Quality' },
+  { key: 'engineering', label: 'Engineering' },
+  { key: 'finance_admin', label: 'Finance/Admin' },
+];
+
+const IMPACT_FIELDS = [
+  { key: 'impactReleasedTravelers', label: 'Affects released travelers?' },
+  { key: 'impactCompletedWork', label: 'Affects work already completed?' },
+  { key: 'impactMaterialIssued', label: 'Affects material issued?' },
+  { key: 'impactInspection', label: 'Affects inspection requirements?' },
+  { key: 'impactLaborBudget', label: 'Affects labor budget?' },
+  { key: 'impactDeliveryDate', label: 'Affects delivery date?' },
+  { key: 'impactCustomerApproval', label: 'Affects customer approval?' },
+  { key: 'requiresProductionHold', label: 'Requires production hold?' },
+] as const;
+
+type ImpactFieldKey = typeof IMPACT_FIELDS[number]['key'];
+
 type Decision = 'APPROVED' | 'REJECTED';
+
+type WadRevisionStatus = 'draft' | 'pending_approval' | 'approved' | 'superseded' | 'rejected';
+
+type WadRevisionApproval = {
+  id: string;
+  approverRole: string;
+  approverUserId: number | null;
+  status: 'pending' | 'approved' | 'rejected';
+  comments: string | null;
+  signedAt: string | null;
+};
+
+type WadRevision = Record<ImpactFieldKey, boolean> & {
+  id: string;
+  wadId: string;
+  revisionCode: string;
+  status: WadRevisionStatus;
+  revisionReason: string;
+  reasonNotes: string | null;
+  impactProduction: boolean;
+  effectiveDate: string | null;
+  createdBy: number | null;
+  createdByDisplayName: string | null;
+  approvedBy: number | null;
+  approvedByDisplayName: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  approvals?: WadRevisionApproval[];
+};
+
+type TravelerSummary = {
+  id: string;
+  travelerNumber?: string | null;
+  status?: string | null;
+  wadRevisionId?: string | null;
+};
 
 type ApprovalRecord = {
   role: string;
@@ -110,6 +187,10 @@ function roleLabel(role: string): string {
   return REQUIRED_APPROVAL_ROLES.find((r) => r.key === role)?.label ?? role.replace(/_/g, ' ');
 }
 
+function statusText(status: string): string {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
 function FieldGrid({ rows }: { rows: Array<[string, unknown]> }) {
   return (
     <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
@@ -153,10 +234,37 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
   const [decision, setDecision] = useState<Decision>('APPROVED');
   const [comments, setComments] = useState('');
   const [signature, setSignature] = useState('');
+  const [activeTab, setActiveTab] = useState(query.get('tab') === 'revisions' ? 'revisions' : 'summary');
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(query.get('createRevision') === '1');
+  const [revisionReason, setRevisionReason] = useState<(typeof WAD_REVISION_REASONS)[number]>('PO quantity change');
+  const [revisionNotes, setRevisionNotes] = useState('');
+  const [revisionEffectiveDate, setRevisionEffectiveDate] = useState('');
+  const [revisionImpacts, setRevisionImpacts] = useState<Record<ImpactFieldKey, boolean>>({
+    impactReleasedTravelers: false,
+    impactCompletedWork: false,
+    impactMaterialIssued: false,
+    impactInspection: false,
+    impactLaborBudget: false,
+    impactDeliveryDate: false,
+    impactCustomerApproval: false,
+    requiresProductionHold: false,
+  });
+  const [revisionApprovalRole, setRevisionApprovalRole] = useState(REVISION_APPROVAL_ROLES[0].key);
+  const [revisionApprovalComments, setRevisionApprovalComments] = useState('');
 
   const { data, isLoading, isError, error } = useQuery<WizardContext>({
     queryKey: ['/api/work-orders/production', wadId, 'wizard'],
     queryFn: () => apiRequest(`/api/work-orders/production/${wadId}/wizard`),
+  });
+
+  const { data: revisions = [] } = useQuery<WadRevision[]>({
+    queryKey: ['/api/wads', wadId, 'revisions'],
+    queryFn: () => apiRequest(`/api/wads/${wadId}/revisions`),
+  });
+
+  const { data: travelers = [] } = useQuery<TravelerSummary[]>({
+    queryKey: ['/api/work-orders', wadId, 'travelers'],
+    queryFn: () => apiRequest(`/api/work-orders/${wadId}/travelers`),
   });
 
   const wizardData = (data?.wad?.wizardData ?? {}) as WizardData;
@@ -201,6 +309,88 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
     },
     onError: (err: Error) => {
       toast({ title: 'Could not record decision', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const latestRevision = revisions[0];
+  const currentApprovedRevision = revisions.find((revision) => revision.status === 'approved');
+  const openRevision = revisions.find((revision) => revision.status === 'draft' || revision.status === 'pending_approval');
+  const blockingRevision = revisions.find((revision) =>
+    (revision.status === 'draft' || revision.status === 'pending_approval') &&
+    (revision.impactProduction || revision.impactReleasedTravelers || revision.impactInspection || revision.impactMaterialIssued || revision.requiresProductionHold)
+  );
+  const firstTraveler = travelers[0];
+  const anyImpactSelected = Object.values(revisionImpacts).some(Boolean);
+  const revisionNotesRequired = revisionReason === 'Other' || anyImpactSelected;
+  const canCreateRevision = revisionReason && (!revisionNotesRequired || revisionNotes.trim().length > 0);
+
+  const resetRevisionForm = () => {
+    setRevisionReason('PO quantity change');
+    setRevisionNotes('');
+    setRevisionEffectiveDate('');
+    setRevisionImpacts({
+      impactReleasedTravelers: false,
+      impactCompletedWork: false,
+      impactMaterialIssued: false,
+      impactInspection: false,
+      impactLaborBudget: false,
+      impactDeliveryDate: false,
+      impactCustomerApproval: false,
+      requiresProductionHold: false,
+    });
+  };
+
+  const createRevisionMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/wads/${wadId}/revisions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          revisionReason,
+          reasonNotes: revisionNotes.trim() || null,
+          effectiveDate: revisionEffectiveDate || null,
+          ...revisionImpacts,
+        }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/wads', wadId, 'revisions'] });
+      setRevisionDialogOpen(false);
+      setActiveTab('revisions');
+      resetRevisionForm();
+      toast({ title: 'WAD revision created', description: 'Draft revision is ready for review.' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Could not create WAD revision', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const submitRevisionMutation = useMutation({
+    mutationFn: (revisionId: string) =>
+      apiRequest(`/api/wad-revisions/${revisionId}/submit`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/wads', wadId, 'revisions'] });
+      toast({ title: 'WAD revision submitted', description: 'Approval routing has been started.' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Could not submit WAD revision', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const approveRevisionMutation = useMutation({
+    mutationFn: ({ revisionId, action }: { revisionId: string; action: 'approve' | 'reject' }) =>
+      apiRequest(`/api/wad-revisions/${revisionId}/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          approverRole: revisionApprovalRole,
+          comments: revisionApprovalComments.trim() || null,
+        }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/wads', wadId, 'revisions'] });
+      setRevisionApprovalComments('');
+      toast({ title: 'WAD revision updated', description: 'Revision approval history was recorded.' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Could not update WAD revision', description: err.message, variant: 'destructive' });
     },
   });
 
@@ -272,7 +462,7 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
           <CardHeader className="border-b">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle className="text-2xl">Work Authorization Document Summary</CardTitle>
+                <CardTitle className="text-2xl">WAD (Working Authorization Document)</CardTitle>
                 <CardDescription className="mt-1">
                   {data.wad.workOrderNumber} - {data.project?.projectName ?? data.project?.projectCode ?? 'Project not linked'}
                 </CardDescription>
@@ -286,7 +476,24 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-8 p-6">
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              {blockingRevision && (
+                <Alert variant={blockingRevision.requiresProductionHold ? 'destructive' : 'default'} className="no-print">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    {blockingRevision.requiresProductionHold
+                      ? 'Production Hold Required — Revision approval required before continuing.'
+                      : 'Pending WAD Revision — Production changes cannot be released until approved.'}
+                  </AlertDescription>
+                </Alert>
+              )}
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                <TabsList className="no-print">
+                  <TabsTrigger value="summary">WAD Summary</TabsTrigger>
+                  <TabsTrigger value="revisions">WAD Revisions</TabsTrigger>
+                </TabsList>
+                <TabsContent value="summary" className="space-y-8">
             <Section title="Contract Context" icon={<FileText className="h-4 w-4 text-blue-600" />}>
               <FieldGrid
                 rows={[
@@ -543,9 +750,229 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
                 </div>
               </div>
             </section>
+                </TabsContent>
+
+                <TabsContent value="revisions" className="space-y-6">
+                  <Section title="Current WAD Revision Summary" icon={<ShieldCheck className="h-4 w-4 text-blue-600" />}>
+                    <FieldGrid
+                      rows={[
+                        ['WAD Number', data.wad.workOrderNumber],
+                        ['Current Revision', currentApprovedRevision?.revisionCode ?? `Rev ${wizardData.currentRevision ?? '-'}`],
+                        ['Status', currentApprovedRevision ? statusText(currentApprovedRevision.status) : data.wad.wadStatus],
+                        ['Linked PO', step1.poNumber ?? data.po?.poNumber],
+                        ['Linked routing', step6.routingRequired ? step6.routingDescription ?? data.wad.partNumber : 'No routing linked'],
+                        ['Linked traveler', firstTraveler?.travelerNumber ?? '-'],
+                        ['Effective date', currentApprovedRevision?.effectiveDate ?? data.wad.updatedAt],
+                      ]}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={() => setRevisionDialogOpen(true)}
+                        disabled={!isApproved || Boolean(openRevision)}
+                        data-testid="button-create-wad-revision"
+                      >
+                        <PenLine className="mr-2 h-4 w-4" />
+                        Create WAD Revision
+                      </Button>
+                      {openRevision && (
+                        <Badge variant="outline">
+                          {openRevision.revisionCode} {statusText(openRevision.status)}
+                        </Badge>
+                      )}
+                    </div>
+                    {!isApproved && (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>Only approved WADs can start a new revision.</AlertDescription>
+                      </Alert>
+                    )}
+                  </Section>
+
+                  <Section title="Approval Panel" icon={<Users className="h-4 w-4 text-blue-600" />}>
+                    {latestRevision ? (
+                      <div className="space-y-4">
+                        <div className="grid gap-3 md:grid-cols-5">
+                          {REVISION_APPROVAL_ROLES.map((approvalRole) => {
+                            const approval = latestRevision.approvals?.find((item) => item.approverRole === approvalRole.key);
+                            return (
+                              <div key={approvalRole.key} className="rounded border bg-white p-3 text-sm">
+                                <div className="font-medium">{approvalRole.label}</div>
+                                <div className="mt-2 text-xs text-muted-foreground">
+                                  {approval ? (
+                                    <>
+                                      <div className={approval.status === 'approved' ? 'font-semibold text-green-700' : approval.status === 'rejected' ? 'font-semibold text-red-700' : 'font-semibold text-yellow-700'}>
+                                        {statusText(approval.status)}
+                                      </div>
+                                      <div>{dateText(approval.signedAt)}</div>
+                                      {approval.comments && <div className="mt-1 italic">"{approval.comments}"</div>}
+                                    </>
+                                  ) : (
+                                    latestRevision.status === 'draft' ? 'Added on submit' : 'Not required'
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {latestRevision.status === 'draft' && (
+                          <Button
+                            onClick={() => submitRevisionMutation.mutate(latestRevision.id)}
+                            disabled={submitRevisionMutation.isPending}
+                          >
+                            {submitRevisionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Submit Revision For Approval
+                          </Button>
+                        )}
+                        {latestRevision.status === 'pending_approval' && (
+                          <div className="grid gap-3 rounded-md border bg-white p-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label>Approval role</Label>
+                              <Select value={revisionApprovalRole} onValueChange={setRevisionApprovalRole}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {REVISION_APPROVAL_ROLES.map((approvalRole) => (
+                                    <SelectItem key={approvalRole.key} value={approvalRole.key}>
+                                      {approvalRole.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2 md:col-span-2">
+                              <Label>Comments</Label>
+                              <Textarea
+                                value={revisionApprovalComments}
+                                onChange={(event) => setRevisionApprovalComments(event.target.value)}
+                                placeholder="Required when rejecting"
+                              />
+                            </div>
+                            <div className="flex justify-end gap-2 md:col-span-2">
+                              <Button
+                                variant="outline"
+                                onClick={() => approveRevisionMutation.mutate({ revisionId: latestRevision.id, action: 'reject' })}
+                                disabled={approveRevisionMutation.isPending}
+                              >
+                                Reject
+                              </Button>
+                              <Button
+                                onClick={() => approveRevisionMutation.mutate({ revisionId: latestRevision.id, action: 'approve' })}
+                                disabled={approveRevisionMutation.isPending}
+                              >
+                                Approve
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="rounded border border-dashed bg-white p-4 text-sm text-muted-foreground">
+                        No WAD revisions have been created.
+                      </div>
+                    )}
+                  </Section>
+
+                  <Section title="Revision History" icon={<ClipboardList className="h-4 w-4 text-blue-600" />}>
+                    <DataTable
+                      emptyText="No WAD revisions created."
+                      headers={['Revision', 'Status', 'Reason', 'Created By', 'Created Date', 'Approved By', 'Approved Date', 'Effective Date', 'Actions']}
+                      rows={revisions.map((revision) => [
+                        revision.revisionCode,
+                        statusText(revision.status),
+                        revision.revisionReason,
+                        revision.createdByDisplayName ?? revision.createdBy,
+                        dateText(revision.createdAt),
+                        revision.approvedByDisplayName ?? revision.approvedBy,
+                        dateText(revision.approvedAt),
+                        dateText(revision.effectiveDate),
+                        revision.status === 'draft' ? 'Submit available' : revision.status === 'pending_approval' ? 'Approval pending' : '-',
+                      ])}
+                    />
+                  </Section>
+                </TabsContent>
+              </Tabs>
+            </div>
           </CardContent>
         </Card>
       </main>
+
+      <Dialog open={revisionDialogOpen} onOpenChange={setRevisionDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Create WAD Revision</DialogTitle>
+            <DialogDescription>
+              Start a draft revision from the currently approved WAD authorization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <Label>Revision reason</Label>
+              <Select value={revisionReason} onValueChange={(value) => setRevisionReason(value as (typeof WAD_REVISION_REASONS)[number])}>
+                <SelectTrigger data-testid="select-wad-revision-reason">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {WAD_REVISION_REASONS.map((reason) => (
+                    <SelectItem key={reason} value={reason}>
+                      {reason}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Impact Review</Label>
+              <div className="grid gap-2 rounded-md border bg-white p-3 sm:grid-cols-2">
+                {IMPACT_FIELDS.map((field) => (
+                  <label key={field.key} className="flex items-center gap-2 rounded border px-3 py-2 text-sm">
+                    <Checkbox
+                      checked={revisionImpacts[field.key]}
+                      onCheckedChange={(checked) =>
+                        setRevisionImpacts((current) => ({ ...current, [field.key]: checked === true }))
+                      }
+                    />
+                    <span>{field.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Effective date</Label>
+              <Input
+                type="date"
+                value={revisionEffectiveDate}
+                onChange={(event) => setRevisionEffectiveDate(event.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{revisionNotesRequired ? 'Notes / explanation' : 'Notes'}</Label>
+              <Textarea
+                value={revisionNotes}
+                onChange={(event) => setRevisionNotes(event.target.value)}
+                placeholder={revisionNotesRequired ? 'Required for Other or any Yes impact answer' : 'Optional revision notes'}
+                data-testid="textarea-wad-revision-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRevisionDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createRevisionMutation.mutate()}
+              disabled={!canCreateRevision || createRevisionMutation.isPending}
+              data-testid="button-submit-wad-revision"
+            >
+              {createRevisionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Draft Revision
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

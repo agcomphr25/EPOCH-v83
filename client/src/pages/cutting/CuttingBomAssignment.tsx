@@ -206,7 +206,7 @@ export default function CuttingBomAssignment() {
     queryKey: ['/api/cutting-table/packet-items'],
   });
 
-  // Inventory items marked as packet parts (isPacketPart=true)
+  // Inventory items eligible to be packet BOM parts
   const { data: inventoryPacketParts = [] } = useQuery<{ id: number; agPartNumber: string; name: string; sku: string }[]>({
     queryKey: ['/api/cutting-table/packet-part-items'],
   });
@@ -1091,7 +1091,7 @@ export default function CuttingBomAssignment() {
               <div className="space-y-2">
                 <Label className="text-base font-medium">Select Packet Parts</Label>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Choose parts that have been marked as "Packet Part" in inventory, then set quantity and fabric for each.
+                  Choose manufactured component parts, then set quantity and fabric for each.
                 </p>
               </div>
 
@@ -1099,7 +1099,7 @@ export default function CuttingBomAssignment() {
                 <div className="border rounded-lg p-6 text-center text-muted-foreground">
                   <Layers className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>No packet parts found in inventory.</p>
-                  <p className="text-sm">Mark items as "Packet Part" in Inventory Management to see them here.</p>
+                  <p className="text-sm">Set an inventory item as Manufactured and Component to see it here.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">

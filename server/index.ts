@@ -331,6 +331,7 @@ const publicRoutes = [
   '/api/material-lots',  // Material lot validation needed by traveler execution
   '/api/cutting-table/fabric-inventory-by-icn', // ICN lookup for P2 traveler material scanner
   '/api/production/timers', // Production Timer Station - public for floor displays
+  '/api/cnc/operation-batches/station', // CNC operation batch station - badge authenticated floor flow
   '/api/timekeeping/kiosk', // Time Clock kiosk - PIN-based auth, no EPOCH session token
   '/api/work-orders/production/', // Labor budget override request/poll (kiosk, soft auth — individual mutation routes enforce permissions). Trailing slash keeps the bare /production listing endpoint behind strict auth.
 ];
@@ -2052,15 +2053,33 @@ async function initializeBackgroundServices() {
           ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id)
         `);
         await db.execute(sqlLot`
+          ALTER TABLE p2_lot_numbers
+          ADD COLUMN IF NOT EXISTS po_item_id INTEGER REFERENCES p2_purchase_order_items(id)
+        `);
+        await db.execute(sqlLot`
           UPDATE p2_lot_numbers l
           SET po_id = po.id
           FROM p2_purchase_orders po
           WHERE l.po_number = po.po_number
             AND l.po_id IS NULL
         `);
-        console.log('✅ Ensured p2_lot_numbers has po_id FK (backfilled from po_number)');
+        await db.execute(sqlLot`
+          UPDATE p2_lot_numbers l
+          SET po_item_id = matched.po_item_id
+          FROM (
+            SELECT l2.id AS lot_id, MIN(si.po_item_id) AS po_item_id
+            FROM p2_lot_numbers l2
+            JOIN p2_serialized_items si
+              ON l2.serialized_item_ids ? si.id::text
+            WHERE l2.po_item_id IS NULL
+            GROUP BY l2.id
+            HAVING COUNT(DISTINCT si.po_item_id) = 1
+          ) matched
+          WHERE l.id = matched.lot_id
+        `);
+        console.log('✅ Ensured p2_lot_numbers has PO FK columns (backfilled from po_number/serials)');
       } catch (lotPoIdError: any) {
-        console.warn('⚠️ p2_lot_numbers po_id migration warning:', lotPoIdError?.message);
+        console.warn('⚠️ p2_lot_numbers PO FK migration warning:', lotPoIdError?.message);
       }
 
       // GIN index on serialized_item_ids for fast JSONB containment lookups
@@ -2347,7 +2366,8 @@ async function initializeBackgroundServices() {
       try {
         const { sql: sqlMachineType } = await import('drizzle-orm');
         await db.execute(sqlMachineType`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS machine_type TEXT`);
-        console.log('✅ Ensured inventory_items has machine_type column');
+        await db.execute(sqlMachineType`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS machining_time_minutes INTEGER`);
+        console.log('✅ Ensured inventory_items has machine_type and machining_time_minutes columns');
       } catch (machineTypeErr: any) {
         console.warn('⚠️ machine_type migration:', machineTypeErr.message);
       }
@@ -5043,6 +5063,8 @@ async function initializeBackgroundServices() {
         await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS current_revision_number INTEGER NOT NULL DEFAULT 0`);
         await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS current_revision_label TEXT NOT NULL DEFAULT 'Rev 0'`);
         await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id)`);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS p2_po_item_id INTEGER REFERENCES p2_purchase_order_items(id)`);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS p2_billing_allocation_id UUID`);
         // Backfill current_stage from current_step_type for existing rows that still have the default
         await db.execute(sqlProj`
           UPDATE projects SET current_stage = CASE current_step_type
@@ -5344,6 +5366,37 @@ async function initializeBackgroundServices() {
             created_at                 TIMESTAMPTZ DEFAULT NOW(),
             updated_at                 TIMESTAMPTZ DEFAULT NOW()
           )
+        `);
+        await pool.query(`
+          ALTER TABLE p2_production_changes
+            ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid(),
+            ADD COLUMN IF NOT EXISTS change_number TEXT,
+            ADD COLUMN IF NOT EXISTS change_type TEXT,
+            ADD COLUMN IF NOT EXISTS scope TEXT DEFAULT 'PO',
+            ADD COLUMN IF NOT EXISTS part_number TEXT,
+            ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id),
+            ADD COLUMN IF NOT EXISTS routing_id UUID,
+            ADD COLUMN IF NOT EXISTS current_revision TEXT,
+            ADD COLUMN IF NOT EXISTS proposed_change TEXT,
+            ADD COLUMN IF NOT EXISTS reason TEXT,
+            ADD COLUMN IF NOT EXISTS risk_assessment TEXT,
+            ADD COLUMN IF NOT EXISTS requires_customer_approval BOOLEAN DEFAULT false,
+            ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'DRAFT',
+            ADD COLUMN IF NOT EXISTS submitted_by_id INTEGER REFERENCES employees(id),
+            ADD COLUMN IF NOT EXISTS submitted_by_name TEXT,
+            ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS approved_by_id INTEGER REFERENCES employees(id),
+            ADD COLUMN IF NOT EXISTS approved_by_name TEXT,
+            ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS rejected_by_id INTEGER REFERENCES employees(id),
+            ADD COLUMN IF NOT EXISTS rejected_by_name TEXT,
+            ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS rejection_reason TEXT,
+            ADD COLUMN IF NOT EXISTS implemented_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS effective_date DATE,
+            ADD COLUMN IF NOT EXISTS notes TEXT,
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW(),
+            ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
         `);
         await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_po_id_idx ON p2_production_changes(po_id)`);
         await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_status_idx ON p2_production_changes(status)`);
@@ -5926,6 +5979,38 @@ async function initializeBackgroundServices() {
         await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS custom_days_per_week REAL`);
         await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS custom_hours_per_day REAL`);
         await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS custom_weekly_capacity_hours REAL`);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_operation_batches (
+            id SERIAL PRIMARY KEY,
+            work_order_id UUID NOT NULL REFERENCES production_work_orders(id) ON DELETE CASCADE,
+            traveler_step_id VARCHAR(255) NOT NULL REFERENCES traveler_steps(id) ON DELETE CASCADE,
+            operation_id INTEGER REFERENCES cnc_job_operations(id) ON DELETE SET NULL,
+            batch_code TEXT NOT NULL UNIQUE,
+            batch_number INTEGER NOT NULL,
+            batch_qty INTEGER NOT NULL CHECK (batch_qty > 0),
+            qty_completed INTEGER NOT NULL DEFAULT 0 CHECK (qty_completed >= 0),
+            qty_scrapped INTEGER NOT NULL DEFAULT 0 CHECK (qty_scrapped >= 0),
+            assigned_machine_id INTEGER REFERENCES cnc_machines(id) ON DELETE SET NULL,
+            assigned_machine_name TEXT,
+            assigned_employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+            assigned_employee_display_name TEXT,
+            status TEXT NOT NULL DEFAULT 'queued',
+            barcode_value TEXT NOT NULL UNIQUE,
+            priority TEXT NOT NULL DEFAULT 'medium',
+            due_date DATE,
+            notes TEXT,
+            created_by_user_id INTEGER,
+            created_by_display_name TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT cnc_operation_batches_counts_chk
+              CHECK (qty_completed + qty_scrapped <= batch_qty)
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS cnc_operation_batches_work_order_step_idx ON cnc_operation_batches(work_order_id, traveler_step_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS cnc_operation_batches_status_idx ON cnc_operation_batches(status)`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS cnc_operation_batches_barcode_idx ON cnc_operation_batches(barcode_value)`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS cnc_operation_batches_batch_code_idx ON cnc_operation_batches(batch_code)`);
 
         // ── T7: Ensure cnc_schedule_settings table exists ────────────────────
         await pool.query(`
@@ -6773,6 +6858,12 @@ async function initializeBackgroundServices() {
       await pool.query(`ALTER TABLE travelers ADD COLUMN IF NOT EXISTS production_work_order_id UUID`);
       await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS production_work_order_id UUID`);
       await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS traveler_id UUID`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS traveler_step_id VARCHAR(255)`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS operation_batch_id INTEGER`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS machine_id INTEGER`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS machine_name TEXT`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS time_clock_entries_operation_batch_id_idx ON time_clock_entries (operation_batch_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS time_clock_entries_traveler_step_id_idx ON time_clock_entries (traveler_step_id)`);
       // If column was previously created as TEXT, upgrade to UUID
       await pool.query(`
         DO $$
@@ -7533,6 +7624,18 @@ async function initializeBackgroundServices() {
       await vendorPoStorage.backfillVendorPOReceivingStatus();
     } catch (backfillErr) {
       console.warn('⚠️ Vendor PO receiving status backfill failed:', backfillErr);
+    }
+
+    // Backfill linked parts requests from Vendor PO / RCC receiving evidence.
+    // This repairs requests that were linked while pending or received through RCC.
+    try {
+      const { backfillLinkedPartsRequestReceiptStatuses } = await import('./src/services/partsRequestVendorPoSyncService');
+      const result = await backfillLinkedPartsRequestReceiptStatuses();
+      if (result.requestUpdateCount > 0) {
+        console.log(`Backfilled ${result.requestUpdateCount} linked parts request receipt status update(s) across ${result.vendorPoCount} Vendor PO(s)`);
+      }
+    } catch (partsRequestBackfillErr) {
+      console.warn('Linked parts request receipt status backfill failed:', partsRequestBackfillErr);
     }
 
     // One-time backfill: set shippedDate for FULFILLED orders that have shippingCompletedAt but no shippedDate.

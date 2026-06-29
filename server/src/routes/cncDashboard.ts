@@ -5,6 +5,21 @@ import { pool } from '../../db';
 import { requirePermission } from '../../middleware/requirePermission';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 import {
+  evaluateMaterialReadinessGate,
+  evaluateTravelerFinishGates,
+  evaluateTravelerStartGates,
+  evaluateWadReleaseGate,
+} from '../lib/travelerGates';
+import {
+  buildBatchLaborEntryValues,
+  canLoadBatchForStation,
+  completedAndScrappedEqualsBatchQty,
+  completedAndScrappedWithinBatchQty,
+  isBatchBarcodeUniqueConflict,
+  shouldCompleteStepFromBatches,
+  validateBatchQuantityLimit,
+} from '../lib/cncOperationBatches';
+import {
   insertCncScheduleSettingsSchema,
   insertCncMachineSchema,
   insertCncJobSchema,
@@ -20,6 +35,634 @@ import {
 } from '../../schema';
 
 const router = Router();
+
+const batchStatusSchema = z.enum(['queued', 'assigned', 'in_progress', 'paused', 'hold', 'completed', 'cancelled']);
+
+const createBatchSchema = z.object({
+  workOrderId: z.string().uuid(),
+  travelerStepId: z.string().min(1),
+  operationId: z.number().int().positive().optional().nullable(),
+  batchNumber: z.number().int().positive().optional(),
+  batchQty: z.number().int().positive(),
+  assignedMachineId: z.number().int().positive().optional().nullable(),
+  assignedMachineName: z.string().trim().optional().nullable(),
+  assignedEmployeeId: z.number().int().positive().optional().nullable(),
+  assignedEmployeeDisplayName: z.string().trim().optional().nullable(),
+  status: batchStatusSchema.optional().default('queued'),
+  barcodeValue: z.string().trim().optional(),
+  batchCode: z.string().trim().optional(),
+  priority: z.string().trim().optional().default('medium'),
+  dueDate: z.string().trim().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const bulkCreateBatchSchema = z.object({
+  workOrderId: z.string().uuid(),
+  travelerStepId: z.string().min(1),
+  operationId: z.number().int().positive().optional().nullable(),
+  batches: z.array(createBatchSchema.omit({ workOrderId: true, travelerStepId: true, operationId: true }).extend({
+    operationId: z.number().int().positive().optional().nullable(),
+  })).optional(),
+  batchQtys: z.array(z.number().int().positive()).optional(),
+  assignedMachineId: z.number().int().positive().optional().nullable(),
+  assignedMachineName: z.string().trim().optional().nullable(),
+  assignedEmployeeId: z.number().int().positive().optional().nullable(),
+  assignedEmployeeDisplayName: z.string().trim().optional().nullable(),
+  priority: z.string().trim().optional(),
+  dueDate: z.string().trim().optional().nullable(),
+  notes: z.string().optional().nullable(),
+}).refine((data) => (data.batches?.length ?? 0) > 0 || (data.batchQtys?.length ?? 0) > 0, {
+  message: 'Provide batches or batchQtys',
+});
+
+const assignBatchSchema = z.object({
+  assignedMachineId: z.number().int().positive().optional().nullable(),
+  assignedMachineName: z.string().trim().optional().nullable(),
+  assignedEmployeeId: z.number().int().positive().optional().nullable(),
+  assignedEmployeeDisplayName: z.string().trim().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const quantityUpdateSchema = z.object({
+  qtyCompleted: z.number().int().min(0),
+  qtyScrapped: z.number().int().min(0),
+  notes: z.string().optional().nullable(),
+});
+
+const batchStationScanSchema = z.object({
+  employeeBadge: z.string().trim().min(1),
+  barcode: z.string().trim().min(1),
+});
+
+const batchStationActionSchema = z.object({
+  employeeBadge: z.string().trim().min(1),
+  action: z.enum(['start', 'pause', 'resume', 'complete', 'comment', 'hold']),
+  qtyCompleted: z.number().int().min(0).optional(),
+  qtyScrapped: z.number().int().min(0).optional(),
+  comments: z.string().trim().optional().nullable(),
+});
+
+function rowsOf(result: any): any[] {
+  return Array.isArray(result) ? result : (result?.rows ?? []);
+}
+
+function actorDisplayName(req: any): string | null {
+  if (!req.user) return null;
+  return req.user.employeeId ? `${req.user.username} (${req.user.employeeId})` : req.user.username;
+}
+
+function workOrderBarcodeSegment(workOrderNumber: string): string {
+  const digits = String(workOrderNumber ?? '').replace(/\D/g, '');
+  return digits || String(workOrderNumber ?? '').replace(/[^A-Za-z0-9]/g, '').slice(-8) || 'WO';
+}
+
+function buildBatchCode(workOrderNumber: string, stepNumber: number, batchNumber: number): string {
+  return `OPB-${workOrderBarcodeSegment(workOrderNumber)}-${String(stepNumber).padStart(2, '0')}-${String(batchNumber).padStart(3, '0')}`;
+}
+
+const batchSelectSql = `
+  SELECT
+    b.id AS "id",
+    b.work_order_id AS "workOrderId",
+    pwo.work_order_number AS "workOrderNumber",
+    COALESCE(t.part_number, pwo.part_number) AS "partNumber",
+    COALESCE(t.part_name, pwo.description) AS "partName",
+    b.traveler_step_id AS "travelerStepId",
+    ts.step_number AS "travelerStepNumber",
+    ts.department_name AS "travelerStepDepartment",
+    t.id AS "travelerId",
+    t.traveler_number AS "travelerNumber",
+    b.operation_id AS "operationId",
+    op.sequence AS "operationSequence",
+    op.op_name AS "operationName",
+    b.batch_code AS "batchCode",
+    b.batch_number AS "batchNumber",
+    b.batch_qty AS "batchQty",
+    b.qty_completed AS "qtyCompleted",
+    b.qty_scrapped AS "qtyScrapped",
+    b.assigned_machine_id AS "assignedMachineId",
+    b.assigned_machine_name AS "assignedMachineName",
+    b.assigned_employee_id AS "assignedEmployeeId",
+    b.assigned_employee_display_name AS "assignedEmployeeDisplayName",
+    b.status AS "status",
+    b.barcode_value AS "barcodeValue",
+    b.priority AS "priority",
+    b.due_date AS "dueDate",
+    b.notes AS "notes",
+    b.created_by_user_id AS "createdByUserId",
+    b.created_by_display_name AS "createdByDisplayName",
+    b.created_at AS "createdAt",
+    b.updated_at AS "updatedAt",
+    br.total_step_qty AS "totalStepQty",
+    br.batched_qty AS "batchedQty",
+    br.available_to_batch_qty AS "availableToBatchQty",
+    br.in_progress_qty AS "inProgressQty",
+    br.completed_qty AS "completedQty",
+    br.scrapped_qty AS "scrappedQty",
+    br.remaining_qty AS "remainingQty"
+  FROM cnc_operation_batches b
+  JOIN production_work_orders pwo ON pwo.id = b.work_order_id
+  JOIN traveler_steps ts ON ts.id = b.traveler_step_id
+  JOIN travelers t ON t.id = ts.traveler_id
+  LEFT JOIN cnc_job_operations op ON op.id = b.operation_id
+  LEFT JOIN LATERAL (
+    SELECT
+      LEAST(COALESCE(pwo.quantity, 0), COALESCE(t.quantity, pwo.quantity, 0))::int AS total_step_qty,
+      COALESCE(SUM(bb.batch_qty) FILTER (WHERE bb.status <> 'cancelled'), 0)::int AS batched_qty,
+      GREATEST(
+        LEAST(COALESCE(pwo.quantity, 0), COALESCE(t.quantity, pwo.quantity, 0)) -
+        COALESCE(SUM(bb.batch_qty) FILTER (WHERE bb.status <> 'cancelled'), 0),
+        0
+      )::int AS available_to_batch_qty,
+      COALESCE(SUM(GREATEST(bb.batch_qty - bb.qty_completed - bb.qty_scrapped, 0)) FILTER (WHERE bb.status IN ('in_progress', 'paused')), 0)::int AS in_progress_qty,
+      COALESCE(SUM(bb.qty_completed) FILTER (WHERE bb.status <> 'cancelled'), 0)::int AS completed_qty,
+      COALESCE(SUM(bb.qty_scrapped) FILTER (WHERE bb.status <> 'cancelled'), 0)::int AS scrapped_qty,
+      GREATEST(
+        LEAST(COALESCE(pwo.quantity, 0), COALESCE(t.quantity, pwo.quantity, 0)) -
+        COALESCE(SUM(bb.qty_completed + bb.qty_scrapped) FILTER (WHERE bb.status <> 'cancelled'), 0),
+        0
+      )::int AS remaining_qty
+    FROM cnc_operation_batches bb
+    WHERE bb.work_order_id = b.work_order_id
+      AND bb.traveler_step_id = b.traveler_step_id
+  ) br ON true
+`;
+
+async function loadBatch(client: any, id: number) {
+  const result = await client.query(`${batchSelectSql} WHERE b.id = $1`, [id]);
+  return rowsOf(result)[0] ?? null;
+}
+
+async function loadBatchByBarcode(client: any, barcode: string) {
+  const result = await client.query(
+    `${batchSelectSql} WHERE b.barcode_value = $1 OR b.batch_code = $1`,
+    [barcode],
+  );
+  return rowsOf(result)[0] ?? null;
+}
+
+async function resolveActiveEmployeeByBadge(client: any, badge: string) {
+  const normalized = String(badge ?? '').trim().replace(/-/g, '');
+  if (!normalized) return null;
+  const result = await client.query(
+    `SELECT id,
+            name,
+            employee_code AS "employeeCode",
+            department,
+            user_role AS "userRole",
+            is_active AS "isActive",
+            employment_status AS "employmentStatus"
+     FROM employees
+     WHERE REPLACE(COALESCE(badge_scan_code, ''), '-', '') = $1
+        OR LOWER(employee_code) = LOWER($2)
+     LIMIT 1`,
+    [normalized, badge],
+  );
+  const employee = rowsOf(result)[0] ?? null;
+  if (!employee) return null;
+  const terminated = String(employee.employmentStatus ?? 'ACTIVE').toUpperCase() === 'TERMINATED';
+  if (employee.isActive === false || terminated) {
+    const err = new Error('Employee badge is inactive or terminated') as Error & { status?: number };
+    err.status = 403;
+    throw err;
+  }
+  return employee;
+}
+
+function canViewFullTraveler(req: any): boolean {
+  const role = String(req.user?.role ?? req.user?.userRole ?? '').toLowerCase();
+  return ['admin', 'owner', 'manager', 'supervisor'].some((allowed) => role.includes(allowed));
+}
+
+function appendNote(existing: string | null | undefined, next: string | null | undefined): string | null {
+  const cleanNext = String(next ?? '').trim();
+  if (!cleanNext) return existing ?? null;
+  return [existing, cleanNext].filter(Boolean).join('\n');
+}
+
+async function validateBatchStationAccess(client: any, batch: any, employee: any, req: any, options: { allowPaused?: boolean; allowHold?: boolean } = {}) {
+  if (!batch) {
+    const err = new Error('Operation batch barcode not found') as Error & { status?: number };
+    err.status = 404;
+    throw err;
+  }
+
+  const stationDecision = canLoadBatchForStation({
+    status: batch.status,
+    batchCode: batch.batchCode,
+    assignedEmployeeId: batch.assignedEmployeeId,
+    employeeId: Number(employee.id),
+    managerOverride: canViewFullTraveler(req),
+    allowPaused: options.allowPaused,
+    allowHold: options.allowHold,
+  });
+  if (!stationDecision.allowed) {
+    const assignedReason = stationDecision.status === 403 && batch.assignedEmployeeDisplayName
+      ? `Batch ${batch.batchCode} is assigned to ${batch.assignedEmployeeDisplayName}`
+      : stationDecision.reason;
+    const err = new Error(assignedReason ?? 'Batch cannot be loaded for production') as Error & { status?: number };
+    err.status = stationDecision.status;
+    throw err;
+  }
+
+  const wadGate = await evaluateWadReleaseGate(batch.workOrderId);
+  if (!wadGate.allowed) {
+    const err = new Error(wadGate.reason ?? 'Work order is not released') as Error & { status?: number };
+    err.status = 422;
+    throw err;
+  }
+
+  const materialGate = await evaluateMaterialReadinessGate(batch.travelerId);
+  if (!materialGate.allowed) {
+    const err = new Error(materialGate.reason ?? 'Material is not ready') as Error & { status?: number };
+    err.status = 422;
+    throw err;
+  }
+
+  const startGate = await evaluateTravelerStartGates(batch.travelerId, batch.travelerStepId, {
+    employeeId: Number(employee.id),
+    employeeName: employee.name,
+  });
+  if (!startGate.allowed) {
+    const err = new Error(startGate.reason ?? 'Employee is not authorized for this CNC step') as Error & { status?: number };
+    err.status = 403;
+    throw err;
+  }
+}
+
+async function loadBatchStationPayload(client: any, batch: any, employee: any, req: any) {
+  const remainingQty = Math.max(Number(batch.batchQty ?? 0) - Number(batch.qtyCompleted ?? 0) - Number(batch.qtyScrapped ?? 0), 0);
+  const operationId = batch.operationId ? Number(batch.operationId) : null;
+  const [operationResult, programsResult, toolsResult, photosResult, checkpointsResult] = await Promise.all([
+    operationId
+      ? client.query(
+          `SELECT id, sequence, op_name AS "opName", op_description AS "opDescription",
+                  nc_program_ref AS "ncProgramRef", fixture, work_ref_point AS "workRefPoint",
+                  raw_stock_orientation AS "rawStockOrientation", datum_notes AS "datumNotes",
+                  warmup_notes AS "warmupNotes", qc_plan AS "qcPlan"
+           FROM cnc_job_operations WHERE id = $1`,
+          [operationId],
+        )
+      : Promise.resolve({ rows: [] }),
+    operationId
+      ? client.query(
+          `SELECT id, program_name AS "programName", program_number AS "programNumber", version,
+                  machine, estimated_cycle_minutes AS "estimatedCycleMinutes", prove_out_required AS "proveOutRequired",
+                  approved_by_display_name AS "approvedByDisplayName", approved_at AS "approvedAt", notes
+           FROM cnc_programs WHERE operation_id = $1 ORDER BY id`,
+          [operationId],
+        )
+      : Promise.resolve({ rows: [] }),
+    operationId
+      ? client.query(
+          `SELECT id, tool_number AS "toolNumber", holder_position AS "holderPosition", tool_name AS "toolName",
+                  diameter, offset_notes AS "offsetNotes", replacement_notes AS "replacementNotes", image_url AS "imageUrl"
+           FROM cnc_tool_lists WHERE operation_id = $1 ORDER BY sort_order, id`,
+          [operationId],
+        )
+      : Promise.resolve({ rows: [] }),
+    operationId
+      ? client.query(
+          `SELECT id, category, url, caption, uploaded_by_display_name AS "uploadedByDisplayName", created_at AS "createdAt"
+           FROM cnc_setup_photos WHERE operation_id = $1 ORDER BY created_at DESC`,
+          [operationId],
+        )
+      : Promise.resolve({ rows: [] }),
+    operationId
+      ? client.query(
+          `SELECT id, name, characteristic, nominal, tolerance, method, frequency, required,
+                  photo_required AS "photoRequired", signature_required AS "signatureRequired"
+           FROM cnc_qc_checkpoints WHERE operation_id = $1 ORDER BY sort_order, id`,
+          [operationId],
+        )
+      : Promise.resolve({ rows: [] }),
+  ]);
+
+  const operation = rowsOf(operationResult)[0] ?? null;
+  return {
+    type: 'cnc_operation_batch',
+    canViewFullTraveler: canViewFullTraveler(req),
+    employee: {
+      id: employee.id,
+      name: employee.name,
+      employeeCode: employee.employeeCode,
+    },
+    batch: {
+      ...batch,
+      qtyRemaining: remainingQty,
+    },
+    workOrder: {
+      id: batch.workOrderId,
+      number: batch.workOrderNumber,
+      partNumber: batch.partNumber,
+      partName: batch.partName,
+    },
+    step: {
+      id: batch.travelerStepId,
+      travelerId: batch.travelerId,
+      travelerNumber: batch.travelerNumber,
+      stepNumber: batch.travelerStepNumber,
+      department: batch.travelerStepDepartment,
+    },
+    operation,
+    programs: rowsOf(programsResult),
+    tools: rowsOf(toolsResult),
+    setupPhotos: rowsOf(photosResult),
+    inspectionRequirements: rowsOf(checkpointsResult),
+  };
+}
+
+async function validateBatchContext(client: any, input: { workOrderId: string; travelerStepId: string; operationId?: number | null }) {
+  const woResult = await client.query(
+    `SELECT id, work_order_number, quantity FROM production_work_orders WHERE id = $1 FOR UPDATE`,
+    [input.workOrderId],
+  );
+  const workOrder = rowsOf(woResult)[0];
+  if (!workOrder) {
+    const err = new Error('Work order not found') as Error & { status?: number };
+    err.status = 404;
+    throw err;
+  }
+
+  const stepResult = await client.query(
+    `SELECT
+       ts.id,
+       ts.step_number,
+       ts.department_name,
+       t.id AS traveler_id,
+       t.traveler_number,
+       t.quantity AS traveler_quantity,
+       t.production_work_order_id
+     FROM traveler_steps ts
+     JOIN travelers t ON t.id = ts.traveler_id
+     WHERE ts.id = $1`,
+    [input.travelerStepId],
+  );
+  const step = rowsOf(stepResult)[0];
+  if (!step) {
+    const err = new Error('Traveler step not found') as Error & { status?: number };
+    err.status = 404;
+    throw err;
+  }
+  if (step.production_work_order_id && step.production_work_order_id !== input.workOrderId) {
+    const err = new Error('Traveler step does not belong to the selected work order') as Error & { status?: number };
+    err.status = 422;
+    throw err;
+  }
+
+  if (input.operationId) {
+    const opResult = await client.query(
+      `SELECT op.id, j.linked_traveler_step_id
+       FROM cnc_job_operations op
+       JOIN cnc_jobs j ON j.id = op.job_id
+       WHERE op.id = $1`,
+      [input.operationId],
+    );
+    const op = rowsOf(opResult)[0];
+    if (!op) {
+      const err = new Error('CNC operation not found') as Error & { status?: number };
+      err.status = 404;
+      throw err;
+    }
+    if (op.linked_traveler_step_id && op.linked_traveler_step_id !== input.travelerStepId) {
+      const err = new Error('CNC operation is linked to a different traveler step') as Error & { status?: number };
+      err.status = 422;
+      throw err;
+    }
+  }
+
+  const travelerQty = Number(step.traveler_quantity ?? workOrder.quantity ?? 0);
+  const workOrderQty = Number(workOrder.quantity ?? 0);
+  const availableLimit = Math.min(workOrderQty, travelerQty || workOrderQty);
+  return { workOrder, step, availableLimit };
+}
+
+async function activeBatchQty(client: any, workOrderId: string, travelerStepId: string) {
+  const result = await client.query(
+    `SELECT COALESCE(SUM(batch_qty), 0)::int AS active_qty
+     FROM cnc_operation_batches
+     WHERE work_order_id = $1
+       AND traveler_step_id = $2
+       AND status <> 'cancelled'`,
+    [workOrderId, travelerStepId],
+  );
+  return Number(rowsOf(result)[0]?.active_qty ?? 0);
+}
+
+async function activeStepBatchRows(client: any, workOrderId: string, travelerStepId: string) {
+  const result = await client.query(
+    `SELECT batch_qty AS "batchQty",
+            qty_completed AS "qtyCompleted",
+            qty_scrapped AS "qtyScrapped",
+            status
+     FROM cnc_operation_batches
+     WHERE work_order_id = $1
+       AND traveler_step_id = $2
+       AND status <> 'cancelled'`,
+    [workOrderId, travelerStepId],
+  );
+  return rowsOf(result);
+}
+
+async function upsertBatchLaborEntry(client: any, batch: any, employee: any) {
+  const now = new Date();
+  const operationLabel = batch.operationName
+    ? `CNC ${batch.operationSequence ? `Op ${batch.operationSequence}: ` : ''}${batch.operationName}`
+    : `CNC Step ${batch.travelerStepNumber}`;
+  const values = buildBatchLaborEntryValues({
+    employeeId: employee.id,
+    workOrderId: batch.workOrderId,
+    travelerId: batch.travelerId,
+    travelerStepId: batch.travelerStepId,
+    operationBatchId: batch.id,
+    department: batch.travelerStepDepartment ?? 'CNC',
+    operation: operationLabel,
+    machineId: batch.assignedMachineId ?? null,
+    machineName: batch.assignedMachineName ?? null,
+    clockIn: now,
+  });
+
+  const activeResult = await client.query(
+    `SELECT id
+     FROM time_clock_entries
+     WHERE employee_id = $1
+       AND clock_in IS NOT NULL
+       AND clock_out IS NULL
+     ORDER BY clock_in DESC
+     LIMIT 1`,
+    [values.employee_id],
+  );
+  const active = rowsOf(activeResult)[0];
+  if (active) {
+    const updated = await client.query(
+      `UPDATE time_clock_entries
+       SET production_work_order_id = $1,
+           traveler_id = $2,
+           traveler_step_id = $3,
+           operation_batch_id = $4,
+           machine_id = $5,
+           machine_name = $6,
+           department = $7,
+           operation = $8,
+           approval_status = COALESCE(NULLIF(approval_status, ''), $9)
+       WHERE id = $10
+       RETURNING id`,
+      [
+        values.production_work_order_id,
+        values.traveler_id,
+        values.traveler_step_id,
+        values.operation_batch_id,
+        values.machine_id,
+        values.machine_name,
+        values.department,
+        values.operation,
+        values.approval_status,
+        active.id,
+      ],
+    );
+    return rowsOf(updated)[0] ?? null;
+  }
+
+  const inserted = await client.query(
+    `INSERT INTO time_clock_entries (
+       employee_id, date, clock_in, clock_out, production_work_order_id, traveler_id,
+       traveler_step_id, operation_batch_id, machine_id, machine_name, department,
+       operation, approval_status, created_at
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+     RETURNING id`,
+    [
+      values.employee_id,
+      values.date,
+      values.clock_in,
+      values.clock_out,
+      values.production_work_order_id,
+      values.traveler_id,
+      values.traveler_step_id,
+      values.operation_batch_id,
+      values.machine_id,
+      values.machine_name,
+      values.department,
+      values.operation,
+      values.approval_status,
+    ],
+  );
+  return rowsOf(inserted)[0] ?? null;
+}
+
+async function closeBatchLaborEntry(client: any, batch: any, employee: any) {
+  const result = await client.query(
+    `UPDATE time_clock_entries
+     SET clock_out = NOW()
+     WHERE employee_id = $1
+       AND operation_batch_id = $2
+       AND clock_out IS NULL
+     RETURNING id`,
+    [String(employee.id), batch.id],
+  );
+  return rowsOf(result)[0] ?? null;
+}
+
+async function completeTravelerStepWhenBatchesReady(client: any, batch: any, employee: any) {
+  const activeBatches = await activeStepBatchRows(client, batch.workOrderId, batch.travelerStepId);
+  if (!shouldCompleteStepFromBatches(activeBatches)) {
+    return { completed: false, reason: 'Active batches are not all complete.' };
+  }
+
+  const finishGate = await evaluateTravelerFinishGates(batch.travelerStepId);
+  if (!finishGate.allowed) {
+    return { completed: false, reason: finishGate.reason ?? 'Existing traveler completion rules blocked step completion.' };
+  }
+
+  const stepResult = await client.query(
+    `SELECT id, traveler_id, step_number, status
+     FROM traveler_steps
+     WHERE id = $1
+     FOR UPDATE`,
+    [batch.travelerStepId],
+  );
+  const step = rowsOf(stepResult)[0];
+  if (!step || step.status === 'COMPLETED') {
+    return { completed: false, reason: 'Traveler step is already complete or missing.' };
+  }
+
+  if (step.status !== 'IN_PROGRESS') {
+    return { completed: false, reason: `Traveler step must be IN_PROGRESS before completion. Current status: ${step.status}.` };
+  }
+
+  await client.query(
+    `UPDATE traveler_steps
+     SET status = 'COMPLETED',
+         completed_at = NOW(),
+         completed_by = $1
+     WHERE id = $2`,
+    [employee.name ?? 'CNC batch station', batch.travelerStepId],
+  );
+
+  await client.query(
+    `UPDATE traveler_steps
+     SET status = 'IN_PROGRESS'
+     WHERE traveler_id = $1
+       AND status = 'NOT_STARTED'
+       AND step_number = (
+         SELECT MIN(step_number)
+         FROM traveler_steps
+         WHERE traveler_id = $1
+           AND step_number > $2
+           AND status = 'NOT_STARTED'
+       )`,
+    [step.traveler_id, step.step_number],
+  );
+
+  return { completed: true, reason: null };
+}
+
+async function nextBatchNumber(client: any, workOrderId: string, travelerStepId: string) {
+  const result = await client.query(
+    `SELECT COALESCE(MAX(batch_number), 0)::int + 1 AS next_batch_number
+     FROM cnc_operation_batches
+     WHERE work_order_id = $1 AND traveler_step_id = $2`,
+    [workOrderId, travelerStepId],
+  );
+  return Number(rowsOf(result)[0]?.next_batch_number ?? 1);
+}
+
+async function insertBatch(client: any, req: any, context: any, input: z.infer<typeof createBatchSchema>, fallbackBatchNumber: number) {
+  const batchNumber = input.batchNumber ?? fallbackBatchNumber;
+  const generatedCode = buildBatchCode(context.workOrder.work_order_number, Number(context.step.step_number), batchNumber);
+  const batchCode = input.batchCode || generatedCode;
+  const barcodeValue = input.barcodeValue || batchCode;
+  const result = await client.query(
+    `INSERT INTO cnc_operation_batches (
+       work_order_id, traveler_step_id, operation_id, batch_code, batch_number,
+       batch_qty, qty_completed, qty_scrapped, assigned_machine_id, assigned_machine_name,
+       assigned_employee_id, assigned_employee_display_name, status, barcode_value, priority,
+       due_date, notes, created_by_user_id, created_by_display_name, created_at, updated_at
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, 0, 0, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW())
+     RETURNING id`,
+    [
+      input.workOrderId,
+      input.travelerStepId,
+      input.operationId ?? null,
+      batchCode,
+      batchNumber,
+      input.batchQty,
+      input.assignedMachineId ?? null,
+      input.assignedMachineName ?? null,
+      input.assignedEmployeeId ?? null,
+      input.assignedEmployeeDisplayName ?? null,
+      input.status ?? 'queued',
+      barcodeValue,
+      input.priority ?? 'medium',
+      input.dueDate || null,
+      input.notes ?? null,
+      req.user?.id ?? null,
+      actorDisplayName(req),
+    ],
+  );
+  return loadBatch(client, Number(rowsOf(result)[0].id));
+}
 
 // ── Work order search (against authoritative all_orders / travelers) ───────────
 
@@ -323,6 +966,354 @@ router.delete('/operations/:id', async (req, res) => {
     await storage.deleteCncJobOperation(id);
     res.status(204).send();
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Operation batches
+
+router.get('/operation-batches', async (req, res) => {
+  try {
+    const clauses: string[] = [];
+    const values: any[] = [];
+    const addClause = (sqlText: string, value: any) => {
+      values.push(value);
+      clauses.push(sqlText.replace('?', `$${values.length}`));
+    };
+
+    if (typeof req.query.workOrderId === 'string' && req.query.workOrderId.trim()) {
+      addClause('b.work_order_id = ?', req.query.workOrderId.trim());
+    }
+    if (typeof req.query.travelerStepId === 'string' && req.query.travelerStepId.trim()) {
+      addClause('b.traveler_step_id = ?', req.query.travelerStepId.trim());
+    }
+    if (typeof req.query.operationId === 'string' && req.query.operationId.trim()) {
+      addClause('b.operation_id = ?', Number(req.query.operationId));
+    }
+    if (typeof req.query.status === 'string' && req.query.status.trim()) {
+      addClause('b.status = ?', req.query.status.trim());
+    }
+
+    const result = await pool.query(
+      `${batchSelectSql}
+       ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''}
+       ORDER BY b.due_date NULLS LAST, b.priority DESC, b.batch_code`,
+      values,
+    );
+    res.json(rowsOf(result));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/operation-batches/resolve/:barcode', async (req, res) => {
+  try {
+    const barcode = decodeURIComponent(req.params.barcode ?? '').trim();
+    if (!barcode) return res.status(400).json({ error: 'Barcode is required' });
+    const batch = await loadBatchByBarcode(pool, barcode);
+    if (!batch) return res.status(404).json({ error: 'Operation batch barcode not found' });
+    res.json(batch);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/operation-batches/station/scan', async (req, res) => {
+  try {
+    const data = batchStationScanSchema.parse(req.body);
+    const employee = await resolveActiveEmployeeByBadge(pool, data.employeeBadge);
+    if (!employee) return res.status(404).json({ error: 'Employee badge not recognized' });
+    const batch = await loadBatchByBarcode(pool, data.barcode);
+    await validateBatchStationAccess(pool, batch, employee, req, { allowPaused: true });
+    res.json(await loadBatchStationPayload(pool, batch, employee, req));
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    res.status(err?.status ?? 500).json({ error: err.message });
+  }
+});
+
+router.post('/operation-batches/station/:id/action', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const data = batchStationActionSchema.parse(req.body);
+    const employee = await resolveActiveEmployeeByBadge(pool, data.employeeBadge);
+    if (!employee) return res.status(404).json({ error: 'Employee badge not recognized' });
+    const batch = await loadBatch(pool, id);
+    const allowPaused = data.action === 'resume' || data.action === 'comment';
+    const allowHold = data.action === 'comment';
+    await validateBatchStationAccess(pool, batch, employee, req, { allowPaused, allowHold });
+
+    const comments = data.comments ? `[${new Date().toISOString()} ${employee.name}] ${data.comments}` : null;
+    let status = batch.status;
+    let qtyCompleted = Number(batch.qtyCompleted ?? 0);
+    let qtyScrapped = Number(batch.qtyScrapped ?? 0);
+    let notes = appendNote(batch.notes, comments);
+
+    if (data.action === 'start') {
+      status = 'in_progress';
+      await pool.query(
+        `UPDATE traveler_steps
+         SET status = CASE WHEN status IN ('NOT_STARTED', 'PENDING') THEN 'IN_PROGRESS' ELSE status END,
+             started_at = COALESCE(started_at, NOW()),
+             started_by = COALESCE(started_by, $1)
+         WHERE id = $2`,
+        [employee.name, batch.travelerStepId],
+      );
+      await upsertBatchLaborEntry(pool, batch, employee);
+    } else if (data.action === 'pause') {
+      status = 'paused';
+      await closeBatchLaborEntry(pool, batch, employee);
+    } else if (data.action === 'resume') {
+      status = 'in_progress';
+      await upsertBatchLaborEntry(pool, batch, employee);
+    } else if (data.action === 'hold') {
+      status = 'hold';
+      notes = appendNote(notes, comments ? null : `[${new Date().toISOString()} ${employee.name}] Problem/hold flagged`);
+      await closeBatchLaborEntry(pool, batch, employee);
+    } else if (data.action === 'complete') {
+      qtyCompleted = data.qtyCompleted ?? qtyCompleted;
+      qtyScrapped = data.qtyScrapped ?? qtyScrapped;
+      if (!completedAndScrappedWithinBatchQty(Number(batch.batchQty), qtyCompleted, qtyScrapped)) {
+        return res.status(422).json({
+          error: 'Completed plus scrapped quantity cannot exceed batch quantity',
+          batchQty: batch.batchQty,
+          qtyCompleted,
+          qtyScrapped,
+        });
+      }
+      status = completedAndScrappedEqualsBatchQty(Number(batch.batchQty), qtyCompleted, qtyScrapped) ? 'completed' : 'in_progress';
+      if (status === 'completed') {
+        await closeBatchLaborEntry(pool, batch, employee);
+      }
+    }
+
+    await pool.query(
+      `UPDATE cnc_operation_batches
+       SET status = $1,
+           qty_completed = $2,
+           qty_scrapped = $3,
+           assigned_employee_id = COALESCE(assigned_employee_id, $4),
+           assigned_employee_display_name = COALESCE(assigned_employee_display_name, $5),
+           notes = $6,
+           updated_at = NOW()
+       WHERE id = $7`,
+      [status, qtyCompleted, qtyScrapped, employee.id, employee.name, notes, id],
+    );
+
+    const updated = await loadBatch(pool, id);
+    if (updated?.status === 'completed') {
+      await completeTravelerStepWhenBatchesReady(pool, updated, employee);
+    }
+    res.json(await loadBatchStationPayload(pool, updated, employee, req));
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    res.status(err?.status ?? 500).json({ error: err.message });
+  }
+});
+
+router.get('/operation-batches/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const batch = await loadBatch(pool, id);
+    if (!batch) return res.status(404).json({ error: 'Operation batch not found' });
+    res.json(batch);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/operation-batches', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const data = createBatchSchema.parse(req.body);
+    await client.query('BEGIN');
+    const context = await validateBatchContext(client, data);
+    const existingQty = await activeBatchQty(client, data.workOrderId, data.travelerStepId);
+    const quantityLimit = validateBatchQuantityLimit(existingQty, data.batchQty, context.availableLimit);
+    if (!quantityLimit.allowed) {
+      await client.query('ROLLBACK');
+      return res.status(422).json({
+        error: 'Active operation batch quantities exceed available work order/traveler step quantity',
+        availableQty: quantityLimit.availableQty,
+        requestedQty: quantityLimit.requestedQty,
+        limitQty: quantityLimit.limitQty,
+      });
+    }
+    const batchNumber = data.batchNumber ?? await nextBatchNumber(client, data.workOrderId, data.travelerStepId);
+    const batch = await insertBatch(client, req, context, data, batchNumber);
+    await client.query('COMMIT');
+    res.status(201).json(batch);
+  } catch (err: any) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    if (isBatchBarcodeUniqueConflict(err)) return res.status(409).json({ error: 'Batch code or barcode already exists' });
+    res.status(err?.status ?? 500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/operation-batches/bulk', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const data = bulkCreateBatchSchema.parse(req.body);
+    const requestedBatches: any[] = data.batches?.length
+      ? data.batches
+      : (data.batchQtys ?? []).map((batchQty) => ({ batchQty }));
+    const batches = requestedBatches.map((batch) => createBatchSchema.parse({
+      ...batch,
+      workOrderId: data.workOrderId,
+      travelerStepId: data.travelerStepId,
+      operationId: batch.operationId ?? data.operationId ?? null,
+      assignedMachineId: batch.assignedMachineId ?? data.assignedMachineId ?? null,
+      assignedMachineName: batch.assignedMachineName ?? data.assignedMachineName ?? null,
+      assignedEmployeeId: batch.assignedEmployeeId ?? data.assignedEmployeeId ?? null,
+      assignedEmployeeDisplayName: batch.assignedEmployeeDisplayName ?? data.assignedEmployeeDisplayName ?? null,
+      priority: batch.priority ?? data.priority ?? 'medium',
+      dueDate: batch.dueDate ?? data.dueDate ?? null,
+      notes: batch.notes ?? data.notes ?? null,
+    }));
+    const requestedQty = batches.reduce((sum, batch) => sum + batch.batchQty, 0);
+
+    await client.query('BEGIN');
+    const context = await validateBatchContext(client, data);
+    for (const batch of batches) {
+      if (batch.operationId && batch.operationId !== data.operationId) {
+        await validateBatchContext(client, batch);
+      }
+    }
+    const existingQty = await activeBatchQty(client, data.workOrderId, data.travelerStepId);
+    const quantityLimit = validateBatchQuantityLimit(existingQty, requestedQty, context.availableLimit);
+    if (!quantityLimit.allowed) {
+      await client.query('ROLLBACK');
+      return res.status(422).json({
+        error: 'Active operation batch quantities exceed available work order/traveler step quantity',
+        availableQty: quantityLimit.availableQty,
+        requestedQty: quantityLimit.requestedQty,
+        limitQty: quantityLimit.limitQty,
+      });
+    }
+
+    let batchNumber = await nextBatchNumber(client, data.workOrderId, data.travelerStepId);
+    const created: any[] = [];
+    for (const batch of batches) {
+      const effectiveBatchNumber = batch.batchNumber ?? batchNumber;
+      created.push(await insertBatch(client, req, context, batch, effectiveBatchNumber));
+      batchNumber = Math.max(batchNumber + 1, effectiveBatchNumber + 1);
+    }
+    await client.query('COMMIT');
+    res.status(201).json({ count: created.length, batches: created });
+  } catch (err: any) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    if (isBatchBarcodeUniqueConflict(err)) return res.status(409).json({ error: 'Batch code or barcode already exists' });
+    res.status(err?.status ?? 500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+router.patch('/operation-batches/:id/assign', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const data = assignBatchSchema.parse(req.body);
+    const result = await pool.query(
+      `UPDATE cnc_operation_batches
+       SET assigned_machine_id = $1,
+           assigned_machine_name = $2,
+           assigned_employee_id = $3,
+           assigned_employee_display_name = $4,
+           status = CASE WHEN status = 'queued' THEN 'assigned' ELSE status END,
+           notes = COALESCE($5, notes),
+           updated_at = NOW()
+       WHERE id = $6
+       RETURNING id`,
+      [
+        data.assignedMachineId ?? null,
+        data.assignedMachineName ?? null,
+        data.assignedEmployeeId ?? null,
+        data.assignedEmployeeDisplayName ?? null,
+        data.notes ?? null,
+        id,
+      ],
+    );
+    if (rowsOf(result).length === 0) return res.status(404).json({ error: 'Operation batch not found' });
+    res.json(await loadBatch(pool, id));
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/operation-batches/:id/hold', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes : null;
+    const result = await pool.query(
+      `UPDATE cnc_operation_batches
+       SET status = 'hold', notes = COALESCE($1, notes), updated_at = NOW()
+       WHERE id = $2 AND status <> 'cancelled'
+       RETURNING id`,
+      [notes, id],
+    );
+    if (rowsOf(result).length === 0) return res.status(404).json({ error: 'Active operation batch not found' });
+    res.json(await loadBatch(pool, id));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/operation-batches/:id/cancel', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes : null;
+    const result = await pool.query(
+      `UPDATE cnc_operation_batches
+       SET status = 'cancelled', notes = COALESCE($1, notes), updated_at = NOW()
+       WHERE id = $2
+       RETURNING id`,
+      [notes, id],
+    );
+    if (rowsOf(result).length === 0) return res.status(404).json({ error: 'Operation batch not found' });
+    res.json(await loadBatch(pool, id));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/operation-batches/:id/quantities', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const data = quantityUpdateSchema.parse(req.body);
+    const existing = await loadBatch(pool, id);
+    if (!existing) return res.status(404).json({ error: 'Operation batch not found' });
+    if (existing.status === 'cancelled') return res.status(422).json({ error: 'Cancelled batches cannot be updated' });
+    if (!completedAndScrappedWithinBatchQty(existing.batchQty, data.qtyCompleted, data.qtyScrapped)) {
+      return res.status(422).json({
+        error: 'Completed plus scrapped quantity cannot exceed batch quantity',
+        batchQty: existing.batchQty,
+        qtyCompleted: data.qtyCompleted,
+        qtyScrapped: data.qtyScrapped,
+      });
+    }
+    const nextStatus = completedAndScrappedEqualsBatchQty(existing.batchQty, data.qtyCompleted, data.qtyScrapped) ? 'completed' : existing.status;
+    await pool.query(
+      `UPDATE cnc_operation_batches
+       SET qty_completed = $1,
+           qty_scrapped = $2,
+           status = $3,
+           notes = COALESCE($4, notes),
+           updated_at = NOW()
+       WHERE id = $5`,
+      [data.qtyCompleted, data.qtyScrapped, nextStatus, data.notes ?? null, id],
+    );
+    const updated = await loadBatch(pool, id);
+    if (updated?.status === 'completed') {
+      await completeTravelerStepWhenBatchesReady(pool, updated, { name: actorDisplayName(req) ?? 'CNC dashboard' });
+    }
+    res.json(updated);
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
     res.status(500).json({ error: err.message });
   }
 });
@@ -836,7 +1827,7 @@ router.get('/jobs/:id/traveler-info', async (req, res) => {
     const result = await pool.query(
       `SELECT t.id, t.traveler_number AS "travelerNumber", t.status,
               t.part_name AS "partName", t.part_number AS "partNumber",
-              t.work_order_id AS "workOrderId", t.quantity,
+              t.work_order_id AS "workOrderId", t.production_work_order_id AS "productionWorkOrderId", t.quantity,
               s.id AS "currentStepId", s.department_name AS "currentStepDept",
               s.status AS "currentStepStatus", s.step_number AS "currentStepNumber"
        FROM travelers t

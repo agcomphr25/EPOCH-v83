@@ -60,6 +60,10 @@ function normalizeObjectPath(filePath: string | null | undefined) {
   return filePath?.startsWith('objects/') ? `/${filePath}` : filePath;
 }
 
+function contentDisposition(disposition: 'inline' | 'attachment', filename: string) {
+  return `${disposition}; filename="${filename.replace(/["\r\n]/g, '_')}"`;
+}
+
 // GET /api/order-attachments/:orderId - Get all attachments for an order
 router.get('/:orderId', async (req, res) => {
   try {
@@ -284,11 +288,10 @@ router.get('/download/:attachmentId', async (req, res) => {
 
     if (isSupabaseObjectPath(normalizedDownloadPath) || isReplitObjectPath(normalizedDownloadPath)) {
       try {
-        res.setHeader(
-          'Content-Disposition',
-          `${forceDownload ? 'attachment' : 'inline'}; filename="${attachment.originalFileName}"`
-        );
-        await getFileStorageProviderForObjectPath(normalizedDownloadPath!).downloadObject(normalizedDownloadPath!, res);
+        await getFileStorageProviderForObjectPath(normalizedDownloadPath!).downloadObject(normalizedDownloadPath!, res, {
+          contentType: attachment.mimeType,
+          contentDisposition: contentDisposition(forceDownload ? 'attachment' : 'inline', attachment.originalFileName),
+        });
       } catch (cloudError) {
         console.error('[order-attachments/download] Error fetching from cloud storage:', cloudError);
         res.status(404).json({ error: 'File not found in cloud storage' });
@@ -298,7 +301,7 @@ router.get('/download/:attachmentId', async (req, res) => {
         res.download(attachment.filePath, attachment.originalFileName);
       } else {
         res.setHeader('Content-Type', attachment.mimeType);
-        res.setHeader('Content-Disposition', `inline; filename="${attachment.originalFileName}"`);
+        res.setHeader('Content-Disposition', contentDisposition('inline', attachment.originalFileName));
         res.sendFile(path.resolve(attachment.filePath));
       }
     } else {

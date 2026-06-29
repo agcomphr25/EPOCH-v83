@@ -97,6 +97,7 @@ interface TemplateTask {
 
 interface Checklist {
   id: string;
+  projectId: string;
   projectName: string;
   poNumber: string | null;
   dueDate: string | null;
@@ -155,6 +156,27 @@ interface Employee {
   id: number;
   name: string;
   email: string;
+}
+
+interface ProjectOption {
+  id: string;
+  projectCode?: string | null;
+  projectName: string;
+  poNumber?: string | null;
+  poId?: number | null;
+  currentStage?: string | null;
+  status?: string | null;
+}
+
+interface WizardDepartment {
+  id: string;
+  name: string;
+  tasks: { id: string; description: string }[];
+}
+
+interface DepartmentTaskOption {
+  name: string;
+  tasks: string[];
 }
 
 export default function PreproductionChecklistPage() {
@@ -222,6 +244,7 @@ export default function PreproductionChecklistPage() {
               isCreateOpen={isCreateChecklistOpen}
               setIsCreateOpen={setIsCreateChecklistOpen}
               selectedChecklistId={contextChecklistId}
+              initialProjectId={contextProjectId}
               initialProjectName={contextProjectName}
               initialPoNumber={contextPoNumber}
             />
@@ -251,6 +274,371 @@ export default function PreproductionChecklistPage() {
 // CHECKLISTS TAB
 // ===============================
 
+function PreproductionChecklistWizard({
+  open,
+  onOpenChange,
+  projects,
+  departmentOptions,
+  departmentTaskOptions,
+  initialProjectId,
+  initialProjectName,
+  initialPoNumber,
+  isSubmitting,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  projects: ProjectOption[];
+  departmentOptions: string[];
+  departmentTaskOptions: DepartmentTaskOption[];
+  initialProjectId: string;
+  initialProjectName: string;
+  initialPoNumber: string;
+  isSubmitting: boolean;
+  onSubmit: (data: {
+    templateName: string;
+    templateDescription: string;
+    projectId: string;
+    projectName: string;
+    poNumber: string;
+    departments: WizardDepartment[];
+  }) => void;
+}) {
+  const [templateName, setTemplateName] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
+  const [projectId, setProjectId] = useState(initialProjectId || '');
+  const [projectName, setProjectName] = useState(initialProjectName || '');
+  const [poNumber, setPoNumber] = useState(initialPoNumber || '');
+  const [departmentName, setDepartmentName] = useState('');
+  const [customDepartmentName, setCustomDepartmentName] = useState('');
+  const [departments, setDepartments] = useState<WizardDepartment[]>([]);
+  const taskOptionsByDepartment = new Map(
+    departmentTaskOptions.map((department) => [department.name.toLowerCase(), department.tasks])
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setProjectId(initialProjectId || '');
+    setProjectName(initialProjectName || '');
+    setPoNumber(initialPoNumber || '');
+  }, [open, initialProjectId, initialProjectName, initialPoNumber]);
+
+  const selectedProject = projects.find((project) => project.id === projectId);
+
+  useEffect(() => {
+    if (!selectedProject) return;
+    setProjectName(selectedProject.projectName || '');
+    setPoNumber(selectedProject.poNumber || '');
+  }, [selectedProject?.id]);
+
+  const addDepartment = () => {
+    const name = (departmentName === '__new__' ? customDepartmentName : departmentName).trim();
+    if (!name || departments.some((department) => department.name.toLowerCase() === name.toLowerCase())) {
+      return;
+    }
+
+    setDepartments((current) => [
+      ...current,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name,
+        tasks: [{ id: `${Date.now()}-task`, description: '' }],
+      },
+    ]);
+    setDepartmentName('');
+    setCustomDepartmentName('');
+  };
+
+  const updateTask = (departmentId: string, taskId: string, description: string) => {
+    setDepartments((current) =>
+      current.map((department) =>
+        department.id === departmentId
+          ? {
+              ...department,
+              tasks: department.tasks.map((task) =>
+                task.id === taskId ? { ...task, description } : task
+              ),
+            }
+          : department
+      )
+    );
+  };
+
+  const addTask = (departmentId: string) => {
+    setDepartments((current) =>
+      current.map((department) =>
+        department.id === departmentId
+          ? {
+              ...department,
+              tasks: [
+                ...department.tasks,
+                { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, description: '' },
+              ],
+            }
+          : department
+      )
+    );
+  };
+
+  const removeTask = (departmentId: string, taskId: string) => {
+    setDepartments((current) =>
+      current.map((department) =>
+        department.id === departmentId
+          ? { ...department, tasks: department.tasks.filter((task) => task.id !== taskId) }
+          : department
+      )
+    );
+  };
+
+  const removeDepartment = (departmentId: string) => {
+    setDepartments((current) => current.filter((department) => department.id !== departmentId));
+  };
+
+  const cleanedDepartments = departments
+    .map((department) => ({
+      ...department,
+      name: department.name.trim(),
+      tasks: department.tasks
+        .map((task) => ({ ...task, description: task.description.trim() }))
+        .filter((task) => task.description),
+    }))
+    .filter((department) => department.name && department.tasks.length > 0);
+
+  const canSubmit =
+    templateName.trim() &&
+    projectName.trim() &&
+    cleanedDepartments.length > 0 &&
+    cleanedDepartments.every((department) => department.tasks.length > 0);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Pre-production Checklist Wizard</DialogTitle>
+          <DialogDescription>
+            Build a reusable department checklist template and assign it to a project.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Template Name *</Label>
+              <Input
+                value={templateName}
+                onChange={(event) => setTemplateName(event.target.value)}
+                placeholder="Privateer pre-production readiness"
+                data-testid="input-wizard-template-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Assign to Project *</Label>
+              <Select
+                value={projectId || 'manual'}
+                onValueChange={(value) => {
+                  setProjectId(value === 'manual' ? '' : value);
+                  if (value === 'manual') {
+                    setProjectName('');
+                    setPoNumber('');
+                  }
+                }}
+              >
+                <SelectTrigger data-testid="select-wizard-project">
+                  <SelectValue placeholder="Select project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual project name</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {[project.projectCode, project.projectName].filter(Boolean).join(' - ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Project Name *</Label>
+              <Input
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                placeholder="Project name"
+                data-testid="input-wizard-project-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>PO Number</Label>
+              <Input
+                value={poNumber}
+                onChange={(event) => setPoNumber(event.target.value)}
+                placeholder="PO number"
+                data-testid="input-wizard-po-number"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Textarea
+              value={templateDescription}
+              onChange={(event) => setTemplateDescription(event.target.value)}
+              placeholder="Optional template notes"
+              data-testid="input-wizard-template-description"
+            />
+          </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-base font-semibold">Departments and Tasks</h3>
+              <p className="text-sm text-muted-foreground">
+                New departments are saved with this template and will be available in future wizard runs.
+              </p>
+            </div>
+            <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+              <Select value={departmentName} onValueChange={setDepartmentName}>
+                <SelectTrigger data-testid="select-wizard-department">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departmentOptions.map((department) => (
+                    <SelectItem key={department} value={department}>
+                      {department}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__new__">Add new department</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                value={customDepartmentName}
+                onChange={(event) => setCustomDepartmentName(event.target.value)}
+                placeholder="New department name"
+                disabled={departmentName !== '__new__'}
+                data-testid="input-wizard-new-department"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addDepartment}
+                disabled={!departmentName || (departmentName === '__new__' && !customDepartmentName.trim())}
+                data-testid="button-wizard-add-department"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {departments.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  Add a department to start building the template.
+                </CardContent>
+              </Card>
+            ) : (
+              departments.map((department) => (
+                <Card key={department.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-base">{department.name}</CardTitle>
+                        <CardDescription>{department.tasks.length} task{department.tasks.length === 1 ? '' : 's'}</CardDescription>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeDepartment(department.id)}
+                        data-testid={`button-wizard-remove-department-${department.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {department.tasks.map((task, index) => (
+                      <div key={task.id} className="grid gap-2 md:grid-cols-[minmax(180px,260px)_1fr_auto]">
+                        <Select
+                          value="__new_task__"
+                          onValueChange={(value) => {
+                            if (value.startsWith('saved:')) {
+                              updateTask(department.id, task.id, value.slice('saved:'.length));
+                            }
+                          }}
+                        >
+                          <SelectTrigger data-testid={`select-wizard-task-option-${department.id}-${index}`}>
+                            <SelectValue placeholder="Use saved task" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__new_task__">New task</SelectItem>
+                            {(taskOptionsByDepartment.get(department.name.toLowerCase()) || []).map((taskOption) => (
+                              <SelectItem key={taskOption} value={`saved:${taskOption}`}>
+                                {taskOption}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          value={task.description}
+                          onChange={(event) => updateTask(department.id, task.id, event.target.value)}
+                          placeholder="Choose a saved task or type a new task"
+                          data-testid={`input-wizard-task-${department.id}-${index}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeTask(department.id, task.id)}
+                          disabled={department.tasks.length === 1}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addTask(department.id)}
+                      data-testid={`button-wizard-add-task-${department.id}`}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Task
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() =>
+              onSubmit({
+                templateName: templateName.trim(),
+                templateDescription: templateDescription.trim(),
+                projectId,
+                projectName: projectName.trim(),
+                poNumber: poNumber.trim(),
+                departments: cleanedDepartments,
+              })
+            }
+            disabled={!canSubmit || isSubmitting}
+            data-testid="button-submit-checklist-wizard"
+          >
+            {isSubmitting ? 'Creating...' : 'Create Template and Assign'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ChecklistsTab({
   searchTerm,
   setSearchTerm,
@@ -260,6 +648,7 @@ function ChecklistsTab({
   isCreateOpen,
   setIsCreateOpen,
   selectedChecklistId = '',
+  initialProjectId = '',
   initialProjectName = '',
   initialPoNumber = '',
 }: {
@@ -271,11 +660,13 @@ function ChecklistsTab({
   isCreateOpen: boolean;
   setIsCreateOpen: (b: boolean) => void;
   selectedChecklistId?: string;
+  initialProjectId?: string;
   initialProjectName?: string;
   initialPoNumber?: string;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   const { data: checklists = [], isLoading } = useQuery<Checklist[]>({
     queryKey: ['/api/preproduction-checklists', statusFilter],
@@ -293,6 +684,18 @@ function ChecklistsTab({
 
   const { data: templates = [] } = useQuery<Template[]>({
     queryKey: ['/api/preproduction-checklists/templates'],
+  });
+
+  const { data: projects = [] } = useQuery<ProjectOption[]>({
+    queryKey: ['/api/projects'],
+  });
+
+  const { data: departmentOptions = [] } = useQuery<string[]>({
+    queryKey: ['/api/preproduction-checklists/templates/departments'],
+  });
+
+  const { data: departmentTaskOptions = [] } = useQuery<DepartmentTaskOption[]>({
+    queryKey: ['/api/preproduction-checklists/templates/department-task-options'],
   });
 
   const [newChecklist, setNewChecklist] = useState({
@@ -337,6 +740,58 @@ function ChecklistsTab({
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to create checklist', variant: 'destructive' });
+    },
+  });
+
+  const wizardMutation = useMutation({
+    mutationFn: async (data: {
+      templateName: string;
+      templateDescription: string;
+      projectId: string;
+      projectName: string;
+      poNumber: string;
+      departments: WizardDepartment[];
+    }) => {
+      const template = await apiRequest('/api/preproduction-checklists/templates/wizard', {
+        method: 'POST',
+        body: {
+          name: data.templateName,
+          description: data.templateDescription || null,
+          sections: data.departments.map((department, index) => ({
+            name: department.name,
+            sortOrder: index + 1,
+            tasks: department.tasks.map((task, taskIndex) => ({
+              description: task.description,
+              sortOrder: taskIndex + 1,
+            })),
+          })),
+        },
+      });
+
+      return apiRequest('/api/preproduction-checklists', {
+        method: 'POST',
+        body: {
+          projectName: data.projectName,
+          poNumber: data.poNumber || undefined,
+          templateId: template.id,
+          assignedProjectId: data.projectId || undefined,
+        },
+      });
+    },
+    onSuccess: (checklist: Checklist) => {
+      qc.invalidateQueries({ queryKey: ['/api/preproduction-checklists'] });
+      qc.invalidateQueries({ queryKey: ['/api/preproduction-checklists/templates'] });
+      qc.invalidateQueries({ queryKey: ['/api/preproduction-checklists/templates/departments'] });
+      qc.invalidateQueries({ queryKey: ['/api/preproduction-checklists/templates/department-task-options'] });
+      qc.invalidateQueries({ queryKey: ['/api/projects'] });
+      if (checklist?.projectId) {
+        qc.invalidateQueries({ queryKey: ['/api/projects', checklist.projectId] });
+      }
+      toast({ title: 'Success', description: 'Template created and checklist assigned' });
+      setIsWizardOpen(false);
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to create checklist from wizard', variant: 'destructive' });
     },
   });
 
@@ -390,11 +845,30 @@ function ChecklistsTab({
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)} data-testid="button-create-checklist">
-          <Plus className="h-4 w-4 mr-2" />
-          New Checklist
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setIsWizardOpen(true)} data-testid="button-open-checklist-wizard">
+            <ClipboardList className="h-4 w-4 mr-2" />
+            Checklist Wizard
+          </Button>
+          <Button onClick={() => setIsCreateOpen(true)} data-testid="button-create-checklist">
+            <Plus className="h-4 w-4 mr-2" />
+            New Checklist
+          </Button>
+        </div>
       </div>
+
+      <PreproductionChecklistWizard
+        open={isWizardOpen}
+        onOpenChange={setIsWizardOpen}
+        projects={projects}
+        departmentOptions={departmentOptions}
+        departmentTaskOptions={departmentTaskOptions}
+        initialProjectId={initialProjectId}
+        initialProjectName={initialProjectName}
+        initialPoNumber={initialPoNumber}
+        isSubmitting={wizardMutation.isPending}
+        onSubmit={(data) => wizardMutation.mutate(data)}
+      />
 
       {/* Checklists Grid */}
       {isLoading ? (
@@ -1354,7 +1828,7 @@ function TaskRow({
   onUpdateTask: (taskId: string, data: any) => void;
   onDeleteTask: (taskId: string) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(task.isCompleted || !!task.assignedTo);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [notes, setNotes] = useState(task.notes || '');
   const [link, setLink] = useState(task.link || '');
   const [hasChanges, setHasChanges] = useState(false);
@@ -1369,7 +1843,7 @@ function TaskRow({
   const handleTaskComplete = (checked: boolean | "indeterminate") => {
     onUpdateTask(task.id, { isCompleted: checked });
     if (checked === true) {
-      setIsExpanded(true);
+      setIsExpanded(false);
     }
   };
 
@@ -1473,69 +1947,85 @@ function TaskRow({
         </div>
       </div>
       
-      {showNotesLinkFields && isExpanded && (
-        <div className="px-3 pb-3 pt-0 border-t mx-3 mt-1">
-          <div className="space-y-3 pt-3">
-            <div className="space-y-2">
-              <Label className="text-sm flex items-center gap-2">
+      {showNotesLinkFields && (
+        <Accordion
+          type="single"
+          collapsible
+          value={isExpanded ? 'notes-link' : ''}
+          onValueChange={(value) => setIsExpanded(value === 'notes-link')}
+          className="border-t mx-3 mt-1"
+        >
+          <AccordionItem value="notes-link" className="border-0">
+            <AccordionTrigger className="py-2 text-sm hover:no-underline" data-testid={`accordion-notes-link-${task.id}`}>
+              <span className="flex items-center gap-2">
                 <StickyNote className="h-4 w-4" />
-                Notes
-              </Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => {
-                  setNotes(e.target.value);
-                  setHasChanges(true);
-                }}
-                placeholder="Add notes about this task..."
-                className="min-h-[80px] text-sm"
-                disabled={isSigned}
-                data-testid={`input-notes-${task.id}`}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm flex items-center gap-2">
-                <Link2 className="h-4 w-4" />
-                Link
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  value={link}
-                  onChange={(e) => {
-                    setLink(e.target.value);
-                    setHasChanges(true);
-                  }}
-                  placeholder="https://example.com/document"
-                  className="text-sm"
-                  disabled={isSigned}
-                  data-testid={`input-link-${task.id}`}
-                />
-                {link && (
+                Notes and link
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pb-3">
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-sm flex items-center gap-2">
+                    <StickyNote className="h-4 w-4" />
+                    Notes
+                  </Label>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => {
+                      setNotes(e.target.value);
+                      setHasChanges(true);
+                    }}
+                    placeholder="Add notes about this task..."
+                    className="min-h-[80px] text-sm"
+                    disabled={isSigned}
+                    data-testid={`input-notes-${task.id}`}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm flex items-center gap-2">
+                    <Link2 className="h-4 w-4" />
+                    Link
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={link}
+                      onChange={(e) => {
+                        setLink(e.target.value);
+                        setHasChanges(true);
+                      }}
+                      placeholder="https://example.com/document"
+                      className="text-sm"
+                      disabled={isSigned}
+                      data-testid={`input-link-${task.id}`}
+                    />
+                    {link && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        asChild
+                        className="shrink-0"
+                      >
+                        <a href={link} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {hasChanges && !isSigned && (
                   <Button
-                    variant="outline"
-                    size="icon"
-                    asChild
-                    className="shrink-0"
+                    size="sm"
+                    onClick={handleSaveNotesLink}
+                    data-testid={`button-save-notes-${task.id}`}
                   >
-                    <a href={link} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Notes & Link
                   </Button>
                 )}
               </div>
-            </div>
-            {hasChanges && !isSigned && (
-              <Button 
-                size="sm" 
-                onClick={handleSaveNotesLink}
-                data-testid={`button-save-notes-${task.id}`}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Save Notes & Link
-              </Button>
-            )}
-          </div>
-        </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       )}
     </div>
   );

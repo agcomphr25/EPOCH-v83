@@ -1,4 +1,8 @@
 import express from 'express';
+import { randomUUID } from 'crypto';
+import fs from 'fs/promises';
+import multer from 'multer';
+import path from 'path';
 import { storage } from '../../storage';
 import { insertProjectStepAttachmentSchema } from '../../schema';
 import { ObjectNotFoundError } from '../../replit_integrations/object_storage';
@@ -10,6 +14,43 @@ import {
 } from '../services/fileStorageProvider';
 
 const router = express.Router();
+const localProjectStepAttachmentsDir = path.join(process.cwd(), 'uploads', 'project-step-attachments');
+const localProjectStepAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+});
+
+function safeLocalFileName(fileName: string) {
+  const parsed = path.parse(fileName || 'project-step-attachment');
+  const base = parsed.name
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 90) || 'project-step-attachment';
+  const ext = parsed.ext.replace(/[^a-zA-Z0-9.]/g, '').slice(0, 20);
+  return `${randomUUID()}-${base}${ext}`;
+}
+
+function isLocalProjectStepAttachmentPath(filePath: string | null | undefined) {
+  return !!filePath && filePath.startsWith('/uploads/project-step-attachments/');
+}
+
+function resolveLocalProjectStepAttachmentPath(filePath: string) {
+  const fileName = path.basename(filePath);
+  return path.join(localProjectStepAttachmentsDir, fileName);
+}
+
+async function saveLocalProjectStepAttachment(file: Express.Multer.File) {
+  await fs.mkdir(localProjectStepAttachmentsDir, { recursive: true });
+  const storedFileName = safeLocalFileName(file.originalname);
+  await fs.writeFile(path.join(localProjectStepAttachmentsDir, storedFileName), file.buffer);
+  return `/uploads/project-step-attachments/${storedFileName}`;
+}
+
+async function deleteLocalProjectStepAttachment(filePath: string) {
+  if (!isLocalProjectStepAttachmentPath(filePath)) return;
+  await fs.unlink(resolveLocalProjectStepAttachmentPath(filePath));
+}
 
 router.get('/by-project/:projectId', sessionAwareAuth, async (req, res) => {
   try {
@@ -84,6 +125,85 @@ router.post('/request-upload-url', sessionAwareAuth, async (req, res) => {
     console.error('Error generating upload URL for project step attachment:', { status, reason, message });
     res.status(status).json({ error: 'Failed to generate upload URL', reason, details: message });
   }
+});
+
+router.post('/local-upload', sessionAwareAuth, (req, res) => {
+  localProjectStepAttachmentUpload.single('file')(req, res, async (uploadError: any) => {
+    if (uploadError) {
+      const isSizeLimit = uploadError instanceof multer.MulterError && uploadError.code === 'LIMIT_FILE_SIZE';
+      return res.status(isSizeLimit ? 413 : 400).json({
+        error: isSizeLimit ? 'Document uploads are limited to 100 MB.' : 'Failed to read uploaded document',
+        details: uploadError.message,
+      });
+    }
+
+    let localFilePath: string | null = null;
+    try {
+      const file = req.file;
+      const { projectId, stepId, notes } = req.body;
+      const user = req.user;
+
+      if (!file) {
+        return res.status(400).json({ error: 'No file received' });
+      }
+      if (!projectId || !stepId) {
+        return res.status(400).json({ error: 'Missing required fields: projectId, stepId' });
+      }
+
+      const step = await storage.getProjectStep(stepId);
+      if (!step) {
+        return res.status(404).json({ error: 'Step not found' });
+      }
+      if (step.projectId !== projectId) {
+        return res.status(400).json({ error: 'Step does not belong to the specified project' });
+      }
+
+      localFilePath = await saveLocalProjectStepAttachment(file);
+      const uploadedByEmployeeId = user?.employeeId || null;
+      const originalFileName = file.originalname || 'project-step-attachment';
+      const attachmentData = {
+        projectId,
+        stepId,
+        fileName: localFilePath.split('/').pop() || originalFileName,
+        originalFileName,
+        fileSize: file.size || 0,
+        mimeType: file.mimetype || 'application/octet-stream',
+        filePath: localFilePath,
+        uploadedBy: uploadedByEmployeeId,
+        notes: notes || null,
+      };
+
+      const validatedData = insertProjectStepAttachmentSchema.parse(attachmentData);
+      const attachment = await storage.createProjectStepAttachment(validatedData);
+
+      await storage.createProjectActivityLog({
+        projectId,
+        activityType: 'document_attached',
+        stepType: step.stepType,
+        description: `Document attached: ${originalFileName}`,
+        performedBy: uploadedByEmployeeId || undefined,
+      });
+
+      console.warn('[project-step-attachments/local-upload] Used local upload fallback', {
+        projectId,
+        stepId,
+        attachmentId: attachment.id,
+        reason: 'object_storage_signing_unavailable',
+      });
+
+      res.status(201).json(attachment);
+    } catch (error: any) {
+      if (localFilePath) {
+        try {
+          await deleteLocalProjectStepAttachment(localFilePath);
+        } catch (cleanupError) {
+          console.warn('Failed to clean up local project step attachment after upload error:', cleanupError);
+        }
+      }
+      console.error('Error uploading local project step attachment:', error);
+      res.status(500).json({ error: error.message || 'Failed to upload project step attachment' });
+    }
+  });
 });
 
 router.post('/complete-upload', sessionAwareAuth, async (req, res) => {
@@ -196,6 +316,13 @@ router.delete('/:attachmentId', sessionAwareAuth, async (req, res) => {
       } catch (deleteError) {
         console.warn('Failed to delete file from cloud storage:', deleteError);
       }
+    } else if (normalizedPath && isLocalProjectStepAttachmentPath(normalizedPath)) {
+      try {
+        await deleteLocalProjectStepAttachment(normalizedPath);
+        console.log(`Deleted local file: ${normalizedPath}`);
+      } catch (deleteError) {
+        console.warn('Failed to delete local project step attachment:', deleteError);
+      }
     }
 
     await storage.deleteProjectStepAttachment(attachmentId);
@@ -244,6 +371,17 @@ router.get('/download/:attachmentId', sessionAwareAuth, async (req, res) => {
           return res.status(404).json({ error: 'Attachment file not found in storage' });
         }
         return res.status(502).json({ error: 'Failed to retrieve file from cloud storage' });
+      }
+    } else if (normalizedDownloadPath && isLocalProjectStepAttachmentPath(normalizedDownloadPath)) {
+      try {
+        const localPath = resolveLocalProjectStepAttachmentPath(normalizedDownloadPath);
+        await fs.access(localPath);
+        const disposition = forceDownload ? 'attachment' : 'inline';
+        res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(attachment.originalFileName)}"`);
+        res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
+        return res.sendFile(localPath);
+      } catch {
+        return res.status(404).json({ error: 'Attachment file not found on server' });
       }
     } else {
       return res.status(404).json({ error: 'File not found' });

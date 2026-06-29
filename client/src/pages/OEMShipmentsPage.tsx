@@ -61,13 +61,14 @@ import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Plus } from 'lucide-react';
 
 interface ShipmentItem {
-  id: number;
+  id: string;
   poItemId: number;
   orderId: string;
   quantity: number;
   description: string;
   poNumber: string;
   hasPackingSlip: boolean;
+  packingSlipItemId?: string | null;
   itemType: 'stock_model' | 'custom_model' | string;
   unitPrice?: number | null;
   lineTotal?: number | null;
@@ -78,7 +79,7 @@ interface ShipmentItem {
 }
 
 interface Shipment {
-  id: number;
+  id: string;
   customer_id: number;
   customer_name: string;
   customer_address: string;
@@ -139,11 +140,11 @@ export default function OEMShipmentsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(0);
-  const [expandedShipments, setExpandedShipments] = useState<Set<number>>(new Set());
+  const [expandedShipments, setExpandedShipments] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'date' | 'po'>('date');
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set());
-  const [editingTrackingId, setEditingTrackingId] = useState<number | null>(null);
+  const [editingTrackingId, setEditingTrackingId] = useState<string | null>(null);
   const [editingTrackingValue, setEditingTrackingValue] = useState('');
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
   const [addItemShipmentId, setAddItemShipmentId] = useState<string | null>(null);
@@ -366,7 +367,7 @@ export default function OEMShipmentsPage() {
     );
   };
 
-  const toggleExpanded = (shipmentId: number) => {
+  const toggleExpanded = (shipmentId: string) => {
     const newExpanded = new Set(expandedShipments);
     if (newExpanded.has(shipmentId)) {
       newExpanded.delete(shipmentId);
@@ -376,7 +377,7 @@ export default function OEMShipmentsPage() {
     setExpandedShipments(newExpanded);
   };
 
-  const downloadShippingLabel = async (shipmentId: number, trackingNumber: string) => {
+  const downloadShippingLabel = async (shipmentId: string, trackingNumber: string) => {
     const newTab = window.open('', '_blank');
     try {
       const response = await fetch(`/api/po-orders/oem-shipments/${shipmentId}/label`, {
@@ -418,7 +419,15 @@ export default function OEMShipmentsPage() {
     }
   };
 
-  const downloadPackingSlip = async (itemId: number, poNumber: string, orderId: string) => {
+  const getAttachedPackingSlipItemId = (item: ShipmentItem) =>
+    item.packingSlipItemId || item.id;
+
+  const getPackingSlipItemForGroup = (items: ShipmentItem[]) =>
+    items.find((item) => item.packingSlipItemId) ||
+    items.find((item) => item.hasPackingSlip) ||
+    items[0];
+
+  const downloadPackingSlip = async (itemId: string, poNumber: string, orderId: string) => {
     const newTab = window.open('', '_blank');
     try {
       const response = await fetch(`/api/po-orders/oem-shipments/packing-slip/${itemId}`, {
@@ -466,7 +475,7 @@ export default function OEMShipmentsPage() {
   };
 
   const updateTrackingMutation = useMutation({
-    mutationFn: async ({ shipmentId, trackingNumber }: { shipmentId: number; trackingNumber: string }) => {
+    mutationFn: async ({ shipmentId, trackingNumber }: { shipmentId: string; trackingNumber: string }) => {
       return await apiRequest(`/api/po-orders/oem-shipments/${shipmentId}/tracking`, { 
         method: 'PATCH', 
         body: { trackingNumber } 
@@ -487,12 +496,12 @@ export default function OEMShipmentsPage() {
     },
   });
 
-  const startEditingTracking = (shipmentId: number, currentValue: string) => {
+  const startEditingTracking = (shipmentId: string, currentValue: string) => {
     setEditingTrackingId(shipmentId);
     setEditingTrackingValue(currentValue);
   };
 
-  const saveTrackingNumber = (shipmentId: number) => {
+  const saveTrackingNumber = (shipmentId: string) => {
     if (editingTrackingValue.trim()) {
       updateTrackingMutation.mutate({ shipmentId, trackingNumber: editingTrackingValue.trim() });
     }
@@ -640,7 +649,7 @@ export default function OEMShipmentsPage() {
       });
     });
     return acc;
-  }, {} as Record<string, { poNumber: string; customerName: string; customerId: number; items: Array<ShipmentItem & { trackingNumber: string; shippedDate: string; shipmentId: number; hasLabel: boolean }> }>);
+  }, {} as Record<string, { poNumber: string; customerName: string; customerId: number; items: Array<ShipmentItem & { trackingNumber: string; shippedDate: string; shipmentId: string; hasLabel: boolean }> }>);
 
   return (
     <div className="p-6 space-y-6">
@@ -1042,7 +1051,7 @@ export default function OEMShipmentsPage() {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                onClick={() => { const slipItem = items.find(i => i.hasPackingSlip) || items[0]; downloadPackingSlip(slipItem.id, poNumber, slipItem.orderId); }}
+                                                onClick={() => { const slipItem = getPackingSlipItemForGroup(items); downloadPackingSlip(getAttachedPackingSlipItemId(slipItem), poNumber, slipItem.orderId); }}
                                               >
                                                 <FileText className="h-4 w-4 mr-2" />
                                                 View Packing Slip
@@ -1076,7 +1085,7 @@ export default function OEMShipmentsPage() {
                                                 <TooltipTrigger asChild>
                                                   <div>
                                                     <DropdownMenuItem
-                                                      onClick={() => { const slipItem = items.find(i => i.hasPackingSlip) || items[0]; downloadPackingSlip(slipItem.id, poNumber, slipItem.orderId); }}
+                                                      onClick={() => { const slipItem = getPackingSlipItemForGroup(items); downloadPackingSlip(getAttachedPackingSlipItemId(slipItem), poNumber, slipItem.orderId); }}
                                                     >
                                                       <Printer className="h-3 w-3 mr-2 flex-shrink-0" />
                                                       <div className="flex flex-col">
@@ -1387,7 +1396,7 @@ export default function OEMShipmentsPage() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
+                                      onClick={() => downloadPackingSlip(getAttachedPackingSlipItemId(item), item.poNumber, item.orderId)}
                                     >
                                       <Printer className="h-3 w-3 mr-1" />
                                       View Packing Slip

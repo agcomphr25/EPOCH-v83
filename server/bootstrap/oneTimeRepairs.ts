@@ -1,6 +1,7 @@
 import {
   runEarlyBootRepairBackfills,
   runPacketAllocationBackfill,
+  runP1ProductionStatusBackfill,
   runReturnToQcShippedStatusRepair,
 } from '../scripts/maintenance/bootRepairBackfills';
 
@@ -78,6 +79,10 @@ export async function runLaborAllocationBackfill(pool: any) {
 
 export async function runEarlyOneTimeRepairBackfills(context: BootRepairContext) {
   await runEarlyBootRepairBackfills(context);
+}
+
+export async function runP1ProductionStatusBootBackfill(context: BootRepairContext) {
+  return runP1ProductionStatusBackfill(context);
 }
 
 export async function runReturnToQcBootRepair() {

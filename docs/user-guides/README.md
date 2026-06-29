@@ -8,6 +8,10 @@ This directory contains step-by-step user guides for common tasks in the EPOCH v
 
 - **[Customer Creation Guide](./customer-creation-guide.md)** - Complete walkthrough for adding new customers with address validation
 
+### System Administration
+
+- **[P1 PO Status Repair Runbook](./p1-po-status-repair-runbook.md)** - Safe dry-run, apply, and verification steps for repairing P1 purchase order status drift
+
 ## Coming Soon
 
 - Order Entry Guide

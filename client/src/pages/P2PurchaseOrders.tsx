@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { P2CustomerManager } from '@/components/P2CustomerManager';
 import { P2POManager } from '@/components/P2POManager';
 import { P2POItemsManager } from '@/components/P2POItemsManager';
+import P2POCreationWizard, { SourcePO } from '@/components/p2/P2POCreationWizard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, FileText, Package } from 'lucide-react';
+import { Building2, FileText } from 'lucide-react';
 
 type ViewMode = 'customers' | 'orders' | 'items';
 
@@ -15,6 +16,7 @@ interface ItemsView {
 export default function P2PurchaseOrders() {
   const [activeTab, setActiveTab] = useState<ViewMode>('customers');
   const [itemsView, setItemsView] = useState<ItemsView | null>(null);
+  const [revisePO, setRevisePO] = useState<SourcePO | null>(null);
 
   const handleManageItems = (poId: number, poNumber: string) => {
     setItemsView({ poId, poNumber });
@@ -26,10 +28,37 @@ export default function P2PurchaseOrders() {
     setActiveTab('orders');
   };
 
-  const handleBackToCustomers = () => {
-    setItemsView(null);
-    setActiveTab('customers');
+  const handleRevise = (po: any) => {
+    setRevisePO({
+      id: po.id,
+      poNumber: po.poNumber,
+      customerId: po.customerId,
+      expectedDelivery: po.expectedDelivery,
+      toleranceAuthorizerId: po.toleranceAuthorizerId ?? null,
+      notes: po.notes ?? null,
+      assignedToId: po.assignedToId ?? null,
+      productionLeadId: po.productionLeadId ?? null,
+      projectId: po.projectId ?? null,
+      revisionNumber: po.revisionNumber ?? 0,
+    });
   };
+
+  const handleReviseComplete = () => {
+    setRevisePO(null);
+    setActiveTab('orders');
+  };
+
+  if (revisePO) {
+    return (
+      <div className="container mx-auto p-6">
+        <P2POCreationWizard
+          onComplete={handleReviseComplete}
+          onCancel={() => setRevisePO(null)}
+          sourcePO={revisePO}
+        />
+      </div>
+    );
+  }
 
   if (activeTab === 'items' && itemsView) {
     return (
@@ -75,7 +104,10 @@ export default function P2PurchaseOrders() {
         </TabsContent>
 
         <TabsContent value="orders" className="mt-6">
-          <P2POManager onManageItems={handleManageItems} />
+          <P2POManager
+            onManageItems={handleManageItems}
+            onRevise={handleRevise}
+          />
         </TabsContent>
       </Tabs>
     </div>

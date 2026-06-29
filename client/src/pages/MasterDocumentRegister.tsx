@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,122 @@ import type { ControlledDocument, DocumentVersionHistory } from '@shared/schema'
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
+const DOCUMENT_TYPE_OPTIONS = [
+  { value: 'POSTER', label: 'Poster', codeToken: 'Poster' },
+  { value: 'PROCEDURE', label: 'Procedure / DOC', codeToken: 'DOC' },
+  { value: 'FORM', label: 'Form', codeToken: 'Form' },
+  { value: 'TABLE', label: 'Table', codeToken: 'Table' },
+  { value: 'SOP', label: 'SOP', codeToken: 'DOC' },
+  { value: 'WI', label: 'Work Instruction', codeToken: 'DOC' },
+  { value: 'POLICY', label: 'Policy', codeToken: 'DOC' },
+  { value: 'PLAN', label: 'Plan', codeToken: 'DOC' },
+];
+
+const DOCUMENT_DEPARTMENT_OPTIONS = [
+  'General Use',
+  'Front Office',
+  'HR',
+  'Quality',
+  'Quality Control',
+  'P1 Operations',
+  'P2 Operations',
+  'PL1',
+  'PL2',
+  'PL3',
+  'CNC',
+  'Cutting Table',
+  'Gunsmith',
+  'Inventory',
+  'Paint',
+  'Plugging',
+  'Production',
+  'Shipping - PL1',
+  'Finish - PL1',
+  'Mold Maintenance',
+  'Purchasing',
+];
+
+const DEPARTMENT_CODE_PREFIXES: Record<string, string> = {
+  'General Use': 'AG',
+  'Front Office': 'FO',
+  HR: 'HR',
+  Quality: 'QC',
+  'Quality Control': 'QC',
+  'P1 Operations': 'PL1',
+  'P2 Operations': 'PL2',
+  PL1: 'PL1',
+  PL2: 'PL2',
+  PL3: 'PL3',
+  CNC: 'CNC',
+  'Cutting Table': 'CT',
+  Gunsmith: 'GU',
+  Inventory: 'IN',
+  Paint: 'PT',
+  Plugging: 'PG',
+  Production: 'PR',
+  'Shipping - PL1': 'SH',
+  'Finish - PL1': 'FN',
+  'Mold Maintenance': 'MM',
+  Purchasing: 'PO',
+};
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const codePrefixForDepartment = (department: string) => {
+  const mapped = DEPARTMENT_CODE_PREFIXES[department];
+  if (mapped) return mapped;
+  return department
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 4);
+};
+
+const codeTokenForDocumentType = (documentType: string) =>
+  DOCUMENT_TYPE_OPTIONS.find((option) => option.value === documentType)?.codeToken || documentType;
+
+const generateDocumentNumber = (
+  documents: ControlledDocument[],
+  department: string,
+  documentType: string
+) => {
+  if (!department || !documentType) return '';
+
+  const prefix = codePrefixForDepartment(department);
+  const codeToken = codeTokenForDocumentType(documentType);
+  const matcher = new RegExp(
+    `^${escapeRegExp(prefix)}\\s+${escapeRegExp(codeToken)}\\s*(\\d+(?:\\.\\d+)?)$`,
+    'i'
+  );
+
+  const highestWholeNumber = documents.reduce((highest, doc) => {
+    const match = doc.documentNumber?.trim().match(matcher);
+    if (!match) return highest;
+    const number = Number(match[1]);
+    if (!Number.isFinite(number)) return highest;
+    return Math.max(highest, Math.floor(number));
+  }, 0);
+
+  return `${prefix} ${codeToken} ${highestWholeNumber + 1}`;
+};
+
+const nextRevisionVersion = (version: string | null | undefined) => {
+  const match = String(version || '1.0').match(/^(\d+)(?:\.(\d+))?$/);
+  if (!match) return '1.1';
+
+  const major = Number(match[1]);
+  const minor = Number(match[2] || '0');
+  if (!Number.isFinite(major) || !Number.isFinite(minor)) return '1.1';
+
+  if (minor >= 9) {
+    return `${major + 1}.0`;
+  }
+
+  return `${major}.${minor + 1}`;
+};
+
 export default function MasterDocumentRegister() {
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
@@ -61,7 +177,17 @@ export default function MasterDocumentRegister() {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<ControlledDocument | null>(null);
   const [createNewVersion, setCreateNewVersion] = useState(false);
-  const [versionType, setVersionType] = useState<'major' | 'minor'>('minor');
+  const [newDocumentDepartment, setNewDocumentDepartment] = useState('');
+  const [newDocumentType, setNewDocumentType] = useState('');
+  const [pendingDocumentAccess, setPendingDocumentAccess] = useState<{
+    doc: ControlledDocument;
+    mode: 'view' | 'download';
+  } | null>(null);
+  const [stepUpPassword, setStepUpPassword] = useState('');
+  const [stepUpError, setStepUpError] = useState<string | null>(null);
+  const [isStepUpOpen, setIsStepUpOpen] = useState(false);
+  const [isStepUpSubmitting, setIsStepUpSubmitting] = useState(false);
+  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch controlled documents
@@ -89,24 +215,17 @@ export default function MasterDocumentRegister() {
   const canCreateEdit = session?.role === 'ADMIN' || session?.role === 'OWNER' || session?.username === 'lauriet';
   const canApprove = session?.username === 'lauriet';
 
-  // Filter documents
-  const filteredDocuments = documents.filter((doc) => {
-    const matchesSearch =
-      searchQuery === '' ||
-      doc.documentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.documentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    const matchesDepartment = departmentFilter === 'all' || doc.department === departmentFilter;
-    const matchesType = typeFilter === 'all' || doc.documentType === typeFilter;
-    const matchesStatus = statusFilter === 'all' || doc.status === statusFilter;
-
-    return matchesSearch && matchesDepartment && matchesType && matchesStatus;
-  });
-
   // Get unique departments and types for filters
   const departments = ['all', ...Array.from(new Set(documents.map((d) => d.department)))];
   const documentTypes = ['all', ...Array.from(new Set(documents.map((d) => d.documentType)))];
+  const createDepartmentOptions = useMemo(
+    () => Array.from(new Set([...DOCUMENT_DEPARTMENT_OPTIONS, ...documents.map((d) => d.department).filter(Boolean)])),
+    [documents]
+  );
+  const generatedDocumentNumber = useMemo(
+    () => generateDocumentNumber(documents, newDocumentDepartment, newDocumentType),
+    [documents, newDocumentDepartment, newDocumentType]
+  );
 
   // Check if document is expired
   const isExpired = (doc: ControlledDocument) => {
@@ -122,6 +241,23 @@ export default function MasterDocumentRegister() {
     const daysUntilExpiration = Math.floor((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return daysUntilExpiration > 0 && daysUntilExpiration <= 30;
   };
+
+  // Filter documents
+  const filteredDocuments = documents.filter((doc) => {
+    const matchesSearch =
+      searchQuery === '' ||
+      doc.documentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.documentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesDepartment = departmentFilter === 'all' || doc.department === departmentFilter;
+    const matchesType = typeFilter === 'all' || doc.documentType === typeFilter;
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'expired' ? isExpired(doc) : doc.status === statusFilter);
+
+    return matchesSearch && matchesDepartment && matchesType && matchesStatus;
+  });
 
   const getStatusBadge = (doc: ControlledDocument) => {
     if (isExpired(doc)) {
@@ -189,9 +325,156 @@ export default function MasterDocumentRegister() {
   const isPdfDocument = (doc: ControlledDocument) =>
     Boolean(doc.filePath?.toLowerCase().endsWith('.pdf'));
 
-  const openDocumentFile = (doc: ControlledDocument, mode: 'view' | 'download') => {
+  const isExternalDocument = (doc: ControlledDocument) =>
+    Boolean(doc.filePath && /^https?:\/\//i.test(doc.filePath));
+
+  const getAuthHeaders = (): Record<string, string> => {
+    const storedToken = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+    return storedToken ? { Authorization: `Bearer ${storedToken}` } : {};
+  };
+
+  const getFilenameFromDisposition = (disposition: string | null, fallback: string) => {
+    if (!disposition) return fallback;
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/"/g, ''));
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+    return filenameMatch?.[1] || fallback;
+  };
+
+  const openDocumentBlob = (blob: Blob, filename: string, mode: 'view' | 'download', targetWindow?: Window | null) => {
+    const blobUrl = URL.createObjectURL(blob);
+    if (mode === 'view') {
+      if (targetWindow) {
+        targetWindow.location.href = blobUrl;
+      } else {
+        window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      }
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  const openDocumentFile = async (doc: ControlledDocument, mode: 'view' | 'download', targetWindowOverride?: Window | null) => {
+    if (isExternalDocument(doc)) {
+      window.open(doc.filePath!, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     const path = `/api/controlled-documents/${doc.id}/${mode}`;
-    window.open(path, '_blank', 'noopener,noreferrer');
+    const targetWindow =
+      targetWindowOverride ?? (mode === 'view'
+        ? window.open('', '_blank')
+        : null);
+
+    if (targetWindow) {
+      targetWindow.opener = null;
+      targetWindow.document.write('<p style="font-family: sans-serif; padding: 1rem;">Loading document...</p>');
+    }
+
+    try {
+      setOpeningDocumentId(doc.id);
+      const response = await fetch(path, {
+        credentials: 'include',
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) {
+        let errorData: any = null;
+        try {
+          errorData = await response.json();
+        } catch {
+          // Keep default message below.
+        }
+
+        if (response.status === 401 && errorData?.requireStepUp) {
+          targetWindow?.close();
+          setPendingDocumentAccess({ doc, mode });
+          setStepUpPassword('');
+          setStepUpError(null);
+          setIsStepUpOpen(true);
+          return;
+        }
+
+        targetWindow?.close();
+        throw new Error(errorData?.error || `Failed to ${mode} document`);
+      }
+
+      const blob = await response.blob();
+      const filename = getFilenameFromDisposition(
+        response.headers.get('content-disposition'),
+        `${doc.documentNumber || 'document'}.pdf`
+      );
+      openDocumentBlob(blob, filename, mode, targetWindow);
+    } catch (error: any) {
+      targetWindow?.close();
+      toast({
+        title: 'Unable to open document',
+        description: error.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setOpeningDocumentId(null);
+    }
+  };
+
+  const handleStepUpSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pendingDocumentAccess) return;
+    if (!stepUpPassword.trim()) {
+      setStepUpError('Enter your password to verify your credentials.');
+      return;
+    }
+
+    try {
+      setIsStepUpSubmitting(true);
+      setStepUpError(null);
+      const targetWindow =
+        pendingDocumentAccess.mode === 'view'
+          ? window.open('', '_blank')
+          : null;
+      if (targetWindow) {
+        targetWindow.opener = null;
+        targetWindow.document.write('<p style="font-family: sans-serif; padding: 1rem;">Verifying credentials...</p>');
+      }
+
+      const response = await fetch('/api/auth/step-up', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ password: stepUpPassword }),
+      });
+
+      if (!response.ok) {
+        targetWindow?.close();
+        let errorData: any = null;
+        try {
+          errorData = await response.json();
+        } catch {
+          // Keep default message below.
+        }
+        throw new Error(errorData?.error || 'Credential verification failed');
+      }
+
+      const access = pendingDocumentAccess;
+      setIsStepUpOpen(false);
+      setPendingDocumentAccess(null);
+      setStepUpPassword('');
+      await openDocumentFile(access.doc, access.mode, targetWindow);
+    } catch (error: any) {
+      setStepUpError(error.message || 'Credential verification failed');
+    } finally {
+      setIsStepUpSubmitting(false);
+    }
   };
 
   // Create document mutation
@@ -206,6 +489,8 @@ export default function MasterDocumentRegister() {
       queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
       setIsCreateDialogOpen(false);
       setSelectedFile(null);
+      setNewDocumentDepartment('');
+      setNewDocumentType('');
       toast({
         title: 'Success',
         description: 'Document created successfully',
@@ -279,7 +564,6 @@ export default function MasterDocumentRegister() {
 
     if (createNewVersion) {
       formData.append('createNewVersion', 'true');
-      formData.append('versionType', versionType);
     }
 
     if (selectedFile) {
@@ -335,6 +619,7 @@ export default function MasterDocumentRegister() {
       return await apiRequest('/api/controlled-documents/import/csv', {
         method: 'POST',
         body: formData,
+        timeout: 120000,
       });
     },
     onSuccess: (data: any) => {
@@ -415,7 +700,11 @@ export default function MasterDocumentRegister() {
                 <Button
                   className="flex items-center gap-2"
                   data-testid="button-create-document"
-                  onClick={() => setIsCreateDialogOpen(true)}
+                  onClick={() => {
+                    setNewDocumentDepartment('');
+                    setNewDocumentType('');
+                    setIsCreateDialogOpen(true);
+                  }}
                 >
                   <Plus className="h-4 w-4" />
                   New Document
@@ -485,6 +774,7 @@ export default function MasterDocumentRegister() {
                   <SelectItem value="draft">Draft</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -558,13 +848,13 @@ export default function MasterDocumentRegister() {
                           <div className="flex items-center gap-2">
                             {doc.filePath && (
                               <>
-                                {isPdfDocument(doc) && (
+                                {(isPdfDocument(doc) || isExternalDocument(doc)) && (
                                   <Badge
                                     variant="outline"
                                     role="button"
                                     tabIndex={0}
                                     className="h-8 cursor-pointer gap-1 border-blue-300 px-2 text-blue-700 hover:bg-blue-50"
-                                    title="View PDF"
+                                    title={isExternalDocument(doc) ? 'Open linked document' : 'View PDF'}
                                     data-testid={`badge-view-pdf-${doc.id}`}
                                     onClick={() => openDocumentFile(doc, 'view')}
                                     onKeyDown={(event) => {
@@ -575,14 +865,15 @@ export default function MasterDocumentRegister() {
                                     }}
                                   >
                                     <Eye className="h-3.5 w-3.5" />
-                                    View
+                                    {openingDocumentId === doc.id ? 'Opening' : isExternalDocument(doc) ? 'Open' : 'View'}
                                   </Badge>
                                 )}
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   className="h-8 w-8 p-0"
-                                  title="Download"
+                                  title={isExternalDocument(doc) ? 'Open linked document' : 'Download'}
+                                  disabled={openingDocumentId === doc.id}
                                   onClick={() => openDocumentFile(doc, 'download')}
                                   data-testid={`button-download-${doc.id}`}
                                 >
@@ -655,7 +946,10 @@ export default function MasterDocumentRegister() {
                   id="documentNumber"
                   name="documentNumber"
                   required
-                  placeholder="e.g., P1-001"
+                  value={generatedDocumentNumber}
+                  readOnly
+                  placeholder="Select department and type"
+                  className="bg-gray-100 font-mono"
                   data-testid="input-document-number"
                 />
               </div>
@@ -675,34 +969,32 @@ export default function MasterDocumentRegister() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="documentType">Document Type *</Label>
-                <Select name="documentType" required>
+                <Select name="documentType" value={newDocumentType} onValueChange={setNewDocumentType} required>
                   <SelectTrigger data-testid="select-document-type">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="SOP">SOP - Standard Operating Procedure</SelectItem>
-                    <SelectItem value="WI">WI - Work Instruction</SelectItem>
-                    <SelectItem value="FORM">Form</SelectItem>
-                    <SelectItem value="POLICY">Policy</SelectItem>
-                    <SelectItem value="PROCEDURE">Procedure</SelectItem>
-                    <SelectItem value="PLAN">Plan</SelectItem>
+                    {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="department">Department *</Label>
-                <Select name="department" required>
+                <Select name="department" value={newDocumentDepartment} onValueChange={setNewDocumentDepartment} required>
                   <SelectTrigger data-testid="select-department">
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="P1 Operations">P1 Operations</SelectItem>
-                    <SelectItem value="P2 Operations">P2 Operations</SelectItem>
-                    <SelectItem value="Quality Control">Quality Control</SelectItem>
-                    <SelectItem value="Manufacturing">Manufacturing</SelectItem>
-                    <SelectItem value="Engineering">Engineering</SelectItem>
-                    <SelectItem value="Safety">Safety</SelectItem>
+                    {createDepartmentOptions.map((department) => (
+                      <SelectItem key={department} value={department}>
+                        {department}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -746,6 +1038,8 @@ export default function MasterDocumentRegister() {
                 id="currentVersion"
                 name="currentVersion"
                 defaultValue="1.0"
+                readOnly
+                className="bg-gray-100"
                 placeholder="e.g., 2.3"
                 data-testid="input-current-version"
               />
@@ -769,7 +1063,7 @@ export default function MasterDocumentRegister() {
                   id="retentionLength"
                   name="retentionLength"
                   placeholder="e.g., 1 year, 5 years, Permanent"
-                  defaultValue="1 year"
+                  defaultValue="10 years"
                   data-testid="input-retention-length"
                 />
               </div>
@@ -814,6 +1108,8 @@ export default function MasterDocumentRegister() {
                 onClick={() => {
                   setIsCreateDialogOpen(false);
                   setSelectedFile(null);
+                  setNewDocumentDepartment('');
+                  setNewDocumentType('');
                 }}
                 data-testid="button-cancel-create"
               >
@@ -856,7 +1152,9 @@ export default function MasterDocumentRegister() {
                     <div>
                       <p className="text-sm font-medium">Current Version: {selectedDocument.currentVersion}</p>
                       <p className="text-xs text-gray-600">
-                        {createNewVersion ? 'Creating new version' : 'Updating current version'}
+                        {createNewVersion
+                          ? `Next revision: ${nextRevisionVersion(selectedDocument.currentVersion)}`
+                          : 'Updating current version'}
                       </p>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -876,17 +1174,11 @@ export default function MasterDocumentRegister() {
 
                   {createNewVersion && (
                     <div className="space-y-3 border-t pt-3">
-                      <div className="space-y-2">
-                        <Label>Version Type</Label>
-                        <Select value={versionType} onValueChange={(v) => setVersionType(v as 'major' | 'minor')}>
-                          <SelectTrigger data-testid="select-version-type">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="minor">Minor Version (e.g., 1.0 → 1.1)</SelectItem>
-                            <SelectItem value="major">Major Version (e.g., 1.0 → 2.0)</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <div className="rounded-md border border-blue-200 bg-white p-3">
+                        <div className="text-xs font-medium uppercase text-gray-500">Next Version</div>
+                        <div className="font-mono text-lg">
+                          {nextRevisionVersion(selectedDocument.currentVersion)}
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -939,12 +1231,11 @@ export default function MasterDocumentRegister() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="SOP">SOP - Standard Operating Procedure</SelectItem>
-                      <SelectItem value="WI">WI - Work Instruction</SelectItem>
-                      <SelectItem value="FORM">Form</SelectItem>
-                      <SelectItem value="POLICY">Policy</SelectItem>
-                      <SelectItem value="PROCEDURE">Procedure</SelectItem>
-                      <SelectItem value="PLAN">Plan</SelectItem>
+                      {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -956,12 +1247,11 @@ export default function MasterDocumentRegister() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="P1 Operations">P1 Operations</SelectItem>
-                      <SelectItem value="P2 Operations">P2 Operations</SelectItem>
-                      <SelectItem value="Quality Control">Quality Control</SelectItem>
-                      <SelectItem value="Manufacturing">Manufacturing</SelectItem>
-                      <SelectItem value="Engineering">Engineering</SelectItem>
-                      <SelectItem value="Safety">Safety</SelectItem>
+                      {createDepartmentOptions.map((department) => (
+                        <SelectItem key={department} value={department}>
+                          {department}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1018,7 +1308,7 @@ export default function MasterDocumentRegister() {
                   <Input
                     id="edit-retentionLength"
                     name="retentionLength"
-                    defaultValue={selectedDocument.retentionLength || ''}
+                    defaultValue={selectedDocument.retentionLength || '10 years'}
                     data-testid="input-edit-retention-length"
                   />
                 </div>
@@ -1220,6 +1510,74 @@ export default function MasterDocumentRegister() {
         </DialogContent>
       </Dialog>
 
+      {/* Credential Verification Dialog */}
+      <Dialog open={isStepUpOpen} onOpenChange={(open) => {
+        setIsStepUpOpen(open);
+        if (!open) {
+          setPendingDocumentAccess(null);
+          setStepUpPassword('');
+          setStepUpError(null);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verify Credentials</DialogTitle>
+            <DialogDescription>
+              Controlled document access requires recent credential verification.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleStepUpSubmit} className="space-y-4">
+            {pendingDocumentAccess && (
+              <div className="rounded-md border bg-gray-50 p-3 text-sm">
+                <div className="font-medium">{pendingDocumentAccess.doc.documentName}</div>
+                <div className="text-xs text-gray-500">
+                  {pendingDocumentAccess.mode === 'view' ? 'View PDF' : 'Download file'}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="stepUpPassword">Password</Label>
+              <Input
+                id="stepUpPassword"
+                type="password"
+                value={stepUpPassword}
+                onChange={(event) => setStepUpPassword(event.target.value)}
+                autoComplete="current-password"
+                autoFocus
+                disabled={isStepUpSubmitting}
+                data-testid="input-step-up-password"
+              />
+              {stepUpError && (
+                <p className="text-sm text-red-600" data-testid="text-step-up-error">
+                  {stepUpError}
+                </p>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isStepUpSubmitting}
+                onClick={() => {
+                  setIsStepUpOpen(false);
+                  setPendingDocumentAccess(null);
+                  setStepUpPassword('');
+                  setStepUpError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isStepUpSubmitting}>
+                {isStepUpSubmitting ? 'Verifying...' : 'Verify and Continue'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* CSV Import Dialog */}
       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
         <DialogContent className="max-w-lg">
@@ -1242,7 +1600,8 @@ export default function MasterDocumentRegister() {
                 required
               />
               <p className="text-xs text-gray-500">
-                CSV should have columns: TITLE, CODE, Department, Version, Date, Record Retention Length, Summary of Changes
+                CSV should have columns: TITLE, CODE, Department, Version, Date, Record Retention Length, Summary of Changes.
+                Include Document Link, File URL, URL, Link, or File Path to attach document links.
               </p>
             </div>
 

@@ -48,6 +48,11 @@ export async function ensureP2PurchaseOrderReadSchema(): Promise<void> {
               ADD COLUMN IF NOT EXISTS scrap_rate_percent real NOT NULL DEFAULT 0;
           END IF;
 
+          IF to_regclass('public.p2_purchase_order_items') IS NOT NULL THEN
+            ALTER TABLE public.p2_purchase_order_items
+              ADD COLUMN IF NOT EXISTS due_date date;
+          END IF;
+
           IF to_regclass('public.p2_serialized_items') IS NOT NULL THEN
             ALTER TABLE public.p2_serialized_items
               ADD COLUMN IF NOT EXISTS build_family_key text,

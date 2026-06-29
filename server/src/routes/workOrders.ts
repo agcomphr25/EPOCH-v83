@@ -106,6 +106,7 @@ async function getWadStatusP2Demand(projectIds: string[]): Promise<Map<string, W
       WHERE p.id = ANY($1::uuid[])
         AND po.project_name IS NOT NULL
         AND TRIM(po.project_name) <> ''
+        AND po.is_current_revision IS NOT FALSE
     ),
     distinct_links AS (
       SELECT DISTINCT project_id, po_id
@@ -683,6 +684,7 @@ router.get('/production/wad-status', authenticateToken, requirePermission('work_
             FROM p2_purchase_orders po
             WHERE po.project_name IS NOT NULL
               AND TRIM(po.project_name) <> ''
+              AND po.is_current_revision IS NOT FALSE
               AND LOWER(TRIM(po.project_name)) IN (
                 LOWER(TRIM(${projects.projectCode})),
                 LOWER(TRIM(${projects.projectName})),
@@ -1269,6 +1271,46 @@ function validateUuid(value: string): boolean {
   return UUID_REGEX.test(value);
 }
 
+type BlockingWadRevision = {
+  id: string;
+  revision_code: string;
+  requires_production_hold: boolean;
+};
+
+async function getBlockingWadRevision(wadId: string): Promise<BlockingWadRevision | null> {
+  const result = await pool.query<BlockingWadRevision>(
+    `
+      SELECT id, revision_code, requires_production_hold
+      FROM wad_revisions
+      WHERE wad_id = $1
+        AND status IN ('draft', 'pending_approval')
+        AND (
+          impact_production = true
+          OR impact_released_travelers = true
+          OR impact_inspection = true
+          OR impact_material_issued = true
+          OR requires_production_hold = true
+        )
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [wadId]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+function sendBlockedWadRevisionResponse(res: Response, revision: BlockingWadRevision) {
+  const productionHoldMessage = 'Production Hold Required — Revision approval required before continuing.';
+  const pendingRevisionMessage = 'Pending WAD Revision — Production changes cannot be released until approved.';
+  return res.status(409).json({
+    error: revision.requires_production_hold ? productionHoldMessage : pendingRevisionMessage,
+    revisionId: revision.id,
+    revisionCode: revision.revision_code,
+    productionHoldRequired: revision.requires_production_hold,
+  });
+}
+
 // POST /api/work-orders/:id/travelers/create — create a traveler from a WAD using its part routing
 router.post('/:id/travelers/create', requirePermission('work_orders.release'), async (req: Request, res: Response) => {
   try {
@@ -1280,6 +1322,11 @@ router.post('/:id/travelers/create', requirePermission('work_orders.release'), a
 
     const user = (req as any).user;
     const createdBy = req.body?.createdBy ?? user?.username ?? user?.id ?? 'system';
+
+    const blockingRevision = await getBlockingWadRevision(id);
+    if (blockingRevision) {
+      return sendBlockedWadRevisionResponse(res, blockingRevision);
+    }
 
     let traveler: Awaited<ReturnType<typeof storage.createTravelerFromProductionWorkOrder>>;
     try {
@@ -1307,6 +1354,7 @@ router.post('/:id/travelers/create', requirePermission('work_orders.release'), a
       partNumber: traveler.partNumber,
       status: traveler.status,
       partRoutingId: traveler.partRoutingId,
+      wadRevisionId: traveler.wadRevisionId,
     });
   } catch (error: any) {
     console.error('[WorkOrders] Error creating traveler from WAD:', error);
@@ -1743,6 +1791,11 @@ router.post('/:id/release', authenticateToken, requirePermission('work_orders.re
 
     if (wad.status === 'IN_PROGRESS' || wad.status === 'COMPLETE' || wad.status === 'CLOSED') {
       return res.status(400).json({ error: `Cannot release a work order with status: ${wad.status}` });
+    }
+
+    const blockingRevision = await getBlockingWadRevision(id);
+    if (blockingRevision) {
+      return sendBlockedWadRevisionResponse(res, blockingRevision);
     }
 
     const readiness = await evaluateWorkOrderReadiness(id);

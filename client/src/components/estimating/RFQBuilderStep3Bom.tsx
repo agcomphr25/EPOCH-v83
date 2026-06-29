@@ -16,6 +16,8 @@ export type BomLineRow = {
   vendorNameSnapshot?: string;
   materialSpec?: string;
   notes?: string;
+  sourceType?: "DRAFT" | "MANUAL";
+  sourceLabel?: string;
 };
 
 type PartOption = {
@@ -120,6 +122,7 @@ export default function RFQBuilderStep3Bom({
           <table className="w-full border-collapse min-w-[1550px]">
             <thead>
               <tr className="border-b">
+                <th className="text-left p-2">Source</th>
                 <th className="text-left p-2">Description</th>
                 <th className="text-left p-2">Category</th>
                 <th className="text-left p-2">Qty / Part</th>
@@ -139,13 +142,13 @@ export default function RFQBuilderStep3Bom({
             <tbody>
               {!selectedBomPartId ? (
                 <tr>
-                  <td colSpan={14} className="p-4 text-sm text-muted-foreground">
+                  <td colSpan={15} className="p-4 text-sm text-muted-foreground">
                     Select an RFQ part to begin adding BOM lines.
                   </td>
                 </tr>
               ) : filteredBomLines.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="p-4 text-sm text-muted-foreground">
+                  <td colSpan={15} className="p-4 text-sm text-muted-foreground">
                     No BOM lines yet for this part.
                   </td>
                 </tr>
@@ -158,6 +161,11 @@ export default function RFQBuilderStep3Bom({
 
                   return (
                     <tr key={`${row.id ?? "new"}-${index}`} className="border-b align-top">
+                      <td className="p-2">
+                        <span className="rounded border px-2 py-1 text-xs">
+                          {row.sourceType === "DRAFT" ? "Draft sourced" : "Manual"}
+                        </span>
+                      </td>
                       <td className="p-2">
                         <input
                           className="w-[180px] border rounded px-2 py-1"

@@ -14,7 +14,11 @@ import {
   ArrowDown,
   GitBranch,
   ExternalLink,
+  Copy,
   AlertCircle,
+  Image as ImageIcon,
+  Star,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
@@ -30,6 +34,7 @@ import {
 
 import InventoryItemCostHistory from './InventoryItemCostHistory';
 import TraceabilityConfigModal from './TraceabilityConfigModal';
+import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
 
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -79,6 +84,207 @@ type VendorOption = {
   id: number;
   name: string;
 };
+
+type InventoryMediaAttachment = {
+  attachment: {
+    id: string;
+    mediaId: string;
+    entityType: string;
+    entityId: string;
+    attachedAt: string;
+    notes: string | null;
+  };
+  media: {
+    id: string;
+    filename: string;
+    storagePath: string;
+    mimeType: string;
+    title: string | null;
+  };
+};
+
+function mediaDownloadUrl(mediaId?: string | null) {
+  return mediaId ? `/api/media/${mediaId}/download` : '';
+}
+
+function normalizeOrderUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function PartImageThumbnail({
+  item,
+  className = 'h-10 w-10',
+}: {
+  item: InventoryItem;
+  className?: string;
+}) {
+  const primaryImageMediaId = (item as any).primaryImageMediaId as string | null | undefined;
+
+  if (!primaryImageMediaId) {
+    return (
+      <div className={`${className} flex items-center justify-center rounded-md border bg-muted text-muted-foreground`}>
+        <ImageIcon className="h-4 w-4" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={mediaDownloadUrl(primaryImageMediaId)}
+      alt={`${item.agPartNumber} ${item.name}`}
+      className={`${className} rounded-md border object-cover bg-muted`}
+      loading="lazy"
+    />
+  );
+}
+
+function InventoryItemImagesPanel({
+  item,
+  onPrimaryImageChange,
+}: {
+  item: InventoryItem;
+  onPrimaryImageChange?: (item: InventoryItem) => void;
+}) {
+  const queryClient = useQueryClient();
+  const itemPrimaryImageMediaId = ((item as any).primaryImageMediaId as string | null | undefined) ?? null;
+  const [primaryImageMediaId, setPrimaryImageMediaId] = useState<string | null>(itemPrimaryImageMediaId);
+
+  useEffect(() => {
+    setPrimaryImageMediaId(itemPrimaryImageMediaId);
+  }, [item.id, itemPrimaryImageMediaId]);
+
+  const attachmentKey = ['/api/media/attachments', 'inventory_item', item.agPartNumber];
+
+  const { data: attachments = [], isLoading } = useQuery<InventoryMediaAttachment[]>({
+    queryKey: attachmentKey,
+    queryFn: async () => {
+      const res = await fetch(`/api/media/attachments/inventory_item/${encodeURIComponent(item.agPartNumber)}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to load part images');
+      return res.json();
+    },
+    enabled: !!item.agPartNumber,
+  });
+
+  const imageAttachments = attachments.filter((attachment) => attachment.media.mimeType.startsWith('image/'));
+
+  const setPrimaryImageMutation = useMutation({
+    mutationFn: (mediaId: string | null) =>
+      apiRequest(`/api/inventory/items/${item.id}/primary-image`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaId }),
+      }),
+    onSuccess: (updatedItem: InventoryItem) => {
+      const nextPrimary = ((updatedItem as any).primaryImageMediaId as string | null | undefined) ?? null;
+      setPrimaryImageMediaId(nextPrimary);
+      onPrimaryImageChange?.(updatedItem);
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+      toast.success(nextPrimary ? 'Primary image updated' : 'Primary image cleared');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to update primary image');
+    },
+  });
+
+  return (
+    <Card className="mt-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ImageIcon className="h-4 w-4" />
+          Part Images
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <PartImageThumbnail item={{ ...item, primaryImageMediaId } as InventoryItem} className="h-16 w-16" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{item.agPartNumber} | {item.name}</div>
+            <div className="text-xs text-muted-foreground">
+              Attach images from Central Storage, upload a new photo, then mark the best one as primary.
+            </div>
+          </div>
+          {primaryImageMediaId && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPrimaryImageMutation.mutate(null)}
+              disabled={setPrimaryImageMutation.isPending}
+              data-testid={`button-clear-primary-image-${item.id}`}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Clear Primary
+            </Button>
+          )}
+          <MediaAttachmentPicker
+            entityType="inventory_item"
+            entityId={item.agPartNumber}
+            compact
+            onAttachmentChange={() => {
+              queryClient.invalidateQueries({ queryKey: attachmentKey });
+            }}
+            trigger={
+              <Button variant="outline" size="sm" data-testid={`button-manage-images-${item.id}`}>
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Attach Images
+              </Button>
+            }
+          />
+        </div>
+
+        {isLoading ? (
+          <div className="text-sm text-muted-foreground">Loading images...</div>
+        ) : imageAttachments.length === 0 ? (
+          <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+            No images are attached to this part yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {imageAttachments.map((attachment) => {
+              const isPrimary = attachment.media.id === primaryImageMediaId;
+              return (
+                <div key={attachment.attachment.id} className="rounded-md border overflow-hidden bg-background">
+                  <button
+                    type="button"
+                    className="block aspect-square w-full bg-muted"
+                    onClick={() => window.open(mediaDownloadUrl(attachment.media.id), '_blank', 'noopener,noreferrer')}
+                    data-testid={`button-open-part-image-${attachment.media.id}`}
+                  >
+                    <img
+                      src={mediaDownloadUrl(attachment.media.id)}
+                      alt={attachment.media.title || attachment.media.filename}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </button>
+                  <div className="p-2 space-y-2">
+                    <div className="truncate text-xs font-medium" title={attachment.media.title || attachment.media.filename}>
+                      {attachment.media.title || attachment.media.filename}
+                    </div>
+                    <Button
+                      variant={isPrimary ? 'default' : 'outline'}
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setPrimaryImageMutation.mutate(attachment.media.id)}
+                      disabled={isPrimary || setPrimaryImageMutation.isPending}
+                      data-testid={`button-set-primary-image-${attachment.media.id}`}
+                    >
+                      <Star className="h-3.5 w-3.5 mr-2" />
+                      {isPrimary ? 'Primary' : 'Set Primary'}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function createInventoryRequestId() {
   return `inv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -134,6 +340,13 @@ const TRACEABILITY_CONFIG_FIELDS: { key: string; label: string; type: 'text' | '
   { key: 'certReference', label: 'Cert Reference', type: 'text' },
 ];
 
+type CncMachineOption = {
+  id: number;
+  machineName: string;
+  machineNumber?: string | null;
+  active?: boolean;
+};
+
 interface InventoryFormData {
   agPartNumber: string;
   sku: string;
@@ -144,9 +357,11 @@ interface InventoryFormData {
   manufacturingLevel: string;
   manufacturingDepartment: string;
   machineType: string;
+  machiningTimeMinutes: string;
   source: string;
   vendorId: string;
   supplierPartNumber: string;
+  orderUrl: string;
   secondarySupplierPartNumber: string;
   costPer: string;
   vendorUnit: string;
@@ -244,8 +459,104 @@ const InventoryForm = ({
   onSaveTraceabilityFields: (fields: string[]) => void;
   onTraceabilityConfigChange: (config: TraceabilityFieldConfig) => void;
 }) => {
+  const queryClient = useQueryClient();
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [newDepartmentName, setNewDepartmentName] = useState('');
+  const sortedVendors = React.useMemo(
+    () =>
+      Array.isArray(vendors)
+        ? [...vendors].sort((a, b) => a.name.localeCompare(b.name))
+        : [],
+    [vendors]
+  );
+  const selectedSecondaryVendor = sortedVendors.find(
+    (vendor) => vendor.name === formData.secondarySource
+  );
+  const secondarySourceValue = selectedSecondaryVendor
+    ? selectedSecondaryVendor.id.toString()
+    : formData.secondarySource
+      ? `legacy:${formData.secondarySource}`
+      : 'none';
+  const { data: cncMachines = [] } = useQuery<CncMachineOption[]>({
+    queryKey: ['/api/cnc/machines'],
+  });
+  const activeCncMachines = React.useMemo(
+    () =>
+      cncMachines
+        .filter((machine) => machine.active !== false)
+        .sort((a, b) => a.machineName.localeCompare(b.machineName)),
+    [cncMachines]
+  );
+  const selectedInactiveMachine =
+    formData.machineType &&
+    !activeCncMachines.some((machine) => machine.machineName === formData.machineType)
+      ? cncMachines.find((machine) => machine.machineName === formData.machineType)
+      : undefined;
+  const selectedLegacyMachineName =
+    formData.machineType &&
+    !activeCncMachines.some((machine) => machine.machineName === formData.machineType) &&
+    !selectedInactiveMachine
+      ? formData.machineType
+      : undefined;
+  const sortedDepartments = React.useMemo(
+    () =>
+      Array.isArray(departments)
+        ? [...departments].sort((a, b) => a.name.localeCompare(b.name))
+        : [],
+    [departments]
+  );
+  const createDepartmentMutation = useMutation({
+    mutationFn: (name: string) =>
+      apiRequest('/api/inventory/departments', {
+        method: 'POST',
+        body: {
+          name,
+          isActive: true,
+          sortOrder: sortedDepartments.length + 1,
+        },
+      }),
+    onSuccess: async (department: { name?: string }) => {
+      const departmentName = department?.name || newDepartmentName.trim();
+      await queryClient.invalidateQueries({ queryKey: ['/api/inventory/departments'] });
+      if (departmentName && !formData.assignedDepartments.includes(departmentName)) {
+        onMultiSelectChange('assignedDepartments', [
+          ...formData.assignedDepartments,
+          departmentName,
+        ]);
+      }
+      setNewDepartmentName('');
+      toast.success('Department added');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to add department');
+    },
+  });
+
+  const handleAddDepartment = () => {
+    const departmentName = newDepartmentName.trim();
+    if (!departmentName) {
+      toast.error('Enter a department name');
+      return;
+    }
+
+    const existingDepartment = sortedDepartments.find(
+      (dept) => dept.name.toLowerCase() === departmentName.toLowerCase()
+    );
+    if (existingDepartment) {
+      if (!formData.assignedDepartments.includes(existingDepartment.name)) {
+        onMultiSelectChange('assignedDepartments', [
+          ...formData.assignedDepartments,
+          existingDepartment.name,
+        ]);
+      }
+      setNewDepartmentName('');
+      toast.success('Department selected');
+      return;
+    }
+
+    createDepartmentMutation.mutate(departmentName);
+  };
 
   const { data: allUnits = [] } = useQuery<Array<{ id: number; symbol: string; family: string; family_id: number }>>({
     queryKey: ['/api/units'],
@@ -374,6 +685,7 @@ const InventoryForm = ({
                 onSelectChange('manufacturedCategory', '');
                 onSelectChange('manufacturingLevel', '');
                 onSelectChange('machineType', '');
+                onSelectChange('machiningTimeMinutes', '');
               }
             }}
           >
@@ -396,6 +708,7 @@ const InventoryForm = ({
                   onSelectChange('manufacturedCategory', value);
                   if (value !== 'MACHINED_PART') {
                     onSelectChange('machineType', '');
+                    onSelectChange('machiningTimeMinutes', '');
                   }
                 }}
               >
@@ -416,23 +729,53 @@ const InventoryForm = ({
               </Select>
             </div>
             {formData.manufacturedCategory === 'MACHINED_PART' && (
-              <div>
-                <Label htmlFor="machineType">Machine Type</Label>
-                <Select
-                  value={formData.machineType || ''}
-                  onValueChange={(value) => onSelectChange('machineType', value === '_none' ? '' : value)}
-                >
-                  <SelectTrigger data-testid="select-machineType">
-                    <SelectValue placeholder="Select machine type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">None / Not specified</SelectItem>
-                    <SelectItem value="CNC Mill 3rd Axis">CNC Mill 3rd Axis</SelectItem>
-                    <SelectItem value="CNC Mill 4th Axis">CNC Mill 4th Axis</SelectItem>
-                    <SelectItem value="Lathe">Lathe</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div>
+                  <Label htmlFor="machineType">Machine</Label>
+                  <Select
+                    value={formData.machineType || '_none'}
+                    onValueChange={(value) => onSelectChange('machineType', value === '_none' ? '' : value)}
+                  >
+                    <SelectTrigger id="machineType" data-testid="select-machineType">
+                      <SelectValue placeholder="Select CNC machine" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">None / Not specified</SelectItem>
+                      {selectedInactiveMachine && (
+                        <SelectItem value={selectedInactiveMachine.machineName}>
+                          {selectedInactiveMachine.machineName}
+                          {selectedInactiveMachine.machineNumber ? ` (${selectedInactiveMachine.machineNumber})` : ''}
+                        </SelectItem>
+                      )}
+                      {selectedLegacyMachineName && (
+                        <SelectItem value={selectedLegacyMachineName}>
+                          {selectedLegacyMachineName}
+                        </SelectItem>
+                      )}
+                      {activeCncMachines.map((machine) => (
+                        <SelectItem key={machine.id} value={machine.machineName}>
+                          {machine.machineName}
+                          {machine.machineNumber ? ` (${machine.machineNumber})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="machiningTimeMinutes">Machining Time (minutes)</Label>
+                  <Input
+                    id="machiningTimeMinutes"
+                    name="machiningTimeMinutes"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.machiningTimeMinutes}
+                    onChange={onChange}
+                    placeholder="Enter machining time"
+                    data-testid="input-machiningTimeMinutes"
+                  />
+                </div>
+              </>
             )}
             <div>
               <Label htmlFor="manufacturingLevel">Manufacturing Level</Label>
@@ -625,12 +968,11 @@ const InventoryForm = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">None</SelectItem>
-              {Array.isArray(vendors) &&
-                [...vendors].sort((a, b) => a.name.localeCompare(b.name)).map((vendor) => (
-                  <SelectItem key={vendor.id} value={vendor.id.toString()}>
-                    {vendor.name}
-                  </SelectItem>
-                ))}
+              {sortedVendors.map((vendor) => (
+                <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                  {vendor.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -646,26 +988,65 @@ const InventoryForm = ({
           />
         </div>
         <div>
-          <Label htmlFor="source">Source</Label>
+          <Label htmlFor="orderUrl">Order Website URL</Label>
+          <Input
+            id="orderUrl"
+            name="orderUrl"
+            value={formData.orderUrl}
+            onChange={onChange}
+            placeholder="vendor.com/item-page"
+            data-testid="input-orderUrl"
+          />
+        </div>
+        <div>
+          <Label htmlFor="source">Vendor Name</Label>
           <Input
             id="source"
             name="source"
             value={formData.source}
             onChange={onChange}
-            placeholder="Enter source"
+            placeholder="Enter vendor name"
             data-testid="input-source"
           />
         </div>
         <div>
           <Label htmlFor="secondarySource">Secondary Source</Label>
-          <Input
-            id="secondarySource"
-            name="secondarySource"
-            value={formData.secondarySource}
-            onChange={onChange}
-            placeholder="Enter secondary source"
-            data-testid="input-secondarySource"
-          />
+          <Select
+            value={secondarySourceValue}
+            onValueChange={(value) => {
+              if (value === 'none') {
+                onSelectChange('secondarySource', '');
+                return;
+              }
+
+              if (value.startsWith('legacy:')) {
+                onSelectChange('secondarySource', value.slice('legacy:'.length));
+                return;
+              }
+
+              const vendor = sortedVendors.find(
+                (option) => option.id.toString() === value
+              );
+              onSelectChange('secondarySource', vendor?.name || '');
+            }}
+          >
+            <SelectTrigger id="secondarySource" data-testid="select-secondarySource">
+              <SelectValue placeholder="Select secondary vendor (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              {formData.secondarySource && !selectedSecondaryVendor && (
+                <SelectItem value={`legacy:${formData.secondarySource}`}>
+                  {formData.secondarySource}
+                </SelectItem>
+              )}
+              {sortedVendors.map((vendor) => (
+                <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                  {vendor.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label htmlFor="secondarySupplierPartNumber">Secondary Supplier Part #</Label>
@@ -912,7 +1293,7 @@ const InventoryForm = ({
         <div className="md:col-span-2">
           <Label htmlFor="assignedDepartments">Assigned Departments *</Label>
           <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
-            {departments.map((dept) => (
+            {sortedDepartments.map((dept) => (
               <div key={dept.id} className="flex items-center space-x-2">
                 <Checkbox
                   id={`dept-${dept.id}`}
@@ -940,6 +1321,30 @@ const InventoryForm = ({
                 </Label>
               </div>
             ))}
+          </div>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <Input
+              value={newDepartmentName}
+              onChange={(event) => setNewDepartmentName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleAddDepartment();
+                }
+              }}
+              placeholder="New department name"
+              data-testid="input-new-department"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAddDepartment}
+              disabled={createDepartmentMutation.isPending}
+              data-testid="button-add-department"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {createDepartmentMutation.isPending ? 'Adding...' : 'Add Department'}
+            </Button>
           </div>
           {formData.assignedDepartments.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
@@ -1332,9 +1737,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     manufacturingLevel: '',
     manufacturingDepartment: '',
     machineType: '',
+    machiningTimeMinutes: '',
     source: '',
     vendorId: 'none',
     supplierPartNumber: '',
+    orderUrl: '',
     secondarySupplierPartNumber: '',
     costPer: '',
     vendorUnit: '',
@@ -1383,6 +1790,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const [otherDocsFile, setOtherDocsFile] = useState<File | null>(null);
   const [currentOtherDocsFileName, setCurrentOtherDocsFileName] = useState<string | null>(null);
   const [isTraceabilityModalOpen, setIsTraceabilityModalOpen] = useState(false);
+  const [orderUrlItem, setOrderUrlItem] = useState<InventoryItem | null>(null);
+  const [orderUrlDraft, setOrderUrlDraft] = useState('');
 
   // Sync legacy department field with first assigned department
   useEffect(() => {
@@ -1478,6 +1887,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   });
 
   const vendors = vendorsResponse?.data || [];
+  const vendorById = React.useMemo(() => {
+    const map = new Map<number, VendorOption>();
+    vendors.forEach((vendor) => map.set(vendor.id, vendor));
+    return map;
+  }, [vendors]);
 
   const { data: assets = [] } = useQuery<{ id: string; assetTag: string; name: string; status: string }[]>({
     queryKey: ['/api/assets'],
@@ -1850,6 +2264,25 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     onError: () => toast.error('Failed to delete inventory item'),
   });
 
+  const updateOrderUrlMutation = useMutation({
+    mutationFn: ({ id, orderUrl }: { id: number; orderUrl: string | null }) =>
+      apiRequest(`/api/inventory/items/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ orderUrl }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/items'] });
+      toast.success('Order URL saved');
+      setOrderUrlItem(null);
+      setOrderUrlDraft('');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to save order URL');
+    },
+  });
+
   const handleExportCSV = async () => {
     try {
       const response = await fetch('/api/enhanced/inventory/export/csv');
@@ -1964,9 +2397,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       manufacturingLevel: '',
       manufacturingDepartment: '',
       machineType: '',
+      machiningTimeMinutes: '',
       source: '',
       vendorId: 'none',
       supplierPartNumber: '',
+      orderUrl: '',
       secondarySupplierPartNumber: '',
       costPer: '',
       vendorUnit: '',
@@ -2022,8 +2457,19 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   );
 
   const handleSelectChange = useCallback((name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  }, []);
+    setFormData((prev) => {
+      if (name !== 'vendorId') {
+        return { ...prev, [name]: value };
+      }
+
+      const selectedVendor = vendors.find((vendor) => vendor.id.toString() === value);
+      return {
+        ...prev,
+        vendorId: value,
+        source: selectedVendor && !prev.source.trim() ? selectedVendor.name : prev.source,
+      };
+    });
+  }, [vendors]);
 
   const handleMultiSelectChange = useCallback((name: string, values: string[]) => {
     setFormData((prev) => ({ ...prev, [name]: values }));
@@ -2088,6 +2534,69 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     document.getElementById(id)?.click();
   }, []);
 
+  const getInventoryItemFormData = (
+    item: InventoryItem,
+    overrides: Partial<InventoryFormData> = {}
+  ): InventoryFormData => {
+    const resolvedItemType = item.itemType || (item.type === 'Manufactured' ? 'MANUFACTURED' : 'PURCHASED');
+    return {
+      agPartNumber: item.agPartNumber,
+      sku: item.sku || '',
+      name: item.name,
+      type: item.type || 'Purchased',
+      itemType: resolvedItemType,
+      manufacturedCategory: item.manufacturedCategory || (item.isPacket ? 'PACKET' : ''),
+      manufacturingLevel: item.manufacturingLevel || '',
+      manufacturingDepartment: item.manufacturingDepartment || '',
+      machineType: item.machineType || '',
+      machiningTimeMinutes: (item as any).machiningTimeMinutes != null ? String((item as any).machiningTimeMinutes) : '',
+      source: item.source || '',
+      vendorId: item.vendorId ? item.vendorId.toString() : 'none',
+      supplierPartNumber: item.supplierPartNumber || '',
+      orderUrl: (item as any).orderUrl || '',
+      secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
+      costPer: item.costPer != null ? item.costPer.toString() : '',
+      vendorUnit: item.vendorUnit || '',
+      purchaseUnitLabel: item.purchaseUnitLabel || '',
+      purchaseUnit: item.purchaseUnit || '',
+      purchaseUnitId: (item as any).purchaseUnitId?.toString() || '',
+      purchaseQuantity: item.purchaseQuantity ? item.purchaseQuantity.toString() : '',
+      consumptionRate: item.consumptionRate ? item.consumptionRate.toString() : '',
+      usageUnit: item.usageUnit || '',
+      usageUnitId: (item as any).usageUnitId?.toString() || '',
+      cogsPerUnit: item.cogsPerUnit != null ? item.cogsPerUnit.toString() : '',
+      orderDate: item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
+      department: item.department || '',
+      assignedDepartments: (item as any).assignedDepartments || [],
+      leadTimeDays: item.leadTimeDays ? item.leadTimeDays.toString() : '',
+      secondarySource: item.secondarySource || '',
+      notes: item.notes || '',
+      isStockItem: item.isStockItem || false,
+      utilizedInPL1: item.utilizedInPL1 || false,
+      utilizedInPL2: item.utilizedInPL2 || false,
+      utilizedInPL3: item.utilizedInPL3 || false,
+      traceabilityRequired: item.traceabilityRequired || false,
+      traceabilityFields: (item as any).traceabilityFields || [],
+      traceabilityFieldConfig: (item as any).traceabilityFieldConfig || {},
+      utilizedInFacilities: item.utilizedInFacilities || false,
+      utilizedInAdmin: item.utilizedInAdmin || false,
+      utilizedInServices: item.utilizedInServices || false,
+      isPacket: (item as any).isPacket || false,
+      isFabric: item.isFabric || false,
+      hasSds: item.hasSds || false,
+      hasTds: item.hasTds || false,
+      hasOtherDocs: item.hasOtherDocs || false,
+      assignedToAsset: (item as any).assignedToAsset || '',
+      defaultOrderMethod: (item as any).defaultOrderMethod || '',
+      shelfLifeControlled: (item as any).shelfLifeControlled || false,
+      frozenShelfLifeDays: (item as any).frozenShelfLifeDays != null ? String((item as any).frozenShelfLifeDays) : '',
+      roomTempShelfLifeDays: (item as any).roomTempShelfLifeDays != null ? String((item as any).roomTempShelfLifeDays) : '',
+      defaultMaxOutTimeMinutes: (item as any).defaultMaxOutTimeMinutes != null ? String((item as any).defaultMaxOutTimeMinutes) : '',
+      outTimeEnforcementRequired: (item as any).outTimeEnforcementRequired || false,
+      ...overrides,
+    };
+  };
+
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -2125,6 +2634,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             ? parseInt(formData.vendorId)
             : null,
         supplierPartNumber: formData.supplierPartNumber || null,
+        orderUrl: normalizeOrderUrl(formData.orderUrl),
         secondarySupplierPartNumber:
           formData.secondarySupplierPartNumber || null,
         costPer: formData.costPer !== '' ? parseFloat(formData.costPer) : null,
@@ -2168,6 +2678,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         machineType: formData.manufacturedCategory === 'MACHINED_PART' && formData.machineType
           ? formData.machineType
           : null,
+        machiningTimeMinutes: formData.manufacturedCategory === 'MACHINED_PART' && formData.machiningTimeMinutes !== ''
+          ? parseInt(formData.machiningTimeMinutes, 10)
+          : null,
         shelfLifeControlled: formData.shelfLifeControlled,
         frozenShelfLifeDays: formData.frozenShelfLifeDays !== '' ? parseInt(formData.frozenShelfLifeDays, 10) : null,
         roomTempShelfLifeDays: formData.roomTempShelfLifeDays !== '' ? parseInt(formData.roomTempShelfLifeDays, 10) : null,
@@ -2186,66 +2699,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
 
   const handleEdit = (item: InventoryItem) => {
     setEditingItem(item);
-    const resolvedItemType = item.itemType || (item.type === 'Manufactured' ? 'MANUFACTURED' : 'PURCHASED');
-    setFormData({
-      agPartNumber: item.agPartNumber,
-      sku: item.sku || '',
-      name: item.name,
-      type: item.type || 'Purchased',
-      itemType: resolvedItemType,
-      manufacturedCategory: item.manufacturedCategory || (item.isPacket ? 'PACKET' : ''),
-      manufacturingLevel: item.manufacturingLevel || '',
-      manufacturingDepartment: item.manufacturingDepartment || '',
-      machineType: item.machineType || '',
-      source: item.source || '',
-      vendorId: item.vendorId ? item.vendorId.toString() : 'none',
-      supplierPartNumber: item.supplierPartNumber || '',
-      secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
-      costPer: item.costPer != null ? item.costPer.toString() : '',
-      vendorUnit: item.vendorUnit || '',
-      purchaseUnitLabel: item.purchaseUnitLabel || '',
-      purchaseUnit: item.purchaseUnit || '',
-      purchaseUnitId: (item as any).purchaseUnitId?.toString() || '',
-      purchaseQuantity: item.purchaseQuantity
-        ? item.purchaseQuantity.toString()
-        : '',
-      consumptionRate: item.consumptionRate
-        ? item.consumptionRate.toString()
-        : '',
-      usageUnit: item.usageUnit || '',
-      usageUnitId: (item as any).usageUnitId?.toString() || '',
-      cogsPerUnit: item.cogsPerUnit != null ? item.cogsPerUnit.toString() : '',
-      orderDate: item.orderDate
-        ? new Date(item.orderDate).toISOString().split('T')[0]
-        : '',
-      department: item.department || '',
-      assignedDepartments: (item as any).assignedDepartments || [],
-      leadTimeDays: item.leadTimeDays ? item.leadTimeDays.toString() : '',
-      secondarySource: item.secondarySource || '',
-      notes: item.notes || '',
-      isStockItem: item.isStockItem || false,
-      utilizedInPL1: item.utilizedInPL1 || false,
-      utilizedInPL2: item.utilizedInPL2 || false,
-      utilizedInPL3: item.utilizedInPL3 || false,
-      traceabilityRequired: item.traceabilityRequired || false,
-      traceabilityFields: (item as any).traceabilityFields || [],
-      traceabilityFieldConfig: (item as any).traceabilityFieldConfig || {},
-      utilizedInFacilities: item.utilizedInFacilities || false,
-      utilizedInAdmin: item.utilizedInAdmin || false,
-      utilizedInServices: item.utilizedInServices || false,
-      isPacket: (item as any).isPacket || false,
-      isFabric: item.isFabric || false,
-      hasSds: item.hasSds || false,
-      hasTds: item.hasTds || false,
-      hasOtherDocs: item.hasOtherDocs || false,
-      assignedToAsset: (item as any).assignedToAsset || '',
-      defaultOrderMethod: (item as any).defaultOrderMethod || '',
-      shelfLifeControlled: (item as any).shelfLifeControlled || false,
-      frozenShelfLifeDays: (item as any).frozenShelfLifeDays != null ? String((item as any).frozenShelfLifeDays) : '',
-      roomTempShelfLifeDays: (item as any).roomTempShelfLifeDays != null ? String((item as any).roomTempShelfLifeDays) : '',
-      defaultMaxOutTimeMinutes: (item as any).defaultMaxOutTimeMinutes != null ? String((item as any).defaultMaxOutTimeMinutes) : '',
-      outTimeEnforcementRequired: (item as any).outTimeEnforcementRequired || false,
-    });
+    setFormData(getInventoryItemFormData(item));
     setSdsFile(null);
     setCurrentSdsFileName(item.sdsFilePath ? item.sdsFilePath.split('/').pop() || null : null);
     setTdsFile(null);
@@ -2253,6 +2707,49 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     setOtherDocsFile(null);
     setCurrentOtherDocsFileName(item.otherDocsFilePath ? item.otherDocsFilePath.split('/').pop() || null : null);
     setIsEditOpen(true);
+  };
+
+  const handleCopyItem = async (item: InventoryItem) => {
+    setEditingItem(null);
+    setSdsFile(null);
+    setCurrentSdsFileName(null);
+    setTdsFile(null);
+    setCurrentTdsFileName(null);
+    setOtherDocsFile(null);
+    setCurrentOtherDocsFileName(null);
+    setRoutingCreateMode(null);
+    setSelectedTemplateId('');
+    setSelectedExistingRoutingId('');
+    setFormData(getInventoryItemFormData(item, {
+      agPartNumber: '',
+      name: `${item.name} Copy`,
+      hasSds: false,
+      hasTds: false,
+      hasOtherDocs: false,
+    }));
+    setIsCreateOpen(true);
+
+    try {
+      const data = await fetch('/api/inventory/items/next-part-number').then((r) => r.json());
+      if (data.nextPartNumber) {
+        setFormData((prev) => ({ ...prev, agPartNumber: data.nextPartNumber }));
+      }
+    } catch {
+      toast.error('Copied item details, but could not fetch the next part number');
+    }
+  };
+
+  const openOrderUrlDialog = (item: InventoryItem) => {
+    setOrderUrlItem(item);
+    setOrderUrlDraft((item as any).orderUrl || '');
+  };
+
+  const handleSaveOrderUrl = () => {
+    if (!orderUrlItem) return;
+    updateOrderUrlMutation.mutate({
+      id: orderUrlItem.id,
+      orderUrl: normalizeOrderUrl(orderUrlDraft),
+    });
   };
 
   const handleDelete = (id: number) => {
@@ -2561,7 +3058,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             <div className="text-sm text-gray-500 space-y-1">
               <p className="font-semibold">Expected columns:</p>
               <p>
-                AG Part#, SKU, Name, Source, Supplier Part #, Cost per, Order
+                AG Part#, SKU, Name, Vendor, Supplier Part #, Cost per, Order
                 Date, Notes, Utilized, Secondary Source
               </p>
               <p className="text-xs italic mt-2">
@@ -2672,7 +3169,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       ) : (
         <div style={{ overflow: 'hidden', width: '100%' }}>
           <div style={{ overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ minWidth: '1400px', borderCollapse: 'collapse' }} className="w-full border border-gray-200 dark:border-gray-700">
+            <table style={{ minWidth: '1480px', borderCollapse: 'collapse' }} className="w-full border border-gray-200 dark:border-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800">
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center w-12">
@@ -2683,6 +3180,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     onCheckedChange={toggleSelectAll}
                     data-testid="checkbox-select-all"
                   />
+                </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left w-20">
+                  Image
                 </th>
                 <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -2786,7 +3286,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   data-testid="header-source"
                 >
                   <div className="flex items-center gap-2">
-                    Source
+                    Vendor
                     {sortColumn === 'source' ? (
                       sortDirection === 'asc' ? (
                         <ArrowUp className="h-4 w-4" />
@@ -2943,6 +3443,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                         data-testid={`checkbox-item-${item.id}`}
                       />
                     </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      <PartImageThumbnail item={item} />
+                    </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 font-medium">
                       {item.agPartNumber}
                     </td>
@@ -2953,7 +3456,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                       {item.name}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                      {item.source || '-'}
+                      {(item.vendorId && vendorById.get(item.vendorId)?.name) || item.source || '-'}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       {item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}
@@ -3029,6 +3532,24 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2" onClick={(e) => e.stopPropagation()}>
                       <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openOrderUrlDialog(item)}
+                          title={(item as any).orderUrl ? 'Edit order URL' : 'Add order URL'}
+                          data-testid={`button-order-url-${item.id}`}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCopyItem(item)}
+                          title="Copy part"
+                          data-testid={`button-copy-${item.id}`}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -3141,6 +3662,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b bg-muted/50">
+                              <th className="h-9 px-4 text-left font-medium">Image</th>
                               <th className="h-9 px-4 text-left font-medium">AG Part #</th>
                               <th className="h-9 px-4 text-left font-medium">Name</th>
                               <th className="h-9 px-4 text-left font-medium">Level</th>
@@ -3153,7 +3675,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                           <tbody>
                             {catItems.length === 0 ? (
                               <tr>
-                                <td colSpan={7} className="py-6 text-center text-gray-500 text-xs">
+                                <td colSpan={8} className="py-6 text-center text-gray-500 text-xs">
                                   No {CATEGORY_DISPLAY_NAMES[category]} items
                                   {(searchTerm || utilizedFilter !== 'all') && ' matching filters'}
                                 </td>
@@ -3161,6 +3683,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                             ) : (
                               catItems.map((item) => (
                                 <tr key={item.id} className="border-b hover:bg-muted/50 transition-all duration-150 hover:shadow-sm cursor-pointer" onClick={() => handleEdit(item)}>
+                                  <td className="px-4 py-2">
+                                    <PartImageThumbnail item={item} />
+                                  </td>
                                   <td className="px-4 py-2 font-mono text-xs">{item.agPartNumber}</td>
                                   <td className="px-4 py-2 font-medium">{item.name}</td>
                                   <td className="px-4 py-2">
@@ -3202,6 +3727,12 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                                   </td>
                                   <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex space-x-2">
+                                      <Button variant="outline" size="sm" onClick={() => openOrderUrlDialog(item)} title={(item as any).orderUrl ? 'Edit order URL' : 'Add order URL'} data-testid={`button-order-url-mfg-${item.id}`}>
+                                        <ExternalLink className="h-4 w-4" />
+                                      </Button>
+                                      <Button variant="outline" size="sm" onClick={() => handleCopyItem(item)} title="Copy part" data-testid={`button-copy-mfg-${item.id}`}>
+                                        <Copy className="h-4 w-4" />
+                                      </Button>
                                       <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit" data-testid={`button-edit-mfg-${item.id}`}>
                                         <Edit className="h-4 w-4" />
                                       </Button>
@@ -3260,6 +3791,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b bg-muted/50">
+                            <th className="h-9 px-4 text-left font-medium">Image</th>
                             <th className="h-9 px-4 text-left font-medium">AG Part #</th>
                             <th className="h-9 px-4 text-left font-medium">Name</th>
                             <th className="h-9 px-4 text-left font-medium">Actions</th>
@@ -3268,10 +3800,19 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                         <tbody>
                           {filteredUncategorized.map((item) => (
                             <tr key={item.id} className="border-b hover:bg-muted/50 transition-all duration-150 hover:shadow-sm cursor-pointer" onClick={() => handleEdit(item)}>
+                              <td className="px-4 py-2">
+                                <PartImageThumbnail item={item} />
+                              </td>
                               <td className="px-4 py-2 font-mono text-xs">{item.agPartNumber}</td>
                               <td className="px-4 py-2 font-medium">{item.name}</td>
                               <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex space-x-2">
+                                  <Button variant="outline" size="sm" onClick={() => openOrderUrlDialog(item)} title={(item as any).orderUrl ? 'Edit order URL' : 'Add order URL'} data-testid={`button-order-url-uncat-${item.id}`}>
+                                    <ExternalLink className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => handleCopyItem(item)} title="Copy part" data-testid={`button-copy-uncat-${item.id}`}>
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
                                   <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit">
                                     <Edit className="h-4 w-4" />
                                   </Button>
@@ -3292,6 +3833,88 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={!!orderUrlItem}
+        onOpenChange={(open) => {
+          if (!open) {
+            setOrderUrlItem(null);
+            setOrderUrlDraft('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Order Website URL</DialogTitle>
+          </DialogHeader>
+          {orderUrlItem && (
+            <div className="space-y-4">
+              <div className="text-sm">
+                <p className="font-medium">{orderUrlItem.name}</p>
+                <p className="text-muted-foreground">{orderUrlItem.agPartNumber}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="actionOrderUrl">Website URL</Label>
+                <Input
+                  id="actionOrderUrl"
+                  value={orderUrlDraft}
+                  onChange={(e) => setOrderUrlDraft(e.target.value)}
+                  placeholder="vendor.com/item-page"
+                  inputMode="url"
+                  data-testid="input-action-order-url"
+                />
+              </div>
+              <div className="flex flex-wrap justify-between gap-2">
+                <div className="flex gap-2">
+                  {((item: InventoryItem) => {
+                    const currentUrl = normalizeOrderUrl((item as any).orderUrl || '');
+                    return currentUrl ? (
+                      <Button
+                        variant="outline"
+                        type="button"
+                        onClick={() => window.open(currentUrl, '_blank', 'noopener,noreferrer')}
+                        data-testid="button-open-order-url"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open
+                      </Button>
+                    ) : null;
+                  })(orderUrlItem)}
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => updateOrderUrlMutation.mutate({ id: orderUrlItem.id, orderUrl: null })}
+                    disabled={updateOrderUrlMutation.isPending || !(orderUrlItem as any).orderUrl}
+                    data-testid="button-clear-order-url"
+                  >
+                    Clear
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => {
+                      setOrderUrlItem(null);
+                      setOrderUrlDraft('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSaveOrderUrl}
+                    disabled={updateOrderUrlMutation.isPending}
+                    data-testid="button-save-order-url"
+                  >
+                    Save URL
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={isEditOpen}
@@ -3344,6 +3967,13 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             onSaveTraceabilityFields={handleSaveTraceabilityFields}
             onTraceabilityConfigChange={handleTraceabilityConfigChange}
           />
+          {editingItem?.agPartNumber && (
+            <InventoryItemImagesPanel
+              item={editingItem}
+              onPrimaryImageChange={(updatedItem) => setEditingItem(updatedItem)}
+            />
+          )}
+
           {editingItem?.agPartNumber && (
             <div className="mt-6 border-t pt-6">
               <InventoryItemCostHistory

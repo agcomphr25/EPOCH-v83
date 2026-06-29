@@ -63,11 +63,23 @@ type SerializedUnit = {
   completedAt: string | null;
   finalizedAt: string | null;
   finalizedBy: string | null;
+  projectId?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
+  projectPoId?: number | null;
+  projectPoNumber?: string | null;
+  projectPoItemId?: number | null;
 };
 
 type POGroup = {
   poNumber: string;
   poId: number;
+  shipmentPoId: number;
+  shipmentPoNumber: string;
+  shipmentPoItemId: number | null;
+  projectId: string | null;
+  projectCode: string | null;
+  projectName: string | null;
   customerName: string;
   units: SerializedUnit[];
   totalUnits: number;
@@ -90,6 +102,15 @@ type CreatedShipment = {
   journalEntryId?: number;
   journalEntryStatus?: string;
   journalLineCount?: number;
+};
+
+type ShipmentPoContext = {
+  poId?: number | null;
+  poNumber?: string | null;
+  poItemId?: number | null;
+  projectId?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
 };
 
 function invoiceStatusColor(status?: string) {
@@ -124,6 +145,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   const [generatingCertFor, setGeneratingCertFor] = useState<string | null>(null);
   const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
   const [summaryModalSerials, setSummaryModalSerials] = useState<SerializedUnit[]>([]);
+  const [summaryModalPoContext, setSummaryModalPoContext] = useState<ShipmentPoContext | null>(null);
   const [cocModal, setCocModal] = useState<{ poNumber: string; lotId: string } | null>(null);
   const [cocSpecialProcesses, setCocSpecialProcesses] = useState('N/A');
   const [cocShipDate, setCocShipDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -136,11 +158,28 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   });
 
   const shippingUnits = selectedPOIds.length > 0
-    ? shippingUnitsRaw.filter((u) => selectedPOIds.includes(u.poId))
+    ? shippingUnitsRaw.filter((u) => selectedPOIds.includes(u.projectPoId ?? u.poId) || selectedPOIds.includes(u.poId))
     : shippingUnitsRaw;
+
+  const buildShipmentPoContext = (
+    units: SerializedUnit[],
+    fallbackPoNumber?: string | null,
+  ): ShipmentPoContext => {
+    const sample = units[0];
+    return {
+      poId: sample?.projectPoId ?? sample?.poId ?? null,
+      poNumber: sample?.projectPoNumber ?? fallbackPoNumber ?? sample?.poNumber ?? null,
+      poItemId: sample?.projectPoItemId ?? null,
+      projectId: sample?.projectId ?? null,
+      projectCode: sample?.projectCode ?? null,
+      projectName: sample?.projectName ?? null,
+    };
+  };
 
   type ExistingShipmentRow = {
     po_id: number;
+    source_po_ids?: number[] | null;
+    source_po_numbers?: string[] | null;
     lot_id: string;
     lot_number: string;
     slip_id: string;
@@ -161,10 +200,17 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   });
 
   // Build poId → poNumber lookup from the live shipping queue
-  const poIdToNumber = useMemo(() => {
-    const map: Record<number, string> = {};
+  const shipmentPoIdToGroupKeys = useMemo(() => {
+    const map: Record<number, Set<string>> = {};
     for (const u of shippingUnits) {
-      if (u.poId && u.poNumber) map[u.poId] = u.poNumber;
+      if (u.poId && u.poNumber) {
+        map[u.poId] = map[u.poId] ?? new Set<string>();
+        map[u.poId].add(u.poNumber);
+      }
+      if (u.projectPoId && u.poNumber) {
+        map[u.projectPoId] = map[u.projectPoId] ?? new Set<string>();
+        map[u.projectPoId].add(u.poNumber);
+      }
     }
     return map;
   }, [shippingUnits]);
@@ -173,14 +219,16 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   // Merges server rows into existing local state: adds missing lots but preserves locally-enriched
   // fields (e.g. certId/certNumber set by handleGenerateCoC before the next server refetch).
   useEffect(() => {
-    if (!existingShipmentRows.length || !Object.keys(poIdToNumber).length) return;
+    if (!existingShipmentRows.length || !Object.keys(shipmentPoIdToGroupKeys).length) return;
     setCreatedShipments((prev) => {
       const next: Record<string, CreatedShipment[]> = { ...prev };
       for (const row of existingShipmentRows) {
-        const poNumber = poIdToNumber[row.po_id];
-        if (!poNumber) continue;
-        if (!next[poNumber]) next[poNumber] = [];
-        const existingIdx = next[poNumber].findIndex((s) => s.lotId === row.lot_id);
+        const poNumbers = Array.from(new Set<string>([
+          ...(row.source_po_numbers ?? []),
+          ...Array.from(shipmentPoIdToGroupKeys[row.po_id] ?? []),
+          ...(row.source_po_ids ?? []).flatMap((poId) => Array.from(shipmentPoIdToGroupKeys[poId] ?? [])),
+        ].filter((poNumber): poNumber is string => !!poNumber)));
+        if (poNumbers.length === 0) continue;
         const serverEntry: CreatedShipment = {
           lotId: row.lot_id,
           lotNumber: row.lot_number,
@@ -196,22 +244,26 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           journalEntryStatus: row.journal_entry_status ?? undefined,
           journalLineCount: row.journal_line_count ?? undefined,
         };
-        if (existingIdx === -1) {
-          next[poNumber] = [...next[poNumber], serverEntry];
-        } else {
-          const local = next[poNumber][existingIdx];
-          // Prefer local cert fields if server hasn't caught up yet
-          const merged: CreatedShipment = {
-            ...serverEntry,
-            certId: local.certId ?? serverEntry.certId,
-            certNumber: local.certNumber ?? serverEntry.certNumber,
-          };
-          next[poNumber] = next[poNumber].map((s, i) => (i === existingIdx ? merged : s));
+        for (const poNumber of poNumbers) {
+          if (!next[poNumber]) next[poNumber] = [];
+          const existingIdx = next[poNumber].findIndex((s) => s.lotId === row.lot_id);
+          if (existingIdx === -1) {
+            next[poNumber] = [...next[poNumber], serverEntry];
+          } else {
+            const local = next[poNumber][existingIdx];
+            // Prefer local cert fields if server hasn't caught up yet
+            const merged: CreatedShipment = {
+              ...serverEntry,
+              certId: local.certId ?? serverEntry.certId,
+              certNumber: local.certNumber ?? serverEntry.certNumber,
+            };
+            next[poNumber] = next[poNumber].map((s, i) => (i === existingIdx ? merged : s));
+          }
         }
       }
       return next;
     });
-  }, [existingShipmentRows, poIdToNumber]);
+  }, [existingShipmentRows, shipmentPoIdToGroupKeys]);
 
   const poGroups = useMemo(() => {
     const groups: Record<string, POGroup> = {};
@@ -221,6 +273,12 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
         groups[key] = {
           poNumber: unit.poNumber,
           poId: unit.poId,
+          shipmentPoId: unit.projectPoId ?? unit.poId,
+          shipmentPoNumber: unit.projectPoNumber ?? unit.poNumber,
+          shipmentPoItemId: unit.projectPoItemId ?? null,
+          projectId: unit.projectId ?? null,
+          projectCode: unit.projectCode ?? null,
+          projectName: unit.projectName ?? null,
           customerName: unit.customerName,
           units: [],
           totalUnits: 0,
@@ -286,7 +344,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   useEffect(() => {
     if (!initialPO || autoTriggered.current || shippingUnits.length === 0) return;
     const readyForPO = shippingUnits.filter(
-      (u) => u.poNumber === initialPO &&
+      (u) => (u.poNumber === initialPO || u.projectPoNumber === initialPO) &&
              u.status === 'COMPLETED' &&
              !!(u.finalizedAt && u.sku && u.drawingName)
     );
@@ -307,6 +365,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
 
     setSelectedSerials((prev) => ({ ...prev, [initialPO]: new Set(unitsToShip.map((u) => u.id)) }));
     setSummaryModalSerials(unitsToShip);
+    setSummaryModalPoContext(buildShipmentPoContext(unitsToShip, initialPO));
     setSummaryModalPO(initialPO);
   }, [initialPO, initialUnits, shippingUnits]);
 
@@ -403,13 +462,28 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     });
   };
 
-  const handleCreateShipment = async (poNumber: string, serialIds: string[]) => {
+  const handleCreateShipment = async (
+    poNumber: string,
+    serialIds: string[],
+    billingAssignments: { serializedItemId: string; allocationId: string }[] = [],
+    billingBucketOverrides: {
+      poId?: number;
+      poNumber?: string;
+      poItemId: number;
+      bucketLabel: string;
+      description?: string;
+      customerPoLine?: string;
+      quantityAuthorized?: number;
+      unitPrice?: number;
+      serialIds?: string[];
+    }[] = [],
+  ) => {
     if (serialIds.length === 0) return;
     setCreatingShipmentFor(poNumber);
     try {
       const lot = await apiRequest('/api/p2/lots', {
         method: 'POST',
-        body: JSON.stringify({ serialIds, createdBy: 'shipping' }),
+        body: JSON.stringify({ serialIds, createdBy: 'shipping', billingAssignments, billingBucketOverrides }),
       });
       const slip = await apiRequest('/api/p2/packing-slips', {
         method: 'POST',
@@ -552,16 +626,19 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
       {summaryModalPO && (
         <ShipmentSummaryModal
           serials={summaryModalSerials}
-          onConfirm={() => {
+          poContext={summaryModalPoContext ?? undefined}
+          onConfirm={(billingAssignments, billingBucketOverrides) => {
             const po = summaryModalPO!;
             const ids = summaryModalSerials.map((s) => s.id);
             setSummaryModalPO(null);
             setSummaryModalSerials([]);
-            handleCreateShipment(po, ids);
+            setSummaryModalPoContext(null);
+            handleCreateShipment(po, ids, billingAssignments, billingBucketOverrides);
           }}
           onCancel={() => {
             setSummaryModalPO(null);
             setSummaryModalSerials([]);
+            setSummaryModalPoContext(null);
           }}
         />
       )}
@@ -670,6 +747,14 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                             [group.poNumber]: new Set(finalizedUnits.map((u) => u.id)),
                           }));
                           setSummaryModalSerials(finalizedUnits);
+                          setSummaryModalPoContext({
+                            poId: group.shipmentPoId,
+                            poNumber: group.shipmentPoNumber,
+                            poItemId: group.shipmentPoItemId,
+                            projectId: group.projectId,
+                            projectCode: group.projectCode,
+                            projectName: group.projectName,
+                          });
                           setSummaryModalPO(group.poNumber);
                         }}
                       >
@@ -958,6 +1043,14 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                           onClick={() => {
                             const selected = group.units.filter((u) => shipSelForPO.has(u.id));
                             setSummaryModalSerials(selected);
+                            setSummaryModalPoContext({
+                              poId: group.shipmentPoId,
+                              poNumber: group.shipmentPoNumber,
+                              poItemId: group.shipmentPoItemId,
+                              projectId: group.projectId,
+                              projectCode: group.projectCode,
+                              projectName: group.projectName,
+                            });
                             setSummaryModalPO(group.poNumber);
                           }}
                           className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -972,8 +1065,10 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                     )}
 
                     {/* ── Created shipment documents ── */}
-                    {shipments.map((shipment) => (
-                      <div key={shipment.lotId} className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
+                    {shipments.map((shipment) => {
+                      const displayedShipmentDocumentNumber = shipment.invoiceNumber || shipment.slipNumber;
+                      return (
+                        <div key={shipment.lotId} className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm font-semibold">
                           <CheckCircle className="w-4 h-4" />
                           Shipment Created
@@ -985,7 +1080,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                             >
                               {shipment.lotNumber}
                             </Link>
-                            {' '}· {shipment.slipNumber}
+                            {' '}· {displayedShipmentDocumentNumber}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -1080,8 +1175,9 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                             </Badge>
                           )}
                         </div>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
 
                     {allCompletedFinalized && shipments.length === 0 && (
                       <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg">

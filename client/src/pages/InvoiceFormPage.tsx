@@ -23,7 +23,7 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Plus, Trash2, Save, ArrowLeft, Loader2, Paperclip } from 'lucide-react';
+import { Copy, Plus, Trash2, Save, ArrowLeft, Loader2, Paperclip } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
 
@@ -54,6 +54,19 @@ function calculateDueDate(invoiceDate: string, terms: string): string {
 }
 
 interface InvoiceLine {
+  id?: string;
+  inventoryItemId?: string | null;
+  poItemId?: number | null;
+  partNumber: string;
+  productionLine?: string;
+  projectId?: string | null;
+  projectNameSnapshot?: string | null;
+  salespersonUserId?: number | null;
+  salespersonNameSnapshot?: string | null;
+  csrUserId?: number | null;
+  csrNameSnapshot?: string | null;
+  customerType?: string | null;
+  dimensionTags?: Record<string, any>;
   description: string;
   qty: string;
   unitPrice: string;
@@ -80,6 +93,7 @@ interface InvoiceFormData {
 }
 
 const emptyLine = (): InvoiceLine => ({
+  partNumber: '',
   description: '',
   qty: '1',
   unitPrice: '0',
@@ -150,6 +164,45 @@ export default function InvoiceFormPage() {
     enabled: !!form.customerId && !isP1Invoice,
   });
 
+  const customerOptions = (() => {
+    const options = customers.map((customer: any) => ({
+      ...customer,
+      customerId: String(customer.customerId),
+    }));
+    const currentCustomerId = existingInvoice?.customerId ? String(existingInvoice.customerId) : '';
+    if (
+      isEditing &&
+      !isP1Invoice &&
+      currentCustomerId &&
+      !options.some((customer: any) => String(customer.customerId) === currentCustomerId)
+    ) {
+      options.unshift({
+        customerId: currentCustomerId,
+        customerName: existingInvoice?.customerName || `Customer ${currentCustomerId}`,
+        paymentTerms: existingInvoice?.terms || '',
+      });
+    }
+    return options;
+  })();
+
+  const poOptions = (() => {
+    const options = [...customerPos];
+    const currentPoId = existingInvoice?.poId ? String(existingInvoice.poId) : '';
+    if (
+      isEditing &&
+      !isP1Invoice &&
+      currentPoId &&
+      !options.some((po) => String(po.id) === currentPoId)
+    ) {
+      options.unshift({
+        id: Number(currentPoId),
+        poNumber: existingInvoice?.poNumber || existingInvoice?.poOverride || currentPoId,
+        status: 'linked',
+      });
+    }
+    return options;
+  })();
+
   useEffect(() => {
     if (existingInvoice && isEditing) {
       setForm({
@@ -171,6 +224,19 @@ export default function InvoiceFormPage() {
         lines:
           existingInvoice.lines && existingInvoice.lines.length > 0
             ? existingInvoice.lines.map((l: any) => ({
+                id: l.id,
+                inventoryItemId: l.inventoryItemId || null,
+                poItemId: l.poItemId || null,
+                partNumber: l.partNumber || '',
+                productionLine: l.productionLine || 'P2',
+                projectId: l.projectId || null,
+                projectNameSnapshot: l.projectNameSnapshot || null,
+                salespersonUserId: l.salespersonUserId || null,
+                salespersonNameSnapshot: l.salespersonNameSnapshot || null,
+                csrUserId: l.csrUserId || null,
+                csrNameSnapshot: l.csrNameSnapshot || null,
+                customerType: l.customerType || null,
+                dimensionTags: l.dimensionTags || {},
                 description: l.description || '',
                 qty: l.qty || '1',
                 unitPrice: l.unitPrice || '0',
@@ -178,7 +244,15 @@ export default function InvoiceFormPage() {
               }))
             : [emptyLine()],
       });
-      setDueDateManuallySet(true);
+      const calculatedDueDate =
+        existingInvoice.invoiceDate && existingInvoice.terms
+          ? calculateDueDate(existingInvoice.invoiceDate, existingInvoice.terms)
+          : '';
+      setDueDateManuallySet(
+        !!existingInvoice.dueDate &&
+          !!calculatedDueDate &&
+          existingInvoice.dueDate !== calculatedDueDate
+      );
     }
   }, [existingInvoice, isEditing]);
 
@@ -201,7 +275,7 @@ export default function InvoiceFormPage() {
   const updateField = (field: keyof InvoiceFormData, value: string) => {
     setForm((prev) => {
       if (field === 'customerId' && value !== prev.customerId) {
-        const customer = customers.find((c: any) => c.customerId === value);
+        const customer = customerOptions.find((c: any) => c.customerId === value);
         const prefillTerms = customer?.paymentTerms || '';
         const newDueDate = !dueDateManuallySet && prefillTerms
           ? calculateDueDate(prev.invoiceDate, prefillTerms)
@@ -242,6 +316,63 @@ export default function InvoiceFormPage() {
     setForm((prev) => ({ ...prev, lines: [...prev.lines, emptyLine()] }));
   };
 
+  const splitLine = (index: number) => {
+    const source = form.lines[index];
+    if (!source) return;
+
+    const sourceQty = parseFloat(source.qty) || 0;
+    if (sourceQty <= 1) {
+      toast({
+        title: 'Cannot Split Line',
+        description: 'Line quantity must be greater than 1 to split.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const requestedQty = window.prompt('Quantity to move to the new invoice line', '1');
+    if (requestedQty === null) return;
+
+    const splitQty = parseFloat(requestedQty);
+    if (!Number.isFinite(splitQty) || splitQty <= 0 || splitQty >= sourceQty) {
+      toast({
+        title: 'Invalid Split Quantity',
+        description: `Enter a quantity greater than 0 and less than ${sourceQty}.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setForm((prev) => {
+      const latestSource = prev.lines[index];
+      if (!latestSource) return prev;
+      const remainingQty = sourceQty - splitQty;
+      const splitMarker = {
+        invoiceLineSplit: true,
+        splitFromInvoiceLineId: latestSource.id || null,
+        splitAt: new Date().toISOString(),
+      };
+      const updatedSource = {
+        ...latestSource,
+        qty: String(remainingQty),
+        lineTotal: calculateLineTotal(String(remainingQty), latestSource.unitPrice),
+      };
+      const splitClone: InvoiceLine = {
+        ...latestSource,
+        id: undefined,
+        qty: String(splitQty),
+        lineTotal: calculateLineTotal(String(splitQty), latestSource.unitPrice),
+        dimensionTags: {
+          ...(latestSource.dimensionTags || {}),
+          ...splitMarker,
+        },
+      };
+      const newLines = [...prev.lines];
+      newLines.splice(index, 1, updatedSource, splitClone);
+      return { ...prev, lines: newLines };
+    });
+  };
+
   const removeLine = (index: number) => {
     setForm((prev) => {
       if (prev.lines.length <= 1) return prev;
@@ -268,6 +399,18 @@ export default function InvoiceFormPage() {
         retainagePercent: data.retainagePercent,
         retainageAmount: data.retainageAmount,
         lines: data.lines.map((l) => ({
+          inventoryItemId: l.inventoryItemId || null,
+          poItemId: l.poItemId || null,
+          partNumber: l.partNumber || null,
+          productionLine: l.productionLine || 'P2',
+          projectId: l.projectId || null,
+          projectNameSnapshot: l.projectNameSnapshot || null,
+          salespersonUserId: l.salespersonUserId || null,
+          salespersonNameSnapshot: l.salespersonNameSnapshot || null,
+          csrUserId: l.csrUserId || null,
+          csrNameSnapshot: l.csrNameSnapshot || null,
+          customerType: l.customerType || null,
+          dimensionTags: l.dimensionTags || {},
           description: l.description,
           qty: l.qty,
           unitPrice: l.unitPrice,
@@ -369,7 +512,7 @@ export default function InvoiceFormPage() {
                     <SelectValue placeholder="Select customer" />
                   </SelectTrigger>
                   <SelectContent>
-                    {customers.map((c: any) => (
+                    {customerOptions.map((c: any) => (
                       <SelectItem key={c.customerId} value={c.customerId}>
                         {c.customerName}
                       </SelectItem>
@@ -450,7 +593,7 @@ export default function InvoiceFormPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">None</SelectItem>
-                  {customerPos.map((po) => (
+                  {poOptions.map((po) => (
                     <SelectItem key={po.id} value={String(po.id)}>
                       {po.poNumber} ({po.status})
                     </SelectItem>
@@ -610,16 +753,29 @@ export default function InvoiceFormPage() {
                     <TableCell className="text-right font-medium">
                       ${parseFloat(line.lineTotal || '0').toFixed(2)}
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeLine(index)}
-                        disabled={isP1Invoice || form.lines.length <= 1}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    <TableCell className="whitespace-nowrap">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => splitLine(index)}
+                          disabled={isP1Invoice || (parseFloat(line.qty) || 0) <= 1}
+                          title="Split line quantity"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeLine(index)}
+                          disabled={isP1Invoice || form.lines.length <= 1}
+                          title="Remove line"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

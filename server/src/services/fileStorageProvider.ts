@@ -18,13 +18,18 @@ export interface UploadTarget {
   provider: FileStorageProviderName;
 }
 
+export interface DownloadObjectOptions {
+  contentType?: string | null;
+  contentDisposition?: string | null;
+}
+
 export interface FileStorageProvider {
   readonly name: FileStorageProviderName;
   createUploadTarget(input: CreateUploadTargetInput): Promise<UploadTarget>;
   uploadBuffer(input: CreateUploadTargetInput & { buffer: Buffer }): Promise<string>;
   setPublicReadPolicy(objectPath: string, owner?: string): Promise<void>;
   deleteObject(objectPath: string): Promise<void>;
-  downloadObject(objectPath: string, res: Response): Promise<void>;
+  downloadObject(objectPath: string, res: Response, options?: DownloadObjectOptions): Promise<void>;
   downloadBuffer(objectPath: string): Promise<Buffer>;
 }
 
@@ -152,9 +157,9 @@ class ReplitFileStorageProvider implements FileStorageProvider {
     await objectFile.delete();
   }
 
-  async downloadObject(objectPath: string, res: Response) {
+  async downloadObject(objectPath: string, res: Response, options?: DownloadObjectOptions) {
     const objectFile = await this.objectStorage.getObjectEntityFile(normalizeLegacyObjectPath(objectPath));
-    await this.objectStorage.downloadObject(objectFile, res);
+    await this.objectStorage.downloadObject(objectFile, res, 3600, options);
   }
 
   async downloadBuffer(objectPath: string) {
@@ -240,7 +245,7 @@ class SupabaseFileStorageProvider implements FileStorageProvider {
     }
   }
 
-  async downloadObject(objectPath: string, res: Response) {
+  async downloadObject(objectPath: string, res: Response, options?: DownloadObjectOptions) {
     const ref = parseSupabaseObjectPath(objectPath);
     const response = await fetch(`${this.url}/storage/v1/object/${encodeURIComponent(ref.bucket)}/${ref.path}`, {
       headers: this.authHeaders(),
@@ -257,9 +262,12 @@ class SupabaseFileStorageProvider implements FileStorageProvider {
 
     response.headers.forEach((value, key) => {
       if (['content-type', 'content-length', 'cache-control'].includes(key.toLowerCase())) {
+        if (key.toLowerCase() === 'content-type' && options?.contentType) return;
         res.setHeader(key, value);
       }
     });
+    if (options?.contentType) res.setHeader('Content-Type', options.contentType);
+    if (options?.contentDisposition) res.setHeader('Content-Disposition', options.contentDisposition);
 
     Readable.fromWeb(response.body as any).pipe(res);
   }

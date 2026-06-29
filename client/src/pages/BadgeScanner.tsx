@@ -30,6 +30,8 @@ type EmployeeBadgeActionResponse = {
   } | null;
 };
 
+const OPERATION_BATCH_BARCODE_PATTERN = /^OPB-[A-Za-z0-9]+-\d+-\d+$/i;
+
 export default function BadgeScanner() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -47,16 +49,16 @@ export default function BadgeScanner() {
         `/api/employee-badges/employee-badge-actions/by-employee/${employeeCode}`
       ) as EmployeeBadgeActionResponse;
 
+      setScannedEmployee(response);
+
       if (!response.action) {
+        setScanState('EMPLOYEE_SCANNED');
         toast({
-          title: 'No Action Configured',
-          description: `Employee ${response.employee.name} has no badge action configured. Please contact admin.`,
-          variant: 'destructive',
+          title: 'Employee Identified',
+          description: `Welcome, ${response.employee.name}! Ready to scan CNC operation batch barcode.`,
         });
         return;
       }
-
-      setScannedEmployee(response);
 
       // For actions that don't need a second scan, execute immediately
       if (
@@ -127,7 +129,23 @@ export default function BadgeScanner() {
   };
 
   const handleOrderScan = async (barcode: string) => {
-    if (!scannedEmployee || !scannedEmployee.action) return;
+    if (!scannedEmployee) return;
+
+    if (OPERATION_BATCH_BARCODE_PATTERN.test(barcode)) {
+      const badge = encodeURIComponent(scannedEmployee.employee.employeeCode);
+      const batchBarcode = encodeURIComponent(barcode);
+      setLocation(`/cnc/batch-station?badge=${badge}&barcode=${batchBarcode}`);
+      return;
+    }
+
+    if (!scannedEmployee.action) {
+      toast({
+        title: 'No Action Configured',
+        description: 'Scan an operation batch barcode or contact admin to configure order processing for this badge.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     // Check for duplicates
     if (scannedOrderBarcodes.includes(barcode)) {
@@ -268,7 +286,7 @@ export default function BadgeScanner() {
                     {scannedEmployee.employee.name}
                   </p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Action: {ACTION_TYPE_LABELS[scannedEmployee.action?.actionType as BadgeActionType]}
+                    Action: {scannedEmployee.action ? ACTION_TYPE_LABELS[scannedEmployee.action.actionType as BadgeActionType] : 'CNC batch scan'}
                   </p>
                   {scannedEmployee.action?.actionType === BADGE_ACTION_TYPES.P1_DEPARTMENT_PROGRESS && (
                     <p className="text-sm text-muted-foreground">
@@ -327,6 +345,8 @@ export default function BadgeScanner() {
                     ? 'Scan Order Barcodes'
                     : scannedEmployee.action?.actionType === BADGE_ACTION_TYPES.P2_DEPARTMENT_PROGRESS
                     ? 'Scan P2 Item Barcodes'
+                    : !scannedEmployee.action
+                    ? 'Scan CNC Operation Batch Barcode'
                     : 'Scan Items'}
                 </h3>
                 <div className="mt-2 space-y-2">
@@ -340,7 +360,7 @@ export default function BadgeScanner() {
                         setOrderBarcodeInput('');
                       }
                     }}
-                    placeholder="Scan or type barcode (press Enter to add)..."
+                    placeholder={scannedEmployee.action ? 'Scan or type barcode (press Enter to add)...' : 'Scan OPB barcode...'}
                     disabled={scanState === 'PROCESSING'}
                     autoFocus={scanState === 'EMPLOYEE_SCANNED' || scanState === 'ORDERS_SCANNED'}
                     data-testid="input-order-barcode"
@@ -411,8 +431,8 @@ export default function BadgeScanner() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <p>1. Scan your employee badge to identify yourself and load your configured action</p>
-          <p>2. Scan multiple order or item barcodes (press Enter after each scan)</p>
-          <p>3. Click "Process Orders" to perform the configured action on all scanned items</p>
+          <p>2. Scan an operation batch, order, or item barcode (press Enter after each scan)</p>
+          <p>3. Click "Process Orders" for configured batch actions, or continue into the CNC batch station when scanning OPB barcodes</p>
           <p className="pt-2 text-muted-foreground">
             <strong>Batch Processing:</strong> You can scan multiple orders at once for faster
             workflows. Remove any mistakes before processing.

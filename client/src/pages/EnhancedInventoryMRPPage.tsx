@@ -43,10 +43,12 @@ import OutsideProcessingCard from '../components/inventory/OutsideProcessingCard
 import POSuggestionsCard from '../components/inventory/POSuggestionsCard';
 import VendorPOManager from '../components/inventory/VendorPOManager';
 import VendorPOSettings from '../components/inventory/VendorPOSettings';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function EnhancedInventoryMRPPage() {
   const searchParams = useSearch();
   const [, setLocation] = useLocation();
+  const { can } = usePermissions();
   const [isInventoryItemsModalOpen, setIsInventoryItemsModalOpen] = useState(false);
   const [isVendorPOModalOpen, setIsVendorPOModalOpen] = useState(false);
   const [isPOSettingsModalOpen, setIsPOSettingsModalOpen] = useState(false);
@@ -58,6 +60,10 @@ export default function EnhancedInventoryMRPPage() {
   const [isMrpShortagesModalOpen, setIsMrpShortagesModalOpen] = useState(false);
   const [isPOSuggestionsModalOpen, setIsPOSuggestionsModalOpen] = useState(false);
   const [initialPartNumber, setInitialPartNumber] = useState<string | null>(null);
+  const canSeeConsolidatedNeeds =
+    can('purchasing.view_requisitions') ||
+    can('purchasing.manage_pos') ||
+    can('purchasing.approve_po');
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
@@ -314,29 +320,31 @@ export default function EnhancedInventoryMRPPage() {
             </CardContent>
           </Card>
 
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-purple-500"
-            onClick={() => setLocation('/inventory/consolidated-needs')}
-            data-testid="card-consolidated-needs"
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <ClipboardList className="h-5 w-5 text-purple-600" />
-                Consolidated Parts Needs
-              </CardTitle>
-              <CardDescription>
-                View and manage all parts requests across departments
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-purple-600">
-                  Parts Needs
+          {canSeeConsolidatedNeeds && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-purple-500"
+              onClick={() => setLocation('/inventory/consolidated-needs')}
+              data-testid="card-consolidated-needs"
+            >
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <ClipboardList className="h-5 w-5 text-purple-600" />
+                  Consolidated Parts Needs
+                </CardTitle>
+                <CardDescription>
+                  View and manage all parts requests across departments
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-2xl font-bold text-purple-600">
+                    Parts Needs
+                  </div>
+                  <ClipboardList className="h-4 w-4 text-gray-400" />
                 </div>
-                <ClipboardList className="h-4 w-4 text-gray-400" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 

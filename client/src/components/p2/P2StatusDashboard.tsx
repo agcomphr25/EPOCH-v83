@@ -14,7 +14,6 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-  ArrowRight,
   Layers,
   Factory,
   TrendingUp,
@@ -395,7 +394,7 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                           onClick={() => onViewPO?.(po.id)}
                           data-testid={`button-view-po-${po.id}`}
                         >
-                          Schedule <ArrowRight className="h-4 w-4 ml-1" />
+                          View PO <FileText className="h-4 w-4 ml-1" />
                         </Button>
                       </div>
                     </div>
@@ -456,7 +455,7 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                             onClick={() => onViewPO?.(po.id)}
                             data-testid={`button-view-completed-po-${po.id}`}
                           >
-                            View <ArrowRight className="h-4 w-4 ml-1" />
+                            View PO <FileText className="h-4 w-4 ml-1" />
                           </Button>
                         </div>
                       </TableCell>

@@ -777,15 +777,15 @@ router.post('/:id/link-po', async (req, res) => {
       return res.status(400).json({ message: 'A revision reason is required when changing the linked PO' });
     }
 
-    // Validate PO exists and is not already assigned to another project
+    // Validate PO exists. p2_purchase_orders.project_id is repaired below in
+    // the same transaction; projects.po_id remains the authoritative conflict
+    // check because it has the enforced one-to-one project/PO relationship.
     const poRows = await pool.query<{ id: number; po_number: string; project_id: string | null }>(
       `SELECT id, po_number, project_id::text FROM p2_purchase_orders WHERE id = $1`,
       [poId]
     );
     if (poRows.length === 0) return res.status(404).json({ message: 'PO not found' });
-    if (poRows[0].project_id && poRows[0].project_id !== id) {
-      return res.status(409).json({ message: 'This PO is already assigned to another project' });
-    }
+    const previousPoProjectId = poRows[0].project_id ?? null;
 
     // Ensure no other project already uses this poId
     const conflictRows = await pool.query<{ id: string }>(
@@ -811,6 +811,16 @@ router.post('/:id/link-po', async (req, res) => {
     // so we cannot end up with a P2 PO linked while redundant WAD WOs remain
     // active.
     const { updated, supersedeResult } = await db.transaction(async (tx) => {
+      if (previousPoId && previousPoId !== poId) {
+        await tx.execute(sql`
+          UPDATE p2_purchase_orders
+             SET project_id = NULL,
+                 updated_at = NOW()
+           WHERE id = ${previousPoId}
+             AND project_id = ${id}::uuid
+        `);
+      }
+
       const updatedRows = await tx.execute(sql`
         UPDATE projects
            SET po_id = ${poId},
@@ -847,7 +857,7 @@ router.post('/:id/link-po', async (req, res) => {
           ${revisionSummary}, ${revisionReason},
           ${previousPoId}, ${poId},
           ${createdBy ?? null}, ${createdByDisplayName ?? null},
-          ${JSON.stringify({ source: 'project_po_link', previousPoId, newPoId: poId })}::jsonb
+          ${JSON.stringify({ source: 'project_po_link', previousPoId, newPoId: poId, previousPoProjectId })}::jsonb
         )
       `);
 
@@ -873,7 +883,7 @@ router.post('/:id/link-po', async (req, res) => {
       description: `${revisionLabel}: ${revisionSummary}`,
       performedBy: createdBy,
       performedByDisplayName: createdByDisplayName,
-      metadata: { revisionNumber: nextRevision, previousPoId, newPoId: poId, reason: revisionReason },
+      metadata: { revisionNumber: nextRevision, previousPoId, newPoId: poId, reason: revisionReason, previousPoProjectId },
     } as any);
 
     res.json(updated);

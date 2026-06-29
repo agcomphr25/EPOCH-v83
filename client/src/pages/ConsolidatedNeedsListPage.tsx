@@ -53,6 +53,7 @@ type InventoryItem = {
   source?: string | null;
   vendorName?: string | null;
   vendorId?: number | null;
+  supplierPartNumber?: string | null;
   currentBalance?: number;
   minStock?: number;
   maxStock?: number;
@@ -782,15 +783,23 @@ export default function ConsolidatedNeedsListPage() {
     if (partNumber) setLocation(getInventoryProfilePath(partNumber));
   }, [getInventoryPartNumber, getInventoryProfilePath, setLocation]);
 
+  const getVendorSkuDisplay = useCallback((request: PartsRequest) => {
+    const supplierPartNumber = request.inventoryItem?.supplierPartNumber?.trim();
+    if (supplierPartNumber) return supplierPartNumber;
+
+    const vendorPartNumber = request.vendorPartNumber?.trim();
+    return vendorPartNumber || '';
+  }, []);
+
   const getVendorPartNumbersForRequests = useCallback((requests: PartsRequest[]) => {
     return Array.from(
       new Set(
         requests
-          .map((request) => request.vendorPartNumber?.trim())
+          .map((request) => getVendorSkuDisplay(request))
           .filter((value): value is string => !!value)
       )
     );
-  }, []);
+  }, [getVendorSkuDisplay]);
 
   const openLinkPoDialog = (request: PartsRequest) => {
     setLinkPoRequest(request);
@@ -1084,7 +1093,7 @@ export default function ConsolidatedNeedsListPage() {
     const rows = vendorGroup.requests.map(r => [
       r.partNumber,
       r.partName,
-      r.vendorPartNumber || '',
+      getVendorSkuDisplay(r),
       r.quantity.toString(),
       r.estimatedCost?.toFixed(2) || '',
       r.department,
@@ -1111,7 +1120,7 @@ export default function ConsolidatedNeedsListPage() {
 
   const copyOrderList = (vendorGroup: VendorGroup) => {
     const lines = vendorGroup.requests.map(r => 
-      `${r.vendorPartNumber || r.partNumber}\t${r.partName}\t${r.quantity}`
+      `${getVendorSkuDisplay(r) || r.partNumber}\t${r.partName}\t${r.quantity}`
     );
     const text = lines.join('\n');
     navigator.clipboard.writeText(text);
@@ -1617,7 +1626,7 @@ export default function ConsolidatedNeedsListPage() {
                             )}
                           </td>
                           <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
-                            {request.vendorPartNumber || '-'}
+                            {getVendorSkuDisplay(request) || '-'}
                           </td>
                           <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-gray-100">{request.quantity}</td>
                           <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">

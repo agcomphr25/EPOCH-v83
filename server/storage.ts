@@ -7143,6 +7143,7 @@ export class DatabaseStorage implements IStorage {
         invName: inventoryItems.name,
         invSource: inventoryItems.source,
         invVendorId: inventoryItems.vendorId,
+        invSupplierPartNumber: inventoryItems.supplierPartNumber,
         invUsageUnit: inventoryItems.usageUnit,
         projectCode: projects.projectCode,
         projectName: projects.projectName,
@@ -7172,6 +7173,7 @@ export class DatabaseStorage implements IStorage {
         source: r.invSource,
         vendorName: r.invSource,
         vendorId: r.invVendorId,
+        supplierPartNumber: r.invSupplierPartNumber,
         usageUnit: r.invUsageUnit,
       } : undefined,
       project: r.projectCode ? {

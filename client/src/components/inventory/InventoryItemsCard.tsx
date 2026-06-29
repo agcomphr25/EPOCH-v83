@@ -459,8 +459,10 @@ const InventoryForm = ({
   onSaveTraceabilityFields: (fields: string[]) => void;
   onTraceabilityConfigChange: (config: TraceabilityFieldConfig) => void;
 }) => {
+  const queryClient = useQueryClient();
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [newDepartmentName, setNewDepartmentName] = useState('');
   const sortedVendors = React.useMemo(
     () =>
       Array.isArray(vendors)
@@ -497,6 +499,64 @@ const InventoryForm = ({
     !selectedInactiveMachine
       ? formData.machineType
       : undefined;
+  const sortedDepartments = React.useMemo(
+    () =>
+      Array.isArray(departments)
+        ? [...departments].sort((a, b) => a.name.localeCompare(b.name))
+        : [],
+    [departments]
+  );
+  const createDepartmentMutation = useMutation({
+    mutationFn: (name: string) =>
+      apiRequest('/api/inventory/departments', {
+        method: 'POST',
+        body: {
+          name,
+          isActive: true,
+          sortOrder: sortedDepartments.length + 1,
+        },
+      }),
+    onSuccess: async (department: { name?: string }) => {
+      const departmentName = department?.name || newDepartmentName.trim();
+      await queryClient.invalidateQueries({ queryKey: ['/api/inventory/departments'] });
+      if (departmentName && !formData.assignedDepartments.includes(departmentName)) {
+        onMultiSelectChange('assignedDepartments', [
+          ...formData.assignedDepartments,
+          departmentName,
+        ]);
+      }
+      setNewDepartmentName('');
+      toast.success('Department added');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to add department');
+    },
+  });
+
+  const handleAddDepartment = () => {
+    const departmentName = newDepartmentName.trim();
+    if (!departmentName) {
+      toast.error('Enter a department name');
+      return;
+    }
+
+    const existingDepartment = sortedDepartments.find(
+      (dept) => dept.name.toLowerCase() === departmentName.toLowerCase()
+    );
+    if (existingDepartment) {
+      if (!formData.assignedDepartments.includes(existingDepartment.name)) {
+        onMultiSelectChange('assignedDepartments', [
+          ...formData.assignedDepartments,
+          existingDepartment.name,
+        ]);
+      }
+      setNewDepartmentName('');
+      toast.success('Department selected');
+      return;
+    }
+
+    createDepartmentMutation.mutate(departmentName);
+  };
 
   const { data: allUnits = [] } = useQuery<Array<{ id: number; symbol: string; family: string; family_id: number }>>({
     queryKey: ['/api/units'],
@@ -1233,7 +1293,7 @@ const InventoryForm = ({
         <div className="md:col-span-2">
           <Label htmlFor="assignedDepartments">Assigned Departments *</Label>
           <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
-            {departments.map((dept) => (
+            {sortedDepartments.map((dept) => (
               <div key={dept.id} className="flex items-center space-x-2">
                 <Checkbox
                   id={`dept-${dept.id}`}
@@ -1261,6 +1321,30 @@ const InventoryForm = ({
                 </Label>
               </div>
             ))}
+          </div>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <Input
+              value={newDepartmentName}
+              onChange={(event) => setNewDepartmentName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleAddDepartment();
+                }
+              }}
+              placeholder="New department name"
+              data-testid="input-new-department"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAddDepartment}
+              disabled={createDepartmentMutation.isPending}
+              data-testid="button-add-department"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {createDepartmentMutation.isPending ? 'Adding...' : 'Add Department'}
+            </Button>
           </div>
           {formData.assignedDepartments.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">

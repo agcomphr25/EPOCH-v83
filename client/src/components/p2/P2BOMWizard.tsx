@@ -65,7 +65,9 @@ interface DepartmentOption {
 
 interface PartNeedingBOM {
   id: string;
+  inventoryItemId?: string | null;
   partNumber: string;
+  displayPartNumber?: string;
   description: string;
   quantity: number;
   hasBOM: boolean;
@@ -108,6 +110,11 @@ function getDepartmentLabel(value: string | undefined, options: DepartmentOption
 function departmentOptionsWithCurrent(options: DepartmentOption[], value: string | undefined) {
   if (!value || options.some((department) => department.value === value)) return options;
   return [...options, { value, label: getDepartmentLabel(value, options) }];
+}
+
+function parsePositiveQuantity(value: string, fallback = 0) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardProps) {
@@ -200,7 +207,9 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
     if (poData?.lineItems) {
       const parts: PartNeedingBOM[] = poData.lineItems.map((item: any) => ({
         id: item.id.toString(),
-        partNumber: item.partNumber,
+        inventoryItemId: item.inventoryItemId != null ? String(item.inventoryItemId) : null,
+        partNumber: item.internalPartNumber || item.agPartNumber || item.partNumber,
+        displayPartNumber: item.partNumber,
         description: item.partName || item.description || '',
         quantity: item.quantity,
         hasBOM: item.hasBOM || false,
@@ -554,7 +563,9 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
               <Input
                 type="number"
                 value={newItem.quantity || ''}
-                onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })}
+                onChange={(e) => setNewItem({ ...newItem, quantity: parsePositiveQuantity(e.target.value) })}
+                min="0.0001"
+                step="any"
                 placeholder="Qty"
                 data-testid="input-bom-quantity"
               />
@@ -685,7 +696,9 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
                     <Input
                       type="number"
                       value={editingItem.quantity}
-                      onChange={(e) => setEditingItem({ ...editingItem, quantity: parseInt(e.target.value) || 1 })}
+                      onChange={(e) => setEditingItem({ ...editingItem, quantity: parsePositiveQuantity(e.target.value, 1) })}
+                      min="0.0001"
+                      step="any"
                       data-testid="input-edit-quantity"
                     />
                   </div>

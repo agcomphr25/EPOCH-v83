@@ -500,13 +500,57 @@ router.get('/p2-po-boms', async (req, res) => {
       .where(eq(bomDefinitions.isActive, true))
       .orderBy(desc(bomDefinitions.createdAt));
 
-    const poItemPartNumbers = await db.select({ partNumber: p2PurchaseOrderItems.partNumber })
+    const poItemPartNumbers = await db.select({
+      partNumber: p2PurchaseOrderItems.partNumber,
+      inventoryItemId: p2PurchaseOrderItems.inventoryItemId,
+    })
       .from(p2PurchaseOrderItems);
-    const poPartSet = new Set(poItemPartNumbers.map(p => p.partNumber).filter(Boolean));
+    const inventoryIds = Array.from(new Set(poItemPartNumbers.map(p => p.inventoryItemId).filter(Boolean))) as number[];
+    const linkedInventoryById = inventoryIds.length > 0
+      ? await db.select({
+          id: inventoryItems.id,
+          agPartNumber: inventoryItems.agPartNumber,
+          name: inventoryItems.name,
+        })
+        .from(inventoryItems)
+        .where(inArray(inventoryItems.id, inventoryIds))
+      : [];
+    const candidatePartNumbers = Array.from(new Set(allBomDefs.flatMap(bom => {
+      const sku = String(bom.sku || '').trim();
+      const baseSku = sku.replace(/\s+Rev\s+.+$/i, '');
+      return [sku, baseSku].filter(Boolean);
+    })));
+    const linkedInventoryBySku = candidatePartNumbers.length > 0
+      ? await db.select({
+          id: inventoryItems.id,
+          agPartNumber: inventoryItems.agPartNumber,
+          name: inventoryItems.name,
+        })
+        .from(inventoryItems)
+        .where(inArray(inventoryItems.agPartNumber, candidatePartNumbers))
+      : [];
+    const linkedInventory = [...linkedInventoryById, ...linkedInventoryBySku];
+    const inventoryById = new Map(linkedInventory.map(item => [item.id, item]));
+    const inventoryByPartNumber = new Map(linkedInventory.map(item => [item.agPartNumber, item]));
+    const poPartSet = new Set<string>();
+    poItemPartNumbers.forEach(p => {
+      if (p.partNumber) poPartSet.add(p.partNumber);
+      const internalPart = p.inventoryItemId ? inventoryById.get(p.inventoryItemId)?.agPartNumber : null;
+      if (internalPart) poPartSet.add(internalPart);
+    });
 
     const p2Boms = allBomDefs.filter(bom => 
       bom.sku && poPartSet.has(bom.sku)
-    );
+    ).map(bom => {
+      const baseSku = String(bom.sku || '').replace(/\s+Rev\s+.+$/i, '');
+      const internalPart = inventoryByPartNumber.get(String(bom.sku || '')) || inventoryByPartNumber.get(baseSku);
+      return {
+        ...bom,
+        internalPartNumber: internalPart?.agPartNumber || null,
+        internalPartName: internalPart?.name || null,
+        inventoryItemId: internalPart?.id || null,
+      };
+    });
 
     const filtered = search
       ? p2Boms.filter(bom => {
@@ -514,6 +558,8 @@ router.get('/p2-po-boms', async (req, res) => {
           return (
             bom.modelName?.toLowerCase().includes(s) ||
             bom.sku?.toLowerCase().includes(s) ||
+            bom.internalPartNumber?.toLowerCase().includes(s) ||
+            bom.internalPartName?.toLowerCase().includes(s) ||
             bom.description?.toLowerCase().includes(s)
           );
         })
@@ -543,6 +589,18 @@ router.get('/p2-po-boms/:id', async (req, res) => {
       .where(and(eq(bomItems.bomId, id), eq(bomItems.isActive, true)))
       .orderBy(bomItems.assemblyLevel, bomItems.partName);
 
+    const baseSku = String(bom.sku || '').replace(/\s+Rev\s+.+$/i, '');
+    const [internalPart] = bom.sku
+      ? await db.select({
+          id: inventoryItems.id,
+          agPartNumber: inventoryItems.agPartNumber,
+          name: inventoryItems.name,
+        })
+        .from(inventoryItems)
+        .where(inArray(inventoryItems.agPartNumber, [bom.sku, baseSku]))
+        .limit(1)
+      : [];
+
     const poItems = bom.sku
       ? await db.select({
           poId: p2PurchaseOrderItems.poId,
@@ -551,13 +609,123 @@ router.get('/p2-po-boms/:id', async (req, res) => {
         })
         .from(p2PurchaseOrderItems)
         .innerJoin(p2PurchaseOrders, eq(p2PurchaseOrderItems.poId, p2PurchaseOrders.id))
-        .where(eq(p2PurchaseOrderItems.partNumber, bom.sku))
+        .where(internalPart
+          ? inArray(p2PurchaseOrderItems.inventoryItemId, [internalPart.id])
+          : eq(p2PurchaseOrderItems.partNumber, bom.sku))
       : [];
 
-    res.json({ ...bom, items, linkedPurchaseOrders: poItems });
+    res.json({
+      ...bom,
+      internalPartNumber: internalPart?.agPartNumber || null,
+      internalPartName: internalPart?.name || null,
+      inventoryItemId: internalPart?.id || null,
+      items,
+      linkedPurchaseOrders: poItems,
+    });
   } catch (error) {
     console.error('Get P2 PO BOM error:', error);
     res.status(500).json({ error: 'Failed to fetch P2 PO BOM' });
+  }
+});
+
+router.put('/p2-po-boms/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = {
+      sku: req.body.sku,
+      modelName: req.body.modelName,
+      revision: req.body.revision,
+      description: req.body.description,
+      updatedAt: new Date(),
+    };
+
+    const [updated] = await db.update(bomDefinitions)
+      .set(updateData)
+      .where(eq(bomDefinitions.id, id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'P2 PO BOM not found' });
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Update P2 PO BOM error:', error);
+    res.status(500).json({ error: 'Failed to update P2 PO BOM' });
+  }
+});
+
+router.post('/p2-po-boms/:id/items', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const quantity = Number.parseFloat(String(req.body.quantity ?? ''));
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return res.status(400).json({ error: 'Quantity must be greater than 0' });
+    }
+
+    const [newItem] = await db.insert(bomItems)
+      .values({
+        bomId: id,
+        partName: String(req.body.partName || '').trim(),
+        quantity,
+        firstDept: String(req.body.firstDept || 'Layup').trim(),
+        itemType: String(req.body.itemType || 'material').trim(),
+        notes: req.body.notes || '',
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    res.json(newItem);
+  } catch (error) {
+    console.error('Add P2 PO BOM item error:', error);
+    res.status(500).json({ error: 'Failed to add P2 PO BOM item' });
+  }
+});
+
+router.put('/p2-po-boms/:bomId/items/:itemId', async (req, res) => {
+  try {
+    const { bomId, itemId } = req.params;
+    const quantity = Number.parseFloat(String(req.body.quantity ?? ''));
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return res.status(400).json({ error: 'Quantity must be greater than 0' });
+    }
+
+    const [updatedItem] = await db.update(bomItems)
+      .set({
+        partName: String(req.body.partName || '').trim(),
+        quantity,
+        firstDept: String(req.body.firstDept || 'Layup').trim(),
+        itemType: String(req.body.itemType || 'material').trim(),
+        notes: req.body.notes || '',
+        updatedAt: new Date(),
+      })
+      .where(and(eq(bomItems.id, itemId), eq(bomItems.bomId, bomId)))
+      .returning();
+
+    if (!updatedItem) {
+      return res.status(404).json({ error: 'P2 PO BOM item not found' });
+    }
+
+    res.json(updatedItem);
+  } catch (error) {
+    console.error('Update P2 PO BOM item error:', error);
+    res.status(500).json({ error: 'Failed to update P2 PO BOM item' });
+  }
+});
+
+router.delete('/p2-po-boms/:bomId/items/:itemId', async (req, res) => {
+  try {
+    const { bomId, itemId } = req.params;
+
+    await db.update(bomItems)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(and(eq(bomItems.id, itemId), eq(bomItems.bomId, bomId)));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete P2 PO BOM item error:', error);
+    res.status(500).json({ error: 'Failed to delete P2 PO BOM item' });
   }
 });
 

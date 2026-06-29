@@ -492,8 +492,36 @@ function linePartNumber(line: BomLine) {
   return line.agPartNumber || line.supplierItemId || `DRAFT-${line.id.slice(0, 8).toUpperCase()}`;
 }
 
+const importedPartNumberHeaders = ['agpartnumber', 'agpart', 'partnumber', 'partno', 'partnum', 'part', 'itemnumber', 'sku'];
+const importedDescriptionHeaders = [
+  'description',
+  'desc',
+  'partdescription',
+  'partsdescription',
+  'partdesc',
+  'partsdesc',
+  'itemdescription',
+  'itemdesc',
+  'materialdescription',
+  'productdescription',
+  'name',
+  'item',
+];
+
+function customImportField(line: BomLine, keys: string[]) {
+  const customFields = line.customFields ?? {};
+  for (const [label, value] of Object.entries(customFields)) {
+    if (keys.includes(normalizeCsvHeader(label)) && value.trim()) return value.trim();
+  }
+  return '';
+}
+
 function lineDescription(line: BomLine) {
-  return line.description || line.inventoryItemName || linePartNumber(line);
+  const partNumber = linePartNumber(line);
+  const description = line.description?.trim() ?? '';
+  const customDescription = customImportField(line, importedDescriptionHeaders);
+  if (description && description !== 'Imported spreadsheet line' && description !== partNumber) return description;
+  return customDescription || description || line.inventoryItemName || partNumber;
 }
 
 function normalizeBomLine(line: BomLine): BomLine {
@@ -810,24 +838,33 @@ const knownImportHeaders = new Set([
   'agpartnumber',
   'category',
   'cost',
+  'desc',
   'description',
   'estimatedcost',
   'filter',
   'inventoryitemid',
   'isservice',
   'item',
+  'itemdesc',
   'itemdescription',
   'itemnumber',
   'manufacturer',
+  'materialdescription',
   'mfg',
   'name',
   'note',
   'notes',
   'orderstatus',
   'part',
+  'partdesc',
   'partdescription',
+  'partno',
+  'partnum',
   'partnumber',
+  'partsdesc',
+  'partsdescription',
   'price',
+  'productdescription',
   'qnty',
   'qty',
   'qtyneeded',
@@ -1249,8 +1286,8 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
         if (!column.isKnown && value) acc[column.label] = value;
         return acc;
       }, {});
-      const importedPartNumber = csvField(row, ['agpartnumber', 'agpart', 'partnumber', 'part', 'itemnumber', 'sku']);
-      const description = csvField(row, ['description', 'partdescription', 'name', 'item', 'itemdescription']) || importedPartNumber;
+      const importedPartNumber = csvField(row, importedPartNumberHeaders);
+      const description = csvField(row, importedDescriptionHeaders) || importedPartNumber;
       if (!description && !importedPartNumber && Object.keys(importedCustomFields).length === 0) return null;
 
       const inventoryMatch = linkInventoryMatches ? findInventoryMatch(importedPartNumber, inventoryItems) : null;

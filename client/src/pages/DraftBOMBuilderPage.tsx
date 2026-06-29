@@ -489,7 +489,7 @@ function inventoryDescription(item: InventoryItemOption) {
 }
 
 function linePartNumber(line: BomLine) {
-  return line.agPartNumber || line.supplierItemId || `DRAFT-${line.id.slice(0, 8).toUpperCase()}`;
+  return line.agPartNumber || line.supplierItemId || customImportField(line, importedPartNumberHeaders) || `DRAFT-${line.id.slice(0, 8).toUpperCase()}`;
 }
 
 const importedPartNumberHeaders = ['agpartnumber', 'agpart', 'partnumber', 'partno', 'partnum', 'part', 'itemnumber', 'sku'];
@@ -826,10 +826,6 @@ function normalizeCsvHeader(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-function isStatusDuplicateColumn(column: string) {
-  return ['status', 'orderstatus'].includes(normalizeCsvHeader(column));
-}
-
 const knownImportHeaders = new Set([
   'action',
   'actual',
@@ -928,24 +924,24 @@ function buildImportColumns(rawHeaders: string[]): ImportColumn[] {
   });
 }
 
+function rowLooksLikeImportHeaders(rows: string[][], normalizedFirstRow: string[]) {
+  if (rows.length < 2) return false;
+  const firstRow = rows[0].map((cell) => cell.trim()).filter(Boolean);
+  if (firstRow.length < 2) return false;
+
+  const knownHeaderCount = normalizedFirstRow.filter((header) => knownImportHeaders.has(header)).length;
+  if (knownHeaderCount >= 1) return true;
+
+  const textLikeCount = firstRow.filter((cell) => /[a-z]/i.test(cell) && Number.isNaN(Number(cell.replace(/[$,]/g, '')))).length;
+  return textLikeCount >= Math.ceil(firstRow.length / 2);
+}
+
 function csvField(row: Record<string, string>, keys: string[]) {
   for (const key of keys) {
     const value = row[key];
     if (value) return value;
   }
   return '';
-}
-
-function parseCsvNumber(value: string): number | '' {
-  const normalized = value.replace(/[$,]/g, '').trim();
-  if (!normalized) return '';
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : '';
-}
-
-function parseImportStatus(value: string, fallback: BomStatus): BomStatus {
-  const match = statuses.find((status) => status.toLowerCase() === value.trim().toLowerCase());
-  return match ?? fallback;
 }
 
 function findInventoryMatch(partNumber: string, inventoryItems: InventoryItemOption[]) {
@@ -1264,14 +1260,13 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
   if (rows.length === 0) return { lines: [], linkedCount: 0, customColumns: [] };
 
   const normalizedFirstRow = rows[0].map(normalizeCsvHeader);
-  const knownHeaderCount = normalizedFirstRow.filter((header) => knownImportHeaders.has(header)).length;
-  const hasHeaders = knownHeaderCount >= 1;
+  const hasHeaders = rowLooksLikeImportHeaders(rows, normalizedFirstRow);
   const maxColumnCount = Math.max(...rows.map((row) => row.length));
   const headerLabels = hasHeaders
     ? rows[0]
     : Array.from({ length: maxColumnCount }, (_, index) => fallbackImportHeaderLabels[index] ?? `Imported Column ${index + 1}`);
   const columns = buildImportColumns(headerLabels);
-  const customColumns = columns.filter((column) => !column.isKnown).map((column) => column.label);
+  const customColumns = columns.map((column) => column.label);
   const dataRows = hasHeaders ? rows.slice(1) : rows;
   let linkedCount = 0;
 
@@ -1283,7 +1278,7 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
       }, {});
       const importedCustomFields = columns.reduce<Record<string, string>>((acc, column, index) => {
         const value = cells[index]?.trim() ?? '';
-        if (!column.isKnown && value) acc[column.label] = value;
+        if (value) acc[column.label] = value;
         return acc;
       }, {});
       const importedPartNumber = csvField(row, importedPartNumberHeaders);
@@ -1292,37 +1287,29 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
 
       const inventoryMatch = linkInventoryMatches ? findInventoryMatch(importedPartNumber, inventoryItems) : null;
       if (inventoryMatch) linkedCount += 1;
-      const estimatedCost = parseCsvNumber(csvField(row, ['unitcost', 'estimatedcost', 'cost', 'price']));
-      const actualCost = parseCsvNumber(csvField(row, ['actualcost', 'actual']));
-      const quantity = parseCsvNumber(csvField(row, ['qtyneeded', 'quantity', 'qty', 'qnty']));
-      const serviceValue = csvField(row, ['service', 'isservice']).toLowerCase();
-      const note = csvField(row, ['note', 'notes']);
       const fallbackStatus = inventoryMatch ? 'Needs Review' : 'Needs Quote';
 
       return {
         ...newLine(),
-        action: csvField(row, ['action']) || 'Order / Quote',
-        category: csvField(row, ['category', 'filter']) || 'Hardware/Misc.',
+        action: 'Order / Quote',
+        category: 'Hardware/Misc.',
         description: inventoryMatch ? inventoryDescription(inventoryMatch) : description || 'Imported spreadsheet line',
-        agPartNumber: inventoryMatch?.agPartNumber || (linkInventoryMatches ? '' : importedPartNumber),
-        supplier: csvField(row, ['supplier', 'vendor', 'source']) || inventoryMatch?.source || inventoryMatch?.supplier || '',
-        supplierItemId:
-          csvField(row, ['supplierpartnumber', 'supplierpart', 'supplieritem', 'supplieritemid']) ||
-          inventoryMatch?.supplierPartNumber ||
-          '',
-        manufacturer: csvField(row, ['manufacturer', 'mfg']) || inventoryMatch?.manufacturer || '',
-        unit: csvField(row, ['unit', 'uom']) || inventoryMatch?.usageUnit || inventoryMatch?.unit || 'EA',
-        unitCost: estimatedCost || (Number.isFinite(Number(inventoryMatch?.costPer)) ? Number(inventoryMatch?.costPer) : ''),
-        actualCost,
-        qtyNeeded: quantity || 1,
-        service: ['true', 'yes', 'y', '1', 'service'].includes(serviceValue),
-        status: parseImportStatus(csvField(row, ['status', 'orderstatus']), fallbackStatus),
-        targetNeedDate: csvField(row, ['targetneeddate']),
-        note: note || (inventoryMatch
+        agPartNumber: inventoryMatch?.agPartNumber || '',
+        supplier: inventoryMatch?.source || inventoryMatch?.supplier || '',
+        supplierItemId: inventoryMatch?.supplierPartNumber || '',
+        manufacturer: inventoryMatch?.manufacturer || '',
+        unit: inventoryMatch?.usageUnit || inventoryMatch?.unit || 'EA',
+        unitCost: Number.isFinite(Number(inventoryMatch?.costPer)) ? Number(inventoryMatch?.costPer) : '',
+        actualCost: '',
+        qtyNeeded: 1,
+        service: false,
+        status: fallbackStatus,
+        targetNeedDate: '',
+        note: inventoryMatch
           ? `CSV import linked to inventory item #${inventoryMatch.id}`
           : importedPartNumber
             ? `CSV import draft part ${importedPartNumber}`
-            : 'CSV import draft part'),
+            : 'CSV import draft part',
         inventoryItemId: inventoryMatch?.id ?? null,
         inventoryItemName: inventoryMatch?.name || inventoryMatch?.description || null,
         isDraftPart: !inventoryMatch,
@@ -1394,7 +1381,7 @@ function uniqueColumnNames(columns: string[]) {
 }
 
 function sanitizeCustomColumns(columns: string[]) {
-  return uniqueColumnNames(columns).filter((column) => !isStatusDuplicateColumn(column));
+  return uniqueColumnNames(columns);
 }
 
 function loadDrafts(): BomDraft[] {
@@ -2237,7 +2224,7 @@ export default function DraftBOMBuilderPage() {
     if (result.lines.length === 0) {
       toast({
         title: 'No rows imported',
-        description: 'Check that the file has part, description, quantity, supplier, or cost columns.',
+        description: 'Check that the file has a header row and at least one row with import values.',
         variant: 'destructive',
       });
       return;

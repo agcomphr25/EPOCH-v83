@@ -6367,8 +6367,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { id } = req.params;
       const { storage } = await import('../../storage');
       const { db } = await import('../../db');
-      const { bomDefinitions, bomItems: bomItemsTable } = await import('../../schema');
-      const { eq, and } = await import('drizzle-orm');
+      const { bomDefinitions, bomItems: bomItemsTable, inventoryItems } = await import('../../schema');
+      const { eq, and, inArray } = await import('drizzle-orm');
       
       const po = await storage.getP2PurchaseOrder(parseInt(id), { includeItems: true });
       
@@ -6378,12 +6378,28 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // Get line items with BOM status
       const lineItems = await Promise.all((po.items || []).map(async (item: any) => {
+        const [linkedInventoryItem] = item.inventoryItemId
+          ? await db
+            .select({
+              id: inventoryItems.id,
+              agPartNumber: inventoryItems.agPartNumber,
+              name: inventoryItems.name,
+            })
+            .from(inventoryItems)
+            .where(eq(inventoryItems.id, item.inventoryItemId))
+            .limit(1)
+          : [];
+        const internalPartNumber = linkedInventoryItem?.agPartNumber || null;
+        const bomLookupKeys = [internalPartNumber, item.partNumber].filter(Boolean);
+
         // Check if a BOM exists for this part number
         const existingBOM = await db
           .select()
           .from(bomDefinitions)
           .where(and(
-            eq(bomDefinitions.sku, item.partNumber),
+            bomLookupKeys.length > 1
+              ? inArray(bomDefinitions.sku, bomLookupKeys)
+              : eq(bomDefinitions.sku, bomLookupKeys[0] || item.partNumber),
             eq(bomDefinitions.isActive, true)
           ))
           .limit(1);
@@ -6401,6 +6417,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         
         return {
           ...item,
+          internalPartNumber,
+          inventoryPartName: linkedInventoryItem?.name || null,
           hasBOM: existingBOM.length > 0,
           bomDefinitionId: existingBOM[0]?.id || null,
           bomItems: bomItemsList.map(bi => ({
@@ -6524,13 +6542,67 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { bomItems: bomItemsInput, poItemId, partNumber } = req.body;
       
       const { db } = await import('../../db');
-      const { bomDefinitions, bomItems: bomItemsTable, p2PurchaseOrders, p2PurchaseOrderItems } = await import('../../schema');
+      const { bomDefinitions, bomItems: bomItemsTable, inventoryItems, p2PurchaseOrders, p2PurchaseOrderItems } = await import('../../schema');
       const { eq, and, sql, inArray } = await import('drizzle-orm');
       
       console.log(`Saving BOM for part ${partId}, partNumber: ${partNumber}:`, bomItemsInput);
+
+      const poItemIdNum = parseInt(poItemId);
+      const [linkedPoItem] = poItemId && !isNaN(poItemIdNum) && !String(poItemId).startsWith('mfg-')
+        ? await db
+          .select()
+          .from(p2PurchaseOrderItems)
+          .where(eq(p2PurchaseOrderItems.id, poItemIdNum))
+          .limit(1)
+        : [];
+      const [linkedPoInventoryItem] = linkedPoItem?.inventoryItemId
+        ? await db
+          .select({
+            id: inventoryItems.id,
+            agPartNumber: inventoryItems.agPartNumber,
+            name: inventoryItems.name,
+          })
+          .from(inventoryItems)
+          .where(eq(inventoryItems.id, linkedPoItem.inventoryItemId))
+          .limit(1)
+        : [];
+
+      const canonicalPartNumber = String(linkedPoInventoryItem?.agPartNumber || partNumber || linkedPoItem?.partNumber || `P2-PART-${partId}`).trim();
+      const normalizedBomItems = await Promise.all((bomItemsInput || []).map(async (item: any) => {
+        const quantity = Number.parseFloat(String(item.quantity ?? ''));
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error(`Invalid BOM quantity for ${item.partNumber || 'component'}`);
+        }
+
+        const inventoryItemId = item.inventoryItemId ? Number.parseInt(String(item.inventoryItemId), 10) : null;
+        const [linkedInventoryItem] = inventoryItemId
+          ? await db
+            .select({
+              id: inventoryItems.id,
+              agPartNumber: inventoryItems.agPartNumber,
+              name: inventoryItems.name,
+            })
+            .from(inventoryItems)
+            .where(eq(inventoryItems.id, inventoryItemId))
+            .limit(1)
+          : [];
+
+        const componentPartNumber = String(linkedInventoryItem?.agPartNumber || item.partNumber || '').trim();
+        if (!componentPartNumber) {
+          throw new Error('BOM component part number is required');
+        }
+
+        return {
+          ...item,
+          quantity,
+          partNumber: componentPartNumber,
+          description: item.description || linkedInventoryItem?.name || '',
+          inventoryItemId: linkedInventoryItem?.id ?? inventoryItemId ?? null,
+        };
+      }));
       
       // Gather all manufactured child part numbers upfront for batch lookup
-      const manufacturedPartNumbers = (bomItemsInput || [])
+      const manufacturedPartNumbers = normalizedBomItems
         .filter((item: any) => item.isManufactured && item.partNumber)
         .map((item: any) => item.partNumber);
       
@@ -6550,11 +6622,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // First check if a BOM definition already exists for this part number
       let bomDef: any = null;
-      if (partNumber) {
+      if (canonicalPartNumber) {
         const existing = await db
           .select()
           .from(bomDefinitions)
-          .where(eq(bomDefinitions.sku, partNumber))
+          .where(eq(bomDefinitions.sku, canonicalPartNumber))
           .limit(1);
         
         if (existing.length > 0) {
@@ -6565,10 +6637,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       // Create new BOM definition if it doesn't exist
       if (!bomDef) {
         const [newBom] = await db.insert(bomDefinitions).values({
-          sku: partNumber || `P2-PART-${partId}`,
-          modelName: partNumber || `Part ${partId}`,
+          sku: canonicalPartNumber,
+          modelName: linkedPoInventoryItem?.name || canonicalPartNumber,
           revision: 'A',
-          description: `BOM for P2 part ${partNumber || partId}`,
+          description: `BOM for P2 part ${canonicalPartNumber}`,
           isActive: true
         }).returning();
         bomDef = newBom;
@@ -6584,7 +6656,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const insertedItems = [];
       const createdChildBomDefinitions = [];
       
-      for (const item of bomItemsInput || []) {
+      for (const item of normalizedBomItems) {
         let childBomDef = null;
         
         // If the item is manufactured, ensure it has a BOM definition
@@ -6645,7 +6717,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const [inserted] = await db.insert(bomItemsTable).values({
           bomId: bomDef.id,
           partName: item.partNumber,
-          quantity: item.quantity || 1,
+          quantity: item.quantity,
           firstDept: effectiveFirstDept,
           itemType: item.isManufactured ? 'manufactured' : 'material',
           notes: item.description || '',
@@ -6657,13 +6729,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // Update the PO's bomConfigured flag if we have a valid numeric poItemId
       // Skip this for manufactured child parts (IDs starting with 'mfg-')
-      const poItemIdNum = parseInt(poItemId);
-      if (poItemId && !isNaN(poItemIdNum) && !String(poItemId).startsWith('mfg-')) {
-        const [poItem] = await db
-          .select()
-          .from(p2PurchaseOrderItems)
-          .where(eq(p2PurchaseOrderItems.id, poItemIdNum))
-          .limit(1);
+      if (linkedPoItem) {
+        const poItem = linkedPoItem;
         
         if (poItem) {
           // Check if all items for this PO have BOMs
@@ -6674,11 +6741,21 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           
           let allHaveBOMs = true;
           for (const pi of allItems) {
+            const [piInventoryItem] = pi.inventoryItemId
+              ? await db
+                .select({
+                  agPartNumber: inventoryItems.agPartNumber,
+                })
+                .from(inventoryItems)
+                .where(eq(inventoryItems.id, pi.inventoryItemId))
+                .limit(1)
+              : [];
+            const piBomKey = piInventoryItem?.agPartNumber || pi.partNumber;
             const hasBOM = await db
               .select()
               .from(bomDefinitions)
               .where(and(
-                eq(bomDefinitions.sku, pi.partNumber),
+                eq(bomDefinitions.sku, piBomKey),
                 eq(bomDefinitions.isActive, true)
               ))
               .limit(1);
@@ -6731,7 +6808,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                 .where(eq(p2ProdTable.p2PoId, poItem.poId));
 
               const hasCuttingDemands = existingProdOrders.some(o => o.department === 'Cutting Table');
-              const bomHasPacketItems = (bomItemsInput || []).some((item: any) => item.isManufactured);
+              const bomHasPacketItems = normalizedBomItems.some((item: any) => item.isManufactured);
 
               if (existingProdOrders.length === 0) {
                 console.log(`🔄 Auto-generating production orders for PO ${po?.poNumber} (including cutting table packet demands)...`);

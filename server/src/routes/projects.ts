@@ -2076,7 +2076,7 @@ router.get('/:id/p2-hub', async (req, res) => {
     const poItems = poIds.length > 0
       ? await optionalHubQuery<any>(
           'PO line items',
-          `SELECT id, po_id, part_number, part_name, quantity, unit_price,
+          `SELECT id, po_id, inventory_item_id, part_number, part_name, quantity, unit_price,
                   total_price, specifications, notes, created_at, updated_at
            FROM p2_purchase_order_items
            WHERE po_id = ANY($1::int[])
@@ -2084,7 +2084,25 @@ router.get('/:id/p2-hub', async (req, res) => {
           [poIds],
         )
       : [];
-    const partNumbers = Array.from(new Set(poItems.map((item: any) => item.part_number).filter(Boolean)));
+    const poInventoryItemIds = Array.from(new Set(poItems
+      .map((item: any) => Number(item.inventory_item_id))
+      .filter((id: number) => Number.isInteger(id) && id > 0)));
+    const poInventoryItems = poInventoryItemIds.length > 0
+      ? await optionalHubQuery<any>(
+          'PO inventory items',
+          `SELECT id, ag_part_number, name
+           FROM inventory_items
+           WHERE id = ANY($1::int[])`,
+          [poInventoryItemIds],
+        )
+      : [];
+    const poInventoryPartById = new Map(poInventoryItems.map((item: any) => [Number(item.id), item.ag_part_number]));
+    const partNumbers = Array.from(new Set([
+      ...poItems.map((item: any) => item.part_number).filter(Boolean),
+      ...poItems
+        .map((item: any) => poInventoryPartById.get(Number(item.inventory_item_id)))
+        .filter(Boolean),
+    ]));
 
     const [
       productionOrders,

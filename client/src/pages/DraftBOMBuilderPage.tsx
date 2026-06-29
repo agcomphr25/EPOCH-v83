@@ -97,6 +97,10 @@ type DraftPartBom = {
   updatedAt: string;
   rootPart: DraftBomPart;
   parts: DraftBomPart[];
+  robustBomId?: string | null;
+  robustBomRevisionId?: string | null;
+  robustBomStatus?: 'draft' | 'active' | null;
+  robustBomAcceptedAt?: string | null;
 };
 type BuiltInWorkspaceTabId = 'po-draft' | 'parts-request' | 'direct-labor' | 'nrc' | 'bom-wizard' | 'assembly-tree';
 type CustomWorkspaceTabId = `custom:${string}`;
@@ -223,6 +227,15 @@ type DraftFinalizedInventoryItem = InventoryItemOption & {
   id: number;
   agPartNumber: string;
   name: string;
+};
+type RobustBomAcceptResult = {
+  bom?: { id?: string | null } | null;
+  revision?: { id?: string | null } | null;
+  status?: 'draft' | 'active';
+  lineCount?: number;
+  p2PoBom?: { id?: string | null } | null;
+  p2PoBomItemCount?: number;
+  linkedP2PoIds?: number[];
 };
 
 type InventoryDepartmentOption = {
@@ -590,6 +603,27 @@ async function createInventoryItemFromDraftLine(
   }) as DraftFinalizedInventoryItem;
 }
 
+async function saveDraftBomToRobustBom(
+  bom: DraftPartBom,
+  draft: BomDraft,
+  activate: boolean,
+): Promise<RobustBomAcceptResult> {
+  return await apiRequest('/api/robust-boms/from-draft-builder', {
+    method: 'POST',
+    body: {
+      draftId: draft.id,
+      draftName: draft.name,
+      revision: draft.revision,
+      projectId: draft.projectId,
+      projectCode: draft.projectCode,
+      projectName: draft.projectName || draft.project,
+      activate,
+      rootPart: bom.rootPart,
+      bom,
+    },
+  }) as RobustBomAcceptResult;
+}
+
 function inventoryItemToPart(item: InventoryItemOption): DraftBomPart {
   return {
     id: `inventory-${item.id}`,
@@ -760,6 +794,50 @@ function mergeDraftBoms(boms: DraftPartBom[]) {
   });
 }
 
+function finalizedPartForLine<T extends DraftBomPart | DraftBomComponent>(
+  part: T,
+  createdByLineId: Map<string, DraftFinalizedInventoryItem>,
+): T {
+  const sourceLineId = part.sourceLineId ?? null;
+  const createdItem = sourceLineId ? createdByLineId.get(sourceLineId) : undefined;
+  if (!createdItem) return part;
+  return {
+    ...part,
+    source: 'inventory-item' as const,
+    inventoryItemId: createdItem.id,
+    partNumber: createdItem.agPartNumber,
+    description: createdItem.name || part.description,
+  } as T;
+}
+
+function applyFinalizedInventoryToDraftBom(
+  bom: DraftPartBom,
+  createdByLineId: Map<string, DraftFinalizedInventoryItem>,
+): DraftPartBom {
+  return {
+    ...bom,
+    rootPart: finalizedPartForLine(bom.rootPart, createdByLineId),
+    parts: bom.parts.map((part) => ({
+      ...finalizedPartForLine(part, createdByLineId),
+      bomItems: part.bomItems.map((component) => finalizedPartForLine(component, createdByLineId)),
+    })),
+  };
+}
+
+function markDraftBomAccepted(
+  bom: DraftPartBom,
+  result: RobustBomAcceptResult,
+  status: 'draft' | 'active',
+): DraftPartBom {
+  return {
+    ...bom,
+    robustBomId: result.bom?.id ?? bom.robustBomId ?? null,
+    robustBomRevisionId: result.revision?.id ?? bom.robustBomRevisionId ?? null,
+    robustBomStatus: result.status ?? status,
+    robustBomAcceptedAt: new Date().toISOString(),
+  };
+}
+
 function sanitizePoColumns(columns?: readonly string[] | null): PoColumnId[] {
   const sanitized = (columns ?? defaultPoColumns).filter((column): column is PoColumnId =>
     validPoColumnIds.has(column as PoColumnId),
@@ -785,8 +863,13 @@ function money(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 }
 
-function asNumber(value: number | '') {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+function asNumber(value: number | string | '') {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function parseCsvRows(csvText: string) {
@@ -2578,6 +2661,9 @@ export default function DraftBOMBuilderPage() {
     const selectedDraftLines = partsRequestLines.filter((line) => line.include);
     const linesToCreate = selectedDraftLines.filter(draftLineNeedsInventoryItem);
     const createdByLineId = new Map<string, DraftFinalizedInventoryItem>();
+    const selectedLineIds = new Set(selectedDraftLines.map((line) => line.id));
+    const acceptedDraftBoms = new Map<string, DraftPartBom>();
+    let draftBomAcceptError: string | null = null;
 
     setIsFinalizingParts(true);
     try {
@@ -2586,14 +2672,43 @@ export default function DraftBOMBuilderPage() {
         createdByLineId.set(line.id, createdItem);
       }
 
+      const finalizedSavedDraftBoms = (draft.savedDraftBoms ?? []).map((bom) =>
+        applyFinalizedInventoryToDraftBom(bom, createdByLineId),
+      );
+      const bomsToAccept = finalizedSavedDraftBoms.filter((bom) =>
+        bom.rootPart.sourceLineId ? selectedLineIds.has(bom.rootPart.sourceLineId) : false,
+      );
+
+      for (const bomToAccept of bomsToAccept) {
+        try {
+          const result = await saveDraftBomToRobustBom(bomToAccept, draft, false);
+          acceptedDraftBoms.set(bomToAccept.id, markDraftBomAccepted(bomToAccept, result, 'draft'));
+        } catch (error) {
+          draftBomAcceptError = error instanceof Error ? error.message : 'Unable to save a draft BOM to Robust BOM.';
+        }
+      }
+
       setDraft((current) => ({
         ...current,
+        savedDraftBoms: (current.savedDraftBoms ?? []).map((bom) =>
+          acceptedDraftBoms.get(bom.id) ?? applyFinalizedInventoryToDraftBom(bom, createdByLineId),
+        ),
+        lines: current.lines.map((line) => ({
+          ...line,
+          childDraftBoms: (line.childDraftBoms ?? []).map((bom) =>
+            acceptedDraftBoms.get(bom.id) ?? applyFinalizedInventoryToDraftBom(bom, createdByLineId),
+          ),
+        })),
         partsRequestLines: (current.partsRequestLines ?? []).map((line) => {
-          if (!line.include) return line;
+          const childDraftBoms = (line.childDraftBoms ?? []).map((bom) =>
+            acceptedDraftBoms.get(bom.id) ?? applyFinalizedInventoryToDraftBom(bom, createdByLineId),
+          );
+          if (!line.include) return { ...line, childDraftBoms };
           const createdItem = createdByLineId.get(line.id);
-          if (draftLineNeedsInventoryItem(line) && !createdItem) return line;
+          if (draftLineNeedsInventoryItem(line) && !createdItem) return { ...line, childDraftBoms };
           return {
             ...line,
+            childDraftBoms,
             finalized: true,
             include: false,
             action: 'Do Not Order',
@@ -2614,10 +2729,20 @@ export default function DraftBOMBuilderPage() {
 
       toast({
         title: 'Inventory finalization complete',
-        description: createdByLineId.size > 0
-          ? `${selectedDraftLines.length} line(s) finalized, ${createdByLineId.size} new inventory item(s) created with AG part numbers.`
-          : `${selectedDraftLines.length} line(s) finalized.`,
+        description: [
+          createdByLineId.size > 0
+            ? `${selectedDraftLines.length} line(s) finalized, ${createdByLineId.size} new inventory item(s) created with AG part numbers.`
+            : `${selectedDraftLines.length} line(s) finalized.`,
+          acceptedDraftBoms.size > 0 ? `${acceptedDraftBoms.size} draft BOM(s) saved to Robust BOM.` : '',
+        ].filter(Boolean).join(' '),
       });
+      if (draftBomAcceptError) {
+        toast({
+          title: 'Draft BOM needs inventory matches',
+          description: draftBomAcceptError,
+          variant: 'destructive',
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create inventory items from the selected draft lines.';
       toast({
@@ -2695,7 +2820,7 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
-  function pushActiveTabTo(target: 'rom' | 'p2-project' | 'rd-project') {
+  async function pushActiveTabTo(target: 'rom' | 'p2-project' | 'rd-project') {
     const payload = {
       source: 'draft-builder',
       draftId: draft.id,
@@ -2728,8 +2853,43 @@ export default function DraftBOMBuilderPage() {
         });
         return;
       }
-      toast({ title: 'Tab pushed to P2 project', description: `${workspaceTabLabel(activeWorkspaceTab)} is ready in the project context.` });
-      setLocation(`/projects/${draft.projectId}?draftBuilderHandoff=1&tab=${encodeURIComponent(activeWorkspaceTab)}`);
+
+      const bomsToPromote = draft.savedDraftBoms ?? [];
+      const promotedDraftBoms = new Map<string, DraftPartBom>();
+      try {
+        for (const bomToPromote of bomsToPromote) {
+          const result = await saveDraftBomToRobustBom(bomToPromote, draft, true);
+          promotedDraftBoms.set(bomToPromote.id, markDraftBomAccepted(bomToPromote, result, 'active'));
+        }
+        if (promotedDraftBoms.size > 0) {
+          setDraft((current) => ({
+            ...current,
+            savedDraftBoms: (current.savedDraftBoms ?? []).map((bom) => promotedDraftBoms.get(bom.id) ?? bom),
+            lines: current.lines.map((line) => ({
+              ...line,
+              childDraftBoms: (line.childDraftBoms ?? []).map((bom) => promotedDraftBoms.get(bom.id) ?? bom),
+            })),
+            partsRequestLines: (current.partsRequestLines ?? []).map((line) => ({
+              ...line,
+              childDraftBoms: (line.childDraftBoms ?? []).map((bom) => promotedDraftBoms.get(bom.id) ?? bom),
+            })),
+          }));
+        }
+        toast({
+          title: 'BOM pushed to P2 project',
+          description: promotedDraftBoms.size > 0
+            ? `${promotedDraftBoms.size} Robust BOM draft(s) promoted and bridged into the P2 BOM Wizard.`
+            : `${workspaceTabLabel(activeWorkspaceTab)} is ready in the project context.`,
+        });
+        setLocation(`/projects/${draft.projectId}?draftBuilderHandoff=1&tab=bom-routing`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to save the draft BOMs to Robust BOM.';
+        toast({
+          title: 'P2 BOM push failed',
+          description: message,
+          variant: 'destructive',
+        });
+      }
       return;
     }
 
@@ -5095,7 +5255,14 @@ function DraftBomWizardWorkspace({
                     onClick={() => loadExistingBom(bom)}
                     disabled={!isEditMode}
                   >
-                    <span className="block font-medium text-slate-950">{bom.name} {bom.revision}</span>
+                    <span className="flex flex-wrap items-center gap-2 font-medium text-slate-950">
+                      {bom.name} {bom.revision}
+                      {bom.robustBomStatus ? (
+                        <Badge variant={bom.robustBomStatus === 'active' ? 'default' : 'secondary'} className="text-[10px] uppercase">
+                          Robust BOM {bom.robustBomStatus}
+                        </Badge>
+                      ) : null}
+                    </span>
                     <span className="mt-1 block text-xs text-slate-500">
                       {linkedLine ? linePartNumber(linkedLine) : `${bom.rootPart.partNumber} (part removed)`} - {bom.parts.length} configured part{bom.parts.length === 1 ? '' : 's'}
                     </span>

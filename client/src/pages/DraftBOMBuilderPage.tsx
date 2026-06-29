@@ -480,6 +480,17 @@ function isInventoryManufactured(item?: InventoryItemOption | null) {
   return item.itemType === 'MANUFACTURED' || item.type === 'Manufactured' || item.isPacket === true || !!item.manufacturedCategory;
 }
 
+function lineSourceLabel(line: BomLine) {
+  if (!line.inventoryItemId) return 'User draft';
+  if (line.isManufactured) return 'User / manufactured';
+  return line.supplier || 'Purchased inventory';
+}
+
+function linePartTypeLabel(line: BomLine) {
+  if (!line.inventoryItemId) return 'Draft part';
+  return line.isManufactured ? 'Manufactured inventory' : 'Purchased inventory';
+}
+
 function inventoryPartNumber(item: InventoryItemOption) {
   return item.agPartNumber || item.manufacturerPartNumber || item.supplierPartNumber || `INV-${item.id}`;
 }
@@ -3870,7 +3881,7 @@ function PoDraftWorkspace({
                     ))}
                     <TableCell>
                       <Badge variant={line.inventoryItemId ? 'outline' : 'secondary'}>
-                        {line.inventoryItemId ? 'Inventory' : 'Draft part'}
+                        {linePartTypeLabel(line)}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -3913,7 +3924,7 @@ function poColumnValue(line: BomLine, columnId: PoColumnId) {
   if (columnId === 'unitCost') return line.unitCost === '' ? '-' : money(asNumber(line.unitCost));
   if (columnId === 'extCost') return money(asNumber(line.unitCost) * asNumber(line.qtyNeeded));
   if (columnId === 'action') return line.action;
-  if (columnId === 'source') return line.inventoryItemId ? `Inventory #${line.inventoryItemId}` : 'Draft part';
+  if (columnId === 'source') return lineSourceLabel(line);
   return '-';
 }
 

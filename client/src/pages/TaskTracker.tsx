@@ -64,6 +64,24 @@ interface TaskItem {
   updatedAt: string;
 }
 
+function renderLinkedText(text: string) {
+  const parts = text.split(/(\/finance\/charge-codes\?[^\s]+)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('/finance/charge-codes?')) {
+      return (
+        <a
+          key={`${part}-${index}`}
+          href={part}
+          className="font-medium text-blue-700 underline underline-offset-2"
+        >
+          Open charge code engine
+        </a>
+      );
+    }
+    return <span key={`${index}-${part.slice(0, 8)}`}>{part}</span>;
+  });
+}
+
 export default function TaskTracker() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -576,8 +594,8 @@ export default function TaskTracker() {
                               {task.title}
                             </div>
                             {task.description && (
-                              <div className="text-sm text-gray-600 mt-1">
-                                {task.description}
+                              <div className="text-sm text-gray-600 mt-1 whitespace-pre-line">
+                                {renderLinkedText(task.description)}
                               </div>
                             )}
                             <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">

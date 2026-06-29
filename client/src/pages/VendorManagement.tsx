@@ -202,6 +202,7 @@ const vendorFormSchema = insertVendorSchema.extend({
   termsAndConditions: z.string().optional(),
   paymentTerms: z.string().optional(),
   shippingInstructions: z.string().optional(),
+  defaultOrderMethod: z.enum(['PO', 'WEBSITE']).optional().nullable(),
 });
 
 const vendorContactFormSchema = insertVendorContactSchema
@@ -296,6 +297,7 @@ export default function VendorManagement() {
       termsAndConditions: '',
       paymentTerms: '',
       shippingInstructions: '',
+      defaultOrderMethod: 'PO',
     },
   });
 
@@ -689,6 +691,7 @@ export default function VendorManagement() {
         termsAndConditions: vendor.termsAndConditions || '',
         paymentTerms: vendor.paymentTerms || '',
         shippingInstructions: vendor.shippingInstructions || '',
+        defaultOrderMethod: (vendor.defaultOrderMethod as 'PO' | 'WEBSITE' | null) || 'PO',
       });
       setVendorAddress({
         street: vendor.street || '',
@@ -1203,6 +1206,7 @@ export default function VendorManagement() {
     approvalPdfUrl: data.approvalPdfUrl || undefined,
     startRenewalDate: data.startRenewalDate || undefined,
     approvalExpiration: data.approvalExpiration || undefined,
+    defaultOrderMethod: data.defaultOrderMethod || 'PO',
     ...extra,
   });
 
@@ -1461,6 +1465,31 @@ export default function VendorManagement() {
 
                       />
                     </div>
+
+                    <FormField
+                      control={form.control}
+                      name="defaultOrderMethod"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Default Order Method</FormLabel>
+                          <Select
+                            value={field.value || 'PO'}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-default-order-method">
+                                <SelectValue placeholder="Select order method" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="PO">Purchase Order</SelectItem>
+                              <SelectItem value="WEBSITE">Website</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
                     <FormField
                       control={form.control}

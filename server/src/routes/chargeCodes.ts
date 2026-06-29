@@ -162,6 +162,88 @@ function normalizeRequestText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function requestTaskMarker(requestId: string): string {
+  return `WAD_CHARGE_CODE_REQUEST:${requestId}`;
+}
+
+function chargeCodeRequestLink(requestId: string, wadId: string): string {
+  const params = new URLSearchParams({
+    wadChargeCodeRequestId: requestId,
+    wadId,
+    autofill: '1',
+  });
+  return `/finance/charge-codes?${params.toString()}`;
+}
+
+async function upsertGlennChargeCodeTask(requestId: string): Promise<void> {
+  const requests = await listChargeCodeRequests({ status: 'PENDING' });
+  const request = requests.find((row: any) => row.id === requestId);
+  if (!request) return;
+  if (!request.wadId) return;
+
+  const marker = requestTaskMarker(requestId);
+  const link = chargeCodeRequestLink(requestId, request.wadId);
+  const title = `Assign WAD charge code - ${request.workOrderNumber ?? 'WAD'} / ${request.operation}`;
+  const description = [
+    `A WAD charge code was requested for ${request.workOrderNumber ?? 'this WAD'}.`,
+    `Department: ${request.department}`,
+    `Operation: ${request.operation}`,
+    request.budgetedHours ? `Budgeted hours: ${request.budgetedHours}` : null,
+    `Open charge code engine: ${link}`,
+  ].filter(Boolean).join('\n');
+  const notes = `${marker}\n${link}`;
+  const existing = await pool.query(
+    `SELECT id
+       FROM task_items
+      WHERE notes LIKE $1
+      ORDER BY id DESC
+      LIMIT 1`,
+    [`%${marker}%`]
+  );
+
+  if (existing.length > 0) {
+    await pool.query(
+      `UPDATE task_items
+          SET title = $2,
+              description = $3,
+              category = 'WAD Charge Codes',
+              priority = 'High',
+              assigned_to = 'Glenn Jones',
+              gj_status = FALSE,
+              tm_status = FALSE,
+              finished_status = FALSE,
+              is_active = TRUE,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [existing[0].id, title, description]
+    );
+    return;
+  }
+
+  await pool.query(
+    `INSERT INTO task_items (
+       title, description, category, priority, assigned_to, created_by, notes
+     )
+     VALUES ($1, $2, 'WAD Charge Codes', 'High', 'Glenn Jones', 'WAD Charge Code Engine', $3)`,
+    [title, description, notes]
+  );
+}
+
+async function completeGlennChargeCodeTask(requestId: string, chargeCode: string, actorName: string): Promise<void> {
+  const marker = requestTaskMarker(requestId);
+  await pool.query(
+    `UPDATE task_items
+        SET finished_status = TRUE,
+            finished_completed_by = $2,
+            finished_completed_at = NOW(),
+            notes = CONCAT(COALESCE(notes, ''), E'\nAssigned charge code: ', $3),
+            updated_at = NOW()
+      WHERE notes LIKE $1
+        AND is_active = TRUE`,
+    [`%${marker}%`, actorName, chargeCode]
+  );
+}
+
 async function listChargeCodeRequests(filters: { status?: string; wadId?: string }) {
   await ensureChargeCodeRequestTable();
   const conditions: string[] = [];
@@ -283,6 +365,7 @@ router.post('/requests', authenticateToken, h(async (req, res) => {
   });
 
   const requests = await listChargeCodeRequests({ wadId, status: 'PENDING' });
+  await upsertGlennChargeCodeTask(String(rows[0].id));
   res.status(201).json(requests.find((request: any) => request.id === rows[0].id) ?? rows[0]);
 }));
 
@@ -369,6 +452,7 @@ router.patch('/requests/:requestId/assign', authenticateToken, requireRole('ADMI
     userAgent: req.headers['user-agent'] ?? null,
     payload: { requestId, chargeCodeId, chargeCode: chargeCode.code },
   });
+  await completeGlennChargeCodeTask(requestId, chargeCode.code, actorName);
 
   const rows = await listChargeCodeRequests({});
   res.json(rows.find((request: any) => request.id === requestId));

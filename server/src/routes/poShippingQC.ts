@@ -1945,6 +1945,7 @@ router.get(
             );
           }
 
+          let invoiceNumber: string | null = item.shipment_invoice_number || null;
           const siblingWithPackingSlip = siblingRows.find((r) => r.packing_slip_base64);
           if (siblingWithPackingSlip?.packing_slip_base64) {
             packingSlipBase64 = siblingWithPackingSlip.packing_slip_base64;
@@ -1991,7 +1992,6 @@ router.get(
             : 0;
 
           // Resolve invoice number: reuse stored value, or generate + persist a new one
-          let invoiceNumber: string;
           if (shipmentPoCount <= 1 && item.shipment_invoice_number) {
             invoiceNumber = item.shipment_invoice_number;
             console.log(
@@ -2047,6 +2047,9 @@ router.get(
                 );
               }
             }
+          }
+          if (!invoiceNumber) {
+            throw new Error(`Could not resolve invoice number for PO ${poNumberForSlip || '(unknown PO)'}`);
           }
 
           const slipItems = groupItemsByDescription(

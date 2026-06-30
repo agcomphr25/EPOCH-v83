@@ -48,6 +48,16 @@ describe('accountingEventMatrix', () => {
     ]));
   });
 
+  it('points revenue stream classification work at the shared classifier', () => {
+    const p1Prepaid = accountingEventMatrix.find((row) => row.id === 'P1_PREPAID_SHIPMENT_REVENUE_RECOGNIZED');
+    const p1Po = accountingEventMatrix.find((row) => row.id === 'P1_PO_NET30_INVOICE_POSTED');
+    const p2 = accountingEventMatrix.find((row) => row.id === 'P2_NET30_INVOICE_POSTED');
+
+    expect(p1Prepaid?.evidence).toContain('server/src/services/revenueStreamClassifier.ts');
+    expect(p1Po?.evidence).toContain('server/src/services/revenueStreamClassifier.ts');
+    expect(p2?.evidence).toContain('server/src/services/revenueStreamClassifier.ts');
+  });
+
   it('tracks capital equipment, equipment loans, loan payments, and depreciation as accounting events', () => {
     const ids = accountingEventMatrix.map((row) => row.id);
 

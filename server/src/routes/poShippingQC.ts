@@ -1831,6 +1831,8 @@ router.get(
   async (req, res) => {
     try {
       const { itemId } = req.params;
+      const requestedPoNumber =
+        typeof req.query.poNumber === 'string' ? req.query.poNumber.trim() : '';
       console.log(`📄 Downloading packing slip for shipment item ${itemId}...`);
 
       // Validate UUID format
@@ -1903,7 +1905,7 @@ router.get(
             zip: (shipTo.postalCode as string) || 'N/A',
           };
 
-          const poNumberForSlip = item.po_number || '';
+          const poNumberForSlip = item.po_number || requestedPoNumber || '';
 
           // Fetch all items for this PO within the same shipment to compute aggregated fields
           const siblingQuery = `
@@ -1911,6 +1913,7 @@ router.get(
             si.id,
             si.order_id,
             si.quantity,
+            si.packing_slip_base64,
             sr.reference AS shipment_reference,
             poi.item_name AS poi_item_name,
             poi.stock_model_name AS poi_stock_model_name,
@@ -1924,7 +1927,10 @@ router.get(
           WHERE si.shipment_id = (
             SELECT shipment_id FROM shipment_items WHERE id = $1
           )
-          AND COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) = $2
+          AND (
+            COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) = $2
+            OR si.id = $1
+          )
         `;
           const siblingResult = await pool.query(siblingQuery, [
             itemId,
@@ -1939,6 +1945,20 @@ router.get(
             );
           }
 
+          const siblingWithPackingSlip = siblingRows.find((r) => r.packing_slip_base64);
+          if (siblingWithPackingSlip?.packing_slip_base64) {
+            packingSlipBase64 = siblingWithPackingSlip.packing_slip_base64;
+            await pool.query(
+              `UPDATE shipment_items
+               SET packing_slip_base64 = $1
+               WHERE id = $2
+                 AND packing_slip_base64 IS NULL`,
+              [packingSlipBase64, itemId]
+            );
+            console.log(
+              `Reused sibling packing slip ${siblingWithPackingSlip.id} for itemId=${itemId}, PO=${poNumberForSlip}`
+            );
+          } else {
           // Aggregate quantity across all items in this PO group
           const totalQty = siblingRows.reduce(
             (sum, r) => sum + (r.quantity || 1),
@@ -2088,6 +2108,7 @@ router.get(
             trackingNumber: item.tracking_number || '',
             shipmentRecordId: item.shipment_record_id || null,
           });
+          }
         } catch (regenErr: any) {
           console.error(
             `❌ Packing slip regeneration failed for item ${itemId}:`,
@@ -2095,13 +2116,15 @@ router.get(
           );
           return res.status(404).json({
             _error: 'Packing slip not available and could not be regenerated',
+            details: regenErr.message,
           });
         }
       }
 
       // Decode base64 and send as PDF
       const slipBuffer = Buffer.from(packingSlipBase64, 'base64');
-      const filename = `packing-slip-PO${item.po_number}-${item.order_id}.pdf`;
+      const filenamePoNumber = item.po_number || requestedPoNumber || 'unknown';
+      const filename = `packing-slip-PO${filenamePoNumber}-${item.order_id}.pdf`;
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader(

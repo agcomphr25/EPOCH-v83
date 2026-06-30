@@ -434,15 +434,19 @@ export default function OEMShipmentsPage() {
   const downloadPackingSlip = async (itemId: string, poNumber: string, orderId: string) => {
     const newTab = window.open('', '_blank');
     try {
-      const response = await fetch(`/api/po-orders/oem-shipments/packing-slip/${itemId}`, {
+      const params = new URLSearchParams();
+      if (poNumber) params.set('poNumber', poNumber);
+      if (orderId) params.set('orderId', orderId);
+      const response = await fetch(`/api/po-orders/oem-shipments/packing-slip/${itemId}?${params.toString()}`, {
         credentials: 'include',
       });
 
       if (response.status === 404) {
         newTab?.close();
+        const errorBody = await response.json().catch(() => null);
         toast({
           title: 'No packing slip available',
-          description: 'No packing slip could be found or regenerated for this shipment.',
+          description: errorBody?.details || errorBody?._error || 'No packing slip could be found or regenerated for this shipment.',
           variant: 'destructive',
         });
         return;
@@ -450,7 +454,8 @@ export default function OEMShipmentsPage() {
 
       if (!response.ok) {
         newTab?.close();
-        throw new Error('Failed to open packing slip');
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.details || errorBody?._error || 'Failed to open packing slip');
       }
 
       const blob = await response.blob();

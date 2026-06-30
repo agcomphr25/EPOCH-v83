@@ -711,7 +711,7 @@ export default function OEMShipmentsPage() {
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    placeholder="Search by customer, tracking, reference, or invoice #..."
+                    placeholder="Search customer, PO, order, stock, tracking, reference, or invoice #..."
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}

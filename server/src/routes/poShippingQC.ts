@@ -1460,7 +1460,27 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
         sr.customer_name ILIKE $${paramIndex} OR
         sr.master_tracking_number ILIKE $${paramIndex} OR
         sr.reference ILIKE $${paramIndex} OR
-        sr.invoice_number ILIKE $${paramIndex}
+        sr.invoice_number ILIKE $${paramIndex} OR
+        EXISTS (
+          SELECT 1
+          FROM shipment_items search_si
+          LEFT JOIN production_orders search_prod_ord ON search_si.order_id = search_prod_ord.order_id
+          LEFT JOIN purchase_order_items search_poi ON search_poi.id = search_si.po_item_id
+          LEFT JOIN purchase_orders search_po ON search_poi.po_id = search_po.id
+          WHERE search_si.shipment_id = sr.id
+            AND (
+              search_si.order_id ILIKE $${paramIndex} OR
+              search_si.po_number ILIKE $${paramIndex} OR
+              search_si.description ILIKE $${paramIndex} OR
+              search_prod_ord.po_number ILIKE $${paramIndex} OR
+              search_prod_ord.customer_name ILIKE $${paramIndex} OR
+              search_prod_ord.item_name ILIKE $${paramIndex} OR
+              search_poi.item_name ILIKE $${paramIndex} OR
+              search_poi.stock_model_name ILIKE $${paramIndex} OR
+              search_po.po_number ILIKE $${paramIndex} OR
+              search_po.customer_name ILIKE $${paramIndex}
+            )
+        )
       )`);
       params.push(`%${search}%`);
       paramIndex++;

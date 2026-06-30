@@ -540,6 +540,19 @@ describe('GET /api/po-orders/oem-shipments', () => {
     expect(source).toContain("inv.internal_notes ILIKE 'Source: P1 OEM shipment%'");
     expect(source).toContain("line.dimension_tags->>'orderId' = si.order_id");
   });
+
+  it('searches OEM shipments by shipment item PO, order, and stock details', async () => {
+    const source = readFileSync(
+      join(process.cwd(), 'server/src/routes/poShippingQC.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('FROM shipment_items search_si');
+    expect(source).toContain('search_si.order_id ILIKE');
+    expect(source).toContain('search_si.po_number ILIKE');
+    expect(source).toContain('search_poi.stock_model_name ILIKE');
+    expect(source).toContain('search_po.customer_name ILIKE');
+  });
 });
 
 describe('POST /api/po-orders/oem-shipments/:id/invoices', () => {

@@ -144,10 +144,21 @@ async function findP1PackingSlipInvoice(
            AND (
              inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
              OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
-           )
+         )
          )`
              : ''
          }
+         OR (
+           inv.po_override = $2
+           AND (
+             inv.internal_notes ILIKE '%' || $1 || '%'
+             OR inv.notes ILIKE '%' || $1 || '%'
+           )
+           AND (
+             inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+             OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+           )
+         )
          ${
            shipmentPoCount <= 1
              ? `OR (
@@ -1603,6 +1614,17 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                   )
               )
               ${fulfillmentAttemptInvoiceSql}
+              OR (
+                inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                AND (
+                  inv.internal_notes ILIKE '%' || sr.id::text || '%'
+                  OR inv.notes ILIKE '%' || sr.id::text || '%'
+                )
+                AND (
+                  inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+                  OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+                )
+              )
               OR (
                 inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
                 AND inv.invoice_number = sr.invoice_number

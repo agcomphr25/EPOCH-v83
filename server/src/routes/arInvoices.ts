@@ -130,7 +130,10 @@ const invoiceSourceSql = () => sql<string>`
     SELECT 1
     FROM ar_invoice_lines ail
     WHERE ail.invoice_id = ${arInvoices.id}
-      AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+      AND (
+        ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+        OR UPPER(COALESCE(ail.production_line, '')) = 'P1'
+      )
   )
     OR ${arInvoices.notes} ILIKE 'Auto-created from P1 OEM packing slip%'
     OR ${arInvoices.internalNotes} ILIKE 'Source: P1 OEM shipment%'
@@ -655,14 +658,9 @@ router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post
     }
 
     const overrides = invoicePreviewOverrideSchema.parse(req.body || {});
-    await createInvoiceFromPackingSlip(packingSlipId, link.slip.lotNumberId, overrides);
+    const invoice = await createInvoiceFromPackingSlip(packingSlipId, link.slip.lotNumberId, overrides);
 
-    const [invoice] = await db
-      .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
-      .from(arInvoices)
-      .where(eq(arInvoices.packingSlipId, packingSlipId));
-
-    res.status(201).json(invoice);
+    res.status(invoice.existing ? 200 : 201).json(invoice);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors[0]?.message || 'Invalid invoice preview data', issues: error.errors });
@@ -1626,7 +1624,12 @@ async function isP1Invoice(invoice: typeof arInvoices.$inferSelect): Promise<boo
   const [line] = await db
     .select({ id: arInvoiceLines.id })
     .from(arInvoiceLines)
-    .where(and(eq(arInvoiceLines.invoiceId, invoice.id), sql`${arInvoiceLines.dimensionTags}->>'source' = 'p1_oem_packing_slip'`))
+    .where(
+      and(
+        eq(arInvoiceLines.invoiceId, invoice.id),
+        sql`(${arInvoiceLines.dimensionTags}->>'source' = 'p1_oem_packing_slip' OR UPPER(COALESCE(${arInvoiceLines.productionLine}, '')) = 'P1')`,
+      )
+    )
     .limit(1);
   return !!line;
 }

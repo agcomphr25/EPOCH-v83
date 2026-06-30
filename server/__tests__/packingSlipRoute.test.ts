@@ -27,6 +27,8 @@ import express, {
 } from 'express';
 import request from 'supertest';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import type {
   PurchaseOrder,
@@ -523,6 +525,18 @@ describe('GET /api/po-orders/oem-shipments', () => {
     expect(vi.mocked(pool.query).mock.calls[1][0]).not.toContain(
       'p1_fulfillment_attempts'
     );
+  });
+
+  it('links P1 OEM invoices back to shipments even when invoice numbers get a suffix', async () => {
+    const source = readFileSync(
+      join(process.cwd(), 'server/src/routes/poShippingQC.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain("inv.internal_notes ILIKE '%' || sr.id::text || '%'");
+    expect(source).toContain("inv.internal_notes ILIKE '%' || $1 || '%'");
+    expect(source).toContain("inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'");
+    expect(source).toContain("inv.internal_notes ILIKE 'Source: P1 OEM shipment%'");
   });
 });
 

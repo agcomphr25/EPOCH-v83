@@ -144,10 +144,21 @@ async function findP1PackingSlipInvoice(
            AND (
              inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
              OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
-           )
+         )
          )`
              : ''
          }
+         OR (
+           inv.po_override = $2
+           AND (
+             inv.internal_notes ILIKE '%' || $1 || '%'
+             OR inv.notes ILIKE '%' || $1 || '%'
+           )
+           AND (
+             inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+             OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+           )
+         )
          ${
            shipmentPoCount <= 1
              ? `OR (
@@ -1605,6 +1616,17 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
               ${fulfillmentAttemptInvoiceSql}
               OR (
                 inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                AND (
+                  inv.internal_notes ILIKE '%' || sr.id::text || '%'
+                  OR inv.notes ILIKE '%' || sr.id::text || '%'
+                )
+                AND (
+                  inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+                  OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+                )
+              )
+              OR (
+                inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
                 AND inv.invoice_number = sr.invoice_number
                 AND (
                   inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
@@ -2162,6 +2184,7 @@ router.post(
           id: draft.existingInvoice.id,
           invoiceNumber: draft.existingInvoice.invoice_number,
           status: draft.existingInvoice.status,
+          existing: true,
         });
       }
 
@@ -2191,6 +2214,25 @@ router.post(
       const pricingMismatch = draft.pricingMismatch;
 
       await client.query('BEGIN');
+      await client.query(
+        `SELECT pg_advisory_xact_lock(hashtext('p1-oem-packing-slip-invoice'), hashtext($1))`,
+        [`${id}:${poNumber}`]
+      );
+
+      const existingInTransaction = await findP1PackingSlipInvoice(id, poNumber);
+      if (existingInTransaction) {
+        await client.query('COMMIT');
+        console.log(
+          `[P1InvoiceService] Duplicate prevented: shipment ${id}, PO ${poNumber} already has invoice ${existingInTransaction.invoice_number}`
+        );
+        return res.status(200).json({
+          id: existingInTransaction.id,
+          invoiceNumber: existingInTransaction.invoice_number,
+          status: existingInTransaction.status,
+          existing: true,
+        });
+      }
+
       const invoiceResult = await client.query(
         `INSERT INTO ar_invoices (
          customer_id,
@@ -2302,6 +2344,7 @@ router.post(
         id: invoice.id,
         invoiceNumber: invoice.invoice_number,
         status: invoice.status,
+        existing: false,
       });
     } catch (error: any) {
       try {

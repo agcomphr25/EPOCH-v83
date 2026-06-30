@@ -274,10 +274,14 @@ export default function OEMShipmentsPage() {
       setInvoicePreview(null);
       setInvoicePreviewRequest(null);
       toast({
-        title: 'Invoice ready for review',
+        title: invoice?.existing ? 'Invoice already exists' : 'Invoice ready for review',
         description: invoice?.invoiceNumber
-          ? `Invoice ${invoice.invoiceNumber} was created from this P1 packing slip.`
-          : 'Invoice was created from this P1 packing slip.',
+          ? invoice.existing
+            ? `Invoice ${invoice.invoiceNumber} is already linked to this P1 packing slip.`
+            : `Invoice ${invoice.invoiceNumber} was created from this P1 packing slip.`
+          : invoice?.existing
+            ? 'An invoice is already linked to this P1 packing slip.'
+            : 'Invoice was created from this P1 packing slip.',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
       queryClient.invalidateQueries({ predicate: (query) =>

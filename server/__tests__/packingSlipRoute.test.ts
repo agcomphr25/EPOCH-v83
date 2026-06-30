@@ -535,8 +535,10 @@ describe('GET /api/po-orders/oem-shipments', () => {
 
     expect(source).toContain("inv.internal_notes ILIKE '%' || sr.id::text || '%'");
     expect(source).toContain("inv.internal_notes ILIKE '%' || $1 || '%'");
+    expect(source).toContain("inv.internal_notes ILIKE '%' || sr.reference || '%'");
     expect(source).toContain("inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'");
     expect(source).toContain("inv.internal_notes ILIKE 'Source: P1 OEM shipment%'");
+    expect(source).toContain("line.dimension_tags->>'orderId' = si.order_id");
   });
 });
 

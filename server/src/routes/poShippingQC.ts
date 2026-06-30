@@ -153,6 +153,16 @@ async function findP1PackingSlipInvoice(
            AND (
              inv.internal_notes ILIKE '%' || $1 || '%'
              OR inv.notes ILIKE '%' || $1 || '%'
+             OR EXISTS (
+               SELECT 1
+               FROM shipment_records sr
+               WHERE sr.id::text = $1
+                 AND NULLIF(sr.reference, '') IS NOT NULL
+                 AND (
+                   inv.internal_notes ILIKE '%' || sr.reference || '%'
+                   OR inv.notes ILIKE '%' || sr.reference || '%'
+                 )
+             )
            )
            AND (
              inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
@@ -209,7 +219,6 @@ async function findP1PackingSlipInvoiceForOrders(
            WHERE line.invoice_id = inv.id
              AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
              AND line.dimension_tags->>'poNumber' = $1
-             AND NULLIF(line.dimension_tags->>'shipmentRecordId', '') IS NULL
              AND (
                line.dimension_tags->>'orderId' = ANY($2::text[])
                OR EXISTS (
@@ -1595,10 +1604,7 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                   AND line.dimension_tags->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
                   AND (
                     line.dimension_tags->>'shipmentRecordId' = sr.id::text
-                    OR (
-                      NULLIF(line.dimension_tags->>'shipmentRecordId', '') IS NULL
-                      AND line.dimension_tags->>'orderId' = si.order_id
-                    )
+                    OR line.dimension_tags->>'orderId' = si.order_id
                     OR EXISTS (
                       SELECT 1
                       FROM jsonb_array_elements_text(
@@ -1608,8 +1614,7 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                           ELSE '[]'::jsonb
                         END
                       ) AS order_id(value)
-                      WHERE NULLIF(line.dimension_tags->>'shipmentRecordId', '') IS NULL
-                        AND order_id.value = si.order_id
+                      WHERE order_id.value = si.order_id
                     )
                   )
               )
@@ -1619,6 +1624,13 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                 AND (
                   inv.internal_notes ILIKE '%' || sr.id::text || '%'
                   OR inv.notes ILIKE '%' || sr.id::text || '%'
+                  OR (
+                    NULLIF(sr.reference, '') IS NOT NULL
+                    AND (
+                      inv.internal_notes ILIKE '%' || sr.reference || '%'
+                      OR inv.notes ILIKE '%' || sr.reference || '%'
+                    )
+                  )
                 )
                 AND (
                   inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'

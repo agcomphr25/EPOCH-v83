@@ -815,7 +815,7 @@ export default function ConsolidatedNeedsListPage() {
   }, []);
 
   const getInventoryProfilePath = useCallback((partNumber?: string | null) => {
-    return `/inventory/enhanced-mrp?partNumber=${encodeURIComponent(partNumber || '')}`;
+    return `/inventory/enhanced-mrp?partNumber=${encodeURIComponent(partNumber || '')}&returnTo=consolidated-needs`;
   }, []);
 
   const openInventoryProfile = useCallback((request: PartsRequest) => {

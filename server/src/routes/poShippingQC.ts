@@ -153,6 +153,16 @@ async function findP1PackingSlipInvoice(
            AND (
              inv.internal_notes ILIKE '%' || $1 || '%'
              OR inv.notes ILIKE '%' || $1 || '%'
+             OR EXISTS (
+               SELECT 1
+               FROM shipment_records sr
+               WHERE sr.id::text = $1
+                 AND NULLIF(sr.reference, '') IS NOT NULL
+                 AND (
+                   inv.internal_notes ILIKE '%' || sr.reference || '%'
+                   OR inv.notes ILIKE '%' || sr.reference || '%'
+                 )
+             )
            )
            AND (
              inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
@@ -209,7 +219,6 @@ async function findP1PackingSlipInvoiceForOrders(
            WHERE line.invoice_id = inv.id
              AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
              AND line.dimension_tags->>'poNumber' = $1
-             AND NULLIF(line.dimension_tags->>'shipmentRecordId', '') IS NULL
              AND (
                line.dimension_tags->>'orderId' = ANY($2::text[])
                OR EXISTS (
@@ -1451,7 +1460,27 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
         sr.customer_name ILIKE $${paramIndex} OR
         sr.master_tracking_number ILIKE $${paramIndex} OR
         sr.reference ILIKE $${paramIndex} OR
-        sr.invoice_number ILIKE $${paramIndex}
+        sr.invoice_number ILIKE $${paramIndex} OR
+        EXISTS (
+          SELECT 1
+          FROM shipment_items search_si
+          LEFT JOIN production_orders search_prod_ord ON search_si.order_id = search_prod_ord.order_id
+          LEFT JOIN purchase_order_items search_poi ON search_poi.id = search_si.po_item_id
+          LEFT JOIN purchase_orders search_po ON search_poi.po_id = search_po.id
+          WHERE search_si.shipment_id = sr.id
+            AND (
+              search_si.order_id ILIKE $${paramIndex} OR
+              search_si.po_number ILIKE $${paramIndex} OR
+              search_si.description ILIKE $${paramIndex} OR
+              search_prod_ord.po_number ILIKE $${paramIndex} OR
+              search_prod_ord.customer_name ILIKE $${paramIndex} OR
+              search_prod_ord.item_name ILIKE $${paramIndex} OR
+              search_poi.item_name ILIKE $${paramIndex} OR
+              search_poi.stock_model_name ILIKE $${paramIndex} OR
+              search_po.po_number ILIKE $${paramIndex} OR
+              search_po.customer_name ILIKE $${paramIndex}
+            )
+        )
       )`);
       params.push(`%${search}%`);
       paramIndex++;
@@ -1595,10 +1624,7 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                   AND line.dimension_tags->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
                   AND (
                     line.dimension_tags->>'shipmentRecordId' = sr.id::text
-                    OR (
-                      NULLIF(line.dimension_tags->>'shipmentRecordId', '') IS NULL
-                      AND line.dimension_tags->>'orderId' = si.order_id
-                    )
+                    OR line.dimension_tags->>'orderId' = si.order_id
                     OR EXISTS (
                       SELECT 1
                       FROM jsonb_array_elements_text(
@@ -1608,8 +1634,7 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                           ELSE '[]'::jsonb
                         END
                       ) AS order_id(value)
-                      WHERE NULLIF(line.dimension_tags->>'shipmentRecordId', '') IS NULL
-                        AND order_id.value = si.order_id
+                      WHERE order_id.value = si.order_id
                     )
                   )
               )
@@ -1619,6 +1644,13 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                 AND (
                   inv.internal_notes ILIKE '%' || sr.id::text || '%'
                   OR inv.notes ILIKE '%' || sr.id::text || '%'
+                  OR (
+                    NULLIF(sr.reference, '') IS NOT NULL
+                    AND (
+                      inv.internal_notes ILIKE '%' || sr.reference || '%'
+                      OR inv.notes ILIKE '%' || sr.reference || '%'
+                    )
+                  )
                 )
                 AND (
                   inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
@@ -1812,7 +1844,7 @@ router.get(
       SELECT 
         si.id,
         si.packing_slip_base64,
-        si.po_number,
+        COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number,
         si.order_id,
         si.quantity,
         si.description,
@@ -1826,7 +1858,9 @@ router.get(
         to_jsonb(si) -> 'serial_numbers' AS serial_numbers
       FROM shipment_items si
       JOIN shipment_records sr ON sr.id = si.shipment_id
+      LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
       LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+      LEFT JOIN purchase_orders po ON po.id = poi.po_id
       WHERE si.id = $1
     `;
 
@@ -1880,14 +1914,17 @@ router.get(
             sr.reference AS shipment_reference,
             poi.item_name AS poi_item_name,
             poi.stock_model_name AS poi_stock_model_name,
-            poi.stock_model_id AS poi_stock_model_id
+            poi.stock_model_id AS poi_stock_model_id,
+            COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number
           FROM shipment_items si
           JOIN shipment_records sr ON sr.id = si.shipment_id
+          LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
           LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+          LEFT JOIN purchase_orders po ON po.id = poi.po_id
           WHERE si.shipment_id = (
             SELECT shipment_id FROM shipment_items WHERE id = $1
           )
-          AND si.po_number = $2
+          AND COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) = $2
         `;
           const siblingResult = await pool.query(siblingQuery, [
             itemId,
@@ -1895,6 +1932,12 @@ router.get(
           ]);
           const siblingRows: any[] = (siblingResult.rows ||
             siblingResult) as any[];
+
+          if (siblingRows.length === 0) {
+            throw new Error(
+              `No shipment items found for PO ${poNumberForSlip || '(unknown PO)'} in this shipment`
+            );
+          }
 
           // Aggregate quantity across all items in this PO group
           const totalQty = siblingRows.reduce(

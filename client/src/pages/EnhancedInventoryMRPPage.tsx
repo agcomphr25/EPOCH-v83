@@ -64,6 +64,9 @@ export default function EnhancedInventoryMRPPage() {
     can('purchasing.view_requisitions') ||
     can('purchasing.manage_pos') ||
     can('purchasing.approve_po');
+  const returnTo = new URLSearchParams(searchParams).get('returnTo');
+  const inventoryItemsCloseTarget =
+    returnTo === 'consolidated-needs' ? '/inventory/consolidated-needs' : null;
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
@@ -95,6 +98,13 @@ export default function EnhancedInventoryMRPPage() {
       setIsMrpShortagesModalOpen(true);
     } else if (cardType === 'po-suggestions') {
       setIsPOSuggestionsModalOpen(true);
+    }
+  };
+
+  const handleInventoryItemsModalOpenChange = (open: boolean) => {
+    setIsInventoryItemsModalOpen(open);
+    if (!open && inventoryItemsCloseTarget) {
+      setLocation(inventoryItemsCloseTarget);
     }
   };
 
@@ -437,7 +447,7 @@ export default function EnhancedInventoryMRPPage() {
 
       {/* ── Modals ─────────────────────────────────────────────────────────────── */}
 
-      <Dialog open={isInventoryItemsModalOpen} onOpenChange={setIsInventoryItemsModalOpen}>
+      <Dialog open={isInventoryItemsModalOpen} onOpenChange={handleInventoryItemsModalOpenChange}>
         <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">

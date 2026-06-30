@@ -1844,7 +1844,7 @@ router.get(
       SELECT 
         si.id,
         si.packing_slip_base64,
-        si.po_number,
+        COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number,
         si.order_id,
         si.quantity,
         si.description,
@@ -1858,7 +1858,9 @@ router.get(
         to_jsonb(si) -> 'serial_numbers' AS serial_numbers
       FROM shipment_items si
       JOIN shipment_records sr ON sr.id = si.shipment_id
+      LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
       LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+      LEFT JOIN purchase_orders po ON po.id = poi.po_id
       WHERE si.id = $1
     `;
 
@@ -1912,14 +1914,17 @@ router.get(
             sr.reference AS shipment_reference,
             poi.item_name AS poi_item_name,
             poi.stock_model_name AS poi_stock_model_name,
-            poi.stock_model_id AS poi_stock_model_id
+            poi.stock_model_id AS poi_stock_model_id,
+            COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number
           FROM shipment_items si
           JOIN shipment_records sr ON sr.id = si.shipment_id
+          LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
           LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+          LEFT JOIN purchase_orders po ON po.id = poi.po_id
           WHERE si.shipment_id = (
             SELECT shipment_id FROM shipment_items WHERE id = $1
           )
-          AND si.po_number = $2
+          AND COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) = $2
         `;
           const siblingResult = await pool.query(siblingQuery, [
             itemId,
@@ -1927,6 +1932,12 @@ router.get(
           ]);
           const siblingRows: any[] = (siblingResult.rows ||
             siblingResult) as any[];
+
+          if (siblingRows.length === 0) {
+            throw new Error(
+              `No shipment items found for PO ${poNumberForSlip || '(unknown PO)'} in this shipment`
+            );
+          }
 
           // Aggregate quantity across all items in this PO group
           const totalQty = siblingRows.reduce(

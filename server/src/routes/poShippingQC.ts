@@ -1945,7 +1945,7 @@ router.get(
             );
           }
 
-          let invoiceNumber: string | null = item.shipment_invoice_number || null;
+          let resolvedInvoiceNumber: string | null = item.shipment_invoice_number || null;
           const siblingWithPackingSlip = siblingRows.find((r) => r.packing_slip_base64);
           if (siblingWithPackingSlip?.packing_slip_base64) {
             packingSlipBase64 = siblingWithPackingSlip.packing_slip_base64;
@@ -1993,9 +1993,9 @@ router.get(
 
           // Resolve invoice number: reuse stored value, or generate + persist a new one
           if (shipmentPoCount <= 1 && item.shipment_invoice_number) {
-            invoiceNumber = item.shipment_invoice_number;
+            resolvedInvoiceNumber = item.shipment_invoice_number;
             console.log(
-              `♻️ Reusing stored invoice number ${invoiceNumber} for itemId=${itemId}`
+              `♻️ Reusing stored invoice number ${resolvedInvoiceNumber} for itemId=${itemId}`
             );
           } else {
             const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
@@ -2006,28 +2006,28 @@ router.get(
             });
 
             if (reusableInvoiceNumber) {
-              invoiceNumber = reusableInvoiceNumber;
+              resolvedInvoiceNumber = reusableInvoiceNumber;
               console.log(
-                `♻️ Reusing historical invoice number ${invoiceNumber} for itemId=${itemId}`
+                `♻️ Reusing historical invoice number ${resolvedInvoiceNumber} for itemId=${itemId}`
               );
             } else {
-              invoiceNumber = await slipStorage.getNextInvoiceNumber(
+              resolvedInvoiceNumber = await slipStorage.getNextInvoiceNumber(
                 '0',
                 customerName
               );
               console.log(
-                `🆕 Generated new invoice number ${invoiceNumber} for itemId=${itemId}`
+                `🆕 Generated new invoice number ${resolvedInvoiceNumber} for itemId=${itemId}`
               );
             }
             if (item.shipment_record_id && shipmentPoCount <= 1) {
               try {
                 const saveResult = await pool.query(
                   `UPDATE shipment_records SET invoice_number = $1 WHERE id = $2 AND invoice_number IS NULL RETURNING invoice_number`,
-                  [invoiceNumber, item.shipment_record_id]
+                  [resolvedInvoiceNumber, item.shipment_record_id]
                 );
                 if (saveResult.length > 0) {
                   console.log(
-                    `💾 Saved invoice number ${invoiceNumber} to shipment_record id=${item.shipment_record_id}`
+                    `💾 Saved invoice number ${resolvedInvoiceNumber} to shipment_record id=${item.shipment_record_id}`
                   );
                 } else {
                   const reRead = await pool.query(
@@ -2035,9 +2035,9 @@ router.get(
                     [item.shipment_record_id]
                   );
                   if (reRead[0]?.invoice_number) {
-                    invoiceNumber = reRead[0].invoice_number;
+                    resolvedInvoiceNumber = reRead[0].invoice_number;
                     console.log(
-                      `♻️ Concurrent write detected — using pre-existing invoice number ${invoiceNumber} for itemId=${itemId}`
+                      `♻️ Concurrent write detected — using pre-existing invoice number ${resolvedInvoiceNumber} for itemId=${itemId}`
                     );
                   }
                 }
@@ -2048,7 +2048,7 @@ router.get(
               }
             }
           }
-          if (!invoiceNumber) {
+          if (!resolvedInvoiceNumber) {
             throw new Error(`Could not resolve invoice number for PO ${poNumberForSlip || '(unknown PO)'}`);
           }
 
@@ -2066,11 +2066,11 @@ router.get(
           );
 
           console.log(
-            `📋 Packing slip regen — customerName: "${customerName}", poNumber: "${poNumberForSlip}", invoice: "${invoiceNumber}", qty: ${totalQty}, stickerRange: "${stickerRange}", shipmentRef: "${shipmentRef}"`
+            `📋 Packing slip regen — customerName: "${customerName}", poNumber: "${poNumberForSlip}", invoice: "${resolvedInvoiceNumber}", qty: ${totalQty}, stickerRange: "${stickerRange}", shipmentRef: "${shipmentRef}"`
           );
 
           const slipData: PackingSlipData = {
-            packingSlipNumber: invoiceNumber,
+            packingSlipNumber: resolvedInvoiceNumber,
             poNumber: poNumberForSlip,
             date: new Date().toLocaleDateString('en-US', {
               month: 'short',
@@ -2107,7 +2107,7 @@ router.get(
           await recordP1FulfillmentArtifacts({
             orderIds: siblingRows.map((r) => r.order_id).filter(Boolean),
             poNumber: poNumberForSlip,
-            invoiceNumber,
+            invoiceNumber: resolvedInvoiceNumber,
             trackingNumber: item.tracking_number || '',
             shipmentRecordId: item.shipment_record_id || null,
           });

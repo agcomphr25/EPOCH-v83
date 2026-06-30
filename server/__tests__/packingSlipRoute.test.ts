@@ -560,9 +560,14 @@ describe('GET /api/po-orders/oem-shipments', () => {
       'utf8'
     );
 
+    expect(source).toContain('const requestedPoNumber =');
+    expect(source).toContain("item.po_number || requestedPoNumber || ''");
     expect(source).toContain("COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number");
     expect(source).toContain("AND COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) = $2");
+    expect(source).toContain('si.packing_slip_base64');
+    expect(source).toContain('siblingWithPackingSlip?.packing_slip_base64');
     expect(source).toContain('No shipment items found for PO');
+    expect(source).toContain('details: regenErr.message');
   });
 });
 

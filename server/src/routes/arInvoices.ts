@@ -15,8 +15,6 @@ import {
   p2LotNumbers,
   p2PackingSlips,
   p2PurchaseOrders,
-  chartOfAccounts,
-  productionLineAccountingMap,
   journalEntries,
   journalLines,
 } from '../../schema';
@@ -29,10 +27,8 @@ import { buildInvoicePreviewFromPackingSlip, createInvoiceFromPackingSlip } from
 import { assertPostingAllowedForPeriod } from '../services/accountingPeriodService';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 import { recordAuditEvent } from '../services/auditLedgerService';
-import {
-  buildRevenueDimensionTags,
-  resolveRevenueAccountForProductionLine,
-} from '../services/productionLineAccounting';
+import { buildRevenueDimensionTags } from '../services/productionLineAccounting';
+import { postArInvoiceAccounting } from '../services/arInvoicePostingService';
 import { formatP2DocumentPoNumber } from '../utils/p2DocumentPoNumber';
 
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
@@ -1124,47 +1120,6 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
       .from(arInvoiceLines)
       .where(eq(arInvoiceLines.invoiceId, id));
 
-    const total = parseFloat(invoice.totalAmount);
-    const subtotal = parseFloat(invoice.subtotal);
-    const discount = parseFloat(invoice.discountAmount ?? '0') || 0;
-    const freight = parseFloat(invoice.freightAmount ?? '0') || 0;
-    const tax = parseFloat(invoice.taxAmount ?? '0') || 0;
-    const retainage = parseFloat(invoice.retainageAmount ?? '0') || 0;
-
-    await ensureArInvoicePostingSchema();
-
-    const allAccounts = await db.select().from(chartOfAccounts);
-    const revenueMaps = await db
-      .select()
-      .from(productionLineAccountingMap)
-      .where(eq(productionLineAccountingMap.active, true));
-    const arAccount = allAccounts.find((a) => a.accountName === 'Accounts Receivable');
-    const accountByNumber = (accountNumber: string) => allAccounts.find((a) => a.accountNumber === accountNumber);
-    const arAccountV2 = accountByNumber('11000') ?? arAccount;
-    const retainageAccount = retainage > 0 ? accountByNumber('11200') : null;
-    const shippingIncomeAccount = freight > 0 ? accountByNumber('43000') : null;
-    const discountAccount = discount > 0 ? accountByNumber('49000') : null;
-    const revenueAccount = allAccounts.find((a) => a.accountName === 'Revenue — P2 Products');
-    const taxAccount = tax > 0 ? allAccounts.find((a) => a.accountName === 'Sales Tax Payable') : null;
-    const revenueAccountV2 = accountByNumber('41000') ?? allAccounts.find((a) => a.accountName === 'Product Revenue') ?? revenueAccount;
-    const taxAccountV2 = tax > 0 ? (accountByNumber('20500') ?? taxAccount) : null;
-
-    if (!arAccountV2 || !revenueAccountV2) {
-      return res.status(500).json({ error: 'Required chart-of-accounts entries not found' });
-    }
-    if (retainage > 0 && !retainageAccount) {
-      return res.status(500).json({ error: 'Retainage Receivable account not found in chart of accounts' });
-    }
-    if (freight > 0 && !shippingIncomeAccount) {
-      return res.status(500).json({ error: 'Shipping Income account not found in chart of accounts' });
-    }
-    if (discount > 0 && !discountAccount) {
-      return res.status(500).json({ error: 'Discounts and Allowances account not found in chart of accounts' });
-    }
-    if (tax > 0 && !taxAccountV2) {
-      return res.status(500).json({ error: 'Sales Tax Payable account not found in chart of accounts' });
-    }
-
     const result = await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(arInvoices)
@@ -1177,117 +1132,15 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
         .where(eq(arInvoices.id, id))
         .returning();
 
-      const [entry] = await tx
-        .insert(journalEntries)
-        .values({
-          transactionType: 'AR_INVOICE',
-          referenceType: 'ar_invoice',
-          referenceId: 0,
-          referenceUuid: id,
-          effectiveDate: new Date(`${invoice.invoiceDate}T00:00:00`),
-          memo: `AR Invoice ${invoice.invoiceNumber} — ID: ${id}`,
-          status: 'POSTED',
-          sourceSystem: 'EPOCH',
-          sourceDocumentType: 'AR_INVOICE',
-          sourceDocumentNumber: invoice.invoiceNumber,
-          postingMode: 'STANDARD',
-          postedAt: new Date(),
-          postedBy: user,
-          createdBy: user,
-        })
-        .returning();
-
-      const firstWith = <K extends keyof typeof invoiceLines[number]>(key: K) =>
-        invoiceLines.find((line) => line[key] !== null && line[key] !== undefined)?.[key] ?? null;
-      const nullable = <T>(value: T | null | undefined) => value ?? null;
-      const commonDimensions = {
-        customerId: invoice.customerId,
-        productionLine: invoiceLines.length === 1 ? invoiceLines[0].productionLine : 'MIXED',
-        customerType: firstWith('customerType') as string | null,
-        projectId: firstWith('projectId') as string | null,
-        projectNameSnapshot: firstWith('projectNameSnapshot') as string | null,
-        salespersonUserId: firstWith('salespersonUserId') as number | null,
-        salespersonNameSnapshot: firstWith('salespersonNameSnapshot') as string | null,
-        csrUserId: firstWith('csrUserId') as number | null,
-        csrNameSnapshot: firstWith('csrNameSnapshot') as string | null,
-        allowability: 'ALLOWABLE',
-        directIndirect: 'DIRECT',
-        costPool: 'DIRECT',
-        dimensionTags: {
-          source: 'ar_invoice',
-          invoiceId: id,
-          invoiceNumber: invoice.invoiceNumber,
-        } as Record<string, unknown>,
-      };
-
-      type LineInsert = typeof commonDimensions & {
-        journalEntryId: number;
-        accountId: number;
-        debitAmount: number;
-        creditAmount: number;
-        inventoryItemId?: string | null;
-        partNumber?: string | null;
-      };
-      const lines: LineInsert[] = [
-        { ...commonDimensions, journalEntryId: entry.id, accountId: arAccountV2.id, debitAmount: total, creditAmount: 0 },
-      ];
-      if (discount > 0) {
-        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: discountAccount!.id, debitAmount: discount, creditAmount: 0 });
-      }
-      if (retainage > 0) {
-        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: retainageAccount!.id, debitAmount: retainage, creditAmount: 0 });
-      }
-      for (const line of invoiceLines) {
-        const lineProductionLine = line.productionLine || 'MIGRATION_REVIEW';
-        const lineRevenueAccount = resolveRevenueAccountForProductionLine({
-          productionLine: lineProductionLine,
-          accounts: allAccounts,
-          revenueMaps,
-          fallbackRevenueAccount: revenueAccountV2,
-        });
-        lines.push({
-          ...commonDimensions,
-          journalEntryId: entry.id,
-          accountId: lineRevenueAccount.id,
-          debitAmount: 0,
-          creditAmount: parseFloat(String(line.lineTotal)) || 0,
-          productionLine: lineProductionLine,
-          projectId: nullable(line.projectId),
-          projectNameSnapshot: nullable(line.projectNameSnapshot),
-          salespersonUserId: nullable(line.salespersonUserId),
-          salespersonNameSnapshot: nullable(line.salespersonNameSnapshot),
-          csrUserId: nullable(line.csrUserId),
-          csrNameSnapshot: nullable(line.csrNameSnapshot),
-          customerType: nullable(line.customerType),
-          inventoryItemId: nullable(line.inventoryItemId),
-          partNumber: nullable(line.partNumber),
-          dimensionTags: {
-            ...commonDimensions.dimensionTags,
-            ...(line.dimensionTags && typeof line.dimensionTags === 'object' ? line.dimensionTags : {}),
-            arInvoiceLineId: line.id,
-            lineDescription: line.description,
-            revenueAccountNumber: lineRevenueAccount.accountNumber,
-            revenueAccountName: lineRevenueAccount.accountName,
-          },
-        });
-      }
-      if (freight > 0) {
-        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: shippingIncomeAccount!.id, debitAmount: 0, creditAmount: freight });
-      }
-      if (tax > 0) {
-        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: taxAccountV2!.id, debitAmount: 0, creditAmount: tax, directIndirect: 'UNASSIGNED', costPool: 'NONE' });
-      }
-
-      const totalDebits = Math.round(lines.reduce((sum, line) => sum + line.debitAmount, 0) * 100) / 100;
-      const totalCredits = Math.round(lines.reduce((sum, line) => sum + line.creditAmount, 0) * 100) / 100;
-      if (Math.abs(totalDebits - totalCredits) > 0.001) {
-        throw new Error(`AR invoice journal entry is imbalanced: debits=${totalDebits}, credits=${totalCredits}`);
-      }
-
-      await tx.insert(journalLines).values(lines);
+      const posting = await postArInvoiceAccounting({
+        invoice,
+        invoiceLines,
+        user: (req as any).user ?? { username: user },
+        tx,
+      });
 
       console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) posted by ${user}`);
-      console.log(`[InvoiceService] Journal entry ${entry.id} created for invoice ${invoice.invoiceNumber} — DR AR ${total}, CR Revenue ${subtotal}${tax > 0 ? `, CR Sales Tax ${tax}` : ''}`);
+      console.log(`[InvoiceService] Journal entry ${posting.journalEntryId} created for invoice ${invoice.invoiceNumber}`);
 
       return updated;
     });

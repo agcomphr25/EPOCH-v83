@@ -58,6 +58,16 @@ describe('accountingEventMatrix', () => {
     expect(p2?.evidence).toContain('server/src/services/revenueStreamClassifier.ts');
   });
 
+  it('points AR invoice posting coverage at the shared posting service', () => {
+    const arInvoice = accountingEventMatrix.find((row) => row.id === 'AR_INVOICE_POSTED');
+    const p1Po = accountingEventMatrix.find((row) => row.id === 'P1_PO_NET30_INVOICE_POSTED');
+    const p2 = accountingEventMatrix.find((row) => row.id === 'P2_NET30_INVOICE_POSTED');
+
+    expect(arInvoice?.evidence).toContain('server/src/services/arInvoicePostingService.ts');
+    expect(p1Po?.evidence).toContain('server/src/services/accountingPostingService.ts');
+    expect(p2?.evidence).toContain('server/src/services/accountingPostingService.ts');
+  });
+
   it('tracks capital equipment, equipment loans, loan payments, and depreciation as accounting events', () => {
     const ids = accountingEventMatrix.map((row) => row.id);
 

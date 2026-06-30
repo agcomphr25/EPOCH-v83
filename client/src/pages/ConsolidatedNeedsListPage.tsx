@@ -153,6 +153,7 @@ type ConsolidatedPart = {
 };
 
 type StatusView = 'OPEN' | 'PENDING' | 'APPROVED' | 'ORDERED' | 'RECEIVED' | 'ALL';
+type VendorRequestView = 'needs-order' | 'ordered' | 'all';
 
 const isArchivedFromConsolidatedNeeds = (request: PartsRequest) => {
   return request.status === 'RECEIVED' || request.status === 'DELIVERED_TO_DEPT';
@@ -177,6 +178,7 @@ export default function ConsolidatedNeedsListPage() {
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
   const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor'>('by-vendor');
   const [vendorFilterTab, setVendorFilterTab] = useState<'all' | 'po' | 'website'>('all');
+  const [vendorRequestViews, setVendorRequestViews] = useState<Record<string, VendorRequestView>>({});
   const [statusView, setStatusView] = useState<StatusView>('OPEN');
   const [selectedVendorRequests, setSelectedVendorRequests] = useState<Set<number>>(new Set());
   const [isVendorAssignDialogOpen, setIsVendorAssignDialogOpen] = useState(false);
@@ -245,6 +247,31 @@ export default function ConsolidatedNeedsListPage() {
     ['APPROVED', 'RECEIVED_PARTIAL'].includes(request.status)
     && !request.vendorPoId
     && getRemainingRequestQuantity(request) > 0;
+
+  const isOrderedVendorRequest = (request: PartsRequest) =>
+    ['ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT'].includes(request.status)
+    || Boolean(request.vendorPoId);
+
+  const getVendorRequestView = (vendorKey: string): VendorRequestView =>
+    vendorRequestViews[vendorKey] || 'needs-order';
+
+  const setVendorRequestView = (vendorKey: string, view: VendorRequestView) => {
+    setVendorRequestViews((prev) => ({
+      ...prev,
+      [vendorKey]: view,
+    }));
+    setSelectedVendorRequests(new Set());
+  };
+
+  const getVendorRequestsForView = (requests: PartsRequest[], view: VendorRequestView) => {
+    if (view === 'ordered') {
+      return requests.filter(isOrderedVendorRequest);
+    }
+    if (view === 'needs-order') {
+      return requests.filter((request) => !isOrderedVendorRequest(request));
+    }
+    return requests;
+  };
 
   // Update parts request mutation
   const updateRequestMutation = useMutation({
@@ -1473,6 +1500,11 @@ export default function ConsolidatedNeedsListPage() {
           const actionCount = selectedReadyCount || approvedCount;
           const hasHighUrgency = vendorGroup.requests.some(r => r.urgency === 'HIGH' || r.urgency === 'CRITICAL');
           const isWebsiteGroup = vendorGroup.orderMethod === 'WEBSITE';
+          const orderedRequestsForVendor = vendorGroup.requests.filter(isOrderedVendorRequest);
+          const needsOrderRequestsForVendor = vendorGroup.requests.filter((request) => !isOrderedVendorRequest(request));
+          const vendorRequestView = getVendorRequestView(vendorKey);
+          const visibleVendorRequests = getVendorRequestsForView(vendorGroup.requests, vendorRequestView);
+          const visibleSelectableRequests = visibleVendorRequests.filter(isOrderMarkableRequest);
 
           return (
             <Card key={vendorKey} className={`${hasHighUrgency ? 'border-orange-300 dark:border-orange-700' : ''}`}>
@@ -1501,6 +1533,7 @@ export default function ConsolidatedNeedsListPage() {
                       </CardTitle>
                       <CardDescription>
                         {vendorGroup.requests.length} parts | {vendorGroup.totalQuantity} total units | 
+                        {needsOrderRequestsForVendor.length} need order | {orderedRequestsForVendor.length} ordered |
                         {approvedCount > 0 && ` ${approvedCount} ready to order |`}
                         ${vendorGroup.totalEstimatedCost.toFixed(2)} est. total
                       </CardDescription>
@@ -1563,17 +1596,39 @@ export default function ConsolidatedNeedsListPage() {
 
               {isExpanded && (
                 <CardContent>
+                  <Tabs
+                    value={vendorRequestView}
+                    onValueChange={(value) => setVendorRequestView(vendorKey, value as VendorRequestView)}
+                    className="space-y-3"
+                  >
+                    <TabsList className="flex h-auto flex-wrap justify-start">
+                      <TabsTrigger value="needs-order" data-testid={`tab-vendor-needs-order-${vendorKey}`}>
+                        Needs order ({needsOrderRequestsForVendor.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="ordered" data-testid={`tab-vendor-ordered-${vendorKey}`}>
+                        Ordered ({orderedRequestsForVendor.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="all" data-testid={`tab-vendor-all-requests-${vendorKey}`}>
+                        All ({vendorGroup.requests.length})
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  {visibleVendorRequests.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-gray-300 p-6 text-center text-sm text-muted-foreground dark:border-gray-700">
+                      No requests in this vendor view.
+                    </div>
+                  ) : (
                   <table className="w-full">
                     <thead className="bg-gray-100 dark:bg-gray-900">
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 w-10">
                           <Checkbox
                             checked={
-                              vendorGroup.requests.filter(isOrderMarkableRequest).length > 0
-                              && vendorGroup.requests.filter(isOrderMarkableRequest).every(r => selectedVendorRequests.has(r.id))
+                              visibleSelectableRequests.length > 0
+                              && visibleSelectableRequests.every(r => selectedVendorRequests.has(r.id))
                             }
                             onCheckedChange={(checked) => {
-                              const selectable = vendorGroup.requests.filter(isOrderMarkableRequest);
+                              const selectable = visibleSelectableRequests;
                               if (checked) {
                                 setSelectedVendorRequests(new Set([
                                   ...Array.from(selectedVendorRequests),
@@ -1602,7 +1657,7 @@ export default function ConsolidatedNeedsListPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                      {vendorGroup.requests.map((request) => {
+                      {visibleVendorRequests.map((request) => {
                         const selectableForPo = isPoDraftableRequest(request);
                         const selectableForOrder = isOrderMarkableRequest(request);
                         const effectiveOrderMethod = resolveEffectiveOrderMethod(request, getResolvedVendorForRequest(request));
@@ -1745,6 +1800,7 @@ export default function ConsolidatedNeedsListPage() {
                       })}
                     </tbody>
                   </table>
+                  )}
                 </CardContent>
               )}
             </Card>

@@ -658,14 +658,9 @@ router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post
     }
 
     const overrides = invoicePreviewOverrideSchema.parse(req.body || {});
-    await createInvoiceFromPackingSlip(packingSlipId, link.slip.lotNumberId, overrides);
+    const invoice = await createInvoiceFromPackingSlip(packingSlipId, link.slip.lotNumberId, overrides);
 
-    const [invoice] = await db
-      .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
-      .from(arInvoices)
-      .where(eq(arInvoices.packingSlipId, packingSlipId));
-
-    res.status(201).json(invoice);
+    res.status(invoice.existing ? 200 : 201).json(invoice);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors[0]?.message || 'Invalid invoice preview data', issues: error.errors });

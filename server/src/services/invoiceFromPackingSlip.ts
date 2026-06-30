@@ -459,15 +459,20 @@ export async function createInvoiceFromPackingSlip(
   packingSlipId: string,
   lotId: string,
   overrides: InvoicePreviewInput = {},
-): Promise<void> {
+): Promise<{ id: string; invoiceNumber: string; status: string; existing: boolean }> {
   const existing = await db
-    .select({ id: arInvoices.id })
+    .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
     .from(arInvoices)
     .where(eq(arInvoices.packingSlipId, packingSlipId));
 
   if (existing.length > 0) {
     console.log(`[InvoiceService] Duplicate prevented (pre-check): invoice already exists for packing slip ${packingSlipId}`);
-    return;
+    return {
+      id: existing[0].id,
+      invoiceNumber: existing[0].invoiceNumber,
+      status: existing[0].status,
+      existing: true,
+    };
   }
 
   const preview = await buildInvoicePreviewFromPackingSlip(packingSlipId, lotId, overrides);
@@ -476,7 +481,24 @@ export async function createInvoiceFromPackingSlip(
   }
 
   try {
-    await db.transaction(async (tx) => {
+    const invoice = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('p2-packing-slip-invoice'), hashtext(${packingSlipId}))`);
+
+      const [existingInTransaction] = await tx
+        .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
+        .from(arInvoices)
+        .where(eq(arInvoices.packingSlipId, packingSlipId));
+
+      if (existingInTransaction) {
+        console.log(`[InvoiceService] Duplicate prevented (transaction): invoice already exists for packing slip ${packingSlipId}`);
+        return {
+          id: existingInTransaction.id,
+          invoiceNumber: existingInTransaction.invoiceNumber,
+          status: existingInTransaction.status,
+          existing: true,
+        };
+      }
+
       const [invoice] = await tx
         .insert(arInvoices)
         .values({
@@ -503,7 +525,7 @@ export async function createInvoiceFromPackingSlip(
           createdBy: 'system',
           customerVisibleNotes: preview.customerVisibleNotes,
         })
-        .returning({ id: arInvoices.id });
+        .returning({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status });
 
       if (preview.lines.length > 0) {
         await tx.insert(arInvoiceLines).values(
@@ -570,13 +592,34 @@ export async function createInvoiceFromPackingSlip(
           packingSlipNumber: preview.invoiceNumber,
         })
         .where(eq(p2PackingSlips.id, packingSlipId));
+
+      return {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        status: invoice.status,
+        existing: false,
+      };
     });
 
-    console.log(`[InvoiceService] Invoice ${preview.invoiceNumber} auto-created for packing slip ${packingSlipId}`);
+    if (!invoice.existing) {
+      console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} auto-created for packing slip ${packingSlipId}`);
+    }
+    return invoice;
   } catch (err: any) {
     if (err?.code === '23505') {
       console.log(`[InvoiceService] Duplicate prevented (constraint): invoice already exists for packing slip ${packingSlipId}`);
-      return;
+      const [existingAfterConflict] = await db
+        .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
+        .from(arInvoices)
+        .where(eq(arInvoices.packingSlipId, packingSlipId));
+      if (existingAfterConflict) {
+        return {
+          id: existingAfterConflict.id,
+          invoiceNumber: existingAfterConflict.invoiceNumber,
+          status: existingAfterConflict.status,
+          existing: true,
+        };
+      }
     }
     throw err;
   }

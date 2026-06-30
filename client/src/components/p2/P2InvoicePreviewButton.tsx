@@ -192,8 +192,14 @@ export default function P2InvoicePreviewButton({
     },
     onSuccess: (invoice: any) => {
       toast({
-        title: 'Invoice ready for review',
-        description: invoice?.invoiceNumber ? `Invoice ${invoice.invoiceNumber} was created.` : 'Invoice was created.',
+        title: invoice?.existing ? 'Invoice already exists' : 'Invoice ready for review',
+        description: invoice?.invoiceNumber
+          ? invoice.existing
+            ? `Invoice ${invoice.invoiceNumber} is already linked to this packing slip.`
+            : `Invoice ${invoice.invoiceNumber} was created.`
+          : invoice?.existing
+            ? 'An invoice is already linked to this packing slip.'
+            : 'Invoice was created.',
       });
       setOpen(false);
       onCreated?.(invoice);

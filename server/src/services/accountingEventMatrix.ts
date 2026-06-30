@@ -97,8 +97,8 @@ export const accountingEventMatrix = [
     journalReferenceType: 'p1_shipment_snapshot / p1_shipment_record',
     implementationStatus: 'PARTIAL',
     risk: 'HIGH',
-    evidence: ['server/src/services/p1ShipmentRevenueService.ts', 'server/src/routes/shipping.ts'],
-    nextControlAction: 'Promote the current draft shipment revenue entries through the shared posting service and verify regular-vs-PO order classification before posting.',
+    evidence: ['server/src/services/p1ShipmentRevenueService.ts', 'server/src/services/revenueStreamClassifier.ts', 'server/src/routes/shipping.ts'],
+    nextControlAction: 'Promote the current draft shipment revenue entries through the shared posting service now that regular-vs-PO stream classification is centralized.',
   },
   {
     id: 'P1_PO_NET30_INVOICE_POSTED',
@@ -113,8 +113,8 @@ export const accountingEventMatrix = [
     journalReferenceType: 'ar_invoice',
     implementationStatus: 'PARTIAL',
     risk: 'HIGH',
-    evidence: ['server/src/routes/arInvoices.ts', 'server/src/services/p1ShipmentRevenueService.ts'],
-    nextControlAction: 'Add an explicit P1 PO invoice source discriminator so prepaid regular orders cannot accidentally post as Net 30 AR.',
+    evidence: ['server/src/routes/arInvoices.ts', 'server/src/services/p1ShipmentRevenueService.ts', 'server/src/services/revenueStreamClassifier.ts'],
+    nextControlAction: 'Wire P1 PO invoice creation/posting directly to the shared classifier and shared posting service.',
   },
   {
     id: 'P2_NET30_INVOICE_POSTED',
@@ -129,8 +129,8 @@ export const accountingEventMatrix = [
     journalReferenceType: 'ar_invoice',
     implementationStatus: 'IMPLEMENTED',
     risk: 'MEDIUM',
-    evidence: ['server/src/routes/arInvoices.ts', 'server/src/services/invoiceFromPackingSlip.ts'],
-    nextControlAction: 'Move P2 invoice posting through the shared posting service and verify dimension tags for project, lot, packing slip, PO, CLIN, and customer.',
+    evidence: ['server/src/routes/arInvoices.ts', 'server/src/services/invoiceFromPackingSlip.ts', 'server/src/services/revenueStreamClassifier.ts'],
+    nextControlAction: 'Move P2 invoice posting through the shared posting service using the shared classifier and verify dimension tags for project, lot, packing slip, PO, CLIN, and customer.',
   },
   {
     id: 'AR_CREDIT_MEMO_ISSUED',

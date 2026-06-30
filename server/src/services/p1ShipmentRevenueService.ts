@@ -13,6 +13,12 @@ import {
   shipmentItems,
   shipmentRecords,
 } from '../../schema';
+import {
+  assertRevenueStream,
+  classifyRevenueStream,
+  type RevenueStream,
+  type RevenueStreamClassification,
+} from './revenueStreamClassifier';
 
 type DbExecutor = typeof db | any;
 
@@ -31,6 +37,8 @@ type DimensionSeed = {
   source: 'p1_standard_shipment_revenue' | 'p1_po_shipment_revenue';
   sourceId: string;
   sourceDocumentNumber: string;
+  revenueStream: RevenueStream;
+  revenueClassification: RevenueStreamClassification;
   extraTags?: Record<string, unknown>;
 };
 
@@ -195,6 +203,10 @@ async function upsertDraftRevenueEntry(
     costPool: 'DIRECT',
     dimensionTags: {
       source: seed.source,
+      revenueStream: seed.revenueStream,
+      revenueRecognitionTiming: seed.revenueClassification.recognitionTiming,
+      revenuePaymentTerms: seed.revenueClassification.paymentTerms,
+      revenueClassificationReason: seed.revenueClassification.reason,
       productionLine: 'P1',
       sourceId: seed.sourceId,
       p1OrderId: seed.orderId,
@@ -282,6 +294,15 @@ export async function createOrUpdateP1ShipmentRevenueFromSnapshot(
   const { order, customer } = await getP1OrderCustomer(tx, snapshot.salesOrderId);
   const paidAmount = await getP1OrderPaymentTotal(tx, snapshot.salesOrderId);
   const customerName = customer?.name ?? customer?.company ?? snapshot.customerName ?? null;
+  const classification = classifyRevenueStream({
+    productionLine: 'P1',
+    sourceTable: 'shipment_accounting_snapshots',
+    orderSource: order?.orderSource,
+    orderSourceV2: order?.orderSourceV2,
+    sourcePoId: order?.sourcePoId,
+    hasCustomerPrepayment: paidAmount > 0,
+  });
+  assertRevenueStream(classification, 'P1_REGULAR_PREPAID', `P1 shipment snapshot ${snapshot.id}`);
 
   return upsertDraftRevenueEntry(
     tx,
@@ -305,6 +326,8 @@ export async function createOrUpdateP1ShipmentRevenueFromSnapshot(
       source: 'p1_standard_shipment_revenue',
       sourceId: snapshot.id,
       sourceDocumentNumber: snapshot.salesOrderId || String(snapshot.shipmentId),
+      revenueStream: classification.revenueStream,
+      revenueClassification: classification,
       extraTags: {
         shipmentAccountingSnapshotId: snapshot.id,
         shipmentId: snapshot.shipmentId,
@@ -355,6 +378,14 @@ export async function createOrUpdateP1ShipmentRevenueFromShipmentRecord(
   const first = items[0] ?? null;
   const orderIds = Array.from(new Set(items.map((item: any) => item.orderId).filter(Boolean)));
   const poNumbers = Array.from(new Set(items.map((item: any) => item.poNumber).filter(Boolean)));
+  const classification = classifyRevenueStream({
+    productionLine: 'P1',
+    sourceTable: 'shipment_records',
+    p1PurchaseOrderId: poNumbers[0] ?? null,
+    hasP1PurchaseOrderItems: items.some((item: any) => item.poItemId),
+    terms: 'NET_30',
+  });
+  assertRevenueStream(classification, 'P1_PO_NET30', `P1 shipment record ${shipment.id}`);
 
   return upsertDraftRevenueEntry(
     tx,
@@ -378,6 +409,8 @@ export async function createOrUpdateP1ShipmentRevenueFromShipmentRecord(
       source: 'p1_po_shipment_revenue',
       sourceId: shipment.id,
       sourceDocumentNumber: shipment.invoiceNumber || shipment.reference || shipment.id,
+      revenueStream: classification.revenueStream,
+      revenueClassification: classification,
       extraTags: {
         shipmentRecordId: shipment.id,
         shipmentReference: shipment.reference,

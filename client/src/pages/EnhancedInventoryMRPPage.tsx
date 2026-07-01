@@ -455,7 +455,9 @@ export default function EnhancedInventoryMRPPage() {
               Inventory Items Management
             </DialogTitle>
           </DialogHeader>
-          <InventoryItemsCard initialSearchTerm={initialPartNumber} />
+          {isInventoryItemsModalOpen && (
+            <InventoryItemsCard initialSearchTerm={initialPartNumber} />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -467,7 +469,7 @@ export default function EnhancedInventoryMRPPage() {
               Inventory Balances
             </DialogTitle>
           </DialogHeader>
-          <InventoryBalancesCard />
+          {isBalancesModalOpen && <InventoryBalancesCard />}
         </DialogContent>
       </Dialog>
 
@@ -479,7 +481,7 @@ export default function EnhancedInventoryMRPPage() {
               Inventory Transactions
             </DialogTitle>
           </DialogHeader>
-          <InventoryTransactionsCard />
+          {isTransactionsModalOpen && <InventoryTransactionsCard />}
         </DialogContent>
       </Dialog>
 
@@ -491,7 +493,7 @@ export default function EnhancedInventoryMRPPage() {
               Progressive Allocation
             </DialogTitle>
           </DialogHeader>
-          <ProgressiveAllocationCard />
+          {isProgressiveAllocModalOpen && <ProgressiveAllocationCard />}
         </DialogContent>
       </Dialog>
 
@@ -503,7 +505,7 @@ export default function EnhancedInventoryMRPPage() {
               MRP Calculation
             </DialogTitle>
           </DialogHeader>
-          <MRPCalculationCard />
+          {isMrpCalculationModalOpen && <MRPCalculationCard />}
         </DialogContent>
       </Dialog>
 
@@ -515,7 +517,7 @@ export default function EnhancedInventoryMRPPage() {
               Material Shortages
             </DialogTitle>
           </DialogHeader>
-          <MRPShortagesCard />
+          {isMrpShortagesModalOpen && <MRPShortagesCard />}
         </DialogContent>
       </Dialog>
 
@@ -527,7 +529,7 @@ export default function EnhancedInventoryMRPPage() {
               PO Suggestions
             </DialogTitle>
           </DialogHeader>
-          <POSuggestionsCard />
+          {isPOSuggestionsModalOpen && <POSuggestionsCard />}
         </DialogContent>
       </Dialog>
 
@@ -539,7 +541,7 @@ export default function EnhancedInventoryMRPPage() {
               Vendor Purchase Orders
             </DialogTitle>
           </DialogHeader>
-          <VendorPOManager />
+          {isVendorPOModalOpen && <VendorPOManager />}
         </DialogContent>
       </Dialog>
 
@@ -551,7 +553,7 @@ export default function EnhancedInventoryMRPPage() {
               PO Settings
             </DialogTitle>
           </DialogHeader>
-          <VendorPOSettings />
+          {isPOSettingsModalOpen && <VendorPOSettings />}
         </DialogContent>
       </Dialog>
 
@@ -563,7 +565,7 @@ export default function EnhancedInventoryMRPPage() {
               Outside Processing
             </DialogTitle>
           </DialogHeader>
-          <OutsideProcessingCard />
+          {isOutsideProcessingModalOpen && <OutsideProcessingCard />}
         </DialogContent>
       </Dialog>
     </div>

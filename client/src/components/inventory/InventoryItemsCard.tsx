@@ -1696,6 +1696,57 @@ const inventoryFormSchema = z.object({
   { message: 'Purchased items must not have a manufactured category.', path: ['manufacturedCategory'] }
 );
 
+function inventoryItemMatchesSearch(item: InventoryItem, searchTerm: string) {
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  if (!normalizedSearch) return true;
+
+  const assignedDepartments = Array.isArray((item as any).assignedDepartments)
+    ? ((item as any).assignedDepartments as unknown[])
+    : [];
+
+  const searchableValues = [
+    item.agPartNumber,
+    item.name,
+    item.sku,
+    item.source,
+    item.supplierPartNumber,
+    item.secondarySupplierPartNumber,
+    item.department,
+    item.notes,
+    item.secondarySource,
+    item.manufacturedCategory,
+    item.manufacturingLevel,
+    item.manufacturingDepartment,
+    item.machineType,
+    (item as any).orderUrl,
+    (item as any).defaultOrderMethod,
+    ...assignedDepartments,
+  ];
+
+  return searchableValues.some((value) =>
+    value != null && String(value).toLowerCase().includes(normalizedSearch)
+  );
+}
+
+function inventoryItemMatchesUtilizedFilter(item: InventoryItem, utilizedFilter: string) {
+  switch (utilizedFilter) {
+    case 'pl1':
+      return item.utilizedInPL1;
+    case 'pl2':
+      return item.utilizedInPL2;
+    case 'pl3':
+      return item.utilizedInPL3;
+    case 'facilities':
+      return item.utilizedInFacilities;
+    case 'admin':
+      return item.utilizedInAdmin;
+    case 'services':
+      return item.utilizedInServices;
+    default:
+      return true;
+  }
+}
+
 export default function InventoryItemsCard({ initialSearchTerm }: InventoryItemsCardProps = {}) {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -2017,23 +2068,31 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     },
   });
 
+  const deferredSearchTerm = React.useDeferredValue(searchTerm);
+
   // Type-filtered item sets for tab counts and tab filtering
-  const purchasedItems = Array.isArray(allItems)
-    ? allItems.filter(
+  const purchasedItems = React.useMemo(
+    () => Array.isArray(allItems)
+      ? allItems.filter(
         (item) =>
           item.itemType === 'PURCHASED' ||
           (!item.itemType && item.type !== 'Manufactured' && !item.isPacket)
       )
-    : [];
+      : [],
+    [allItems]
+  );
 
-  const manufacturedItems = Array.isArray(allItems)
-    ? allItems.filter(
+  const manufacturedItems = React.useMemo(
+    () => Array.isArray(allItems)
+      ? allItems.filter(
         (item) =>
           item.itemType === 'MANUFACTURED' ||
           item.type === 'Manufactured' ||
           item.isPacket
       )
-    : [];
+      : [],
+    [allItems]
+  );
 
   // Group manufactured items by category for accordion view
   const groupedManufactured = React.useMemo(() => {
@@ -2066,42 +2125,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const items = Array.isArray(allItems)
     ? tabItems
         .filter((item) => {
-          // Search filter
-          if (searchTerm.trim()) {
-            const searchLower = searchTerm.toLowerCase();
-            const matchesSearch =
-              item.agPartNumber.toLowerCase().includes(searchLower) ||
-              item.name.toLowerCase().includes(searchLower) ||
-              (item.sku && item.sku.toLowerCase().includes(searchLower)) ||
-              (item.source &&
-                item.source.toLowerCase().includes(searchLower)) ||
-              (item.supplierPartNumber &&
-                item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
-              (item.department &&
-                item.department.toLowerCase().includes(searchLower)) ||
-              (item.notes && item.notes.toLowerCase().includes(searchLower));
-            if (!matchesSearch) return false;
-          }
+          if (!inventoryItemMatchesSearch(item, deferredSearchTerm)) return false;
 
           // Utilized filter
-          if (utilizedFilter !== 'all') {
-            switch (utilizedFilter) {
-              case 'pl1':
-                return item.utilizedInPL1;
-              case 'pl2':
-                return item.utilizedInPL2;
-              case 'pl3':
-                return item.utilizedInPL3;
-              case 'facilities':
-                return item.utilizedInFacilities;
-              case 'admin':
-                return item.utilizedInAdmin;
-              case 'services':
-                return item.utilizedInServices;
-              default:
-                return true;
-            }
-          }
+          if (!inventoryItemMatchesUtilizedFilter(item, utilizedFilter)) return false;
 
           return true;
         })
@@ -3618,29 +3645,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             <Accordion type="multiple" className="space-y-2">
               {MANUFACTURED_CATEGORY_ORDER.map((category) => {
                 const catItems = (groupedManufactured[category] || []).filter((item) => {
-                  if (searchTerm.trim()) {
-                    const s = searchTerm.toLowerCase();
-                    if (
-                      !item.agPartNumber.toLowerCase().includes(s) &&
-                      !item.name.toLowerCase().includes(s) &&
-                      !(item.sku && item.sku.toLowerCase().includes(s)) &&
-                      !(item.source && item.source.toLowerCase().includes(s)) &&
-                      !(item.supplierPartNumber && item.supplierPartNumber.toLowerCase().includes(s)) &&
-                      !(item.department && item.department.toLowerCase().includes(s)) &&
-                      !(item.notes && item.notes.toLowerCase().includes(s))
-                    ) return false;
-                  }
-                  if (utilizedFilter !== 'all') {
-                    switch (utilizedFilter) {
-                      case 'pl1': return item.utilizedInPL1;
-                      case 'pl2': return item.utilizedInPL2;
-                      case 'pl3': return item.utilizedInPL3;
-                      case 'facilities': return item.utilizedInFacilities;
-                      case 'admin': return item.utilizedInAdmin;
-                      case 'services': return item.utilizedInServices;
-                      default: return true;
-                    }
-                  }
+                  if (!inventoryItemMatchesSearch(item, deferredSearchTerm)) return false;
+                  if (!inventoryItemMatchesUtilizedFilter(item, utilizedFilter)) return false;
                   return true;
                 });
                 const dashboard = getSupplySourceDashboard(category);
@@ -3753,29 +3759,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               })}
               {(() => {
                 const filteredUncategorized = uncategorizedManufactured.filter((item) => {
-                  if (searchTerm.trim()) {
-                    const s = searchTerm.toLowerCase();
-                    if (
-                      !item.agPartNumber.toLowerCase().includes(s) &&
-                      !item.name.toLowerCase().includes(s) &&
-                      !(item.sku && item.sku.toLowerCase().includes(s)) &&
-                      !(item.source && item.source.toLowerCase().includes(s)) &&
-                      !(item.supplierPartNumber && item.supplierPartNumber.toLowerCase().includes(s)) &&
-                      !(item.department && item.department.toLowerCase().includes(s)) &&
-                      !(item.notes && item.notes.toLowerCase().includes(s))
-                    ) return false;
-                  }
-                  if (utilizedFilter !== 'all') {
-                    switch (utilizedFilter) {
-                      case 'pl1': return item.utilizedInPL1;
-                      case 'pl2': return item.utilizedInPL2;
-                      case 'pl3': return item.utilizedInPL3;
-                      case 'facilities': return item.utilizedInFacilities;
-                      case 'admin': return item.utilizedInAdmin;
-                      case 'services': return item.utilizedInServices;
-                      default: return true;
-                    }
-                  }
+                  if (!inventoryItemMatchesSearch(item, deferredSearchTerm)) return false;
+                  if (!inventoryItemMatchesUtilizedFilter(item, utilizedFilter)) return false;
                   return true;
                 });
                 if (filteredUncategorized.length === 0) return null;

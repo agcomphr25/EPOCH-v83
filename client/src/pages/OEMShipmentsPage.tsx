@@ -444,9 +444,12 @@ export default function OEMShipmentsPage() {
       if (response.status === 404) {
         newTab?.close();
         const errorBody = await response.json().catch(() => null);
+        const routeVersion = errorBody?.routeVersion
+          ? ` [${errorBody.routeVersion}]`
+          : '';
         toast({
           title: 'No packing slip available',
-          description: errorBody?.details || errorBody?._error || 'No packing slip could be found or regenerated for this shipment.',
+          description: `${errorBody?.details || errorBody?._error || 'No packing slip could be found or regenerated for this shipment.'}${routeVersion}`,
           variant: 'destructive',
         });
         return;

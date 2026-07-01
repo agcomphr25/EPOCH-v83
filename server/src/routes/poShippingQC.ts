@@ -1823,6 +1823,9 @@ router.get('/oem-shipments/:id/label', authenticateToken, async (req, res) => {
   }
 });
 
+const P1_OEM_PACKING_SLIP_ROUTE_VERSION =
+  'p1-oem-packing-slip-resolved-invoice-20260701';
+
 // GET /api/po-orders/oem-shipments/packing-slip/:itemId
 // Download packing slip for a specific shipment item
 router.get(
@@ -1833,13 +1836,20 @@ router.get(
       const { itemId } = req.params;
       const requestedPoNumber =
         typeof req.query.poNumber === 'string' ? req.query.poNumber.trim() : '';
+      res.setHeader(
+        'X-EPOCH-P1-Packing-Slip-Route',
+        P1_OEM_PACKING_SLIP_ROUTE_VERSION
+      );
       console.log(`📄 Downloading packing slip for shipment item ${itemId}...`);
 
       // Validate UUID format
       const uuidRegex =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(itemId)) {
-        return res.status(400).json({ _error: 'Invalid item ID format' });
+        return res.status(400).json({
+          _error: 'Invalid item ID format',
+          routeVersion: P1_OEM_PACKING_SLIP_ROUTE_VERSION,
+        });
       }
 
       const query = `
@@ -1870,7 +1880,10 @@ router.get(
       const item = (result.rows || result)[0];
 
       if (!item) {
-        return res.status(404).json({ _error: 'Shipment item not found' });
+        return res.status(404).json({
+          _error: 'Shipment item not found',
+          routeVersion: P1_OEM_PACKING_SLIP_ROUTE_VERSION,
+        });
       }
 
       let packingSlipBase64: string = item.packing_slip_base64;
@@ -2120,6 +2133,7 @@ router.get(
           return res.status(404).json({
             _error: 'Packing slip not available and could not be regenerated',
             details: regenErr.message,
+            routeVersion: P1_OEM_PACKING_SLIP_ROUTE_VERSION,
           });
         }
       }
@@ -2142,6 +2156,7 @@ router.get(
       res.status(500).json({
         _error: 'Failed to download packing slip',
         details: error.message,
+        routeVersion: P1_OEM_PACKING_SLIP_ROUTE_VERSION,
       });
     }
   }

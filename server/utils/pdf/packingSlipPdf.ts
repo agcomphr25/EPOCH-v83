@@ -359,6 +359,7 @@ export async function generatePoPackingSlipPdf(data: PackingSlipData): Promise<B
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const invoiceNumber = data.invoiceNumber || data.packingSlipNumber;
 
   const margins = await getMargins();
   const margin = (margins.STANDARD as number) ?? 40;

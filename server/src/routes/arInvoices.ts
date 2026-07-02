@@ -990,7 +990,7 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       let tax = parseFloat(taxAmount ?? existing.taxAmount);
       let retainage = parseFloat(retainageAmount ?? existing.retainageAmount ?? '0');
 
-      if (!isP1Invoice && lines && Array.isArray(lines)) {
+      if (lines && Array.isArray(lines)) {
         await tx.delete(arInvoiceLines).where(eq(arInvoiceLines.invoiceId, id));
 
         const calculatedLines = lines.map((line: any) => {

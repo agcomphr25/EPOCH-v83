@@ -421,7 +421,6 @@ export default function InvoiceFormPage() {
         delete payload.customerId;
         delete payload.poId;
         delete payload.poOverride;
-        delete payload.lines;
       }
 
       if (isEditing) {
@@ -699,7 +698,14 @@ export default function InvoiceFormPage() {
 
         <Card className="mb-6">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Line Items</CardTitle>
+            <div>
+              <CardTitle>Line Items</CardTitle>
+              {isP1Invoice && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  P1 shipment source lines are locked to this PO, but quantities and prices can be split or adjusted before posting.
+                </p>
+              )}
+            </div>
             <Button type="button" variant="outline" size="sm" onClick={addLine} disabled={isP1Invoice}>
               <Plus className="h-4 w-4 mr-1" />
               Add Line
@@ -724,8 +730,6 @@ export default function InvoiceFormPage() {
                         value={line.description}
                         onChange={(e) => updateLine(index, 'description', e.target.value)}
                         placeholder="Item description"
-                        readOnly={isP1Invoice}
-                        className={isP1Invoice ? 'bg-muted' : undefined}
                       />
                     </TableCell>
                     <TableCell>
@@ -735,8 +739,6 @@ export default function InvoiceFormPage() {
                         step="1"
                         value={line.qty}
                         onChange={(e) => updateLine(index, 'qty', e.target.value)}
-                        readOnly={isP1Invoice}
-                        className={isP1Invoice ? 'bg-muted' : undefined}
                       />
                     </TableCell>
                     <TableCell>
@@ -746,8 +748,6 @@ export default function InvoiceFormPage() {
                         step="0.01"
                         value={line.unitPrice}
                         onChange={(e) => updateLine(index, 'unitPrice', e.target.value)}
-                        readOnly={isP1Invoice}
-                        className={isP1Invoice ? 'bg-muted' : undefined}
                       />
                     </TableCell>
                     <TableCell className="text-right font-medium">
@@ -760,7 +760,7 @@ export default function InvoiceFormPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => splitLine(index)}
-                          disabled={isP1Invoice || (parseFloat(line.qty) || 0) <= 1}
+                          disabled={(parseFloat(line.qty) || 0) <= 1}
                           title="Split line quantity"
                         >
                           <Copy className="h-4 w-4" />

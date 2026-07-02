@@ -461,6 +461,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         customerId: order.customerid,
         customerName: order.customername,
         features: order.features,
+        isFlattop: order.isFlattop ?? order.isflattop ?? false,
         priorityScore: priorityResult.score, // COMPUTED, not from DB
         prioritySource: priorityResult.source,
         priorityReason: priorityResult.reason,

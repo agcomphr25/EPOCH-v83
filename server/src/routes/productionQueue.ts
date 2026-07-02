@@ -318,6 +318,78 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
   }
 });
 
+// Reconcile the high-level P1 Production Queue department total with queue buckets
+router.get('/reconciliation', async (req: Request, res: Response) => {
+  try {
+    const summaryQuery = `
+      SELECT
+        COUNT(*) FILTER (
+          WHERE current_department = 'P1 Production Queue'
+            AND status <> 'SCRAPPED'
+            AND status <> 'CANCELLED'
+            AND scrap_date IS NULL
+        )::integer AS total_in_department,
+        COUNT(*) FILTER (
+          WHERE current_department = 'P1 Production Queue'
+            AND status <> 'SCRAPPED'
+            AND status <> 'CANCELLED'
+            AND scrap_date IS NULL
+            AND status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
+            AND (is_cancelled IS NULL OR is_cancelled = false)
+            AND model_id IS NOT NULL
+            AND model_id != ''
+            AND model_id != 'None'
+            AND LOWER(model_id) != 'no stock'
+            AND LOWER(model_id) != 'no_stock'
+            AND (
+              (features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null')
+              OR LOWER(model_id) LIKE '%m1a%'
+              OR is_flattop = true
+            )
+        )::integer AS ready_orders,
+        COUNT(*) FILTER (
+          WHERE current_department = 'P1 Production Queue'
+            AND status <> 'SCRAPPED'
+            AND status <> 'CANCELLED'
+            AND scrap_date IS NULL
+            AND status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
+            AND (is_cancelled IS NULL OR is_cancelled = false)
+            AND features->>'po_item_id' IS NULL
+            AND (is_flattop IS NULL OR is_flattop = false)
+            AND (
+              (model_id IS NULL OR model_id = '' OR model_id = 'None') OR
+              (
+                (features->>'action_length' IS NULL OR features->>'action_length' = '' OR features->>'action_length' = 'null')
+                AND (model_id IS NULL OR LOWER(model_id) NOT LIKE '%m1a%')
+              )
+            )
+        )::integer AS needs_attention
+      FROM all_orders
+    `;
+
+    const result = await pool.query(summaryQuery);
+    const row = Array.isArray(result) ? result[0] : result.rows?.[0];
+    const total = Number(row?.total_in_department || 0);
+    const ready = Number(row?.ready_orders || 0);
+    const needsAttention = Number(row?.needs_attention || 0);
+
+    res.json({
+      department: 'P1 Production Queue',
+      total,
+      ready,
+      needsAttention,
+      otherNotReady: Math.max(total - ready - needsAttention, 0),
+    });
+  } catch (error) {
+    console.error('❌ RECONCILIATION: Error fetching production queue reconciliation:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch production queue reconciliation',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // Get Production Queue with priority scores (for regular orders)
 router.get('/prioritized', async (req: Request, res: Response) => {
   try {
@@ -1219,7 +1291,8 @@ router.get('/attention', async (req: Request, res: Response) => {
         END
       )
       WHERE o.current_department = 'P1 Production Queue'
-        AND o.status IN ('FINALIZED', 'Active')
+        AND o.status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
+        AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
         AND o.features->>'po_item_id' IS NULL
         AND (o.is_flattop IS NULL OR o.is_flattop = false)
         AND (

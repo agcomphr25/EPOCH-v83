@@ -19,6 +19,8 @@ import {
   Image as ImageIcon,
   Star,
   X,
+  Archive,
+  RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
@@ -1747,6 +1749,16 @@ function inventoryItemMatchesUtilizedFilter(item: InventoryItem, utilizedFilter:
   }
 }
 
+function inventoryItemIsActive(item: InventoryItem) {
+  return item.isActive !== false;
+}
+
+function inventoryItemMatchesStatusFilter(item: InventoryItem, statusFilter: 'active' | 'inactive' | 'all') {
+  if (statusFilter === 'inactive') return !inventoryItemIsActive(item);
+  if (statusFilter === 'all') return true;
+  return inventoryItemIsActive(item);
+}
+
 export default function InventoryItemsCard({ initialSearchTerm }: InventoryItemsCardProps = {}) {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -1757,6 +1769,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const [replaceAllItems, setReplaceAllItems] = useState(false);
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm || '');
   const [utilizedFilter, setUtilizedFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
   const [activeTab, setActiveTab] = useState<'purchased' | 'manufactured'>('purchased');
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [isAddToGroupDialogOpen, setIsAddToGroupDialogOpen] = useState(false);
@@ -1914,8 +1927,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   ]);
 
   const { data: allItems = [], isLoading, isError, error } = useQuery<InventoryItem[]>({
-    queryKey: ['/api/enhanced/inventory/items'],
-    queryFn: () => apiRequest('/api/enhanced/inventory/items'),
+    queryKey: ['/api/enhanced/inventory/items', { includeInactive: statusFilter !== 'active' }],
+    queryFn: () => apiRequest(`/api/enhanced/inventory/items${statusFilter !== 'active' ? '?includeInactive=true' : ''}`),
   });
 
   React.useEffect(() => {
@@ -2075,23 +2088,29 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     () => Array.isArray(allItems)
       ? allItems.filter(
         (item) =>
-          item.itemType === 'PURCHASED' ||
-          (!item.itemType && item.type !== 'Manufactured' && !item.isPacket)
+          inventoryItemMatchesStatusFilter(item, statusFilter) &&
+          (
+            item.itemType === 'PURCHASED' ||
+            (!item.itemType && item.type !== 'Manufactured' && !item.isPacket)
+          )
       )
       : [],
-    [allItems]
+    [allItems, statusFilter]
   );
 
   const manufacturedItems = React.useMemo(
     () => Array.isArray(allItems)
       ? allItems.filter(
         (item) =>
-          item.itemType === 'MANUFACTURED' ||
-          item.type === 'Manufactured' ||
-          item.isPacket
+          inventoryItemMatchesStatusFilter(item, statusFilter) &&
+          (
+            item.itemType === 'MANUFACTURED' ||
+            item.type === 'Manufactured' ||
+            item.isPacket
+          )
       )
       : [],
-    [allItems]
+    [allItems, statusFilter]
   );
 
   // Group manufactured items by category for accordion view
@@ -2275,6 +2294,23 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       });
     },
     onError: (error: any) => toast.error(error instanceof Error ? error.message : 'Failed to update inventory item'),
+  });
+
+  const updateItemStatusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
+      apiRequest(`/api/inventory/items/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ isActive }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: (_data, variables) => {
+      toast.success(variables.isActive ? 'Inventory item restored' : 'Inventory item marked inactive');
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/items'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update inventory item status');
+    },
   });
 
   const deleteMutation = useMutation({
@@ -2787,6 +2823,18 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     }
   };
 
+  const handleToggleItemStatus = (item: InventoryItem) => {
+    const nextIsActive = !inventoryItemIsActive(item);
+    if (
+      !nextIsActive &&
+      !window.confirm(`Mark ${item.agPartNumber || item.name} as inactive? It will be hidden from active inventory lists but kept for history.`)
+    ) {
+      return;
+    }
+
+    updateItemStatusMutation.mutate({ id: item.id, isActive: nextIsActive });
+  };
+
   // Checkbox selection handlers
   const toggleSelectItem = (itemId: number) => {
     const newSelected = new Set(selectedItems);
@@ -3166,6 +3214,19 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               </SelectContent>
             </Select>
           </div>
+
+          <div className="w-44">
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'active' | 'inactive' | 'all')}>
+              <SelectTrigger data-testid="select-status-filter">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {!isLoading && (
@@ -3196,7 +3257,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       ) : (
         <div style={{ overflow: 'hidden', width: '100%' }}>
           <div style={{ overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ minWidth: '1480px', borderCollapse: 'collapse' }} className="w-full border border-gray-200 dark:border-gray-700">
+            <table style={{ minWidth: '1580px', borderCollapse: 'collapse' }} className="w-full border border-gray-200 dark:border-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800">
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center w-12">
@@ -3451,6 +3512,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   Traceability
                 </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
+                  Status
+                </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Actions
                 </th>
               </tr>
@@ -3459,7 +3523,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               {items.map((item) => (
                   <tr
                     key={item.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-150 hover:shadow-sm cursor-pointer"
+                    className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-150 hover:shadow-sm cursor-pointer ${inventoryItemIsActive(item) ? '' : 'bg-gray-50 text-gray-500 dark:bg-gray-900/40 dark:text-gray-400'}`}
                     data-testid={`row-item-${item.id}`}
                     onClick={() => handleEdit(item)}
                   >
@@ -3557,6 +3621,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                         );
                       })()}
                     </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      <Badge variant={inventoryItemIsActive(item) ? 'secondary' : 'outline'}>
+                        {inventoryItemIsActive(item) ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2" onClick={(e) => e.stopPropagation()}>
                       <div className="flex space-x-2">
                         <Button
@@ -3585,6 +3654,16 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                           data-testid={`button-edit-${item.id}`}
                         >
                           <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleToggleItemStatus(item)}
+                          disabled={updateItemStatusMutation.isPending}
+                          title={inventoryItemIsActive(item) ? 'Mark inactive' : 'Restore active'}
+                          data-testid={`${inventoryItemIsActive(item) ? 'button-deactivate' : 'button-activate'}-${item.id}`}
+                        >
+                          {inventoryItemIsActive(item) ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
                         </Button>
                         <Button
                           variant="outline"
@@ -3636,6 +3715,18 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   </SelectContent>
                 </Select>
               </div>
+              <div className="w-44">
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'active' | 'inactive' | 'all')}>
+                  <SelectTrigger data-testid="select-status-filter-manufactured">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
@@ -3675,20 +3766,21 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                               <th className="h-9 px-4 text-left font-medium">Utilized In</th>
                               <th className="h-9 px-4 text-left font-medium">Traceability</th>
                               <th className="h-9 px-4 text-left font-medium">Current Qty</th>
+                              <th className="h-9 px-4 text-left font-medium">Status</th>
                               <th className="h-9 px-4 text-left font-medium">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
                             {catItems.length === 0 ? (
                               <tr>
-                                <td colSpan={8} className="py-6 text-center text-gray-500 text-xs">
+                                <td colSpan={9} className="py-6 text-center text-gray-500 text-xs">
                                   No {CATEGORY_DISPLAY_NAMES[category]} items
-                                  {(searchTerm || utilizedFilter !== 'all') && ' matching filters'}
+                                  {(searchTerm || utilizedFilter !== 'all' || statusFilter !== 'active') && ' matching filters'}
                                 </td>
                               </tr>
                             ) : (
                               catItems.map((item) => (
-                                <tr key={item.id} className="border-b hover:bg-muted/50 transition-all duration-150 hover:shadow-sm cursor-pointer" onClick={() => handleEdit(item)}>
+                                <tr key={item.id} className={`border-b hover:bg-muted/50 transition-all duration-150 hover:shadow-sm cursor-pointer ${inventoryItemIsActive(item) ? '' : 'bg-gray-50 text-gray-500 dark:bg-gray-900/40 dark:text-gray-400'}`} onClick={() => handleEdit(item)}>
                                   <td className="px-4 py-2">
                                     <PartImageThumbnail item={item} />
                                   </td>
@@ -3731,6 +3823,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                                   <td className="px-4 py-2 font-medium">
                                     {balancesByPart[item.agPartNumber] != null ? balancesByPart[item.agPartNumber] : 0}
                                   </td>
+                                  <td className="px-4 py-2">
+                                    <Badge variant={inventoryItemIsActive(item) ? 'secondary' : 'outline'}>
+                                      {inventoryItemIsActive(item) ? 'Active' : 'Inactive'}
+                                    </Badge>
+                                  </td>
                                   <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex space-x-2">
                                       <Button variant="outline" size="sm" onClick={() => openOrderUrlDialog(item)} title={(item as any).orderUrl ? 'Edit order URL' : 'Add order URL'} data-testid={`button-order-url-mfg-${item.id}`}>
@@ -3741,6 +3838,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                                       </Button>
                                       <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit" data-testid={`button-edit-mfg-${item.id}`}>
                                         <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button variant="outline" size="sm" onClick={() => handleToggleItemStatus(item)} disabled={updateItemStatusMutation.isPending} title={inventoryItemIsActive(item) ? 'Mark inactive' : 'Restore active'} data-testid={`${inventoryItemIsActive(item) ? 'button-deactivate-mfg' : 'button-activate-mfg'}-${item.id}`}>
+                                        {inventoryItemIsActive(item) ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
                                       </Button>
                                       <Button variant="outline" size="sm" onClick={() => handleDelete(item.id)} disabled={deleteMutation.isPending} title="Delete" data-testid={`button-delete-mfg-${item.id}`}>
                                         <Trash2 className="h-4 w-4" />
@@ -3779,17 +3879,23 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                             <th className="h-9 px-4 text-left font-medium">Image</th>
                             <th className="h-9 px-4 text-left font-medium">AG Part #</th>
                             <th className="h-9 px-4 text-left font-medium">Name</th>
+                            <th className="h-9 px-4 text-left font-medium">Status</th>
                             <th className="h-9 px-4 text-left font-medium">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredUncategorized.map((item) => (
-                            <tr key={item.id} className="border-b hover:bg-muted/50 transition-all duration-150 hover:shadow-sm cursor-pointer" onClick={() => handleEdit(item)}>
+                            <tr key={item.id} className={`border-b hover:bg-muted/50 transition-all duration-150 hover:shadow-sm cursor-pointer ${inventoryItemIsActive(item) ? '' : 'bg-gray-50 text-gray-500 dark:bg-gray-900/40 dark:text-gray-400'}`} onClick={() => handleEdit(item)}>
                               <td className="px-4 py-2">
                                 <PartImageThumbnail item={item} />
                               </td>
                               <td className="px-4 py-2 font-mono text-xs">{item.agPartNumber}</td>
                               <td className="px-4 py-2 font-medium">{item.name}</td>
+                              <td className="px-4 py-2">
+                                <Badge variant={inventoryItemIsActive(item) ? 'secondary' : 'outline'}>
+                                  {inventoryItemIsActive(item) ? 'Active' : 'Inactive'}
+                                </Badge>
+                              </td>
                               <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex space-x-2">
                                   <Button variant="outline" size="sm" onClick={() => openOrderUrlDialog(item)} title={(item as any).orderUrl ? 'Edit order URL' : 'Add order URL'} data-testid={`button-order-url-uncat-${item.id}`}>
@@ -3800,6 +3906,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                                   </Button>
                                   <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit">
                                     <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => handleToggleItemStatus(item)} disabled={updateItemStatusMutation.isPending} title={inventoryItemIsActive(item) ? 'Mark inactive' : 'Restore active'} data-testid={`${inventoryItemIsActive(item) ? 'button-deactivate-uncat' : 'button-activate-uncat'}-${item.id}`}>
+                                    {inventoryItemIsActive(item) ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
                                   </Button>
                                   <Button variant="outline" size="sm" onClick={() => handleDelete(item.id)} disabled={deleteMutation.isPending} title="Delete">
                                     <Trash2 className="h-4 w-4" />

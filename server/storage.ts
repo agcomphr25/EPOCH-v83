@@ -1280,7 +1280,7 @@ export interface IStorage {
   deleteFormSubmission(id: number): Promise<void>;
 
   // Inventory Items CRUD
-  getAllInventoryItems(): Promise<InventoryItem[]>;
+  getAllInventoryItems(options?: { includeInactive?: boolean }): Promise<InventoryItem[]>;
   getInventoryItem(id: number): Promise<InventoryItem | undefined>;
   getInventoryItemByAgPartNumber(
     agPartNumber: string
@@ -6625,12 +6625,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Inventory Items CRUD
-  async getAllInventoryItems(): Promise<InventoryItem[]> {
+  async getAllInventoryItems(options: { includeInactive?: boolean } = {}): Promise<InventoryItem[]> {
     // Include items where isActive is true OR isActive is null (treat null as active)
     try {
-      return await db
-        .select()
-        .from(inventoryItems)
+      const query = db.select().from(inventoryItems);
+      if (options.includeInactive) {
+        return await query.orderBy(inventoryItems.name);
+      }
+      return await query
         .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)))
         .orderBy(inventoryItems.name);
     } catch (error: any) {
@@ -6641,12 +6643,18 @@ export class DatabaseStorage implements IStorage {
       }
 
       console.warn('[Inventory] Falling back to runtime inventory_items columns:', message);
-      const result = await db.execute(sql`
-        SELECT *
-        FROM inventory_items
-        WHERE is_active = TRUE OR is_active IS NULL
-        ORDER BY name
-      `);
+      const result = options.includeInactive
+        ? await db.execute(sql`
+            SELECT *
+            FROM inventory_items
+            ORDER BY name
+          `)
+        : await db.execute(sql`
+            SELECT *
+            FROM inventory_items
+            WHERE is_active = TRUE OR is_active IS NULL
+            ORDER BY name
+          `);
 
       const rows = Array.isArray(result) ? result : ((result as any).rows || []);
       return rows.map((row: Record<string, unknown>) => {

@@ -84,6 +84,7 @@ interface ProductionQueueOrder {
   customerId: string;
   customerName?: string;
   features?: any;
+  isFlattop?: boolean;
   priorityScore: number;
   urgency?: 'critical' | 'high' | 'medium' | 'low';
   isManualUrgency?: boolean;
@@ -1894,6 +1895,7 @@ export default function ProductionQueueManager() {
                               actionLength = 'Long';
                           }
                         }
+                        const hasActionLength = actionLength && actionLength !== 'none';
 
                         // Check if bottom metal contains "adl"
                         const bottomMetal = order.features?.bottom_metal;
@@ -1980,13 +1982,22 @@ export default function ProductionQueueManager() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              {actionLength && actionLength !== 'none' && (
+                              {hasActionLength ? (
                                 <Badge
                                   variant="secondary"
                                   className="font-medium"
                                 >
                                   {actionLength}
                                 </Badge>
+                              ) : order.isFlattop ? (
+                                <Badge
+                                  className="bg-yellow-100 text-yellow-900 border-yellow-300 font-semibold"
+                                  title="Flattop stock: action length is not machined"
+                                >
+                                  FLATTOP
+                                </Badge>
+                              ) : (
+                                <span className="text-gray-400">-</span>
                               )}
                             </TableCell>
                             <TableCell>

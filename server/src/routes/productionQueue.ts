@@ -16,6 +16,11 @@ function logDuplicatePrevention(event: string, details: Record<string, any>) {
 
 const router = Router();
 
+function isActionLengthOptionalStockModel(stockModel: string | null | undefined): boolean {
+  const normalized = (stockModel || '').toLowerCase();
+  return normalized.includes('m1a') || normalized.includes('tikka');
+}
+
 // Helper function to automatically handle orders that need attention or movement
 async function autoMoveInvalidStockModelOrders(storage: any) {
   try {
@@ -46,14 +51,14 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
       }
       // Orders with missing stock model or missing action_length need attention
       // Flattop orders are excluded - they never need attention
-      // M1A models are excluded from action_length/action_inlet/barrel_inlet/bottom_metal checks
+      // M1A and Tikka models are excluded from action_length checks
       else if (
         !order.isFlattop &&
         (!stockModel ||
         stockModel === '' ||
         (!features.action_length &&
           features.action_length !== 0 &&
-          !(stockModel && stockModel.toLowerCase().includes('m1a'))))
+          !isActionLengthOptionalStockModel(stockModel)))
       ) {
         ordersNeedingAttention.push(order);
       }
@@ -344,6 +349,7 @@ router.get('/reconciliation', async (req: Request, res: Response) => {
             AND (
               (features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null')
               OR LOWER(model_id) LIKE '%m1a%'
+              OR LOWER(model_id) LIKE '%tikka%'
               OR is_flattop = true
             )
         )::integer AS ready_orders,
@@ -360,7 +366,13 @@ router.get('/reconciliation', async (req: Request, res: Response) => {
               (model_id IS NULL OR model_id = '' OR model_id = 'None') OR
               (
                 (features->>'action_length' IS NULL OR features->>'action_length' = '' OR features->>'action_length' = 'null')
-                AND (model_id IS NULL OR LOWER(model_id) NOT LIKE '%m1a%')
+                AND (
+                  model_id IS NULL
+                  OR (
+                    LOWER(model_id) NOT LIKE '%m1a%'
+                    AND LOWER(model_id) NOT LIKE '%tikka%'
+                  )
+                )
               )
             )
         )::integer AS needs_attention
@@ -416,6 +428,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
             AND (
               features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null'
               OR LOWER(model_id) LIKE '%m1a%'
+              OR LOWER(model_id) LIKE '%tikka%'
               OR is_flattop = true
             )
           ) as passes_all_filters
@@ -472,6 +485,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND (
           (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
           OR LOWER(o.model_id) LIKE '%m1a%'
+          OR LOWER(o.model_id) LIKE '%tikka%'
           OR o.is_flattop = true
         )
       ORDER BY 
@@ -1299,7 +1313,13 @@ router.get('/attention', async (req: Request, res: Response) => {
           (o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None') OR
           (
             (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null')
-            AND (LOWER(o.model_id) NOT LIKE '%m1a%')
+            AND (
+              o.model_id IS NULL
+              OR (
+                LOWER(o.model_id) NOT LIKE '%m1a%'
+                AND LOWER(o.model_id) NOT LIKE '%tikka%'
+              )
+            )
           )
         )
       ORDER BY 

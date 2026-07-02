@@ -1957,6 +1957,7 @@ export default function ProductionQueueManager() {
                           }
                         }
                         const hasActionLength = actionLength && actionLength !== 'none';
+                        const isTikkaModel = (order.modelId || '').toLowerCase().includes('tikka');
 
                         // Check if bottom metal contains "adl"
                         const bottomMetal = order.features?.bottom_metal;
@@ -2056,6 +2057,14 @@ export default function ProductionQueueManager() {
                                   title="Flattop stock: action length is not machined"
                                 >
                                   FLATTOP
+                                </Badge>
+                              ) : isTikkaModel ? (
+                                <Badge
+                                  variant="secondary"
+                                  className="font-medium"
+                                  title="Tikka stock: action length is not differentiated"
+                                >
+                                  None
                                 </Badge>
                               ) : (
                                 <span className="text-gray-400">-</span>

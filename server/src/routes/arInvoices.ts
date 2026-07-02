@@ -990,27 +990,42 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       let tax = parseFloat(taxAmount ?? existing.taxAmount);
       let retainage = parseFloat(retainageAmount ?? existing.retainageAmount ?? '0');
 
-      if (!isP1Invoice && lines && Array.isArray(lines)) {
+      if (lines && Array.isArray(lines)) {
+        const existingLines = await tx
+          .select()
+          .from(arInvoiceLines)
+          .where(eq(arInvoiceLines.invoiceId, id));
+        const existingLinesById = new Map(
+          existingLines.map((line) => [line.id, line])
+        );
+
         await tx.delete(arInvoiceLines).where(eq(arInvoiceLines.invoiceId, id));
 
         const calculatedLines = lines.map((line: any) => {
+          const existingLine = line.id ? existingLinesById.get(line.id) : null;
           const qty = parseFloat(line.qty) || 0;
           const unitPrice = parseFloat(line.unitPrice) || 0;
-          const productionLine = line.productionLine || 'MIGRATION_REVIEW';
+          const productionLine =
+            line.productionLine ||
+            existingLine?.productionLine ||
+            'MIGRATION_REVIEW';
           return {
             invoiceId: id,
-            inventoryItemId: line.inventoryItemId || null,
-            poItemId: line.poItemId || null,
-            partNumber: line.partNumber || null,
+            inventoryItemId: line.inventoryItemId ?? existingLine?.inventoryItemId ?? null,
+            poItemId: line.poItemId ?? existingLine?.poItemId ?? null,
+            partNumber: line.partNumber ?? existingLine?.partNumber ?? null,
             productionLine,
-            projectId: line.projectId || null,
-            projectNameSnapshot: line.projectNameSnapshot || null,
-            salespersonUserId: line.salespersonUserId || null,
-            salespersonNameSnapshot: line.salespersonNameSnapshot || null,
-            csrUserId: line.csrUserId || null,
-            csrNameSnapshot: line.csrNameSnapshot || null,
-            customerType: line.customerType || null,
+            projectId: line.projectId ?? existingLine?.projectId ?? null,
+            projectNameSnapshot: line.projectNameSnapshot ?? existingLine?.projectNameSnapshot ?? null,
+            salespersonUserId: line.salespersonUserId ?? existingLine?.salespersonUserId ?? null,
+            salespersonNameSnapshot: line.salespersonNameSnapshot ?? existingLine?.salespersonNameSnapshot ?? null,
+            csrUserId: line.csrUserId ?? existingLine?.csrUserId ?? null,
+            csrNameSnapshot: line.csrNameSnapshot ?? existingLine?.csrNameSnapshot ?? null,
+            customerType: line.customerType ?? existingLine?.customerType ?? null,
             dimensionTags: {
+              ...(existingLine?.dimensionTags && typeof existingLine.dimensionTags === 'object'
+                ? existingLine.dimensionTags
+                : {}),
               ...(line.dimensionTags || {}),
               ...buildRevenueDimensionTags(productionLine),
             },

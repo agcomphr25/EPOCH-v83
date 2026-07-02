@@ -12,4 +12,11 @@ describe('AR invoice P1 source detection', () => {
     expect(source).toContain("UPPER(COALESCE(ail.production_line, '')) = 'P1'");
     expect(source).toContain("UPPER(COALESCE(${arInvoiceLines.productionLine}, '')) = 'P1'");
   });
+
+  it('preserves existing line source tags when editable P1 invoice lines are saved', () => {
+    expect(source).toContain('const existingLinesById = new Map');
+    expect(source).toContain('existingLine?.dimensionTags');
+    expect(source).toContain('...(line.dimensionTags || {})');
+    expect(source).not.toContain('if (!isP1Invoice && lines && Array.isArray(lines))');
+  });
 });

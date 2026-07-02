@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import ProductionTracker from '@/components/ProductionTracker';
 import PipelineVisualization from '@/components/PipelineVisualization';
 import ModelAnalyticsDashboard from '@/components/ModelAnalyticsDashboard';
+import { Button } from '@/components/ui/button';
 import {
   Accordion,
   AccordionItem,
@@ -16,6 +18,12 @@ export default function ProductionTracking() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      <div className="flex justify-end">
+        <Button asChild variant="outline">
+          <Link href="/production-tracking/customer-wip">Customer WIP</Link>
+        </Button>
+      </div>
+
       {/* Pipeline Production Overview */}
       <PipelineVisualization />
 

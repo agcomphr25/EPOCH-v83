@@ -256,11 +256,11 @@ async function resolveInventoryDocumentPath(primaryDir: string, legacyDir: strin
 }
 
 // Enhanced Inventory API - Get all items (mounted at /api/enhanced/inventory/items)
-// Supports optional query param: ?manufacturedCategory=MACHINED_PART
+// Supports optional query params: ?manufacturedCategory=MACHINED_PART&includeInactive=true
 router.get('/inventory/items', async (req: Request, res: Response) => {
   try {
-    let items = await storage.getAllInventoryItems();
-    const { manufacturedCategory } = req.query;
+    const { manufacturedCategory, includeInactive } = req.query;
+    let items = await storage.getAllInventoryItems({ includeInactive: includeInactive === 'true' });
     if (typeof manufacturedCategory === 'string' && manufacturedCategory) {
       items = items.filter(item => item.manufacturedCategory === manufacturedCategory);
     }
@@ -272,11 +272,11 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
 });
 
 // Also expose at /items for /api/inventory/items path
-// Supports optional query param: ?manufacturedCategory=MACHINED_PART
+// Supports optional query params: ?manufacturedCategory=MACHINED_PART&includeInactive=true
 router.get('/items', async (req: Request, res: Response) => {
   try {
-    let items = await storage.getAllInventoryItems();
-    const { manufacturedCategory } = req.query;
+    const { manufacturedCategory, includeInactive } = req.query;
+    let items = await storage.getAllInventoryItems({ includeInactive: includeInactive === 'true' });
     if (typeof manufacturedCategory === 'string' && manufacturedCategory) {
       items = items.filter(item => item.manufacturedCategory === manufacturedCategory);
     }

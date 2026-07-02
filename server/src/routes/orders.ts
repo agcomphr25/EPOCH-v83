@@ -604,6 +604,88 @@ router.get('/pipeline-details', async (req: Request, res: Response) => {
   }
 });
 
+const CUSTOMER_WIP_ACTIVE_WHERE = `
+  ao.status <> 'SCRAPPED'
+  AND ao.status <> 'CANCELLED'
+  AND ao.scrap_date IS NULL
+  AND ao.current_department <> 'Fulfilled'
+  AND ao.current_department <> 'Shipped'
+`;
+
+// Customer WIP customers, sourced from the same active P1 production set as production tracking.
+router.get('/customer-wip/customers', async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        ao.customer_id AS "customerId",
+        MIN(COALESCE(po.customer_name, c.name, ao.customer_id, 'Unknown Customer')) AS "customerName",
+        COUNT(*)::integer AS "wipCount"
+      FROM all_orders ao
+      LEFT JOIN purchase_orders po ON po.id = ao.source_po_id
+      LEFT JOIN customers c ON c.id::text = ao.customer_id
+      WHERE ${CUSTOMER_WIP_ACTIVE_WHERE}
+        AND ao.customer_id IS NOT NULL
+        AND ao.customer_id <> ''
+      GROUP BY ao.customer_id
+      ORDER BY "customerName" ASC
+    `);
+
+    res.json((result.rows || []).map((row) => ({
+      customerId: row.customerId,
+      customerName: row.customerName,
+      wipCount: Number(row.wipCount) || 0,
+    })));
+  } catch (error) {
+    console.error('Customer WIP customer fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch Customer WIP customers' });
+  }
+});
+
+// Customer WIP rows for one customer. This intentionally stays read-only.
+router.get('/customer-wip', async (req: Request, res: Response) => {
+  const customerId = typeof req.query.customerId === 'string' ? req.query.customerId.trim() : '';
+  if (!customerId) {
+    return res.status(400).json({ error: 'customerId is required' });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          ao.order_id AS "orderId",
+          ao.fb_order_number AS "fbOrderNumber",
+          ao.customer_id AS "customerId",
+          COALESCE(po.customer_name, c.name, ao.customer_id, 'Unknown Customer') AS "customerName",
+          COALESCE(NULLIF(po.po_number, ''), NULLIF(ao.customer_po, '')) AS "poNumber",
+          COALESCE(NULLIF(ao.fb_order_number, ''), ao.order_id) AS "stockOrderIdentifier",
+          COALESCE(NULLIF(poi.stock_model_name, ''), NULLIF(poi.item_name, ''), NULLIF(poi.item_id, ''), NULLIF(ao.model_id, ''), 'Unspecified') AS "stockModel",
+          CASE
+            WHEN ao.current_department = 'P1 Production Queue' THEN 'Production Queue'
+            ELSE ao.current_department
+          END AS "currentDepartment",
+          ao.due_date AS "dueDate"
+        FROM all_orders ao
+        LEFT JOIN purchase_orders po ON po.id = ao.source_po_id
+        LEFT JOIN purchase_order_items poi ON poi.id = ao.source_po_item_id
+        LEFT JOIN customers c ON c.id::text = ao.customer_id
+        WHERE ${CUSTOMER_WIP_ACTIVE_WHERE}
+          AND ao.customer_id = $1
+        ORDER BY
+          COALESCE(NULLIF(po.po_number, ''), NULLIF(ao.customer_po, ''), NULLIF(ao.fb_order_number, ''), ao.order_id) ASC,
+          "currentDepartment" ASC,
+          ao.due_date ASC,
+          ao.order_id ASC
+      `,
+      [customerId]
+    );
+
+    res.json({ customerId, items: result.rows || [] });
+  } catch (error) {
+    console.error('Customer WIP fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch Customer WIP' });
+  }
+});
+
 // YTD shipped count (must be before :orderId route)
 router.get('/ytd-shipped-count', async (req: Request, res: Response) => {
   try {

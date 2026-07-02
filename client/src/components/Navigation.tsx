@@ -1634,6 +1634,12 @@ export default function Navigation() {
       description: 'Track production orders from POs',
     },
     {
+      path: '/production-tracking/customer-wip',
+      label: 'Customer WIP',
+      icon: Users,
+      description: 'View unfinished P1 work by customer, PO, and department',
+    },
+    {
       path: '/production-forecast',
       label: 'Production Forecast',
       icon: BarChart3,

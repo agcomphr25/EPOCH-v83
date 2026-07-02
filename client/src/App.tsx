@@ -158,6 +158,7 @@ const P2ReadyToShipDashboard = React.lazy(() => import('./pages/P2ReadyToShipDas
 const POProductsPage = React.lazy(() => import('./pages/POProductsPage'));
 const ProductLabelsPage = React.lazy(() => import('./pages/ProductLabelsPage'));
 const ProductionTracking = React.lazy(() => import('./pages/ProductionTracking'));
+const CustomerWIPPage = React.lazy(() => import('./pages/CustomerWIPPage'));
 const BarcodeScannerPage = React.lazy(() => import('./pages/BarcodeScannerPage'));
 const AllOrdersPage = React.lazy(() => import('./pages/AllOrdersPage'));
 const OrderReports = React.lazy(() => import('./pages/OrderReports'));
@@ -769,6 +770,10 @@ function App() {
                   <Route path="/product-labels" component={ProductLabelsPage} />
 
                   {/* Production and BOM Routes */}
+                  <Route
+                    path="/production-tracking/customer-wip"
+                    component={CustomerWIPPage}
+                  />
                   <Route
                     path="/production-tracking"
                     component={ProductionTracking}

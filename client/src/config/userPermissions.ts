@@ -177,6 +177,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/po-products',
   '/product-labels',
   '/production-tracking',
+  '/production-tracking/customer-wip',
   '/wad-wizard',
   '/wad-status',
   '/production-forecast',

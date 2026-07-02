@@ -173,6 +173,9 @@ export async function postArInvoiceAccounting({
   }
 
   for (const line of invoiceLines) {
+    const lineCredit = money(line.lineTotal);
+    if (lineCredit <= 0) continue;
+
     const lineProductionLine = line.productionLine || 'MIGRATION_REVIEW';
     const lineRevenueAccount = resolveRevenueAccountForProductionLine({
       productionLine: lineProductionLine,
@@ -185,7 +188,7 @@ export async function postArInvoiceAccounting({
       accountNumber: lineRevenueAccount.accountNumber || '41000',
       accountName: lineRevenueAccount.accountName,
       debitAmount: 0,
-      creditAmount: money(line.lineTotal),
+      creditAmount: lineCredit,
       productionLine: lineProductionLine,
       projectId: nullable(line.projectId),
       projectNameSnapshot: nullable(line.projectNameSnapshot),

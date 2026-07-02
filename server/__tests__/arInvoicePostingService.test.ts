@@ -27,4 +27,10 @@ describe('arInvoicePostingService', () => {
     expect(source).toContain('revenueAccountNumber: lineRevenueAccount.accountNumber');
     expect(source).toContain('revenueAccountName: lineRevenueAccount.accountName');
   });
+
+  it('skips zero-value invoice lines so no-op display lines do not block posting', () => {
+    expect(source).toContain('const lineCredit = money(line.lineTotal)');
+    expect(source).toContain('if (lineCredit <= 0) continue');
+    expect(source).toContain('creditAmount: lineCredit');
+  });
 });

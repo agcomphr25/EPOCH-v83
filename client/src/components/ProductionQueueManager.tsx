@@ -94,6 +94,14 @@ interface ProductionQueueOrder {
   urgencyLevel: 'critical' | 'high' | 'medium' | 'normal';
 }
 
+interface ProductionQueueReconciliation {
+  department: string;
+  total: number;
+  ready: number;
+  needsAttention: number;
+  otherNotReady: number;
+}
+
 type QueueView = 'orders' | 'customer' | 'stock-model' | 'due-date';
 
 interface QueueSummaryRow {
@@ -303,6 +311,14 @@ export default function ProductionQueueManager() {
     queryFn: () => apiRequest('/api/production-queue/attention'),
   });
 
+  const {
+    data: queueReconciliation,
+    refetch: refetchReconciliation,
+  } = useQuery<ProductionQueueReconciliation>({
+    queryKey: ['/api/production-queue/reconciliation'],
+    queryFn: () => apiRequest('/api/production-queue/reconciliation'),
+  });
+
   // Auto-populate production queue mutation
   const autoPopulateMutation = useMutation({
     mutationFn: () =>
@@ -314,6 +330,9 @@ export default function ProductionQueueManager() {
       });
       queryClient.invalidateQueries({
         queryKey: ['/api/production-queue/prioritized'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/production-queue/reconciliation'],
       });
     },
     onError: (error: any) => {
@@ -370,6 +389,9 @@ export default function ProductionQueueManager() {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['/api/production-queue/prioritized'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/production-queue/reconciliation'],
       });
       toast({
         title: 'Success',
@@ -479,6 +501,7 @@ export default function ProductionQueueManager() {
       
       // Refresh queues
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/reconciliation'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p1-po-queue/purchase-orders/open'] });
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule/weeks'] });
     },
@@ -791,6 +814,7 @@ export default function ProductionQueueManager() {
         refetchPOs();
         refetchStuckCounts();
         queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/production-queue/reconciliation'] });
       } else if (result.stuckSelectionsFound === 0) {
         toast({
           title: 'No Stuck Items',
@@ -1057,6 +1081,11 @@ export default function ProductionQueueManager() {
   // Explicit guards to distinguish truly empty queue from filtered-to-empty
   const isTrulyEmpty = productionQueue.length === 0;
   const isFilteredEmpty = productionQueue.length > 0 && filteredProductionQueue.length === 0;
+  const readyOrderCount = queueReconciliation?.ready ?? productionQueue.length;
+  const needsAttentionCount = queueReconciliation?.needsAttention ?? attentionOrders.length;
+  const departmentTotal =
+    queueReconciliation?.total ?? readyOrderCount + needsAttentionCount;
+  const otherNotReadyCount = queueReconciliation?.otherNotReady ?? 0;
 
   if (isLoading || isLoadingAttention || isLoadingPOs) {
     return (
@@ -1107,6 +1136,8 @@ export default function ProductionQueueManager() {
           <Button
             onClick={() => {
               refetch();
+              refetchAttention();
+              refetchReconciliation();
               refetchPOs();
             }}
             variant="outline"
@@ -1209,14 +1240,44 @@ export default function ProductionQueueManager() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-blue-500" />
               <div>
-                <p className="text-sm text-gray-500">Total Orders</p>
-                <p className="text-xl font-bold">{productionQueue.length}</p>
+                <p className="text-sm text-gray-500">P1 Dept Total</p>
+                <p className="text-xl font-bold">{departmentTotal}</p>
+                <p className="text-xs text-gray-400">Matches pipeline</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-sky-500" />
+              <div>
+                <p className="text-sm text-gray-500">Ready Orders</p>
+                <p className="text-xl font-bold">{readyOrderCount}</p>
+                <p className="text-xs text-gray-400">Actionable below</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={needsAttentionCount > 0 || otherNotReadyCount > 0 ? 'bg-red-50 border-red-200' : ''}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              <div>
+                <p className="text-sm text-gray-500">Not Ready</p>
+                <p className="text-xl font-bold">{needsAttentionCount + otherNotReadyCount}</p>
+                <p className="text-xs text-gray-400">
+                  {needsAttentionCount} attention
+                  {otherNotReadyCount > 0 ? ` + ${otherNotReadyCount} other` : ''}
+                </p>
               </div>
             </div>
           </CardContent>

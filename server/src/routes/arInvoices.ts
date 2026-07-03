@@ -30,8 +30,12 @@ import { recordAuditEvent } from '../services/auditLedgerService';
 import { buildRevenueDimensionTags } from '../services/productionLineAccounting';
 import { postArInvoiceAccounting } from '../services/arInvoicePostingService';
 import { formatP2DocumentPoNumber } from '../utils/p2DocumentPoNumber';
+import {
+  recordP2InvoiceNumberAudit,
+  syncP2InvoiceSequenceFromManualNumber,
+} from '../services/p2InvoiceNumberService';
 
-const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
+const LOCKED_STATUSES = ['POSTED', 'VOID', 'PAID'];
 
 let arInvoicePostingSchemaReady: Promise<void> | null = null;
 
@@ -983,6 +987,55 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       String(existing.notes || '').startsWith('Auto-created from P1 OEM packing slip') ||
       String(existing.internalNotes || '').startsWith('Source: P1 OEM shipment');
 
+    const requestedInvoiceNumber = invoiceNumber !== undefined ? String(invoiceNumber).trim() : undefined;
+    if (requestedInvoiceNumber !== undefined && !requestedInvoiceNumber) {
+      return res.status(400).json({ error: 'Invoice number cannot be blank' });
+    }
+
+    const invoiceNumberChanged =
+      requestedInvoiceNumber !== undefined && requestedInvoiceNumber !== existing.invoiceNumber;
+
+    if (invoiceNumberChanged) {
+      const [duplicateInvoice] = await db
+        .select({ id: arInvoices.id })
+        .from(arInvoices)
+        .where(and(eq(arInvoices.invoiceNumber, requestedInvoiceNumber), not(eq(arInvoices.id, id))))
+        .limit(1);
+      if (duplicateInvoice) {
+        return res.status(409).json({ error: 'An invoice with that number already exists' });
+      }
+
+      if (!isP1Invoice && existing.packingSlipId) {
+        const [duplicateSlip] = await db
+          .select({ id: p2PackingSlips.id })
+          .from(p2PackingSlips)
+          .where(
+            and(
+              or(
+                eq(p2PackingSlips.packingSlipNumber, requestedInvoiceNumber),
+                eq(p2PackingSlips.invoiceNumber, requestedInvoiceNumber),
+              ),
+              not(eq(p2PackingSlips.id, existing.packingSlipId)),
+            ),
+          )
+          .limit(1);
+        if (duplicateSlip) {
+          return res.status(409).json({ error: 'A P2 packing slip with that number already exists' });
+        }
+      }
+    }
+
+    let p2InvoiceNumberAudit:
+      | {
+          packingSlipId: string;
+          customerId: string;
+          customerName: string;
+          oldPackingSlipNumber: string | null;
+          oldInvoiceNumber: string | null;
+          newInvoiceNumber: string;
+        }
+      | null = null;
+
     const result = await db.transaction(async (tx) => {
       let subtotal = parseFloat(existing.subtotal);
       let discount = parseFloat(discountAmount ?? existing.discountAmount ?? '0');
@@ -1056,7 +1109,7 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
         .update(arInvoices)
         .set({
           ...(!isP1Invoice && customerId !== undefined && { customerId }),
-          ...(invoiceNumber !== undefined && { invoiceNumber }),
+          ...(requestedInvoiceNumber !== undefined && { invoiceNumber: requestedInvoiceNumber }),
           ...(invoiceDate !== undefined && { invoiceDate }),
           ...(dueDate !== undefined && { dueDate: dueDate || null }),
           ...(terms !== undefined && { terms: terms || null }),
@@ -1078,6 +1131,57 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
         .where(eq(arInvoices.id, id))
         .returning();
 
+      if (!isP1Invoice && existing.packingSlipId) {
+        const [linkedSlip] = await tx
+          .select({
+            id: p2PackingSlips.id,
+            packingSlipNumber: p2PackingSlips.packingSlipNumber,
+            invoiceNumber: p2PackingSlips.invoiceNumber,
+            customerId: p2PackingSlips.customerId,
+            customerName: p2PackingSlips.customerName,
+          })
+          .from(p2PackingSlips)
+          .where(eq(p2PackingSlips.id, existing.packingSlipId));
+
+        const slipPatch: Partial<typeof p2PackingSlips.$inferInsert> = {};
+        if (invoiceNumberChanged && requestedInvoiceNumber) {
+          slipPatch.packingSlipNumber = requestedInvoiceNumber;
+          slipPatch.invoiceNumber = requestedInvoiceNumber;
+          slipPatch.externalPdfUrl = null;
+          p2InvoiceNumberAudit = linkedSlip
+            ? {
+                packingSlipId: linkedSlip.id,
+                customerId: linkedSlip.customerId,
+                customerName: linkedSlip.customerName,
+                oldPackingSlipNumber: linkedSlip.packingSlipNumber,
+                oldInvoiceNumber: linkedSlip.invoiceNumber,
+                newInvoiceNumber: requestedInvoiceNumber,
+              }
+            : null;
+        }
+        if (poOverride !== undefined) {
+          slipPatch.poNumber = poOverride || null;
+          slipPatch.externalPdfUrl = null;
+        } else if (poId !== undefined) {
+          if (poId) {
+            const [selectedPo] = await tx
+              .select({ poNumber: p2PurchaseOrders.poNumber })
+              .from(p2PurchaseOrders)
+              .where(eq(p2PurchaseOrders.id, Number(poId)));
+            slipPatch.poNumber = selectedPo?.poNumber || null;
+          } else {
+            slipPatch.poNumber = null;
+          }
+          slipPatch.externalPdfUrl = null;
+        }
+        if (Object.keys(slipPatch).length > 0) {
+          await tx
+            .update(p2PackingSlips)
+            .set({ ...slipPatch, updatedAt: new Date() })
+            .where(eq(p2PackingSlips.id, existing.packingSlipId));
+        }
+      }
+
       const updatedLines = await tx
         .select()
         .from(arInvoiceLines)
@@ -1085,6 +1189,34 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
 
       return { ...updated, lines: updatedLines };
     });
+
+    if (p2InvoiceNumberAudit) {
+      try {
+        await syncP2InvoiceSequenceFromManualNumber({
+          customerId: p2InvoiceNumberAudit.customerId,
+          customerName: p2InvoiceNumberAudit.customerName,
+          invoiceNumber: p2InvoiceNumberAudit.newInvoiceNumber,
+        });
+        await recordP2InvoiceNumberAudit({
+          packingSlipId: p2InvoiceNumberAudit.packingSlipId,
+          invoiceId: id,
+          customerId: p2InvoiceNumberAudit.customerId,
+          oldPackingSlipNumber: p2InvoiceNumberAudit.oldPackingSlipNumber,
+          newPackingSlipNumber: p2InvoiceNumberAudit.newInvoiceNumber,
+          oldInvoiceNumber: p2InvoiceNumberAudit.oldInvoiceNumber,
+          newInvoiceNumber: p2InvoiceNumberAudit.newInvoiceNumber,
+          action: 'AR_INVOICE_NUMBER_EDIT',
+          reason: 'Invoice number edited from AR invoice details',
+          changedBy: (req as any).user?.username || null,
+        });
+      } catch (numberAuditErr) {
+        console.warn('[ARInvoice] P2 invoice number sequence/audit sync failed after invoice edit:', {
+          invoiceId: id,
+          invoiceNumber: p2InvoiceNumberAudit.newInvoiceNumber,
+          numberAuditErr,
+        });
+      }
+    }
 
     res.json(result);
   } catch (error) {

@@ -379,6 +379,7 @@ interface InventoryFormData {
   leadTimeDays: string;
   secondarySource: string;
   notes: string;
+  isActive: boolean;
   isStockItem: boolean;
   utilizedInPL1: boolean;
   utilizedInPL2: boolean;
@@ -816,6 +817,20 @@ const InventoryForm = ({
             )}
           </>
         )}
+        <div className="md:col-span-2 flex items-center justify-between gap-4 rounded-md border p-3">
+          <div className="space-y-1">
+            <Label htmlFor="isActive">Active</Label>
+            <p className="text-xs text-muted-foreground">
+              Inactive items stay in history but are hidden from active inventory lists.
+            </p>
+          </div>
+          <Checkbox
+            id="isActive"
+            checked={formData.isActive}
+            onCheckedChange={(checked) => onCheckboxChange('isActive', checked === true)}
+            data-testid="checkbox-inventory-item-active"
+          />
+        </div>
         <div className="flex items-center space-x-2 pt-6">
           <Checkbox
             id="isStockItem"
@@ -1823,6 +1838,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     leadTimeDays: '',
     secondarySource: '',
     notes: '',
+    isActive: true,
     isStockItem: false,
     utilizedInPL1: false,
     utilizedInPL2: false,
@@ -2482,6 +2498,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       leadTimeDays: '',
       secondarySource: '',
       notes: '',
+      isActive: true,
       isStockItem: false,
       utilizedInPL1: false,
       utilizedInPL2: false,
@@ -2634,6 +2651,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       leadTimeDays: item.leadTimeDays ? item.leadTimeDays.toString() : '',
       secondarySource: item.secondarySource || '',
       notes: item.notes || '',
+      isActive: item.isActive !== false,
       isStockItem: item.isStockItem || false,
       utilizedInPL1: item.utilizedInPL1 || false,
       utilizedInPL2: item.utilizedInPL2 || false,
@@ -2722,6 +2740,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         leadTimeDays: parseLeadTimeToDays(formData.leadTimeDays),
         secondarySource: formData.secondarySource || null,
         notes: formData.notes || null,
+        isActive: formData.isActive,
         isStockItem: formData.isStockItem,
         utilizedInPL1: formData.utilizedInPL1,
         utilizedInPL2: formData.utilizedInPL2,
@@ -2786,6 +2805,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     setFormData(getInventoryItemFormData(item, {
       agPartNumber: '',
       name: `${item.name} Copy`,
+      isActive: true,
       hasSds: false,
       hasTds: false,
       hasOtherDocs: false,

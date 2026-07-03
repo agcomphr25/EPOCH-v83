@@ -17,6 +17,14 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import P2InvoicePreviewButton from '@/components/p2/P2InvoicePreviewButton';
 
+const getSafeBackTarget = (target: string | null) => {
+  if (!target || !target.startsWith('/') || target.startsWith('//')) return null;
+  if (target.startsWith('/p2-control-center') || target.startsWith('/p2/shipments/')) {
+    return target;
+  }
+  return null;
+};
+
 interface PackingSlipLineItem {
   partNumber: string;
   partName: string;
@@ -89,6 +97,7 @@ export default function P2PackingSlipViewer() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
+  const backTarget = getSafeBackTarget(new URLSearchParams(window.location.search).get('backTo'));
 
   const [editMode, setEditMode] = useState(false);
   const [editSlipNumber, setEditSlipNumber] = useState('');
@@ -202,7 +211,9 @@ export default function P2PackingSlipViewer() {
   };
 
   const handleBack = () => {
-    if (packingSlip?.lotNumberId) {
+    if (backTarget) {
+      setLocation(backTarget);
+    } else if (packingSlip?.lotNumberId) {
       setLocation(`/p2/shipments/${packingSlip.lotNumberId}`);
     } else {
       setLocation('/p2-traveler-viewer');

@@ -434,7 +434,7 @@ export default function InvoiceFormPage() {
         body: payload,
       });
     },
-    onSuccess: () => {
+    onSuccess: (savedInvoice: any) => {
       queryClient.invalidateQueries({ predicate: (query) => 
         Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
       });
@@ -444,7 +444,7 @@ export default function InvoiceFormPage() {
           ? 'Invoice has been updated successfully.'
           : 'Invoice has been created successfully.',
       });
-      navigate('/finance/invoices');
+      navigate(isEditing ? `/finance/invoices/${savedInvoice?.id || editId}` : '/finance/invoices');
     },
     onError: (error: any) => {
       toast({
@@ -522,12 +522,12 @@ export default function InvoiceFormPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="invoiceNumber">Invoice Number *</Label>
+              <Label htmlFor="invoiceNumber">Invoice # *</Label>
               <Input
                 id="invoiceNumber"
                 value={form.invoiceNumber}
                 onChange={(e) => updateField('invoiceNumber', e.target.value)}
-                placeholder="INV-001"
+                placeholder="ROC26-0006A"
               />
             </div>
 
@@ -602,12 +602,12 @@ export default function InvoiceFormPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="poOverride">PO Override</Label>
+              <Label htmlFor="poOverride">Customer PO Override</Label>
               <Input
                 id="poOverride"
                 value={form.poOverride}
                 onChange={(e) => updateField('poOverride', e.target.value)}
-                placeholder="Manual PO number"
+                placeholder="Manual/customer PO number"
                 readOnly={isP1Invoice}
                 className={isP1Invoice ? 'bg-muted' : undefined}
               />

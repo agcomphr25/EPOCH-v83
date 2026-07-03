@@ -137,9 +137,18 @@ async function getLinkedP2InvoiceNumberForPackingSlip(
   const rows = await pool.query<{ invoice_number: string }>(
     `SELECT invoice_number
        FROM ar_invoices
-      WHERE packing_slip_id = $1
-         OR ($2::uuid IS NOT NULL AND lot_id = $2::uuid)
-      ORDER BY created_at DESC
+      WHERE status <> 'VOID'
+        AND (
+          packing_slip_id = $1
+          OR (
+            $2::uuid IS NOT NULL
+            AND lot_id = $2::uuid
+            AND packing_slip_id IS NULL
+          )
+        )
+      ORDER BY
+        CASE WHEN packing_slip_id = $1 THEN 0 ELSE 1 END,
+        created_at DESC
       LIMIT 1`,
     [packingSlipId, lotId ?? null]
   );
@@ -1581,7 +1590,7 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
           ) AS journal_line_count
         FROM ar_invoices ar
         LEFT JOIN journal_entries je ON je.reference_uuid = ar.id
-        WHERE (ar.lot_id = l.id AND ar.status <> 'VOID')
+        WHERE (ar.lot_id = l.id AND ar.status <> 'VOID' AND ar.packing_slip_id IS NULL)
           OR ar.packing_slip_id = ps.id
           OR (
             l.packing_slip_id IS NOT NULL

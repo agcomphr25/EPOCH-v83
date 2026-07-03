@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import {
   AlertTriangle,
@@ -286,6 +286,27 @@ function mergeDraftRecords(localRecords: DraftBomRecord[], sharedRecords: DraftB
   return [...byId.values()].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
 }
 
+function mergeProjects(sharedProjects: RDProject[], localProjects: RDProject[]) {
+  const byId = new Map<string, RDProject>();
+  for (const project of [...sharedProjects, ...localProjects]) {
+    if (project?.id) byId.set(project.id, project);
+  }
+  return [...byId.values()];
+}
+
+async function saveSharedProject(project: RDProject) {
+  const response = await fetch(`/api/rd-projects/${encodeURIComponent(project.id)}`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(project),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to save R&D project');
+  }
+  return response.json() as Promise<RDProject>;
+}
+
 function findDraftLineForComponent(component: DraftBomComponent | DraftBomPart, lines: DraftBomLine[]) {
   if (component.sourceLineId) {
     const match = lines.find((line) => line.id === component.sourceLineId);
@@ -454,8 +475,19 @@ function AssemblyTreeNode({ node, depth = 0 }: { node: AssemblyNode; depth?: num
 
 export default function RDProjectsPage() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const { data: employees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ['/api/employees'],
+  });
+  const { data: sharedProjects = [] } = useQuery<RDProject[]>({
+    queryKey: ['/api/rd-projects'],
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch('/api/rd-projects', { credentials: 'include' });
+      if (!response.ok) return [];
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
   });
   const { data: sharedDraftRecords = [] } = useQuery<DraftBomRecord[]>({
     queryKey: ['/api/draft-bom-drafts'],
@@ -470,9 +502,13 @@ export default function RDProjectsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyProject);
   const [localDraftRecords, setLocalDraftRecords] = useState<DraftBomRecord[]>(() => readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
-  const [projects, setProjects] = useState<RDProject[]>(() => readJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, []));
+  const [localProjects, setLocalProjects] = useState<RDProject[]>(() => readJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, []));
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
+  const projects = useMemo(
+    () => mergeProjects(sharedProjects, localProjects),
+    [sharedProjects, localProjects],
+  );
   const draftRecords = useMemo(
     () => mergeDraftRecords(localDraftRecords, sharedDraftRecords),
     [localDraftRecords, sharedDraftRecords],
@@ -496,8 +532,8 @@ export default function RDProjectsPage() {
   );
 
   useEffect(() => {
-    writeJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, projects);
-  }, [projects]);
+    writeJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, localProjects);
+  }, [localProjects]);
 
   useEffect(() => {
     const refreshDraftRecords = () => setLocalDraftRecords(readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
@@ -511,6 +547,18 @@ export default function RDProjectsPage() {
 
   const resetForm = () => setForm(emptyProject);
 
+  const persistProject = (project: RDProject) => {
+    setLocalProjects((current) => [project, ...current.filter((item) => item.id !== project.id)]);
+    saveSharedProject(project)
+      .then((saved) => {
+        setLocalProjects((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+        queryClient.invalidateQueries({ queryKey: ['/api/rd-projects'] });
+      })
+      .catch((error) => {
+        console.error('Failed to persist shared R&D project:', error);
+      });
+  };
+
   const createProject = () => {
     const ownerEmployee = activeEmployees.find((employee) => String(employee.id) === form.owner);
     const project: RDProject = {
@@ -523,20 +571,16 @@ export default function RDProjectsPage() {
       draftTabIds: form.draftTabIds,
       status: 'draft',
     };
-    setProjects((current) => [project, ...current]);
+    persistProject(project);
     setSelectedProjectId(project.id);
     resetForm();
     setIsDialogOpen(false);
   };
 
   const toggleProjectStatus = (projectId: string, active: boolean) => {
-    setProjects((current) =>
-      current.map((project) =>
-        project.id === projectId
-          ? { ...project, status: active ? 'active' : 'draft' }
-          : project
-      )
-    );
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    persistProject({ ...project, status: active ? 'active' : 'draft' });
   };
 
   const toggleDraftTab = (tabId: string, checked: boolean) => {

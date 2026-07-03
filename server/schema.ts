@@ -16373,6 +16373,32 @@ export const insertDraftBomDraftSchema = createInsertSchema(draftBomDrafts).omit
 export type DraftBomDraft = typeof draftBomDrafts.$inferSelect;
 export type InsertDraftBomDraft = z.infer<typeof insertDraftBomDraftSchema>;
 
+// R&D projects created from the Design tab. These are shared for every user
+// with access to the Design / R&D Projects page.
+export const rdProjects = pgTable('rd_projects', {
+  id: text('id').primaryKey(),
+  projectName: text('project_name').notNull(),
+  owner: text('owner').notNull().default(''),
+  status: text('status').notNull().default('draft'),
+  signoffRequired: boolean('signoff_required').notNull().default(false),
+  signoffUserId: text('signoff_user_id').notNull().default(''),
+  draftTabIds: jsonb('draft_tab_ids').notNull().$type<string[]>().default(sql`'[]'::jsonb`),
+  description: text('description').notNull().default(''),
+  createdByUserId: integer('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByDisplayName: text('created_by_display_name').notNull().default('unknown'),
+  updatedByUserId: integer('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  updatedByDisplayName: text('updated_by_display_name').notNull().default('unknown'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const insertRdProjectSchema = createInsertSchema(rdProjects).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+export type RdProject = typeof rdProjects.$inferSelect;
+export type InsertRdProject = z.infer<typeof insertRdProjectSchema>;
+
 export const schemaChangeLog = pgTable('schema_change_log', {
   id: serial('id').primaryKey(),
   timestamp: timestamp('timestamp').defaultNow().notNull(),

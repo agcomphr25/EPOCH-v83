@@ -202,7 +202,7 @@ const vendorFormSchema = insertVendorSchema.extend({
   termsAndConditions: z.string().optional(),
   paymentTerms: z.string().optional(),
   shippingInstructions: z.string().optional(),
-  defaultOrderMethod: z.enum(['PO', 'WEBSITE']).optional().nullable(),
+  defaultOrderMethod: z.enum(['PO', 'WEBSITE', 'EMAIL']).optional().nullable(),
 });
 
 const vendorContactFormSchema = insertVendorContactSchema
@@ -691,7 +691,7 @@ export default function VendorManagement() {
         termsAndConditions: vendor.termsAndConditions || '',
         paymentTerms: vendor.paymentTerms || '',
         shippingInstructions: vendor.shippingInstructions || '',
-        defaultOrderMethod: (vendor.defaultOrderMethod as 'PO' | 'WEBSITE' | null) || 'PO',
+        defaultOrderMethod: (vendor.defaultOrderMethod as 'PO' | 'WEBSITE' | 'EMAIL' | null) || 'PO',
       });
       setVendorAddress({
         street: vendor.street || '',
@@ -1484,6 +1484,7 @@ export default function VendorManagement() {
                             <SelectContent>
                               <SelectItem value="PO">Purchase Order</SelectItem>
                               <SelectItem value="WEBSITE">Website</SelectItem>
+                              <SelectItem value="EMAIL">Email</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />

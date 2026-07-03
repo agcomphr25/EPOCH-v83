@@ -1605,7 +1605,7 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
 
         // Auto-set orderMethod from item default if not provided
         if (!requestData.orderMethod && item.defaultOrderMethod) {
-          requestData.orderMethod = item.defaultOrderMethod as 'PO' | 'WEBSITE';
+          requestData.orderMethod = item.defaultOrderMethod as 'PO' | 'WEBSITE' | 'EMAIL';
         }
 
         // Auto-assign vendor from the inventory item first; source is legacy display text.
@@ -2077,7 +2077,7 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
       requestIds: number[];
       updates: {
         vendorId?: number | null;
-        orderMethod?: 'PO' | 'WEBSITE' | null;
+        orderMethod?: 'PO' | 'WEBSITE' | 'EMAIL' | null;
         vendorPartNumber?: string | null;
         productUrl?: string | null;
         status?: string;
@@ -2253,8 +2253,8 @@ router.post(
           );
         }
 
-        if (request.orderMethod === 'WEBSITE') {
-          throw Object.assign(new Error('Website-order requests cannot be linked to a Vendor PO.'), { status: 422 });
+        if (request.orderMethod === 'WEBSITE' || request.orderMethod === 'EMAIL') {
+          throw Object.assign(new Error('Website/email-order requests cannot be linked to a Vendor PO.'), { status: 422 });
         }
 
         if (request.vendorPoId && request.vendorPoId !== payload.vendorPoId) {
@@ -2406,6 +2406,27 @@ const createVendorPoFromPartsRequestsSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+const sendPartsRequestVendorEmailSchema = z.object({
+  vendorId: z.number().int().positive(),
+  requestIds: z.array(z.number().int().positive()).min(1),
+  quantities: z.record(z.coerce.number().positive()).optional(),
+  notes: z.string().optional().nullable(),
+});
+
+function escapeEmailHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatCurrencyForEmail(value: unknown) {
+  const numeric = Number(value || 0);
+  return Number.isFinite(numeric) && numeric > 0 ? `$${numeric.toFixed(2)}` : '';
+}
+
 function normalizePartsRequestCategory(value: string | null | undefined) {
   const normalized = String(value || '').trim().toUpperCase();
   if (!normalized) return null;
@@ -2477,10 +2498,10 @@ router.post(
           );
         }
 
-        const websiteRequests = selectedWithResolvedVendors.filter((r) => r.orderMethod === 'WEBSITE');
-        if (websiteRequests.length > 0) {
+        const nonPoRequests = selectedWithResolvedVendors.filter((r) => r.orderMethod === 'WEBSITE' || r.orderMethod === 'EMAIL');
+        if (nonPoRequests.length > 0) {
           throw Object.assign(
-            new Error(`Website-order request(s) cannot be used to create a Vendor PO: ${websiteRequests.map((r) => r.id).join(', ')}`),
+            new Error(`Website/email-order request(s) cannot be used to create a Vendor PO: ${nonPoRequests.map((r) => r.id).join(', ')}`),
             { status: 422 }
           );
         }
@@ -2633,6 +2654,243 @@ router.post(
       const status = (error as any)?.status || 500;
       res.status(status).json({
         error: status === 500 ? 'Failed to create Vendor PO draft from parts requests' : (error as Error).message,
+      });
+    }
+  }
+);
+
+router.post(
+  '/parts-requests/send-vendor-email',
+  requirePermission('purchasing.manage_pos'),
+  async (req: Request, res: Response) => {
+    try {
+      const payload = sendPartsRequestVendorEmailSchema.parse(req.body);
+      const actor = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
+      const actorEmail = (req as any).user?.email as string | undefined;
+      const { partsRequests, partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequestStatusHistory, vendors, inventoryItems } = await import('../../schema');
+      const { sendCommunication } = await import('../../communication/send');
+      const { VENDOR_CONTACT_EMAIL } = await import('../../communication/registry');
+      const { eq: dEq, inArray: dInArray, and: dAnd } = await import('drizzle-orm');
+
+      const uniqueRequestIds = Array.from(new Set(payload.requestIds));
+      const [vendor] = await db
+        .select()
+        .from(vendors)
+        .where(dEq(vendors.id, payload.vendorId));
+
+      if (!vendor) {
+        return res.status(404).json({ error: 'Vendor not found' });
+      }
+      if (!vendor.email) {
+        return res.status(422).json({ error: 'Vendor email is not configured.' });
+      }
+
+      const selected = await db
+        .select()
+        .from(partsRequests)
+        .where(dInArray(partsRequests.id, uniqueRequestIds));
+
+      if (selected.length !== uniqueRequestIds.length) {
+        const found = new Set(selected.map((request) => request.id));
+        const missing = uniqueRequestIds.filter((id) => !found.has(id));
+        return res.status(404).json({ error: `Parts request(s) not found: ${missing.join(', ')}` });
+      }
+
+      const selectedPartNumbers = Array.from(
+        new Set(
+          selected
+            .flatMap((request) => [request.agPartNumber, request.partNumber])
+            .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+            .map((part) => part.trim())
+        )
+      );
+      const inventoryRows = selectedPartNumbers.length > 0
+        ? await db
+          .select({
+            agPartNumber: inventoryItems.agPartNumber,
+            vendorId: inventoryItems.vendorId,
+            defaultOrderMethod: inventoryItems.defaultOrderMethod,
+            supplierPartNumber: inventoryItems.supplierPartNumber,
+          })
+          .from(inventoryItems)
+          .where(dInArray(inventoryItems.agPartNumber, selectedPartNumbers))
+        : [];
+      const inventoryByPartNumber = new Map(inventoryRows.map((item) => [item.agPartNumber, item]));
+
+      const selectedWithContext = selected.map((request) => {
+        const item = inventoryByPartNumber.get(request.agPartNumber || '') ?? inventoryByPartNumber.get(request.partNumber || '');
+        const resolvedVendorId = request.vendorId ?? item?.vendorId ?? null;
+        const effectiveOrderMethod = request.orderMethod || item?.defaultOrderMethod || vendor.defaultOrderMethod || null;
+        const remainingQuantity = Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || request.qtyReceived || 0));
+        const requestedQuantity = Number(payload.quantities?.[String(request.id)] ?? payload.quantities?.[request.id as any] ?? remainingQuantity);
+        return { request, item, resolvedVendorId, effectiveOrderMethod, remainingQuantity, requestedQuantity };
+      });
+
+      const badVendor = selectedWithContext.filter((entry) => entry.resolvedVendorId !== vendor.id);
+      if (badVendor.length > 0) {
+        return res.status(422).json({
+          error: `Selected request(s) are not assigned to ${vendor.name}: ${badVendor.map((entry) => entry.request.id).join(', ')}`,
+        });
+      }
+
+      const badMethod = selectedWithContext.filter((entry) => entry.effectiveOrderMethod !== 'EMAIL');
+      if (badMethod.length > 0) {
+        return res.status(422).json({
+          error: `Selected request(s) are not email-order requests: ${badMethod.map((entry) => entry.request.id).join(', ')}`,
+        });
+      }
+
+      const badStatus = selectedWithContext.filter((entry) => !['APPROVED', 'RECEIVED_PARTIAL'].includes(entry.request.status));
+      if (badStatus.length > 0) {
+        return res.status(422).json({
+          error: `Only APPROVED or partially received requests can be emailed to vendors. Invalid request id(s): ${badStatus.map((entry) => `${entry.request.id} (${entry.request.status})`).join(', ')}`,
+        });
+      }
+
+      const badQuantity = selectedWithContext.filter((entry) => entry.requestedQuantity <= 0 || entry.requestedQuantity > entry.remainingQuantity);
+      if (badQuantity.length > 0) {
+        return res.status(422).json({
+          error: `Invalid order quantity for request id(s): ${badQuantity.map((entry) => entry.request.id).join(', ')}`,
+        });
+      }
+
+      const rowsHtml = selectedWithContext.map((entry) => {
+        const request = entry.request;
+        const vendorSku = request.vendorPartNumber || entry.item?.supplierPartNumber || '';
+        return `<tr>
+          <td>${escapeEmailHtml(vendorSku || request.partNumber)}</td>
+          <td>${escapeEmailHtml(request.partName)}</td>
+          <td>${escapeEmailHtml(entry.requestedQuantity)}</td>
+          <td>${escapeEmailHtml(formatCurrencyForEmail(request.estimatedCost))}</td>
+          <td>${escapeEmailHtml(request.department || '')}</td>
+          <td>${escapeEmailHtml(`PR-${request.id}`)}</td>
+        </tr>`;
+      }).join('');
+      const itemsTable = `<table>
+        <thead>
+          <tr><th>Part / Vendor SKU</th><th>Description</th><th>Qty</th><th>Est. Cost</th><th>Department</th><th>Reference</th></tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+      const itemsList = selectedWithContext.map((entry) => {
+        const request = entry.request;
+        const vendorSku = request.vendorPartNumber || entry.item?.supplierPartNumber || request.partNumber;
+        return `- ${vendorSku} | ${request.partName} | Qty ${entry.requestedQuantity} | ${request.department || ''} | PR-${request.id}`;
+      }).join('\n');
+      const trimmedNotes = payload.notes?.trim() || '';
+      const emailResult = await sendCommunication({
+        templateKey: 'parts_request_vendor_email',
+        context: {
+          vendor_name: vendor.name,
+          vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
+          items_table: itemsTable,
+          items_list: itemsList,
+          request_ids: selectedWithContext.map((entry) => `PR-${entry.request.id}`).join(', '),
+          buyer_name: actor,
+          buyer_email: actorEmail || VENDOR_CONTACT_EMAIL,
+          notes_html: trimmedNotes ? `<p><strong>Notes:</strong> ${escapeEmailHtml(trimmedNotes)}</p>` : '',
+          notes_text: trimmedNotes ? `Notes: ${trimmedNotes}` : '',
+        },
+        to: vendor.email,
+        replyTo: actorEmail || VENDOR_CONTACT_EMAIL,
+        triggeredBy: actor,
+        capabilityRequired: 'send_parts_request_vendor_email',
+        orderId: selectedWithContext.map((entry) => `PR-${entry.request.id}`).join(','),
+        emailContext: 'parts_request_vendor_email',
+      });
+
+      if (!emailResult.success) {
+        return res.status(502).json({
+          error: emailResult.error || 'Failed to send vendor email.',
+        });
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const [batch] = await tx.insert(partsRequestBatches).values({
+          vendorId: vendor.id,
+          vendorName: vendor.name,
+          orderMethod: 'EMAIL',
+          status: 'ORDERED',
+          createdBy: actor,
+          notes: [
+            trimmedNotes || null,
+            `Vendor email sent to ${vendor.email}.`,
+          ].filter(Boolean).join('\n'),
+          orderDate: new Date(),
+        }).returning();
+
+        const updatedRequests: any[] = [];
+        for (const entry of selectedWithContext) {
+          const request = entry.request;
+          const qtyOrdered = entry.requestedQuantity;
+          const [orderLine] = await tx.insert(partsRequestOrderLines).values({
+            batchId: batch.id,
+            vendorId: vendor.id,
+            partNumber: request.partNumber,
+            partName: request.partName,
+            agPartNumber: request.agPartNumber,
+            qtyOrdered,
+            qtyReceived: 0,
+            status: 'ORDERED',
+          }).returning();
+
+          await tx.insert(partsRequestOrderAllocations).values({
+            orderLineId: orderLine.id,
+            partsRequestId: request.id,
+            qtyAllocated: qtyOrdered,
+            qtyReceivedApplied: 0,
+            departmentId: request.departmentId,
+            status: 'ALLOCATED',
+          });
+
+          const totalOrdered = Number(request.qtyOrdered || 0) + qtyOrdered;
+          const newStatus = totalOrdered >= Number(request.quantity || 0) ? 'ORDERED' : 'ORDERED_PARTIAL';
+          const [updatedRequest] = await tx.update(partsRequests).set({
+            batchId: batch.id,
+            qtyOrdered: totalOrdered,
+            status: newStatus,
+            vendorId: vendor.id,
+            orderMethod: 'EMAIL',
+            orderDate: new Date(),
+            updatedAt: new Date(),
+          }).where(dAnd(dEq(partsRequests.id, request.id), dInArray(partsRequests.status, ['APPROVED', 'RECEIVED_PARTIAL']))).returning();
+
+          if (updatedRequest) {
+            updatedRequests.push({ request: updatedRequest, fromStatus: request.status, toStatus: newStatus });
+            await tx.insert(partsRequestStatusHistory).values({
+              partsRequestId: request.id,
+              fromStatus: request.status,
+              toStatus: newStatus,
+              changedBy: actor,
+              reason: `Vendor email sent to ${vendor.name} (${vendor.email}) via batch #${batch.id}; ${qtyOrdered} ordered.`,
+            });
+          }
+        }
+
+        return { batch, updatedRequests };
+      });
+
+      for (const entry of result.updatedRequests) {
+        await notifyPartsRequestParticipants({
+          request: entry.request,
+          fromStatus: entry.fromStatus,
+          toStatus: entry.toStatus,
+          changedBy: actor,
+          reason: `Vendor email sent to ${vendor.name}.`,
+        });
+      }
+
+      res.status(201).json({
+        success: true,
+        batch: result.batch,
+        updatedCount: result.updatedRequests.length,
+        emailRecipient: vendor.email,
+      });
+    } catch (error) {
+      console.error('Send parts request vendor email error:', error);
+      const status = (error as any)?.status || 500;
+      res.status(status).json({
+        error: status === 500 ? 'Failed to send parts request vendor email' : (error as Error).message,
       });
     }
   }

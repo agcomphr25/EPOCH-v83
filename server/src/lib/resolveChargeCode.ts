@@ -28,7 +28,7 @@ export type CertificationStatus = 'VALID' | 'EXPIRED' | 'MISSING';
 export interface ResolvedChargeCode {
   chargeCodeId: number;
   chargeCode: string;
-  resolvedFrom: 'wad_default' | 'traveler_default' | 'wad_department' | 'department_match';
+  resolvedFrom: 'wad_default' | 'traveler_default' | 'wad_department' | 'department_match' | 'wad_wizard';
 }
 
 export interface ResolveChargeCodeError {
@@ -37,6 +37,80 @@ export interface ResolveChargeCodeError {
 }
 
 export type ResolveChargeCodeResult = ResolvedChargeCode | ResolveChargeCodeError;
+
+type WadWizardChargeCodeRow = {
+  department?: unknown;
+  operation?: unknown;
+  chargeCode?: unknown;
+  classification?: unknown;
+};
+
+const WAD_DEPARTMENT_LABELS: Record<string, string> = {
+  CUTTING_KITTING: 'Cutting / Kitting',
+  LAYUP: 'Layup',
+  CURE: 'Cure',
+  CNC: 'CNC',
+  SUB_ASSEMBLY: 'Sub Assembly',
+  ASSEMBLY: 'Assembly',
+  FINISH: 'Finish',
+  PAINT: 'Paint',
+  QC: 'Quality Control',
+  SHIPPING: 'Shipping',
+};
+
+function normalizeToken(value: unknown): string {
+  return typeof value === 'string' ? value.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+}
+
+function isQcDepartment(value: unknown): boolean {
+  const normalized = normalizeToken(value);
+  return normalized === 'qc' || normalized === 'qualitycontrol' || normalized === 'finalqc';
+}
+
+function getWizardChargeCodeRows(wizardData: unknown): WadWizardChargeCodeRow[] {
+  if (!wizardData || typeof wizardData !== 'object') return [];
+  const step4 = (wizardData as { step4?: unknown }).step4;
+  if (!step4 || typeof step4 !== 'object') return [];
+  const chargeCodes = (step4 as { chargeCodes?: unknown }).chargeCodes;
+  if (!Array.isArray(chargeCodes)) return [];
+  return chargeCodes.filter((row): row is WadWizardChargeCodeRow => !!row && typeof row === 'object');
+}
+
+export function pickWizardChargeCode(
+  wizardData: unknown,
+  department: string | null,
+  operation: string | null = null,
+): string | null {
+  const rows = getWizardChargeCodeRows(wizardData)
+    .map((row) => ({
+      row,
+      code: typeof row.chargeCode === 'string' ? row.chargeCode.trim() : '',
+      departmentKey: normalizeToken(row.department),
+      departmentLabel: normalizeToken(WAD_DEPARTMENT_LABELS[String(row.department ?? '')]),
+      operation: normalizeToken(row.operation),
+    }))
+    .filter((row) => row.code.length > 0);
+
+  if (rows.length === 0) return null;
+
+  const targetDepartment = normalizeToken(department);
+  const targetOperation = normalizeToken(operation);
+
+  const exactDepartmentMatch = rows.find(
+    (row) => targetDepartment && (row.departmentKey === targetDepartment || row.departmentLabel === targetDepartment),
+  );
+  if (exactDepartmentMatch) return exactDepartmentMatch.code;
+
+  const exactOperationMatch = rows.find((row) => targetOperation && row.operation === targetOperation);
+  if (exactOperationMatch) return exactOperationMatch.code;
+
+  const nonQcRows = rows.filter((row) => !isQcDepartment(row.row.department));
+  if (!isQcDepartment(department) && nonQcRows.length === 1) {
+    return nonQcRows[0].code;
+  }
+
+  return null;
+}
 
 const DEPARTMENT_ALIASES: Record<string, string[]> = {
   QC: ['QC', 'Quality Control'],
@@ -130,6 +204,7 @@ export async function resolveChargeCode(params: {
   // (operation-level, derived via travelerStepId → routing operation) over the
   // caller-supplied department string.
   let effectiveDepartment = department;
+  let effectiveOperation: string | null = null;
   if (travelerStepId) {
     try {
       const [step] = await db
@@ -152,7 +227,10 @@ export async function resolveChargeCode(params: {
 
         if (traveler?.partRoutingId) {
           const [routingOp] = await db
-            .select({ departmentName: routingOperations.departmentName })
+            .select({
+              departmentName: routingOperations.departmentName,
+              operationName: routingOperations.operationName,
+            })
             .from(routingOperations)
             .where(
               and(
@@ -164,6 +242,9 @@ export async function resolveChargeCode(params: {
 
           if (routingOp?.departmentName) {
             effectiveDepartment = routingOp.departmentName;
+          }
+          if (routingOp?.operationName) {
+            effectiveOperation = routingOp.operationName;
           }
         }
         // Use the step's own departmentName if routing op not found
@@ -284,8 +365,23 @@ export async function resolveChargeCode(params: {
     }
   }
 
+  // Priority 4: WAD wizard Step 4 charge code rows. The wizard stores these in
+  // wizardData; older WADs may be fully approved without default_charge_code_id.
+  const wizardChargeCode = pickWizardChargeCode(wad.wizardData, effectiveDepartment, effectiveOperation);
+  if (wizardChargeCode) {
+    const [wizardCc] = await db
+      .select({ id: chargeCodes.id, code: chargeCodes.code })
+      .from(chargeCodes)
+      .where(and(eq(chargeCodes.code, wizardChargeCode), eq(chargeCodes.active, true)))
+      .limit(1);
+
+    if (wizardCc) {
+      return { chargeCodeId: wizardCc.id, chargeCode: wizardCc.code, resolvedFrom: 'wad_wizard' };
+    }
+  }
+
   return {
-    error: `No charge code resolved for WAD '${productionWorkOrderId}'. Set a default charge code on the production work order or the traveler, or create an active charge code for department '${effectiveDepartment ?? department ?? 'unknown'}'.`,
+    error: `No charge code resolved for WAD '${productionWorkOrderId}'. Set a default charge code on the production work order or the traveler, create an active charge code for department '${effectiveDepartment ?? department ?? 'unknown'}', or assign a matching active charge code in WAD Step 4.`,
     resolvedFrom: 'none',
   };
 }

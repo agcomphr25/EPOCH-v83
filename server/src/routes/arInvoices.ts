@@ -2103,6 +2103,15 @@ router.post('/:id/void', requirePermission('finance.void_invoice'), async (req: 
           .returning();
 
         if (existingReversal) {
+          await tx.execute(sql`
+            UPDATE p2_serial_billing_assignments
+               SET invoice_id = NULL,
+                   locked_at = NULL,
+                   locked_by = NULL,
+                   lock_reason = NULL,
+                   updated_at = now()
+             WHERE invoice_id = ${id}
+          `);
           console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user}; reversal journal entry ${existingReversal.id} already exists`);
           return updated;
         }
@@ -2169,6 +2178,15 @@ router.post('/:id/void', requirePermission('finance.void_invoice'), async (req: 
             },
           })),
         );
+        await tx.execute(sql`
+          UPDATE p2_serial_billing_assignments
+             SET invoice_id = NULL,
+                 locked_at = NULL,
+                 locked_by = NULL,
+                 lock_reason = NULL,
+                 updated_at = now()
+           WHERE invoice_id = ${id}
+        `);
         console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user}; reversal journal entry ${entry.id} created from original entry ${originalEntry.id}`);
         return updated;
       });
@@ -2181,6 +2199,15 @@ router.post('/:id/void', requirePermission('finance.void_invoice'), async (req: 
       .set({ status: 'VOID', voidedAt: new Date(), voidedBy: user, voidReason, updatedAt: new Date() })
       .where(eq(arInvoices.id, id))
       .returning();
+    await db.execute(sql`
+      UPDATE p2_serial_billing_assignments
+         SET invoice_id = NULL,
+             locked_at = NULL,
+             locked_by = NULL,
+             lock_reason = NULL,
+             updated_at = now()
+       WHERE invoice_id = ${id}
+    `);
 
     console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user} — reason: ${voidReason}`);
 

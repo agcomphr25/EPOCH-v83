@@ -534,7 +534,12 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
         };
       });
       setCocModal(null);
-      toast({ title: 'CoC Generated', description: `Certificate ${cert.certificateNumber} created.` });
+      toast({
+        title: cert.reused || cert.alreadyExists ? 'CoC Ready' : 'CoC Generated',
+        description: cert.reused || cert.alreadyExists
+          ? `Using existing certificate ${cert.certificateNumber} for this lot.`
+          : `Certificate ${cert.certificateNumber} created.`,
+      });
     } catch (err: any) {
       toast({ title: 'CoC Failed', description: err?.message || 'Failed to generate certificate', variant: 'destructive' });
     } finally {

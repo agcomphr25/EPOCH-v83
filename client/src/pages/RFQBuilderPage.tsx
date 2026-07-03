@@ -347,9 +347,13 @@ function normalizeNrcRow(row: Partial<NrcCostRow>, sourceType: CostSourceType = 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function RFQBuilderPage() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [, params] = useRoute("/rfq-builder/:id");
-  const rfqId = params?.id;
+  const queryRfqId = useMemo(() => {
+    const query = location.split("?")[1];
+    return query ? new URLSearchParams(query).get("rfqId") ?? undefined : undefined;
+  }, [location]);
+  const rfqId = params?.id ?? queryRfqId;
   const queryClient = useQueryClient();
 
   const [header, setHeader] = useState<RfqHeader>({

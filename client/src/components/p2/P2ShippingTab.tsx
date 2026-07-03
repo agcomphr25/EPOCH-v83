@@ -113,6 +113,11 @@ type ShipmentPoContext = {
   projectName?: string | null;
 };
 
+const P2_SHIPPING_TAB_BACK_TARGET = '/p2-control-center?tab=shipping';
+
+const buildPackingSlipViewerUrl = (slipId: string) =>
+  `/p2/packing-slip/${slipId}?backTo=${encodeURIComponent(P2_SHIPPING_TAB_BACK_TARGET)}`;
+
 function invoiceStatusColor(status?: string) {
   switch (status?.toUpperCase()) {
     case 'DRAFT': return 'bg-blue-50 text-blue-700 border-blue-200';
@@ -1087,7 +1092,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                           <Button
                             size="sm" variant="outline"
                             className="border-green-300 text-green-700 hover:bg-green-50"
-                            onClick={() => window.open(`/p2/packing-slip/${shipment.slipId}`, '_blank')}
+                            onClick={() => window.open(buildPackingSlipViewerUrl(shipment.slipId), '_blank')}
                           >
                             <FileText className="w-3 h-3 mr-1" />Packing Slip
                           </Button>

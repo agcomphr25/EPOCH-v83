@@ -568,6 +568,50 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
   };
 
+  const handleCreateReplacementPackingSlip = async (poNumber: string, shipment: CreatedShipment) => {
+    try {
+      const slip = await apiRequest('/api/p2/packing-slips', {
+        method: 'POST',
+        body: JSON.stringify({
+          lotId: shipment.lotId,
+          createdBy: 'shipping',
+          replacesPackingSlipId: shipment.slipId,
+          replacementReason: `Replacement after invoice ${shipment.invoiceNumber || shipment.slipNumber} was voided`,
+        }),
+      });
+      setCreatedShipments((prev) => {
+        const list = prev[poNumber] ?? [];
+        const replacement: CreatedShipment = {
+          ...shipment,
+          slipId: slip.id,
+          slipNumber: slip.packingSlipNumber,
+          invoiceId: undefined,
+          invoiceNumber: undefined,
+          invoiceStatus: undefined,
+          invoiceTotalAmount: undefined,
+          journalEntryId: undefined,
+          journalEntryStatus: undefined,
+          journalLineCount: undefined,
+        };
+        return {
+          ...prev,
+          [poNumber]: list.map((entry) => (entry.lotId === shipment.lotId ? replacement : entry)),
+        };
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+      toast({
+        title: 'Replacement packing slip created',
+        description: `Lot ${shipment.lotNumber} now uses packing slip ${slip.packingSlipNumber}.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Replacement failed',
+        description: err?.message || 'Could not create replacement packing slip.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const voidShipmentMutation = useMutation({
     mutationFn: async ({ poNumber, shipment, reason }: { poNumber: string; shipment: CreatedShipment; reason: string }) => {
       return apiRequest(`/api/p2/shipments/${shipment.lotId}/void`, {
@@ -1072,6 +1116,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                     {/* ── Created shipment documents ── */}
                     {shipments.map((shipment) => {
                       const displayedShipmentDocumentNumber = shipment.invoiceNumber || shipment.slipNumber;
+                      const isInvoiceVoid = shipment.invoiceStatus?.toUpperCase() === 'VOID';
                       return (
                         <div key={shipment.lotId} className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm font-semibold">
@@ -1125,7 +1170,26 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                               )}
                             </Button>
                           )}
-                          {shipment.invoiceId ? (
+                          {shipment.invoiceId && isInvoiceVoid ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                                onClick={() => setLocation(`/finance/invoices/${shipment.invoiceId}`)}
+                              >
+                                <Receipt className="w-3 h-3 mr-1" />Voided Invoice {shipment.invoiceNumber}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                onClick={() => handleCreateReplacementPackingSlip(group.poNumber, shipment)}
+                              >
+                                <FileText className="w-3 h-3 mr-1" />Replacement Packing Slip
+                              </Button>
+                            </>
+                          ) : shipment.invoiceId ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -1163,7 +1227,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                               <Badge variant="outline" className={invoiceStatusColor(shipment.invoiceStatus)}>
                                 Invoice {shipment.invoiceStatus || 'created'}
                               </Badge>
-                              {shipment.journalEntryId ? (
+                              {isInvoiceVoid ? null : shipment.journalEntryId ? (
                                 <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
                                   JE #{shipment.journalEntryId} {shipment.journalEntryStatus || 'POSTED'}
                                   {shipment.journalLineCount ? ` (${shipment.journalLineCount} lines)` : ''}

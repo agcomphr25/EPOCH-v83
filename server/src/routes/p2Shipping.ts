@@ -1570,7 +1570,7 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
           ) AS journal_line_count
         FROM ar_invoices ar
         LEFT JOIN journal_entries je ON je.reference_uuid = ar.id
-        WHERE ar.lot_id = l.id
+        WHERE (ar.lot_id = l.id AND ar.status <> 'VOID')
           OR ar.packing_slip_id = ps.id
           OR (
             l.packing_slip_id IS NOT NULL
@@ -1647,14 +1647,33 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       .where(eq(p2LotNumbers.id, input.lotId));
     if (!lot) return res.status(404).json({ error: 'Lot not found' });
 
-    // Guard: one packing slip per lot.
-    // This guard checks whether the lot already has a packing slip assigned via
-    // p2_lot_numbers.packing_slip_id. Replacement slips are always created for
-    // NEW lots (the replacement items are repacked as a new lot with new serials),
-    // so this guard does not conflict with replacements — each lot can only ever
-    // have one packing slip regardless of whether the slip is a replacement.
-    if (lot.packingSlipId) {
+    // Guard: one current packing slip per lot. A same-lot replacement is allowed
+    // only when it explicitly replaces the current slip and no active invoice remains.
+    const replacingCurrentSlip = !!(
+      lot.packingSlipId &&
+      input.replacesPackingSlipId &&
+      input.replacesPackingSlipId === lot.packingSlipId
+    );
+
+    if (lot.packingSlipId && !replacingCurrentSlip) {
       return res.status(409).json({ error: 'Packing slip already exists for this lot' });
+    }
+
+    if (replacingCurrentSlip) {
+      const blockingInvoices = await pool.query<{ invoice_number: string; status: string }>(
+        `SELECT invoice_number, status
+           FROM ar_invoices
+          WHERE lot_id = $1::uuid
+             OR packing_slip_id = $2::uuid`,
+        [lot.id, lot.packingSlipId]
+      );
+      const activeInvoices = blockingInvoices.rows.filter((invoice) => invoice.status !== 'VOID');
+      if (activeInvoices.length > 0) {
+        return res.status(409).json({
+          error: 'Current packing slip still has an active invoice. Void the invoice before creating a replacement packing slip.',
+          invoices: activeInvoices,
+        });
+      }
     }
 
     const [existingSlipForLot] = await db
@@ -1662,7 +1681,7 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       .from(p2PackingSlips)
       .where(eq(p2PackingSlips.lotNumberId, lot.id));
 
-    if (existingSlipForLot) {
+    if (existingSlipForLot && !replacingCurrentSlip) {
       await db
         .update(p2LotNumbers)
         .set({ packingSlipId: existingSlipForLot.id })
@@ -1825,13 +1844,35 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       .set({ packingSlipId: slip.id })
       .where(eq(p2LotNumbers.id, lot.id));
 
-    await pool.query(`
-      UPDATE p2_serial_billing_assignments
-         SET packing_slip_id = $1,
-             updated_at = now()
-       WHERE serialized_item_id = ANY($2::uuid[])
-         AND locked_at IS NULL
-    `, [slip.id, serialIds]);
+    if (replacingCurrentSlip) {
+      await pool.query(`
+        UPDATE p2_serial_billing_assignments
+           SET packing_slip_id = $1,
+               invoice_id = NULL,
+               locked_at = NULL,
+               locked_by = NULL,
+               lock_reason = NULL,
+               updated_at = now()
+         WHERE serialized_item_id = ANY($2::uuid[])
+           AND (
+             locked_at IS NULL
+             OR invoice_id IN (
+               SELECT id
+                 FROM ar_invoices
+                WHERE status = 'VOID'
+                  AND (lot_id = $3::uuid OR packing_slip_id = $4::uuid)
+             )
+           )
+      `, [slip.id, serialIds, lot.id, input.replacesPackingSlipId]);
+    } else {
+      await pool.query(`
+        UPDATE p2_serial_billing_assignments
+           SET packing_slip_id = $1,
+               updated_at = now()
+         WHERE serialized_item_id = ANY($2::uuid[])
+           AND locked_at IS NULL
+      `, [slip.id, serialIds]);
+    }
 
     return res.status(201).json(slip);
   } catch (err: any) {

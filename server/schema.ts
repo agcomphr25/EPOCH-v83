@@ -702,7 +702,7 @@ export const inventoryItems = pgTable('inventory_items', {
   hasOtherDocs: boolean('has_other_docs').default(false), // Has Other Documents
   otherDocsFilePath: text('other_docs_file_path'), // Path to uploaded Other Docs PDF file
   assignedToAsset: text('assigned_to_asset'), // Asset this item is assigned to (name + tag from /assets)
-  defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO' or 'WEBSITE'
+  defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO', 'WEBSITE', or 'EMAIL'
   purchaseUnitId: integer('purchase_unit_id').references(() => units.id), // FK → units (measurement unit for purchasing)
   usageUnitId: integer('usage_unit_id').references(() => units.id), // FK → units (measurement unit for consumption)
   // Formal item type classification (replaces loose text `type` field)
@@ -854,7 +854,7 @@ export const partsRequests = pgTable('parts_requests', {
   receivedByDepartment: text('received_by_department'), // Who in the department received the parts
   vendorPoId: integer('vendor_po_id').references(() => vendorPOs.id), // Link to vendor PO if ordered
   vendorId: integer('vendor_id').references(() => vendors.id), // Assigned vendor for ordering
-  orderMethod: text('order_method'), // 'PO' for purchase order or 'WEBSITE' for online orders (McMaster-Carr, Amazon, etc.)
+  orderMethod: text('order_method'), // 'PO', 'WEBSITE', 'EMAIL', or operational methods such as 'LOCAL_PICKUP'
   vendorPartNumber: text('vendor_part_number'),
   productUrl: text('product_url'),
   notes: text('notes'),
@@ -3043,7 +3043,7 @@ export const insertPartsRequestSchema = createInsertSchema(partsRequests)
     receivedByDepartment: z.string().optional().nullable(),
     vendorPoId: z.number().optional().nullable(),
     vendorId: z.number().optional().nullable(),
-    orderMethod: z.enum(['PO', 'WEBSITE']).optional().nullable(),
+    orderMethod: z.enum(['PO', 'WEBSITE', 'EMAIL']).optional().nullable(),
     vendorPartNumber: z.string().optional().nullable(),
     productUrl: z.string().url().optional().nullable(),
     notes: z.string().optional().nullable(),
@@ -3661,7 +3661,7 @@ export const vendors = pgTable('vendors', {
   termsAndConditions: text('terms_and_conditions'), // Vendor-specific PO terms and conditions
   paymentTerms: text('payment_terms'), // Vendor-specific payment terms
   shippingInstructions: text('shipping_instructions'), // Vendor-specific shipping instructions
-  defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO' or 'WEBSITE'
+  defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO', 'WEBSITE', or 'EMAIL'
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -4379,7 +4379,7 @@ export const insertVendorSchema = createInsertSchema(vendors)
     state: z.string().optional(),
     zipCode: z.string().optional(),
     country: z.string().optional(),
-    defaultOrderMethod: z.enum(['PO', 'WEBSITE']).optional().nullable(),
+    defaultOrderMethod: z.enum(['PO', 'WEBSITE', 'EMAIL']).optional().nullable(),
     scope: z.string().optional(),
     approvalSource: z.string().optional(),
     approvalPdfUrl: z.string().optional(),

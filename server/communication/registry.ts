@@ -205,13 +205,13 @@ export async function getTemplateVersionHistory(
 
 export async function seedVendorEmailTemplates(db: any): Promise<void> {
   const existing = await db.execute(
-    sql`SELECT key FROM email_templates WHERE key IN ('vendor_rfq', 'vendor_po_issue', 'vendor_po_resend')`
+    sql`SELECT key FROM email_templates WHERE key IN ('vendor_rfq', 'vendor_po_issue', 'vendor_po_resend', 'parts_request_vendor_email')`
   );
   const existingKeys = new Set(
     (existing.rows ?? existing).map((r: any) => r.key)
   );
 
-  const templates = [VENDOR_RFQ_TEMPLATE, VENDOR_PO_ISSUE_TEMPLATE, VENDOR_PO_RESEND_TEMPLATE];
+  const templates = [VENDOR_RFQ_TEMPLATE, VENDOR_PO_ISSUE_TEMPLATE, VENDOR_PO_RESEND_TEMPLATE, PARTS_REQUEST_VENDOR_EMAIL_TEMPLATE];
 
   for (const tpl of templates) {
     if (!existingKeys.has(tpl.key)) {
@@ -522,6 +522,106 @@ Vendor: {{vendor_name}}
 Requested Delivery Date: {{requested_delivery_date}}
 
 If you have any questions about this order, please contact us at glenn@agadvanced.com or call 256-723-8381.
+
+---
+AG Composites
+230 Hamer Road
+Owens Cross Roads, AL 35763
+Phone: 256-723-8381
+Email: glenn@agadvanced.com`,
+};
+
+export const PARTS_REQUEST_VENDOR_EMAIL_TEMPLATE = {
+  key: 'parts_request_vendor_email',
+  name: 'Parts Request Vendor Email',
+  subject: 'Parts request from AG Composites',
+  allowedVariables: [
+    'vendor_name',
+    'vendor_contact_person',
+    'items_table',
+    'items_list',
+    'request_ids',
+    'buyer_name',
+    'buyer_email',
+    'notes_html',
+    'notes_text',
+  ],
+  attachmentRules: { systemNotice: true },
+  bodyHtml: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parts request from AG Composites</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background-color: #ffffff;
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      margin-bottom: 24px;
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 16px;
+    }
+    .header h1 { color: #1a1a1a; font-size: 22px; margin: 0; }
+    table { border-collapse: collapse; width: 100%; margin: 18px 0; }
+    th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; font-size: 14px; }
+    th { background: #f3f4f6; }
+    .footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Parts Request</h1>
+    </div>
+    <p>Hello{{vendor_contact_person}},</p>
+    <p>AG Composites would like to order the following item(s):</p>
+    {{items_table}}
+    {{notes_html}}
+    <p>Please reply with confirmation, availability, pricing if needed, and estimated ship date.</p>
+    <p>Request reference(s): {{request_ids}}</p>
+    <div class="footer">
+      <p>
+        <strong>AG Composites</strong><br>
+        230 Hamer Road<br>
+        Owens Cross Roads, AL 35763<br>
+        Phone: 256-723-8381<br>
+        Email: glenn@agadvanced.com
+      </p>
+    </div>
+  </div>
+</body>
+</html>`,
+  bodyText: `Parts Request
+
+Hello{{vendor_contact_person}},
+
+AG Composites would like to order the following item(s):
+
+{{items_list}}
+
+{{notes_text}}
+
+Please reply with confirmation, availability, pricing if needed, and estimated ship date.
+
+Request reference(s): {{request_ids}}
 
 ---
 AG Composites

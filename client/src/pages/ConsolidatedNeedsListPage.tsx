@@ -43,6 +43,7 @@ import {
   Eye,
   Link as LinkIcon,
   Send,
+  Mail,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -53,7 +54,7 @@ type InventoryItem = {
   source?: string | null;
   vendorName?: string | null;
   vendorId?: number | null;
-  defaultOrderMethod?: 'PO' | 'WEBSITE' | null;
+  defaultOrderMethod?: 'PO' | 'WEBSITE' | 'EMAIL' | null;
   supplierPartNumber?: string | null;
   currentBalance?: number;
   minStock?: number;
@@ -72,7 +73,7 @@ type Vendor = {
   email?: string;
   phone?: string;
   website?: string;
-  defaultOrderMethod?: 'PO' | 'WEBSITE' | null;
+  defaultOrderMethod?: 'PO' | 'WEBSITE' | 'EMAIL' | null;
 };
 
 type VendorPO = {
@@ -120,7 +121,7 @@ type PartsRequest = {
     externalPoNumber?: string | null;
     status?: string | null;
   };
-  orderMethod?: 'PO' | 'WEBSITE' | 'LOCAL_PICKUP';
+  orderMethod?: 'PO' | 'WEBSITE' | 'EMAIL' | 'LOCAL_PICKUP';
   vendorPartNumber?: string;
   productUrl?: string;
   qtyOrdered?: number;
@@ -159,7 +160,8 @@ const isArchivedFromConsolidatedNeeds = (request: PartsRequest) => {
   return request.status === 'RECEIVED' || request.status === 'DELIVERED_TO_DEPT';
 };
 
-const resolveEffectiveOrderMethod = (request: PartsRequest, vendor?: Vendor | null): 'PO' | 'WEBSITE' => {
+const resolveEffectiveOrderMethod = (request: PartsRequest, vendor?: Vendor | null): 'PO' | 'WEBSITE' | 'EMAIL' => {
+  if (request.orderMethod === 'EMAIL') return 'EMAIL';
   if (request.orderMethod === 'WEBSITE') return 'WEBSITE';
   if (request.orderMethod === 'PO') return 'PO';
   return request.inventoryItem?.defaultOrderMethod || vendor?.defaultOrderMethod || 'PO';
@@ -177,7 +179,7 @@ export default function ConsolidatedNeedsListPage() {
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
   const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor'>('by-vendor');
-  const [vendorFilterTab, setVendorFilterTab] = useState<'all' | 'po' | 'website'>('all');
+  const [vendorFilterTab, setVendorFilterTab] = useState<'all' | 'po' | 'website' | 'email'>('all');
   const [vendorRequestViews, setVendorRequestViews] = useState<Record<string, VendorRequestView>>({});
   const [statusView, setStatusView] = useState<StatusView>('OPEN');
   const [selectedVendorRequests, setSelectedVendorRequests] = useState<Set<number>>(new Set());
@@ -185,7 +187,7 @@ export default function ConsolidatedNeedsListPage() {
   const [isBulkOrderDialogOpen, setIsBulkOrderDialogOpen] = useState(false);
   const [bulkExpectedDelivery, setBulkExpectedDelivery] = useState('');
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
-  const [selectedOrderMethod, setSelectedOrderMethod] = useState<'PO' | 'WEBSITE'>('PO');
+  const [selectedOrderMethod, setSelectedOrderMethod] = useState<'PO' | 'WEBSITE' | 'EMAIL'>('PO');
   const [batchQuantities, setBatchQuantities] = useState<Record<number, number>>({});
   const [batchNotes, setBatchNotes] = useState('');
   const [batchPurchasingCategory, setBatchPurchasingCategory] = useState<'P1' | 'P2' | 'GENERAL' | 'R_AND_D'>('GENERAL');
@@ -239,7 +241,14 @@ export default function ConsolidatedNeedsListPage() {
   const isPoDraftableRequest = (request: PartsRequest) =>
     ['APPROVED', 'RECEIVED_PARTIAL'].includes(request.status)
     && resolveEffectiveOrderMethod(request, getResolvedVendorForRequest(request)) !== 'WEBSITE'
+    && resolveEffectiveOrderMethod(request, getResolvedVendorForRequest(request)) !== 'EMAIL'
     && request.orderMethod !== 'LOCAL_PICKUP'
+    && !request.vendorPoId
+    && getRemainingRequestQuantity(request) > 0;
+
+  const isEmailOrderableRequest = (request: PartsRequest) =>
+    ['APPROVED', 'RECEIVED_PARTIAL'].includes(request.status)
+    && resolveEffectiveOrderMethod(request, getResolvedVendorForRequest(request)) === 'EMAIL'
     && !request.vendorPoId
     && getRemainingRequestQuantity(request) > 0;
 
@@ -422,6 +431,37 @@ export default function ConsolidatedNeedsListPage() {
     },
   });
 
+  const sendVendorEmailMutation = useMutation({
+    mutationFn: async (data: {
+      vendorId: number;
+      requestIds: number[];
+      quantities: Record<number, number>;
+    }) => {
+      return apiRequest('/api/inventory/parts-requests/send-vendor-email', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      toast({
+        title: 'Vendor Email Sent',
+        description: result?.emailRecipient
+          ? `Request email was sent to ${result.emailRecipient}.`
+          : 'Request email was sent to the vendor.',
+      });
+      setSelectedVendorRequests(new Set());
+      setStatusView('OPEN');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Could not send vendor email',
+        description: error?.message || 'Failed to send the selected requests by email.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const linkVendorPoMutation = useMutation({
     mutationFn: async (data: {
       requestId: number;
@@ -588,6 +628,41 @@ export default function ConsolidatedNeedsListPage() {
       quantities,
       notes: localPickupNotes || undefined,
       receivedBy: user ? `${user.firstName} ${user.lastName}` : undefined,
+    });
+  };
+
+  const handleSendVendorEmail = (vendorGroup: VendorGroup) => {
+    if (!vendorGroup.vendorId) {
+      toast({
+        title: 'Vendor Required',
+        description: 'Assign a vendor before sending a request email.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const candidates = vendorGroup.requests.filter(isEmailOrderableRequest);
+    const selectedCandidates = candidates.filter(r => selectedVendorRequests.has(r.id));
+    const emailRequests = selectedCandidates.length > 0 ? selectedCandidates : candidates;
+
+    if (emailRequests.length === 0) {
+      toast({
+        title: 'No Email-Ready Requests',
+        description: 'Approve email-order requests before sending them to the vendor.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const quantities: Record<number, number> = {};
+    emailRequests.forEach((request) => {
+      quantities[request.id] = getRemainingRequestQuantity(request);
+    });
+
+    sendVendorEmailMutation.mutate({
+      vendorId: vendorGroup.vendorId,
+      requestIds: emailRequests.map((request) => request.id),
+      quantities,
     });
   };
 
@@ -952,9 +1027,11 @@ export default function ConsolidatedNeedsListPage() {
 
   const filteredVendorGroups = useMemo(() => {
     if (vendorFilterTab === 'po') {
-      return vendorGroups.filter(g => g.orderMethod !== 'WEBSITE');
+      return vendorGroups.filter(g => g.orderMethod !== 'WEBSITE' && g.orderMethod !== 'EMAIL');
     } else if (vendorFilterTab === 'website') {
       return vendorGroups.filter(g => g.orderMethod === 'WEBSITE');
+    } else if (vendorFilterTab === 'email') {
+      return vendorGroups.filter(g => g.orderMethod === 'EMAIL');
     }
     return vendorGroups;
   }, [vendorGroups, vendorFilterTab]);
@@ -1247,6 +1324,14 @@ export default function ConsolidatedNeedsListPage() {
   };
 
   const getOrderMethodBadge = (method: string | null) => {
+    if (method === 'EMAIL') {
+      return (
+        <Badge className="bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300 flex items-center gap-1">
+          <Mail className="w-3 h-3" />
+          Email
+        </Badge>
+      );
+    }
     if (method === 'WEBSITE') {
       return (
         <Badge className="bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 flex items-center gap-1">
@@ -1486,6 +1571,10 @@ export default function ConsolidatedNeedsListPage() {
               <Globe className="w-4 h-4 mr-1" />
               Website Orders
             </TabsTrigger>
+            <TabsTrigger value="email" data-testid="tab-vendor-email">
+              <Mail className="w-4 h-4 mr-1" />
+              Email Orders
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -1494,17 +1583,22 @@ export default function ConsolidatedNeedsListPage() {
           const vendorKey = vendorGroup.key;
           const isExpanded = expandedVendors.has(vendorKey);
           const readyRequests = vendorGroup.requests.filter(isPoDraftableRequest);
+          const emailReadyRequests = vendorGroup.requests.filter(isEmailOrderableRequest);
           const pickupReadyRequests = vendorGroup.requests.filter(isLocalPickupRequest);
           const approvedCount = readyRequests.length;
           const selectedReadyCount = readyRequests.filter(r => selectedVendorRequests.has(r.id)).length;
+          const selectedEmailReadyCount = emailReadyRequests.filter(r => selectedVendorRequests.has(r.id)).length;
           const actionCount = selectedReadyCount || approvedCount;
           const hasHighUrgency = vendorGroup.requests.some(r => r.urgency === 'HIGH' || r.urgency === 'CRITICAL');
           const isWebsiteGroup = vendorGroup.orderMethod === 'WEBSITE';
+          const isEmailGroup = vendorGroup.orderMethod === 'EMAIL';
           const orderedRequestsForVendor = vendorGroup.requests.filter(isOrderedVendorRequest);
           const needsOrderRequestsForVendor = vendorGroup.requests.filter((request) => !isOrderedVendorRequest(request));
           const vendorRequestView = getVendorRequestView(vendorKey);
           const visibleVendorRequests = getVendorRequestsForView(vendorGroup.requests, vendorRequestView);
-          const visibleSelectableRequests = visibleVendorRequests.filter(isOrderMarkableRequest);
+          const visibleSelectableRequests = visibleVendorRequests.filter((request) => (
+            isOrderMarkableRequest(request) || isEmailOrderableRequest(request)
+          ));
 
           return (
             <Card key={vendorKey} className={`${hasHighUrgency ? 'border-orange-300 dark:border-orange-700' : ''}`}>
@@ -1514,6 +1608,8 @@ export default function ConsolidatedNeedsListPage() {
                     <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
                       {vendorGroup.orderMethod === 'WEBSITE' ? (
                         <Globe className="w-5 h-5 text-blue-500 dark:text-blue-400" />
+                      ) : vendorGroup.orderMethod === 'EMAIL' ? (
+                        <Mail className="w-5 h-5 text-sky-500 dark:text-sky-400" />
                       ) : vendorGroup.vendorId ? (
                         <Building2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                       ) : (
@@ -1570,6 +1666,20 @@ export default function ConsolidatedNeedsListPage() {
                           Select All Ready
                         </Button>
                       </>
+                    )}
+                    {emailReadyRequests.length > 0 && isEmailGroup && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => handleSendVendorEmail(vendorGroup)}
+                        disabled={sendVendorEmailMutation.isPending}
+                        data-testid={`button-send-email-${vendorKey}`}
+                      >
+                        <Mail className="w-4 h-4 mr-1" />
+                        {sendVendorEmailMutation.isPending
+                          ? 'Sending...'
+                          : `Send Email (${selectedEmailReadyCount || emailReadyRequests.length})`}
+                      </Button>
                     )}
                     {pickupReadyRequests.length > 0 && !isWebsiteGroup && (
                       <Button
@@ -1659,12 +1769,14 @@ export default function ConsolidatedNeedsListPage() {
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                       {visibleVendorRequests.map((request) => {
                         const selectableForPo = isPoDraftableRequest(request);
+                        const selectableForEmail = isEmailOrderableRequest(request);
                         const selectableForOrder = isOrderMarkableRequest(request);
                         const effectiveOrderMethod = resolveEffectiveOrderMethod(request, getResolvedVendorForRequest(request));
                         const canLocalPickup = isLocalPickupRequest(request);
                         const canCreateNewPo = selectableForPo;
                         const canLinkExistingPo = !request.vendorPoId
                           && effectiveOrderMethod !== 'WEBSITE'
+                          && effectiveOrderMethod !== 'EMAIL'
                           && ['APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL'].includes(request.status)
                           && !['REJECTED', 'CANCELED', 'DELIVERED_TO_DEPT'].includes(request.status);
                         return (
@@ -1673,7 +1785,7 @@ export default function ConsolidatedNeedsListPage() {
                             <Checkbox
                               checked={selectedVendorRequests.has(request.id)}
                               onCheckedChange={() => toggleRequestSelection(request.id)}
-                              disabled={!selectableForOrder}
+                              disabled={!selectableForOrder && !selectableForEmail}
                               data-testid={`checkbox-request-${request.id}`}
                             />
                           </td>
@@ -1712,6 +1824,9 @@ export default function ConsolidatedNeedsListPage() {
                               {getStatusBadge(request.status)}
                               {effectiveOrderMethod === 'WEBSITE' && (
                                 <Badge className="bg-teal-100 text-teal-800 w-fit">Website order</Badge>
+                              )}
+                              {effectiveOrderMethod === 'EMAIL' && (
+                                <Badge className="bg-sky-100 text-sky-800 w-fit">Email order</Badge>
                               )}
                               {request.vendorPoId && (
                                 <Badge variant="outline" className="w-fit">
@@ -2233,7 +2348,7 @@ export default function ConsolidatedNeedsListPage() {
                     Local Pickup
                   </Button>
                 )}
-                {!detailRequest.vendorPoId && detailRequest.orderMethod !== 'WEBSITE' && ['APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL'].includes(detailRequest.status) && (
+                {!detailRequest.vendorPoId && !['WEBSITE', 'EMAIL'].includes(resolveEffectiveOrderMethod(detailRequest, getResolvedVendorForRequest(detailRequest))) && ['APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL'].includes(detailRequest.status) && (
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -2415,13 +2530,14 @@ export default function ConsolidatedNeedsListPage() {
 
             <div>
               <label className="block text-sm font-medium mb-1">Order Method</label>
-              <Select value={selectedOrderMethod} onValueChange={(v) => setSelectedOrderMethod(v as 'PO' | 'WEBSITE')}>
+              <Select value={selectedOrderMethod} onValueChange={(v) => setSelectedOrderMethod(v as 'PO' | 'WEBSITE' | 'EMAIL')}>
                 <SelectTrigger data-testid="select-order-method">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="PO">Purchase Order (PO)</SelectItem>
                   <SelectItem value="WEBSITE">Website Order</SelectItem>
+                  <SelectItem value="EMAIL">Email Order</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -1544,8 +1544,8 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
         l.lot_number,
         ps.id          AS slip_id,
         ps.packing_slip_number AS slip_number,
-        NULL::uuid AS cert_id,
-        NULL::text AS cert_number,
+        cc.id AS cert_id,
+        cc.certificate_number AS cert_number,
         inv.id AS invoice_id,
         inv.invoice_number,
         inv.status AS invoice_status,
@@ -1555,6 +1555,17 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
         COALESCE(inv.journal_line_count, 0)::int AS journal_line_count
       FROM p2_lot_numbers l
       JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
+      LEFT JOIN LATERAL (
+        SELECT coc.id, coc.certificate_number
+        FROM p2_certificates_of_conformance coc
+        WHERE coc.id = l.certificate_id
+           OR coc.lot_number_id = l.id
+           OR coc.lot_number = l.lot_number
+        ORDER BY
+          CASE WHEN coc.id = l.certificate_id THEN 0 ELSE 1 END,
+          coc.created_at DESC
+        LIMIT 1
+      ) cc ON TRUE
       LEFT JOIN LATERAL (
         SELECT
           ar.id,
@@ -2487,9 +2498,10 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
          FROM p2_certificates_of_conformance
         WHERE id = COALESCE($1::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
            OR lot_number_id = $2::uuid
+           OR lot_number = $3
         ORDER BY created_at DESC
         LIMIT 1`,
-      [lot.certificateId, lot.id]
+      [lot.certificateId, lot.id, lot.lotNumber]
     );
     if (existingCertRows.length > 0) {
       const existingCert = existingCertRows[0];
@@ -2507,6 +2519,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
         id: existingCert.id,
         certificateNumber: existingCert.certificate_number,
         alreadyExists: true,
+        reused: true,
       });
     }
 
@@ -3000,6 +3013,31 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
         [lot.certificate_id]
       );
       if (certRows.length) certificate = certRows[0];
+    }
+    if (!certificate) {
+      const certRows = await pool.query(
+        `SELECT id, certificate_number, lot_number, customer_id, customer_name,
+                po_number, part_number, part_name, quantity, serial_numbers,
+                manufacturing_date, ship_date, status, approved_by, approved_at,
+                issued_at, created_at
+         FROM p2_certificates_of_conformance
+         WHERE lot_number_id = $1 OR lot_number = $2
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [lot.id, lot.lot_number]
+      );
+      if (certRows.length) {
+        certificate = certRows[0];
+        await pool.query(
+          `UPDATE p2_lot_numbers
+             SET certificate_id = $1,
+                 updated_at = NOW()
+           WHERE id = $2
+             AND certificate_id IS DISTINCT FROM $1`,
+          [certificate.id, lot.id]
+        );
+        lot.certificate_id = certificate.id;
+      }
     }
 
     // Fetch serialized items in this lot

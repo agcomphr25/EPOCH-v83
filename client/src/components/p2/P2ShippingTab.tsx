@@ -6,7 +6,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import {
   Package,
@@ -24,10 +33,13 @@ import {
   ClipboardCheck,
   Zap,
   ExternalLink,
+  Receipt,
+  Ban,
 } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import ShipmentSummaryModal from './ShipmentSummaryModal';
+import P2InvoicePreviewButton from './P2InvoicePreviewButton';
 
 type SerializedUnit = {
   id: string;
@@ -51,11 +63,23 @@ type SerializedUnit = {
   completedAt: string | null;
   finalizedAt: string | null;
   finalizedBy: string | null;
+  projectId?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
+  projectPoId?: number | null;
+  projectPoNumber?: string | null;
+  projectPoItemId?: number | null;
 };
 
 type POGroup = {
   poNumber: string;
   poId: number;
+  shipmentPoId: number;
+  shipmentPoNumber: string;
+  shipmentPoItemId: number | null;
+  projectId: string | null;
+  projectCode: string | null;
+  projectName: string | null;
   customerName: string;
   units: SerializedUnit[];
   totalUnits: number;
@@ -71,7 +95,40 @@ type CreatedShipment = {
   slipNumber: string;
   certId?: string;
   certNumber?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  invoiceStatus?: string;
+  invoiceTotalAmount?: string;
+  journalEntryId?: number;
+  journalEntryStatus?: string;
+  journalLineCount?: number;
 };
+
+type ShipmentPoContext = {
+  poId?: number | null;
+  poNumber?: string | null;
+  poItemId?: number | null;
+  projectId?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
+};
+
+const P2_SHIPPING_TAB_BACK_TARGET = '/p2-control-center?tab=shipping';
+
+const buildPackingSlipViewerUrl = (slipId: string) =>
+  `/p2/packing-slip/${slipId}?backTo=${encodeURIComponent(P2_SHIPPING_TAB_BACK_TARGET)}`;
+
+function invoiceStatusColor(status?: string) {
+  switch (status?.toUpperCase()) {
+    case 'DRAFT': return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'REVIEW': return 'bg-orange-50 text-orange-700 border-orange-200';
+    case 'POSTED': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    case 'SENT': return 'bg-teal-50 text-teal-700 border-teal-200';
+    case 'PAID': return 'bg-green-50 text-green-800 border-green-200';
+    case 'VOID': return 'bg-gray-50 text-gray-600 border-gray-200';
+    default: return 'bg-gray-50 text-gray-700 border-gray-200';
+  }
+}
 
 export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds = [] }: { initialPO?: string; initialUnits?: string; selectedPOIds?: number[] } = {}) {
   const [, setLocation] = useLocation();
@@ -93,6 +150,10 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   const [generatingCertFor, setGeneratingCertFor] = useState<string | null>(null);
   const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
   const [summaryModalSerials, setSummaryModalSerials] = useState<SerializedUnit[]>([]);
+  const [summaryModalPoContext, setSummaryModalPoContext] = useState<ShipmentPoContext | null>(null);
+  const [cocModal, setCocModal] = useState<{ poNumber: string; lotId: string } | null>(null);
+  const [cocSpecialProcesses, setCocSpecialProcesses] = useState('N/A');
+  const [cocShipDate, setCocShipDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const autoTriggered = useRef(false);
 
@@ -102,17 +163,41 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   });
 
   const shippingUnits = selectedPOIds.length > 0
-    ? shippingUnitsRaw.filter((u) => selectedPOIds.includes(u.poId))
+    ? shippingUnitsRaw.filter((u) => selectedPOIds.includes(u.projectPoId ?? u.poId) || selectedPOIds.includes(u.poId))
     : shippingUnitsRaw;
+
+  const buildShipmentPoContext = (
+    units: SerializedUnit[],
+    fallbackPoNumber?: string | null,
+  ): ShipmentPoContext => {
+    const sample = units[0];
+    return {
+      poId: sample?.projectPoId ?? sample?.poId ?? null,
+      poNumber: sample?.projectPoNumber ?? fallbackPoNumber ?? sample?.poNumber ?? null,
+      poItemId: sample?.projectPoItemId ?? null,
+      projectId: sample?.projectId ?? null,
+      projectCode: sample?.projectCode ?? null,
+      projectName: sample?.projectName ?? null,
+    };
+  };
 
   type ExistingShipmentRow = {
     po_id: number;
+    source_po_ids?: number[] | null;
+    source_po_numbers?: string[] | null;
     lot_id: string;
     lot_number: string;
     slip_id: string;
     slip_number: string;
     cert_id: string | null;
     cert_number: string | null;
+    invoice_id: string | null;
+    invoice_number: string | null;
+    invoice_status: string | null;
+    invoice_total_amount: string | null;
+    journal_entry_id: number | null;
+    journal_entry_status: string | null;
+    journal_line_count: number | null;
   };
 
   const { data: existingShipmentRows = [] } = useQuery<ExistingShipmentRow[]>({
@@ -120,10 +205,17 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   });
 
   // Build poId → poNumber lookup from the live shipping queue
-  const poIdToNumber = useMemo(() => {
-    const map: Record<number, string> = {};
+  const shipmentPoIdToGroupKeys = useMemo(() => {
+    const map: Record<number, Set<string>> = {};
     for (const u of shippingUnits) {
-      if (u.poId && u.poNumber) map[u.poId] = u.poNumber;
+      if (u.poId && u.poNumber) {
+        map[u.poId] = map[u.poId] ?? new Set<string>();
+        map[u.poId].add(u.poNumber);
+      }
+      if (u.projectPoId && u.poNumber) {
+        map[u.projectPoId] = map[u.projectPoId] ?? new Set<string>();
+        map[u.projectPoId].add(u.poNumber);
+      }
     }
     return map;
   }, [shippingUnits]);
@@ -132,14 +224,16 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   // Merges server rows into existing local state: adds missing lots but preserves locally-enriched
   // fields (e.g. certId/certNumber set by handleGenerateCoC before the next server refetch).
   useEffect(() => {
-    if (!existingShipmentRows.length || !Object.keys(poIdToNumber).length) return;
+    if (!existingShipmentRows.length || !Object.keys(shipmentPoIdToGroupKeys).length) return;
     setCreatedShipments((prev) => {
       const next: Record<string, CreatedShipment[]> = { ...prev };
       for (const row of existingShipmentRows) {
-        const poNumber = poIdToNumber[row.po_id];
-        if (!poNumber) continue;
-        if (!next[poNumber]) next[poNumber] = [];
-        const existingIdx = next[poNumber].findIndex((s) => s.lotId === row.lot_id);
+        const poNumbers = Array.from(new Set<string>([
+          ...(row.source_po_numbers ?? []),
+          ...Array.from(shipmentPoIdToGroupKeys[row.po_id] ?? []),
+          ...(row.source_po_ids ?? []).flatMap((poId) => Array.from(shipmentPoIdToGroupKeys[poId] ?? [])),
+        ].filter((poNumber): poNumber is string => !!poNumber)));
+        if (poNumbers.length === 0) continue;
         const serverEntry: CreatedShipment = {
           lotId: row.lot_id,
           lotNumber: row.lot_number,
@@ -147,23 +241,34 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           slipNumber: row.slip_number,
           certId: row.cert_id ?? undefined,
           certNumber: row.cert_number ?? undefined,
+          invoiceId: row.invoice_id ?? undefined,
+          invoiceNumber: row.invoice_number ?? undefined,
+          invoiceStatus: row.invoice_status ?? undefined,
+          invoiceTotalAmount: row.invoice_total_amount ?? undefined,
+          journalEntryId: row.journal_entry_id ?? undefined,
+          journalEntryStatus: row.journal_entry_status ?? undefined,
+          journalLineCount: row.journal_line_count ?? undefined,
         };
-        if (existingIdx === -1) {
-          next[poNumber] = [...next[poNumber], serverEntry];
-        } else {
-          const local = next[poNumber][existingIdx];
-          // Prefer local cert fields if server hasn't caught up yet
-          const merged: CreatedShipment = {
-            ...serverEntry,
-            certId: local.certId ?? serverEntry.certId,
-            certNumber: local.certNumber ?? serverEntry.certNumber,
-          };
-          next[poNumber] = next[poNumber].map((s, i) => (i === existingIdx ? merged : s));
+        for (const poNumber of poNumbers) {
+          if (!next[poNumber]) next[poNumber] = [];
+          const existingIdx = next[poNumber].findIndex((s) => s.lotId === row.lot_id);
+          if (existingIdx === -1) {
+            next[poNumber] = [...next[poNumber], serverEntry];
+          } else {
+            const local = next[poNumber][existingIdx];
+            // Prefer local cert fields if server hasn't caught up yet
+            const merged: CreatedShipment = {
+              ...serverEntry,
+              certId: local.certId ?? serverEntry.certId,
+              certNumber: local.certNumber ?? serverEntry.certNumber,
+            };
+            next[poNumber] = next[poNumber].map((s, i) => (i === existingIdx ? merged : s));
+          }
         }
       }
       return next;
     });
-  }, [existingShipmentRows, poIdToNumber]);
+  }, [existingShipmentRows, shipmentPoIdToGroupKeys]);
 
   const poGroups = useMemo(() => {
     const groups: Record<string, POGroup> = {};
@@ -173,6 +278,12 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
         groups[key] = {
           poNumber: unit.poNumber,
           poId: unit.poId,
+          shipmentPoId: unit.projectPoId ?? unit.poId,
+          shipmentPoNumber: unit.projectPoNumber ?? unit.poNumber,
+          shipmentPoItemId: unit.projectPoItemId ?? null,
+          projectId: unit.projectId ?? null,
+          projectCode: unit.projectCode ?? null,
+          projectName: unit.projectName ?? null,
           customerName: unit.customerName,
           units: [],
           totalUnits: 0,
@@ -238,7 +349,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   useEffect(() => {
     if (!initialPO || autoTriggered.current || shippingUnits.length === 0) return;
     const readyForPO = shippingUnits.filter(
-      (u) => u.poNumber === initialPO &&
+      (u) => (u.poNumber === initialPO || u.projectPoNumber === initialPO) &&
              u.status === 'COMPLETED' &&
              !!(u.finalizedAt && u.sku && u.drawingName)
     );
@@ -259,6 +370,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
 
     setSelectedSerials((prev) => ({ ...prev, [initialPO]: new Set(unitsToShip.map((u) => u.id)) }));
     setSummaryModalSerials(unitsToShip);
+    setSummaryModalPoContext(buildShipmentPoContext(unitsToShip, initialPO));
     setSummaryModalPO(initialPO);
   }, [initialPO, initialUnits, shippingUnits]);
 
@@ -355,13 +467,28 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     });
   };
 
-  const handleCreateShipment = async (poNumber: string, serialIds: string[]) => {
+  const handleCreateShipment = async (
+    poNumber: string,
+    serialIds: string[],
+    billingAssignments: { serializedItemId: string; allocationId: string }[] = [],
+    billingBucketOverrides: {
+      poId?: number;
+      poNumber?: string;
+      poItemId: number;
+      bucketLabel: string;
+      description?: string;
+      customerPoLine?: string;
+      quantityAuthorized?: number;
+      unitPrice?: number;
+      serialIds?: string[];
+    }[] = [],
+  ) => {
     if (serialIds.length === 0) return;
     setCreatingShipmentFor(poNumber);
     try {
       const lot = await apiRequest('/api/p2/lots', {
         method: 'POST',
-        body: JSON.stringify({ serialIds, createdBy: 'shipping' }),
+        body: JSON.stringify({ serialIds, createdBy: 'shipping', billingAssignments, billingBucketOverrides }),
       });
       const slip = await apiRequest('/api/p2/packing-slips', {
         method: 'POST',
@@ -386,12 +513,21 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     }
   };
 
-  const handleGenerateCoC = async (poNumber: string, lotId: string) => {
+  const openCoCModal = (poNumber: string, lotId: string) => {
+    setCocModal({ poNumber, lotId });
+    setCocSpecialProcesses('N/A');
+    setCocShipDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const handleGenerateCoC = async () => {
+    if (!cocModal) return;
+    const { poNumber, lotId } = cocModal;
+    const specialProcesses = cocSpecialProcesses.trim() || 'N/A';
     setGeneratingCertFor(lotId);
     try {
       const cert = await apiRequest('/api/p2/certificates', {
         method: 'POST',
-        body: JSON.stringify({ lotId, createdBy: 'shipping' }),
+        body: JSON.stringify({ lotId, createdBy: 'shipping', specialProcesses, shipDate: cocShipDate }),
       });
       setCreatedShipments((prev) => {
         const list = prev[poNumber] ?? [];
@@ -402,12 +538,75 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           ),
         };
       });
-      toast({ title: 'CoC Generated', description: `Certificate ${cert.certificateNumber} created.` });
+      setCocModal(null);
+      toast({
+        title: cert.reused || cert.alreadyExists ? 'CoC Ready' : 'CoC Generated',
+        description: cert.reused || cert.alreadyExists
+          ? `Using existing certificate ${cert.certificateNumber} for this lot.`
+          : `Certificate ${cert.certificateNumber} created.`,
+      });
     } catch (err: any) {
       toast({ title: 'CoC Failed', description: err?.message || 'Failed to generate certificate', variant: 'destructive' });
     } finally {
       setGeneratingCertFor(null);
     }
+  };
+
+  const handleInvoiceCreated = (poNumber: string, shipment: CreatedShipment, invoice: any) => {
+    setCreatedShipments((prev) => {
+      const list = prev[poNumber] ?? [];
+      return {
+        ...prev,
+        [poNumber]: list.map((s) =>
+          s.slipId === shipment.slipId
+            ? {
+                ...s,
+                invoiceId: invoice?.id,
+                invoiceNumber: invoice?.invoiceNumber,
+                invoiceStatus: invoice?.status,
+              }
+            : s
+        ),
+      };
+    });
+    queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+    queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+  };
+
+  const voidShipmentMutation = useMutation({
+    mutationFn: async ({ poNumber, shipment, reason }: { poNumber: string; shipment: CreatedShipment; reason: string }) => {
+      return apiRequest(`/api/p2/shipments/${shipment.lotId}/void`, {
+        method: 'POST',
+        body: { reason },
+      });
+    },
+    onSuccess: (_result, variables) => {
+      setCreatedShipments((prev) => ({
+        ...prev,
+        [variables.poNumber]: (prev[variables.poNumber] ?? []).filter((s) => s.lotId !== variables.shipment.lotId),
+      }));
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/shipping-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/shipments'] });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+      toast({
+        title: 'Shipment voided',
+        description: `${variables.shipment.lotNumber} was voided. Finalized units are available to regroup.`,
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Void failed',
+        description: err?.message || 'Shipment could not be voided.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleVoidShipment = (poNumber: string, shipment: CreatedShipment) => {
+    const reason = window.prompt(`Reason for voiding lot ${shipment.lotNumber}? Finalized units will be released for regrouping.`);
+    if (!reason || !reason.trim()) return;
+    voidShipmentMutation.mutate({ poNumber, shipment, reason: reason.trim() });
   };
 
   const summary = useMemo(() => {
@@ -437,16 +636,19 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
       {summaryModalPO && (
         <ShipmentSummaryModal
           serials={summaryModalSerials}
-          onConfirm={() => {
+          poContext={summaryModalPoContext ?? undefined}
+          onConfirm={(billingAssignments, billingBucketOverrides) => {
             const po = summaryModalPO!;
             const ids = summaryModalSerials.map((s) => s.id);
             setSummaryModalPO(null);
             setSummaryModalSerials([]);
-            handleCreateShipment(po, ids);
+            setSummaryModalPoContext(null);
+            handleCreateShipment(po, ids, billingAssignments, billingBucketOverrides);
           }}
           onCancel={() => {
             setSummaryModalPO(null);
             setSummaryModalSerials([]);
+            setSummaryModalPoContext(null);
           }}
         />
       )}
@@ -555,6 +757,14 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                             [group.poNumber]: new Set(finalizedUnits.map((u) => u.id)),
                           }));
                           setSummaryModalSerials(finalizedUnits);
+                          setSummaryModalPoContext({
+                            poId: group.shipmentPoId,
+                            poNumber: group.shipmentPoNumber,
+                            poItemId: group.shipmentPoItemId,
+                            projectId: group.projectId,
+                            projectCode: group.projectCode,
+                            projectName: group.projectName,
+                          });
                           setSummaryModalPO(group.poNumber);
                         }}
                       >
@@ -843,6 +1053,14 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                           onClick={() => {
                             const selected = group.units.filter((u) => shipSelForPO.has(u.id));
                             setSummaryModalSerials(selected);
+                            setSummaryModalPoContext({
+                              poId: group.shipmentPoId,
+                              poNumber: group.shipmentPoNumber,
+                              poItemId: group.shipmentPoItemId,
+                              projectId: group.projectId,
+                              projectCode: group.projectCode,
+                              projectName: group.projectName,
+                            });
                             setSummaryModalPO(group.poNumber);
                           }}
                           className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -857,8 +1075,10 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                     )}
 
                     {/* ── Created shipment documents ── */}
-                    {shipments.map((shipment) => (
-                      <div key={shipment.lotId} className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
+                    {shipments.map((shipment) => {
+                      const displayedShipmentDocumentNumber = shipment.invoiceNumber || shipment.slipNumber;
+                      return (
+                        <div key={shipment.lotId} className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm font-semibold">
                           <CheckCircle className="w-4 h-4" />
                           Shipment Created
@@ -870,14 +1090,14 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                             >
                               {shipment.lotNumber}
                             </Link>
-                            {' '}· {shipment.slipNumber}
+                            {' '}· {displayedShipmentDocumentNumber}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Button
                             size="sm" variant="outline"
                             className="border-green-300 text-green-700 hover:bg-green-50"
-                            onClick={() => window.open(`/p2/packing-slip/${shipment.slipId}`, '_blank')}
+                            onClick={() => window.open(buildPackingSlipViewerUrl(shipment.slipId), '_blank')}
                           >
                             <FileText className="w-3 h-3 mr-1" />Packing Slip
                           </Button>
@@ -901,7 +1121,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                               size="sm" variant="outline"
                               className="border-blue-300 text-blue-700 hover:bg-blue-50"
                               disabled={generatingCertFor === shipment.lotId}
-                              onClick={() => handleGenerateCoC(group.poNumber, shipment.lotId)}
+                              onClick={() => openCoCModal(group.poNumber, shipment.lotId)}
                             >
                               {generatingCertFor === shipment.lotId ? (
                                 <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Generating...</>
@@ -910,9 +1130,64 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                               )}
                             </Button>
                           )}
+                          {shipment.invoiceId ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => setLocation(`/finance/invoices/${shipment.invoiceId}`)}
+                            >
+                              <Receipt className="w-3 h-3 mr-1" />Invoice {shipment.invoiceNumber}
+                            </Button>
+                          ) : (
+                            <P2InvoicePreviewButton
+                              packingSlipId={shipment.slipId}
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                              onCreated={(invoice) => handleInvoiceCreated(group.poNumber, shipment, invoice)}
+                            />
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-red-300 text-red-700 hover:bg-red-50"
+                            disabled={voidShipmentMutation.isPending && voidShipmentMutation.variables?.shipment.lotId === shipment.lotId}
+                            onClick={() => handleVoidShipment(group.poNumber, shipment)}
+                          >
+                            {voidShipmentMutation.isPending && voidShipmentMutation.variables?.shipment.lotId === shipment.lotId ? (
+                              <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Voiding...</>
+                            ) : (
+                              <><Ban className="w-3 h-3 mr-1" />Void</>
+                            )}
+                          </Button>
                         </div>
-                      </div>
-                    ))}
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          {shipment.invoiceId ? (
+                            <>
+                              <Badge variant="outline" className={invoiceStatusColor(shipment.invoiceStatus)}>
+                                Invoice {shipment.invoiceStatus || 'created'}
+                              </Badge>
+                              {shipment.journalEntryId ? (
+                                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                                  JE #{shipment.journalEntryId} {shipment.journalEntryStatus || 'POSTED'}
+                                  {shipment.journalLineCount ? ` (${shipment.journalLineCount} lines)` : ''}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                  JE pending until invoice is posted
+                                </Badge>
+                              )}
+                            </>
+                          ) : (
+                            <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200">
+                              No invoice created
+                            </Badge>
+                          )}
+                        </div>
+                        </div>
+                      );
+                    })}
 
                     {allCompletedFinalized && shipments.length === 0 && (
                       <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg">
@@ -932,6 +1207,60 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           })}
         </div>
       )}
+      <Dialog open={!!cocModal} onOpenChange={(open) => !open && setCocModal(null)}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle>Generate Certificate of Conformance</DialogTitle>
+            <DialogDescription>
+              Confirm the shipping date and any special processes before creating the CoC.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="coc-ship-date">Shipping Date</Label>
+              <Input
+                id="coc-ship-date"
+                type="date"
+                value={cocShipDate}
+                onChange={(event) => setCocShipDate(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="coc-special-processes">Special Processes</Label>
+              <Textarea
+                id="coc-special-processes"
+                value={cocSpecialProcesses}
+                onChange={(event) => setCocSpecialProcesses(event.target.value)}
+                placeholder="N/A"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCocModal(null)}
+              disabled={!!cocModal && generatingCertFor === cocModal.lotId}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleGenerateCoC}
+              disabled={!cocShipDate || (!!cocModal && generatingCertFor === cocModal.lotId)}
+            >
+              {!!cocModal && generatingCertFor === cocModal.lotId ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating...</>
+              ) : (
+                <><ClipboardCheck className="w-4 h-4 mr-2" />Generate CoC</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

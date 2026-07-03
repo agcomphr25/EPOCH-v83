@@ -842,6 +842,21 @@ export default function InventoryReceivingPage() {
       }
       const combinedNotes = noteParts.join(' | ');
 
+      // Build per-unit splits payload (Task #240) — when perUnitMode is on,
+      // each finalUnitsData entry becomes its own material_lots row on the
+      // server with its own traceability values, instead of the receive being
+      // collapsed into a single lot with everything stuffed into notes.
+      const unitsPayload = perUnitMode && finalUnitsData.length > 0
+        ? finalUnitsData.map((unitData) => {
+            // Stringify any non-string values defensively for the API
+            const trace: Record<string, string> = {};
+            for (const [k, v] of Object.entries(unitData)) {
+              if (v != null && String(v).trim() !== '') trace[k] = String(v);
+            }
+            return { quantity: 1, traceability: trace };
+          })
+        : undefined;
+
       // Update the vendor PO item with received quantity
       await apiRequest(`/api/vendor-pos/items/${selectedReceivingItem.id}/receive`, {
         method: 'POST',
@@ -850,6 +865,7 @@ export default function InventoryReceivingPage() {
           notes: combinedNotes || undefined,
           cocLink: dialogReceivingData.cocLink || undefined,
           documentUrl: dialogReceivingData.pdfUrl || undefined,
+          units: unitsPayload,
         }),
       });
 

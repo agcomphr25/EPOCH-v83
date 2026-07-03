@@ -1,11 +1,34 @@
 import { Factory } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import DashboardGrid from '@/components/widgets/DashboardGrid';
 import DashboardControlBar from '@/components/widgets/DashboardControlBar';
 import ControlTowerRibbon from '@/components/widgets/ControlTowerRibbon';
+import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 import { PCC_DASHBOARD_LAYOUT } from '@/config/pccDashboardLayout';
 import { DashboardFilterProvider } from '@/contexts/DashboardFilterContext';
+import { apiRequest } from '@/lib/queryClient';
+
+type CurrentUser = {
+  id: number;
+  username: string;
+  role: string;
+  employeeId?: number | null;
+};
 
 export default function ProductionControlCenter() {
+  const { data: currentUser } = useQuery<CurrentUser | null>({
+    queryKey: ['currentUser'],
+    queryFn: () => apiRequest('/api/auth/session'),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    queryFn: () => apiRequest('/api/timekeeping/my-employee-id'),
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
+
   return (
     <DashboardFilterProvider>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -29,6 +52,16 @@ export default function ProductionControlCenter() {
           </div>
 
           <ControlTowerRibbon />
+
+          {dashboardEmployeeId && (
+            <div className="mb-6">
+              <MyTasksControlCenter
+                employeeId={dashboardEmployeeId}
+                userName={currentUser?.username ?? 'tandym'}
+                compact={false}
+              />
+            </div>
+          )}
 
           <DashboardGrid layout={PCC_DASHBOARD_LAYOUT} />
         </div>

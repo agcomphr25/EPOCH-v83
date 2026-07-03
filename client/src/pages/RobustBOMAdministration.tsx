@@ -1702,6 +1702,15 @@ function P2POBOMsSection() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBom, setSelectedBom] = useState<any>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
+  const [metadataDraft, setMetadataDraft] = useState<any>({});
+  const [itemDrafts, setItemDrafts] = useState<any[]>([]);
+  const [newItemDraft, setNewItemDraft] = useState({
+    partName: '',
+    quantity: '1',
+    itemType: 'material',
+    firstDept: 'Layup',
+    notes: '',
+  });
 
   const { data: p2PoBoms, isLoading } = useQuery({
     queryKey: ['/api/robust-boms/p2-po-boms', { search: searchTerm }],
@@ -1713,6 +1722,102 @@ function P2POBOMsSection() {
     queryFn: () => apiRequest(`/api/robust-boms/p2-po-boms/${selectedBom?.id}`),
     enabled: !!selectedBom?.id && isViewOpen,
   });
+
+  useEffect(() => {
+    if (!bomDetail) return;
+    setMetadataDraft({
+      sku: bomDetail.sku || '',
+      modelName: bomDetail.modelName || '',
+      revision: bomDetail.revision || 'A',
+      description: bomDetail.description || '',
+    });
+    setItemDrafts((bomDetail.items || []).map((item: any) => ({
+      ...item,
+      quantity: String(item.quantity ?? 1),
+      firstDept: item.firstDept || 'Layup',
+      itemType: item.itemType || 'material',
+      notes: item.notes || '',
+    })));
+  }, [bomDetail]);
+
+  const invalidateP2BomQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/p2-po-boms'] });
+    if (selectedBom?.id) {
+      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/p2-po-boms', selectedBom.id] });
+    }
+  };
+
+  const updateMetadataMutation = useMutation({
+    mutationFn: () => apiRequest(`/api/robust-boms/p2-po-boms/${selectedBom?.id}`, {
+      method: 'PUT',
+      body: metadataDraft,
+    }),
+    onSuccess: (updatedBom) => {
+      setSelectedBom(updatedBom);
+      invalidateP2BomQueries();
+      toast({ title: 'P2 BOM updated' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to update P2 BOM', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const updateItemMutation = useMutation({
+    mutationFn: (item: any) => apiRequest(`/api/robust-boms/p2-po-boms/${selectedBom?.id}/items/${item.id}`, {
+      method: 'PUT',
+      body: {
+        partName: item.partName,
+        quantity: Number.parseFloat(String(item.quantity)),
+        itemType: item.itemType,
+        firstDept: item.firstDept,
+        notes: item.notes,
+      },
+    }),
+    onSuccess: () => {
+      invalidateP2BomQueries();
+      toast({ title: 'BOM item updated' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to update BOM item', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const addItemMutation = useMutation({
+    mutationFn: () => apiRequest(`/api/robust-boms/p2-po-boms/${selectedBom?.id}/items`, {
+      method: 'POST',
+      body: {
+        ...newItemDraft,
+        quantity: Number.parseFloat(String(newItemDraft.quantity)),
+      },
+    }),
+    onSuccess: () => {
+      setNewItemDraft({ partName: '', quantity: '1', itemType: 'material', firstDept: 'Layup', notes: '' });
+      invalidateP2BomQueries();
+      toast({ title: 'BOM item added' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to add BOM item', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: (itemId: string) => apiRequest(`/api/robust-boms/p2-po-boms/${selectedBom?.id}/items/${itemId}`, {
+      method: 'DELETE',
+    }),
+    onSuccess: () => {
+      invalidateP2BomQueries();
+      toast({ title: 'BOM item removed' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to remove BOM item', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const updateItemDraft = (index: number, updates: Record<string, unknown>) => {
+    setItemDrafts((current) => current.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, ...updates } : item
+    )));
+  };
 
   return (
     <Card>
@@ -1745,6 +1850,7 @@ function P2POBOMsSection() {
             <TableHeader>
               <TableRow>
                 <TableHead>Part Number / SKU</TableHead>
+                <TableHead>Internal Part #</TableHead>
                 <TableHead>Model Name</TableHead>
                 <TableHead>Revision</TableHead>
                 <TableHead>Description</TableHead>
@@ -1756,6 +1862,19 @@ function P2POBOMsSection() {
               {p2PoBoms.map((bom: any) => (
                 <TableRow key={bom.id}>
                   <TableCell className="font-medium">{bom.sku || '-'}</TableCell>
+                  <TableCell>
+                    {bom.internalPartNumber ? (
+                      <Button
+                        variant="link"
+                        className="h-auto p-0 font-mono"
+                        onClick={() => window.open(`/inventory/manager?part=${encodeURIComponent(bom.internalPartNumber)}`, '_self')}
+                      >
+                        {bom.internalPartNumber}
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground">Unlinked</span>
+                    )}
+                  </TableCell>
                   <TableCell>{bom.modelName}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{bom.revision}</Badge>
@@ -1774,7 +1893,7 @@ function P2POBOMsSection() {
                       }}
                       title="View BOM details"
                     >
-                      <FileText className="h-4 w-4" />
+                      <FileEdit className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -1787,9 +1906,9 @@ function P2POBOMsSection() {
           setIsViewOpen(open);
           if (!open) setSelectedBom(null);
         }}>
-          <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetContent side="right" className="w-full sm:max-w-4xl overflow-y-auto">
             <SheetHeader>
-              <SheetTitle>P2 PO BOM Details</SheetTitle>
+              <SheetTitle>Edit P2 PO BOM</SheetTitle>
               <SheetDescription>
                 {selectedBom?.sku} - {selectedBom?.modelName}
               </SheetDescription>
@@ -1800,21 +1919,56 @@ function P2POBOMsSection() {
               <div className="mt-6 space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Part Number</label>
-                    <p className="font-medium">{bomDetail.sku || '-'}</p>
+                    <Label>Part Number / SKU</Label>
+                    <Input
+                      value={metadataDraft.sku || ''}
+                      onChange={(e) => setMetadataDraft({ ...metadataDraft, sku: e.target.value })}
+                    />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Model Name</label>
-                    <p className="font-medium">{bomDetail.modelName}</p>
+                    <Label>Model Name</Label>
+                    <Input
+                      value={metadataDraft.modelName || ''}
+                      onChange={(e) => setMetadataDraft({ ...metadataDraft, modelName: e.target.value })}
+                    />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Revision</label>
-                    <p>{bomDetail.revision}</p>
+                    <Label>Revision</Label>
+                    <Input
+                      value={metadataDraft.revision || ''}
+                      onChange={(e) => setMetadataDraft({ ...metadataDraft, revision: e.target.value })}
+                    />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
-                    <p>{bomDetail.description || '-'}</p>
+                    <Label>Internal Part #</Label>
+                    {bomDetail.internalPartNumber ? (
+                      <Button
+                        variant="link"
+                        className="h-10 px-0 font-mono"
+                        onClick={() => window.open(`/inventory/manager?part=${encodeURIComponent(bomDetail.internalPartNumber)}`, '_self')}
+                      >
+                        {bomDetail.internalPartNumber} - {bomDetail.internalPartName || 'Inventory item'}
+                      </Button>
+                    ) : (
+                      <div className="flex h-10 items-center text-sm text-muted-foreground">No internal inventory part linked</div>
+                    )}
                   </div>
+                  <div className="col-span-2">
+                    <Label>Description</Label>
+                    <Textarea
+                      value={metadataDraft.description || ''}
+                      onChange={(e) => setMetadataDraft({ ...metadataDraft, description: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => updateMetadataMutation.mutate()}
+                    disabled={updateMetadataMutation.isPending}
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    Save BOM
+                  </Button>
                 </div>
 
                 {bomDetail.linkedPurchaseOrders && bomDetail.linkedPurchaseOrders.length > 0 && (
@@ -1832,7 +1986,7 @@ function P2POBOMsSection() {
 
                 <div>
                   <h4 className="font-semibold mb-2">BOM Items ({bomDetail.items?.length || 0})</h4>
-                  {bomDetail.items && bomDetail.items.length > 0 ? (
+                  {itemDrafts.length > 0 ? (
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1841,21 +1995,77 @@ function P2POBOMsSection() {
                           <TableHead>Qty</TableHead>
                           <TableHead>First Dept</TableHead>
                           <TableHead>Notes</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {bomDetail.items.map((item: any) => (
+                        {itemDrafts.map((item: any, index: number) => (
                           <TableRow key={item.id}>
-                            <TableCell className="font-medium">{item.partName}</TableCell>
                             <TableCell>
-                              <Badge variant={item.itemType === 'manufactured' ? 'default' : 'outline'}>
-                                {item.itemType}
-                              </Badge>
+                              <Input
+                                value={item.partName || ''}
+                                onChange={(e) => updateItemDraft(index, { partName: e.target.value })}
+                              />
                             </TableCell>
-                            <TableCell>{item.quantity}</TableCell>
-                            <TableCell>{item.firstDept}</TableCell>
-                            <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
-                              {item.notes || '-'}
+                            <TableCell>
+                              <Select
+                                value={item.itemType || 'material'}
+                                onValueChange={(value) => updateItemDraft(index, { itemType: value })}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="material">Material</SelectItem>
+                                  <SelectItem value="manufactured">Manufactured</SelectItem>
+                                  <SelectItem value="sub_assembly">Sub-assembly</SelectItem>
+                                  <SelectItem value="labor">Labor</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="0.0001"
+                                step="any"
+                                value={item.quantity}
+                                onChange={(e) => updateItemDraft(index, { quantity: e.target.value })}
+                                className="w-24"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                value={item.firstDept || ''}
+                                onChange={(e) => updateItemDraft(index, { firstDept: e.target.value })}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                value={item.notes || ''}
+                                onChange={(e) => updateItemDraft(index, { notes: e.target.value })}
+                              />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => updateItemMutation.mutate(item)}
+                                  disabled={updateItemMutation.isPending}
+                                  title="Save item"
+                                >
+                                  <Save className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deleteItemMutation.mutate(item.id)}
+                                  disabled={deleteItemMutation.isPending}
+                                  title="Remove item"
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1864,6 +2074,69 @@ function P2POBOMsSection() {
                   ) : (
                     <p className="text-sm text-muted-foreground">No items configured yet</p>
                   )}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <h4 className="font-semibold">Add BOM Item</h4>
+                  <div className="grid grid-cols-[1.4fr_0.8fr_0.6fr_0.9fr_1.2fr_auto] gap-2 items-end">
+                    <div>
+                      <Label>Part Name / Internal #</Label>
+                      <Input
+                        value={newItemDraft.partName}
+                        onChange={(e) => setNewItemDraft({ ...newItemDraft, partName: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label>Type</Label>
+                      <Select
+                        value={newItemDraft.itemType}
+                        onValueChange={(value) => setNewItemDraft({ ...newItemDraft, itemType: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="material">Material</SelectItem>
+                          <SelectItem value="manufactured">Manufactured</SelectItem>
+                          <SelectItem value="sub_assembly">Sub-assembly</SelectItem>
+                          <SelectItem value="labor">Labor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Qty</Label>
+                      <Input
+                        type="number"
+                        min="0.0001"
+                        step="any"
+                        value={newItemDraft.quantity}
+                        onChange={(e) => setNewItemDraft({ ...newItemDraft, quantity: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label>First Dept</Label>
+                      <Input
+                        value={newItemDraft.firstDept}
+                        onChange={(e) => setNewItemDraft({ ...newItemDraft, firstDept: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label>Notes</Label>
+                      <Input
+                        value={newItemDraft.notes}
+                        onChange={(e) => setNewItemDraft({ ...newItemDraft, notes: e.target.value })}
+                      />
+                    </div>
+                    <Button
+                      onClick={() => addItemMutation.mutate()}
+                      disabled={addItemMutation.isPending || !newItemDraft.partName.trim()}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : null}

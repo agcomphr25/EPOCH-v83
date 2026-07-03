@@ -144,6 +144,20 @@ export default function NonconformanceFormModal({
       zipCode: '',
       country: 'United States',
     },
+    containmentAction: '',
+    containmentOwner: '',
+    containmentDueDate: '',
+    containmentCompletedAt: '',
+    rootCause: '',
+    rootCauseMethod: '',
+    correctiveAction: '',
+    preventiveAction: '',
+    capaRequired: false,
+    dispositionRationale: '',
+    effectivenessReview: '',
+    effectivenessStatus: 'not_started',
+    effectivenessReviewedAt: '',
+    recurrenceDetected: false,
   });
 
   const [orderAddress, setOrderAddress] = useState<any>(null);
@@ -234,6 +248,20 @@ export default function NonconformanceFormModal({
           zipCode: '',
           country: 'United States',
         },
+        containmentAction: recordToEdit.containmentAction || '',
+        containmentOwner: recordToEdit.containmentOwner || '',
+        containmentDueDate: recordToEdit.containmentDueDate?.split('T')[0] || '',
+        containmentCompletedAt: recordToEdit.containmentCompletedAt?.split('T')[0] || '',
+        rootCause: recordToEdit.rootCause || '',
+        rootCauseMethod: recordToEdit.rootCauseMethod || '',
+        correctiveAction: recordToEdit.correctiveAction || '',
+        preventiveAction: recordToEdit.preventiveAction || '',
+        capaRequired: recordToEdit.capaRequired || false,
+        dispositionRationale: recordToEdit.dispositionRationale || '',
+        effectivenessReview: recordToEdit.effectivenessReview || '',
+        effectivenessStatus: recordToEdit.effectivenessStatus || 'not_started',
+        effectivenessReviewedAt: recordToEdit.effectivenessReviewedAt?.split('T')[0] || '',
+        recurrenceDetected: recordToEdit.recurrenceDetected || false,
       });
 
       // If editing and record has useOrderAddress set, fetch the order address
@@ -446,7 +474,7 @@ export default function NonconformanceFormModal({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {savedRecord ? 'Record Created - Print Repair Barcode' : (isEdit ? 'Edit' : 'New')} Nonconformance Record
+            {savedRecord ? 'Record Created - Print Repair Barcode' : (isEdit ? 'Edit' : 'New')} P1 Nonconforming Record
           </DialogTitle>
         </DialogHeader>
 

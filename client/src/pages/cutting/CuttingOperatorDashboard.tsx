@@ -31,6 +31,19 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { GroupedPOsBadge } from "@/components/cutting/GroupedPOsBadge";
+import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
+import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
+import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
+import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
+import { CuttingQueueSummaryStrip } from "@/components/cutting/CuttingQueueSummaryStrip";
+import { CuttingQueueExportButton } from "@/components/cutting/CuttingQueueExportButton";
+import { CuttingQueueEmptyState } from "@/components/cutting/CuttingQueueEmptyState";
+import {
+  CuttingQueueFilterBar,
+  filterCuttingQueueItems,
+  isCuttingQueueProductionProtected,
+  type CuttingQueueFilterValue,
+} from "@/components/cutting/CuttingQueueFilterBar";
 import { useToast } from "@/hooks/use-toast";
 import {
   Accordion,
@@ -85,6 +98,7 @@ type BuiltPacket = {
   barcode: string;
   packetNumber: number;
   displayPacketNumber: number | null;
+  printedPacketNumber?: number | null;
   buildDate: string;
   status: string;
   isMixedFabric: boolean;
@@ -96,6 +110,8 @@ type BuiltPacket = {
   sku: string | null;
   queueId: string | null;
   quantityOrdered: number | null;
+  batchQuantity?: number;
+  isBatchEntry?: boolean;
   fabricSources: BuiltPacketFabricSource[];
 };
 
@@ -148,7 +164,18 @@ type ManufacturingQueueItem = {
   dueDate: string | null;
   estimatedCuts: number;
   packetBomId: string | null;
+  bomMatchReason?: string | null;
+  bomMatchConfidence?: string | null;
   poNumbers?: GroupedPO[] | null;
+  builtPacketCount?: number;
+  allocatedPacketCount?: number;
+  printableBarcodeCount?: number;
+  productionProtected?: boolean;
+  productionProtectionReason?: string | null;
+  materialType?: string | null;
+  source?: string | null;
+  orderId?: string | null;
+  packetName?: string | null;
 };
 
 type PacketBOM = {
@@ -217,6 +244,143 @@ function buildMfgBarcode(queueId: string | null, sku: string | null, packetNumbe
   return `MFG-${queueId}-${sku}-${packetNumber}`;
 }
 
+type P1PacketRecipeComponent = {
+  label: string;
+  partsPerPacket: number;
+  programName: string;
+  yieldPerRun: number;
+  squareMetersPerRun: number;
+};
+
+type P1PacketRecipe = {
+  name: string;
+  matchers: string[];
+  materialTypes: string[];
+  components: P1PacketRecipeComponent[];
+};
+
+type P1PacketRunPlan = {
+  packetName: string;
+  packetsNeeded: number;
+  totalRuns: number;
+  totalSquareMeters: number;
+  requirements: Array<P1PacketRecipeComponent & {
+    totalParts: number;
+    runsNeeded: number;
+    squareMetersNeeded: number;
+  }>;
+};
+
+const STOCK_PROGRAM_SQUARE_METERS_PER_RUN = 3;
+
+const P1_PACKET_RECIPES: P1PacketRecipe[] = [
+  {
+    name: 'Carbon Fiber Stock Packet',
+    matchers: ['carbon fiber packet', 'carbon fiber stock packet', 'carbon fiber stock', 'carbon_fiber'],
+    materialTypes: ['carbon_fiber'],
+    components: [
+      { label: 'Shells', partsPerPacket: 2, programName: 'Shells', yieldPerRun: 26, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Wrist Reinforcements', partsPerPacket: 10, programName: 'Wrists reinforcement', yieldPerRun: 500, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'BSRs', partsPerPacket: 6, programName: 'BSRs', yieldPerRun: 946, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Buttstock Reinforcements', partsPerPacket: 2, programName: 'Buttstock reinforcements', yieldPerRun: 70, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Forends', partsPerPacket: 2, programName: 'Forends', yieldPerRun: 68, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Half Gridle', partsPerPacket: 1, programName: 'Half Gridle', yieldPerRun: 440, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Seam', partsPerPacket: 1, programName: 'Seams', yieldPerRun: 39, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Pillar Seam', partsPerPacket: 1, programName: 'Pillar Seams', yieldPerRun: 156, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+    ],
+  },
+  {
+    name: 'Cheek Riser',
+    matchers: ['cheek riser', 'cheek risers', 'cheekriser', 'cheek_riser'],
+    materialTypes: ['cheek_riser'],
+    components: [
+      { label: 'Cheek Risers', partsPerPacket: 1, programName: 'Cheekrisers', yieldPerRun: 110, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+    ],
+  },
+];
+
+function normalizePacketText(value: string | null | undefined): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isP2QueueItem(item: ManufacturingQueueItem): boolean {
+  const source = normalizePacketText(item.source);
+  const materialType = normalizePacketText(item.materialType);
+  return source === 'p2 sync'
+    || source === 'p2_sync'
+    || materialType.startsWith('p2 ')
+    || (item.poNumbers || []).some(po => Boolean(po.p2PoId || po.p2PoItemId));
+}
+
+function findP1PacketRecipe(item: ManufacturingQueueItem): P1PacketRecipe | null {
+  if (isP2QueueItem(item)) return null;
+
+  const haystack = [
+    item.displayName,
+    item.packetName,
+    item.partName,
+    item.partNumber,
+    item.materialType,
+  ].map(normalizePacketText);
+
+  return P1_PACKET_RECIPES.find(recipe => {
+    const materialMatch = recipe.materialTypes.some(materialType =>
+      haystack.includes(normalizePacketText(materialType))
+    );
+    const nameMatch = recipe.matchers.some(matcher => {
+      const normalizedMatcher = normalizePacketText(matcher);
+      return haystack.some(value => value && (value === normalizedMatcher || value.includes(normalizedMatcher) || normalizedMatcher.includes(value)));
+    });
+    return materialMatch || nameMatch;
+  }) || null;
+}
+
+function getP1PacketRunPlan(item: ManufacturingQueueItem): P1PacketRunPlan | null {
+  const recipe = findP1PacketRecipe(item);
+  if (!recipe) return null;
+
+  const packetsNeeded = Math.max(0, (item.quantityOrdered || 0) - (item.quantityCompleted || 0));
+  if (packetsNeeded <= 0) return null;
+
+  const requirements = recipe.components.map(component => {
+    const totalParts = component.partsPerPacket * packetsNeeded;
+    return {
+      ...component,
+      totalParts,
+      runsNeeded: Math.ceil(totalParts / component.yieldPerRun),
+      squareMetersNeeded: Math.ceil(totalParts / component.yieldPerRun) * component.squareMetersPerRun,
+    };
+  });
+
+  return {
+    packetName: recipe.name,
+    packetsNeeded,
+    totalRuns: requirements.reduce((sum, requirement) => sum + requirement.runsNeeded, 0),
+    totalSquareMeters: requirements.reduce((sum, requirement) => sum + requirement.squareMetersNeeded, 0),
+    requirements,
+  };
+}
+
+function getPrintableBarcodeCount(item: ManufacturingQueueItem): number {
+  if (typeof item.printableBarcodeCount === 'number') {
+    return Math.max(0, item.printableBarcodeCount);
+  }
+  return Math.max(0, (item.quantityOrdered || 0) - (item.quantityCompleted || 0));
+}
+
+function isQueueProductionProtected(item: ManufacturingQueueItem): boolean {
+  return isCuttingQueueProductionProtected(item);
+}
+
+function isPacketBarcodePrintable(item: ManufacturingQueueItem): boolean {
+  const status = String(item.status || '').toUpperCase();
+  return isP2QueueItem(item) && (status === 'PENDING' || status === 'IN_PROGRESS' || status === 'LOCKED') && getPrintableBarcodeCount(item) > 0;
+}
+
 function useIsAdmin() {
   const { data: session } = useQuery<SessionUser>({ queryKey: ['/api/auth/session'] });
   const role = session?.role;
@@ -228,6 +392,7 @@ export default function CuttingOperatorDashboard() {
   const isAdmin = useIsAdmin();
   
   const [selectedStatus, setSelectedStatus] = useState<string>("ACTIVE");
+  const [queueFilter, setQueueFilter] = useState<CuttingQueueFilterValue>("all");
   const [selectedMfgItem, setSelectedMfgItem] = useState<ManufacturingQueueItem | null>(null);
   const [isProductionDialogOpen, setIsProductionDialogOpen] = useState(false);
   const [isCuttingWorkflowOpen, setIsCuttingWorkflowOpen] = useState(false);
@@ -244,7 +409,6 @@ export default function CuttingOperatorDashboard() {
     freezerNumber: string;
   }[]>([]);
   
-  const [universalBarcode, setUniversalBarcode] = useState("");
   const [fabricSearch, setFabricSearch] = useState("");
   const [allFabricSearch, setAllFabricSearch] = useState("");
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -285,6 +449,7 @@ export default function CuttingOperatorDashboard() {
   const [editingSource, setEditingSource] = useState<BuiltPacketFabricSource | null>(null);
   const [editingPacketId, setEditingPacketId] = useState<number | null>(null);
   const [confirmDeleteSourceId, setConfirmDeleteSourceId] = useState<number | null>(null);
+  const [packetMaterialScanValues, setPacketMaterialScanValues] = useState<Record<number, string>>({});
   const [fabricSourceForm, setFabricSourceForm] = useState({
     fabricType: '',
     lotNumber: '',
@@ -299,13 +464,15 @@ export default function CuttingOperatorDashboard() {
     queryKey: ['currentUser'],
   });
 
-  const { data: builtPackets = [], isLoading: loadingBuiltPackets, refetch: refetchBuiltPackets } = useQuery<BuiltPacket[]>({
+  const {
+    data: builtPackets = [],
+    isLoading: loadingBuiltPackets,
+    isError: builtPacketsError,
+    error: builtPacketsErrorDetails,
+    refetch: refetchBuiltPackets,
+  } = useQuery<BuiltPacket[]>({
     queryKey: ['/api/cutting-table-mfg-queue/built-packets'],
-    queryFn: async () => {
-      const res = await fetch('/api/cutting-table-mfg-queue/built-packets?limit=50');
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => apiRequest('/api/cutting-table-mfg-queue/built-packets?limit=50'),
   });
 
   const updateFabricSourceMutation = useMutation({
@@ -339,6 +506,33 @@ export default function CuttingOperatorDashboard() {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to delete fabric source.', variant: 'destructive' });
+    },
+  });
+
+  const scanPacketFabricSourceMutation = useMutation({
+    mutationFn: async ({ packetId, barcode }: { packetId: number; barcode: string }) => {
+      return apiRequest(`/api/cutting-table-mfg-queue/built-packets/${packetId}/fabric-sources/scan`, {
+        method: 'POST',
+        body: JSON.stringify({ barcode }),
+      });
+    },
+    onSuccess: (data: any, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/built-packets'] });
+      setPacketMaterialScanValues(prev => ({ ...prev, [variables.packetId]: '' }));
+      const roll = data?.roll;
+      toast({
+        title: 'Material attached',
+        description: roll?.rollNumber
+          ? `Roll ${roll.rollNumber} was added to this packet.`
+          : 'The scanned material was added to this packet.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Scan Error',
+        description: error?.message || 'Failed to add material to packet.',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -413,6 +607,7 @@ export default function CuttingOperatorDashboard() {
       let userNotes: string | null = null;
       let orderId: string | null = null;
       let materialType: string | null = item.materialType || null;
+      let source: string | null = item.source || null;
       let poNumbers: GroupedPO[] = Array.isArray(item.poNumbers) ? item.poNumbers : [];
       if (item.notes) {
         try {
@@ -422,6 +617,7 @@ export default function CuttingOperatorDashboard() {
           userNotes = parsedNotes.userNotes || null;
           orderId = parsedNotes.orderId || null;
           if (!materialType) materialType = parsedNotes.materialType || null;
+          if (!source) source = parsedNotes.source || null;
           if (poNumbers.length === 0 && Array.isArray(parsedNotes.poNumbers)) {
             poNumbers = parsedNotes.poNumbers as GroupedPO[];
           }
@@ -434,6 +630,7 @@ export default function CuttingOperatorDashboard() {
         'carbon_fiber': 'carbon fiber packet',
         'fiberglass': 'fiberglass packet',
         'mesa': 'mesa packet',
+        'cheek_riser': 'cheek riser',
         'p2_disruptor': 'disruptor',
         'p2_disruptor_packet': 'disruptor packet',
         'p2_antenna': 'antenna cover',
@@ -473,7 +670,13 @@ export default function CuttingOperatorDashboard() {
         estimatedCuts,
         displayName,
         packetBomId: bomId || matchingBOM?.id,
+        bomMatchReason: item.bomMatchReason || (bomId || matchingBOM?.id ? 'client_fallback' : null),
+        bomMatchConfidence: item.bomMatchConfidence || (bomId ? 'strong' : matchingBOM?.id ? 'fallback' : 'none'),
         poNumbers,
+        materialType,
+        source,
+        orderId,
+        packetName,
       };
     });
   }, [mfgQueueItemsRaw, packetBOMs]);
@@ -528,6 +731,7 @@ export default function CuttingOperatorDashboard() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/built-packets'] });
       setIsProductionDialogOpen(false);
       resetProductionForm();
       toast({
@@ -704,7 +908,7 @@ export default function CuttingOperatorDashboard() {
       toast({ title: 'Barcodes Ready', description: `${data.count} packet barcode labels ready to print.` });
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to generate packet barcodes.', variant: 'destructive' });
+      toast({ title: 'No barcodes available', description: 'Only unallocated packet barcodes can be printed.', variant: 'destructive' });
     },
   });
 
@@ -832,11 +1036,15 @@ export default function CuttingOperatorDashboard() {
       clearTimeout(packetScanTimerRef.current);
       packetScanTimerRef.current = null;
     }
-    if (packetScanBarcode && packetScanBarcode.length > 5 && packetScanBarcode.startsWith('MFG-') && /^MFG-\d+-[^-]+/.test(packetScanBarcode)) {
+    const normalizedPacketScan = packetScanBarcode.trim();
+    const isPacketScanBarcode =
+      /^MFG-\d+-.+/.test(normalizedPacketScan) ||
+      /^PKT-.+-\d+-\d+-\d+(?:-\d+)?$/.test(normalizedPacketScan);
+    if (isPacketScanBarcode) {
       packetScanTimerRef.current = setTimeout(() => {
-        if (packetScanBarcode !== lastSubmittedPacketRef.current) {
-          lastSubmittedPacketRef.current = packetScanBarcode;
-          handlePacketScan(packetScanBarcode);
+        if (normalizedPacketScan !== lastSubmittedPacketRef.current) {
+          lastSubmittedPacketRef.current = normalizedPacketScan;
+          handlePacketScan(normalizedPacketScan);
         }
       }, 400);
     }
@@ -922,10 +1130,10 @@ export default function CuttingOperatorDashboard() {
 
   const selectAllPendingForPrint = () => {
     const pendingIds = mfgQueueItems
-      .filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS')
+      .filter(isPacketBarcodePrintable)
       .map(i => i.id);
     setSelectedPrintIds(prev => 
-      prev.length === pendingIds.length ? [] : pendingIds
+      prev.filter(id => pendingIds.includes(id)).length === pendingIds.length ? [] : pendingIds
     );
   };
 
@@ -1026,8 +1234,6 @@ export default function CuttingOperatorDashboard() {
         variant: "destructive",
       });
     }
-    
-    setUniversalBarcode("");
   };
 
   const handleStartCuttingWorkflow = (item: ManufacturingQueueItem) => {
@@ -1162,6 +1368,7 @@ export default function CuttingOperatorDashboard() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/built-packets'] });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
       setIsProductionDialogOpen(false);
       resetProductionForm();
@@ -1273,9 +1480,20 @@ export default function CuttingOperatorDashboard() {
       null;
   }, [selectedMfgItem, packetBOMs]);
 
-  const pendingReceiving = fabricInventory.filter(f => f.squareMeters > 0 && !f.freezerLocation).length;
+  const freezerAssignmentQueue = fabricInventory.filter(
+    f => f.squareMeters > 0 && !f.freezerLocation && f.status !== 'depleted'
+  );
+  const pendingReceiving = freezerAssignmentQueue.length;
   const inProgressCount = mfgQueueItems.filter(i => i.status === 'IN_PROGRESS').length;
   const pendingCount = mfgQueueItems.filter(i => i.status === 'PENDING').length;
+  const filteredMfgQueueItems = useMemo(
+    () => filterCuttingQueueItems(mfgQueueItems, queueFilter),
+    [mfgQueueItems, queueFilter]
+  );
+  const printableQueueItems = filteredMfgQueueItems.filter(isPacketBarcodePrintable);
+  const printableQueueIds = printableQueueItems.map(i => i.id);
+  const selectedPrintableIds = selectedPrintIds.filter(id => printableQueueIds.includes(id));
+  const printTargetIds = selectedPrintableIds.length > 0 ? selectedPrintableIds : printableQueueIds;
 
   return (
     <div className="space-y-6">
@@ -1287,6 +1505,9 @@ export default function CuttingOperatorDashboard() {
             Operator Dashboard
           </h2>
           <p className="text-muted-foreground text-sm">Cutting workflow, fabric selection, and label printing</p>
+          <div className="mt-2">
+            <CuttingQueueSummaryStrip items={mfgQueueItems} />
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex gap-2 text-sm">
@@ -1329,61 +1550,120 @@ export default function CuttingOperatorDashboard() {
         </div>
       </div>
 
-      {/* Quick Actions Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Scan Packet to Start */}
-        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-background">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Scan className="h-4 w-4 text-primary" />
+      <Card className="border-primary/30 bg-primary/5">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Scan className="h-5 w-5 text-primary" />
+                Scan Station
+              </CardTitle>
+              <CardDescription>Start with the packet barcode, then scan material rolls for that active packet.</CardDescription>
+            </div>
+            {activeScannedPacket ? (
+              <Badge className="w-fit bg-blue-600">
+                Active: {activeScannedPacket.queueItem?.partNumber || activeScannedPacket.queueItem?.displayName || 'Packet'}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="w-fit">No active packet</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border bg-background p-4">
+              <div className="mb-3 flex items-start gap-3">
+                <Badge className="h-7 w-7 justify-center rounded-full p-0">1</Badge>
+                <div>
+                  <h3 className="font-medium">Scan packet barcode</h3>
+                  <p className="text-sm text-muted-foreground">This opens the packet and loads its BOM material requirements.</p>
+                </div>
               </div>
-              Scan Packet to Start
-            </CardTitle>
-            <CardDescription className="text-xs">Scan a printed packet barcode to begin work</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2 mb-3">
-              <BarcodeInputField
-                id="packet-scan-barcode"
-                value={packetScanBarcode}
-                onChange={(val) => {
-                  setPacketScanBarcode(val);
-                }}
-                placeholder="Scan packet barcode (MFG-...)..."
-                data-testid="input-packet-scan"
-              />
-              <Button 
-                onClick={() => handlePacketScan(packetScanBarcode)} 
-                className="shrink-0"
-                disabled={scanStartMutation.isPending}
-                data-testid="button-packet-scan"
-              >
-                {scanStartMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
-              </Button>
+              <div className="flex gap-2">
+                <BarcodeInputField
+                  id="packet-scan-barcode"
+                  value={packetScanBarcode}
+                  onChange={(val) => setPacketScanBarcode(val)}
+                  placeholder="Scan packet barcode (MFG... or PKT...)"
+                  data-testid="input-packet-scan"
+                />
+                <Button
+                  onClick={() => handlePacketScan(packetScanBarcode)}
+                  className="shrink-0"
+                  disabled={scanStartMutation.isPending || !packetScanBarcode.trim()}
+                  data-testid="button-packet-scan"
+                >
+                  {scanStartMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <BarcodeInputField
-                id="universal-barcode"
-                value={universalBarcode}
-                onChange={(val) => {
-                  setUniversalBarcode(val);
-                  if (val && val.length > 5) {
-                    handleBarcodeScan(val);
-                  }
-                }}
-                placeholder="Quick scan fabric roll..."
-                data-testid="input-universal-barcode"
-              />
-              <Button onClick={() => handleBarcodeScan(universalBarcode)} className="shrink-0" variant="outline" size="sm" data-testid="button-scan">
-                <Scan className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
 
+            <div className={cn("rounded-lg border bg-background p-4", !activeScannedPacket && "opacity-60")}>
+              <div className="mb-3 flex items-start gap-3">
+                <Badge className="h-7 w-7 justify-center rounded-full p-0" variant={activeScannedPacket ? "default" : "secondary"}>2</Badge>
+                <div>
+                  <h3 className="font-medium">Scan material for active packet</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {activeScannedPacket
+                      ? `${activeScannedPacket.queueItem?.displayName || activeScannedPacket.queueItem?.partName || 'Packet'} is active.`
+                      : "Scan a packet first so the material can be checked against the right BOM."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <BarcodeInputField
+                  id="material-scan-barcode"
+                  value={materialScanBarcode}
+                  onChange={(val) => setMaterialScanBarcode(val)}
+                  placeholder="Scan material roll barcode"
+                  data-testid="input-material-scan"
+                />
+                <Button
+                  onClick={() => handleMaterialScan(materialScanBarcode)}
+                  className="shrink-0"
+                  disabled={validateMaterialMutation.isPending || !activeScannedPacket?.queueItem?.id || !materialScanBarcode.trim()}
+                  data-testid="button-material-scan"
+                >
+                  {validateMaterialMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {validatedRolls.length > 0 && (
+            <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-300">
+                <CheckCircle2 className="h-4 w-4" />
+                {validatedRolls.length} material roll(s) scanned for this packet
+              </div>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {validatedRolls.map((roll: any) => (
+                  <div key={roll.id} className="flex items-center justify-between gap-2 rounded border bg-background px-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{roll.fabric || roll.nickname || 'Material roll'}</p>
+                      <p className="text-xs text-muted-foreground">Roll {roll.rollNumber || '-'} | Lot {roll.lotNumber || 'N/A'}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => setValidatedRolls(prev => prev.filter(r => r.id !== roll.id))}
+                      aria-label="Remove scanned material roll"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4">
         {/* FIFO Lookup */}
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <div className="p-2 rounded-lg bg-blue-500/10">
@@ -1793,72 +2073,6 @@ export default function CuttingOperatorDashboard() {
                 )}
               </div>
             </div>
-
-            {/* Material Roll Scanning */}
-            <div className="border-2 border-dashed border-primary/30 rounded-lg p-4">
-              <h4 className="font-medium mb-3 flex items-center gap-2">
-                <Barcode className="h-4 w-4" />
-                Scan Material Rolls
-              </h4>
-              <div className="flex gap-2 mb-3">
-                <BarcodeInputField
-                  id="material-scan-barcode"
-                  value={materialScanBarcode}
-                  onChange={(val) => {
-                    setMaterialScanBarcode(val);
-                  }}
-                  placeholder="Scan material roll barcode..."
-                  data-testid="input-material-scan"
-                />
-                <Button
-                  onClick={() => handleMaterialScan(materialScanBarcode)}
-                  className="shrink-0"
-                  disabled={validateMaterialMutation.isPending}
-                  data-testid="button-material-scan"
-                >
-                  {validateMaterialMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
-                </Button>
-              </div>
-
-              {validatedRolls.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                    {validatedRolls.length} roll(s) validated and ready
-                  </p>
-                  {validatedRolls.map((roll: any) => (
-                    <div key={roll.id} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <div>
-                          <span className="font-medium text-sm">{roll.fabric || roll.nickname}</span>
-                          <span className="text-muted-foreground text-sm ml-2">Roll {roll.rollNumber}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="text-right text-xs text-muted-foreground">
-                          <div>Lot: {roll.lotNumber || 'N/A'} | Batch: {roll.batchNumber || 'N/A'}</div>
-                          <div>
-                            {parseFloat(roll.squareMeters || '0').toFixed(1)} m²
-                            {roll.expirationDate && ` | Exp: ${new Date(roll.expirationDate).toLocaleDateString()}`}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setValidatedRolls(prev => prev.filter(r => r.id !== roll.id))}
-                          className="ml-1 p-1 text-muted-foreground hover:text-red-600 transition-colors"
-                          aria-label="Remove roll"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-2">
-                  Scan material roll barcodes to validate against the BOM
-                </p>
-              )}
-            </div>
           </CardContent>
         </Card>
       )}
@@ -1895,8 +2109,7 @@ export default function CuttingOperatorDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {fabricInventory
-                      .filter(f => f.squareMeters > 0 && !f.freezerLocation)
+                    {freezerAssignmentQueue
                       .slice(0, 20)
                       .map((fabric) => (
                       <TableRow key={fabric.id} className="hover:bg-muted/50" data-testid={`row-fabric-${fabric.id}`}>
@@ -2125,28 +2338,20 @@ export default function CuttingOperatorDashboard() {
                 size="sm"
                 className="bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => {
-                  const printableItems = mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS');
-                  const allIds = printableItems.map(i => i.id);
-                  if (allIds.length > 0) bulkPrintBarcodesMutation.mutate({ queueIds: allIds, quantities: printQuantities });
+                  if (printTargetIds.length > 0) {
+                    bulkPrintBarcodesMutation.mutate({ queueIds: printTargetIds, quantities: printQuantities });
+                  }
                 }}
-                disabled={bulkPrintBarcodesMutation.isPending || mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS').length === 0}
+                disabled={bulkPrintBarcodesMutation.isPending || printTargetIds.length === 0}
                 data-testid="button-print-all-barcodes"
               >
                 <Printer className="h-4 w-4 mr-1" />
-                {bulkPrintBarcodesMutation.isPending ? 'Generating...' : 'Print Barcodes'}
+                {bulkPrintBarcodesMutation.isPending
+                  ? 'Generating...'
+                  : selectedPrintableIds.length > 0
+                    ? `Print ${selectedPrintableIds.length} Selected`
+                    : 'Print Barcodes'}
               </Button>
-              {selectedPrintIds.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => bulkPrintBarcodesMutation.mutate({ queueIds: selectedPrintIds, quantities: printQuantities })}
-                  disabled={bulkPrintBarcodesMutation.isPending}
-                  data-testid="button-bulk-print-barcodes"
-                >
-                  <Printer className="h-4 w-4 mr-1" />
-                  {`Print ${selectedPrintIds.length} Selected`}
-                </Button>
-              )}
             </div>
           </div>
         </CardHeader>
@@ -2157,38 +2362,53 @@ export default function CuttingOperatorDashboard() {
               Loading queue...
             </div>
           ) : mfgQueueItems.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
-              <Scissors className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p>No items in the queue</p>
-              <p className="text-sm">Schedule packets from the Weekly Scheduling page</p>
+            <CuttingQueueEmptyState mode="empty" />
+          ) : filteredMfgQueueItems.length === 0 ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CuttingQueueFilterBar items={mfgQueueItems} value={queueFilter} onChange={setQueueFilter} />
+                <CuttingQueueExportButton items={filteredMfgQueueItems} filenamePrefix="cutting-operator-queue" />
+              </div>
+              <CuttingQueueEmptyState mode="filtered" filter={queueFilter} onClearFilter={() => setQueueFilter("all")} />
             </div>
           ) : (
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="w-10">
-                      <input
-                        type="checkbox"
-                        checked={selectedPrintIds.length > 0 && selectedPrintIds.length === mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS').length}
-                        onChange={selectAllPendingForPrint}
-                        className="h-4 w-4 rounded border-gray-300"
-                        title="Select all for printing"
-                      />
-                    </TableHead>
-                    <TableHead>Part Number</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="text-center">Progress</TableHead>
-                    <TableHead className="text-center">Cuts</TableHead>
-                    <TableHead className="text-center w-24"># to Print</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-center">Priority</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead className="w-40 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {mfgQueueItems.map((item) => (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CuttingQueueFilterBar items={mfgQueueItems} value={queueFilter} onChange={setQueueFilter} />
+                <CuttingQueueExportButton items={filteredMfgQueueItems} filenamePrefix="cutting-operator-queue" />
+              </div>
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead className="w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedPrintableIds.length > 0 && selectedPrintableIds.length === printableQueueItems.length}
+                          onChange={selectAllPendingForPrint}
+                          className="h-4 w-4 rounded border-gray-300"
+                          title="Select all for printing"
+                          disabled={printableQueueItems.length === 0}
+                        />
+                      </TableHead>
+                      <TableHead className="min-w-[320px]">Packet</TableHead>
+                      <TableHead className="text-center">Progress</TableHead>
+                      <TableHead className="text-center">Cuts</TableHead>
+                      <TableHead className="text-center w-24"># to Print</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Next</TableHead>
+                      <TableHead className="text-center">Priority</TableHead>
+                      <TableHead>Due Date</TableHead>
+                      <TableHead className="w-48 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredMfgQueueItems.map((item) => {
+                    const isProductionProtected = isQueueProductionProtected(item);
+                    const p1RunPlan = getP1PacketRunPlan(item);
+                    const isP2Packet = isP2QueueItem(item);
+
+                    return (
                     <TableRow 
                       key={item.id} 
                       className={cn(
@@ -2199,7 +2419,7 @@ export default function CuttingOperatorDashboard() {
                       data-testid={`row-mfg-item-${item.id}`}
                     >
                       <TableCell>
-                        {(item.status === 'PENDING' || item.status === 'IN_PROGRESS') && (
+                        {isPacketBarcodePrintable(item) ? (
                           <input
                             type="checkbox"
                             checked={selectedPrintIds.includes(item.id)}
@@ -2207,16 +2427,54 @@ export default function CuttingOperatorDashboard() {
                             className="h-4 w-4 rounded border-gray-300"
                             data-testid={`checkbox-print-${item.id}`}
                           />
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]">
+                            {p1RunPlan ? 'P1' : '-'}
+                          </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="font-mono font-medium">{item.partNumber || '-'}</TableCell>
-                      <TableCell className="max-w-[240px]">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate">{item.displayName || item.partName || '-'}</span>
-                          <GroupedPOsBadge
-                            poNumbers={item.poNumbers}
-                            testIdPrefix={`pos-${item.id}`}
-                          />
+                      <TableCell className="max-w-[420px]">
+                        <div className="space-y-1.5">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate font-medium" title={item.displayName || item.partName || ""}>
+                              {item.displayName || item.partName || '-'}
+                            </span>
+                            <Badge variant={isP2Packet ? "default" : "secondary"} className="h-5 shrink-0 text-[10px]">
+                              {isP2Packet ? 'P2 trace' : 'P1 cut/make'}
+                            </Badge>
+                            <GroupedPOsBadge
+                              poNumbers={item.poNumbers}
+                              className="h-6 shrink-0 bg-muted px-1.5 text-[11px] text-muted-foreground hover:bg-muted"
+                              testIdPrefix={`pos-${item.id}`}
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                            <span className="font-mono text-foreground">{item.partNumber || '-'}</span>
+                            <span title={`BOM match: ${item.bomMatchReason || "none"}`}>
+                              <CuttingBomMatchBadge
+                                reason={item.bomMatchReason}
+                                confidence={item.bomMatchConfidence}
+                                compact
+                              />
+                            </span>
+                          </div>
+                          <CuttingQueueProductionLockNotice item={item} compact />
+                          {p1RunPlan && (
+                            <div className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium">{p1RunPlan.packetsNeeded} packets</span>
+                                <span>{p1RunPlan.totalRuns} total program runs</span>
+                                <span>{p1RunPlan.totalSquareMeters} m² total</span>
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {p1RunPlan.requirements.map(requirement => (
+                                  <Badge key={requirement.programName} variant="outline" className="bg-background text-[10px]">
+                                    {requirement.programName}: {requirement.runsNeeded}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
@@ -2232,28 +2490,43 @@ export default function CuttingOperatorDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className="font-mono">{item.estimatedCuts}</Badge>
+                        {p1RunPlan ? (
+                          <div className="space-y-1">
+                            <Badge variant="outline" className="font-mono">{p1RunPlan.totalRuns} runs</Badge>
+                            <div className="text-[11px] text-muted-foreground">{p1RunPlan.totalSquareMeters} m²</div>
+                          </div>
+                        ) : (
+                          <Badge variant="outline" className="font-mono">{item.estimatedCuts}</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {(item.status === 'PENDING' || item.status === 'IN_PROGRESS') && (
+                        {isPacketBarcodePrintable(item) ? (
                           <Input
                             type="number"
                             min={1}
-                            max={item.quantityOrdered}
-                            value={printQuantities[item.id] ?? item.quantityOrdered}
+                            max={getPrintableBarcodeCount(item)}
+                            value={Math.min(printQuantities[item.id] ?? getPrintableBarcodeCount(item), getPrintableBarcodeCount(item))}
                             onChange={(e) => {
                               const val = parseInt(e.target.value) || 0;
+                              const maxPrintable = getPrintableBarcodeCount(item);
                               setPrintQuantities(prev => ({
                                 ...prev,
-                                [item.id]: Math.max(1, Math.min(val, item.quantityOrdered))
+                                [item.id]: Math.max(1, Math.min(val, maxPrintable))
                               }));
                             }}
                             className="w-16 h-7 text-center text-sm mx-auto"
                             data-testid={`input-print-qty-${item.id}`}
                           />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            {p1RunPlan ? 'No barcode' : 'None'}
+                          </span>
                         )}
                       </TableCell>
                       <TableCell>{getStatusBadge(item.status)}</TableCell>
+                      <TableCell>
+                        <CuttingQueueNextActionBadge item={item} compact />
+                      </TableCell>
                       <TableCell className="text-center">
                         <Badge 
                           variant={item.priority >= 80 ? "destructive" : item.priority >= 60 ? "default" : "secondary"}
@@ -2267,7 +2540,8 @@ export default function CuttingOperatorDashboard() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1 justify-end">
-                          {item.status === 'PENDING' && (
+                          <CuttingQueueTraceSheet queueId={item.id} size="icon" iconOnly />
+                          {item.status === 'PENDING' && !isProductionProtected && (
                             <Button 
                               size="sm" 
                               onClick={() => handleStartCuttingWorkflow(item)}
@@ -2288,18 +2562,20 @@ export default function CuttingOperatorDashboard() {
                                 <Scissors className="h-4 w-4 mr-1" />
                                 View
                               </Button>
-                              <Button 
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700"
-                                onClick={() => { setSelectedMfgItem(item); setIsProductionDialogOpen(true); }}
-                                data-testid={`button-complete-${item.id}`}
-                              >
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                                Complete
-                              </Button>
+                              {!isProductionProtected && (
+                                <Button
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700"
+                                  onClick={() => { setSelectedMfgItem(item); setIsProductionDialogOpen(true); }}
+                                  data-testid={`button-complete-${item.id}`}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                                  Complete
+                                </Button>
+                              )}
                             </>
                           )}
-                          {item.status === 'COMPLETED' && (
+                          {item.status === 'COMPLETED' && !isProductionProtected && (
                             <Button 
                               size="sm" 
                               variant="outline"
@@ -2313,9 +2589,11 @@ export default function CuttingOperatorDashboard() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                    );
+                  })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>
@@ -2342,6 +2620,10 @@ export default function CuttingOperatorDashboard() {
         <CardContent>
           {loadingBuiltPackets ? (
             <div className="text-sm text-muted-foreground py-4 text-center">Loading...</div>
+          ) : builtPacketsError ? (
+            <div className="text-sm text-destructive py-6 text-center">
+              {(builtPacketsErrorDetails as Error)?.message || 'Failed to load made packets.'}
+            </div>
           ) : builtPackets.length === 0 ? (
             <div className="text-sm text-muted-foreground py-6 text-center">No built packets found.</div>
           ) : (
@@ -2389,11 +2671,13 @@ export default function CuttingOperatorDashboard() {
                       <div>
                         {(() => {
                           const mfgParsed = parseMfgBarcode(packet.barcode);
-                          const mfgBarcode = mfgParsed.isMfgFormat
+                          const mfgBarcode = packet.isBatchEntry
+                            ? packet.barcode
+                            : mfgParsed.isMfgFormat
                             ? mfgParsed.raw
-                            : buildMfgBarcode(packet.queueId, packet.sku, packet.displayPacketNumber ?? packet.packetNumber);
+                            : buildMfgBarcode(packet.queueId, packet.sku, packet.printedPacketNumber ?? packet.displayPacketNumber ?? packet.packetNumber);
                           const segments = mfgBarcode ? parseMfgBarcode(mfgBarcode) : null;
-                          const isInternalBarcode = !mfgParsed.isMfgFormat;
+                          const isInternalBarcode = !packet.isBatchEntry && !mfgParsed.isMfgFormat;
 
                           const totalPackets = packet.quantityOrdered
                             ?? builtPackets.filter((p) => p.queueId && p.queueId === packet.queueId).length;
@@ -2410,6 +2694,7 @@ export default function CuttingOperatorDashboard() {
                                   variant={
                                     packet.status === 'AVAILABLE' ? 'secondary'
                                     : packet.status === 'CONSUMED' ? 'destructive'
+                                    : packet.status === 'BATCH' ? 'outline'
                                     : 'default'
                                   }
                                   className={cn(
@@ -2437,7 +2722,11 @@ export default function CuttingOperatorDashboard() {
                                 </div>
                               )}
                               <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                                {totalPackets > 0 && (
+                                {packet.isBatchEntry ? (
+                                  <span className="text-xs font-medium text-foreground">
+                                    Batch {packet.batchQuantity ?? packet.quantityOrdered ?? 0} packets
+                                  </span>
+                                ) : totalPackets > 0 && (
                                   <span className="text-xs font-medium text-foreground">
                                     Packet {packet.displayPacketNumber ?? packet.packetNumber} of {totalPackets}
                                   </span>
@@ -2461,14 +2750,53 @@ export default function CuttingOperatorDashboard() {
                       </div>
                     </div>
                     <div className="text-xs text-muted-foreground shrink-0">
-                      {packet.fabricSources.length} fabric {packet.fabricSources.length === 1 ? 'source' : 'sources'}
+                      {packet.isBatchEntry
+                        ? `${packet.batchQuantity ?? packet.quantityOrdered ?? 0} packet batch`
+                        : `${packet.fabricSources.length} fabric ${packet.fabricSources.length === 1 ? 'source' : 'sources'}`}
                     </div>
                   </button>
 
                   {expandedPacketId === packet.id && (
                     <div className="border-t bg-muted/20 px-4 py-3">
+                      {!packet.isBatchEntry && (
+                      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="flex-1 space-y-1">
+                          <Label className="text-xs">Scan Material Into Packet</Label>
+                          <Input
+                            value={packetMaterialScanValues[packet.id] || ''}
+                            onChange={(e) => setPacketMaterialScanValues(prev => ({ ...prev, [packet.id]: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const barcode = (packetMaterialScanValues[packet.id] || '').trim();
+                                if (barcode) {
+                                  scanPacketFabricSourceMutation.mutate({ packetId: packet.id, barcode });
+                                }
+                              }
+                            }}
+                            placeholder="Scan material roll barcode, ICN, or roll number..."
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={scanPacketFabricSourceMutation.isPending || !(packetMaterialScanValues[packet.id] || '').trim()}
+                          onClick={() => {
+                            const barcode = (packetMaterialScanValues[packet.id] || '').trim();
+                            if (!barcode) return;
+                            scanPacketFabricSourceMutation.mutate({ packetId: packet.id, barcode });
+                          }}
+                        >
+                          <Scan className="h-3 w-3 mr-1" />
+                          Add Material
+                        </Button>
+                      </div>
+                      )}
                       {packet.fabricSources.length === 0 ? (
-                        <p className="text-sm text-muted-foreground italic">No fabric source records for this packet.</p>
+                        <p className="text-sm text-muted-foreground italic">
+                          {packet.isBatchEntry
+                            ? 'P1 stock packet batch added to inventory. Individual packet records are not created for this batch.'
+                            : 'No fabric source records for this packet.'}
+                        </p>
                       ) : (
                         <div className="space-y-2">
                           {packet.fabricSources.map((source) => (
@@ -2654,10 +2982,19 @@ export default function CuttingOperatorDashboard() {
 
       <Dialog open={isCuttingWorkflowOpen} onOpenChange={setIsCuttingWorkflowOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {(() => {
+            const selectedP1RunPlan = selectedMfgItem ? getP1PacketRunPlan(selectedMfgItem) : null;
+            return (
+              <>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Scissors className="h-5 w-5" />
               Cutting Workflow: {selectedMfgItem?.displayName || selectedMfgItem?.partNumber || selectedMfgItem?.partName}
+              {selectedMfgItem && (
+                <Badge variant={isP2QueueItem(selectedMfgItem) ? "default" : "secondary"} className="ml-1">
+                  {isP2QueueItem(selectedMfgItem) ? 'P2 trace packet' : 'P1 cut/make packet'}
+                </Badge>
+              )}
             </DialogTitle>
             <DialogDescription>
               Step {workflowStep === 'fabric' ? '1 of 4: Retrieve Fabric' : workflowStep === 'cutting' ? '2 of 4: Cutting Programs' : workflowStep === 'complete' ? '3 of 4: Complete & Print Labels' : '4 of 4: Fabric Disposition'}
@@ -2694,11 +3031,13 @@ export default function CuttingOperatorDashboard() {
                     <p className="font-bold text-lg">{(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)}</p>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground text-xs">Cuts Needed</Label>
+                    <Label className="text-muted-foreground text-xs">{selectedP1RunPlan ? 'Program Runs' : 'Cuts Needed'}</Label>
                     <p className="font-bold text-lg">{
-                      matchingBOM
-                        ? Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM.yieldPerCut || 4))
-                        : (selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / 4))
+                      selectedP1RunPlan
+                        ? selectedP1RunPlan.totalRuns
+                        : matchingBOM
+                          ? Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM.yieldPerCut || 4))
+                          : (selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / 4))
                     }</p>
                   </div>
                   <div>
@@ -2706,6 +3045,37 @@ export default function CuttingOperatorDashboard() {
                     <p className="font-bold text-lg">{matchingBOM?.squareMetersPerCut || 0.5} m²</p>
                   </div>
                 </div>
+                {selectedP1RunPlan && (
+                  <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-medium text-amber-950 dark:text-amber-100">{selectedP1RunPlan.packetName}</p>
+                        <p className="text-xs text-amber-800 dark:text-amber-200">
+                          {selectedP1RunPlan.packetsNeeded} packets to make; no P1 packet barcodes required.
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="bg-background font-mono">
+                        {selectedP1RunPlan.totalRuns} total runs
+                      </Badge>
+                      <Badge variant="outline" className="bg-background font-mono">
+                        {selectedP1RunPlan.totalSquareMeters} m² total
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {selectedP1RunPlan.requirements.map(requirement => (
+                        <div key={requirement.programName} className="rounded-md border bg-background px-3 py-2 text-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">{requirement.programName}</span>
+                            <Badge>{requirement.runsNeeded} run{requirement.runsNeeded === 1 ? '' : 's'}</Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {requirement.totalParts} {requirement.label.toLowerCase()} needed at {requirement.yieldPerRun}/run; {requirement.squareMetersPerRun} m²/run
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4">
@@ -2891,15 +3261,34 @@ export default function CuttingOperatorDashboard() {
                   <Scissors className="h-4 w-4" />
                   Cutting Programs
                 </h4>
-                <p className="text-sm text-muted-foreground">
-                  Execute the following cutting program for {(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)} packets
-                </p>
-                <div className="mt-3 p-3 bg-background rounded border">
-                  <p className="font-mono text-sm">Program: {selectedMfgItem?.partNumber || 'STANDARD'}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
+                {selectedP1RunPlan ? (
+                  <div className="mt-3 space-y-2">
+                    {selectedP1RunPlan.requirements.map(requirement => (
+                      <div key={requirement.programName} className="rounded border bg-background p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="font-mono text-sm">{requirement.programName}</p>
+                          <Badge>{requirement.runsNeeded} run{requirement.runsNeeded === 1 ? '' : 's'}</Badge>
+                          <Badge variant="outline">{requirement.squareMetersNeeded} m²</Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Make {requirement.totalParts} {requirement.label.toLowerCase()} for {selectedP1RunPlan.packetsNeeded} packets ({requirement.partsPerPacket}/packet; yield {requirement.yieldPerRun}/run; {requirement.squareMetersPerRun} m²/run).
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Execute the following cutting program for {(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)} packets
+                    </p>
+                    <div className="mt-3 p-3 bg-background rounded border">
+                      <p className="font-mono text-sm">Program: {selectedMfgItem?.partNumber || 'STANDARD'}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
                     Cuts Required: {selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM?.yieldPerCut || 4))}
                   </p>
-                </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {matchingBOM && matchingBOM.cuts && matchingBOM.cuts.length > 0 ? (
@@ -3161,6 +3550,9 @@ export default function CuttingOperatorDashboard() {
               )}
             </div>
           </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

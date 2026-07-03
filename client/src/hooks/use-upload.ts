@@ -1,5 +1,7 @@
 import { useState, useCallback } from "react";
 import type { UppyFile } from "@uppy/core";
+import { apiRequest } from "@/lib/queryClient";
+import { getErrorMessage } from "@/lib/utils";
 
 interface UploadMetadata {
   name: string;
@@ -62,38 +64,16 @@ export function useUpload(options: UseUploadOptions = {}) {
    */
   const requestUploadUrl = useCallback(
     async (file: File): Promise<UploadResponse> => {
-      const response = await fetch("/api/uploads/request-url", {
+      const response = await apiRequest("/api/uploads/request-url", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+        body: {
           name: file.name,
           size: file.size,
           contentType: file.type || "application/octet-stream",
-        }),
+        },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const parts = [
-          errorData.error || `Failed to get upload URL (HTTP ${response.status})`,
-        ];
-        if (errorData.reason && errorData.reason !== "unknown") {
-          parts.push(errorData.reason);
-        }
-        if (errorData.details) {
-          parts.push(errorData.details);
-        }
-        const message = parts.join(" — ");
-        console.error("[useUpload] request-url failed:", {
-          status: response.status,
-          ...errorData,
-        });
-        throw new Error(message);
-      }
-
-      return response.json();
+      return response as UploadResponse;
     },
     []
   );
@@ -124,9 +104,10 @@ export function useUpload(options: UseUploadOptions = {}) {
           statusText: response.statusText,
           body: truncated,
         });
-        throw new Error(
+        throw new Error(getErrorMessage(
+          truncated,
           `Failed to upload file to storage (HTTP ${response.status} ${response.statusText})`
-        );
+        ));
       }
     },
     []
@@ -198,23 +179,15 @@ export function useUpload(options: UseUploadOptions = {}) {
       headers?: Record<string, string>;
     }> => {
       // Use the actual file properties to request a per-file presigned URL
-      const response = await fetch("/api/uploads/request-url", {
+      const data = await apiRequest("/api/uploads/request-url", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+        body: {
           name: file.name,
           size: file.size,
           contentType: file.type || "application/octet-stream",
-        }),
-      });
+        },
+      }) as UploadResponse;
 
-      if (!response.ok) {
-        throw new Error("Failed to get upload URL");
-      }
-
-      const data = await response.json();
       return {
         method: "PUT",
         url: data.uploadURL,
@@ -232,4 +205,3 @@ export function useUpload(options: UseUploadOptions = {}) {
     progress,
   };
 }
-

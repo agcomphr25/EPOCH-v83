@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { eq, and, asc, desc, ilike, notInArray, sql, or } from 'drizzle-orm';
+import { eq, and, asc, desc, ilike, inArray, notInArray, sql, or } from 'drizzle-orm';
 import { auditService } from '../services/auditService';
 import { requirePermission } from '../../middleware/requirePermission';
 import { validateActionToken } from '../../middleware/actionToken';
@@ -11,8 +11,13 @@ import { evaluateTravelerTrainingGate, evaluateQcTrainingGate } from '../lib/tra
 import { resolveChargeCode, deriveProjectId, resolveCertificationStatus, resolveBudgetOverrunState } from '../lib/resolveChargeCode';
 import { resolvePacketBarcode } from '../lib/packetResolution';
 import { getActiveRoutingStep } from '../services/routingStepService';
+import { adjustPacketInventoryItem } from '../utils/p1PacketInventory';
 import { laborAllocationsEnabled } from '../lib/featureFlags';
+import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import * as allocationService from '../services/laborAllocationService';
+import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
+import { executeTravelerAutoPunch } from './timeClock';
+import { recordAuditEvent } from '../services/auditLedgerService';
 import { db } from '../../db';
 import {
   insertTravelerSchema,
@@ -26,13 +31,19 @@ import {
   p2SerializedItemEvents,
   travelers,
   travelerSteps,
+  travelerTasks,
+  travelerTaskFields,
+  travelerSignatures,
+  travelerEvents,
   travelerAuthorizedNotes,
   auditEvents,
+  chargeCodes,
   partRoutings,
   inventoryItems,
   manufacturingQueue,
   productionWorkOrders,
   cuttingBuiltPackets,
+  cuttingPacketBOMs,
   getSupplySourceDashboard,
   supplySourceDashboardToLegacyDept,
 } from '../../schema';
@@ -61,6 +72,207 @@ const DEPT_ALIASES: Record<string, string> = {
   'shipping': 'shipping',
 };
 
+const TRACE_FIELD_ALIASES: Record<string, string[]> = {
+  trace_internalcontrolnumber: ['internalControlNumber', 'material_internal_control_number', 'material_icn'],
+  trace_supplier: ['supplier'],
+  trace_inventorypartnumber: ['inventoryPartNumber', 'material_part_number'],
+  trace_batchlotnumber: ['batchLotNumber', 'material_batch_number', 'material_lot'],
+  trace_manufacturer: ['manufacturer', 'material_brand'],
+  trace_rollnumber: ['rollNumber'],
+  trace_expirationdate: ['expirationDate', 'material_expiration_date'],
+  trace_receiveddate: ['receivedDate'],
+};
+
+function parseQueueIdFromPacketBarcode(barcode: string | null | undefined): number | null {
+  if (!barcode) return null;
+  const trimmed = barcode.trim();
+  const mfgMatch = trimmed.match(/^MFG-(\d+)-/);
+  if (mfgMatch) {
+    const queueId = Number(mfgMatch[1]);
+    return Number.isInteger(queueId) ? queueId : null;
+  }
+
+  const parts = trimmed.split('-');
+  if (parts.length < 5 || parts[0] !== 'PKT') return null;
+
+  const maybeRepairIndex = parts[parts.length - 1];
+  const maybeTimestamp = parts[parts.length - 2];
+  const hasRepairIndex = /^\d+$/.test(maybeRepairIndex) && /^\d{10,}$/.test(maybeTimestamp);
+  const queueIndex = hasRepairIndex ? parts.length - 4 : parts.length - 3;
+  const queueId = Number(parts[queueIndex]);
+  return Number.isInteger(queueId) ? queueId : null;
+}
+
+async function resolvePacketInventoryItemIdForCommit(
+  tx: any,
+  packet: typeof cuttingBuiltPackets.$inferSelect,
+  scannedBarcode: string,
+): Promise<number | null> {
+  const queueId = parseQueueIdFromPacketBarcode(packet.barcode) ?? parseQueueIdFromPacketBarcode(scannedBarcode);
+  if (queueId != null) {
+    const [queueRow] = await tx
+      .select({ inventoryItemId: manufacturingQueue.inventoryItemId })
+      .from(manufacturingQueue)
+      .where(eq(manufacturingQueue.id, queueId))
+      .limit(1);
+    if (queueRow?.inventoryItemId) return queueRow.inventoryItemId;
+  }
+
+  if (packet.productCategoryId) {
+    const [bom] = await tx
+      .select({ inventoryItemId: cuttingPacketBOMs.inventoryItemId })
+      .from(cuttingPacketBOMs)
+      .where(eq(cuttingPacketBOMs.productCategoryId, packet.productCategoryId))
+      .limit(1);
+    if (bom?.inventoryItemId) return bom.inventoryItemId;
+  }
+
+  return null;
+}
+
+async function commitPacketToTravelerInventory(params: {
+  packet: typeof cuttingBuiltPackets.$inferSelect;
+  scannedBarcode: string;
+  allocationTarget: string;
+  intendedRoutingStepId: string | null;
+}): Promise<void> {
+  const { packet, scannedBarcode, allocationTarget, intendedRoutingStepId } = params;
+
+  await db.transaction(async (tx) => {
+    const [lockedPacket] = await tx
+      .select()
+      .from(cuttingBuiltPackets)
+      .where(eq(cuttingBuiltPackets.id, packet.id))
+      .limit(1)
+      .for('update');
+
+    if (!lockedPacket) {
+      throw new Error(`Cutting packet ${packet.id} disappeared before allocation`);
+    }
+
+    const alreadyCommittedToThisTraveler =
+      lockedPacket.status === 'ALLOCATED' &&
+      lockedPacket.allocatedToOrder === allocationTarget;
+
+    const shouldRemoveFromInventory = lockedPacket.status === 'AVAILABLE';
+    if (shouldRemoveFromInventory) {
+      const inventoryItemId = await resolvePacketInventoryItemIdForCommit(tx, lockedPacket, scannedBarcode);
+      if (!inventoryItemId) {
+        throw new Error(`Unable to resolve inventory packet item for ${lockedPacket.barcode || scannedBarcode}`);
+      }
+      await adjustPacketInventoryItem(tx, inventoryItemId, -1);
+    }
+
+    if (!alreadyCommittedToThisTraveler) {
+      await tx
+        .update(cuttingBuiltPackets)
+        .set({
+          status: lockedPacket.status === 'CONSUMED' ? lockedPacket.status : 'ALLOCATED',
+          allocatedToOrder: allocationTarget,
+          intendedRoutingStepId,
+          updatedAt: new Date(),
+        })
+        .where(eq(cuttingBuiltPackets.id, lockedPacket.id));
+    }
+  });
+}
+
+const LEGACY_ROC_BACKFILL_DEFAULT_SERIALS = [
+  'ROC2600084',
+  'ROC2600089',
+  'ROC2600083',
+  'ROC2600086',
+  'ROC2600085',
+  'ROC2600080',
+  'ROC2600079',
+  'ROC2600078',
+  'ROC2600077',
+  'ROC2600076',
+  'ROC2600075',
+  'ROC2600074',
+  'ROC2600046',
+] as const;
+
+const LEGACY_ROC_BACKFILL_DEFAULT_CUTOFF = '2026-05-20';
+const LEGACY_ROC_BACKFILL_DEFAULT_APPROVER = 'Tasha Mireles';
+const LEGACY_ROC_LAYUP_CHARGE_CODE = 'ROC-LU330-050126';
+const LEGACY_ROC_QC_CHARGE_CODE = 'ROC-QC330-050126';
+const LEGACY_ROC_CANCELED_TRAVELER_NUMBER = 'TRV-2026-000271';
+const LEGACY_ROC_APPROVAL_REASON =
+  'Legacy routing remediation approved by Tasha Mireles. The prior six-department traveler routing was compressed into the current Layup and Quality Control charge-code structure after the 2026-05-20 routing change. Existing captured traveler data is preserved. Missing legacy gate evidence is closed by supervised backfill so serialized production travelers can continue without changing the current traveler creation or execution process.';
+
+const LEGACY_ROC_DEPARTMENT_CHARGE_CODE_MAP: Record<string, 'layup' | 'qualityControl'> = {
+  'mold prep': 'layup',
+  layup: 'layup',
+  'cello wrap': 'layup',
+  'oven/cure': 'layup',
+  'oven cure': 'layup',
+  'quality control': 'qualityControl',
+  qc: 'qualityControl',
+  'final qc': 'qualityControl',
+  finalqc: 'qualityControl',
+};
+
+const legacyRocDryRunSchema = z.object({
+  serials: z.array(z.string().trim().min(1)).min(1).optional(),
+  cutoffDate: z.string().trim().min(1).optional(),
+  approver: z.string().trim().min(1).optional(),
+  chargeCodes: z.object({
+    layup: z.string().trim().min(1).optional(),
+    qualityControl: z.string().trim().min(1).optional(),
+  }).optional(),
+});
+
+const legacyRocApplySchema = z.object({
+  travelerIds: z.array(z.string().trim().min(1)).min(1).optional(),
+  approver: z.string().trim().min(1).default(LEGACY_ROC_BACKFILL_DEFAULT_APPROVER),
+  reason: z.string().trim().min(1).default(LEGACY_ROC_APPROVAL_REASON),
+  confirmSupervisorApproval: z.literal(true),
+});
+
+const LEGACY_ROC_RESTORE_REASON =
+  'Traveler TRV-2026-000271 was canceled accidentally during manual troubleshooting of the legacy routing/charge-code issue. Cancellation is preserved in the audit history. Traveler is restored to active status for supervised legacy routing remediation and continuation of production record completion.';
+
+const legacyRocRestoreSchema = z.object({
+  approver: z.string().trim().min(1).default(LEGACY_ROC_BACKFILL_DEFAULT_APPROVER),
+  reason: z.string().trim().min(1).default(LEGACY_ROC_RESTORE_REASON),
+  confirmSupervisorApproval: z.literal(true),
+});
+
+function normalizeLegacyRocValue(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function getLegacyRocChargeCodeKey(departmentName: string | null | undefined): 'layup' | 'qualityControl' | null {
+  const normalized = normalizeLegacyRocValue(departmentName).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+  return LEGACY_ROC_DEPARTMENT_CHARGE_CODE_MAP[normalized] ?? null;
+}
+
+function parseLegacyRocCutoff(cutoffDate: string): Date {
+  // Treat a date-only cutoff as the end of that local production day.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cutoffDate)) {
+    return new Date(`${cutoffDate}T23:59:59.999`);
+  }
+  return new Date(cutoffDate);
+}
+
+function resolveTraceFieldValue(
+  fieldKey: string,
+  fieldValues: Record<string, unknown>,
+): unknown {
+  const aliases = TRACE_FIELD_ALIASES[fieldKey];
+  if (!aliases) return undefined;
+
+  for (const alias of aliases) {
+    const value = fieldValues[alias];
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function normalizeDept(d: string): string {
   let lower = d.toLowerCase().trim();
   lower = lower.replace(/^pending\s+/i, '');
@@ -82,7 +294,7 @@ function getDeptTimestampField(dept: string): string | null {
   return map[key] || null;
 }
 
-async function syncP2SerializedItemOnStepComplete(
+export async function syncP2SerializedItemOnStepComplete(
   traveler: { id: string; serialNumber?: string | null; partNumber?: string | null },
   completedStep: { departmentName: string; stepNumber: number },
   performedBy: string
@@ -90,14 +302,31 @@ async function syncP2SerializedItemOnStepComplete(
   try {
     if (!traveler.serialNumber) return;
 
+    // Trim + case-insensitive lookup that normalizes BOTH sides — the
+    // DB column may itself have leading/trailing whitespace, so a bare
+    // `ilike(col, trimmedInput)` is not enough. Do NOT restrict to
+    // status='ACTIVE' here — if we find a non-ACTIVE row we want to log
+    // and skip rather than silently miss the item (Task #257).
+    const trimmedSerial = traveler.serialNumber.trim();
     const serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: and(
-        ilike(p2SerializedItems.serialNumber, traveler.serialNumber),
-        eq(p2SerializedItems.status, 'ACTIVE')
-      ),
+      where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${trimmedSerial}))`,
     });
 
-    if (!serializedItem) return;
+    if (!serializedItem) {
+      console.warn(
+        `[P2 Sync] No p2_serialized_items row found for serial "${trimmedSerial}" ` +
+        `(traveler=${traveler.id}, step=${completedStep.stepNumber})`
+      );
+      return;
+    }
+
+    if (serializedItem.status !== 'ACTIVE') {
+      console.log(
+        `[P2 Sync] Skipping "${serializedItem.barcode}" — status is "${serializedItem.status}" ` +
+        `(traveler=${traveler.id}, step=${completedStep.stepNumber})`
+      );
+      return;
+    }
 
     let routing = serializedItem.partRoutingId
       ? await db.query.partRoutings.findFirst({
@@ -127,8 +356,35 @@ async function syncP2SerializedItemOnStepComplete(
 
     const stepDeptIndex = departmentSequence.findIndex(d => normalizeDept(d) === normalizedStepDept);
 
+    // Final-step fallback (Task #257): even if the completed step's dept
+    // doesn't appear in the routing sequence (or is "behind" the item),
+    // detect "this was the traveler's last step" and force-complete the
+    // item. Otherwise the item is stranded forever in Pending Layup /
+    // its current dept.
+    const remainingSteps = await db
+      .select({ id: travelerSteps.id, status: travelerSteps.status })
+      .from(travelerSteps)
+      .where(eq(travelerSteps.travelerId, traveler.id));
+    const noOpenStepsLeft = remainingSteps.every((s) => {
+      const st = String(s.status).toUpperCase();
+      return st !== 'NOT_STARTED' && st !== 'IN_PROGRESS' && st !== 'STARTED';
+    });
+
     if (normalizedStepDept !== normalizedItemDept) {
       if (stepDeptIndex < 0 || stepDeptIndex < currentIndex) {
+        if (noOpenStepsLeft) {
+          console.log(
+            `[P2 Sync] Step dept "${stepDept}" not in routing for "${serializedItem.barcode}" ` +
+            `but no open steps remain on traveler ${traveler.id} — force-completing.`
+          );
+          await forceCompleteP2SerializedItem(
+            serializedItem,
+            departmentSequence,
+            performedBy,
+            `Traveler ${traveler.id} fully completed (step ${completedStep.stepNumber}, dept "${stepDept}" not in routing sequence)`
+          );
+          return;
+        }
         console.log(`[P2 Sync] Step dept "${stepDept}" is behind or unknown vs item dept "${itemDept}" — skipping`);
         return;
       }
@@ -153,12 +409,22 @@ async function syncP2SerializedItemOnStepComplete(
       }
     }
 
-    if (targetIndex < departmentSequence.length) {
+    // If the routing says we'd advance past the end OR the traveler has
+    // no more open steps, terminate the item.
+    const shouldComplete = targetIndex >= departmentSequence.length || noOpenStepsLeft;
+
+    if (!shouldComplete) {
       updates.currentDepartment = nextDepartment;
       updates.currentStageIndex = targetIndex;
     } else {
       updates.status = 'COMPLETED';
       updates.completedAt = new Date();
+      // Backfill any remaining per-dept completion timestamps so the
+      // history is consistent with the COMPLETED status.
+      for (let i = currentIndex; i < departmentSequence.length; i++) {
+        const f = getDeptTimestampField(departmentSequence[i]);
+        if (f && !updates[f]) updates[f] = new Date();
+      }
     }
 
     const result = await db.update(p2SerializedItems)
@@ -171,22 +437,157 @@ async function syncP2SerializedItemOnStepComplete(
       return;
     }
 
+    const toDept = shouldComplete ? 'COMPLETED' : (nextDepartment || 'COMPLETED');
     await db.insert(p2SerializedItemEvents).values({
       serializedItemId: serializedItem.id,
       barcode: serializedItem.barcode,
       eventType: 'TRANSITION',
       fromDepartment: itemDept,
-      toDepartment: nextDepartment || 'COMPLETED',
+      toDepartment: toDept,
       fromStageIndex: currentIndex,
-      toStageIndex: targetIndex < departmentSequence.length ? targetIndex : null,
+      toStageIndex: shouldComplete ? null : targetIndex,
       performedBy,
       notes: `Synced from traveler step completion (${traveler.id}, step ${completedStep.stepNumber})`,
     });
 
-    console.log(`[P2 Sync] Advanced "${serializedItem.barcode}" from "${itemDept}" to "${nextDepartment || 'COMPLETED'}"`);
+    console.log(`[P2 Sync] Advanced "${serializedItem.barcode}" from "${itemDept}" to "${toDept}"`);
   } catch (err: any) {
-    console.error('[P2 Sync] Failed to sync serialized item on step complete:', err?.message);
+    // Task #257: emit a structured error log and write an audit event so
+    // silent drift becomes visible the next time someone looks.
+    console.error('[P2 Sync] Failed to sync serialized item on step complete:', {
+      travelerId: traveler.id,
+      serialNumber: traveler.serialNumber,
+      stepNumber: completedStep.stepNumber,
+      stepDept: completedStep.departmentName,
+      error: err?.message,
+      stack: err?.stack,
+    });
+    try {
+      if (traveler.serialNumber) {
+        const trimmed = traveler.serialNumber.trim();
+        const item = await db.query.p2SerializedItems.findFirst({
+          where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${trimmed}))`,
+        });
+        if (item) {
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: item.id,
+            barcode: item.barcode,
+            eventType: 'NOTE',
+            fromDepartment: item.currentDepartment,
+            toDepartment: item.currentDepartment,
+            fromStageIndex: item.currentStageIndex || 0,
+            toStageIndex: item.currentStageIndex || 0,
+            performedBy: performedBy || 'system',
+            notes: `P2 Sync error on traveler ${traveler.id} step ${completedStep.stepNumber}: ${err?.message ?? 'unknown'}`,
+          });
+        }
+      }
+    } catch (_auditErr) {
+      // best-effort; do not throw out of the catch
+    }
   }
+}
+
+/**
+ * Task #257: belt-and-suspenders for the traveler-completion path.
+ * Force-advance the matching p2_serialized_items row to COMPLETED even
+ * if the per-step sync missed it (unknown dept, lookup miss, etc.).
+ * Safe to call multiple times — no-ops when the row is already
+ * COMPLETED / SCRAPPED / HOLD or when no row matches.
+ */
+async function forceCompleteP2SerializedItemForTraveler(
+  traveler: { id: string; serialNumber?: string | null; partNumber?: string | null },
+  performedBy: string
+): Promise<void> {
+  try {
+    if (!traveler.serialNumber) return;
+    const trimmedSerial = traveler.serialNumber.trim();
+    // Normalize BOTH sides — DB column may itself have whitespace.
+    const item = await db.query.p2SerializedItems.findFirst({
+      where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${trimmedSerial}))`,
+    });
+    if (!item) {
+      console.warn(
+        `[P2 ForceComplete] No p2_serialized_items row for serial "${trimmedSerial}" (traveler=${traveler.id})`
+      );
+      return;
+    }
+    if (item.status !== 'ACTIVE') {
+      console.log(
+        `[P2 ForceComplete] "${item.barcode}" already in terminal state "${item.status}" — no action`
+      );
+      return;
+    }
+
+    let routing = item.partRoutingId
+      ? await db.query.partRoutings.findFirst({
+          where: eq(partRoutings.id, item.partRoutingId),
+        })
+      : null;
+    if (!routing && item.partNumber) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(eq(partRoutings.partNumber, item.partNumber), eq(partRoutings.isActive, true)),
+      });
+    }
+    const departmentSequence = routing?.departmentSequence
+      ? (routing.departmentSequence as string[])
+      : [...P2_DEPARTMENT_STAGES];
+
+    await forceCompleteP2SerializedItem(
+      item,
+      departmentSequence,
+      performedBy,
+      `Traveler ${traveler.id} marked COMPLETED — belt-and-suspenders force-complete`
+    );
+  } catch (err: any) {
+    console.error('[P2 ForceComplete] Failed:', {
+      travelerId: traveler.id,
+      serialNumber: traveler.serialNumber,
+      error: err?.message,
+      stack: err?.stack,
+    });
+  }
+}
+
+async function forceCompleteP2SerializedItem(
+  item: { id: string; barcode: string; currentDepartment: string; currentStageIndex: number | null; status: string },
+  departmentSequence: string[],
+  performedBy: string,
+  reason: string
+): Promise<void> {
+  const now = new Date();
+  const currentIndex = item.currentStageIndex || 0;
+  const updates: any = {
+    status: 'COMPLETED',
+    completedAt: now,
+    updatedAt: now,
+  };
+  for (let i = currentIndex; i < departmentSequence.length; i++) {
+    const f = getDeptTimestampField(departmentSequence[i]);
+    if (f && !updates[f]) updates[f] = now;
+  }
+  const result = await db.update(p2SerializedItems)
+    .set(updates)
+    .where(and(eq(p2SerializedItems.id, item.id), eq(p2SerializedItems.status, 'ACTIVE')))
+    .returning({ id: p2SerializedItems.id });
+
+  if (!result.length) {
+    console.log(`[P2 ForceComplete] "${item.barcode}" no-op (status changed concurrently)`);
+    return;
+  }
+
+  await db.insert(p2SerializedItemEvents).values({
+    serializedItemId: item.id,
+    barcode: item.barcode,
+    eventType: 'TRANSITION',
+    fromDepartment: item.currentDepartment,
+    toDepartment: 'COMPLETED',
+    fromStageIndex: currentIndex,
+    toStageIndex: null,
+    performedBy,
+    notes: reason,
+  });
+  console.log(`[P2 ForceComplete] "${item.barcode}" -> COMPLETED (${reason})`);
 }
 
 const router = Router();
@@ -196,24 +597,42 @@ router.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+router.use(async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    await ensureProductionWorkflowReadSchema();
+    next();
+  } catch (error) {
+    console.error('[Travelers] production workflow schema readiness failed:', error);
+    res.status(503).json({
+      error: 'Traveler workflow schema is not ready',
+      message: 'Traveler data is temporarily unavailable while production workflow tables are prepared.',
+    });
+  }
+});
+
 router.use(validateActionToken);
 
 // Get all travelers with optional filters
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { status, partNumber, workOrderId, inventoryItemId } = req.query;
+    const { status, partNumber, workOrderId, inventoryItemId, partRoutingId, routingId } = req.query;
 
     const filters: {
       status?: string;
       partNumber?: string;
       workOrderId?: string;
       inventoryItemId?: string;
+      partRoutingId?: string;
     } = {};
 
     if (status && typeof status === 'string') filters.status = status;
     if (partNumber && typeof partNumber === 'string') filters.partNumber = partNumber;
     if (workOrderId && typeof workOrderId === 'string') filters.workOrderId = workOrderId;
     if (inventoryItemId && typeof inventoryItemId === 'string') filters.inventoryItemId = inventoryItemId;
+    const routingIdParam = (typeof partRoutingId === 'string' && partRoutingId)
+      || (typeof routingId === 'string' && routingId)
+      || null;
+    if (routingIdParam) filters.partRoutingId = routingIdParam;
 
     const travelers = await storage.getTravelers(
       Object.keys(filters).length > 0 ? filters : undefined
@@ -264,6 +683,750 @@ router.get('/by-serial/:serialNumber', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/legacy-roc-backfill/dry-run', requirePermission('work_orders.override_charges'), async (req: Request, res: Response) => {
+  try {
+    const parsed = legacyRocDryRunSchema.parse(req.body ?? {});
+    const serials = [...new Set(
+      (parsed.serials ?? [...LEGACY_ROC_BACKFILL_DEFAULT_SERIALS])
+        .map((s) => s.trim())
+        .filter(Boolean)
+    )];
+    const cutoffDate = parsed.cutoffDate ?? LEGACY_ROC_BACKFILL_DEFAULT_CUTOFF;
+    const cutoff = parseLegacyRocCutoff(cutoffDate);
+
+    if (Number.isNaN(cutoff.getTime())) {
+      return res.status(400).json({ error: 'Invalid cutoffDate', message: `Could not parse cutoff date '${cutoffDate}'.` });
+    }
+
+    const chargeCodeConfig = {
+      layup: parsed.chargeCodes?.layup ?? LEGACY_ROC_LAYUP_CHARGE_CODE,
+      qualityControl: parsed.chargeCodes?.qualityControl ?? LEGACY_ROC_QC_CHARGE_CODE,
+    };
+
+    const chargeCodeRows = await db
+      .select({
+        id: chargeCodes.id,
+        code: chargeCodes.code,
+        department: chargeCodes.department,
+        active: chargeCodes.active,
+      })
+      .from(chargeCodes)
+      .where(inArray(chargeCodes.code, [chargeCodeConfig.layup, chargeCodeConfig.qualityControl]));
+    const chargeCodeByCode = new Map(chargeCodeRows.map((cc) => [cc.code, cc]));
+    const chargeCodeStatus = {
+      layup: chargeCodeByCode.get(chargeCodeConfig.layup) ?? null,
+      qualityControl: chargeCodeByCode.get(chargeCodeConfig.qualityControl) ?? null,
+    };
+
+    const reportRows: any[] = [];
+
+    for (const serial of serials) {
+      const normalizedSerial = normalizeLegacyRocValue(serial);
+      const serializedItem = await db.query.p2SerializedItems.findFirst({
+        where: sql`
+          LOWER(TRIM(${p2SerializedItems.serialNumber})) = ${normalizedSerial}
+          OR LOWER(TRIM(${p2SerializedItems.barcode})) = ${normalizedSerial}
+          OR LOWER(TRIM(COALESCE(${p2SerializedItems.travelerBarcode}, ''))) = ${normalizedSerial}
+          OR LOWER(TRIM(COALESCE(${p2SerializedItems.customerSerialNumber}, ''))) = ${normalizedSerial}
+        `,
+      });
+
+      const travelerLookupValues = [
+        serial,
+        serializedItem?.serialNumber,
+        serializedItem?.barcode,
+        serializedItem?.travelerBarcode,
+        serializedItem?.customerSerialNumber,
+      ]
+        .map((v) => String(v ?? '').trim())
+        .filter(Boolean);
+
+      const travelersById = new Map<string, any>();
+      for (const lookupValue of [...new Set(travelerLookupValues)]) {
+        const normalizedLookup = normalizeLegacyRocValue(lookupValue);
+        const matches = await db
+          .select()
+          .from(travelers)
+          .where(sql`
+            LOWER(TRIM(COALESCE(${travelers.serialNumber}, ''))) = ${normalizedLookup}
+            OR LOWER(TRIM(COALESCE(${travelers.internalControlNumber}, ''))) = ${normalizedLookup}
+            OR LOWER(TRIM(COALESCE(${travelers.lotNumber}, ''))) = ${normalizedLookup}
+            OR LOWER(TRIM(${travelers.travelerNumber})) = ${normalizedLookup}
+          `);
+        for (const traveler of matches) travelersById.set(traveler.id, traveler);
+      }
+
+      if (travelersById.size === 0) {
+        reportRows.push({
+          inputSerial: serial,
+          serializedItem: serializedItem
+            ? {
+                id: serializedItem.id,
+                serialNumber: serializedItem.serialNumber,
+                barcode: serializedItem.barcode,
+                travelerBarcode: serializedItem.travelerBarcode,
+                currentDepartment: serializedItem.currentDepartment,
+                status: serializedItem.status,
+                partNumber: serializedItem.partNumber,
+                partRoutingId: serializedItem.partRoutingId,
+                partRoutingRevision: serializedItem.partRoutingRevision,
+              }
+            : null,
+          traveler: null,
+          classification: 'needs_review',
+          reasons: serializedItem
+            ? ['Serialized item was found, but no matching traveler was found.']
+            : ['No serialized item or traveler was found for this ROC identifier.'],
+          proposedActions: [],
+        });
+        continue;
+      }
+
+      for (const traveler of travelersById.values()) {
+        const steps = await db
+          .select()
+          .from(travelerSteps)
+          .where(eq(travelerSteps.travelerId, traveler.id))
+          .orderBy(asc(travelerSteps.stepNumber));
+
+        const stepReports = [];
+        for (const step of steps) {
+          const chargeKey = getLegacyRocChargeCodeKey(step.departmentName);
+          if (!chargeKey) continue;
+
+          const tasks = await db
+            .select()
+            .from(travelerTasks)
+            .where(eq(travelerTasks.travelerStepId, step.id))
+            .orderBy(asc(travelerTasks.sortOrder));
+          const taskIds = tasks.map((task) => task.id);
+          const fields = taskIds.length > 0
+            ? await db
+                .select()
+                .from(travelerTaskFields)
+                .where(inArray(travelerTaskFields.travelerTaskId, taskIds))
+            : [];
+
+          const missingRequiredFields = fields
+            .filter((field) => field.required && String(field.value ?? '').trim() === '')
+            .map((field) => ({
+              id: field.id,
+              travelerTaskId: field.travelerTaskId,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+            }));
+          const incompleteRequiredTasks = tasks
+            .filter((task) => task.required && String(task.status).toUpperCase() !== 'COMPLETED')
+            .map((task) => ({
+              id: task.id,
+              title: task.title,
+              taskType: task.taskType,
+              taskPhase: task.taskPhase,
+              status: task.status,
+            }));
+
+          const targetCode = chargeKey === 'layup' ? chargeCodeConfig.layup : chargeCodeConfig.qualityControl;
+          const targetChargeCode = chargeCodeByCode.get(targetCode) ?? null;
+          const hasActiveTargetChargeCode = targetChargeCode?.active === true;
+
+          stepReports.push({
+            stepId: step.id,
+            stepNumber: step.stepNumber,
+            departmentName: step.departmentName,
+            status: step.status,
+            startedAt: step.startedAt,
+            completedAt: step.completedAt,
+            completedBy: step.completedBy,
+            mapsTo: chargeKey === 'layup' ? 'Layup' : 'Quality Control',
+            targetChargeCode: targetChargeCode
+              ? {
+                  id: targetChargeCode.id,
+                  code: targetChargeCode.code,
+                  department: targetChargeCode.department,
+                  active: targetChargeCode.active,
+                }
+              : { code: targetCode, active: false, missing: true },
+            taskCount: tasks.length,
+            incompleteRequiredTasks,
+            missingRequiredFields,
+            proposedAction: String(step.status).toUpperCase() === 'COMPLETED'
+              ? 'already_completed_no_write'
+              : hasActiveTargetChargeCode && missingRequiredFields.length === 0
+                ? 'eligible_for_legacy_mapping_apply'
+                : 'manual_review_required',
+          });
+        }
+
+        const routing = traveler.partRoutingId
+          ? await db.query.partRoutings.findFirst({ where: eq(partRoutings.id, traveler.partRoutingId) })
+          : null;
+        const routingSequence = Array.isArray(routing?.departmentSequence)
+          ? routing.departmentSequence as string[]
+          : [];
+        const createdAt = traveler.createdAt ? new Date(traveler.createdAt) : null;
+        const createdAfterCutoff = createdAt ? createdAt > cutoff : false;
+        const terminalStatus = ['COMPLETED', 'CANCELED', 'CANCELLED'].includes(String(traveler.status).toUpperCase());
+        const activeChargeCodesMissing =
+          chargeCodeStatus.layup?.active !== true || chargeCodeStatus.qualityControl?.active !== true;
+        const reviewSteps = stepReports.filter((step) => step.proposedAction === 'manual_review_required');
+        const eligibleSteps = stepReports.filter((step) => step.proposedAction === 'eligible_for_legacy_mapping_apply');
+
+        const reasons: string[] = [];
+        if (terminalStatus) reasons.push(`Traveler status is terminal (${traveler.status}).`);
+        if (createdAfterCutoff) reasons.push(`Traveler was created after cutoff ${cutoffDate}.`);
+        if (stepReports.length === 0) reasons.push('Traveler has no legacy six-department steps in the approved mapping.');
+        if (activeChargeCodesMissing) reasons.push('One or both target charge codes are missing or inactive.');
+        if (reviewSteps.length > 0) reasons.push('One or more mapped legacy steps have missing required evidence or an inactive/missing target charge code.');
+        if (!terminalStatus && !createdAfterCutoff && stepReports.length > 0 && eligibleSteps.length > 0 && reviewSteps.length === 0 && !activeChargeCodesMissing) {
+          reasons.push('Eligible for apply step after supervisor approval; dry-run performed no writes.');
+        }
+
+        const classification = terminalStatus || createdAfterCutoff || stepReports.length === 0
+          ? 'do_not_touch'
+          : activeChargeCodesMissing || reviewSteps.length > 0
+            ? 'needs_review'
+            : 'safe_to_apply';
+
+        reportRows.push({
+          inputSerial: serial,
+          serializedItem: serializedItem
+            ? {
+                id: serializedItem.id,
+                serialNumber: serializedItem.serialNumber,
+                barcode: serializedItem.barcode,
+                travelerBarcode: serializedItem.travelerBarcode,
+                currentDepartment: serializedItem.currentDepartment,
+                currentStageIndex: serializedItem.currentStageIndex,
+                status: serializedItem.status,
+                partNumber: serializedItem.partNumber,
+                partRoutingId: serializedItem.partRoutingId,
+                partRoutingRevision: serializedItem.partRoutingRevision,
+              }
+            : null,
+          traveler: {
+            id: traveler.id,
+            travelerNumber: traveler.travelerNumber,
+            serialNumber: traveler.serialNumber,
+            internalControlNumber: traveler.internalControlNumber,
+            status: traveler.status,
+            partNumber: traveler.partNumber,
+            partRoutingId: traveler.partRoutingId,
+            partRoutingRevision: traveler.partRoutingRevision,
+            createdAt: traveler.createdAt,
+          },
+          routing: routing
+            ? {
+                id: routing.id,
+                partNumber: routing.partNumber,
+                routingRevision: (routing as any).routingRevision ?? null,
+                departmentSequence: routingSequence,
+              }
+            : null,
+          classification,
+          reasons,
+          proposedActions: stepReports,
+        });
+      }
+    }
+
+    const summary = reportRows.reduce((acc, row) => {
+      acc.totalRows += 1;
+      acc[row.classification] = (acc[row.classification] ?? 0) + 1;
+      acc.proposedStepActions += row.proposedActions.filter(
+        (action: any) => action.proposedAction === 'eligible_for_legacy_mapping_apply'
+      ).length;
+      acc.manualReviewStepActions += row.proposedActions.filter(
+        (action: any) => action.proposedAction === 'manual_review_required'
+      ).length;
+      return acc;
+    }, {
+      totalRows: 0,
+      safe_to_apply: 0,
+      needs_review: 0,
+      do_not_touch: 0,
+      proposedStepActions: 0,
+      manualReviewStepActions: 0,
+    } as Record<string, number>);
+
+    res.json({
+      mode: 'dry_run',
+      writesPerformed: false,
+      scope: {
+        serials,
+        cutoffDate,
+        cutoffTimestamp: cutoff.toISOString(),
+        approver: parsed.approver ?? LEGACY_ROC_BACKFILL_DEFAULT_APPROVER,
+        departmentMapping: {
+          'Mold Prep': chargeCodeConfig.layup,
+          Layup: chargeCodeConfig.layup,
+          'Cello Wrap': chargeCodeConfig.layup,
+          'Oven/Cure': chargeCodeConfig.layup,
+          'Quality Control': chargeCodeConfig.qualityControl,
+          'Final QC': chargeCodeConfig.qualityControl,
+        },
+      },
+      chargeCodes: chargeCodeStatus,
+      summary,
+      rows: reportRows,
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error building legacy ROC traveler backfill dry-run:', error);
+    res.status(500).json({ error: 'Failed to build legacy ROC traveler backfill dry-run', message: error.message });
+  }
+});
+
+router.post('/legacy-roc-backfill/apply', requirePermission('work_orders.override_charges'), async (req: Request, res: Response) => {
+  try {
+    const parsed = legacyRocApplySchema.parse(req.body ?? {});
+    const defaultSerials = [...LEGACY_ROC_BACKFILL_DEFAULT_SERIALS];
+    const now = new Date();
+
+    const layupChargeCode = await db.query.chargeCodes.findFirst({
+      where: and(eq(chargeCodes.code, LEGACY_ROC_LAYUP_CHARGE_CODE), eq(chargeCodes.active, true)),
+    });
+    const qcChargeCode = await db.query.chargeCodes.findFirst({
+      where: and(eq(chargeCodes.code, LEGACY_ROC_QC_CHARGE_CODE), eq(chargeCodes.active, true)),
+    });
+    if (!layupChargeCode || !qcChargeCode) {
+      return res.status(400).json({
+        error: 'TARGET_CHARGE_CODE_INACTIVE',
+        message: 'Both ROC legacy backfill charge codes must exist and be active before apply can run.',
+        chargeCodes: {
+          layup: layupChargeCode ? { id: layupChargeCode.id, code: layupChargeCode.code, active: layupChargeCode.active } : null,
+          qualityControl: qcChargeCode ? { id: qcChargeCode.id, code: qcChargeCode.code, active: qcChargeCode.active } : null,
+        },
+      });
+    }
+
+    const allowedTravelerRows = await db
+      .select()
+      .from(travelers)
+      .where(inArray(travelers.serialNumber, defaultSerials));
+    const allowedTravelerIds = new Set(
+      allowedTravelerRows
+        .filter((traveler) => !['COMPLETED', 'CANCELED', 'CANCELLED'].includes(String(traveler.status).toUpperCase()))
+        .map((traveler) => traveler.id)
+    );
+    const requestedTravelerIds = parsed.travelerIds?.length
+      ? parsed.travelerIds
+      : [...allowedTravelerIds];
+    const deniedTravelerIds = requestedTravelerIds.filter((id) => !allowedTravelerIds.has(id));
+    if (deniedTravelerIds.length > 0) {
+      return res.status(400).json({
+        error: 'TRAVELER_NOT_IN_LEGACY_ROC_SCOPE',
+        message: 'Apply is limited to the active legacy ROC travelers from the approved dry-run scope.',
+        deniedTravelerIds,
+      });
+    }
+
+    const results = [];
+
+    for (const travelerId of requestedTravelerIds) {
+      const traveler = allowedTravelerRows.find((row) => row.id === travelerId);
+      if (!traveler) continue;
+
+      const priorBackfill = await db.query.travelerEvents.findFirst({
+        where: and(
+          eq(travelerEvents.travelerId, traveler.id),
+          eq(travelerEvents.action, 'LEGACY_ROC_ROUTING_BACKFILL_APPLIED')
+        ),
+      });
+      if (priorBackfill) {
+        results.push({
+          travelerId: traveler.id,
+          travelerNumber: traveler.travelerNumber,
+          status: 'skipped',
+          reason: 'Legacy ROC routing backfill already applied.',
+        });
+        continue;
+      }
+
+      const serializedItem = traveler.serialNumber
+        ? await db.query.p2SerializedItems.findFirst({
+            where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${traveler.serialNumber.trim()}))`,
+          })
+        : null;
+
+      const steps = await db
+        .select()
+        .from(travelerSteps)
+        .where(eq(travelerSteps.travelerId, traveler.id))
+        .orderBy(asc(travelerSteps.stepNumber));
+      const mappedSteps = steps.filter((step) => getLegacyRocChargeCodeKey(step.departmentName));
+      if (mappedSteps.length === 0) {
+        results.push({
+          travelerId: traveler.id,
+          travelerNumber: traveler.travelerNumber,
+          status: 'skipped',
+          reason: 'No mapped legacy six-department traveler steps found.',
+        });
+        continue;
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const stepResults = [];
+
+        for (const step of mappedSteps) {
+          const chargeKey = getLegacyRocChargeCodeKey(step.departmentName);
+          const targetChargeCode = chargeKey === 'qualityControl' ? qcChargeCode : layupChargeCode;
+          const tasks = await tx
+            .select()
+            .from(travelerTasks)
+            .where(eq(travelerTasks.travelerStepId, step.id));
+          const taskIds = tasks.map((task) => task.id);
+          const fields = taskIds.length > 0
+            ? await tx
+                .select()
+                .from(travelerTaskFields)
+                .where(inArray(travelerTaskFields.travelerTaskId, taskIds))
+            : [];
+
+          const incompleteRequiredTasks = tasks.filter((task) => task.required && String(task.status).toUpperCase() !== 'COMPLETED');
+          const missingRequiredFields = fields.filter((field) => field.required && String(field.value ?? '').trim() === '');
+          const changedTaskIds: string[] = [];
+
+          for (const task of tasks) {
+            if (String(task.status).toUpperCase() === 'COMPLETED') continue;
+            await tx
+              .update(travelerTasks)
+              .set({
+                status: 'COMPLETED',
+                completedAt: now,
+                completedBy: parsed.approver,
+              })
+              .where(eq(travelerTasks.id, task.id));
+            changedTaskIds.push(task.id);
+          }
+
+          const existingSignature = await tx
+            .select({ id: travelerSignatures.id })
+            .from(travelerSignatures)
+            .where(and(
+              eq(travelerSignatures.travelerStepId, step.id),
+              eq(travelerSignatures.badgeScan, 'LEGACY_ROC_BACKFILL')
+            ))
+            .limit(1);
+          if (existingSignature.length === 0) {
+            await tx.insert(travelerSignatures).values({
+              travelerStepId: step.id,
+              signedBy: parsed.approver,
+              signedByName: parsed.approver,
+              badgeScan: 'LEGACY_ROC_BACKFILL',
+              signedAt: now,
+              meaning: 'LEGACY_ROUTING_REMEDIATION',
+              notes: parsed.reason,
+              signatureData: null,
+            });
+          }
+
+          const beforeStepStatus = step.status;
+          if (String(step.status).toUpperCase() !== 'COMPLETED') {
+            await tx
+              .update(travelerSteps)
+              .set({
+                status: 'COMPLETED',
+                completedAt: now,
+                completedBy: parsed.approver,
+                notes: step.notes
+                  ? `${step.notes}\n\nLegacy ROC routing backfill: ${parsed.reason}`
+                  : `Legacy ROC routing backfill: ${parsed.reason}`,
+              })
+              .where(eq(travelerSteps.id, step.id));
+          }
+
+          const stepPayload = {
+            stepId: step.id,
+            stepNumber: step.stepNumber,
+            departmentName: step.departmentName,
+            mappedDepartment: chargeKey === 'qualityControl' ? 'Quality Control' : 'Layup',
+            targetChargeCodeId: targetChargeCode.id,
+            targetChargeCode: targetChargeCode.code,
+            beforeStepStatus,
+            afterStepStatus: 'COMPLETED',
+            changedTaskIds,
+            incompleteRequiredTaskIds: incompleteRequiredTasks.map((task) => task.id),
+            missingRequiredFields: missingRequiredFields.map((field) => ({
+              id: field.id,
+              travelerTaskId: field.travelerTaskId,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+            })),
+          };
+
+          await tx.insert(travelerEvents).values({
+            travelerId: traveler.id,
+            actor: parsed.approver,
+            actorName: parsed.approver,
+            action: 'LEGACY_ROC_ROUTING_STEP_BACKFILLED',
+            details: {
+              ...stepPayload,
+              reason: parsed.reason,
+              approvedAt: now.toISOString(),
+            },
+          });
+
+          await recordAuditEvent({
+            eventType: 'LEGACY_ROC_ROUTING_STEP_BACKFILLED',
+            subjectType: 'traveler_step',
+            subjectId: step.id,
+            sourceService: 'travelers.legacyRocBackfill',
+            actor: { username: parsed.approver, role: 'supervisor' },
+            occurredAt: now,
+            reason: parsed.reason,
+            entityType: 'traveler',
+            entityId: traveler.id,
+            payload: {
+              travelerId: traveler.id,
+              travelerNumber: traveler.travelerNumber,
+              serialNumber: traveler.serialNumber ?? null,
+              ...stepPayload,
+            },
+            meta: {
+              travelerId: traveler.id,
+              travelerNumber: traveler.travelerNumber,
+              serialNumber: traveler.serialNumber ?? null,
+            },
+          }, tx);
+
+          stepResults.push(stepPayload);
+        }
+
+        const finalSteps = await tx
+          .select({ status: travelerSteps.status })
+          .from(travelerSteps)
+          .where(eq(travelerSteps.travelerId, traveler.id));
+        const allStepsCompleted = finalSteps.every((step) => String(step.status).toUpperCase() === 'COMPLETED');
+
+        let travelerCompleted = false;
+        const beforeTravelerStatus = traveler.status;
+        if (allStepsCompleted && String(traveler.status).toUpperCase() !== 'COMPLETED') {
+          await tx
+            .update(travelers)
+            .set({ status: 'COMPLETED', updatedAt: now })
+            .where(eq(travelers.id, traveler.id));
+          travelerCompleted = true;
+        }
+
+        let serializedItemUpdated = false;
+        if (serializedItem && serializedItem.status === 'ACTIVE') {
+          await tx
+            .update(p2SerializedItems)
+            .set({
+              status: allStepsCompleted ? 'COMPLETED' : serializedItem.status,
+              completedAt: allStepsCompleted ? now : serializedItem.completedAt,
+              updatedAt: now,
+            })
+            .where(eq(p2SerializedItems.id, serializedItem.id));
+
+          await tx.insert(p2SerializedItemEvents).values({
+            serializedItemId: serializedItem.id,
+            barcode: serializedItem.barcode,
+            eventType: 'NOTE',
+            fromDepartment: serializedItem.currentDepartment,
+            toDepartment: allStepsCompleted ? 'COMPLETED' : serializedItem.currentDepartment,
+            fromStageIndex: serializedItem.currentStageIndex ?? null,
+            toStageIndex: allStepsCompleted ? null : serializedItem.currentStageIndex ?? null,
+            performedBy: parsed.approver,
+            notes: parsed.reason,
+            metadata: {
+              travelerId: traveler.id,
+              travelerNumber: traveler.travelerNumber,
+              action: 'LEGACY_ROC_ROUTING_BACKFILL_APPLIED',
+            },
+          });
+          serializedItemUpdated = true;
+        }
+
+        await tx.insert(travelerEvents).values({
+          travelerId: traveler.id,
+          actor: parsed.approver,
+          actorName: parsed.approver,
+          action: 'LEGACY_ROC_ROUTING_BACKFILL_APPLIED',
+          details: {
+            reason: parsed.reason,
+            approvedAt: now.toISOString(),
+            beforeTravelerStatus,
+            afterTravelerStatus: travelerCompleted ? 'COMPLETED' : beforeTravelerStatus,
+            travelerCompleted,
+            serializedItemUpdated,
+            stepCount: stepResults.length,
+            stepIds: stepResults.map((step) => step.stepId),
+          },
+        });
+
+        await recordAuditEvent({
+          eventType: 'LEGACY_ROC_ROUTING_BACKFILL_APPLIED',
+          subjectType: 'traveler',
+          subjectId: traveler.id,
+          sourceService: 'travelers.legacyRocBackfill',
+          actor: { username: parsed.approver, role: 'supervisor' },
+          occurredAt: now,
+          reason: parsed.reason,
+          entityType: 'traveler',
+          entityId: traveler.id,
+          payload: {
+            travelerId: traveler.id,
+            travelerNumber: traveler.travelerNumber,
+            serialNumber: traveler.serialNumber ?? null,
+            beforeTravelerStatus,
+            afterTravelerStatus: travelerCompleted ? 'COMPLETED' : beforeTravelerStatus,
+            travelerCompleted,
+            serializedItemId: serializedItem?.id ?? null,
+            serializedItemUpdated,
+            stepResults,
+          },
+          meta: {
+            travelerId: traveler.id,
+            travelerNumber: traveler.travelerNumber,
+            serialNumber: traveler.serialNumber ?? null,
+          },
+        }, tx);
+
+        return {
+          travelerId: traveler.id,
+          travelerNumber: traveler.travelerNumber,
+          serialNumber: traveler.serialNumber,
+          status: 'applied',
+          travelerCompleted,
+          serializedItemUpdated,
+          stepCount: stepResults.length,
+        };
+      });
+
+      results.push(result);
+    }
+
+    res.json({
+      mode: 'apply',
+      writesPerformed: true,
+      approver: parsed.approver,
+      reason: parsed.reason,
+      restoreRequiredTravelerNumber: LEGACY_ROC_CANCELED_TRAVELER_NUMBER,
+      summary: {
+        requested: requestedTravelerIds.length,
+        applied: results.filter((result) => result.status === 'applied').length,
+        skipped: results.filter((result) => result.status === 'skipped').length,
+      },
+      results,
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error applying legacy ROC traveler backfill:', error);
+    res.status(500).json({ error: 'Failed to apply legacy ROC traveler backfill', message: error.message });
+  }
+});
+
+router.post('/legacy-roc-backfill/restore-canceled', requirePermission('work_orders.override_charges'), async (req: Request, res: Response) => {
+  try {
+    const parsed = legacyRocRestoreSchema.parse(req.body ?? {});
+    const now = new Date();
+
+    const [traveler] = await db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.travelerNumber, LEGACY_ROC_CANCELED_TRAVELER_NUMBER))
+      .limit(1);
+
+    if (!traveler) {
+      return res.status(404).json({
+        error: 'TRAVELER_NOT_FOUND',
+        message: `${LEGACY_ROC_CANCELED_TRAVELER_NUMBER} was not found.`,
+      });
+    }
+
+    const normalizedSerial = normalizeLegacyRocValue(traveler.serialNumber);
+    const inScope = [...LEGACY_ROC_BACKFILL_DEFAULT_SERIALS].map(normalizeLegacyRocValue).includes(normalizedSerial);
+    if (!inScope) {
+      return res.status(400).json({
+        error: 'TRAVELER_NOT_IN_LEGACY_ROC_SCOPE',
+        message: `${LEGACY_ROC_CANCELED_TRAVELER_NUMBER} is not linked to the approved ROC serial scope.`,
+      });
+    }
+
+    if (String(traveler.status).toUpperCase() !== 'CANCELED' && String(traveler.status).toUpperCase() !== 'CANCELLED') {
+      return res.json({
+        mode: 'restore_canceled',
+        writesPerformed: false,
+        status: 'skipped',
+        travelerId: traveler.id,
+        travelerNumber: traveler.travelerNumber,
+        message: `Traveler is already ${traveler.status}; no restore was needed.`,
+      });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [updatedTraveler] = await tx
+        .update(travelers)
+        .set({
+          status: 'IN_PROGRESS',
+          updatedAt: now,
+        })
+        .where(eq(travelers.id, traveler.id))
+        .returning();
+
+      await tx.insert(travelerEvents).values({
+        travelerId: traveler.id,
+        actor: parsed.approver,
+        actorName: parsed.approver,
+        action: 'LEGACY_ROC_CANCELED_TRAVELER_RESTORED',
+        details: {
+          reason: parsed.reason,
+          restoredAt: now.toISOString(),
+          beforeTravelerStatus: traveler.status,
+          afterTravelerStatus: 'IN_PROGRESS',
+          serialNumber: traveler.serialNumber ?? null,
+        },
+      });
+
+      await recordAuditEvent({
+        eventType: 'LEGACY_ROC_CANCELED_TRAVELER_RESTORED',
+        subjectType: 'traveler',
+        subjectId: traveler.id,
+        sourceService: 'travelers.legacyRocBackfill',
+        actor: { username: parsed.approver, role: 'supervisor' },
+        occurredAt: now,
+        reason: parsed.reason,
+        entityType: 'traveler',
+        entityId: traveler.id,
+        payload: {
+          travelerId: traveler.id,
+          travelerNumber: traveler.travelerNumber,
+          serialNumber: traveler.serialNumber ?? null,
+          beforeTravelerStatus: traveler.status,
+          afterTravelerStatus: 'IN_PROGRESS',
+        },
+        meta: {
+          travelerId: traveler.id,
+          travelerNumber: traveler.travelerNumber,
+          serialNumber: traveler.serialNumber ?? null,
+        },
+      }, tx);
+
+      return updatedTraveler;
+    });
+
+    res.json({
+      mode: 'restore_canceled',
+      writesPerformed: true,
+      status: 'restored',
+      traveler: result,
+      approver: parsed.approver,
+      reason: parsed.reason,
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error restoring legacy ROC canceled traveler:', error);
+    res.status(500).json({ error: 'Failed to restore legacy ROC canceled traveler', message: error.message });
+  }
+});
+
 // Get traveler by ID with full details
 router.get('/:id', async (req: Request, res: Response) => {
   try {
@@ -299,7 +1462,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (validatedData.productionWorkOrderId) {
       const [wad] = await db
-        .select()
+        .select({ id: productionWorkOrders.id })
         .from(productionWorkOrders)
         .where(eq(productionWorkOrders.id, validatedData.productionWorkOrderId));
       if (!wad) {
@@ -419,7 +1582,7 @@ router.post('/from-part-number/:partNumber', async (req: Request, res: Response)
         return res.status(400).json({ error: 'productionWorkOrderId must be a valid UUID' });
       }
       const [wad] = await db
-        .select()
+        .select({ id: productionWorkOrders.id })
         .from(productionWorkOrders)
         .where(eq(productionWorkOrders.id, productionWorkOrderId));
       if (!wad) {
@@ -520,7 +1683,7 @@ router.post('/from-routing/:partRoutingId', async (req: Request, res: Response) 
         return res.status(400).json({ error: 'productionWorkOrderId must be a valid UUID' });
       }
       const [wad] = await db
-        .select()
+        .select({ id: productionWorkOrders.id })
         .from(productionWorkOrders)
         .where(eq(productionWorkOrders.id, productionWorkOrderId));
       if (!wad) {
@@ -615,6 +1778,154 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Shared helper: promote a DRAFT traveler to IN_PROGRESS.
+ *
+ * Runs the kit-release and WAD-release gates exactly as `POST /:id/start` does,
+ * updates the traveler status, emits the STATUS_CHANGED traveler event, logs the
+ * TRAVELER_STARTED audit event, and auto-transitions the linked WAD from
+ * RELEASED → IN_PROGRESS.
+ *
+ * Returns either { ok: true, traveler } on success, or { ok: false, status, body }
+ * containing the exact response shape the standalone /start endpoint would have
+ * returned, so callers can forward it directly to the client.
+ */
+async function promoteTravelerToInProgress(
+  traveler: NonNullable<Awaited<ReturnType<typeof storage.getTraveler>>>,
+  actorName: string,
+  actorUser?: { employeeId?: number; id?: number; username?: string }
+): Promise<
+  | { ok: true; traveler: NonNullable<Awaited<ReturnType<typeof storage.getTraveler>>> }
+  | { ok: false; status: number; body: any }
+> {
+  const id = traveler.id;
+
+  // Kit release gate: if traveler is linked to a KIT queue item, it must be RELEASED.
+  if (traveler.inventoryItemId) {
+    const numericItemId = parseInt(traveler.inventoryItemId, 10);
+    if (!isNaN(numericItemId)) {
+      const baseConditions = and(
+        eq(manufacturingQueue.inventoryItemId, numericItemId),
+        eq(manufacturingQueue.queueType, 'KIT')
+      );
+
+      let linkedKitItem: { id: number; status: string } | undefined;
+      if (traveler.workOrderId) {
+        const [narrowRow] = await db
+          .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
+          .from(manufacturingQueue)
+          .where(
+            and(
+              baseConditions,
+              eq(manufacturingQueue.parentProductionOrderId, traveler.workOrderId)
+            )
+          )
+          .orderBy(desc(manufacturingQueue.createdAt))
+          .limit(1);
+        linkedKitItem = narrowRow;
+      }
+
+      if (!linkedKitItem) {
+        const [broadRow] = await db
+          .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
+          .from(manufacturingQueue)
+          .where(
+            and(
+              baseConditions,
+              notInArray(manufacturingQueue.status, ['CANCELLED', 'COMPLETED'])
+            )
+          )
+          .orderBy(desc(manufacturingQueue.createdAt))
+          .limit(1);
+        linkedKitItem = broadRow;
+      }
+
+      if (linkedKitItem && linkedKitItem.status !== 'RELEASED') {
+        return {
+          ok: false,
+          status: 400,
+          body: {
+            error: 'Kit not released — release the linked kit queue item before starting this traveler',
+            kitQueueItemId: linkedKitItem.id,
+            kitStatus: linkedKitItem.status,
+          },
+        };
+      }
+    }
+  }
+
+  // WAD gate: traveler's linked production work order must be RELEASED or IN_PROGRESS.
+  if (traveler.productionWorkOrderId) {
+    const [wad] = await db
+      .select({ id: productionWorkOrders.id, status: productionWorkOrders.status })
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, traveler.productionWorkOrderId))
+      .limit(1);
+    if (!wad) {
+      return {
+        ok: false,
+        status: 404,
+        body: {
+          error: 'Linked work order not found — cannot start traveler without a valid WAD',
+          workOrderId: traveler.productionWorkOrderId,
+        },
+      };
+    }
+    const wadGate = await evaluateWadReleaseGate(traveler.productionWorkOrderId);
+    if (!wadGate.allowed) {
+      return {
+        ok: false,
+        status: 403,
+        body: {
+          error: 'Work order not released to floor',
+          workOrderId: traveler.productionWorkOrderId,
+          workOrderStatus: wad.status,
+          reason: wadGate.reason,
+        },
+      };
+    }
+  }
+
+  const updatedTraveler = await storage.updateTraveler(id, { status: 'IN_PROGRESS' });
+
+  await storage.createTravelerEvent({
+    travelerId: id,
+    actor: actorName || 'system',
+    action: 'STATUS_CHANGED',
+    details: { from: 'DRAFT', to: 'IN_PROGRESS' },
+  });
+
+  auditService.logEvent({
+    entityType: 'traveler',
+    entityId: id,
+    action: 'TRAVELER_STARTED',
+    actor: {
+      id: actorUser?.employeeId ?? actorUser?.id ?? undefined,
+      username: actorName || actorUser?.username || 'system',
+    },
+    meta: {
+      workOrderId: traveler.productionWorkOrderId ?? undefined,
+      partNumber: traveler.partNumber ?? undefined,
+      travelerNumber: traveler.travelerNumber ?? undefined,
+    },
+  }).catch(err => console.warn('[Audit] TRAVELER_STARTED log failed:', err?.message));
+
+  // Auto-transition the WAD from RELEASED → IN_PROGRESS on first traveler start
+  if (traveler.productionWorkOrderId) {
+    const [wad] = await db
+      .select({ id: productionWorkOrders.id, status: productionWorkOrders.status })
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, traveler.productionWorkOrderId))
+      .limit(1);
+    if (wad && wad.status === 'RELEASED') {
+      await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
+      console.log(`[Travelers] WAD ${wad.id} transitioned to IN_PROGRESS on first traveler start`);
+    }
+  }
+
+  return { ok: true, traveler: updatedTraveler };
+}
+
 // Start traveler (DRAFT -> IN_PROGRESS)
 router.post('/:id/start', requirePermission('travelers.start'), async (req: Request, res: Response) => {
   try {
@@ -633,124 +1944,22 @@ router.post('/:id/start', requirePermission('travelers.start'), async (req: Requ
       });
     }
 
-    // Kit release gate: if traveler is linked to a KIT queue item, it must be RELEASED.
-    // Linkage strategy (most-to-least specific):
-    //   1. inventoryItemId + parentProductionOrderId (workOrderId on traveler)
-    //   2. inventoryItemId only — pick most recently created KIT row (desc createdAt)
-    if (traveler.inventoryItemId) {
-      const numericItemId = parseInt(traveler.inventoryItemId, 10);
-      if (!isNaN(numericItemId)) {
-        // Build base conditions
-        const baseConditions = and(
-          eq(manufacturingQueue.inventoryItemId, numericItemId),
-          eq(manufacturingQueue.queueType, 'KIT')
-        );
-
-        // Try narrow match first: also match parentProductionOrderId when workOrderId is set
-        let linkedKitItem: { id: number; status: string } | undefined;
-        if (traveler.workOrderId) {
-          const [narrowRow] = await db
-            .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
-            .from(manufacturingQueue)
-            .where(
-              and(
-                baseConditions,
-                eq(manufacturingQueue.parentProductionOrderId, traveler.workOrderId)
-              )
-            )
-            .orderBy(desc(manufacturingQueue.createdAt))
-            .limit(1);
-          linkedKitItem = narrowRow;
-        }
-
-        // Fall back to inventory-item-only match — constrained to open/relevant statuses
-        // (PENDING or RELEASED only; skip CANCELLED and COMPLETED rows to avoid false blocks)
-        if (!linkedKitItem) {
-          const [broadRow] = await db
-            .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
-            .from(manufacturingQueue)
-            .where(
-              and(
-                baseConditions,
-                notInArray(manufacturingQueue.status, ['CANCELLED', 'COMPLETED'])
-              )
-            )
-            .orderBy(desc(manufacturingQueue.createdAt))
-            .limit(1);
-          linkedKitItem = broadRow;
-        }
-
-        if (linkedKitItem && linkedKitItem.status !== 'RELEASED') {
-          return res.status(400).json({
-            error: 'Kit not released — release the linked kit queue item before starting this traveler',
-            kitQueueItemId: linkedKitItem.id,
-            kitStatus: linkedKitItem.status,
-          });
-        }
-      }
-    }
-
-    // WAD gate: traveler's linked production work order must be RELEASED.
-    // Missing WAD is treated as a hard failure — no bypass path exists.
-    if (traveler.productionWorkOrderId) {
-      const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
-      if (!wad) {
-        return res.status(404).json({
-          error: 'Linked work order not found — cannot start traveler without a valid WAD',
-          workOrderId: traveler.productionWorkOrderId,
-        });
-      }
-      // Allow RELEASED or IN_PROGRESS: IN_PROGRESS means a prior traveler on this WAD already
-      // started (which auto-transitioned the WAD), so subsequent travelers are still authorized.
-      if (wad.status !== 'RELEASED' && wad.status !== 'IN_PROGRESS') {
-        return res.status(403).json({
-          error: 'Work order not released to floor',
-          workOrderId: traveler.productionWorkOrderId,
-          workOrderStatus: wad.status,
-        });
-      }
-    }
-
-    const updatedTraveler = await storage.updateTraveler(id, { status: 'IN_PROGRESS' });
-
-    await storage.createTravelerEvent({
-      travelerId: id,
-      actor: startedBy || 'system',
-      action: 'STATUS_CHANGED',
-      details: { from: 'DRAFT', to: 'IN_PROGRESS' },
-    });
-
     const startActorUser = (req as any).user;
-    auditService.logEvent({
-      entityType: 'traveler',
-      entityId: id,
-      action: 'TRAVELER_STARTED',
-      actor: {
-        id: startActorUser?.employeeId ?? startActorUser?.id ?? undefined,
-        username: startedBy || startActorUser?.username || 'system',
-      },
-      meta: {
-        workOrderId: traveler.productionWorkOrderId ?? undefined,
-        partNumber: traveler.partNumber ?? undefined,
-        travelerNumber: traveler.travelerNumber ?? undefined,
-      },
-    }).catch(err => console.warn('[Audit] TRAVELER_STARTED log failed:', err?.message));
-
-    // Auto-transition the WAD to IN_PROGRESS when the first traveler step starts
-    if (traveler.productionWorkOrderId) {
-      const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
-      if (wad && wad.status === 'RELEASED') {
-        await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
-        console.log(`[Travelers] WAD ${wad.id} transitioned to IN_PROGRESS on first traveler start`);
-      }
+    const result = await promoteTravelerToInProgress(
+      traveler,
+      startedBy || startActorUser?.username || 'system',
+      startActorUser
+    );
+    if (!result.ok) {
+      return res.status(result.status).json(result.body);
     }
-
-    res.json(updatedTraveler);
+    return res.json(result.traveler);
   } catch (error: any) {
     console.error('Error starting traveler:', error);
     res.status(500).json({ error: 'Failed to start traveler', message: error.message });
   }
 });
+
 
 // Complete traveler (requires all steps completed and signed)
 router.post('/:id/complete', requirePermission('travelers.finish'), async (req: Request, res: Response) => {
@@ -835,6 +2044,11 @@ router.post('/:id/complete', requirePermission('travelers.finish'), async (req: 
         completedBy || 'system'
       );
     }
+
+    // Task #257: belt-and-suspenders. If the per-step sync missed the
+    // matching p2_serialized_items row (unknown dept, lookup miss, etc.)
+    // force-advance it to COMPLETED now that the traveler is done.
+    await forceCompleteP2SerializedItemForTraveler(traveler, completedBy || 'system');
 
     res.json(updatedTraveler);
   } catch (error: any) {
@@ -940,6 +2154,49 @@ router.post('/:id/cancel', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error canceling traveler:', error);
     res.status(500).json({ error: 'Failed to cancel traveler', message: error.message });
+  }
+});
+
+// Reactivate canceled traveler
+router.post('/:id/reactivate', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reactivatedBy } = req.body;
+
+    const traveler = await storage.getTraveler(id);
+    if (!traveler) {
+      return res.status(404).json({ error: 'Traveler not found' });
+    }
+
+    if (traveler.status !== 'CANCELED') {
+      return res.status(400).json({
+        error: 'Only canceled travelers can be reactivated',
+        currentStatus: traveler.status,
+      });
+    }
+
+    const events = await storage.getTravelerEvents(id);
+    const cancellationEvent = events.find((event) => {
+      const details = event.details as any;
+      return details?.to === 'CANCELED' && typeof details?.from === 'string';
+    });
+    const previousStatus = (cancellationEvent?.details as any)?.from;
+    const allowedTargetStatuses = new Set(['DRAFT', 'IN_PROGRESS', 'BLOCKED']);
+    const nextStatus = allowedTargetStatuses.has(previousStatus) ? previousStatus : 'DRAFT';
+
+    const updatedTraveler = await storage.updateTraveler(id, { status: nextStatus });
+
+    await storage.createTravelerEvent({
+      travelerId: id,
+      actor: reactivatedBy || 'system',
+      action: 'STATUS_CHANGED',
+      details: { from: 'CANCELED', to: nextStatus, restoredFrom: previousStatus || null },
+    });
+
+    res.json(updatedTraveler);
+  } catch (error: any) {
+    console.error('Error reactivating traveler:', error);
+    res.status(500).json({ error: 'Failed to reactivate traveler', message: error.message });
   }
 });
 
@@ -1103,7 +2360,6 @@ async function performStepStart(
         (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') &&
         t.status === 'NOT_STARTED' &&
         !t.requiresSignature &&
-        !t.requiresCertification &&
         badgeGatePattern.test(t.title)
     );
     for (const gateTask of gateCheckTasks) {
@@ -1271,10 +2527,22 @@ router.post('/:travelerId/steps/:stepId/start/override', requirePermission('work
     const operatorName = resolvedOperator.name;
 
     // Validate traveler and step state
-    const traveler = await storage.getTraveler(travelerId);
+    let traveler = await storage.getTraveler(travelerId);
     if (!traveler) return res.status(404).json({ error: 'Traveler not found' });
 
-    if (traveler.status !== 'IN_PROGRESS') {
+    if (traveler.status === 'DRAFT') {
+      // Auto-promote DRAFT → IN_PROGRESS using the same gates as POST /:id/start.
+      // Gate failures (kit not released / WAD not released) surface using the same
+      // response shape the standalone /start endpoint returns today.
+      const promote = await promoteTravelerToInProgress(traveler, supervisor.name, {
+        employeeId: supervisor.id,
+        username: supervisor.name,
+      });
+      if (!promote.ok) {
+        return res.status(promote.status).json(promote.body);
+      }
+      traveler = promote.traveler;
+    } else if (traveler.status !== 'IN_PROGRESS') {
       return res.status(400).json({
         error: 'Traveler must be IN_PROGRESS to start a step',
         currentStatus: traveler.status,
@@ -1333,6 +2601,7 @@ router.post('/:travelerId/steps/:stepId/start/override', requirePermission('work
             travelerStepId: stepId,
             productionWorkOrderId: traveler.productionWorkOrderId ?? null,
             projectId: overrideProjectId ?? null,
+            clinId: null,
             department: step.departmentName ?? null,
             operation: null,
           });
@@ -1475,7 +2744,7 @@ router.get('/:travelerId/steps/:stepId/labor-context', async (req: Request, res:
 router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
-    const { startedBy, badgeScan, employeeId: bodyEmployeeId } = req.body;
+    const { startedBy, badgeScan, employeeId: bodyEmployeeId, laborApprovalId } = req.body;
 
     // Resolve badge scan code to employee name and ID if badge was scanned.
     // Normalise dashes so scanner-formatted UUIDs (xxxxxxxx-xxxx-...) match DB rows
@@ -1515,12 +2784,26 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       }
     }
 
-    const traveler = await storage.getTraveler(travelerId);
+    let traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
       return res.status(404).json({ error: 'Traveler not found' });
     }
 
-    if (traveler.status !== 'IN_PROGRESS') {
+    if (traveler.status === 'DRAFT') {
+      // Auto-promote DRAFT → IN_PROGRESS so operators on the kiosk don't need
+      // an admin to flip the status first. Runs the same kit-release and
+      // WAD-release gates as POST /:id/start; gate failures surface using the
+      // standalone /start endpoint's response shape.
+      const promote = await promoteTravelerToInProgress(
+        traveler,
+        resolvedName,
+        { employeeId: resolvedEmployeeId, username: resolvedName }
+      );
+      if (!promote.ok) {
+        return res.status(promote.status).json(promote.body);
+      }
+      traveler = promote.traveler;
+    } else if (traveler.status !== 'IN_PROGRESS') {
       return res.status(400).json({
         error: 'Traveler must be IN_PROGRESS to start a step',
         currentStatus: traveler.status,
@@ -1539,6 +2822,13 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       });
     }
 
+    const stepTasksForOperation = await storage.getTravelerTasks(stepId);
+    const activeOperationName =
+      stepTasksForOperation.find((t: any) => t.status === 'IN_PROGRESS')?.title ||
+      stepTasksForOperation.find((t: any) => t.status === 'NOT_STARTED')?.title ||
+      stepTasksForOperation[0]?.title ||
+      step.departmentName ||
+      null;
     // WAD release gate: the linked production work order must be RELEASED or IN_PROGRESS.
     // IN_PROGRESS is permitted because the WAD auto-transitions when the first traveler starts;
     // subsequent travelers on the same WAD would otherwise be incorrectly blocked.
@@ -1561,12 +2851,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     // but the employee is NOT blocked. Identity, traveler-authorization, and P2 part-certification
     // failures remain HARD BLOCKS (these require explicit supervisor remediation, not just a flag).
     const trainingGate = await evaluateTravelerTrainingGate(travelerId, stepId, resolvedEmployeeId, resolvedName);
-    const isOperationCertFailure =
-      !trainingGate.allowed &&
-      trainingGate.requirementType === 'training_module' &&
-      (trainingGate.missingRequirement?.startsWith('operation_cert:') ?? false);
-
-    if (!trainingGate.allowed && !isOperationCertFailure) {
+    if (!trainingGate.allowed) {
       // Hard block — identity, traveler-authorization, or P2 part-cert failure
       return res.status(403).json(
         buildTrainingGateErrorBody(
@@ -1577,8 +2862,6 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         )
       );
     }
-    // isOperationCertFailure === true → falls through (WARN: stamp status, allow start)
-
     // Sequence and material gates: previous step must be COMPLETED; lot/ICN must be allocated.
     // Training authorization is already confirmed above; evaluateTravelerStartGates is kept
     // for sequence + material checks only (it also runs a secondary training check that will
@@ -1586,9 +2869,6 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     const startGate = await evaluateTravelerStartGates(travelerId, stepId, {
       employeeId: resolvedEmployeeId,
       employeeName: resolvedName,
-      // Phase 1 WARN: if the training gate already recorded a cert failure and allowed through,
-      // skip the duplicate cert block in evaluateTravelerStartGates so the step is not double-blocked.
-      skipOperationCertCheck: isOperationCertFailure,
     });
     if (!startGate.allowed) {
       return res.status(403).json(
@@ -1613,6 +2893,50 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         message: ccResult.error,
         hint: 'Set a default charge code on the production work order or the traveler.',
       });
+    }
+    let travelerAutoPunch:
+      | { action: 'clockedIn' | 'switched' | 'unchanged'; chargeCode: string | null; warning?: string }
+      | null = null;
+    if (traveler.productionWorkOrderId) {
+      if (resolvedEmployeeId == null) {
+        return res.status(400).json({
+          error: 'EMPLOYEE_NOT_RESOLVED',
+          message: 'A recognized employee badge or employee record is required before the traveler can change the active charge-code punch.',
+        });
+      }
+
+      const contextResult = await buildChargeContextFromTraveler({
+        id: traveler.id,
+        travelerNumber: traveler.travelerNumber,
+        productionWorkOrderId: traveler.productionWorkOrderId,
+      });
+      if (!contextResult.ok) {
+        return res.status(400).json({
+          error: contextResult.error.code,
+          message: contextResult.error.message,
+        });
+      }
+
+      const parsedApprovalId =
+        laborApprovalId != null && !Number.isNaN(parseInt(String(laborApprovalId), 10))
+          ? parseInt(String(laborApprovalId), 10)
+          : null;
+      const autoPunch = await executeTravelerAutoPunch({
+        context: contextResult.context,
+        employeeIdString: String(resolvedEmployeeId),
+        parsedApprovalId,
+      });
+      if (!autoPunch.ok) {
+        return res.status(autoPunch.status).json(autoPunch.body);
+      }
+      travelerAutoPunch = {
+        action: autoPunch.action,
+        chargeCode:
+          autoPunch.chargeContext?.resolvedChargeCode ??
+          autoPunch.chargeContext?.chargeCode ??
+          null,
+        warning: autoPunch.warning,
+      };
     }
     // ──────────────────────────────────────────────────────────────────────
 
@@ -1647,12 +2971,11 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       chargeCodeResolvedFrom: 'error' in ccResult ? null : ccResult.resolvedFrom,
       certificationStatus: certResult.status,
       certificationName: certResult.certificationName,
-      certReason: certResult.reason ?? (isOperationCertFailure ? trainingGate.reason : null),
+      certReason: certResult.reason,
       isOverrun: budgetResult.isOverrun,
       nearlyExhausted: budgetResult.nearlyExhausted,
       overrunReason: budgetResult.overrunReason,
       projectId,
-      warnedOnCert: isOperationCertFailure,
     };
 
     // Stamp the open punch entry for this employee with step-level traceability.
@@ -1662,6 +2985,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         await storage.updatePunchLedgerEntry(openEntry.id, {
           travelerStepId: stepId,
           chargeCodeId: 'error' in ccResult ? null : ccResult.chargeCodeId,
+          operation: activeOperationName,
           certificationStatus: certResult.status,
           isOverrun: budgetResult.isOverrun,
           overrunReason: budgetResult.overrunReason,
@@ -1669,7 +2993,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         });
 
         // Phase D: close current allocation and open a new segment for the new traveler step.
-        if (laborAllocationsEnabled) {
+        if (laborAllocationsEnabled && travelerAutoPunch?.action !== 'clockedIn' && travelerAutoPunch?.action !== 'switched') {
           const updatedOpenEntry = await storage.getOpenPunchLedgerEntry(resolvedEmployeeId);
           if (updatedOpenEntry) {
             allocationService.switchAllocation(updatedOpenEntry, {
@@ -1678,8 +3002,9 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
               travelerStepId: stepId,
               productionWorkOrderId: traveler.productionWorkOrderId ?? null,
               projectId: projectId ?? null,
+              clinId: null,
               department: step.departmentName ?? null,
-              operation: null,
+              operation: activeOperationName,
             }).catch((e: unknown) =>
               console.warn('[travelers/step-start] switchAllocation failed (non-fatal):', (e as Error)?.message)
             );
@@ -1689,7 +3014,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     }
     // ──────────────────────────────────────────────────────────────────────
 
-    res.json({ ...updatedStep, wadLaborContext });
+    res.json({ ...updatedStep, wadLaborContext, autoPunch: travelerAutoPunch });
   } catch (error: any) {
     console.error('Error starting step:', error);
     res.status(500).json({ error: 'Failed to start step', message: error.message });
@@ -1744,9 +3069,11 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
     // Normalize by stripping dashes so UUID badges match whether or not they include
     // hyphens — mirrors the REPLACE() strategy used in badgeAuth middleware.
     let signingEmployeeId: number | undefined;
+    let resolvedEmployeeName: string | null = null;
     let signingEmployeeName: string = signedByName || signedBy || 'unknown';
-    if (badgeScan) {
-      const normalizedSignBadge = badgeScan.replace(/-/g, '');
+    const lookupKey = badgeScan || signedBy;
+    if (lookupKey) {
+      const normalizedSignBadge = String(lookupKey).replace(/-/g, '');
       const signerByBadge = await db
         .select({ id: employees.id, name: employees.name })
         .from(employees)
@@ -1755,18 +3082,36 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
       if (signerByBadge.length > 0) {
         signingEmployeeId = signerByBadge[0].id;
         signingEmployeeName = signerByBadge[0].name;
+        resolvedEmployeeName = signerByBadge[0].name;
       } else {
         const signerByCode = await db
           .select({ id: employees.id, name: employees.name })
           .from(employees)
-          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${badgeScan})`)
+          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${lookupKey})`)
           .limit(1);
         if (signerByCode.length > 0) {
           signingEmployeeId = signerByCode[0].id;
           signingEmployeeName = signerByCode[0].name;
+          resolvedEmployeeName = signerByCode[0].name;
         }
       }
     }
+
+    // Persist the human-readable employee name on the signature so the UI never
+    // falls back to the raw badge UUID. Prefer the resolved employee name from
+    // the badge lookup; otherwise accept a non-empty client-supplied name only
+    // when it doesn't itself look like a raw badge/UUID/EMP code identifier.
+    const HEX_BADGE_RE = /^[0-9a-f-]{16,}$/i;
+    const EMP_CODE_RE = /^EMP\d+$/i;
+    const isRawIdentifier = (v: string) =>
+      HEX_BADGE_RE.test(v) || HEX_BADGE_RE.test(v.replace(/-/g, '')) || EMP_CODE_RE.test(v) || /^ADMIN_FORCE_SIGN$/i.test(v);
+    const trimmedSignedByName = typeof signedByName === 'string' ? signedByName.trim() : '';
+    const clientNameUsable =
+      trimmedSignedByName &&
+      trimmedSignedByName !== signedBy &&
+      trimmedSignedByName !== badgeScan &&
+      !isRawIdentifier(trimmedSignedByName);
+    const signedByNameToStore = resolvedEmployeeName ?? (clientNameUsable ? trimmedSignedByName : null);
 
     // QC training enforcement gate — independent of permission gate; both must pass
     const qcTrainingGate = await evaluateQcTrainingGate(travelerId, stepId, signingEmployeeId, signingEmployeeName);
@@ -1879,7 +3224,7 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
       travelerStepId: stepId,
       travelerTaskId: matchedGateTask?.id || null,
       signedBy,
-      signedByName: signedByName || null,
+      signedByName: signedByNameToStore,
       signatureRole: signatureRole || matchedGateTask?.signatureRole || null,
       badgeScan: badgeScan || null,
       meaning,
@@ -1934,7 +3279,7 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
     await storage.createTravelerEvent({
       travelerId,
       actor: signedBy,
-      actorName: signedByName,
+      actorName: signedByNameToStore ?? signedByName ?? null,
       action: 'SIGNED',
       details: {
         stepId,
@@ -2194,8 +3539,9 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
           });
 
           if (p2Item) {
-            if (!resolution.packetRecord.allocatedToOrder) {
-              const allocationTarget = p2Item.barcode || p2Item.serialNumber;
+            const allocationTarget = p2Item.barcode || p2Item.serialNumber;
+            const allocatedToThisTraveler = resolution.packetRecord.allocatedToOrder === allocationTarget;
+            if (!resolution.packetRecord.allocatedToOrder || allocatedToThisTraveler || resolution.packetRecord.status === 'AVAILABLE') {
               // Phase-2 (Task #144): pin the packet to the traveler's
               // currently active routing step so downstream material draws
               // can hard-block out-of-order consumption against this packet.
@@ -2206,13 +3552,12 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
               const intendedRoutingStepId = activeStep?.inProgress
                 ? activeStep.step.id
                 : null;
-              await db.update(cuttingBuiltPackets)
-                .set({
-                  allocatedToOrder: allocationTarget,
-                  intendedRoutingStepId,
-                  updatedAt: new Date(),
-                })
-                .where(eq(cuttingBuiltPackets.id, resolution.packetRecord.id));
+              await commitPacketToTravelerInventory({
+                packet: resolution.packetRecord,
+                scannedBarcode: preFlightBarcode,
+                allocationTarget,
+                intendedRoutingStepId,
+              });
               console.log(`[Packet Allocation] Allocated cutting packet "${preFlightBarcode}" → "${allocationTarget}" (traveler ${travelerId}, intendedRoutingStepId=${intendedRoutingStepId ?? 'null'})`);
             } else {
               console.log(`[Packet Allocation] Packet "${preFlightBarcode}" already allocated to "${resolution.packetRecord.allocatedToOrder}" — skipping overwrite`);
@@ -2234,6 +3579,9 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       const resolvedFieldValidations = fieldValidations || {};
       for (const field of fields) {
         let value = resolvedFieldValues[field.fieldKey];
+        if (value === undefined && (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY')) {
+          value = resolveTraceFieldValue(field.fieldKey, resolvedFieldValues);
+        }
         if (value === undefined && field.fieldKey === 'operator') {
           value = completedBy || step.startedBy || 'unknown';
         }
@@ -2437,7 +3785,7 @@ router.get('/:travelerId/tasks/:taskId/fields', async (req: Request, res: Respon
 // Update a task field value
 router.patch('/:travelerId/tasks/:taskId/fields/:fieldId', async (req: Request, res: Response) => {
   try {
-    const { travelerId, fieldId } = req.params;
+    const { travelerId, taskId, fieldId } = req.params;
     const { value, recordedBy, validation } = req.body;
 
     const traveler = await storage.getTraveler(travelerId);
@@ -2454,7 +3802,81 @@ router.patch('/:travelerId/tasks/:taskId/fields/:fieldId', async (req: Request, 
       updateData.validation = validation;
     }
 
+    const [existingField] = await db
+      .select()
+      .from(travelerTaskFields)
+      .where(eq(travelerTaskFields.id, fieldId))
+      .limit(1);
+    const task = await storage.getTravelerTask(taskId);
+    const step = task ? await storage.getTravelerStep(task.travelerStepId) : null;
+
     const updatedField = await storage.updateTravelerTaskField(fieldId, updateData);
+
+    if (task && step) {
+      const legacyBackfillEvent = await db.query.travelerEvents.findFirst({
+        where: and(
+          eq(travelerEvents.travelerId, travelerId),
+          eq(travelerEvents.action, 'LEGACY_ROC_ROUTING_STEP_BACKFILLED'),
+          sql`${travelerEvents.details}->>'stepId' = ${step.id}`
+        ),
+      });
+
+      if (legacyBackfillEvent) {
+        const actor = recordedBy || 'unknown';
+        await storage.createTravelerEvent({
+          travelerId,
+          actor,
+          actorName: actor,
+          action: 'LEGACY_ROC_BACKFILL_FIELD_RECORDED',
+          details: {
+            stepId: step.id,
+            stepNumber: step.stepNumber,
+            departmentName: step.departmentName,
+            taskId,
+            taskTitle: task.title,
+            fieldId,
+            fieldKey: updatedField.fieldKey,
+            fieldLabel: updatedField.fieldLabel,
+            previousValue: existingField?.value ?? null,
+            recordedValue: value ?? null,
+            recordedAt: updateData.recordedAt.toISOString(),
+            reason: 'Collected traveler data entered after supervised legacy ROC routing backfill.',
+          },
+        });
+
+        await recordAuditEvent({
+          eventType: 'LEGACY_ROC_BACKFILL_FIELD_RECORDED',
+          subjectType: 'traveler_task_field',
+          subjectId: fieldId,
+          sourceService: 'travelers.legacyRocBackfill',
+          actor: { username: actor, role: null },
+          occurredAt: updateData.recordedAt,
+          reason: 'Collected traveler data entered after supervised legacy ROC routing backfill.',
+          entityType: 'traveler',
+          entityId: travelerId,
+          payload: {
+            travelerId,
+            travelerNumber: traveler.travelerNumber,
+            serialNumber: traveler.serialNumber ?? null,
+            stepId: step.id,
+            stepNumber: step.stepNumber,
+            departmentName: step.departmentName,
+            taskId,
+            taskTitle: task.title,
+            fieldId,
+            fieldKey: updatedField.fieldKey,
+            fieldLabel: updatedField.fieldLabel,
+            previousValue: existingField?.value ?? null,
+            recordedValue: value ?? null,
+          },
+          meta: {
+            travelerId,
+            travelerNumber: traveler.travelerNumber,
+            serialNumber: traveler.serialNumber ?? null,
+          },
+        });
+      }
+    }
 
     res.json(updatedField);
   } catch (error: any) {
@@ -2658,9 +4080,44 @@ router.post('/:travelerId/admin/force-sign-step', async (req: Request, res: Resp
     const { travelerId } = req.params;
     const { stepId, reason, signedBy, signedByName } = req.body;
 
-    if (!stepId || !reason || !signedBy || !signedByName) {
-      return res.status(400).json({ error: 'stepId, reason, signedBy, and signedByName are required' });
+    if (!stepId || !reason || !signedBy) {
+      return res.status(400).json({ error: 'stepId, reason, and signedBy are required' });
     }
+
+    // Resolve the human-readable employee name from the badge/code so the stored
+    // signature shows the operator's name instead of a raw badge UUID. Falls
+    // back to the supplied signedByName if no employee record is matched.
+    let resolvedForceSignName: string | null = null;
+    const forceSignLookup = String(signedBy);
+    if (forceSignLookup) {
+      const normalizedForceBadge = forceSignLookup.replace(/-/g, '');
+      const forceSignerByBadge = await db
+        .select({ name: employees.name })
+        .from(employees)
+        .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalizedForceBadge}`)
+        .limit(1);
+      if (forceSignerByBadge.length > 0) {
+        resolvedForceSignName = forceSignerByBadge[0].name;
+      } else {
+        const forceSignerByCode = await db
+          .select({ name: employees.name })
+          .from(employees)
+          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${forceSignLookup})`)
+          .limit(1);
+        if (forceSignerByCode.length > 0) {
+          resolvedForceSignName = forceSignerByCode[0].name;
+        }
+      }
+    }
+    const FORCE_HEX_RE = /^[0-9a-f-]{16,}$/i;
+    const FORCE_EMP_RE = /^EMP\d+$/i;
+    const forceIsRawIdentifier = (v: string) =>
+      FORCE_HEX_RE.test(v) || FORCE_HEX_RE.test(v.replace(/-/g, '')) || FORCE_EMP_RE.test(v);
+    const trimmedForceName = typeof signedByName === 'string' ? signedByName.trim() : '';
+    const forceClientNameUsable =
+      trimmedForceName && trimmedForceName !== signedBy && !forceIsRawIdentifier(trimmedForceName);
+    const forceSignedByNameToStore =
+      resolvedForceSignName ?? (forceClientNameUsable ? trimmedForceName : null);
 
     const traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
@@ -2700,7 +4157,7 @@ router.post('/:travelerId/admin/force-sign-step', async (req: Request, res: Resp
     const signature = await storage.createTravelerSignature({
       travelerStepId: stepId,
       signedBy,
-      signedByName,
+      signedByName: forceSignedByNameToStore,
       badgeScan: 'ADMIN_FORCE_SIGN',
       signedAt: new Date(),
       meaning: 'COMPLETED',

@@ -34,6 +34,7 @@ export const DOMAIN_LABELS: Record<string, string> = {
   INVENTORY: 'Inventory',
   POLICY: 'Policy',
   GOVT_PROPERTY: 'Govt. Property',
+  SECURITY: 'Security',
 };
 
 export const DOMAIN_WEIGHTS: Record<string, number> = {

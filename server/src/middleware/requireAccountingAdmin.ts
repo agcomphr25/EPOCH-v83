@@ -2,13 +2,20 @@ import type { Request, Response, NextFunction } from 'express';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../../db';
 import { accountingAdminUsers } from '../../schema';
+import { getUserPermissions } from '../services/permissionService';
 
 export async function isAccountingAdminUser(user: any): Promise<boolean> {
   if (!user) return false;
   const username = String(user.username ?? '').trim().toLowerCase();
   const role = String(user.role ?? '').trim().toUpperCase();
   if (!username) return false;
-  if (role === 'ACCOUNTING_ADMIN') return true;
+  if (role === 'ACCOUNTING_ADMIN' || role === 'ADMIN' || role === 'OWNER') return true;
+
+  const userId = Number(user.id);
+  if (Number.isFinite(userId)) {
+    const { permissionSet } = await getUserPermissions(userId, user.role);
+    if (permissionSet.has('finance.accounting_admin')) return true;
+  }
 
   const [row] = await db
     .select({ id: accountingAdminUsers.id })

@@ -67,38 +67,17 @@ async function lookupTraveler(normalized: string) {
   return undefined;
 }
 
-export async function resolveTravelerBarcode(scanValue: string): Promise<ResolveResult> {
-  const { valid, normalized } = validateScanValue(scanValue || '');
-
-  if (!normalized) {
-    return {
-      ok: false,
-      error: { code: 'MALFORMED', message: 'Scan value must not be empty' },
-    };
-  }
-
-  if (!valid) {
-    return {
-      ok: false,
-      error: {
-        code: 'MALFORMED',
-        message: `Scan value contains invalid characters or exceeds length limits: "${normalized.slice(0, 30)}"`,
-      },
-    };
-  }
-
-  const traveler = await lookupTraveler(normalized);
-
-  if (!traveler) {
-    return {
-      ok: false,
-      error: {
-        code: 'NOT_FOUND',
-        message: `No traveler found for scan value: ${normalized}`,
-      },
-    };
-  }
-
+/**
+ * Build a ChargeContext from a fully-loaded traveler row.
+ * Loads the linked WAD, the active traveler step, and active task to derive
+ * department / operation. Used by both `resolveTravelerBarcode` (barcode scan path)
+ * and `resolveTravelerById` (P2 Traveler auto-punch path — Task #188) so that
+ * downstream gates and punch_ledger writes see identical context regardless of
+ * how the traveler was located.
+ */
+export async function buildChargeContextFromTraveler(
+  traveler: { id: string; travelerNumber: string; productionWorkOrderId: string | null },
+): Promise<ResolveResult> {
   if (!traveler.productionWorkOrderId) {
     return {
       ok: false,
@@ -110,7 +89,11 @@ export async function resolveTravelerBarcode(scanValue: string): Promise<Resolve
   }
 
   const [wad] = await db
-    .select()
+    .select({
+      id: productionWorkOrders.id,
+      workOrderNumber: productionWorkOrders.workOrderNumber,
+      projectId: productionWorkOrders.projectId,
+    })
     .from(productionWorkOrders)
     .where(eq(productionWorkOrders.id, traveler.productionWorkOrderId))
     .limit(1);
@@ -169,4 +152,65 @@ export async function resolveTravelerBarcode(scanValue: string): Promise<Resolve
       operation,
     },
   };
+}
+
+/**
+ * Resolve a traveler context directly from a traveler row id.
+ * Used by the P2 Traveler auto-punch helper (Task #188) where the traveler is
+ * located via the serialized item / part chain rather than a barcode scan.
+ */
+export async function resolveTravelerById(travelerId: string): Promise<ResolveResult> {
+  if (!travelerId || typeof travelerId !== 'string' || !travelerId.trim()) {
+    return {
+      ok: false,
+      error: { code: 'MALFORMED', message: 'Traveler id must not be empty' },
+    };
+  }
+  const [traveler] = await db
+    .select()
+    .from(travelers)
+    .where(eq(travelers.id, travelerId.trim()))
+    .limit(1);
+  if (!traveler) {
+    return {
+      ok: false,
+      error: { code: 'NOT_FOUND', message: `No traveler found for id: ${travelerId}` },
+    };
+  }
+  return buildChargeContextFromTraveler(traveler);
+}
+
+export async function resolveTravelerBarcode(scanValue: string): Promise<ResolveResult> {
+  const { valid, normalized } = validateScanValue(scanValue || '');
+
+  if (!normalized) {
+    return {
+      ok: false,
+      error: { code: 'MALFORMED', message: 'Scan value must not be empty' },
+    };
+  }
+
+  if (!valid) {
+    return {
+      ok: false,
+      error: {
+        code: 'MALFORMED',
+        message: `Scan value contains invalid characters or exceeds length limits: "${normalized.slice(0, 30)}"`,
+      },
+    };
+  }
+
+  const traveler = await lookupTraveler(normalized);
+
+  if (!traveler) {
+    return {
+      ok: false,
+      error: {
+        code: 'NOT_FOUND',
+        message: `No traveler found for scan value: ${normalized}`,
+      },
+    };
+  }
+
+  return buildChargeContextFromTraveler(traveler);
 }

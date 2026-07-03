@@ -28,6 +28,11 @@ export default function LAURIETTestDashboard() {
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
 
   const handleLogout = () => {
     localStorage.removeItem('sessionToken');
@@ -90,6 +95,20 @@ export default function LAURIETTestDashboard() {
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   P2 Workflow Management
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/projects">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-slate-200">
+              <CardContent className="p-4 text-center">
+                <FolderKanban className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Projects
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Project pipeline & tracking
                 </p>
               </CardContent>
             </Card>
@@ -280,10 +299,10 @@ export default function LAURIETTestDashboard() {
       </div>
 
       {/* My Tasks Control Center */}
-      {currentUser?.employeeId && (
+      {dashboardEmployeeId && (
         <MyTasksControlCenter
-          employeeId={currentUser.employeeId}
-          userName={currentUser.username}
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'lauriet'}
           compact={false}
         />
       )}

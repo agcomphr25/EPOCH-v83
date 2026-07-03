@@ -47,7 +47,7 @@ import {
   laborEntryDraftsTable,
   employeesTable,
 } from "../../schema/timekeeping";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
   return (req, res, next) => fn(req, res, next).catch((err) => {
@@ -94,6 +94,20 @@ async function requireSalaryPayType(
     return null;
   }
   return { name: emp.name };
+}
+
+async function requireSessionSalaryEmployee(
+  req: Request,
+  res: Response,
+): Promise<{ employeeId: number; name: string } | null> {
+  const epochEmployeeId = (req as any).user?.employeeId ?? null;
+  if (!epochEmployeeId) {
+    res.status(403).json({ error: "Your account is not linked to an employee record" });
+    return null;
+  }
+  const emp = await requireSalaryPayType(epochEmployeeId, res);
+  if (!emp) return null;
+  return { employeeId: epochEmployeeId, name: emp.name };
 }
 
 // ---------------------------------------------------------------------------
@@ -274,11 +288,64 @@ const DCAA_CERTIFICATION_VERSION = 1;
 
 const certifyBodySchema = z.object({
   certificationConfirmed: z.literal(true),
+  reason: z.string().trim().min(5, "A submission reason of at least 5 characters is required.").max(2000),
 });
 
 const supervisorApproveBodySchema = z.object({
   note: z.string().max(2000).optional(),
 });
+
+const supervisorRejectBodySchema = z.object({
+  note: z.string().min(3, "A rejection note is required.").max(2000),
+});
+
+// ---------------------------------------------------------------------------
+// Session-authenticated employee portal routes.
+// These mirror the portal-token routes for normal logged-in employee portal use.
+// ---------------------------------------------------------------------------
+
+router.get(
+  "/salaried-timesheet/my/indirect-codes",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    if (!(await requireFeatureFlag(req, res))) return;
+    const emp = await requireSessionSalaryEmployee(req, res);
+    if (!emp) return;
+    const codes = await svc.getIndirectCodes();
+    res.json(codes);
+  }),
+);
+
+router.get(
+  "/salaried-timesheet/my/travelers/all",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    if (!(await requireFeatureFlag(req, res))) return;
+    const emp = await requireSessionSalaryEmployee(req, res);
+    if (!emp) return;
+    const travelers = await svc.getAllActiveTravelers();
+    res.json(travelers);
+  }),
+);
+
+router.get(
+  "/salaried-timesheet/my/:weekStart",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    if (!(await requireFeatureFlag(req, res))) return;
+    const emp = await requireSessionSalaryEmployee(req, res);
+    if (!emp) return;
+
+    const { weekStart } = req.params;
+    if (!weekStart || !WEEK_START_RE.test(weekStart)) {
+      res.status(400).json({ error: "weekStart must be YYYY-MM-DD" });
+      return;
+    }
+
+    const view = await svc.getSalariedTimesheetView(emp.employeeId, weekStart);
+    res.json(view);
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // POST /api/timekeeping/salaried-timesheet/:id/certify
@@ -297,14 +364,17 @@ router.post(
 
     const bodyParsed = certifyBodySchema.safeParse(req.body);
     if (!bodyParsed.success) {
+      const flat = bodyParsed.error.flatten();
       res.status(400).json({
-        error: "certificationConfirmed must be explicitly true. The employee must check the certification checkbox before submitting.",
+        error: flat.fieldErrors.reason?.[0] ?? "certificationConfirmed must be explicitly true. The employee must check the certification checkbox before submitting.",
       });
       return;
     }
+    const submissionReason = bodyParsed.data.reason.trim();
 
     const ts = await loadTimesheet(id, res);
     if (!ts) return;
+    if (!(await requireSalaryPayType(ts.employeeId, res))) return;
 
     const user = (req as any).user;
     const userId: number | null = user?.id ?? null;
@@ -351,6 +421,7 @@ router.post(
 
     const previousStatus = ts.status;
     const now = new Date();
+    const totalActualHours = await svc.recalculateTimesheetTotal(id);
 
     // Update timesheet — write certification fields atomically
     const [updated] = await db
@@ -388,15 +459,16 @@ router.post(
         certifiedAt: updated?.certifiedAt,
         certificationStatement: DCAA_CERTIFICATION_STATEMENT,
         certificationVersion: DCAA_CERTIFICATION_VERSION,
+        submissionReason,
         certifiedByUserId: userId,
         supervisorEmployeeId,
         periodStart: ts.periodStart,
         periodEnd: ts.periodEnd,
-        totalActualHours: ts.totalActualHours,
+        totalActualHours,
         linesSnapshot: lines.map((l) => ({
           id: l.id,
           date: l.date,
-          actualHours: l.actualHours,
+          hours: l.hours,
           chargeCodeId: l.chargeCodeId,
           travelerId: l.travelerId,
           note: l.note,
@@ -435,6 +507,7 @@ router.post(
 
     const ts = await loadTimesheet(id, res);
     if (!ts) return;
+    if (!(await requireSalaryPayType(ts.employeeId, res))) return;
 
     const user = (req as any).user;
     const userId: number | null = user?.id ?? null;
@@ -570,6 +643,112 @@ router.post(
 );
 
 // ---------------------------------------------------------------------------
+// POST /api/timekeeping/salaried-timesheet/:id/supervisor-reject
+// Supervisor returns a submitted timesheet to the employee for correction.
+// Valid from: SUBMITTED
+// Transitions to: REOPENED
+// ---------------------------------------------------------------------------
+router.post(
+  "/salaried-timesheet/:id/supervisor-reject",
+  authenticateToken,
+  requirePermission("timekeeping.salaried.approve_supervisor"),
+  h(async (req, res): Promise<void> => {
+    if (!(await requireFeatureFlag(req, res))) return;
+
+    const id = Number(req.params.id);
+    if (!id) { res.status(400).json({ error: "Invalid timesheet ID" }); return; }
+
+    const parsedBody = supervisorRejectBodySchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) {
+      res.status(400).json({ error: parsedBody.error.flatten().fieldErrors.note?.[0] ?? "A rejection note is required." });
+      return;
+    }
+    const note = parsedBody.data.note.trim();
+
+    const ts = await loadTimesheet(id, res);
+    if (!ts) return;
+    if (!(await requireSalaryPayType(ts.employeeId, res))) return;
+
+    if (ts.status !== "SUBMITTED") {
+      res.status(409).json({
+        error: `Cannot reject timesheet in status '${ts.status}'. Expected SUBMITTED.`,
+        currentStatus: ts.status,
+      });
+      return;
+    }
+
+    const user = (req as any).user;
+    const userId: number | null = user?.id ?? null;
+    const userName: string | null = user?.name ?? user?.username ?? null;
+    const callerEmployeeId: number | null = user?.employeeId ?? null;
+    const isAdminOwner = user?.role === "ADMIN" || user?.role === "OWNER";
+    if (!callerEmployeeId && !isAdminOwner) {
+      res.status(403).json({ error: "Your account is not linked to an employee record and cannot reject salaried timesheets." });
+      return;
+    }
+    if (callerEmployeeId && ts.employeeId === callerEmployeeId) {
+      res.status(403).json({ error: "You cannot reject your own salaried timesheet." });
+      return;
+    }
+
+    let assignedSupervisorId: number | null = ts.supervisorEmployeeId ?? null;
+    if (!assignedSupervisorId) {
+      const [employeeRow] = await db
+        .select({ supervisorEmployeeId: employees.supervisorEmployeeId })
+        .from(employees)
+        .where(eq(employees.id, ts.employeeId))
+        .limit(1);
+      assignedSupervisorId = employeeRow?.supervisorEmployeeId ?? null;
+    }
+    if (assignedSupervisorId !== callerEmployeeId && !isAdminOwner) {
+      res.status(403).json({ error: "You are not the assigned supervisor for this salaried timesheet." });
+      return;
+    }
+
+    const now = new Date();
+    const [updated] = await db
+      .update(salariedTimesheetsTable)
+      .set({
+        status: "REOPENED",
+        reopenedAt: now,
+        reopenReason: note,
+        supervisorApprovalNote: note,
+      })
+      .where(and(eq(salariedTimesheetsTable.id, id), eq(salariedTimesheetsTable.status, "SUBMITTED")))
+      .returning();
+
+    if (!updated) {
+      res.status(409).json({ error: "Timesheet was already reviewed by another session. Refresh and try again." });
+      return;
+    }
+
+    await writeAudit({
+      timesheetId: id,
+      action: "SUPERVISOR_REJECTED",
+      actorId: userId,
+      actorName: userName,
+      actorRole: user?.role ?? null,
+      beforeState: { status: "SUBMITTED" },
+      afterState: {
+        status: "REOPENED",
+        reopenedAt: updated.reopenedAt,
+        supervisorEmployeeId: assignedSupervisorId,
+        rejectionNote: note,
+      },
+      reason: note,
+      ipAddress: req.ip,
+    });
+
+    res.json({
+      timesheetId: id,
+      status: "REOPENED",
+      reopenedAt: updated.reopenedAt,
+      message: "Timesheet returned to the employee for correction.",
+    });
+  }),
+);
+
+// ---------------------------------------------------------------------------
 // POST /api/timekeeping/salaried-timesheet/:id/payroll-approve
 // Payroll final approval — terminal approval state.
 // Valid from: SUPERVISOR_APPROVED
@@ -589,6 +768,7 @@ router.post(
 
     const ts = await loadTimesheet(id, res);
     if (!ts) return;
+    if (!(await requireSalaryPayType(ts.employeeId, res))) return;
 
     const user = (req as any).user;
     const userId: number | null = user?.id ?? null;
@@ -713,6 +893,7 @@ router.post(
 
     const ts = await loadTimesheet(id, res);
     if (!ts) return;
+    if (!(await requireSalaryPayType(ts.employeeId, res))) return;
 
     const user = (req as any).user;
     const userId: number | null = user?.id ?? null;
@@ -805,6 +986,7 @@ router.post(
 
 const addLineSchema = z.object({
   lineType: z.enum(["DIRECT", "INDIRECT"]),
+  chargeCodeId: z.number().int().positive().optional().nullable(),
   travelerId: z.string().optional().nullable(),
   indirectCodeId: z.number().int().positive().optional().nullable(),
   hours: z.number().gt(0, "Hours must be greater than 0").max(24),
@@ -814,11 +996,116 @@ const addLineSchema = z.object({
 });
 
 const updateLineSchema = z.object({
+  lineType: z.enum(["DIRECT", "INDIRECT"]).optional(),
+  chargeCodeId: z.number().int().positive().nullable().optional(),
+  travelerId: z.string().nullable().optional(),
+  indirectCodeId: z.number().int().positive().nullable().optional(),
   hours: z.number().gt(0, "Hours must be greater than 0").max(24).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   note: z.string().max(500).nullable().optional(),
   originalNarrative: z.string().max(2000).nullable().optional(),
 });
+
+router.post(
+  "/salaried-timesheet/my/timesheets/:id/lines",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    if (!(await requireFeatureFlag(req, res))) return;
+    const emp = await requireSessionSalaryEmployee(req, res);
+    if (!emp) return;
+
+    const timesheetId = Number(req.params.id);
+    if (!timesheetId) { res.status(400).json({ error: "Invalid timesheet ID" }); return; }
+
+    const parsed = addLineSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    const ts = await loadTimesheet(timesheetId, res);
+    if (!ts) return;
+    if (ts.employeeId !== emp.employeeId) {
+      res.status(403).json({ error: "Forbidden: timesheet does not belong to this employee" });
+      return;
+    }
+
+    try {
+      await svc.addLine(timesheetId, emp.employeeId, emp.name, parsed.data);
+      const view = await svc.getSalariedTimesheetView(emp.employeeId, ts.periodStart);
+      res.status(201).json(view);
+    } catch (err: any) {
+      const status = err.statusCode ?? 500;
+      res.status(status).json({ error: err.message });
+    }
+  }),
+);
+
+router.patch(
+  "/salaried-timesheet/my/timesheets/:id/lines/:lineId",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    if (!(await requireFeatureFlag(req, res))) return;
+    const emp = await requireSessionSalaryEmployee(req, res);
+    if (!emp) return;
+
+    const timesheetId = Number(req.params.id);
+    const lineId = Number(req.params.lineId);
+    if (!timesheetId || !lineId) { res.status(400).json({ error: "Invalid ID" }); return; }
+
+    const parsed = updateLineSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    const ts = await loadTimesheet(timesheetId, res);
+    if (!ts) return;
+    if (ts.employeeId !== emp.employeeId) {
+      res.status(403).json({ error: "Forbidden: timesheet does not belong to this employee" });
+      return;
+    }
+
+    try {
+      await svc.updateLine(timesheetId, lineId, emp.employeeId, emp.name, parsed.data);
+      const view = await svc.getSalariedTimesheetView(emp.employeeId, ts.periodStart);
+      res.json(view);
+    } catch (err: any) {
+      const status = err.statusCode ?? 500;
+      res.status(status).json({ error: err.message });
+    }
+  }),
+);
+
+router.delete(
+  "/salaried-timesheet/my/timesheets/:id/lines/:lineId",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    if (!(await requireFeatureFlag(req, res))) return;
+    const emp = await requireSessionSalaryEmployee(req, res);
+    if (!emp) return;
+
+    const timesheetId = Number(req.params.id);
+    const lineId = Number(req.params.lineId);
+    if (!timesheetId || !lineId) { res.status(400).json({ error: "Invalid ID" }); return; }
+
+    const ts = await loadTimesheet(timesheetId, res);
+    if (!ts) return;
+    if (ts.employeeId !== emp.employeeId) {
+      res.status(403).json({ error: "Forbidden: timesheet does not belong to this employee" });
+      return;
+    }
+
+    try {
+      await svc.deleteLine(timesheetId, lineId, emp.employeeId, emp.name);
+      const view = await svc.getSalariedTimesheetView(emp.employeeId, ts.periodStart);
+      res.json(view);
+    } catch (err: any) {
+      const status = err.statusCode ?? 500;
+      res.status(status).json({ error: err.message });
+    }
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // POST /api/timekeeping/salaried-timesheet/portal/:portalId/timesheets/:id/lines
@@ -834,6 +1121,7 @@ router.post(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const parsed = addLineSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -888,6 +1176,7 @@ router.patch(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const parsed = updateLineSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -942,6 +1231,7 @@ router.delete(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const ts = await loadTimesheet(timesheetId, res);
     if (!ts) return;
@@ -988,6 +1278,9 @@ router.get(
   authenticatePortalToken,
   h(async (req, res): Promise<void> => {
     if (!(await requireFeatureFlag(req, res))) return;
+    const epochEmployeeId = req.portalEmployeeId;
+    if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
     const codes = await svc.getIndirectCodes();
     res.json(codes);
   }),
@@ -1004,6 +1297,7 @@ router.get(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const result = await svc.getSuggestedTravelers(epochEmployeeId, 5);
     res.json(result);
@@ -1021,6 +1315,7 @@ router.get(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const travelers = await svc.getAllActiveTravelers();
     res.json(travelers);
@@ -1039,17 +1334,20 @@ router.post(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const timesheetId = Number(req.params.timesheetId);
     if (!timesheetId) { res.status(400).json({ error: "Invalid timesheet ID" }); return; }
 
     const bodyParsed = certifyBodySchema.safeParse(req.body);
     if (!bodyParsed.success) {
+      const flat = bodyParsed.error.flatten();
       res.status(400).json({
-        error: "certificationConfirmed must be explicitly true. Please check the certification checkbox before submitting.",
+        error: flat.fieldErrors.reason?.[0] ?? "certificationConfirmed must be explicitly true. Please check the certification checkbox before submitting.",
       });
       return;
     }
+    const submissionReason = bodyParsed.data.reason.trim();
 
     const ts = await loadTimesheet(timesheetId, res);
     if (!ts) return;
@@ -1067,10 +1365,18 @@ router.post(
       return;
     }
 
-    const empRow = await db.select({ name: employees.name }).from(employees)
+    const empRow = await db.select({ name: employees.name, supervisorEmployeeId: employees.supervisorEmployeeId }).from(employees)
       .where(eq(employees.id, epochEmployeeId)).limit(1);
+    const supervisorEmployeeId = empRow[0]?.supervisorEmployeeId ?? null;
+    if (!supervisorEmployeeId) {
+      res.status(409).json({
+        error: "This salaried employee has no supervisor assigned. Assign a supervisor on the employee profile before submitting.",
+      });
+      return;
+    }
 
     const now = new Date();
+    const totalActualHours = await svc.recalculateTimesheetTotal(timesheetId);
     const [updated] = await db
       .update(salariedTimesheetsTable)
       .set({
@@ -1079,6 +1385,10 @@ router.post(
         certifiedBy: epochEmployeeId,
         certificationStatement: DCAA_CERTIFICATION_STATEMENT,
         certificationVersion: DCAA_CERTIFICATION_VERSION,
+        supervisorEmployeeId,
+        supervisorApprovedAt: null,
+        supervisorApprovedBy: null,
+        supervisorApprovalNote: null,
       })
       .where(eq(salariedTimesheetsTable.id, timesheetId))
       .returning();
@@ -1101,14 +1411,16 @@ router.post(
         certifiedAt: updated?.certifiedAt,
         certificationStatement: DCAA_CERTIFICATION_STATEMENT,
         certificationVersion: DCAA_CERTIFICATION_VERSION,
+        submissionReason,
         certifiedByEmployeeId: epochEmployeeId,
+        supervisorEmployeeId,
         periodStart: ts.periodStart,
         periodEnd: ts.periodEnd,
-        totalActualHours: ts.totalActualHours,
+        totalActualHours,
         linesSnapshot: certLines.map((l) => ({
           id: l.id,
           date: l.date,
-          actualHours: l.actualHours,
+          hours: l.hours,
           chargeCodeId: l.chargeCodeId,
           travelerId: l.travelerId,
           note: l.note,
@@ -1118,6 +1430,112 @@ router.post(
     });
 
     const view = await svc.getSalariedTimesheetView(epochEmployeeId, ts.periodStart);
+    res.json(view);
+  }),
+);
+
+router.post(
+  "/salaried-timesheet/my/certify/:timesheetId",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    if (!(await requireFeatureFlag(req, res))) return;
+    const emp = await requireSessionSalaryEmployee(req, res);
+    if (!emp) return;
+
+    const timesheetId = Number(req.params.timesheetId);
+    if (!timesheetId) { res.status(400).json({ error: "Invalid timesheet ID" }); return; }
+
+    const bodyParsed = certifyBodySchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      const flat = bodyParsed.error.flatten();
+      res.status(400).json({
+        error: flat.fieldErrors.reason?.[0] ?? "certificationConfirmed must be explicitly true. Please check the certification checkbox before submitting.",
+      });
+      return;
+    }
+    const submissionReason = bodyParsed.data.reason.trim();
+
+    const ts = await loadTimesheet(timesheetId, res);
+    if (!ts) return;
+    if (ts.employeeId !== emp.employeeId) {
+      res.status(403).json({ error: "Timesheet does not belong to this employee." });
+      return;
+    }
+    if (ts.status !== "OPEN" && ts.status !== "REOPENED") {
+      res.status(409).json({
+        error: `Cannot certify timesheet in status '${ts.status}'. Expected OPEN or REOPENED.`,
+        currentStatus: ts.status,
+      });
+      return;
+    }
+
+    const [employeeRow] = await db
+      .select({ supervisorEmployeeId: employees.supervisorEmployeeId })
+      .from(employees)
+      .where(eq(employees.id, emp.employeeId))
+      .limit(1);
+    const supervisorEmployeeId = employeeRow?.supervisorEmployeeId ?? null;
+    if (!supervisorEmployeeId) {
+      res.status(409).json({
+        error: "This salaried employee has no supervisor assigned. Assign a supervisor on the employee profile before submitting.",
+      });
+      return;
+    }
+
+    const now = new Date();
+    const totalActualHours = await svc.recalculateTimesheetTotal(timesheetId);
+    const [updated] = await db
+      .update(salariedTimesheetsTable)
+      .set({
+        status: "SUBMITTED",
+        certifiedAt: now,
+        certifiedBy: emp.employeeId,
+        certificationStatement: DCAA_CERTIFICATION_STATEMENT,
+        certificationVersion: DCAA_CERTIFICATION_VERSION,
+        supervisorEmployeeId,
+        supervisorApprovedAt: null,
+        supervisorApprovedBy: null,
+        supervisorApprovalNote: null,
+      })
+      .where(eq(salariedTimesheetsTable.id, timesheetId))
+      .returning();
+
+    const certLines = await db
+      .select()
+      .from(salariedTimesheetLinesTable)
+      .where(eq(salariedTimesheetLinesTable.timesheetId, timesheetId));
+
+    await writeAudit({
+      timesheetId,
+      action: "TIME_CERTIFIED",
+      actorId: emp.employeeId,
+      actorName: emp.name,
+      actorRole: "EMPLOYEE",
+      beforeState: { status: ts.status },
+      afterState: {
+        status: "SUBMITTED",
+        certifiedAt: updated?.certifiedAt,
+        certificationStatement: DCAA_CERTIFICATION_STATEMENT,
+        certificationVersion: DCAA_CERTIFICATION_VERSION,
+        submissionReason,
+        certifiedByEmployeeId: emp.employeeId,
+        supervisorEmployeeId,
+        periodStart: ts.periodStart,
+        periodEnd: ts.periodEnd,
+        totalActualHours,
+        linesSnapshot: certLines.map((l) => ({
+          id: l.id,
+          date: l.date,
+          hours: l.hours,
+          chargeCodeId: l.chargeCodeId,
+          travelerId: l.travelerId,
+          note: l.note,
+        })),
+      },
+      ipAddress: req.ip,
+    });
+
+    const view = await svc.getSalariedTimesheetView(emp.employeeId, ts.periodStart);
     res.json(view);
   }),
 );

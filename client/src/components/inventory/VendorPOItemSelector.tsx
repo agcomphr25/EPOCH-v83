@@ -4,6 +4,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -41,6 +42,13 @@ function formatCurrency(value: number | undefined | null, decimals: number = 2):
   });
 }
 
+function parseWholeQuantity(value: string): number {
+  if (value.trim() === '') return 0;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.trunc(parsed));
+}
+
 type VendorPOItemSelectorProps = {
   vendorPoId: number;
   vendorId: number;
@@ -66,7 +74,7 @@ type VendorPOItem = {
   conversionFactor?: number;
   lineTotal: number;
   notes?: string;
-  customerPoId?: number;
+  customerPoId?: number | null;
   projectId?: string | null;
   productionWorkOrderId?: string | null;
   chargeCodeId?: number | null;
@@ -155,6 +163,27 @@ type InventoryItem = {
   purchaseQuantity?: number;
   costPer?: number;
   supplierPartNumber?: string;
+};
+
+type PartsRequest = {
+  id: number;
+  agPartNumber?: string | null;
+  partNumber: string;
+  partName: string;
+  requestedBy: string;
+  department?: string | null;
+  quantity: number;
+  qtyOrdered?: number | null;
+  vendorPoId?: number | null;
+  status: string;
+  urgency: string;
+  requestDate?: string;
+};
+
+type PartsRequestVendorGroup = {
+  vendorId: number | null;
+  vendorName: string;
+  requests: PartsRequest[];
 };
 
 type NewItemState = {
@@ -287,6 +316,7 @@ export default function VendorPOItemSelector({
     productionWorkOrderId?: string | null;
     chargeCodeId?: number | null;
   }>({});
+  const [linkedPartsRequestIds, setLinkedPartsRequestIds] = useState<number[]>([]);
 
   const { data: items = [], isLoading } = useQuery<VendorPOItem[]>({
     queryKey: ['/api/vendor-pos', vendorPoId, 'items'],
@@ -305,6 +335,11 @@ export default function VendorPOItemSelector({
     queryKey: ['/api/p2-purchase-orders-bypass'],
   });
 
+  const { data: partsRequestGroups = [] } = useQuery<PartsRequestVendorGroup[]>({
+    queryKey: ['/api/inventory/parts-requests/by-vendor'],
+    queryFn: () => apiRequest('/api/inventory/parts-requests/by-vendor'),
+  });
+
   const { data: traceabilityOptions } = useQuery<{
     projects: Project[];
     productionWorkOrders: ProductionWorkOrder[];
@@ -318,8 +353,9 @@ export default function VendorPOItemSelector({
   const chargeCodes = traceabilityOptions?.chargeCodes ?? [];
 
   const isP2ComplianceComplete = complianceStatus === 'Reviewed';
-  const customerPoAllocationDisabled = isP2Purchase && !isP2ComplianceComplete;
-  const projectAllocationDisabled = isP2Purchase && !isP2ComplianceComplete;
+  const customerPoAllocationDisabled = false;
+  const projectAllocationDisabled = false;
+  const showP2ComplianceReviewHint = isP2Purchase && !isP2ComplianceComplete;
 
   const filteredWorkOrders = useMemo(() => {
     if (!newItem.projectId) return productionWorkOrders;
@@ -330,6 +366,33 @@ export default function VendorPOItemSelector({
     if (!editedItem.projectId) return productionWorkOrders;
     return productionWorkOrders.filter((wo) => wo.projectId === editedItem.projectId);
   }, [editedItem.projectId, productionWorkOrders]);
+
+  const matchingPartsRequests = useMemo(() => {
+    if (!newItem.agPartNumber && !newItem.description) return [];
+    const normalizedPart = newItem.agPartNumber.trim().toLowerCase();
+    const vendorGroup = partsRequestGroups.find((group) => group.vendorId === vendorId);
+    if (!vendorGroup) return [];
+
+    return vendorGroup.requests
+      .filter((request) => {
+        const requestPart = String(request.agPartNumber || request.partNumber || '').trim().toLowerCase();
+        const remaining = Number(request.quantity || 0) - Number(request.qtyOrdered || 0);
+        return requestPart === normalizedPart && remaining > 0 && !request.vendorPoId;
+      })
+      .sort((a, b) => {
+        const urgencyOrder: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+        return (urgencyOrder[a.urgency] ?? 4) - (urgencyOrder[b.urgency] ?? 4);
+      });
+  }, [newItem.agPartNumber, newItem.description, partsRequestGroups, vendorId]);
+
+  const selectedPartsRequestQuantities = useMemo(() => {
+    return linkedPartsRequestIds.reduce<Record<number, number>>((acc, requestId) => {
+      const request = matchingPartsRequests.find((item) => item.id === requestId);
+      if (!request) return acc;
+      acc[requestId] = Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || 0));
+      return acc;
+    }, {});
+  }, [linkedPartsRequestIds, matchingPartsRequests]);
 
   const hasUnitConversion = useMemo(() => {
     return selectedInventoryItem?.vendorUnit && 
@@ -359,6 +422,7 @@ export default function VendorPOItemSelector({
 
   const handlePartSelect = async (partId: string) => {
     setSelectedPartId(partId);
+    setLinkedPartsRequestIds([]);
     const selectedPart = vendorParts.find(p => p.id.toString() === partId);
     
     if (selectedPart) {
@@ -464,6 +528,9 @@ export default function VendorPOItemSelector({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'items'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
       toast.success('Item added successfully');
       resetForm();
       if (onTotalChange) {
@@ -539,14 +606,10 @@ export default function VendorPOItemSelector({
     });
     setSelectedPartId('');
     setSelectedInventoryItem(null);
+    setLinkedPartsRequestIds([]);
   };
 
   const handleAddItem = () => {
-    if (projectAllocationDisabled && (newItem.customerPoId || newItem.projectId || newItem.productionWorkOrderId)) {
-      toast.error('Complete compliance review before linking this P2 purchase to a customer PO, project, or WAD');
-      return;
-    }
-
     if (isP2Purchase && !newItem.customerPoId && !newItem.projectId && !newItem.productionWorkOrderId && !newItem.chargeCodeId) {
       toast.error('P2 line items need at least one traceability link: customer PO, project, WAD/work order, or charge code');
       return;
@@ -582,6 +645,8 @@ export default function VendorPOItemSelector({
         chargeCodeId: newItem.chargeCodeId || null,
         otherIdentifier: newItem.otherIdentifier || null,
         notes: newItem.notes || null,
+        partsRequestIds: linkedPartsRequestIds,
+        partsRequestQuantities: selectedPartsRequestQuantities,
       };
     } else {
       if (newItem.quantity <= 0 || newItem.unitPrice < 0) {
@@ -602,6 +667,8 @@ export default function VendorPOItemSelector({
         chargeCodeId: newItem.chargeCodeId || null,
         otherIdentifier: newItem.otherIdentifier || null,
         notes: newItem.notes || null,
+        partsRequestIds: linkedPartsRequestIds,
+        partsRequestQuantities: selectedPartsRequestQuantities,
       };
     }
     
@@ -628,17 +695,17 @@ export default function VendorPOItemSelector({
     const originalItem = items.find(item => item.id === itemId);
     if (!originalItem) return;
 
+    const nextQuantity = editedItem.quantity ?? originalItem.quantity;
+    const nextUnitPrice = editedItem.unitPrice ?? originalItem.unitPrice;
     const nextProjectId = 'projectId' in editedItem ? editedItem.projectId : originalItem.projectId;
     const nextProductionWorkOrderId = 'productionWorkOrderId' in editedItem ? editedItem.productionWorkOrderId : originalItem.productionWorkOrderId;
     const nextChargeCodeId = 'chargeCodeId' in editedItem ? editedItem.chargeCodeId : originalItem.chargeCodeId;
     const nextCustomerPoId = 'customerPoId' in editedItem ? editedItem.customerPoId : originalItem.customerPoId;
+    const materialChanged =
+      Math.abs(Number(nextQuantity) - Number(originalItem.quantity)) > 0.0001 ||
+      Math.abs(Number(nextUnitPrice) - Number(originalItem.unitPrice)) > 0.0001;
 
-    if (projectAllocationDisabled && (nextCustomerPoId || nextProjectId || nextProductionWorkOrderId)) {
-      toast.error('Complete compliance review before linking this P2 purchase to a customer PO, project, or WAD');
-      return;
-    }
-
-    if (isP2Purchase && !nextCustomerPoId && !nextProjectId && !nextProductionWorkOrderId && !nextChargeCodeId) {
+    if (isP2Purchase && !materialChanged && !nextCustomerPoId && !nextProjectId && !nextProductionWorkOrderId && !nextChargeCodeId) {
       toast.error('P2 line items need at least one traceability link: customer PO, project, WAD/work order, or charge code');
       return;
     }
@@ -646,8 +713,8 @@ export default function VendorPOItemSelector({
     const updatedData = {
       agPartNumber: editedItem.agPartNumber ?? originalItem.agPartNumber,
       description: editedItem.description ?? originalItem.description,
-      quantity: editedItem.quantity ?? originalItem.quantity,
-      unitPrice: editedItem.unitPrice ?? originalItem.unitPrice,
+      quantity: nextQuantity,
+      unitPrice: nextUnitPrice,
       notes: editedItem.notes ?? originalItem.notes,
       customerPoId: nextCustomerPoId,
       projectId: nextProjectId,
@@ -794,7 +861,10 @@ export default function VendorPOItemSelector({
                   <Input
                     id="agPartNumber"
                     value={newItem.agPartNumber}
-                    onChange={(e) => setNewItem({ ...newItem, agPartNumber: e.target.value })}
+                    onChange={(e) => {
+                      setNewItem({ ...newItem, agPartNumber: e.target.value });
+                      setLinkedPartsRequestIds([]);
+                    }}
                     data-testid="input-ag-part-number"
                     placeholder="Auto-filled or manual"
                   />
@@ -814,9 +884,11 @@ export default function VendorPOItemSelector({
                   <Input
                     id="quantity"
                     type="number"
-                    step="0.01"
+                    step="1"
+                    min="1"
+                    inputMode="numeric"
                     value={newItem.quantity || ''}
-                    onChange={(e) => setNewItem({ ...newItem, quantity: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setNewItem({ ...newItem, quantity: parseWholeQuantity(e.target.value) })}
                     data-testid="input-quantity"
                   />
                 </div>
@@ -836,11 +908,71 @@ export default function VendorPOItemSelector({
             </div>
           )}
 
+          {matchingPartsRequests.length > 0 && (
+            <div className="border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 rounded-lg p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <p className="font-medium text-sm text-blue-900 dark:text-blue-100">
+                    Link User Part Requests
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Selected requests will be marked ordered and linked to this vendor PO.
+                  </p>
+                </div>
+                <Badge variant="outline" className="bg-white dark:bg-blue-950">
+                  {linkedPartsRequestIds.length} selected
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                {matchingPartsRequests.map((request) => {
+                  const remaining = Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || 0));
+                  const checked = linkedPartsRequestIds.includes(request.id);
+                  return (
+                    <label
+                      key={request.id}
+                      className="flex items-start gap-3 rounded-md border bg-white dark:bg-gray-900 px-3 py-2 text-sm cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(value) => {
+                          setLinkedPartsRequestIds((current) =>
+                            value === true
+                              ? Array.from(new Set([...current, request.id]))
+                              : current.filter((id) => id !== request.id)
+                          );
+                        }}
+                        data-testid={`checkbox-link-parts-request-${request.id}`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">Request #{request.id}</span>
+                          <Badge variant="secondary">{request.urgency}</Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {request.department || 'No department'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {request.requestedBy} requested {remaining} of {request.quantity} remaining
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Internal Tracking Fields - Customer PO and Other Identifier (not visible to vendor) */}
           <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="font-medium text-purple-800 dark:text-purple-200 text-sm">📋 Internal Tracking (not shown on vendor PO)</span>
             </div>
+            {showP2ComplianceReviewHint && (
+              <p className="text-xs text-purple-700 dark:text-purple-300 mb-3">
+                Link each P2 line now so RFQs and draft POs have traceability. Compliance review is still required before issue.
+              </p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="customerPo">Customer PO</Label>
@@ -1025,16 +1157,26 @@ export default function VendorPOItemSelector({
                         data-testid={`input-edit-description-${item.id}`}
                       />
                     ) : (
-                      item.description || '-'
+                      <div className="space-y-1">
+                        <div>{item.description || '-'}</div>
+                        {item.notes && (
+                          <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900 whitespace-pre-wrap">
+                            <span className="font-medium">Details: </span>
+                            {item.notes}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </TableCell>
                   <TableCell>
                     {isEditing ? (
                       <Input
                         type="number"
-                        step="0.01"
+                        step="1"
+                        min="1"
+                        inputMode="numeric"
                         value={editedItem.quantity || 0}
-                        onChange={(e) => setEditedItem({ ...editedItem, quantity: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => setEditedItem({ ...editedItem, quantity: parseWholeQuantity(e.target.value) })}
                         className="w-20"
                         data-testid={`input-edit-quantity-${item.id}`}
                       />

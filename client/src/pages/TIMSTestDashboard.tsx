@@ -10,6 +10,7 @@ import {
   User,
   Factory,
   GraduationCap,
+  ClipboardList,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -19,6 +20,11 @@ export default function TIMSTestDashboard() {
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
 
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
@@ -39,6 +45,20 @@ export default function TIMSTestDashboard() {
 
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <Link href="/employee-portal">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
+            <CardContent className="p-4 text-center">
+              <User className="w-8 h-8 text-purple-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Employee Portal
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Time clock, requests, and personal tools
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
         <Link href="/department-queue/cnc">
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
             <CardContent className="p-4 text-center">
@@ -109,6 +129,20 @@ export default function TIMSTestDashboard() {
           </Card>
         </Link>
 
+        <Link href="/inventory/department-parts-request">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-sky-200">
+            <CardContent className="p-4 text-center">
+              <ClipboardList className="w-8 h-8 text-sky-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Parts Request
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Request parts for CNC and maintenance work
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
         <Link href="/training">
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-teal-200">
             <CardContent className="p-4 text-center">
@@ -125,10 +159,10 @@ export default function TIMSTestDashboard() {
       </div>
 
       {/* My Tasks Control Center */}
-      {currentUser?.employeeId && (
+      {dashboardEmployeeId && (
         <MyTasksControlCenter
-          employeeId={currentUser.employeeId}
-          userName={currentUser.username}
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'tims'}
           compact={false}
         />
       )}

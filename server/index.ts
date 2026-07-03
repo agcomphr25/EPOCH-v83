@@ -11,13 +11,26 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import cron from 'node-cron';
 import { createServer } from 'http';
 import { setupVite, serveStatic, log } from './vite';
-import { db, pool, getDatabaseTargetInfo } from './db';
+import { checkDatabaseHealth, db, pool, getDatabaseTargetInfo } from './db';
 import { authenticateToken } from './middleware/auth';
 import { attemptBadgeOrTokenAuth } from './middleware/badgeAuth';
 import { notificationManager } from './src/services/notificationManager';
+import {
+  countMissingLaborAllocations,
+  runLaborAllocationBackfill,
+  runEarlyOneTimeRepairBackfills,
+  runPacketAllocationBootBackfill,
+  runReturnToQcBootRepair,
+  shouldRunHistoricalBootRepairs,
+} from './bootstrap/oneTimeRepairs';
+import {
+  getLegacyStartupDbMaintenanceSkipMessage,
+  shouldRunLegacyStartupDbMaintenance,
+} from './bootstrap/startupMaintenance';
 
 // Build version marker - change this to verify deployment updates
 const BUILD_VERSION = '2026-01-27-v2';
@@ -43,10 +56,95 @@ console.log('🧬 [BOOT] APP_ENV:', process.env.APP_ENV);
 
 const app = express();
 
+type BootState = {
+  buildVersion: string;
+  startedAt: string;
+  pid: number;
+  routesReady: boolean;
+  routeRegistration: {
+    status: 'pending' | 'loading' | 'ready' | 'failed';
+    startedAt?: string;
+    completedAt?: string;
+    error?: { message: string; stack?: string };
+  };
+  backgroundServices: {
+    status: 'pending' | 'running' | 'complete' | 'failed';
+    startedAt?: string;
+    completedAt?: string;
+    error?: { message: string; stack?: string };
+  };
+  fatalErrors: Array<{
+    type: string;
+    message: string;
+    stack?: string;
+    at: string;
+  }>;
+};
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return { message: error.message, stack: error.stack };
+  }
+  return { message: String(error) };
+}
+
+const bootState: BootState = {
+  buildVersion: BUILD_VERSION,
+  startedAt: new Date().toISOString(),
+  pid: process.pid,
+  routesReady: false,
+  routeRegistration: { status: 'pending' },
+  backgroundServices: { status: 'pending' },
+  fatalErrors: [],
+};
+
+function recordFatalBootError(type: string, error: unknown) {
+  const serialized = serializeError(error);
+  bootState.fatalErrors.push({
+    type,
+    message: serialized.message,
+    stack: serialized.stack,
+    at: new Date().toISOString(),
+  });
+  console.error(`[boot:${type}]`, error);
+}
+
+process.on('unhandledRejection', (reason) => {
+  recordFatalBootError('unhandledRejection', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  recordFatalBootError('uncaughtException', error);
+});
+
 // CRITICAL: Health check endpoint MUST be registered FIRST, before any middleware
 // This ensures Replit deployment health probes get instant responses during initialization
 app.get('/healthz', (req, res) => {
-  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    routesReady: bootState.routesReady,
+    routeRegistration: bootState.routeRegistration.status,
+    backgroundServices: bootState.backgroundServices.status,
+    fatalErrorCount: bootState.fatalErrors.length,
+  });
+});
+
+app.get(['/readyz', '/boot-status', '/api/boot-status'], async (_req, res) => {
+  const database = await checkDatabaseHealth();
+  const ready =
+    bootState.routesReady &&
+    bootState.routeRegistration.status === 'ready' &&
+    bootState.fatalErrors.length === 0 &&
+    database.ok;
+
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'ready' : 'not_ready',
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.round(process.uptime()),
+    database,
+    ...bootState,
+  });
 });
 
 // ─── Routes-ready gate ────────────────────────────────────────────────────────
@@ -63,8 +161,16 @@ app.get('/healthz', (req, res) => {
 let routesReady = false;
 app.use((req, res, next) => {
   if (routesReady) return next();
+  if (req.path === '/api/boot-status') return next();
   if (!req.path.startsWith('/api/')) return next();
   res.set('Retry-After', '2');
+  if (bootState.routeRegistration.status === 'failed') {
+    return res.status(503).json({
+      error: 'Server failed while registering routes',
+      bootStatusUrl: '/api/boot-status',
+      details: bootState.routeRegistration.error?.message,
+    });
+  }
   return res.status(503).json({ error: 'Server starting, please retry' });
 });
 
@@ -98,6 +204,58 @@ console.log('🔒 CORS Configuration:', {
 });
 
 app.use(cors(corsOptions));
+
+// Global API request correlation. Every API response gets a searchable
+// X-Request-Id so browser errors can be matched to exactly one server log trail.
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api')) {
+    return next();
+  }
+
+  const headerId = req.headers['x-request-id'];
+  const requestId = Array.isArray(headerId)
+    ? headerId[0]
+    : headerId || `req-${crypto.randomUUID()}`;
+
+  (req as any).requestId = requestId;
+  res.locals.requestId = requestId;
+  res.setHeader('X-Request-Id', requestId);
+
+  next();
+});
+
+// Inventory upload diagnostics must run before auth/body parsing/route mounting so
+// failures outside the inventory router still carry a searchable request id.
+app.use((req, res, next) => {
+  if (req.path !== '/api/inventory' && !req.path.startsWith('/api/inventory/')) {
+    return next();
+  }
+
+  const headerId = req.headers['x-inventory-request-id'] || req.headers['x-request-id'];
+  const requestId = Array.isArray(headerId)
+    ? headerId[0]
+    : headerId || res.locals.requestId || `inv-server-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  res.locals.inventoryRequestId = requestId;
+  res.setHeader('X-Inventory-Request-Id', requestId);
+
+  console.log(`[inventory-request:${requestId}] received`, {
+    method: req.method,
+    path: req.originalUrl,
+    contentType: req.headers['content-type'],
+    contentLength: req.headers['content-length'],
+    hasCookieHeader: Boolean(req.headers.cookie),
+  });
+
+  res.on('finish', () => {
+    console.log(`[inventory-request:${requestId}] finished`, {
+      statusCode: res.statusCode,
+      contentLength: res.getHeader('content-length'),
+    });
+  });
+
+  next();
+});
 
 // Serve attached assets (PDFs, documents, etc.) - Must be before other routes
 // In production, assets are copied to dist/attached_assets via build script
@@ -173,6 +331,7 @@ const publicRoutes = [
   '/api/material-lots',  // Material lot validation needed by traveler execution
   '/api/cutting-table/fabric-inventory-by-icn', // ICN lookup for P2 traveler material scanner
   '/api/production/timers', // Production Timer Station - public for floor displays
+  '/api/cnc/operation-batches/station', // CNC operation batch station - badge authenticated floor flow
   '/api/timekeeping/kiosk', // Time Clock kiosk - PIN-based auth, no EPOCH session token
   '/api/work-orders/production/', // Labor budget override request/poll (kiosk, soft auth — individual mutation routes enforce permissions). Trailing slash keeps the bare /production listing endpoint behind strict auth.
 ];
@@ -194,6 +353,7 @@ app.use('/api', (req, res, next) => {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+  const requestId = res.locals.requestId;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -205,7 +365,7 @@ app.use((req, res, next) => {
   res.on('finish', () => {
     const duration = Date.now() - start;
     if (path.startsWith('/api')) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      let logLine = `[${requestId || 'no-request-id'}] ${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -230,9 +390,10 @@ app.use((req, res, next) => {
 const port = parseInt(process.env.PORT || '5000', 10);
 const earlyServer = createServer(app);
 
-// In production, register static file serving immediately so GET / returns
-// the built HTML (200) rather than 404 while routes are still loading.
-if (process.env.NODE_ENV !== 'development') {
+// Register production SPA static serving before API route registration.
+// registerRoutes installs route-level fallbacks; if the SPA handler is mounted
+// afterward, GET / can be swallowed by Express and return "Cannot GET /".
+if (app.get('env') !== 'development') {
   serveStatic(app);
 }
 
@@ -263,6 +424,9 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 
 (async () => {
   try {
+    bootState.routeRegistration.status = 'loading';
+    bootState.routeRegistration.startedAt = new Date().toISOString();
+
     // Dynamic import defers tsx compilation of routes/index.ts (137 files, 9300 lines)
     // until AFTER the server is already listening.  Static import would block the entire
     // module from running (including earlyServer.listen) for ~13 seconds while tsx
@@ -275,6 +439,9 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 
     // Flip the routes-ready gate now that all /api/* handlers are mounted.
     routesReady = true;
+    bootState.routesReady = true;
+    bootState.routeRegistration.status = 'ready';
+    bootState.routeRegistration.completedAt = new Date().toISOString();
     console.log('✅ Routes registered — /api gate lifted');
 
     notificationManager.initialize(server);
@@ -282,8 +449,10 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || 'Internal Server Error';
+      const requestId = res.locals.requestId || (_req as any).requestId;
 
       console.error('=== SERVER ERROR ===');
+      console.error('Request ID:', requestId);
       console.error('Status:', status);
       console.error('Message:', message);
       console.error('Stack:', err.stack);
@@ -291,9 +460,10 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
       console.error('Method:', _req.method);
       console.error('===================');
 
-      log(`Error ${status}: ${message}`);
+      log(`Error ${status} [${requestId || 'no-request-id'}]: ${message}`);
       res.status(status).json({
         message,
+        requestId,
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
       });
     });
@@ -307,13 +477,18 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
     // Initialize database and cron jobs (non-blocking background work)
     initializeBackgroundServices();
   } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
+    bootState.routesReady = false;
+    bootState.routeRegistration.status = 'failed';
+    bootState.routeRegistration.completedAt = new Date().toISOString();
+    bootState.routeRegistration.error = serializeError(error);
+    recordFatalBootError('routeRegistration', error);
   }
 })();
 
 // Background initialization - runs after server is listening
 async function initializeBackgroundServices() {
+  bootState.backgroundServices.status = 'running';
+  bootState.backgroundServices.startedAt = new Date().toISOString();
   try {
     // Test database connection (non-blocking)
     console.log('Initializing database connection...');
@@ -325,839 +500,285 @@ async function initializeBackgroundServices() {
     } else {
       console.log('✅ Database connection successful');
 
+      // Safe boot migrations are intentionally not run during normal server startup.
+      // Run them before deploy or manually with: npm run maintenance:safe-migrations
+
+      try {
+        await pool.query(`
+          ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS is_finish_technician boolean DEFAULT false
+        `);
+        await pool.query(`
+          UPDATE users
+          SET is_finish_technician = false
+          WHERE is_finish_technician IS NULL
+        `);
+        await pool.query(`
+          ALTER TABLE user_sessions
+            ADD COLUMN IF NOT EXISTS username text,
+            ADD COLUMN IF NOT EXISTS last_activity_at timestamp,
+            ADD COLUMN IF NOT EXISTS ip_address text,
+            ADD COLUMN IF NOT EXISTS user_agent text,
+            ADD COLUMN IF NOT EXISTS device_fingerprint text,
+            ADD COLUMN IF NOT EXISTS mfa_verified_at timestamptz,
+            ADD COLUMN IF NOT EXISTS security_policy_version text DEFAULT 'cmmc-itar-v1',
+            ADD COLUMN IF NOT EXISTS last_credential_verified_at timestamptz
+        `);
+        await pool.query(`
+          UPDATE user_sessions us
+          SET username = COALESCE(NULLIF(us.username, ''), u.username, 'user-' || us.user_id::text)
+          FROM users u
+          WHERE us.user_id = u.id
+            AND (us.username IS NULL OR us.username = '')
+        `);
+        await pool.query(`
+          UPDATE user_sessions
+          SET username = COALESCE(NULLIF(username, ''), 'unknown'),
+              last_activity_at = COALESCE(last_activity_at, created_at, NOW())
+          WHERE username IS NULL
+             OR username = ''
+             OR last_activity_at IS NULL
+        `);
+        console.log('Authentication schema guard complete');
+      } catch (authSchemaErr: any) {
+        console.error('Authentication schema guard failed:', authSchemaErr?.message || authSchemaErr);
+      }
+
+      try {
+        await pool.query(`
+          ALTER TABLE controlled_documents
+            ADD COLUMN IF NOT EXISTS template_key text,
+            ADD COLUMN IF NOT EXISTS version_date date,
+            ADD COLUMN IF NOT EXISTS origination_date date,
+            ADD COLUMN IF NOT EXISTS classification text NOT NULL DEFAULT 'internal',
+            ADD COLUMN IF NOT EXISTS cui_category text,
+            ADD COLUMN IF NOT EXISTS itar_category text,
+            ADD COLUMN IF NOT EXISTS export_control_jurisdiction text,
+            ADD COLUMN IF NOT EXISTS customer_id text,
+            ADD COLUMN IF NOT EXISTS contract_artifact_type text,
+            ADD COLUMN IF NOT EXISTS access_rule text NOT NULL DEFAULT 'authenticated',
+            ADD COLUMN IF NOT EXISTS mfa_required boolean NOT NULL DEFAULT false,
+            ADD COLUMN IF NOT EXISTS download_tracking_required boolean NOT NULL DEFAULT true
+        `);
+        await pool.query(`
+          ALTER TABLE document_version_history
+            ADD COLUMN IF NOT EXISTS expiration_date date
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_controlled_documents_template_key
+          ON controlled_documents(template_key)
+        `);
+        console.log('Controlled documents schema guard complete');
+      } catch (controlledDocumentsSchemaErr: any) {
+        console.error('Controlled documents schema guard failed:', controlledDocumentsSchemaErr?.message || controlledDocumentsSchemaErr);
+      }
+
+      try {
+        await pool.query(`
+          ALTER TABLE all_orders
+            ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
+        `);
+        await pool.query(`
+          ALTER TABLE order_drafts
+            ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
+        `);
+        await pool.query(`
+          UPDATE all_orders
+          SET department_notes = '[]'::jsonb
+          WHERE department_notes IS NULL
+        `);
+        await pool.query(`
+          UPDATE order_drafts
+          SET department_notes = '[]'::jsonb
+          WHERE department_notes IS NULL
+        `);
+        console.log('P1 department notes schema guard complete');
+      } catch (departmentNotesSchemaErr: any) {
+        console.error('P1 department notes schema guard failed:', departmentNotesSchemaErr?.message || departmentNotesSchemaErr);
+      }
+
+      const runHistoricalBootRepairs = shouldRunHistoricalBootRepairs();
+      const runLegacyStartupDbMaintenance = shouldRunLegacyStartupDbMaintenance();
+      // Ensure P2 packing slips have replacement-linkage columns before the create route writes them.
+      try {
+        const { sql: sqlP2SlipReplacement } = await import('drizzle-orm');
+        await db.execute(sqlP2SlipReplacement`
+          ALTER TABLE p2_packing_slips
+            ADD COLUMN IF NOT EXISTS replaces_packing_slip_id uuid REFERENCES p2_packing_slips(id),
+            ADD COLUMN IF NOT EXISTS replacement_reason text,
+            ADD COLUMN IF NOT EXISTS is_no_charge_replacement boolean NOT NULL DEFAULT false
+        `);
+        console.log('âœ… Ensured p2_packing_slips replacement linkage columns exist');
+      } catch (p2SlipReplacementErr: any) {
+        console.warn('âš ï¸ p2_packing_slips replacement linkage migration skipped:', p2SlipReplacementErr.message);
+      }
+
+      // Targeted production repair for the RW26-221 shipment created during a packing-slip failure.
+      try {
+        const targetLots = await pool.query<{
+          id: string;
+          lot_number: string | null;
+          po_number: string | null;
+          customer_id: string | null;
+          customer_name: string | null;
+          serialized_item_ids: unknown;
+          quantity: number | null;
+        }>(
+          `SELECT id, lot_number, po_number, customer_id, customer_name, serialized_item_ids, quantity
+             FROM p2_lot_numbers
+            WHERE packing_slip_id IS NULL
+              AND COALESCE(status, '') <> 'VOID'
+              AND (po_number = $1 OR lot_number = $1)`,
+          ['RW26-221'],
+        );
+
+        let repairedRw26221Shipments = 0;
+        for (const lot of targetLots) {
+          const existingSlip = await pool.query<{ id: string; packing_slip_number: string }>(
+            `SELECT id, packing_slip_number
+               FROM p2_packing_slips
+              WHERE lot_number_id = $1
+              ORDER BY created_at DESC
+              LIMIT 1`,
+            [lot.id],
+          );
+
+          if (existingSlip[0]) {
+            await pool.query(
+              `UPDATE p2_lot_numbers SET packing_slip_id = $1, updated_at = NOW() WHERE id = $2`,
+              [existingSlip[0].id, lot.id],
+            );
+            repairedRw26221Shipments++;
+            continue;
+          }
+
+          const serializedItemIds = Array.isArray(lot.serialized_item_ids) ? lot.serialized_item_ids : [];
+          const lineItemRows = await pool.query<{
+            line_items: unknown;
+            total_quantity: number | null;
+          }>(
+            `WITH selected_items AS (
+               SELECT si.part_number, si.part_name, si.sku, si.serial_number
+                 FROM jsonb_array_elements_text($1::jsonb) AS selected(id)
+                 JOIN p2_serialized_items si ON si.id::text = selected.id
+             ),
+             grouped_items AS (
+               SELECT
+                 part_number,
+                 part_name,
+                 sku,
+                 COUNT(*)::int AS quantity,
+                 jsonb_agg(serial_number ORDER BY serial_number) AS serial_numbers
+               FROM selected_items
+               GROUP BY part_number, part_name, sku
+             )
+             SELECT
+               COALESCE(
+                 jsonb_agg(
+                   jsonb_build_object(
+                     'partNumber', part_number,
+                     'partName', part_name,
+                     'sku', sku,
+                     'quantity', quantity,
+                     'serialNumbers', serial_numbers,
+                     'lotNumber', $2::text
+                   )
+                   ORDER BY part_number, part_name, sku
+                 ),
+                 '[]'::jsonb
+               ) AS line_items,
+               COALESCE(SUM(quantity), 0)::int AS total_quantity
+             FROM grouped_items`,
+            [JSON.stringify(serializedItemIds), lot.lot_number],
+          );
+
+          const todayIso = new Date().toISOString();
+          const dateStr = todayIso.slice(2, 4) + todayIso.slice(5, 7) + todayIso.slice(8, 10);
+          const countRows = await pool.query<{ count: string }>(
+            `SELECT COUNT(*) AS count FROM p2_packing_slips WHERE packing_slip_number LIKE $1`,
+            [`${dateStr}-%`],
+          );
+          const packingSlipNumber = `${dateStr}-${(parseInt(countRows[0]?.count || '0', 10) + 1)
+            .toString()
+            .padStart(2, '0')}`;
+          const lineItems = lineItemRows[0]?.line_items ?? [];
+          const totalQuantity = lineItemRows[0]?.total_quantity ?? lot.quantity ?? 0;
+
+          const insertedSlip = await pool.query<{ id: string }>(
+            `INSERT INTO p2_packing_slips (
+               packing_slip_number, lot_number_id, lot_number, customer_id, customer_name,
+               customer_address, po_number, line_items, total_quantity, status, created_by
+             )
+             VALUES ($1, $2, $3, COALESCE($4, ''), COALESCE($5, ''), '', $6, $7::jsonb, $8, 'DRAFT', $9)
+             RETURNING id`,
+            [
+              packingSlipNumber,
+              lot.id,
+              lot.lot_number,
+              lot.customer_id,
+              lot.customer_name,
+              lot.po_number,
+              JSON.stringify(lineItems),
+              totalQuantity,
+              'system:rw26-221-packing-slip-repair',
+            ],
+          );
+
+          await pool.query(
+            `UPDATE p2_lot_numbers SET packing_slip_id = $1, updated_at = NOW() WHERE id = $2`,
+            [insertedSlip[0].id, lot.id],
+          );
+          repairedRw26221Shipments++;
+        }
+
+        if (repairedRw26221Shipments > 0) {
+          console.log(`✅ Repaired ${repairedRw26221Shipments} RW26-221 shipment lot(s) missing durable packing slips`);
+        }
+      } catch (rw26221RepairErr: any) {
+        console.warn('⚠️ RW26-221 shipment packing-slip repair skipped:', rw26221RepairErr.message);
+      }
+
+      if (runHistoricalBootRepairs) {
+        console.warn('RUN_BOOT_REPAIRS is enabled; historical boot repairs will run during startup.');
+        const { inserted, missing } = await runLaborAllocationBackfill(pool);
+        console.log(`✅ Phase B labor allocation backfill: inserted ${inserted} row(s) from punch_ledger`);
+        if (missing > 0) {
+          throw new Error(`Phase B coverage gap: ${missing} punch_ledger session(s) still lack a labor_allocations row after backfill`);
+        }
+        console.log('✅ Phase B coverage audit: 0 sessions missing allocations');
+
+        await runEarlyOneTimeRepairBackfills({ db, pool });
+      } else {
+        const missing = await countMissingLaborAllocations(pool);
+        if (missing > 0) {
+          console.warn(
+            `⚠️ Phase B coverage audit: ${missing} punch_ledger session(s) lack labor allocations. ` +
+            'Run npm run maintenance:boot-repairs or set RUN_BOOT_REPAIRS=true for a controlled repair.'
+          );
+        } else {
+          console.log('✅ Phase B coverage audit: 0 sessions missing allocations');
+        }
+        console.log('ℹ️ Historical boot repairs are disabled during normal startup.');
+      }
+
+      if (!runLegacyStartupDbMaintenance) {
+        console.log(`ℹ️ ${getLegacyStartupDbMaintenanceSkipMessage()}`);
+        bootState.backgroundServices.status = 'complete';
+        bootState.backgroundServices.completedAt = new Date().toISOString();
+        return;
+      }
+
+      console.warn(
+        'RUN_STARTUP_DB_MAINTENANCE is enabled; legacy inline DB maintenance, seed checks, ' +
+        'scheduled jobs, and startup prewarm tasks will run from server/index.ts.'
+      );
+
       // Ensure required user accounts exist (e.g. brian → /brian-dashboard)
       try {
         const { ensureRequiredUsersExist } = await import('./src/routes/auth');
         await ensureRequiredUsersExist();
       } catch (userSeedErr: any) {
         console.warn('⚠️ ensureRequiredUsersExist failed:', userSeedErr.message);
-      }
-
-      // ── Pre-deploy: safe integer→uuid / integer→text type fixes ─────────────
-      // These run FIRST before any other boot migration so that subsequent
-      // drizzle-kit push operations never see a stale integer column where the
-      // schema expects uuid/text (which would generate unsafe SET DATA TYPE SQL).
-      // Every migration file is idempotent (DO $$ IF EXISTS guards) — running on
-      // an already-correct database is a complete no-op.
-      // Each file runs in its own try/catch so a failure in one never blocks later migrations.
-      {
-        const { Pool: MigrPool } = await import('pg');
-        const { readFileSync, existsSync } = await import('fs');
-        const { join } = await import('path');
-        const migrPool = new MigrPool({ connectionString: (process.env.FORCE_DATABASE_URL || process.env.DATABASE_URL)! });
-        const migrationsDir = join(process.cwd(), 'migrations');
-        const safeFiles = [
-          '0000_shiny_amazoness.sql',
-          '0001_fix_cutting_built_packets_category_uuid.sql',
-          '0002_fix_fabric_sources_inventory_id_uuid.sql',
-          '0003_comprehensive_integer_to_uuid_audit.sql',
-          '0004_job_allocations.sql',
-          '0005_backfill_production_orders_item_codes.sql',
-          '0006_nonconforming_rmas_and_schema_columns.sql',
-          '0007_p2_shipping_audit_log.sql',
-          '0008_inventory_item_type_category.sql',
-          '0009_schema_change_log.sql',
-          '0010_all_orders_unique_order_id.sql',
-          '0011_fix_finalized_orders_in_production_departments.sql',
-          '0012_bulk_payment_batches.sql',
-          '0013_add_composite_manufactured_category.sql',
-          '0014_receiving_control_center.sql',
-          '0015_receiving_fk_constraints.sql',
-          '0016_routing_type_enum.sql',
-          '0017_routing_operations_tables.sql',
-          '0018_routing_templates.sql',
-          '0019_routing_dependencies.sql',
-          '0020_anodize_jobs.sql',
-          '0021_anodize_cert_inspection.sql',
-          '0022_routing_dependency_enhancements.sql',
-          '0023_traveler_component_associations.sql',
-          '0024_add_assigned_technician_to_production_orders.sql',
-          '0025_fix_production_daily_checklist_seed.sql',
-          '0026_manufacturing_queue_released_at.sql',
-          '0027_brian_ramirez_account_fix.sql',
-          '0028_packing_slip_external_pdf.sql',
-          '0029_add_component_manufactured_category.sql',
-          '0030_p2_invoicing_phase1_schema.sql',
-          '0031_p2_replacement_shipment_linkage.sql',
-          '0032_canonical_customer_key.sql',
-          '0033_v_all_shipments.sql',
-          '0034_labor_gl_posting.sql',
-          '0035_labor_cost_records_journal_entry_id.sql',
-          '0036_project_closing_lessons_learned.sql',
-          '0037_cycle_count_sessions.sql',
-          '0037_project_closing_approval_fields.sql',
-          '0038_labor_schema_phase1.sql',
-          '0039_routing_operation_certification_id.sql',
-          '0040_timestamptz_time_clock_entries.sql',
-          '0041_perm_user_capability_scopes.sql',
-          '0042_perm_ucs_unique_constraint.sql',
-          '0043_perm_ucs_fk_and_constraints.sql',
-          '0044_perm_ucs_strict_scope_constraint.sql',
-          '0045_refund_requests_last_reminded_at.sql',
-          '0046_dcaa_audit_findings.sql',
-          '0047_timekeeper_pin_and_timezone.sql',
-          '0048_drop_punch_events.sql',
-          '0049_retire_timekeeping_identity_columns.sql',
-          '0049_settings_table.sql',
-          '0049_timekeeping_schema.sql',
-          '0050_replace_perm_ucs_coalesce_index.sql',
-          '0051_dcaa_enable_kiosk_pin.sql',
-          '0052_dcaa_missing_tables.sql',
-          '0052_dcaa_scheduler_state.sql',
-          '0053_seed_labor_charge_codes.sql',
-          '0054_add_project_id_to_quotes.sql',
-          '0055_customer_integer_id_bridge.sql',
-          '0055_labor_session_request_ref.sql',
-          '0056_backfill_fulfilled_orders_shipped_date.sql',
-          '0057_p2_cert_hardening.sql',
-          '0058_backfill_training_cert_part_numbers.sql',
-          '0059_native_charge_codes.sql',
-          '0060_punch_ledger.sql',
-          '0061_punch_ledger_pwo_fk.sql',
-          '0062_punch_ledger_check_constraints.sql',
-          '0063_vendor_pos_archived_column.sql',
-          '0064_punch_ledger_wad_traceability.sql',
-          '0065_vendor_date_columns_proper_type.sql',
-          '0066_drop_timekeeping_deprecated_columns.sql',
-          '0067_project_closing_approval_fields.sql',
-          '0068_settings_table.sql',
-          '0069_timekeeping_schema.sql',
-          '0070_dcaa_scheduler_state.sql',
-          '0071_training_certifications_cert_id.sql',
-          '0072_labor_session_request_ref.sql',
-          '0073_vendor_doc_migration_flags.sql',
-          '0074_vendor_po_confirmed_fields.sql',
-          '0075_cutting_documents_table.sql',
-          '0075_time_off_requests.sql',
-          '0076_vendor_po_compliance_reviews.sql',
-          '0077_compliance_requires_attention.sql',
-          '0077_phase_a_salaried_labor_capture.sql',
-          '0078_historical_backfill_flag.sql',
-          '0079_procurement_compliance_effective_date.sql',
-          '0080_link_users_to_employees.sql',
-          '0081_proteus_labs.sql',
-          '0082_pto_three_stage_approval.sql',
-          '0083_proteus_executions_cascade.sql',
-          '0084_pto_payroll_blockers.sql',
-          '0085_labor_capture_suggestions.sql',
-          '0086_p2_serialized_items_barcode_printed_at.sql',
-          '0087_pin_rate_limit.sql',
-          '0088_oem_invoice_number.sql',
-          '0089_vendor_po_compliance_legacy_exception.sql',
-          '0090_labor_allocations.sql',
-          '0091_timesheet_corrections.sql',
-          '0092_timesheet_status_extended.sql',
-          '0093_timekeeping_policy_settings.sql',
-          '0094_enable_salaried_timesheets.sql',
-          '0094_labor_entry_drafts.sql',
-          '0095_production_control_templates.sql',
-          '0096_wad_document_links.sql',
-          '0097_wad_wizard_data.sql',
-          '0098_payroll_export_batches.sql',
-          '0099_audit_evidence_hardening.sql',
-          '0099_employee_payroll_control.sql',
-          '0099_policies_library.sql',
-          '0099_punch_ledger_pending_approval.sql',
-          '0100_audit_ledger_privilege_hardening.sql',
-          '0100_burden_rates_engine.sql',
-          '0101_audit_tamper_attempts_durable.sql',
-          '0102_traveler_off_system_completion_link.sql',
-          '0103_accounting_control_center.sql',
-          '0104_improvement_notes.sql',
-          '0106_employee_payroll_item_attachments.sql',
-          '0107_accounting_expense_attachments.sql',
-          '0108_parts_request_project_line_budget.sql',
-          '0109_inventory_transaction_ledger.sql',
-          '0109_vendor_pos_purchasing_controls_columns.sql',
-          '0110_purchasing_controls_tables_and_vendor_pos_parity.sql',
-          '0111_approval_escalation_engine.sql',
-          '0111_critical_schema_health_repairs.sql',
-          '0111_digital_signatures.sql',
-          '0111_inventory_anomaly_detection.sql',
-          '0111_routing_step_enforcement.sql',
-          '0112_cycle_count_subsystem.sql',
-          '0112_inventory_traceability_capability.sql',
-          '0112_material_issue_approvals.sql',
-          '0113_routing_step_intent_backfill.sql',
-          '0114_inventory_high_risk_approvals.sql',
-          '0114_shelf_life_out_time_enforcement.sql',
-          '0115_vendor_pos_production_line.sql',
-          '0116_parts_request_po_approvals.sql',
-          '0117_vendor_po_items_purchasing_unit_columns.sql',
-          '0117_vendor_po_line_project_traceability.sql',
-          '0118_vendor_po_traceability_columns_safe.sql',
-          '0119_inventory_item_shelf_life_columns_safe.sql',
-          '0120_project_far_flowdowns.sql',
-          '0121_p2_invoice_review_send_structure.sql',
-          '0122_payment_void_audit_controls.sql',
-          '0123_charge_code_cost_handling.sql',
-          '0124_chart_of_accounts_foundation.sql',
-          'investigation_308_order_duplication.sql',
-        ];
-        const criticalMigrations = new Set([
-          '0060_punch_ledger.sql',
-          '0061_punch_ledger_pwo_fk.sql',
-          '0062_punch_ledger_check_constraints.sql',
-          '0063_vendor_pos_archived_column.sql',
-          '0064_punch_ledger_wad_traceability.sql',
-          '0065_vendor_date_columns_proper_type.sql',
-          '0090_labor_allocations.sql',
-        ]);
-        let appliedCount = 0;
-        for (const f of safeFiles) {
-          const filePath = join(migrationsDir, f);
-          if (!existsSync(filePath)) {
-            if (criticalMigrations.has(f)) {
-              throw new Error(`Critical migration file not found on disk: ${f}`);
-            }
-            continue;
-          }
-          try {
-            await migrPool.query(readFileSync(filePath, 'utf-8'));
-            appliedCount++;
-          } catch (fileErr: any) {
-            if (criticalMigrations.has(f)) {
-              console.error(`❌ Critical migration ${f} failed: ${fileErr.message}`);
-              throw fileErr;
-            }
-            console.warn(`⚠️ Migration ${f} skipped: ${fileErr.message}`);
-          }
-        }
-        try { await migrPool.end(); } catch (_) {}
-        console.log(`✅ Pre-deploy migrations: ${appliedCount}/${safeFiles.length} applied (or already correct)`);
-
-        try {
-          const { logCriticalSchemaHealth } = await import('./utils/schemaHealth');
-          await logCriticalSchemaHealth();
-        } catch (schemaHealthErr: any) {
-          console.warn('Critical schema health check skipped:', schemaHealthErr.message);
-        }
-
-        // Run vendor URL migration now that DB schema is guaranteed up-to-date
-        try {
-          const { migrateVendorDocumentUrls } = await import('./src/routes/vendors');
-          await migrateVendorDocumentUrls();
-        } catch (vendorMigrErr: any) {
-          console.warn('⚠️ Vendor document URL migration failed:', vendorMigrErr.message);
-        }
-
-        // Phase B backfill: seed one labor_allocations row per existing punch_ledger session
-        // Hard-fail on error so startup cannot silently proceed without the table populated.
-        const backfillResult = await pool.query(`
-          INSERT INTO labor_allocations (
-            punch_ledger_id,
-            employee_id,
-            allocation_start,
-            allocation_end,
-            charge_code_id,
-            traveler_id,
-            traveler_step_id,
-            production_work_order_id,
-            project_id,
-            department,
-            operation,
-            certification_status,
-            labor_class,
-            is_overrun,
-            status,
-            source,
-            sequence_order
-          )
-          SELECT
-            pl.id                        AS punch_ledger_id,
-            pl.employee_id               AS employee_id,
-            pl.clock_in                  AS allocation_start,
-            pl.clock_out                 AS allocation_end,
-            pl.charge_code_id            AS charge_code_id,
-            pl.traveler_id               AS traveler_id,
-            pl.traveler_step_id          AS traveler_step_id,
-            pl.production_work_order_id  AS production_work_order_id,
-            pl.project_id                AS project_id,
-            pl.department                AS department,
-            pl.operation                 AS operation,
-            pl.certification_status      AS certification_status,
-            pl.labor_class               AS labor_class,
-            pl.is_overrun                AS is_overrun,
-            CASE WHEN pl.clock_out IS NULL THEN 'OPEN' ELSE 'CLOSED' END AS status,
-            'BACKFILL'                   AS source,
-            1                            AS sequence_order
-          FROM punch_ledger pl
-          WHERE NOT EXISTS (
-            SELECT 1 FROM labor_allocations la WHERE la.punch_ledger_id = pl.id
-          )
-        `);
-        const backfillCount = backfillResult.rowCount ?? 0;
-        console.log(`✅ Phase B backfill: inserted ${backfillCount} labor_allocations row(s) from punch_ledger`);
-
-        // Post-backfill coverage audit: confirm zero sessions are missing allocations
-        const coverageResult = await pool.query(`
-          SELECT COUNT(*) AS missing
-          FROM punch_ledger pl
-          WHERE NOT EXISTS (
-            SELECT 1 FROM labor_allocations la WHERE la.punch_ledger_id = pl.id
-          )
-        `);
-        const missingCount = parseInt((coverageResult as any)[0]?.missing ?? '0', 10);
-        if (missingCount > 0) {
-          throw new Error(`Phase B coverage gap: ${missingCount} punch_ledger session(s) still lack a labor_allocations row after backfill`);
-        } else {
-          console.log(`✅ Phase B coverage audit: 0 sessions missing allocations — all punch_ledger rows covered`);
-        }
-
-        // Guard: warn about any *.sql files on disk that are absent from safeFiles
-        try {
-          const { readdirSync } = await import('fs');
-          const diskFiles = readdirSync(migrationsDir).filter((f: string) => f.endsWith('.sql'));
-          const safeSet = new Set(safeFiles);
-          const missing = diskFiles.filter((f: string) => !safeSet.has(f));
-          if (missing.length > 0) {
-            for (const f of missing) {
-              console.warn(`⚠️ Migration file on disk is NOT in safeFiles and will be skipped: ${f}`);
-            }
-          }
-        } catch (scanErr: any) {
-          console.warn('⚠️ Could not scan migrations directory for unlisted files:', scanErr.message);
-        }
-      }
-
-      // Backfill: ensure all customers have a customer_key derived from their name
-      try {
-        const result = await pool.query(
-          `UPDATE customers SET customer_key = UPPER(REPLACE(TRIM(name), ' ', '_')) WHERE customer_key IS NULL`
-        );
-        const updated: number = result.rowCount ?? 0;
-        if (updated > 0) {
-          console.log(`✅ Backfilled customer_key for ${updated} customer(s) with NULL value`);
-        }
-      } catch (bfErr: unknown) {
-        const msg = bfErr instanceof Error ? bfErr.message : String(bfErr);
-        console.warn('⚠️ customer_key backfill skipped:', msg);
-      }
-
-      // Normalize pay_type casing: ensure all existing employees have uppercase pay_type values
-      try {
-        const payTypeResult = await pool.query(
-          `UPDATE employees SET pay_type = UPPER(pay_type) WHERE pay_type IS NOT NULL AND pay_type != UPPER(pay_type)`
-        );
-        const payTypeUpdated: number = payTypeResult.rowCount ?? 0;
-        if (payTypeUpdated > 0) {
-          console.log(`✅ Normalized pay_type casing for ${payTypeUpdated} employee(s) to uppercase`);
-        }
-      } catch (payTypeErr: unknown) {
-        const msg = payTypeErr instanceof Error ? payTypeErr.message : String(payTypeErr);
-        console.warn('⚠️ pay_type normalization skipped:', msg);
-      }
-
-      // One-time migration: Reassign Red Hawk Rifles LLC POs from inactive customer 698 to active customer 547
-      try {
-        const { sql } = await import('drizzle-orm');
-        await db.execute(sql`UPDATE purchase_orders SET customer_id = '547' WHERE customer_id = '698'`);
-        console.log('✅ One-time migration: Red Hawk Rifles LLC POs reassigned from customer 698 → 547');
-      } catch (migError: any) {
-        console.warn('⚠️ One-time migration skipped or already applied:', migError.message);
-      }
-
-      // Fix: Orders in Shipping Management should always be FULFILLED, not FINALIZED
-      try {
-        const { pool: fixPool } = await import('./db');
-        const { auditUpdateOrders } = await import('./src/services/orderAuditWrapper');
-        const eligibleRows = await fixPool.query(
-          `SELECT order_id FROM all_orders
-           WHERE current_department = 'Shipping Management' AND status = 'FINALIZED'`
-        ) as any[];
-        const eligibleIds = eligibleRows.map((r: any) => r.order_id);
-        if (eligibleIds.length > 0) {
-          await auditUpdateOrders({
-            db: fixPool as any,
-            orderIds: eligibleIds,
-            changes: { status: 'FULFILLED' },
-            source: 'BOOT_MIGRATION',
-            user: null,
-            reason: 'Boot migration: Shipping Management FINALIZED → FULFILLED',
-            ip: null,
-            userAgent: null,
-          });
-        }
-        console.log(`✅ Fixed Shipping Management status: ${eligibleIds.length} orders updated from FINALIZED → FULFILLED`);
-      } catch (fixErr: any) {
-        console.warn('⚠️ Shipping Management status fix skipped:', fixErr.message);
-      }
-
-      // Sync serialized item part numbers to match their PO items
-      try {
-        const { sql: sqlSync } = await import('drizzle-orm');
-        await db.execute(sqlSync`
-          UPDATE p2_serialized_items si
-          SET part_number = poi.part_number,
-              part_name = poi.part_name,
-              updated_at = NOW()
-          FROM p2_purchase_order_items poi
-          WHERE si.po_item_id = poi.id
-            AND (si.part_number != poi.part_number OR si.part_name != poi.part_name)
-        `);
-        console.log('✅ Synced serialized item part numbers to match PO items');
-      } catch (syncErr: any) {
-        console.warn('⚠️ Serialized item sync skipped:', syncErr.message);
-      }
-
-      // Historical backfill: reconcile P2 manufacturing_queue entries to their source production orders
-      // Guard: only run when there are both P2 queue entries AND pending P2 production orders,
-      // so this is a no-op on clean databases and skips on subsequent restarts after the fix is applied.
-      try {
-        const p2GuardResult = await pool.query(`
-          SELECT
-            (SELECT COUNT(*) FROM manufacturing_queue
-             WHERE department = 'Cutting Table'
-               AND notes IS NOT NULL
-               AND notes::text LIKE '%"isP2Packet":true%'
-               AND notes::text NOT LIKE '%"p2BackfillApplied":true%') AS queue_count,
-            (SELECT COUNT(*) FROM p2_production_orders
-             WHERE status IN ('pending', 'PENDING', 'in_progress', 'queued')) AS pending_count
-        `);
-        const guardRow = (p2GuardResult as any).rows?.[0] || (p2GuardResult as any[])[0] || {};
-        const queueCount = parseInt(guardRow.queue_count ?? '0', 10);
-        const pendingCount = parseInt(guardRow.pending_count ?? '0', 10);
-        if (queueCount > 0 && pendingCount > 0) {
-          console.log(`🔄 P2 backfill: ${queueCount} P2 queue entries found, ${pendingCount} pending P2 orders — running historical backfill`);
-          const { runP2ScheduledBackfill } = await import('./src/routes/cuttingTable');
-          const bfSummary = await runP2ScheduledBackfill(pool);
-          console.log(`✅ P2 boot backfill complete: ${JSON.stringify(bfSummary)}`);
-        } else {
-          console.log(`✅ P2 boot backfill: guard check passed (queue_count=${queueCount}, pending_count=${pendingCount}) — skipping`);
-        }
-      } catch (p2BfErr: any) {
-        console.warn('⚠️ P2 boot backfill skipped:', p2BfErr.message);
-      }
-
-      // Historical backfill: consolidate pre-task duplicate PENDING P2 cutting rows into the new
-      // grouped shape (one row per packet type per due-date bucket, with contributing POs merged
-      // into notes.poNumbers). Guard: only run when there is at least one PENDING P2 cutting row
-      // in the legacy un-grouped shape (singular poNumber, OR missing poNumbers[], OR missing the
-      // p2BackfillApplied:true stamp). Once consolidated, the guard finds no candidates and the
-      // backfill becomes a no-op on subsequent restarts.
-      try {
-        const dupGuardResult = await pool.query(`
-          SELECT COUNT(*) AS legacy_count
-          FROM manufacturing_queue
-          WHERE department = 'Cutting Table'
-            AND status = 'PENDING'
-            AND inventory_item_id IS NOT NULL
-            AND notes IS NOT NULL
-            AND (
-              notes::text LIKE '%"isP2Packet":true%'
-              OR notes::text LIKE '%"materialType":"p2_%'
-            )
-            AND (
-              notes::text LIKE '%"poNumber":%'
-              OR notes::text NOT LIKE '%"poNumbers":%'
-              OR notes::text NOT LIKE '%"p2BackfillApplied":true%'
-            )
-        `);
-        const dupGuardRow = (dupGuardResult as any).rows?.[0] || (dupGuardResult as any[])[0] || {};
-        const legacyCount = parseInt(dupGuardRow.legacy_count ?? '0', 10);
-
-        // CRITICAL: ensure cutting_packet_barcode_aliases exists BEFORE the
-        // duplicate-grouping backfill runs. The backfill deletes merged rows
-        // and writes alias mappings so previously printed `MFG-{queueId}-...`
-        // labels still resolve. If the alias table is missing, those inserts
-        // are silently skipped and we permanently lose the mapping.
-        try {
-          const { sql: sqlAlias } = await import('drizzle-orm');
-          await db.execute(sqlAlias`
-            CREATE TABLE IF NOT EXISTS cutting_packet_barcode_aliases (
-              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              original_queue_id INTEGER NOT NULL UNIQUE,
-              successor_queue_id INTEGER,
-              inventory_item_id INTEGER,
-              packet_name TEXT,
-              due_date_bucket TEXT,
-              reason TEXT NOT NULL,
-              created_at TIMESTAMP DEFAULT NOW(),
-              updated_at TIMESTAMP DEFAULT NOW()
-            )
-          `);
-          await db.execute(sqlAlias`CREATE INDEX IF NOT EXISTS cutting_packet_barcode_aliases_successor_idx ON cutting_packet_barcode_aliases(successor_queue_id)`);
-          await db.execute(sqlAlias`CREATE INDEX IF NOT EXISTS cutting_packet_barcode_aliases_packet_idx ON cutting_packet_barcode_aliases(inventory_item_id, due_date_bucket)`);
-          console.log('✅ cutting_packet_barcode_aliases table ensured (pre-dup-backfill)');
-        } catch (aliasTableErr: any) {
-          // HARD FAIL: do not run the consolidation if we can't preserve aliases.
-          // Surface a loud error so the operator knows barcode continuity is at
-          // risk — silent degradation is worse than a noisy boot.
-          console.error('❌ cutting_packet_barcode_aliases table creation FAILED — skipping duplicate-grouping backfill to preserve barcode continuity:', aliasTableErr?.message || aliasTableErr);
-          throw aliasTableErr;
-        }
-
-        if (legacyCount > 0) {
-          console.log(`🔄 P2 duplicate-grouping backfill: ${legacyCount} legacy PENDING P2 cutting rows found — running consolidation`);
-          const { runP2DuplicateCuttingBackfill } = await import('./src/routes/cuttingTable');
-          const dupSummary = await runP2DuplicateCuttingBackfill(pool);
-          console.log(`✅ P2 duplicate-grouping boot backfill complete: ${JSON.stringify(dupSummary)}`);
-        } else {
-          console.log('✅ P2 duplicate-grouping boot backfill: no legacy PENDING P2 cutting rows — skipping');
-        }
-      } catch (dupBfErr: any) {
-        console.warn('⚠️ P2 duplicate-grouping boot backfill skipped:', dupBfErr.message);
-      }
-
-      // One-shot historical alias backfill — picks up labels printed before
-      // the alias table existed by mining cutting_built_packets barcodes for
-      // orphan queue ids. Runs AFTER the duplicate-grouping consolidation so
-      // it sees the final canonical rows.
-      try {
-        const { backfillHistoricalAliases } = await import('./src/utils/cuttingPacketBarcodeAlias');
-        const aliasSummary = await backfillHistoricalAliases(pool);
-        if (aliasSummary.candidatesScanned > 0) {
-          console.log(`✅ Cutting packet barcode aliases — historical backfill: ${JSON.stringify(aliasSummary)}`);
-        } else {
-          console.log('✅ Cutting packet barcode aliases — no historical orphan barcodes detected');
-        }
-      } catch (aliasBootErr: any) {
-        console.warn('⚠️ cutting_packet_barcode_aliases historical backfill skipped:', aliasBootErr.message);
-      }
-
-      // Data correction: PO 037517 item 225 (Grace Engineering) — fix cf_privateer → cf_beartooth
-      // The specifications snapshot was frozen with the wrong stock model at creation time.
-      // This correction updates stockModelId, stockModelName, and specifications.stockModel atomically.
-      // Also corrects any production_orders spawned from item 225 that have the same bad snapshot.
-      try {
-        const { pgPool: corrPgPool } = await import('./db');
-        const checkResult = await corrPgPool.query(
-          `SELECT id FROM purchase_order_items WHERE id = 225 AND stock_model_id = 'cf_privateer'`
-        );
-        if (checkResult.rows.length > 0) {
-          await corrPgPool.query(`
-            UPDATE purchase_order_items
-            SET stock_model_id   = 'cf_beartooth',
-                stock_model_name = 'Carbon Fiber Beartooth',
-                specifications   = jsonb_set(
-                  specifications::jsonb,
-                  '{stockModel}',
-                  '"cf_beartooth"'
-                ),
-                updated_at = NOW()
-            WHERE id = 225 AND stock_model_id = 'cf_privateer'
-          `);
-          console.log('✅ Data correction: PO item 225 stock model corrected cf_privateer → cf_beartooth');
-        } else {
-          console.log('✅ Data correction: PO item 225 already correct or not found, skipping');
-        }
-        // Also fix production_orders that were spawned from PO item 225 with the bad snapshot
-        const prodCheckResult = await corrPgPool.query(
-          `SELECT id FROM production_orders WHERE po_item_id = 225 AND specifications->>'stockModel' = 'cf_privateer'`
-        );
-        if (prodCheckResult.rows.length > 0) {
-          await corrPgPool.query(`
-            UPDATE production_orders
-            SET specifications = jsonb_set(
-                  specifications::jsonb,
-                  '{stockModel}',
-                  '"cf_beartooth"'
-                ),
-                updated_at = NOW()
-            WHERE po_item_id = 225 AND specifications->>'stockModel' = 'cf_privateer'
-          `);
-          console.log(`✅ Data correction: ${prodCheckResult.rows.length} production_orders for PO item 225 corrected cf_privateer → cf_beartooth`);
-        }
-      } catch (corrErr: any) {
-        console.warn('⚠️ PO item 225 data correction skipped:', corrErr.message);
-      }
-
-      // Data correction: PO P18665 item 82 — fix duplicate AG-FG-ADJ-AHV105-CDN → AG-FG-AHV105-CDN
-      // Item 82 was entered as AG-FG-ADJ-AHV105-CDN (same as item 78) but should be
-      // AG-FG-AHV105-CDN (non-adjustable, fg_alpine_hunter, $489). Three-part fix:
-      //   1. Correct item_name / item_id on purchase_order_items row (if not yet done)
-      //   2. Correct item_name on any production_orders still carrying the old ADJ name
-      //   3. Reactivate the newest cancelled order if no active/pending order exists
-      try {
-        const { pgPool: p18665Pool } = await import('./db');
-
-        // Part 1 – fix item_name if still wrong
-        const p18665NameCheck = await p18665Pool.query(
-          `SELECT id FROM purchase_order_items WHERE id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN'`
-        );
-        if (p18665NameCheck.rows.length > 0) {
-          await p18665Pool.query(`
-            UPDATE purchase_order_items
-            SET item_name   = 'AG-FG-AHV105-CDN',
-                item_id     = '36',
-                unit_price  = 489.00,
-                total_price = 489.00,
-                updated_at  = NOW()
-            WHERE id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN'
-          `);
-          console.log('✅ Data correction: PO P18665 item 82 item_name corrected ADJ-AHV105-CDN → AHV105-CDN');
-        }
-
-        // Part 2 – fix item_id if it was only partially corrected (name fixed but id still 72)
-        const p18665IdCheck = await p18665Pool.query(
-          `SELECT id FROM purchase_order_items WHERE id = 82 AND item_id = '72' AND item_name = 'AG-FG-AHV105-CDN'`
-        );
-        if (p18665IdCheck.rows.length > 0) {
-          await p18665Pool.query(`
-            UPDATE purchase_order_items
-            SET item_id = '36', updated_at = NOW()
-            WHERE id = 82 AND item_id = '72'
-          `);
-          console.log('✅ Data correction: PO P18665 item 82 item_id corrected 72 → 36');
-        }
-
-        // Part 3 – fix production_orders still carrying the ADJ item name for po_item_id=82
-        const p18665ProdCheck = await p18665Pool.query(
-          `SELECT id FROM production_orders WHERE po_item_id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN'`
-        );
-        if (p18665ProdCheck.rows.length > 0) {
-          await p18665Pool.query(`
-            UPDATE production_orders
-            SET item_name  = 'AG-FG-AHV105-CDN',
-                item_id    = '36',
-                item_code  = 'AG-FG-AHV105-CDN',
-                specifications = specifications || '{"stockModel": "fg_alpine_hunter"}'::jsonb,
-                updated_at = NOW()
-            WHERE po_item_id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN'
-          `);
-          console.log(`✅ Data correction: ${p18665ProdCheck.rows.length} production_order(s) for PO item 82 renamed ADJ-AHV105-CDN → AHV105-CDN`);
-        }
-
-        // Part 4 – if every production order for item 82 is CANCELLED, reactivate the newest one
-        const p18665ActiveCheck = await p18665Pool.query(`
-          SELECT COUNT(*) AS cnt
-          FROM production_orders
-          WHERE po_item_id = 82 AND production_status NOT IN ('CANCELLED', 'SHIPPED')
-        `);
-        const activeCnt = parseInt(p18665ActiveCheck.rows[0]?.cnt ?? '0', 10);
-        if (activeCnt === 0) {
-          const newestCancelled = await p18665Pool.query(`
-            SELECT id, order_id FROM production_orders
-            WHERE po_item_id = 82 AND production_status = 'CANCELLED'
-            ORDER BY id DESC LIMIT 1
-          `);
-          if (newestCancelled.rows.length > 0) {
-            const { id: ncId, order_id: ncOrderId } = newestCancelled.rows[0];
-            await p18665Pool.query(`
-              UPDATE production_orders
-              SET production_status = 'PENDING',
-                  item_name  = 'AG-FG-AHV105-CDN',
-                  item_id    = '36',
-                  item_code  = 'AG-FG-AHV105-CDN',
-                  specifications = specifications || '{"stockModel": "fg_alpine_hunter"}'::jsonb,
-                  updated_at = NOW()
-              WHERE id = ${ncId}
-            `);
-            console.log(`✅ Data correction: Reactivated production order ${ncOrderId} (id ${ncId}) for PO P18665 item 82 — set to PENDING`);
-          }
-        } else {
-          console.log(`✅ Data correction: PO P18665 item 82 already has ${activeCnt} active/pending production order(s), no reactivation needed`);
-        }
-      } catch (corrErr: any) {
-        console.warn('⚠️ PO P18665 item 82 data correction skipped:', corrErr.message);
-      }
-
-      // Data correction: PO P19802 (Red Hawk) — remove 14 duplicate line items created by
-      // multi-click on "Add to Order". User entered 7 items but they were submitted 3 times
-      // resulting in 21 rows. Keep the first instance of each unique item_name (IDs 273-278, 284)
-      // and delete the 14 extras (IDs 279-293 except 284).
-      try {
-        const { pgPool: p19802Pool } = await import('./db');
-        const dupeCheck = await p19802Pool.query(
-          `SELECT COUNT(*) AS cnt FROM purchase_order_items WHERE id IN (279,280,281,282,283,285,286,287,288,289,290,291,292,293)`
-        );
-        const dupeCount = parseInt(dupeCheck.rows[0]?.cnt ?? '0', 10);
-        if (dupeCount > 0) {
-          await p19802Pool.query(
-            `DELETE FROM purchase_order_items WHERE id IN (279,280,281,282,283,285,286,287,288,289,290,291,292,293)`
-          );
-          console.log(`✅ Data correction: Removed ${dupeCount} duplicate line items from PO P19802 (Red Hawk)`);
-        } else {
-          console.log('✅ Data correction: PO P19802 duplicates already cleaned up, skipping');
-        }
-      } catch (corrErr: any) {
-        console.warn('⚠️ PO P19802 duplicate cleanup skipped:', corrErr.message);
-      }
-
-      // Data correction (global): production orders where item_name = item_id (e.g. "81", "Alpine Hunter")
-      // instead of the real SKU from purchase_order_items. Affects 15 POs (P18321, P18666, P18918, etc.)
-      // created before the order-creation bug was fixed. Uses po_item_id FK to find the correct name.
-      // Idempotent: only runs when affected rows exist. Also corrects item_id for display-name cases.
-      try {
-        const { pgPool: itemNamePool } = await import('./db');
-        const itemNameCheck = await itemNamePool.query(
-          `SELECT COUNT(*) AS cnt
-           FROM production_orders po
-           JOIN purchase_order_items poi ON po.po_item_id = poi.id
-           WHERE po.item_name = po.item_id
-             AND poi.item_name LIKE 'AG-%'`
-        );
-        const itemNameBadCount = parseInt(itemNameCheck.rows[0]?.cnt ?? '0', 10);
-        if (itemNameBadCount > 0) {
-          const itemNameFix = await itemNamePool.query(
-            `UPDATE production_orders po
-             SET item_name = poi.item_name,
-                 item_id   = poi.item_id
-             FROM purchase_order_items poi
-             WHERE po.po_item_id = poi.id
-               AND po.item_name = po.item_id
-               AND poi.item_name LIKE 'AG-%'`
-          );
-          console.log(`✅ Data correction: Fixed ${itemNameFix.rowCount} production order(s) across all POs — replaced stub item names with correct SKUs`);
-        } else {
-          console.log('✅ Data correction: All production order item names already correct, skipping');
-        }
-      } catch (corrErr: any) {
-        console.warn('⚠️ Global production order item name correction skipped:', corrErr.message);
-      }
-
-      // Data correction: fix production orders where item_id, item_name, or specifications
-      // don't match the linked purchase_order_items row (via po_item_id). Excludes SHIPPED orders.
-      // Also cancels excess duplicate production orders for PO lines that have more active orders
-      // than the line's quantity (keeping the earliest-created one per PO line, excluding SHIPPED).
-      // Idempotent: checks before updating.
-      try {
-        const { pgPool: mismatchPool } = await import('./db');
-
-        // Step 1: fix item_id / item_name / specifications mismatches
-        const mismatchCheck = await mismatchPool.query(
-          `SELECT COUNT(*) AS cnt
-           FROM production_orders po
-           JOIN purchase_order_items poi ON po.po_item_id = poi.id
-           WHERE po.production_status != 'SHIPPED'
-             AND (
-               po.item_id       IS DISTINCT FROM poi.item_id
-               OR po.item_name  IS DISTINCT FROM poi.item_name
-               OR po.specifications IS DISTINCT FROM poi.specifications::jsonb
-             )`
-        );
-        const mismatchCount = parseInt(mismatchCheck.rows[0]?.cnt ?? '0', 10);
-        if (mismatchCount > 0) {
-          const mismatchFix = await mismatchPool.query(
-            `UPDATE production_orders po
-             SET item_id        = poi.item_id,
-                 item_name      = poi.item_name,
-                 specifications = poi.specifications::jsonb,
-                 updated_at     = NOW()
-             FROM purchase_order_items poi
-             WHERE po.po_item_id = poi.id
-               AND po.production_status != 'SHIPPED'
-               AND (
-                 po.item_id       IS DISTINCT FROM poi.item_id
-                 OR po.item_name  IS DISTINCT FROM poi.item_name
-                 OR po.specifications IS DISTINCT FROM poi.specifications::jsonb
-               )`
-          );
-          console.log(`✅ Data correction: Fixed ${mismatchFix.rowCount} production order(s) with mismatched item_id/item_name/specifications`);
-        } else {
-          console.log('✅ Data correction: All production order item data matches PO lines, skipping');
-        }
-
-        // RC-1 FIX: The excess duplicate cancellation migration has been intentionally removed
-        // from boot-time. Running it on every restart silently cancelled orders that were
-        // legitimately re-released by operators after partial failures. The pre-release guard
-        // in the scheduling route now queries real-time counts from production_orders to prevent
-        // new duplicates, making this boot-time cleanup both redundant and dangerous.
-        console.log('✅ Data correction: Boot-time excess duplicate cancellation skipped (moved to pre-release guard)');
-      } catch (mismatchErr: any) {
-        console.warn('⚠️ Production order mismatch correction skipped:', mismatchErr.message);
-      }
-
-      // Auto-close OPEN POs where every non-cancelled production order is SHIPPED
-      // Fixes POs like SWS2501/SWS2502 that show "6/6 Shipped" but remain in Active tab
-      try {
-        const { pgPool: autoClosePool } = await import('./db');
-        const autoCloseResult = await autoClosePool.query(`
-          UPDATE purchase_orders po
-          SET status = 'CLOSED'
-          WHERE po.status = 'OPEN'
-            AND EXISTS (
-              SELECT 1 FROM production_orders pr WHERE pr.po_id = po.id
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM production_orders pr
-              WHERE pr.po_id = po.id
-                AND pr.production_status <> 'SHIPPED'
-                AND pr.production_status <> 'CANCELLED'
-                AND pr.production_status <> 'COMPLETED'
-            )
-        `);
-        if (autoCloseResult.rowCount && autoCloseResult.rowCount > 0) {
-          console.log(`✅ Auto-closed ${autoCloseResult.rowCount} OPEN PO(s) where all production orders are SHIPPED`);
-        } else {
-          console.log('✅ Auto-close POs: no newly eligible POs found');
-        }
-      } catch (acErr: any) {
-        console.warn('⚠️ Auto-close fully-shipped POs migration skipped:', acErr.message);
-      }
-
-      // Sync serialized items stuck at "Pending Layup" with their actual work task progress
-      try {
-        const { sql: sqlDeptSync } = await import('drizzle-orm');
-        const syncResult = await db.execute(sqlDeptSync`
-          UPDATE p2_serialized_items si
-          SET current_department = latest.department,
-              updated_at = NOW()
-          FROM (
-            SELECT wt.serialized_item_id, 
-                   wt.department,
-                   wt.completed_at,
-                   wt.status as task_status
-            FROM p2_work_tasks wt
-            WHERE wt.started_at IS NOT NULL
-              AND wt.status IN ('IN_PROGRESS', 'COMPLETED')
-              AND wt.id = (
-              SELECT wt2.id FROM p2_work_tasks wt2
-              WHERE wt2.serialized_item_id = wt.serialized_item_id
-                AND wt2.started_at IS NOT NULL
-                AND wt2.status IN ('IN_PROGRESS', 'COMPLETED')
-              ORDER BY wt2.started_at DESC NULLS LAST
-              LIMIT 1
-            )
-          ) latest
-          WHERE si.id = latest.serialized_item_id
-            AND (si.current_department = 'Pending Layup' OR si.current_department IS NULL OR si.current_department = '')
-            AND latest.department IS NOT NULL
-            AND latest.department != 'Pending Layup'
-        `);
-        console.log('✅ Synced stuck "Pending Layup" items with actual work task progress');
-      } catch (deptSyncErr: any) {
-        console.warn('⚠️ Department sync skipped:', deptSyncErr.message);
-      }
-
-      // Also mark items as COMPLETED if all their routing steps have completed work tasks
-      try {
-        const { sql: sqlComplete } = await import('drizzle-orm');
-        await db.execute(sqlComplete`
-          UPDATE p2_serialized_items si
-          SET status = 'COMPLETED',
-              current_department = 'COMPLETED',
-              completed_at = latest_completed.completed_at,
-              updated_at = NOW()
-          FROM (
-            SELECT wt.serialized_item_id,
-                   MAX(wt.completed_at) as completed_at
-            FROM p2_work_tasks wt
-            WHERE wt.status = 'COMPLETED'
-              AND wt.department IN ('Final QC', 'Quality Control')
-            GROUP BY wt.serialized_item_id
-          ) latest_completed
-          WHERE si.id = latest_completed.serialized_item_id
-            AND si.status != 'COMPLETED'
-            AND NOT EXISTS (
-              SELECT 1 FROM p2_work_tasks wt3
-              WHERE wt3.serialized_item_id = si.id
-                AND wt3.status != 'COMPLETED'
-            )
-        `);
-        console.log('✅ Marked fully-completed travelers as COMPLETED');
-      } catch (completeErr: any) {
-        console.warn('⚠️ Completion sync skipped:', completeErr.message);
-      }
-
-      // Clean up resolved RMAs still showing in shipping queue
-      try {
-        const { sql: sqlCleanup } = await import('drizzle-orm');
-        await db.execute(sqlCleanup`UPDATE nonconformance_records SET shipping_status = 'Shipped', updated_at = NOW() WHERE status = 'Resolved' AND shipping_status = 'Ready to Ship' AND tracking_number IS NOT NULL`);
-        await db.execute(sqlCleanup`UPDATE nonconformance_records SET shipping_status = 'Shipped', updated_at = NOW() WHERE status = 'Resolved' AND shipping_status = 'Ready to Ship' AND resolved_at < NOW() - INTERVAL '1 day'`);
-        console.log('✅ Cleaned up resolved RMAs from shipping queue');
-      } catch (cleanupErr: any) {
-        console.warn('⚠️ RMA cleanup skipped:', cleanupErr.message);
       }
 
       // Ensure traveler_signatures has task-specific columns for role-based signing
@@ -1247,21 +868,10 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ p2_packing_slips external_pdf_url migration skipped:', extPdfErr.message);
       }
 
-      // Data repair: clear stuck SHIPPED stock_status on metal-accessory purchase_order_items
-      // from POs 58631218, 58636476, and 58641595 that were left behind after return-to-QC.
-      // The return-to-QC endpoint previously had a guard that refused to clear stock_status
-      // for items already at 'SHIPPED', causing metal accessories to disappear from the
-      // Shipping QC PO tab. This repair is idempotent — rows already cleared are untouched.
-      try {
-        const { apply: repairReturnToQcShippedStatus } = await import('./src/migrations/repairReturnToQcShippedStatus');
-        const repairResult = await repairReturnToQcShippedStatus();
-        if (repairResult.totalCleared > 0) {
-          console.log(`✅ Repair: cleared stuck SHIPPED stock_status on ${repairResult.totalCleared} purchase_order_items across POs 58631218, 58636476, 58641595`);
-        } else {
-          console.log('✅ Repair: no stuck SHIPPED stock_status rows found (already applied or data was clean)');
-        }
-      } catch (repairErr: any) {
-        console.warn('⚠️ Return-to-QC stock_status repair skipped:', repairErr.message);
+      if (runHistoricalBootRepairs) {
+        await runReturnToQcBootRepair();
+      } else {
+        console.log('ℹ️ Return-to-QC shipped status repair skipped during normal startup.');
       }
 
       // Ensure cutting table packet BOM tables exist (needed for scan-start endpoint)
@@ -1630,60 +1240,10 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Cutting packet traceability migration skipped:', cpTErr.message);
       }
 
-      // One-time backfill: restore allocatedToOrder on cutting_built_packets for historical Layup task completions.
-      // Finds all traveler_task_fields with fieldKey IN ('packetBarcode','packet_barcode'), resolves the
-      // traveler → P2 serialized item, and sets cutting_built_packets.allocated_to_order when it is currently NULL.
-      // Idempotent: rows with an existing allocatedToOrder are never overwritten.
-      // AS9100 evidence: each backfilled record is logged with the packet barcode and allocation target.
-      try {
-        const { sql: sqlBf } = await import('drizzle-orm');
-        const backfillResult = await pool.query(`
-          WITH packet_fields AS (
-            SELECT
-              ttf.value               AS packet_barcode,
-              t.id                    AS traveler_id,
-              t.serial_number         AS serial_number
-            FROM traveler_task_fields ttf
-            JOIN traveler_tasks       tt  ON tt.id  = ttf.traveler_task_id
-            JOIN traveler_steps       ts  ON ts.id  = tt.traveler_step_id
-            JOIN travelers            t   ON t.id   = ts.traveler_id
-            WHERE ttf.field_key IN ('packetBarcode', 'packet_barcode')
-              AND ttf.value IS NOT NULL
-              AND ttf.value <> ''
-          ),
-          with_p2 AS (
-            SELECT
-              pf.packet_barcode,
-              pf.traveler_id,
-              COALESCE(p2.barcode, p2.serial_number) AS allocation_target
-            FROM packet_fields pf
-            JOIN p2_serialized_items p2
-              ON (
-                LOWER(p2.serial_number) = LOWER(pf.serial_number)
-                OR LOWER(p2.traveler_barcode) = LOWER(pf.serial_number)
-              )
-            WHERE pf.serial_number IS NOT NULL
-          )
-          UPDATE cutting_built_packets cbp
-          SET
-            allocated_to_order = w.allocation_target,
-            updated_at = NOW()
-          FROM with_p2 w
-          WHERE cbp.barcode = w.packet_barcode
-            AND (cbp.allocated_to_order IS NULL OR cbp.allocated_to_order = '')
-          RETURNING cbp.barcode, cbp.allocated_to_order
-        `);
-        const backfilledRows = backfillResult.rows || [];
-        if (backfilledRows.length > 0) {
-          console.log(`✅ Packet allocation backfill: restored ${backfilledRows.length} allocatedToOrder link(s) — AS9100 traceability restored`);
-          backfilledRows.forEach((r: any) => {
-            console.log(`  [Packet Allocation Backfill] "${r.barcode}" → "${r.allocated_to_order}"`);
-          });
-        } else {
-          console.log('✅ Packet allocation backfill: no unallocated historical packet fields found — already up-to-date');
-        }
-      } catch (packetBfErr: any) {
-        console.warn('⚠️ Packet allocation backfill skipped:', packetBfErr.message);
+      if (runHistoricalBootRepairs) {
+        await runPacketAllocationBootBackfill({ db, pool });
+      } else {
+        console.log('ℹ️ Packet allocation backfill skipped during normal startup.');
       }
 
       // Ensure p2_shipping_audit_log table exists (CMMC/DCAA compliant shipping override history)
@@ -1769,6 +1329,19 @@ async function initializeBackgroundServices() {
           ON CONFLICT (code) DO NOTHING
         `);
 
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS charge_code_employee_assignments (
+            id SERIAL PRIMARY KEY,
+            charge_code_id INTEGER NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
+            employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (charge_code_id, employee_id)
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_charge_code_idx ON charge_code_employee_assignments(charge_code_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_employee_idx ON charge_code_employee_assignments(employee_id)`);
+
         // salaried_timesheets — weekly header record per salaried employee
         await db.execute(sqlSalary`
           CREATE TABLE IF NOT EXISTS timekeeping.salaried_timesheets (
@@ -1839,10 +1412,10 @@ async function initializeBackgroundServices() {
 
       // -----------------------------------------------------------------------
       // DCAA TIMESHEET CORRECTION APPROVAL CHAIN — safety-net bootstrap
-      // Canonical DDL lives in migrations/0091_timesheet_corrections.sql (which
-      // is in safeFiles and applied by the pre-deploy migration runner above).
+      // Canonical DDL lives in migrations/0091_timesheet_corrections.sql. The
+      // legacy safe migration list now runs via npm run maintenance:safe-migrations.
       // This block only patches columns/indexes that may be absent on databases
-      // that existed before this migration was added to safeFiles, and adds the
+      // that existed before this migration was added to the legacy list, and adds the
       // status CHECK constraint idempotently.
       // -----------------------------------------------------------------------
       try {
@@ -1874,11 +1447,108 @@ async function initializeBackgroundServices() {
       }
 
       // -----------------------------------------------------------------------
-      // BLOCKER 2 PHASE A — Indirect Code → Charge Code Unification
+      // PUNCH CORRECTION REQUESTS - kiosk / portal / admin correction queue
+      // Canonical DDL lives in migrations/0142 and drift repair in 0155. This
+      // boot-time safety net keeps kiosk correction submissions from failing on
+      // environments where those migrations were skipped during publish.
+      // -----------------------------------------------------------------------
+      try {
+        await pool.query(`CREATE SCHEMA IF NOT EXISTS timekeeping`);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS timekeeping.punch_correction_requests (
+            id SERIAL PRIMARY KEY,
+            employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            punch_ledger_id INTEGER,
+            request_type TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'employee_portal',
+            status TEXT NOT NULL DEFAULT 'pending_supervisor',
+            reason TEXT NOT NULL,
+            original_snapshot JSONB,
+            proposed_changes JSONB NOT NULL,
+            supervisor_id INTEGER,
+            supervisor_decision TEXT,
+            supervisor_note TEXT,
+            supervisor_reviewed_at TIMESTAMPTZ,
+            supervisor_reviewed_by INTEGER,
+            hr_decision TEXT,
+            hr_note TEXT,
+            hr_reviewed_at TIMESTAMPTZ,
+            hr_reviewed_by INTEGER,
+            applied_at TIMESTAMPTZ,
+            applied_by INTEGER,
+            after_snapshot JSONB,
+            submitted_by_user_id INTEGER,
+            submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_employee_id
+            ON timekeeping.punch_correction_requests(employee_id)
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_punch_ledger_id
+            ON timekeeping.punch_correction_requests(punch_ledger_id)
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_status
+            ON timekeeping.punch_correction_requests(status)
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_supervisor_id
+            ON timekeeping.punch_correction_requests(supervisor_id)
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'employee_portal'
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending_supervisor'
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS submitted_by_user_id INTEGER
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS punch_correction_requests_source_check;
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS chk_punch_correction_source;
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD CONSTRAINT chk_punch_correction_source
+              CHECK (source IN ('employee_portal', 'kiosk', 'admin'))
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS chk_punch_correction_request_type;
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD CONSTRAINT chk_punch_correction_request_type
+              CHECK (request_type IN ('edit_session', 'add_session', 'delete_session'))
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS chk_punch_correction_status;
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD CONSTRAINT chk_punch_correction_status
+              CHECK (status IN ('pending_supervisor', 'pending_hr', 'approved', 'rejected', 'cancelled'))
+        `);
+        console.log('punch_correction_requests table ensured (timekeeping schema)');
+      } catch (punchCorrectionErr: any) {
+        console.error('punch_correction_requests migration failed:', punchCorrectionErr.message);
+      }
+
+      // -----------------------------------------------------------------------
+      // BLOCKER 2 PHASE A - Indirect Code to Charge Code Unification
       // Seeds public.charge_codes indirect pool entries, adds charge_code_id
       // mapping to timekeeping.indirect_codes, and reconciles the live DB
       // salaried_timesheet_lines columns with the Drizzle schema.
-      // All operations are idempotent.  Feature flag stays FALSE.
+      // All operations are idempotent. Feature flag stays FALSE.
       // -----------------------------------------------------------------------
       try {
         // Step 1: Seed indirect labor pool entries in public.charge_codes
@@ -2383,15 +2053,33 @@ async function initializeBackgroundServices() {
           ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id)
         `);
         await db.execute(sqlLot`
+          ALTER TABLE p2_lot_numbers
+          ADD COLUMN IF NOT EXISTS po_item_id INTEGER REFERENCES p2_purchase_order_items(id)
+        `);
+        await db.execute(sqlLot`
           UPDATE p2_lot_numbers l
           SET po_id = po.id
           FROM p2_purchase_orders po
           WHERE l.po_number = po.po_number
             AND l.po_id IS NULL
         `);
-        console.log('✅ Ensured p2_lot_numbers has po_id FK (backfilled from po_number)');
+        await db.execute(sqlLot`
+          UPDATE p2_lot_numbers l
+          SET po_item_id = matched.po_item_id
+          FROM (
+            SELECT l2.id AS lot_id, MIN(si.po_item_id) AS po_item_id
+            FROM p2_lot_numbers l2
+            JOIN p2_serialized_items si
+              ON l2.serialized_item_ids ? si.id::text
+            WHERE l2.po_item_id IS NULL
+            GROUP BY l2.id
+            HAVING COUNT(DISTINCT si.po_item_id) = 1
+          ) matched
+          WHERE l.id = matched.lot_id
+        `);
+        console.log('✅ Ensured p2_lot_numbers has PO FK columns (backfilled from po_number/serials)');
       } catch (lotPoIdError: any) {
-        console.warn('⚠️ p2_lot_numbers po_id migration warning:', lotPoIdError?.message);
+        console.warn('⚠️ p2_lot_numbers PO FK migration warning:', lotPoIdError?.message);
       }
 
       // GIN index on serialized_item_ids for fast JSONB containment lookups
@@ -2423,7 +2111,9 @@ async function initializeBackgroundServices() {
         const { sql: sqlItemCode } = await import('drizzle-orm');
         await db.execute(sqlItemCode`ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS item_code TEXT`);
         await db.execute(sqlItemCode`CREATE INDEX IF NOT EXISTS idx_production_orders_item_code ON production_orders (item_code)`);
-        // Backfill: resolve from purchase_order_items.item_name → item_name → item_id, then UPPER+TRIM
+        // Backfill/sync: resolve from purchase_order_items.item_name → item_name → item_id,
+        // then UPPER+TRIM. Correct stale non-null values too; PO-line repairs can
+        // otherwise leave production_orders.item_code pointing at the old SKU.
         await db.execute(sqlItemCode`
           UPDATE production_orders po
           SET item_code = UPPER(TRIM(
@@ -2435,7 +2125,14 @@ async function initializeBackgroundServices() {
           ))
           FROM purchase_order_items poi
           WHERE po.po_item_id = poi.id
-            AND po.item_code IS NULL
+            AND (po.item_code IS NULL OR po.production_status != 'SHIPPED')
+            AND po.item_code IS DISTINCT FROM UPPER(TRIM(
+              COALESCE(
+                NULLIF(TRIM(poi.item_name), ''),
+                NULLIF(TRIM(po.item_name), ''),
+                NULLIF(TRIM(po.item_id), '')
+              )
+            ))
         `);
         // Fallback for any rows with no matching poi
         await db.execute(sqlItemCode`
@@ -2547,13 +2244,15 @@ async function initializeBackgroundServices() {
         await db.execute(sqlComm`ALTER TABLE communication_logs ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(255)`);
 
         // 3. Seed vendor email templates (idempotent — skip if already present)
-        const { seedVendorEmailTemplates, ensureVendorPOAttachmentRules } = await import('./communication/registry');
+        const { seedVendorEmailTemplates, ensureVendorPOAttachmentRules, ensureVendorRFQContactEmail, ensureVendorPONoMagicLinkTemplates } = await import('./communication/registry');
         await seedVendorEmailTemplates(db);
 
         // 3a. Ensure vendor PO templates have the PDF attachment rule enabled.
         //     The seed is insert-only so existing rows with attachment_rules:{}
         //     were never updated when the flag was added to the seed definition.
         await ensureVendorPOAttachmentRules(db);
+        await ensureVendorRFQContactEmail(db);
+        await ensureVendorPONoMagicLinkTemplates(db);
 
         // 4. One-shot: migrate vendor_rfq body_text {{items_table}} → {{items_list}}
         await db.execute(sqlComm`
@@ -2643,10 +2342,11 @@ async function initializeBackgroundServices() {
         await db.execute(sqlInvClass`
           DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inventory_manufactured_category') THEN
-              CREATE TYPE inventory_manufactured_category AS ENUM ('PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY');
+              CREATE TYPE inventory_manufactured_category AS ENUM ('PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT');
             END IF;
           END $$
         `);
+        await db.execute(sqlInvClass`ALTER TYPE inventory_manufactured_category ADD VALUE IF NOT EXISTS 'FINAL_ASSEMBLY'`);
         await db.execute(sqlInvClass`
           DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inventory_manufacturing_level') THEN
@@ -2666,7 +2366,8 @@ async function initializeBackgroundServices() {
       try {
         const { sql: sqlMachineType } = await import('drizzle-orm');
         await db.execute(sqlMachineType`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS machine_type TEXT`);
-        console.log('✅ Ensured inventory_items has machine_type column');
+        await db.execute(sqlMachineType`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS machining_time_minutes INTEGER`);
+        console.log('✅ Ensured inventory_items has machine_type and machining_time_minutes columns');
       } catch (machineTypeErr: any) {
         console.warn('⚠️ machine_type migration:', machineTypeErr.message);
       }
@@ -3367,6 +3068,7 @@ async function initializeBackgroundServices() {
         await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS validation_provider TEXT`);
         await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS dpv_match_code TEXT`);
         await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS override_reason TEXT`);
+        await db.execute(sqlAddr`ALTER TABLE vendors ADD COLUMN IF NOT EXISTS default_order_method TEXT`);
         console.log('✅ Ensured address validation columns exist');
       } catch (addrErr: any) {
         console.warn('⚠️ Address validation columns migration:', addrErr.message);
@@ -3528,6 +3230,409 @@ async function initializeBackgroundServices() {
             ('Bank Service Charges', 'EXPENSE')
           ON CONFLICT (account_name) DO NOTHING
         `);
+        await db.execute(sqlAcct`
+          ALTER TABLE chart_of_accounts
+            ADD COLUMN IF NOT EXISTS account_number TEXT,
+            ADD COLUMN IF NOT EXISTS parent_account_id INTEGER REFERENCES chart_of_accounts(id),
+            ADD COLUMN IF NOT EXISTS normal_balance TEXT NOT NULL DEFAULT 'DEBIT',
+            ADD COLUMN IF NOT EXISTS financial_statement_section TEXT,
+            ADD COLUMN IF NOT EXISTS cost_pool TEXT NOT NULL DEFAULT 'NONE',
+            ADD COLUMN IF NOT EXISTS default_allowability TEXT NOT NULL DEFAULT 'ALLOWABLE',
+            ADD COLUMN IF NOT EXISTS default_direct_indirect TEXT NOT NULL DEFAULT 'UNASSIGNED',
+            ADD COLUMN IF NOT EXISTS billing_treatment TEXT NOT NULL DEFAULT 'NOT_BILLABLE',
+            ADD COLUMN IF NOT EXISTS requires_documentation BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS requires_review BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS system_controlled BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            ADD COLUMN IF NOT EXISTS description TEXT
+        `);
+        await db.execute(sqlAcct`
+          DO $$
+          DECLARE
+            target_id integer;
+            duplicate_id integer;
+          BEGIN
+            SELECT id
+              INTO target_id
+              FROM chart_of_accounts
+             WHERE account_number = '10300'
+                OR account_name = 'Undeposited Funds'
+             ORDER BY CASE WHEN account_number = '10300' THEN 0 ELSE 1 END, id
+             LIMIT 1;
+
+            IF target_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number,
+                account_name,
+                account_type,
+                normal_balance,
+                financial_statement_section,
+                cost_pool,
+                default_allowability,
+                default_direct_indirect,
+                billing_treatment,
+                requires_documentation,
+                requires_review,
+                system_controlled,
+                description,
+                is_active
+              )
+              VALUES (
+                '10300',
+                'Customer Payment Clearing',
+                'ASSET',
+                'DEBIT',
+                'Current Assets',
+                'NONE',
+                'ALLOWABLE',
+                'UNASSIGNED',
+                'NOT_BILLABLE',
+                FALSE,
+                FALSE,
+                FALSE,
+                'Individually traceable customer payments awaiting bank reconciliation or settlement matching',
+                TRUE
+              )
+              RETURNING id INTO target_id;
+            END IF;
+
+            SELECT id
+              INTO duplicate_id
+              FROM chart_of_accounts
+             WHERE account_name = 'Customer Payment Clearing'
+               AND id <> target_id
+             LIMIT 1;
+
+            IF duplicate_id IS NOT NULL THEN
+              UPDATE journal_lines
+                 SET account_id = target_id,
+                     updated_at = NOW()
+               WHERE account_id = duplicate_id;
+
+              UPDATE chart_of_accounts
+                 SET account_name = 'Customer Payment Clearing (Duplicate - inactive)',
+                     account_number = NULL,
+                     is_active = FALSE,
+                     updated_at = NOW()
+               WHERE id = duplicate_id;
+            END IF;
+
+            UPDATE chart_of_accounts
+               SET account_number = '10300',
+                   account_name = 'Customer Payment Clearing',
+                   account_type = 'ASSET',
+                   normal_balance = 'DEBIT',
+                   financial_statement_section = 'Current Assets',
+                   cost_pool = 'NONE',
+                   default_allowability = 'ALLOWABLE',
+                   default_direct_indirect = 'UNASSIGNED',
+                   billing_treatment = 'NOT_BILLABLE',
+                   requires_documentation = FALSE,
+                   requires_review = FALSE,
+                   system_controlled = FALSE,
+                   is_active = TRUE,
+                   description = 'Individually traceable customer payments awaiting bank reconciliation or settlement matching',
+                   updated_at = NOW()
+             WHERE id = target_id;
+          END $$;
+        `);
+        await db.execute(sqlAcct`
+          CREATE TABLE IF NOT EXISTS production_line_accounting_map (
+            id SERIAL PRIMARY KEY,
+            production_line TEXT NOT NULL UNIQUE,
+            revenue_account_id INTEGER REFERENCES chart_of_accounts(id),
+            revenue_account_number TEXT,
+            revenue_account_name_snapshot TEXT,
+            quickbooks_class TEXT,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlAcct`
+          DO $$
+          DECLARE
+            parent_id integer;
+            p1_id integer;
+            p2_id integer;
+            p3_id integer;
+          BEGIN
+            SELECT id INTO parent_id
+            FROM chart_of_accounts
+            WHERE account_number = '41000'
+               OR account_name = 'Product Revenue'
+            ORDER BY CASE WHEN account_number = '41000' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF parent_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, normal_balance,
+                financial_statement_section, cost_pool, default_allowability,
+                default_direct_indirect, billing_treatment, requires_documentation,
+                requires_review, system_controlled, description, is_active
+              )
+              VALUES (
+                '41000', 'Product Revenue', 'REVENUE', 'CREDIT',
+                'Revenue', 'NONE', 'ALLOWABLE',
+                'DIRECT', 'BILLABLE', FALSE,
+                FALSE, TRUE,
+                'Parent rollup account for production-line product revenue; do not post directly when a production-line child account applies',
+                TRUE
+              )
+              RETURNING id INTO parent_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41000',
+                     account_name = 'Product Revenue',
+                     account_type = 'REVENUE',
+                     parent_account_id = NULL,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     cost_pool = 'NONE',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Parent rollup account for production-line product revenue; do not post directly when a production-line child account applies',
+                     updated_at = NOW()
+               WHERE id = parent_id;
+            END IF;
+
+            SELECT id INTO p1_id
+            FROM chart_of_accounts
+            WHERE account_number = '41010'
+               OR account_name = 'Product Revenue - P1'
+            ORDER BY CASE WHEN account_number = '41010' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF p1_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, parent_account_id,
+                normal_balance, financial_statement_section, cost_pool,
+                default_allowability, default_direct_indirect, billing_treatment,
+                requires_documentation, requires_review, system_controlled,
+                description, is_active
+              )
+              VALUES (
+                '41010', 'Product Revenue - P1', 'REVENUE', parent_id,
+                'CREDIT', 'Revenue', 'NONE',
+                'ALLOWABLE', 'DIRECT', 'BILLABLE',
+                FALSE, FALSE, TRUE,
+                'Posting account for P1 product revenue',
+                TRUE
+              )
+              RETURNING id INTO p1_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41010',
+                     account_name = 'Product Revenue - P1',
+                     account_type = 'REVENUE',
+                     parent_account_id = parent_id,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Posting account for P1 product revenue',
+                     updated_at = NOW()
+               WHERE id = p1_id;
+            END IF;
+
+            SELECT id INTO p2_id
+            FROM chart_of_accounts
+            WHERE account_number = '41020'
+               OR account_name = 'Product Revenue - P2'
+            ORDER BY CASE WHEN account_number = '41020' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF p2_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, parent_account_id,
+                normal_balance, financial_statement_section, cost_pool,
+                default_allowability, default_direct_indirect, billing_treatment,
+                requires_documentation, requires_review, system_controlled,
+                description, is_active
+              )
+              VALUES (
+                '41020', 'Product Revenue - P2', 'REVENUE', parent_id,
+                'CREDIT', 'Revenue', 'NONE',
+                'ALLOWABLE', 'DIRECT', 'BILLABLE',
+                FALSE, FALSE, TRUE,
+                'Posting account for P2 product revenue',
+                TRUE
+              )
+              RETURNING id INTO p2_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41020',
+                     account_name = 'Product Revenue - P2',
+                     account_type = 'REVENUE',
+                     parent_account_id = parent_id,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Posting account for P2 product revenue',
+                     updated_at = NOW()
+               WHERE id = p2_id;
+            END IF;
+
+            SELECT id INTO p3_id
+            FROM chart_of_accounts
+            WHERE account_number = '41030'
+               OR account_name = 'Product Revenue - P3'
+            ORDER BY CASE WHEN account_number = '41030' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF p3_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, parent_account_id,
+                normal_balance, financial_statement_section, cost_pool,
+                default_allowability, default_direct_indirect, billing_treatment,
+                requires_documentation, requires_review, system_controlled,
+                description, is_active
+              )
+              VALUES (
+                '41030', 'Product Revenue - P3', 'REVENUE', parent_id,
+                'CREDIT', 'Revenue', 'NONE',
+                'ALLOWABLE', 'DIRECT', 'BILLABLE',
+                FALSE, FALSE, TRUE,
+                'Posting account for P3 product revenue',
+                TRUE
+              )
+              RETURNING id INTO p3_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41030',
+                     account_name = 'Product Revenue - P3',
+                     account_type = 'REVENUE',
+                     parent_account_id = parent_id,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Posting account for P3 product revenue',
+                     updated_at = NOW()
+               WHERE id = p3_id;
+            END IF;
+
+            INSERT INTO production_line_accounting_map (
+              production_line, revenue_account_id, revenue_account_number,
+              revenue_account_name_snapshot, quickbooks_class, active, updated_at
+            )
+            VALUES
+              ('P1', p1_id, '41010', 'Product Revenue - P1', 'P1', TRUE, NOW()),
+              ('P2', p2_id, '41020', 'Product Revenue - P2', 'P2', TRUE, NOW()),
+              ('P3', p3_id, '41030', 'Product Revenue - P3', 'P3', TRUE, NOW())
+            ON CONFLICT (production_line) DO UPDATE
+              SET revenue_account_id = EXCLUDED.revenue_account_id,
+                  revenue_account_number = EXCLUDED.revenue_account_number,
+                  revenue_account_name_snapshot = EXCLUDED.revenue_account_name_snapshot,
+                  quickbooks_class = EXCLUDED.quickbooks_class,
+                  active = TRUE,
+                  updated_at = NOW();
+          END $$;
+        `);
+        console.log('✅ Ensured accounting shadow layer tables and production-line revenue seed accounts exist');
+        await db.execute(sqlAcct`
+          DO $$
+          DECLARE
+            target_id integer;
+            duplicate_id integer;
+          BEGIN
+            SELECT id
+              INTO target_id
+              FROM chart_of_accounts
+             WHERE account_number = '21100'
+                OR account_name = 'GRNI - Received Not Invoiced'
+             ORDER BY CASE WHEN account_number = '21100' THEN 0 ELSE 1 END, id
+             LIMIT 1;
+
+            IF target_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number,
+                account_name,
+                account_type,
+                normal_balance,
+                financial_statement_section,
+                cost_pool,
+                default_allowability,
+                default_direct_indirect,
+                billing_treatment,
+                requires_documentation,
+                requires_review,
+                system_controlled,
+                description,
+                is_active
+              )
+              VALUES (
+                '21100',
+                'GRNI - Received Not Invoiced',
+                'LIABILITY',
+                'CREDIT',
+                'Current Liabilities',
+                'NONE',
+                'ALLOWABLE',
+                'UNASSIGNED',
+                'NOT_BILLABLE',
+                TRUE,
+                FALSE,
+                TRUE,
+                'Goods received not invoiced / received-not-vouchered clearing liability for inventory receipts awaiting vendor bill match',
+                TRUE
+              )
+              RETURNING id INTO target_id;
+            END IF;
+
+            SELECT id
+              INTO duplicate_id
+              FROM chart_of_accounts
+             WHERE account_name = 'GRNI - Received Not Invoiced'
+               AND id <> target_id
+             LIMIT 1;
+
+            IF duplicate_id IS NOT NULL THEN
+              UPDATE journal_lines
+                 SET account_id = target_id,
+                     updated_at = NOW()
+               WHERE account_id = duplicate_id;
+
+              UPDATE chart_of_accounts
+                 SET account_name = 'GRNI - Received Not Invoiced (Duplicate - inactive)',
+                     account_number = NULL,
+                     is_active = FALSE,
+                     updated_at = NOW()
+               WHERE id = duplicate_id;
+            END IF;
+
+            UPDATE chart_of_accounts
+               SET account_number = '21100',
+                   account_name = 'GRNI - Received Not Invoiced',
+                   account_type = 'LIABILITY',
+                   normal_balance = 'CREDIT',
+                   financial_statement_section = 'Current Liabilities',
+                   cost_pool = 'NONE',
+                   default_allowability = 'ALLOWABLE',
+                   default_direct_indirect = 'UNASSIGNED',
+                   billing_treatment = 'NOT_BILLABLE',
+                   requires_documentation = TRUE,
+                   requires_review = FALSE,
+                   system_controlled = TRUE,
+                   is_active = TRUE,
+                   description = 'Goods received not invoiced / received-not-vouchered clearing liability for inventory receipts awaiting vendor bill match',
+                   updated_at = NOW()
+             WHERE id = target_id;
+          END $$;
+        `);
         console.log('✅ Ensured accounting shadow layer tables and seed accounts exist');
       } catch (acctErr: any) {
         console.warn('⚠️ Accounting shadow layer migration:', acctErr.message);
@@ -3673,6 +3778,34 @@ async function initializeBackgroundServices() {
         console.log('✅ Ensured production_program_runs has linked_log_id/linked_log_type columns');
       } catch (runLogErr: any) {
         console.warn('⚠️ production_program_runs linked log migration:', runLogErr.message);
+      }
+
+      // Durable per-item timer audit snapshots for reconstructing station cards later
+      try {
+        const { sql: sqlItemAudit } = await import('drizzle-orm');
+        await db.execute(sqlItemAudit`
+          CREATE TABLE IF NOT EXISTS production_item_audit_records (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            item_identifier text NOT NULL,
+            serial_number text,
+            traveler_id varchar(255),
+            traveler_number varchar(255),
+            run_id uuid REFERENCES production_program_runs(id) ON DELETE SET NULL,
+            event_type text NOT NULL,
+            event_at timestamp NOT NULL DEFAULT now(),
+            actor_user_id integer REFERENCES users(id),
+            card_snapshot jsonb NOT NULL,
+            created_at timestamp NOT NULL DEFAULT now()
+          )
+        `);
+        await db.execute(sqlItemAudit`CREATE INDEX IF NOT EXISTS production_item_audit_item_identifier_idx ON production_item_audit_records(item_identifier)`);
+        await db.execute(sqlItemAudit`CREATE INDEX IF NOT EXISTS production_item_audit_serial_number_idx ON production_item_audit_records(serial_number)`);
+        await db.execute(sqlItemAudit`CREATE INDEX IF NOT EXISTS production_item_audit_traveler_id_idx ON production_item_audit_records(traveler_id)`);
+        await db.execute(sqlItemAudit`CREATE INDEX IF NOT EXISTS production_item_audit_run_id_idx ON production_item_audit_records(run_id)`);
+        await db.execute(sqlItemAudit`CREATE INDEX IF NOT EXISTS production_item_audit_event_at_idx ON production_item_audit_records(event_at)`);
+        console.log('âœ… Ensured production_item_audit_records table exists');
+      } catch (itemAuditErr: any) {
+        console.warn('âš ï¸ production_item_audit_records migration:', itemAuditErr.message);
       }
 
       // Normalize legacy traceability field IDs in inventory_items for fabric items
@@ -4139,6 +4272,33 @@ async function initializeBackgroundServices() {
         `);
         await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS received_units_receipt_id_idx ON received_units(receipt_id)`);
         await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS received_units_disposition_idx ON received_units(disposition)`);
+        await db.execute(sqlRcc`ALTER TABLE received_units ADD COLUMN IF NOT EXISTS target_project_id UUID REFERENCES projects(id) ON DELETE SET NULL`);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS received_units_target_project_idx ON received_units(target_project_id)`);
+        await db.execute(sqlRcc`
+          CREATE TABLE IF NOT EXISTS project_received_materials (
+            id SERIAL PRIMARY KEY,
+            project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            received_unit_id INTEGER NOT NULL REFERENCES received_units(id) ON DELETE CASCADE,
+            receipt_id INTEGER NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+            material_lot_id UUID REFERENCES material_lots(id) ON DELETE SET NULL,
+            quantity NUMERIC NOT NULL,
+            unit_cost NUMERIC NOT NULL DEFAULT 0,
+            extended_cost NUMERIC NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'pending_pm_acceptance',
+            accepted_by_user_id INTEGER,
+            accepted_by_display_name TEXT,
+            accepted_at TIMESTAMP,
+            rejected_by_user_id INTEGER,
+            rejected_by_display_name TEXT,
+            rejected_at TIMESTAMP,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT project_received_materials_received_unit_unique UNIQUE(received_unit_id)
+          )
+        `);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS project_received_materials_project_idx ON project_received_materials(project_id)`);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS project_received_materials_status_idx ON project_received_materials(status)`);
 
         await db.execute(sqlRcc`
           CREATE TABLE IF NOT EXISTS receipt_documents (
@@ -4185,6 +4345,13 @@ async function initializeBackgroundServices() {
         const { sql: sqlRcc1 } = await import('drizzle-orm');
         // receipts: explicit physical-receipt timestamp
         await db.execute(sqlRcc1`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS received_at TIMESTAMP`);
+        // inventory_items: document attachment flags and paths used by Enhanced MRP item edits
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS has_sds BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS sds_file_path TEXT`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS has_tds BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS tds_file_path TEXT`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS has_other_docs BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS other_docs_file_path TEXT`);
         // inventory_items: required-document enforcement flags
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_sds BOOLEAN NOT NULL DEFAULT FALSE`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_tds BOOLEAN NOT NULL DEFAULT FALSE`);
@@ -4195,9 +4362,11 @@ async function initializeBackgroundServices() {
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS serial_controlled BOOLEAN NOT NULL DEFAULT FALSE`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS shelf_life_controlled BOOLEAN NOT NULL DEFAULT FALSE`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS shelf_life_days INTEGER`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS frozen_shelf_life_days INTEGER`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS room_temp_shelf_life_days INTEGER`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS default_max_out_time_minutes INTEGER`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS out_time_enforcement_required BOOLEAN NOT NULL DEFAULT FALSE`);
-        console.log('✅ Ensured RCC Phase 1 columns (receipts.received_at + inventory_items doc-requirement flags)');
+        console.log('✅ Ensured RCC Phase 1 columns (receipts.received_at + inventory_items document flags/paths)');
       } catch (rcc1Err: any) {
         console.warn('⚠️ RCC Phase 1 column migration:', rcc1Err.message);
       }
@@ -4343,6 +4512,13 @@ async function initializeBackgroundServices() {
           { key: 'projects.close', description: 'Create or submit a project closing record', category: 'projects' },
           { key: 'documents.approve', description: 'Approve controlled documents (replaces the hardcoded username guard)', category: 'documents' },
           { key: 'employees.manage_qualifications', description: 'Grant or revoke machine-class and operation-type qualifications for employees', category: 'employees' },
+          { key: 'approvals.override', description: 'Perform privileged approval overrides after explicit reason capture and audit logging', category: 'approvals' },
+          { key: 'labor.override', description: 'Approve labor overrides, labor budget overruns, and charge-code override exceptions', category: 'labor' },
+          { key: 'engineering.release_revision', description: 'Release controlled engineering revisions and ECO-backed document revisions', category: 'engineering' },
+          { key: 'procurement.approve_po', description: 'Approve and release vendor purchase orders', category: 'procurement' },
+          { key: 'quality.close_ncr', description: 'Close NCR/CAPA records after disposition and effectiveness evidence is attached', category: 'quality' },
+          { key: 'vault.access', description: 'Grant or use access to controlled secure-vault evidence objects', category: 'security' },
+          { key: 'shipping.release_shipment', description: 'Release customer shipments and certify shipment evidence packages', category: 'shipping' },
 
           // Orders
           { key: 'orders.create', description: 'Create draft orders and finalize them into production', category: 'orders' },
@@ -4357,11 +4533,13 @@ async function initializeBackgroundServices() {
           { key: 'finance.view', description: 'Read AR invoices, payments, aging reports, and customer summaries', category: 'finance' },
           { key: 'finance.post_invoice', description: 'Post an AR invoice to the general ledger', category: 'finance' },
           { key: 'finance.void_invoice', description: 'Void an AR invoice', category: 'finance' },
-          { key: 'finance.manage_payments', description: 'Record and delete AR payments', category: 'finance' },
+          { key: 'finance.manage_payments', description: 'Record, update, and void AR/P1 customer payments', category: 'finance' },
+          { key: 'finance.accounting_admin', description: 'Post or adjust entries in migration or soft-closed accounting periods', category: 'finance' },
 
           // Inventory
           { key: 'inventory.adjust', description: 'Update and delete inventory items and balances', category: 'inventory' },
           { key: 'inventory.manage_requests', description: 'Receive or reject inventory parts requests', category: 'inventory' },
+          { key: 'inventory.approve_parts_requests', description: 'Approve inventory parts requests before they enter RFQ or Vendor PO flow', category: 'inventory' },
 
           // Inventory — Cycle Count subsystem (Task #142)
           { key: 'inventory.cycleCount.view', description: 'View cycle count sessions, lines, and variance history', category: 'inventory' },
@@ -4376,6 +4554,8 @@ async function initializeBackgroundServices() {
 
           // Quality
           { key: 'quality.manage_definitions', description: 'Create, update, and delete quality check definitions', category: 'quality' },
+          { key: 'quality.manage_capa', description: 'Create and update CAPA (Corrective and Preventive Action) records', category: 'quality' },
+          { key: 'quality.manage_calibration', description: 'Create, update, and record events for calibration assets', category: 'quality' },
 
           // Purchasing
           { key: 'purchasing.manage_pos', description: 'Create, update, and delete vendor purchase orders', category: 'purchasing' },
@@ -4383,6 +4563,9 @@ async function initializeBackgroundServices() {
           { key: 'purchasing.view_requisitions', description: 'View purchase requisitions, FAR flowdown clauses, and vendor debarment checks', category: 'purchasing' },
           { key: 'purchasing.create_requisition', description: 'Create, submit, and cancel purchase requisitions', category: 'purchasing' },
           { key: 'purchasing.approve_requisition', description: 'Approve or deny purchase requisitions at the standard approval stage', category: 'purchasing' },
+          { key: 'purchasing.approve_requisition_buyer', description: 'Approve purchase requisitions under $500', category: 'purchasing' },
+          { key: 'purchasing.approve_requisition_manager', description: 'Approve purchase requisitions over $500', category: 'purchasing' },
+          { key: 'purchasing.approve_requisition_executive', description: 'Approve purchase requisitions over $5,000', category: 'purchasing' },
           { key: 'purchasing.admin_chain', description: 'Administer the purchasing approval chain, FAR flowdown clauses, and override requisition cancellations', category: 'purchasing' },
           { key: 'purchasing.record_debarment_check', description: 'Record vendor debarment / SAM exclusion checks', category: 'purchasing' },
           { key: 'purchasing.direct_po_exception', description: 'Issue a vendor purchase order without a backing approved requisition (direct-PO exception)', category: 'purchasing' },
@@ -4470,6 +4653,22 @@ async function initializeBackgroundServices() {
            ON CONFLICT (name) DO NOTHING`
         );
 
+        // Ensure PROJECT_MANAGER role exists — PMs author and backfill WADs
+        // (Task #190). Granted work_orders.release so they can drive the WAD
+        // backlog from /wad-status, /wad-wizard, and the PMCC entry point.
+        await pool.query(
+          `INSERT INTO perm_roles (name, description, is_system)
+           VALUES ('PROJECT_MANAGER', 'Project Manager role — owns project execution and WAD authoring/backfill', true)
+           ON CONFLICT (name) DO NOTHING`
+        );
+        await pool.query(
+          `INSERT INTO perm_role_capabilities (role_id, capability_id)
+           SELECT pr.id, pc.id
+           FROM perm_roles pr, perm_capabilities pc
+           WHERE pr.name = 'PROJECT_MANAGER' AND pc.key = 'work_orders.release'
+           ON CONFLICT (role_id, capability_id) DO NOTHING`
+        );
+
         // Assign all EPOCH capabilities to ADMIN and OWNER roles
         for (const cap of epochCapabilities) {
           for (const roleName of ['ADMIN', 'OWNER']) {
@@ -4531,7 +4730,25 @@ async function initializeBackgroundServices() {
            ON CONFLICT (name) DO NOTHING`
         );
 
+        await pool.query(
+          `INSERT INTO perm_roles (name, description, is_system)
+           VALUES ('INVENTORY_MANAGER', 'Inventory Manager role - can manage inventory items and adjustments', true)
+           ON CONFLICT (name) DO NOTHING`
+        );
+
         // MANAGER role: orders, finance, inventory, shipping, quality, purchasing, assets, training, scheduling, reports
+        await pool.query(
+          `INSERT INTO perm_roles (name, description, is_system)
+           VALUES ('PURCHASING_BUYER', 'Buyer role - can approve low-dollar purchase requisitions', true)
+           ON CONFLICT (name) DO NOTHING`
+        );
+
+        await pool.query(
+          `INSERT INTO perm_roles (name, description, is_system)
+           VALUES ('EXECUTIVE', 'Executive role - can approve high-dollar purchase requisitions', true)
+           ON CONFLICT (name) DO NOTHING`
+        );
+
         const managerCaps = [
           'orders.create',
           'orders.cancel',
@@ -4546,11 +4763,15 @@ async function initializeBackgroundServices() {
           'shipping.mark_shipped',
           'shipping.create_label',
           'quality.manage_definitions',
+          'quality.manage_capa',
+          'quality.manage_calibration',
           'purchasing.manage_pos',
           'purchasing.approve_po',
           'purchasing.view_requisitions',
           'purchasing.create_requisition',
           'purchasing.approve_requisition',
+          'purchasing.approve_requisition_buyer',
+          'purchasing.approve_requisition_manager',
           'purchasing.record_debarment_check',
           'assets.manage',
           'training.manage_content',
@@ -4571,6 +4792,47 @@ async function initializeBackgroundServices() {
           );
         }
 
+        const inventoryManagerCaps = [
+          'inventory.adjust',
+          'inventory.manage_requests',
+          'inventory.approve_parts_requests',
+          'inventory.cycleCount.view',
+          'inventory.cycleCount.create',
+          'inventory.cycleCount.approve',
+          'inventory.cycleCount.postAdjustments',
+          'inventory.traceability.view',
+        ];
+        for (const capKey of inventoryManagerCaps) {
+          await pool.query(
+            `INSERT INTO perm_role_capabilities (role_id, capability_id)
+             SELECT pr.id, pc.id
+             FROM perm_roles pr, perm_capabilities pc
+             WHERE pr.name = 'INVENTORY_MANAGER' AND pc.key = $1
+             ON CONFLICT (role_id, capability_id) DO NOTHING`,
+            [capKey]
+          );
+        }
+
+        await pool.query(
+          `INSERT INTO perm_role_capabilities (role_id, capability_id)
+           SELECT pr.id, pc.id
+           FROM perm_roles pr, perm_capabilities pc
+           WHERE pr.name = 'PURCHASING_BUYER' AND pc.key = 'purchasing.approve_requisition_buyer'
+           ON CONFLICT (role_id, capability_id) DO NOTHING`
+        );
+
+        await pool.query(
+          `INSERT INTO perm_role_capabilities (role_id, capability_id)
+           SELECT pr.id, pc.id
+           FROM perm_roles pr, perm_capabilities pc
+           WHERE pr.name = 'EXECUTIVE' AND pc.key IN (
+             'purchasing.approve_requisition_buyer',
+             'purchasing.approve_requisition_manager',
+             'purchasing.approve_requisition_executive'
+           )
+           ON CONFLICT (role_id, capability_id) DO NOTHING`
+        );
+
         // SUPERVISOR role: inventory requests, shipping (mark shipped), quality definitions, training content, scheduling
         const supervisorCaps = [
           'inventory.manage_requests',
@@ -4579,6 +4841,8 @@ async function initializeBackgroundServices() {
           'inventory.cycleCount.approve',
           'shipping.mark_shipped',
           'quality.manage_definitions',
+          'quality.manage_capa',
+          'quality.manage_calibration',
           'training.manage_content',
           'training.record_completion',
           'scheduling.manage',
@@ -4719,6 +4983,32 @@ async function initializeBackgroundServices() {
           console.warn('⚠️ faleeshah override seed skipped:', overrideErr.message);
         }
 
+        // User-level finance overrides for darleneb.
+        try {
+          const darlenebRows = await pool.query(
+            `SELECT id FROM users WHERE lower(username) = 'darleneb' LIMIT 1`
+          );
+          if (darlenebRows.length > 0) {
+            const darlenebId = darlenebRows[0].id;
+            const darlenebCaps = ['finance.manage_payments'];
+            for (const capKey of darlenebCaps) {
+              await pool.query(
+                `INSERT INTO perm_user_overrides (user_id, capability_id, effect)
+                 SELECT $1, pc.id, 'allow'
+                 FROM perm_capabilities pc
+                 WHERE pc.key = $2
+                 ON CONFLICT (user_id, capability_id) DO UPDATE SET effect = EXCLUDED.effect`,
+                [darlenebId, capKey]
+              );
+            }
+            console.log('✅ Granted finance.manage_payments user-level override to darleneb');
+          } else {
+            console.warn('⚠️ darleneb user not found - finance user-level overrides not seeded');
+          }
+        } catch (overrideErr: any) {
+          console.warn('⚠️ darleneb finance override seed skipped:', overrideErr.message);
+        }
+
         console.log('✅ Seeded EPOCH capability keys and assigned to ADMIN/OWNER/FLOOR_OPERATOR/SUPERVISOR/MANAGER/DOCUMENT_MANAGER/HR/VP roles');
       } catch (capErr: any) {
         console.warn('⚠️ EPOCH capability seeding skipped:', capErr.message);
@@ -4731,9 +5021,9 @@ async function initializeBackgroundServices() {
         const { validateCapabilityKeys } = await import('./src/validateCapabilities');
         await validateCapabilityKeys(pool);
       } catch (valErr: any) {
-        console.error('\n🚨 CAPABILITY KEY MISMATCH DETECTED — SERVER REFUSING TO START\n');
+        console.error('\n🚨 CAPABILITY KEY MISMATCH DETECTED — BACKGROUND SERVICES DEGRADED\n');
         console.error(valErr.message);
-        process.exit(1);
+        throw valErr;
       }
 
       // Ensure customers.customer_key column exists (non-unique — production has dupe normalized names)
@@ -4771,7 +5061,11 @@ async function initializeBackgroundServices() {
         // Add new columns
         await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS current_stage TEXT DEFAULT 'rfq_received'`);
         await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS stage_updated_at TIMESTAMP DEFAULT NOW()`);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS current_revision_number INTEGER NOT NULL DEFAULT 0`);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS current_revision_label TEXT NOT NULL DEFAULT 'Rev 0'`);
         await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id)`);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS p2_po_item_id INTEGER REFERENCES p2_purchase_order_items(id)`);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS p2_billing_allocation_id UUID`);
         // Backfill current_stage from current_step_type for existing rows that still have the default
         await db.execute(sqlProj`
           UPDATE projects SET current_stage = CASE current_step_type
@@ -4812,7 +5106,27 @@ async function initializeBackgroundServices() {
           END $$
         `);
         await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS customer_name_snapshot TEXT`);
-        console.log('✅ Ensured projects table has pipeline stage columns and flexible step statuses');
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS project_revisions (
+            id SERIAL PRIMARY KEY,
+            project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            revision_number INTEGER NOT NULL,
+            revision_label TEXT NOT NULL,
+            revision_type TEXT NOT NULL DEFAULT 'PROJECT_CHANGE',
+            summary TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            previous_po_id INTEGER REFERENCES p2_purchase_orders(id),
+            new_po_id INTEGER REFERENCES p2_purchase_orders(id),
+            created_by INTEGER REFERENCES employees(id),
+            created_by_display_name TEXT,
+            metadata JSONB,
+            created_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT project_revisions_project_revision_unique UNIQUE (project_id, revision_number)
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS project_revisions_project_id_idx ON project_revisions(project_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS project_revisions_created_at_idx ON project_revisions(created_at)`);
+        console.log('✅ Ensured projects table has pipeline stage, revision, and flexible step status support');
       } catch (projErr: any) {
         console.warn('⚠️ Projects pipeline migration:', projErr.message);
       }
@@ -5023,9 +5337,18 @@ async function initializeBackgroundServices() {
             po_id                      INTEGER REFERENCES p2_purchase_orders(id),
             routing_id                 UUID,
             current_revision           TEXT,
+            proposed_revision          TEXT,
             proposed_change            TEXT NOT NULL,
             reason                     TEXT NOT NULL,
             risk_assessment            TEXT,
+            affected_documents         JSONB DEFAULT '[]'::jsonb,
+            required_actions           JSONB DEFAULT '[]'::jsonb,
+            approver_employee_id       INTEGER REFERENCES employees(id),
+            approver_employee_name     TEXT,
+            approval_request_id        UUID,
+            approval_request_ids       JSONB DEFAULT '[]'::jsonb,
+            approval_assignments       JSONB DEFAULT '[]'::jsonb,
+            implementation_required    BOOLEAN DEFAULT false,
             requires_customer_approval BOOLEAN DEFAULT false,
             status                     TEXT NOT NULL DEFAULT 'DRAFT',
             submitted_by_id            INTEGER REFERENCES employees(id),
@@ -5045,9 +5368,70 @@ async function initializeBackgroundServices() {
             updated_at                 TIMESTAMPTZ DEFAULT NOW()
           )
         `);
+        await pool.query(`
+          ALTER TABLE p2_production_changes
+            ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid(),
+            ADD COLUMN IF NOT EXISTS change_number TEXT,
+            ADD COLUMN IF NOT EXISTS change_type TEXT,
+            ADD COLUMN IF NOT EXISTS scope TEXT DEFAULT 'PO',
+            ADD COLUMN IF NOT EXISTS part_number TEXT,
+            ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id),
+            ADD COLUMN IF NOT EXISTS routing_id UUID,
+            ADD COLUMN IF NOT EXISTS current_revision TEXT,
+            ADD COLUMN IF NOT EXISTS proposed_change TEXT,
+            ADD COLUMN IF NOT EXISTS reason TEXT,
+            ADD COLUMN IF NOT EXISTS risk_assessment TEXT,
+            ADD COLUMN IF NOT EXISTS requires_customer_approval BOOLEAN DEFAULT false,
+            ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'DRAFT',
+            ADD COLUMN IF NOT EXISTS submitted_by_id INTEGER REFERENCES employees(id),
+            ADD COLUMN IF NOT EXISTS submitted_by_name TEXT,
+            ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS approved_by_id INTEGER REFERENCES employees(id),
+            ADD COLUMN IF NOT EXISTS approved_by_name TEXT,
+            ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS rejected_by_id INTEGER REFERENCES employees(id),
+            ADD COLUMN IF NOT EXISTS rejected_by_name TEXT,
+            ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS rejection_reason TEXT,
+            ADD COLUMN IF NOT EXISTS implemented_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS effective_date DATE,
+            ADD COLUMN IF NOT EXISTS notes TEXT,
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW(),
+            ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
+        `);
         await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_po_id_idx ON p2_production_changes(po_id)`);
         await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_status_idx ON p2_production_changes(status)`);
         await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_type_idx ON p2_production_changes(change_type)`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS proposed_revision TEXT`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS affected_documents JSONB DEFAULT '[]'::jsonb`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS required_actions JSONB DEFAULT '[]'::jsonb`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS approver_employee_id INTEGER REFERENCES employees(id)`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS approver_employee_name TEXT`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS approval_request_id UUID`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS approval_request_ids JSONB DEFAULT '[]'::jsonb`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS approval_assignments JSONB DEFAULT '[]'::jsonb`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS implementation_required BOOLEAN DEFAULT false`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_approval_request_idx ON p2_production_changes(approval_request_id)`);
+        await pool.query(`
+          INSERT INTO escalation_policies (request_type, display_name, description, chain, requires_signature, reason_codes, is_active)
+          VALUES (
+            'PRODUCTION_CHANGE_FORM',
+            'Production Change Form',
+            'AS9100 production change form approval for routing, BOM, material, process, or inspection changes.',
+            '[{"role":"Quality Manager","slaSeconds":14400},{"role":"Production Manager","slaSeconds":28800},{"role":"Director of Operations","slaSeconds":86400,"isBackstop":true}]'::jsonb,
+            true,
+            '["ROUTING_VERIFIED","BOM_VERIFIED","CUSTOMER_APPROVAL_VERIFIED","RISK_ACCEPTED","OTHER"]'::jsonb,
+            true
+          )
+          ON CONFLICT (request_type) DO UPDATE SET
+            display_name = EXCLUDED.display_name,
+            description = EXCLUDED.description,
+            chain = EXCLUDED.chain,
+            requires_signature = EXCLUDED.requires_signature,
+            reason_codes = EXCLUDED.reason_codes,
+            is_active = EXCLUDED.is_active,
+            updated_at = NOW()
+        `);
 
         await pool.query(`
           CREATE TABLE IF NOT EXISTS p2_traveler_changes (
@@ -5102,12 +5486,20 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ users.auth_provider migration skipped:', authProviderErr?.message);
       }
 
-      // Ensure user_sessions.last_credential_verified_at column exists (added by session hardening #981)
+      // Ensure user_sessions has the full session-hardening shape used by login.
       try {
-        await pool.query(`ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_credential_verified_at TIMESTAMPTZ`);
-        console.log('✅ Ensured user_sessions.last_credential_verified_at column');
+        await pool.query(`
+          ALTER TABLE user_sessions
+            ADD COLUMN IF NOT EXISTS ip_address TEXT,
+            ADD COLUMN IF NOT EXISTS user_agent TEXT,
+            ADD COLUMN IF NOT EXISTS device_fingerprint TEXT,
+            ADD COLUMN IF NOT EXISTS mfa_verified_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS security_policy_version TEXT DEFAULT 'cmmc-itar-v1',
+            ADD COLUMN IF NOT EXISTS last_credential_verified_at TIMESTAMPTZ
+        `);
+        console.log('✅ Ensured user_sessions session-hardening columns');
       } catch (sessCredErr: any) {
-        console.warn('⚠️ user_sessions.last_credential_verified_at migration skipped:', sessCredErr?.message);
+        console.warn('⚠️ user_sessions session-hardening migration skipped:', sessCredErr?.message);
       }
 
       // Ensure customer_satisfaction_audit_log table exists (response action audit trail)
@@ -5224,6 +5616,10 @@ async function initializeBackgroundServices() {
         await pool.query(`
           ALTER TABLE p2_purchase_orders
           ADD COLUMN IF NOT EXISTS project_name TEXT
+        `);
+        await pool.query(`
+          ALTER TABLE p2_purchase_orders
+          ADD COLUMN IF NOT EXISTS contract_review_role TEXT NOT NULL DEFAULT 'secondary'
         `);
         console.log('✅ Ensured p2_nonconforming_dispositions and p2_rmas tables exist');
       } catch (ncErr: any) {
@@ -5584,6 +5980,38 @@ async function initializeBackgroundServices() {
         await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS custom_days_per_week REAL`);
         await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS custom_hours_per_day REAL`);
         await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS custom_weekly_capacity_hours REAL`);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_operation_batches (
+            id SERIAL PRIMARY KEY,
+            work_order_id UUID NOT NULL REFERENCES production_work_orders(id) ON DELETE CASCADE,
+            traveler_step_id VARCHAR(255) NOT NULL REFERENCES traveler_steps(id) ON DELETE CASCADE,
+            operation_id INTEGER REFERENCES cnc_job_operations(id) ON DELETE SET NULL,
+            batch_code TEXT NOT NULL UNIQUE,
+            batch_number INTEGER NOT NULL,
+            batch_qty INTEGER NOT NULL CHECK (batch_qty > 0),
+            qty_completed INTEGER NOT NULL DEFAULT 0 CHECK (qty_completed >= 0),
+            qty_scrapped INTEGER NOT NULL DEFAULT 0 CHECK (qty_scrapped >= 0),
+            assigned_machine_id INTEGER REFERENCES cnc_machines(id) ON DELETE SET NULL,
+            assigned_machine_name TEXT,
+            assigned_employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+            assigned_employee_display_name TEXT,
+            status TEXT NOT NULL DEFAULT 'queued',
+            barcode_value TEXT NOT NULL UNIQUE,
+            priority TEXT NOT NULL DEFAULT 'medium',
+            due_date DATE,
+            notes TEXT,
+            created_by_user_id INTEGER,
+            created_by_display_name TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT cnc_operation_batches_counts_chk
+              CHECK (qty_completed + qty_scrapped <= batch_qty)
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS cnc_operation_batches_work_order_step_idx ON cnc_operation_batches(work_order_id, traveler_step_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS cnc_operation_batches_status_idx ON cnc_operation_batches(status)`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS cnc_operation_batches_barcode_idx ON cnc_operation_batches(barcode_value)`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS cnc_operation_batches_batch_code_idx ON cnc_operation_batches(batch_code)`);
 
         // ── T7: Ensure cnc_schedule_settings table exists ────────────────────
         await pool.query(`
@@ -6288,9 +6716,122 @@ async function initializeBackgroundServices() {
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);
-      console.log('✅ Ensured quotes and quote_line_items tables exist');
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS quote_snapshots (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE RESTRICT,
+          quote_number TEXT NOT NULL,
+          revision_number INTEGER NOT NULL,
+          revision_label TEXT NOT NULL,
+          status_at_snapshot TEXT NOT NULL DEFAULT 'SENT',
+          customer_id TEXT NOT NULL,
+          customer_name TEXT NOT NULL,
+          customers_integer_id INTEGER,
+          description TEXT,
+          total_amount REAL NOT NULL DEFAULT 0,
+          valid_until TIMESTAMP,
+          quoted_by TEXT,
+          notes TEXT,
+          bom_assumptions JSONB,
+          labor_assumptions JSONB,
+          lead_times JSONB,
+          exclusions JSONB,
+          cert_requirements JSONB,
+          source_data JSONB,
+          sent_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          CONSTRAINT quote_snapshots_quote_revision_unique UNIQUE (quote_id, revision_number)
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS quote_snapshots_quote_id_idx ON quote_snapshots (quote_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS quote_line_snapshots (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          quote_snapshot_id UUID NOT NULL REFERENCES quote_snapshots(id) ON DELETE RESTRICT,
+          quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE RESTRICT,
+          quote_line_item_id UUID REFERENCES quote_line_items(id) ON DELETE SET NULL,
+          line_number INTEGER NOT NULL,
+          quantity REAL NOT NULL DEFAULT 1,
+          description TEXT NOT NULL,
+          unit_price REAL NOT NULL DEFAULT 0,
+          total_price REAL NOT NULL DEFAULT 0,
+          inventory_item_id INTEGER,
+          ag_part_number TEXT,
+          line_revision TEXT,
+          labor_hours REAL,
+          department TEXT,
+          bom_assumptions JSONB,
+          labor_assumptions JSONB,
+          lead_time_days INTEGER,
+          cert_requirements JSONB,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS quote_line_snapshots_snapshot_id_idx ON quote_line_snapshots (quote_snapshot_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS quote_line_snapshots_quote_id_idx ON quote_line_snapshots (quote_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS quote_po_reconciliations (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE RESTRICT,
+          quote_snapshot_id UUID REFERENCES quote_snapshots(id) ON DELETE RESTRICT,
+          p2_purchase_order_id INTEGER NOT NULL REFERENCES p2_purchase_orders(id) ON DELETE CASCADE,
+          po_number TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'MATCH',
+          revision_mismatch BOOLEAN NOT NULL DEFAULT FALSE,
+          pricing_mismatch BOOLEAN NOT NULL DEFAULT FALSE,
+          clause_mismatch BOOLEAN NOT NULL DEFAULT FALSE,
+          schedule_mismatch BOOLEAN NOT NULL DEFAULT FALSE,
+          quantity_mismatch BOOLEAN NOT NULL DEFAULT FALSE,
+          mismatch_summary JSONB,
+          checked_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS quote_po_reconciliations_po_id_idx ON quote_po_reconciliations (p2_purchase_order_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS quote_po_reconciliations_quote_id_idx ON quote_po_reconciliations (quote_id)`);
+      console.log('✅ Ensured quotes, quote_line_items, and quote contract snapshots tables exist');
     } catch (quotesErr: any) {
       console.warn('⚠️ quotes tables migration skipped:', quotesErr?.message);
+    }
+
+    // Ensure CMMC/ITAR classification columns exist before Drizzle full-table
+    // selects touch these tables. Production can deploy code before the SQL
+    // migration has finished, which blocks WAD authoring with
+    // "column security_classification does not exist".
+    try {
+      await pool.query(`
+        ALTER TABLE IF EXISTS rfq_risk_assessments
+          ADD COLUMN IF NOT EXISTS security_classification TEXT NOT NULL DEFAULT 'internal',
+          ADD COLUMN IF NOT EXISTS cui_category TEXT,
+          ADD COLUMN IF NOT EXISTS itar_category TEXT,
+          ADD COLUMN IF NOT EXISTS export_control_jurisdiction TEXT
+      `);
+      await pool.query(`
+        ALTER TABLE IF EXISTS quotes
+          ADD COLUMN IF NOT EXISTS security_classification TEXT NOT NULL DEFAULT 'internal',
+          ADD COLUMN IF NOT EXISTS cui_category TEXT,
+          ADD COLUMN IF NOT EXISTS itar_category TEXT,
+          ADD COLUMN IF NOT EXISTS export_control_jurisdiction TEXT,
+          ADD COLUMN IF NOT EXISTS customer_file_access_rule TEXT NOT NULL DEFAULT 'authenticated'
+      `);
+      await pool.query(`
+        ALTER TABLE IF EXISTS p2_purchase_orders
+          ADD COLUMN IF NOT EXISTS security_classification TEXT NOT NULL DEFAULT 'internal',
+          ADD COLUMN IF NOT EXISTS cui_category TEXT,
+          ADD COLUMN IF NOT EXISTS itar_category TEXT,
+          ADD COLUMN IF NOT EXISTS export_control_jurisdiction TEXT,
+          ADD COLUMN IF NOT EXISTS customer_file_access_rule TEXT NOT NULL DEFAULT 'authenticated'
+      `);
+      await pool.query(`
+        ALTER TABLE IF EXISTS contract_review_checklist_instances
+          ADD COLUMN IF NOT EXISTS security_classification TEXT NOT NULL DEFAULT 'internal',
+          ADD COLUMN IF NOT EXISTS cui_category TEXT,
+          ADD COLUMN IF NOT EXISTS itar_category TEXT,
+          ADD COLUMN IF NOT EXISTS export_control_jurisdiction TEXT
+      `);
+      console.log('✅ Ensured security classification compatibility columns exist');
+    } catch (securityClassificationErr: any) {
+      console.warn('⚠️ security classification compatibility migration skipped:', securityClassificationErr?.message);
     }
 
     // Ensure production_work_orders (WAD) table and related columns exist — EPOCH v9 spine
@@ -6318,6 +6859,12 @@ async function initializeBackgroundServices() {
       await pool.query(`ALTER TABLE travelers ADD COLUMN IF NOT EXISTS production_work_order_id UUID`);
       await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS production_work_order_id UUID`);
       await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS traveler_id UUID`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS traveler_step_id VARCHAR(255)`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS operation_batch_id INTEGER`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS machine_id INTEGER`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS machine_name TEXT`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS time_clock_entries_operation_batch_id_idx ON time_clock_entries (operation_batch_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS time_clock_entries_traveler_step_id_idx ON time_clock_entries (traveler_step_id)`);
       // If column was previously created as TEXT, upgrade to UUID
       await pool.query(`
         DO $$
@@ -6339,6 +6886,12 @@ async function initializeBackgroundServices() {
       await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS warning_threshold NUMERIC`);
       await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS blocked_threshold NUMERIC`);
       await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS default_charge_code_id INTEGER`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS dashboard_type TEXT`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS queue_type TEXT`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS assigned_department TEXT`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS assigned_dashboard_route TEXT`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS manufacturing_queue_id INTEGER`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS material_budget_amount NUMERIC NOT NULL DEFAULT 0`);
       console.log('✅ Ensured production_work_orders table and WAD spine columns exist');
     } catch (wadErr: any) {
       console.warn('⚠️ production_work_orders migration skipped:', wadErr?.message);
@@ -6513,6 +7066,131 @@ async function initializeBackgroundServices() {
         )
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS estimating_pricing_snapshots_rfq_part_id_idx ON estimating_pricing_snapshots(rfq_part_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimate_versions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          version_number INTEGER NOT NULL,
+          created_by INTEGER,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          superseded_by UUID REFERENCES estimate_versions(id),
+          change_summary TEXT,
+          status TEXT NOT NULL DEFAULT 'DRAFT',
+          margin_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+          pricing_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+          CONSTRAINT estimate_versions_rfq_version_unique UNIQUE (rfq_id, version_number)
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimate_versions_rfq_id_idx ON estimate_versions(rfq_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimate_line_versions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          estimate_version_id UUID NOT NULL REFERENCES estimate_versions(id) ON DELETE CASCADE,
+          rfq_part_id UUID REFERENCES estimating_rfq_parts(id) ON DELETE SET NULL,
+          source_table TEXT NOT NULL,
+          source_id UUID,
+          line_number INTEGER,
+          line_category TEXT NOT NULL,
+          line_summary TEXT,
+          quantity NUMERIC(12,4),
+          unit_cost NUMERIC(12,4),
+          total_cost NUMERIC(14,4),
+          margin_percent NUMERIC(8,4),
+          sell_price NUMERIC(14,4),
+          source_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimate_line_versions_version_id_idx ON estimate_line_versions(estimate_version_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimate_line_versions_rfq_part_id_idx ON estimate_line_versions(rfq_part_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimate_assumptions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          rfq_part_id UUID REFERENCES estimating_rfq_parts(id) ON DELETE CASCADE,
+          assumption_type TEXT NOT NULL CHECK (assumption_type IN ('LABOR', 'SCRAP', 'MATERIAL_YIELD', 'TOOLING_LIFE', 'SETUP_TIME')),
+          assumption_text TEXT NOT NULL,
+          numeric_value NUMERIC(14,4),
+          uom TEXT,
+          confidence_level TEXT NOT NULL DEFAULT 'MEDIUM' CHECK (confidence_level IN ('LOW', 'MEDIUM', 'HIGH')),
+          source_reference TEXT,
+          created_by INTEGER,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimate_assumptions_rfq_id_idx ON estimate_assumptions(rfq_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimate_assumptions_type_idx ON estimate_assumptions(assumption_type)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_approvals (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          estimate_version_id UUID REFERENCES estimate_versions(id) ON DELETE SET NULL,
+          approval_role TEXT NOT NULL CHECK (approval_role IN ('ESTIMATOR', 'ENGINEERING', 'FINANCE', 'EXECUTIVE')),
+          approval_status TEXT NOT NULL DEFAULT 'PENDING' CHECK (approval_status IN ('PENDING', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED')),
+          approval_threshold NUMERIC(14,2),
+          signer_user_id INTEGER,
+          signer_display_name TEXT,
+          digital_signature TEXT,
+          approval_comments TEXT,
+          requested_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          signed_at TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          CONSTRAINT estimating_approvals_rfq_role_unique UNIQUE (rfq_id, approval_role)
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimating_approvals_rfq_id_idx ON estimating_approvals(rfq_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS risk_assessments (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          estimate_version_id UUID REFERENCES estimate_versions(id) ON DELETE SET NULL,
+          status TEXT NOT NULL DEFAULT 'DRAFT',
+          overall_score INTEGER NOT NULL DEFAULT 0,
+          overall_level TEXT NOT NULL DEFAULT 'LOW',
+          approval_routing JSONB NOT NULL DEFAULT '[]'::jsonb,
+          created_by INTEGER,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS risk_assessments_rfq_id_idx ON risk_assessments(rfq_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS risk_items (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          risk_assessment_id UUID NOT NULL REFERENCES risk_assessments(id) ON DELETE CASCADE,
+          category TEXT NOT NULL CHECK (category IN ('TECHNICAL', 'SUPPLY_CHAIN', 'FINANCIAL', 'SCHEDULE', 'COMPLIANCE', 'QUALITY')),
+          description TEXT NOT NULL,
+          severity INTEGER NOT NULL CHECK (severity BETWEEN 1 AND 5),
+          probability INTEGER NOT NULL CHECK (probability BETWEEN 1 AND 5),
+          score INTEGER NOT NULL,
+          owner_user_id INTEGER,
+          owner_display_name TEXT,
+          status TEXT NOT NULL DEFAULT 'OPEN',
+          requires_approval BOOLEAN NOT NULL DEFAULT false,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS risk_items_assessment_id_idx ON risk_items(risk_assessment_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS risk_items_category_idx ON risk_items(category)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS mitigation_actions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          risk_item_id UUID NOT NULL REFERENCES risk_items(id) ON DELETE CASCADE,
+          action_description TEXT NOT NULL,
+          assigned_to_user_id INTEGER,
+          assigned_to_display_name TEXT,
+          due_date TIMESTAMP,
+          status TEXT NOT NULL DEFAULT 'OPEN',
+          completed_at TIMESTAMP,
+          created_by INTEGER,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS mitigation_actions_risk_item_id_idx ON mitigation_actions(risk_item_id)`);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS estimating_defaults (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -6949,6 +7627,18 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ Vendor PO receiving status backfill failed:', backfillErr);
     }
 
+    // Backfill linked parts requests from Vendor PO / RCC receiving evidence.
+    // This repairs requests that were linked while pending or received through RCC.
+    try {
+      const { backfillLinkedPartsRequestReceiptStatuses } = await import('./src/services/partsRequestVendorPoSyncService');
+      const result = await backfillLinkedPartsRequestReceiptStatuses();
+      if (result.requestUpdateCount > 0) {
+        console.log(`Backfilled ${result.requestUpdateCount} linked parts request receipt status update(s) across ${result.vendorPoCount} Vendor PO(s)`);
+      }
+    } catch (partsRequestBackfillErr) {
+      console.warn('Linked parts request receipt status backfill failed:', partsRequestBackfillErr);
+    }
+
     // One-time backfill: set shippedDate for FULFILLED orders that have shippingCompletedAt but no shippedDate.
     // The existence check avoids a full table scan on every boot once all rows are already populated.
     try {
@@ -7268,7 +7958,13 @@ async function initializeBackgroundServices() {
 
     console.log('🎓 Daily training certification expiration digest scheduled (every day at 8:00 AM)');
 
+    bootState.backgroundServices.status = 'complete';
+    bootState.backgroundServices.completedAt = new Date().toISOString();
   } catch (error) {
+    bootState.backgroundServices.status = 'failed';
+    bootState.backgroundServices.completedAt = new Date().toISOString();
+    bootState.backgroundServices.error = serializeError(error);
+    recordFatalBootError('backgroundServices', error);
     console.error('Error initializing background services:', error);
   }
 }

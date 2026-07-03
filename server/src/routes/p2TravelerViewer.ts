@@ -21,6 +21,8 @@ import {
   travelers,
   routingDocuments,
   inventoryItems,
+  projects,
+  productionWorkOrders,
   cuttingFabricInventory,
   cuttingBuiltPackets,
   cuttingBuiltPacketFabricSources,
@@ -39,7 +41,8 @@ import {
   insertP2FinalInspectionResultSchema,
   insertP2DepartmentTransferSignatureSchema,
 } from '../../schema';
-import { eq, and, desc, sql, inArray, or, ilike, asc } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray, or, ilike, asc, type SQL } from 'drizzle-orm';
+import { formatP2DocumentPoNumber } from '../utils/p2DocumentPoNumber';
 
 const router = Router();
 
@@ -59,19 +62,167 @@ function generateDocumentNumber(prefix: string): string {
   return `${prefix}-${dateStr}-${randomNum}`;
 }
 
+function buildP2ViewerScanVariants(scanValue: string): string[] {
+  const trimmed = scanValue.trim();
+  const compact = trimmed.replace(/\s+/g, '');
+  const variants = new Set<string>([trimmed, compact]);
+
+  for (const value of Array.from(variants)) {
+    if (/^rec/i.test(value)) variants.add(`ROC${value.slice(3)}`);
+    if (/^roc/i.test(value)) variants.add(`REC${value.slice(3)}`);
+  }
+
+  return Array.from(variants).filter(Boolean);
+}
+
+async function findSerializedItemForViewerScan(scanValue: string) {
+  const fields = [
+    p2SerializedItems.barcode,
+    p2SerializedItems.travelerBarcode,
+    p2SerializedItems.serialNumber,
+    p2SerializedItems.customerSerialNumber,
+  ];
+
+  for (const variant of buildP2ViewerScanVariants(scanValue)) {
+    const item = await db.query.p2SerializedItems.findFirst({
+      where: or(...fields.map((field) => ilike(field, variant))),
+    });
+    if (item) return item;
+  }
+
+  return null;
+}
+
+async function findProductionWorkOrderForTravelerViewer(params: {
+  serializedItem: typeof p2SerializedItems.$inferSelect;
+  routing: typeof partRoutings.$inferSelect | null;
+  poItem: typeof p2PurchaseOrderItems.$inferSelect | null;
+}) {
+  const { serializedItem, routing, poItem } = params;
+  const projectRows = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.poId, serializedItem.poId));
+
+  if (projectRows.length === 0) return null;
+
+  let inventoryItem: typeof inventoryItems.$inferSelect | null = null;
+  if (poItem?.inventoryItemId) {
+    inventoryItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.id, poItem.inventoryItemId),
+    }) ?? null;
+  }
+
+  const partCandidates = new Set<string>();
+  const addPart = (value?: string | null) => {
+    const trimmed = value?.trim();
+    if (trimmed) partCandidates.add(trimmed);
+  };
+  addPart(inventoryItem?.agPartNumber ?? null);
+  addPart(poItem?.partNumber ?? null);
+  addPart(routing?.partNumber ?? null);
+  addPart(serializedItem.partNumber);
+
+  const whereParts: SQL<unknown>[] = [
+    inArray(productionWorkOrders.projectId, projectRows.map((project) => project.id)),
+    sql`${productionWorkOrders.status} NOT IN ('CANCELLED', 'CANCELED')`,
+  ];
+
+  const partFilters = Array.from(partCandidates).flatMap((part) => [
+    eq(productionWorkOrders.partNumber, part),
+    sql`lower(trim(${productionWorkOrders.partNumber})) = lower(trim(${part}))`,
+  ]);
+  if (partFilters.length > 0) {
+    whereParts.push(or(...partFilters)!);
+  }
+
+  const [workOrder] = await db
+    .select({ id: productionWorkOrders.id })
+    .from(productionWorkOrders)
+    .where(and(...whereParts))
+    .orderBy(desc(productionWorkOrders.createdAt))
+    .limit(1);
+
+  return workOrder ?? null;
+}
+
+const DEFAULT_COC_CERTIFICATION_TEXT =
+  'AG Advanced certifies that the items listed herein have been manufactured, inspected, and tested in accordance with the applicable drawings, specifications, and purchase order requirements. All materials used in manufacture conform to applicable specifications. Records are on file and available for review.';
+
+function assignedSkuFromSerials(serials: Array<{ sku?: string | null }>): string | null {
+  const skus = Array.from(
+    new Set(
+      serials
+        .map((serial) => serial.sku?.trim())
+        .filter((sku): sku is string => Boolean(sku))
+    )
+  );
+
+  return skus.length > 0 ? skus.join(', ') : null;
+}
+
+async function getAssignedSkuForLot(lotNumberId: string | null | undefined): Promise<string | null> {
+  if (!lotNumberId) return null;
+
+  const lot = await db.query.p2LotNumbers.findFirst({
+    where: eq(p2LotNumbers.id, lotNumberId),
+    columns: { serializedItemIds: true },
+  });
+
+  const serialIds = Array.isArray(lot?.serializedItemIds)
+    ? lot.serializedItemIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : [];
+
+  if (serialIds.length === 0) return null;
+
+  const serials = await db
+    .select({ sku: p2SerializedItems.sku })
+    .from(p2SerializedItems)
+    .where(inArray(p2SerializedItems.id, serialIds));
+
+  return assignedSkuFromSerials(serials);
+}
+
+function getSpecialProcesses(processRecords: unknown): string {
+  if (processRecords && typeof processRecords === 'object') {
+    if (!Array.isArray(processRecords)) {
+      const value = (processRecords as { specialProcesses?: unknown }).specialProcesses;
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+
+    if (Array.isArray(processRecords)) {
+      const values = processRecords
+        .map((record) =>
+          record && typeof record === 'object'
+            ? (record as { process?: unknown; name?: unknown }).process || (record as { name?: unknown }).name
+            : null
+        )
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .map((value) => value.trim());
+
+      if (values.length > 0) return Array.from(new Set(values)).join(', ');
+    }
+  }
+
+  return 'N/A';
+}
+
+function getQaMgrTitle(traceabilityData: unknown): string {
+  if (traceabilityData && typeof traceabilityData === 'object' && !Array.isArray(traceabilityData)) {
+    const value = (traceabilityData as { qaMgrTitle?: unknown }).qaMgrTitle;
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+
+  return 'Quality Assurance';
+}
+
 // GET /api/p2-traveler-viewer/item/:barcode
 // Get comprehensive traveler data for a serialized item
 router.get('/item/:barcode', async (req: Request, res: Response) => {
   try {
     const barcode = decodeURIComponent(req.params.barcode).trim();
 
-    // Get serialized item - check both system barcode and physical traveler barcode (case-insensitive)
-    const serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: or(
-        ilike(p2SerializedItems.barcode, barcode),
-        ilike(p2SerializedItems.travelerBarcode, barcode)
-      ),
-    });
+    const serializedItem = await findSerializedItemForViewerScan(barcode);
 
     if (!serializedItem) {
       return res.status(404).json({ error: 'Serialized item not found' });
@@ -223,12 +374,25 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       orderBy: [desc(p2DepartmentTransferSignatures.signedAt)],
     });
 
-    // Get traveler steps linked to this serialized item via serial number
+    const linkedWorkOrder = await findProductionWorkOrderForTravelerViewer({
+      serializedItem,
+      routing,
+      poItem,
+    });
+
+    // Get traveler steps linked to this serialized item. When a production
+    // work order exists, use it as the unit identity so repeated customer
+    // serials do not hydrate a prior completed traveler.
     let travelerStepData: any[] = [];
     let activeTravelerId: string | null = null;
     let activeTravelerRow: any = null;
     const linkedTravelers = await db.query.travelers.findMany({
-      where: eq(travelers.serialNumber, serializedItem.serialNumber),
+      where: linkedWorkOrder
+        ? and(
+            eq(travelers.serialNumber, serializedItem.serialNumber),
+            eq(travelers.productionWorkOrderId, linkedWorkOrder.id),
+          )
+        : eq(travelers.serialNumber, serializedItem.serialNumber),
       orderBy: [asc(travelers.createdAt)],
     });
     if (linkedTravelers.length > 0) {
@@ -334,12 +498,34 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
     }
     
     const empCodePattern = /^EMP\d+$/i;
+    const hexBadgePattern = /^[0-9a-f-]{16,}$/i;
+    const looksLikeRawIdentifier = (key: string) => {
+      if (empCodePattern.test(key)) return true;
+      if (hexBadgePattern.test(key) || hexBadgePattern.test(key.replace(/-/g, ''))) return true;
+      if (/^ADMIN_FORCE_SIGN$/i.test(key)) return true;
+      return false;
+    };
     const resolveName = (identifier: string | null): string | null => {
       if (!identifier) return null;
       const key = String(identifier);
       if (nameMap[key]) return nameMap[key];
-      if (empCodePattern.test(key)) return 'Unknown Technician';
+      // Try matching after stripping dashes for UUID-style badge scans
+      const stripped = key.replace(/-/g, '');
+      if (stripped !== key && nameMap[stripped]) return nameMap[stripped];
+      if (empCodePattern.test(key)) return null;
+      // Don't echo raw hex/UUID badge codes back to the UI — they should fall
+      // through to a friendly "Unknown signer" label.
+      if (hexBadgePattern.test(key)) return null;
       return key;
+    };
+    // Sanitize a stored signedByName: only return it if it's a real human name.
+    // Raw badge codes / EMP codes / UUIDs are treated as unresolved.
+    const sanitizeSignedByName = (storedName: string | null): string | null => {
+      if (!storedName) return null;
+      const trimmed = String(storedName).trim();
+      if (!trimmed) return null;
+      if (looksLikeRawIdentifier(trimmed)) return null;
+      return trimmed;
     };
 
     // Build department progression data using traveler step data when available
@@ -471,7 +657,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
           id: s.id,
           type: 'Traveler Step',
           department: step?.departmentName || 'Unknown',
-          signedBy: resolveName(s.signedBy) || s.signedByName || s.signedBy,
+          signedBy: sanitizeSignedByName(s.signedByName) || resolveName(s.signedBy) || null,
           signedByUsername: s.signedBy,
           signedAt: s.signedAt,
           signatureData: s.signatureData,
@@ -1321,7 +1507,13 @@ router.post('/packing-slip', async (req: Request, res: Response) => {
       packingSlipNumber,
     });
     
-    const [packingSlip] = await db.insert(p2PackingSlips).values(validatedData).returning();
+    const [packingSlip] = await db
+      .insert(p2PackingSlips)
+      .values({
+        ...validatedData,
+        poNumber: formatP2DocumentPoNumber(validatedData.poNumber),
+      })
+      .returning();
 
     // If associated with a lot, update the lot
     if (req.body.lotNumberId) {
@@ -1331,7 +1523,10 @@ router.post('/packing-slip', async (req: Request, res: Response) => {
         .where(eq(p2LotNumbers.id, req.body.lotNumberId));
     }
 
-    return res.json({ success: true, packingSlip });
+    return res.json({
+      success: true,
+      packingSlip: { ...packingSlip, poNumber: formatP2DocumentPoNumber(packingSlip.poNumber) },
+    });
   } catch (error: any) {
     console.error('Error creating packing slip:', error);
     return res.status(500).json({ error: error.message || 'Failed to create packing slip' });
@@ -1363,7 +1558,7 @@ router.get('/packing-slip/:id', async (req: Request, res: Response) => {
     if (!packingSlip) {
       return res.status(404).json({ error: 'Packing slip not found' });
     }
-    return res.json(packingSlip);
+    return res.json({ ...packingSlip, poNumber: formatP2DocumentPoNumber(packingSlip.poNumber) });
   } catch (error: any) {
     console.error('Error getting packing slip:', error);
     return res.status(500).json({ error: 'Failed to get packing slip' });
@@ -1401,12 +1596,36 @@ router.put('/packing-slip/:id', async (req: Request, res: Response) => {
 router.post('/certificate-of-conformance', async (req: Request, res: Response) => {
   try {
     const certificateNumber = req.body.certificateNumber || generateDocumentNumber('COC');
+    const assignedSku = await getAssignedSkuForLot(req.body.lotNumberId);
+    const specialProcesses =
+      typeof req.body.specialProcesses === 'string' && req.body.specialProcesses.trim()
+        ? req.body.specialProcesses.trim()
+        : 'N/A';
+    const qaMgrTitle =
+      typeof req.body.qaMgrTitle === 'string' && req.body.qaMgrTitle.trim()
+        ? req.body.qaMgrTitle.trim()
+        : 'Quality Assurance';
+    const traceabilityData = Array.isArray(req.body.traceabilityData)
+      ? { records: req.body.traceabilityData, qaMgrTitle }
+      : req.body.traceabilityData && typeof req.body.traceabilityData === 'object'
+        ? { ...req.body.traceabilityData, qaMgrTitle }
+        : { qaMgrTitle };
     const validatedData = insertP2CertificateOfConformanceSchema.parse({
       ...req.body,
+      partNumber: assignedSku || req.body.partNumber,
       certificateNumber,
+      certificationText: req.body.certificationText || DEFAULT_COC_CERTIFICATION_TEXT,
+      processRecords: req.body.processRecords ?? { specialProcesses },
+      traceabilityData,
     });
     
-    const [certificate] = await db.insert(p2CertificatesOfConformance).values(validatedData).returning();
+    const [certificate] = await db
+      .insert(p2CertificatesOfConformance)
+      .values({
+        ...validatedData,
+        poNumber: formatP2DocumentPoNumber(validatedData.poNumber),
+      })
+      .returning();
 
     // If associated with a lot, update the lot
     if (req.body.lotNumberId) {
@@ -1416,7 +1635,10 @@ router.post('/certificate-of-conformance', async (req: Request, res: Response) =
         .where(eq(p2LotNumbers.id, req.body.lotNumberId));
     }
 
-    return res.json({ success: true, certificate });
+    return res.json({
+      success: true,
+      certificate: { ...certificate, poNumber: formatP2DocumentPoNumber(certificate.poNumber) },
+    });
   } catch (error: any) {
     console.error('Error creating certificate of conformance:', error);
     return res.status(500).json({ error: error.message || 'Failed to create certificate of conformance' });
@@ -1448,7 +1670,14 @@ router.get('/certificate-of-conformance/:id', async (req: Request, res: Response
     if (!certificate) {
       return res.status(404).json({ error: 'Certificate not found' });
     }
-    return res.json(certificate);
+    const assignedSku = await getAssignedSkuForLot(certificate.lotNumberId);
+    return res.json({
+      ...certificate,
+      poNumber: formatP2DocumentPoNumber(certificate.poNumber),
+      partNumber: assignedSku || certificate.partNumber,
+      specialProcesses: getSpecialProcesses(certificate.processRecords),
+      qaMgrTitle: getQaMgrTitle(certificate.traceabilityData),
+    });
   } catch (error: any) {
     console.error('Error getting certificate:', error);
     return res.status(500).json({ error: 'Failed to get certificate' });
@@ -1463,6 +1692,24 @@ router.put('/certificate-of-conformance/:id', async (req: Request, res: Response
     const updateData = req.body;
     delete updateData.id;
     delete updateData.createdAt;
+    if (typeof updateData.specialProcesses === 'string') {
+      updateData.processRecords = {
+        ...(updateData.processRecords && typeof updateData.processRecords === 'object' && !Array.isArray(updateData.processRecords)
+          ? updateData.processRecords
+          : {}),
+        specialProcesses: updateData.specialProcesses.trim() || 'N/A',
+      };
+      delete updateData.specialProcesses;
+    }
+    if (typeof updateData.qaMgrTitle === 'string') {
+      updateData.traceabilityData = {
+        ...(updateData.traceabilityData && typeof updateData.traceabilityData === 'object' && !Array.isArray(updateData.traceabilityData)
+          ? updateData.traceabilityData
+          : {}),
+        qaMgrTitle: updateData.qaMgrTitle.trim() || 'Quality Assurance',
+      };
+      delete updateData.qaMgrTitle;
+    }
     updateData.updatedAt = new Date();
 
     const [certificate] = await db
@@ -1625,7 +1872,7 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
         lotNumber: lot.lotNumber,
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         lineItems,
         totalQuantity: serializedItems.length,
         status: 'DRAFT',
@@ -1657,13 +1904,15 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
         lotNumber: lot.lotNumber,
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         partNumber: lot.partNumber,
         partName: lot.partName,
         quantity: serializedItems.length,
         serialNumbers,
         manufacturingDate: lot.manufacturingDate,
-        traceabilityData: allTraceability,
+        certificationText: DEFAULT_COC_CERTIFICATION_TEXT,
+        processRecords: { specialProcesses: 'N/A' },
+        traceabilityData: { records: allTraceability, qaMgrTitle: 'Quality Assurance' },
         inspectionSummary,
         status: 'DRAFT',
         createdBy,
@@ -1734,7 +1983,7 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
         lotNumber: lot.lotNumber,
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         partNumber: lot.partNumber,
         partName: lot.partName,
         quantity: serializedItems.length,

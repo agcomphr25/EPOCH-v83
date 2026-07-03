@@ -3,7 +3,7 @@ export interface EditPunchParams {
   punchType: 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
   punchedAt: string;
   note: string;
-  chargeCodeId: number | null;
+  chargeCodeId?: number | null;
 }
 
 export interface EditPunchDeps {
@@ -25,10 +25,13 @@ export async function runEditPunch(
 
   const body: Record<string, unknown> = {
     which,
+    punchType: params.punchType,
     punchedAt: params.punchedAt,
     editNote: params.note,
-    chargeCodeId: params.chargeCodeId,
   };
+  if (params.chargeCodeId !== undefined) {
+    body.chargeCodeId = params.chargeCodeId;
+  }
 
   const { ok, data } = await deps.fetchJson(`/api/timekeeping/punches/${params.id}`, {
     method: 'PATCH',

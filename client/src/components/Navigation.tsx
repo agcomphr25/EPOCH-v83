@@ -108,6 +108,7 @@ import OfflineIndicator from './OfflineIndicator';
 import GlobalSearch from './GlobalSearch';
 import ExecutiveRundownDropdown from './ExecutiveRundownDropdown';
 import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES, isAdminUser, getRequiredCapability } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import {
@@ -201,9 +202,11 @@ export default function Navigation() {
 
   const trainingAlertCount = recertCountData?.count ?? 0;
 
-  // Fetch compliance backfill queue count for nav badge
+  // Fetch score-impacting compliance backfill count for nav badge.
+  // Legacy pre-policy items stay visible on the queue page, but are isolated from ERDI scoring.
   const { data: backfillRows } = useQuery<Array<{ id: number }>>({
-    queryKey: ['/api/vendor-pos/compliance-backfill'],
+    queryKey: ['/api/vendor-pos/compliance-backfill', 'enforced'],
+    queryFn: () => apiRequest('/api/vendor-pos/compliance-backfill?filter=enforced'),
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
@@ -259,6 +262,7 @@ export default function Navigation() {
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
+  const [qmsExpanded, setQmsExpanded] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
   const [userDashboardsExpanded, setUserDashboardsExpanded] = useState(false);
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
@@ -276,6 +280,7 @@ export default function Navigation() {
     setTrainingExpanded(false);
     setInventoryExpanded(false);
     setQcMaintenanceExpanded(false);
+    setQmsExpanded(false);
     setEmployeesExpanded(false);
     setFinanceExpanded(false);
     setUserDashboardsExpanded(false);
@@ -304,6 +309,7 @@ export default function Navigation() {
         if (dropdownName !== 'training') setTrainingExpanded(false);
         if (dropdownName !== 'inventory') setInventoryExpanded(false);
         if (dropdownName !== 'qcMaintenance') setQcMaintenanceExpanded(false);
+        if (dropdownName !== 'qms') setQmsExpanded(false);
         if (dropdownName !== 'employees') setEmployeesExpanded(false);
         if (dropdownName !== 'finance') setFinanceExpanded(false);
         if (dropdownName !== 'userDashboards') setUserDashboardsExpanded(false);
@@ -503,6 +509,12 @@ export default function Navigation() {
       description: 'Identify orders in Shipping Management with a FINISHED status mismatch',
     },
     {
+      path: '/admin/p1-po-status-repair',
+      label: 'P1 PO Status Repair',
+      icon: Wrench,
+      description: 'Review and apply P1 purchase order status repairs from dry-run results',
+    },
+    {
       path: '/system-audits',
       label: 'System Audit Library',
       icon: FileSearch,
@@ -537,15 +549,21 @@ export default function Navigation() {
   const estimatingItems: NavItemDef[] = [
     {
       path: '/estimating',
-      label: 'RFQs',
+      label: 'ROM Builder',
       icon: FileSearch,
-      description: 'View and manage Requests for Quotation',
+      description: 'View and manage ROM estimates',
     },
     {
-      path: '/rfq-builder',
-      label: 'Cost Builder',
-      icon: Calculator,
-      description: 'BOM-driven cost estimation with overhead rates and margins',
+      path: '/estimating/bom-drafts',
+      label: 'Draft Builder',
+      icon: FileSpreadsheet,
+      description: 'Create reusable draft BOMs and sourcing picklists',
+    },
+    {
+      path: '/design/rd-projects',
+      label: 'R & D Projects',
+      icon: FlaskConical,
+      description: 'Create R & D projects, attach draft builder tabs, and track prototype readiness',
     },
   ];
 
@@ -564,9 +582,9 @@ export default function Navigation() {
     },
     {
       path: '/nonconformance',
-      label: 'Nonconforming Tracker',
+      label: 'P1 Nonconforming',
       icon: XCircle,
-      description: 'Track and manage quality issues and dispositions',
+      description: 'Track P1 stock-line nonconforming items and dispositions',
     },
     {
       path: '/rts',
@@ -930,6 +948,93 @@ export default function Navigation() {
     },
   ];
 
+  const qmsItems: NavItemDef[] = [
+    {
+      path: '/qms/change-control',
+      label: 'Change Control',
+      icon: FileSignature,
+      description: 'Controlled change request intake, approvals, and implementation records',
+    },
+    {
+      path: '/qms/cars',
+      label: 'CARs',
+      icon: ShieldCheck,
+      description: 'Corrective Action Reports and effectiveness checks',
+    },
+    {
+      path: '/qms/ncr-central-record',
+      label: 'NCR Central Record',
+      icon: XCircle,
+      description: 'Central register for nonconformance records and closure evidence',
+    },
+    {
+      path: '/qms/nsia-registrar',
+      label: 'NSIA Registrar',
+      icon: FileCheck,
+      description: 'Registrar records, evidence, renewal dates, and owners',
+    },
+    {
+      path: '/qms/design-control',
+      label: 'Design Control',
+      icon: Route,
+      description: 'Design inputs, review gates, validation, and release controls',
+    },
+    {
+      path: '/qms/parts-equipment',
+      label: 'Parts and Equipment',
+      icon: PackageCheck,
+      description: 'Unified register with tabs for equipment, measuring devices, AS9100 calibration/validation, customer property, serialized items, returns, and archive history',
+    },
+    {
+      path: '/assets',
+      label: 'Assets',
+      icon: Boxes,
+      description: 'Existing asset registry and equipment records',
+    },
+  ];
+  const qmsPartsEquipmentTabItems: NavItemDef[] = [
+    {
+      path: '/qms/parts-equipment?tab=equipment',
+      label: 'Equipment',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=measuring-devices',
+      label: 'Measuring Devices',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=as9100-calibration',
+      label: 'AS9100 Calibration',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=as9100-validation',
+      label: 'AS9100 Validation',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=customer-property',
+      label: 'Customer Property',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=serialized-items',
+      label: 'Serialized Items',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=returned-items',
+      label: 'Returned Items',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=calibration-archive',
+      label: 'Calibration Archive',
+      icon: PackageCheck,
+    },
+  ];
+
   const trainingItems = [
     {
       path: '/training-control-center',
@@ -1232,6 +1337,12 @@ export default function Navigation() {
       description: 'CNC operations and maintenance management dashboard',
     },
     {
+      path: '/angiet-dashboard',
+      label: 'ANGIET Dashboard',
+      icon: Settings,
+      description: 'Cutting Table, CNC & Gunsmith Operations dashboard',
+    },
+    {
       path: '/bradw-dashboard',
       label: 'BRADW Dashboard',
       icon: Users,
@@ -1295,10 +1406,22 @@ export default function Navigation() {
       description: 'Complete P2 workflow: orders, BOMs, scheduling, routing, and certifications',
     },
     {
+      path: '/p2-customers',
+      label: 'P2 Customers',
+      icon: Users,
+      description: 'Manage customers for P2 purchase orders and RFQ tracking',
+    },
+    {
       path: '/wad-wizard',
       label: 'WAD Wizard',
       icon: FileCheck,
       description: 'Launch the Work Authorization Document wizard for any Production Work Order',
+    },
+    {
+      path: '/wad-status',
+      label: 'WAD Status',
+      icon: FileCheck,
+      description: 'Backlog of projects in P2 Release / Production with WAD authoring status',
     },
     {
       path: '/help/p2-order-guide',
@@ -1454,10 +1577,16 @@ export default function Navigation() {
       description: 'Step-based timing programs for production processes',
     },
     {
-      path: '/voice-notes',
-      label: 'Voice Notes',
+      path: '/knowledge-capture',
+      label: 'Knowledge Capture',
       icon: Mic,
-      description: 'Voice-activated notes for production issues and tracking',
+      description: 'Private voice journal for process observations and business knowledge',
+    },
+    {
+      path: '/epoch-copilot',
+      label: 'EPOCH Copilot',
+      icon: MessageSquare,
+      description: 'Admin assistant for EPOCH records and how-to guides',
     },
     {
       path: '/metric-directory',
@@ -1503,6 +1632,12 @@ export default function Navigation() {
       label: 'Production Tracking',
       icon: TrendingUp,
       description: 'Track production orders from POs',
+    },
+    {
+      path: '/production-tracking/customer-wip',
+      label: 'Customer WIP',
+      icon: Users,
+      description: 'View unfinished P1 work by customer, PO, and department',
     },
     {
       path: '/production-forecast',
@@ -1636,14 +1771,16 @@ export default function Navigation() {
     if (!isUserInPermissionsList(username)) {
       return items.filter((item) => {
         const cap = getRequiredCapability(item.path);
-        if (cap && navCapSet.has(cap)) return true;
+        const caps = Array.isArray(cap) ? cap : cap ? [cap] : [];
+        if (caps.some((requiredCap) => navCapSet.has(requiredCap))) return true;
         return DEFAULT_USER_ROUTES.some(route => item.path === route || item.path.startsWith(route + '/'));
       });
     }
 
     return items.filter((item) => {
       const cap = getRequiredCapability(item.path);
-      if (cap && navCapSet.has(cap)) return true;
+      const caps = Array.isArray(cap) ? cap : cap ? [cap] : [];
+      if (caps.some((requiredCap) => navCapSet.has(requiredCap))) return true;
       return hasRouteAccess(username, item.path, userRole);
     });
   };
@@ -1679,6 +1816,10 @@ export default function Navigation() {
   const filteredQcMaintenanceItems = useMemo(
     () => filterByPermissions(qcMaintenanceItems, currentUser?.username, userRole),
     [qcMaintenanceItems, currentUser?.username, userRole, navCapSet]
+  );
+  const filteredQmsItems = useMemo(
+    () => filterByPermissions(qmsItems, currentUser?.username, userRole),
+    [qmsItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredTrainingItems = useMemo(
     () => filterByPermissions(trainingItems, currentUser?.username, userRole),
@@ -1773,6 +1914,7 @@ export default function Navigation() {
   const isQcMaintenanceActive = qcMaintenanceItems.some(
     (item) => location === item.path
   );
+  const isQmsActive = qmsItems.some((item) => location === item.path);
   const isEmployeesActive = employeesItems.some(
     (item) => location === item.path
   );
@@ -1916,7 +2058,7 @@ export default function Navigation() {
               </div>
             )}
 
-            {/* Estimating Dropdown */}
+            {/* Design Dropdown */}
             {filteredEstimatingItems.length > 0 && (
               <div className="relative">
                 <Button
@@ -1934,7 +2076,7 @@ export default function Navigation() {
                   }
                 >
                   <Calculator className="h-4 w-4" />
-                  Estimating
+                  Design
                   {estimatingExpanded ? (
                     <ChevronDown className="h-4 w-4" />
                   ) : (
@@ -2310,6 +2452,88 @@ export default function Navigation() {
                           <Icon className="h-4 w-4" />
                           {item.label}
                         </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* QMS Dropdown */}
+            {filteredQmsItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isQmsActive ? 'default' : 'ghost'}
+                  className={cn(
+                    'flex items-center gap-2 text-sm',
+                    isQmsActive && 'bg-primary text-white'
+                  )}
+                  onClick={() =>
+                    toggleDropdown(
+                      'qms',
+                      qmsExpanded,
+                      setQmsExpanded
+                    )
+                  }
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  QMS
+                  {qmsExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+
+                {qmsExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[220px]">
+                    {filteredQmsItems.map((item) => {
+                      const Icon = item.icon;
+                      const isPartsEquipment = item.path === '/qms/parts-equipment';
+                      const isActive = isPartsEquipment
+                        ? location.startsWith('/qms/parts-equipment')
+                        : location === item.path;
+
+                      return (
+                        <div key={item.path}>
+                          <button
+                            className={cn(
+                              'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100',
+                              isActive && 'bg-primary text-white hover:bg-primary'
+                            )}
+                            onClick={() => {
+                              closeAllDropdowns();
+                              setLocation(item.path);
+                            }}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                          {isPartsEquipment && (
+                            <div className="border-l border-gray-200 ml-5 my-1">
+                              {qmsPartsEquipmentTabItems.map((tabItem) => {
+                                const TabIcon = tabItem.icon;
+                                const tabActive = location === tabItem.path;
+                                return (
+                                  <button
+                                    key={tabItem.path}
+                                    className={cn(
+                                      'w-full text-left pl-4 pr-3 py-1.5 text-xs flex items-center gap-2 text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                                      tabActive && 'bg-blue-50 text-blue-700'
+                                    )}
+                                    onClick={() => {
+                                      closeAllDropdowns();
+                                      setLocation(tabItem.path);
+                                    }}
+                                  >
+                                    <TabIcon className="h-3.5 w-3.5" />
+                                    {tabItem.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -2713,8 +2937,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/edri') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm text-sky-500 hover:bg-sky-50 hover:text-sky-600',
-                  location.startsWith('/admin/edri') && 'bg-sky-400 text-white hover:bg-sky-500 hover:text-white'
+                  'flex items-center gap-2 text-sm text-foreground hover:bg-gray-100 hover:text-foreground',
+                  location.startsWith('/admin/edri') && 'bg-primary text-white hover:bg-primary hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/edri'); }}
               >
@@ -2743,8 +2967,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/continuity') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm',
-                  location.startsWith('/admin/continuity') && 'bg-primary text-white'
+                  'flex items-center gap-2 text-sm text-foreground hover:bg-gray-100 hover:text-foreground',
+                  location.startsWith('/admin/continuity') && 'bg-primary text-white hover:bg-primary hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/continuity'); }}
               >

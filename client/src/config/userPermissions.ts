@@ -11,14 +11,22 @@ export interface UserPermissions {
   deniedRoutes?: string[]; // Routes to explicitly block (used with fullAccess: true)
 }
 
-export const CAPABILITY_GATED_ROUTES: Record<string, string> = {
-  '/pto-command-center': 'timekeeping.pto.view_all',
+export const CAPABILITY_GATED_ROUTES: Record<string, string | string[]> = {
+  '/pto-command-center': [
+    'timekeeping.pto.view_all',
+    'timekeeping.pto.approve_supervisor',
+    'timekeeping.pto.approve_hr',
+    'timekeeping.pto.approve_vp',
+  ],
   '/orders-list': 'orders.view_list',
   '/time-clock-admin': 'timekeeping.time_clock_admin.access',
+  '/finance/bulk-payment': 'finance.manage_payments',
+  '/finance/bulk-payment-history': 'finance.view',
   '/inventory/cycle-counts': 'inventory.cycleCount.view',
+  '/inventory/consolidated-needs': 'purchasing.view_requisitions',
 };
 
-export function getRequiredCapability(route: string): string | undefined {
+export function getRequiredCapability(route: string): string | string[] | undefined {
   for (const [pattern, cap] of Object.entries(CAPABILITY_GATED_ROUTES)) {
     if (route === pattern || route.startsWith(pattern + '/')) {
       return cap;
@@ -31,7 +39,7 @@ export function getRequiredCapability(route: string): string | undefined {
 export const DEFAULT_USER_ROUTES: string[] = ['/employee-portal'];
 
 // Universal routes that ALL authenticated users can access regardless of permissions
-export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/employee-portal', '/badge-scanner', '/help', '/pdf-signature-tool', '/routing-document-management', '/tickets', '/tickets-command-center', '/quick-notes', '/training', '/policies', '/approvals'];
+export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/employee-portal', '/badge-scanner', '/help', '/pdf-signature-tool', '/routing-document-management', '/tickets', '/tickets-command-center', '/quick-notes', '/training', '/training/my-training', '/policies', '/approvals', '/pto-command-center'];
 
 // All valid navbar routes for reference (from Navigation.tsx)
 // This helps ensure permissions use correct paths
@@ -44,6 +52,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/queue-integrity',
   '/admin/control-tower',
   '/admin/shipping-status-audit',
+  '/admin/p1-po-status-repair',
   '/system-audits',
   '/admin/audit-ledger',
   '/admin/inventory-anomalies',
@@ -57,12 +66,15 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/qr-codes',
   '/admin/checklist-management',
   '/admin/continuity',
+  '/epoch-copilot',
+  '/admin/security-center',
   '/admin/policies',
   '/policies',
   '/prompt-library',
   '/proteus-labs',
   '/improvement-notes',
   '/analytics',
+  '/design/rd-projects',
   '/badge-configuration',
   '/badge-scanner',
   '/barcode-scanner',
@@ -105,6 +117,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/finance/cogs',
   '/finance/cogs-report',
   '/finance/cost-accounting',
+  '/finance/chart-of-accounts',
   '/finance/burden-rates',
   '/finance/cost-centers',
   '/finance/dashboard',
@@ -128,12 +141,20 @@ export const VALID_NAVBAR_ROUTES = [
   '/inventory/traceability',
   '/production/material-readiness',
   '/inventory/parts-request',
+  '/inventory/department-parts-request',
   '/inventory/receiving',
   '/inventory/receiving-legacy',
   '/inventory/scanner',
   '/kickback-tracking',
   '/maintenance',
   '/maintenance-events',
+  '/qms',
+  '/qms/change-control',
+  '/qms/cars',
+  '/qms/ncr-central-record',
+  '/qms/nsia-registrar',
+  '/qms/design-control',
+  '/qms/parts-equipment',
   '/assets',
   '/asset-dashboard',
   '/manufacturing-queue',
@@ -156,7 +177,9 @@ export const VALID_NAVBAR_ROUTES = [
   '/po-products',
   '/product-labels',
   '/production-tracking',
+  '/production-tracking/customer-wip',
   '/wad-wizard',
+  '/wad-status',
   '/production-forecast',
   '/purchase-orders',
   '/qc',
@@ -249,7 +272,6 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/inventory/ledger',
       '/production/material-readiness',
       '/inventory/parts-request',
-      '/inventory/consolidated-needs',
       '/customers',
       '/tickets',
       '/gateway-reports',
@@ -259,6 +281,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/order-department-transfer',
       '/metal-accessories',
       '/training',
+      '/knowledge-capture',
       '/voice-notes',
       '/order-heat-map',
       '/urgent-orders-report',
@@ -297,11 +320,18 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   angiet: {
     routes: [
       '/order-entry',
+      '/department-queue/cnc',
+      '/department-queue/gunsmith',
+      '/cutting-control-center',
+      '/fabric-inventory',
+      '/all-orders',
       '/orders-list',
       '/orders-management',
       '/department-queue/production-queue',
       '/department-queue/layup-plugging',
       '/customers',
+      '/inventory/parts-request',
+      '/training',
     ],
   },
 
@@ -368,6 +398,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/chasew-dashboard',
       '/projects',
       '/projects/pipeline',
+      '/design/rd-projects',
       '/media-library',
       '/p2-control-center',
       '/p2-forms',
@@ -448,9 +479,11 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/gunsmith',
       '/cutting-control-center',
       '/fabric-inventory',
+      '/all-orders',
       '/orders-list',
       '/orders-management',
       '/inventory/parts-request',
+      '/training',
     ],
   },
 
@@ -486,6 +519,10 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/maintenance',
       '/maintenance-events',
       '/projects',
+      '/projects/pipeline',
+      '/projects/:id',
+      '/projects/:id/closing',
+      '/p2-control-center',
     ],
   },
 
@@ -515,7 +552,9 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/assets',
       '/asset-dashboard',
       '/inventory/parts-request',
+      '/inventory/department-parts-request',
       '/metal-accessories',
+      '/employee-portal',
     ],
   },
 };
@@ -657,6 +696,7 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/inventory/enhanced-mrp': ['ADMIN', 'INVENTORY_MANAGER'],
   '/inventory/ledger': ['ADMIN', 'INVENTORY_MANAGER', 'OWNER'],
   '/inventory/traceability': ['ADMIN', 'OWNER', 'QUALITY', 'QUALITY_INSPECTOR', 'MATERIALS', 'MATERIALS_MANAGER', 'INVENTORY_MANAGER', 'COMPLIANCE'],
+  '/inventory/consolidated-needs': ['ADMIN', 'OWNER'],
   '/production/material-readiness': ['ADMIN', 'INVENTORY_MANAGER', 'OWNER'],
   '/user-management': ['ADMIN', 'OWNER'],
   '/employee': ['ADMIN', 'OWNER'],
@@ -709,15 +749,18 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/robust-bom-administration': ['ADMIN', 'OWNER'],
   '/p2-control-center': ['ADMIN', 'OWNER'],
   '/pm-control-center': ['ADMIN', 'OWNER', 'PROJECT_MANAGER'],
-  '/wad-wizard': ['ADMIN', 'OWNER'],
+  '/wad-wizard': ['ADMIN', 'OWNER', 'PROJECT_MANAGER'],
+  '/wad-status': ['ADMIN', 'OWNER', 'PROJECT_MANAGER'],
   '/manufacturing-queue': ['ADMIN', 'OWNER'],
   '/po-products': ['ADMIN', 'OWNER'],
   '/product-labels': ['ADMIN', 'OWNER'],
   '/purchase-orders': ['ADMIN', 'OWNER'],
   '/analytics': ['ADMIN', 'OWNER'],
+  '/design/rd-projects': ['ADMIN', 'OWNER', 'PROJECT_MANAGER'],
   '/nonconformance': ['ADMIN', 'OWNER'],
   '/rts': ['ADMIN', 'OWNER'],
   '/qc': ['ADMIN', 'OWNER'],
+  '/qms': ['ADMIN', 'OWNER'],
   '/vendors': ['ADMIN', 'OWNER'],
   '/vendor-pos': ['ADMIN', 'OWNER'],
   '/purchase-requisitions': ['ADMIN', 'OWNER'],
@@ -729,7 +772,9 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/checklist-management': ['ADMIN', 'OWNER'],
   '/admin/edri': ['ADMIN', 'OWNER'],
   '/admin/dcaa-findings': ['ADMIN', 'OWNER'],
+  '/admin/security-center': ['ADMIN', 'OWNER'],
   '/admin/continuity': ['ADMIN', 'OWNER'],
+  '/epoch-copilot': ['ADMIN', 'OWNER'],
   '/prompt-library': ['ADMIN', 'OWNER'],
   '/proteus-labs': ['ADMIN', 'OWNER'],
   '/improvement-notes': ['ADMIN', 'OWNER'],

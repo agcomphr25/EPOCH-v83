@@ -14,8 +14,9 @@ import {
 import { eq, desc, inArray, count, sql, isNull, and, gte, lte } from 'drizzle-orm';
 import { chargeCard, voidTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
 import { auditService } from '../services/auditService';
-import * as accountingService from '../services/accountingService';
+import { createOrUpdateP1PaymentJournalEntry } from '../services/p1PaymentPostingService';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
@@ -32,6 +33,21 @@ const paymentRateLimiter = rateLimit({
 
 // Determine if we're in test mode (sandbox)
 const isTestMode = process.env.NODE_ENV !== 'production';
+
+async function tryPostP1PaymentJournalEntry(
+  paymentId: number,
+  user?: { username?: string | null } | null,
+  tx?: any
+) {
+  try {
+    await createOrUpdateP1PaymentJournalEntry(paymentId, user ?? null, tx);
+  } catch (postingError) {
+    console.error(
+      `[payments] Payment ${paymentId} was recorded, but accounting journal posting failed:`,
+      postingError
+    );
+  }
+}
 
 // Credit card payment schema for API validation
 const creditCardPaymentSchema = z.object({
@@ -186,21 +202,6 @@ async function processTransactionResult(data: {
   const status = isApproved ? 'completed' : 'failed';
   const recordedPaymentAmount = isApproved ? data.amount : 0;
 
-  // Create payment record
-  const [payment] = await db
-    .insert(payments)
-    .values({
-      orderId: data.orderId,
-      paymentType: 'credit_card',
-      paymentAmount: recordedPaymentAmount,
-      paymentDate: new Date(),
-      notes: isApproved
-        ? `Credit card payment approved - Auth: ${data.authCode}`
-        : `Credit card payment failed - ${data.responseReasonText}. Attempted amount: $${data.amount.toFixed(2)}`,
-    })
-    .returning();
-
-  // Create credit card transaction record
   // Extract card details from Accept.Blue response format
   const lastFourDigits = data.rawResponse?.last_4 || 
     data.rawResponse?.transaction?.card_details?.last4 ||
@@ -209,36 +210,57 @@ async function processTransactionResult(data: {
     data.rawResponse?.transaction?.card_details?.card_type ||
     data.rawResponse?.transactionResponse?.accountType;
 
-  const [transaction] = await db
-    .insert(creditCardTransactions)
-    .values({
-      paymentId: payment.id,
-      orderId: data.orderId,
-      transactionId: data.transactionId,
-      authCode: data.authCode,
-      responseCode: data.responseCode,
-      responseReasonCode: data.responseReasonCode,
-      responseReasonText: data.responseReasonText,
-      avsResult: data.avsResult,
-      cvvResult: data.cvvResult,
-      lastFourDigits: lastFourDigits,
-      cardType: cardType,
-      amount: data.amount,
-      taxAmount: data.taxAmount,
-      shippingAmount: data.shippingAmount,
-      customerEmail: data.customerEmail,
-      billingFirstName: data.billingAddress.firstName,
-      billingLastName: data.billingAddress.lastName,
-      billingAddress: data.billingAddress.address,
-      billingCity: data.billingAddress.city,
-      billingState: data.billingAddress.state,
-      billingZip: data.billingAddress.zip,
-      billingCountry: data.billingAddress.country,
-      isTest: data.isTest,
-      rawResponse: data.rawResponse,
-      status: status,
-    })
-    .returning();
+  const { payment, transaction } = await db.transaction(async (tx) => {
+    const [paymentRecord] = await tx
+      .insert(payments)
+      .values({
+        orderId: data.orderId,
+        paymentType: 'credit_card',
+        paymentAmount: recordedPaymentAmount,
+        paymentDate: new Date(),
+        notes: isApproved
+          ? `Credit card payment approved - Auth: ${data.authCode}`
+          : `Credit card payment failed - ${data.responseReasonText}. Attempted amount: $${data.amount.toFixed(2)}`,
+      })
+      .returning();
+
+    const [transactionRecord] = await tx
+      .insert(creditCardTransactions)
+      .values({
+        paymentId: paymentRecord.id,
+        orderId: data.orderId,
+        transactionId: data.transactionId,
+        authCode: data.authCode,
+        responseCode: data.responseCode,
+        responseReasonCode: data.responseReasonCode,
+        responseReasonText: data.responseReasonText,
+        avsResult: data.avsResult,
+        cvvResult: data.cvvResult,
+        lastFourDigits: lastFourDigits,
+        cardType: cardType,
+        amount: data.amount,
+        taxAmount: data.taxAmount,
+        shippingAmount: data.shippingAmount,
+        customerEmail: data.customerEmail,
+        billingFirstName: data.billingAddress.firstName,
+        billingLastName: data.billingAddress.lastName,
+        billingAddress: data.billingAddress.address,
+        billingCity: data.billingAddress.city,
+        billingState: data.billingAddress.state,
+        billingZip: data.billingAddress.zip,
+        billingCountry: data.billingAddress.country,
+        isTest: data.isTest,
+        rawResponse: data.rawResponse,
+        status: status,
+      })
+      .returning();
+
+    if (isApproved) {
+      await tryPostP1PaymentJournalEntry(paymentRecord.id, null, tx);
+    }
+
+    return { payment: paymentRecord, transaction: transactionRecord };
+  });
 
   // If payment was approved, update order status
   if (isApproved) {
@@ -492,7 +514,7 @@ const batchPaymentSchema = z.object({
     .min(1),
 });
 
-router.post('/batch', async (req, res) => {
+router.post('/batch', requirePermission('finance.manage_payments'), async (req, res) => {
   try {
     const batchData = batchPaymentSchema.parse(req.body);
 
@@ -551,26 +573,24 @@ router.post('/batch', async (req, res) => {
     // Process each order payment
     for (const allocation of batchData.orderAllocations) {
       if (allocation.amount > 0) {
-        // Create payment record
-        const [paymentRecord] = await db
-          .insert(payments)
-          .values({
-            orderId: allocation.orderId,
-            paymentType: batchData.paymentMethod,
-            paymentAmount: allocation.amount,
-            paymentDate: new Date(),
-            notes:
-              batchData.notes ||
-              `${batchData.paymentMethod.replace('_', ' ').toUpperCase()} payment via batch processing`,
-            batchId: batch.id,
-          })
-          .returning();
+        const paymentRecord = await db.transaction(async (tx) => {
+          const [record] = await tx
+            .insert(payments)
+            .values({
+              orderId: allocation.orderId,
+              paymentType: batchData.paymentMethod,
+              paymentAmount: allocation.amount,
+              paymentDate: new Date(),
+              notes:
+                batchData.notes ||
+                `${batchData.paymentMethod.replace('_', ' ').toUpperCase()} payment via batch processing`,
+              batchId: batch.id,
+            })
+            .returning();
 
-        try {
-          await accountingService.createOrUpdateFromPayment(paymentRecord, (req as any).user);
-        } catch (accountingError) {
-          console.error('[Accounting] Failed to create journal entry for batch payment:', accountingError);
-        }
+          await tryPostP1PaymentJournalEntry(record.id, (req as any).user, tx);
+          return record;
+        });
 
         // Update order payment status
         await db
@@ -673,7 +693,7 @@ const bulkLivePaymentSchema = z.object({
     .min(1, 'At least one order must be selected'),
 });
 
-router.post('/bulk-live', async (req, res) => {
+router.post('/bulk-live', requirePermission('finance.manage_payments'), async (req, res) => {
   try {
     console.log('🔄 Bulk live payment request received');
     const paymentData = bulkLivePaymentSchema.parse(req.body);
@@ -792,24 +812,22 @@ router.post('/bulk-live', async (req, res) => {
     for (const allocation of paymentData.orderAllocations) {
       if (allocation.amount > 0) {
         try {
-          // Create payment record for this order
-          const [payment] = await db
-            .insert(payments)
-            .values({
-              orderId: allocation.orderId,
-              paymentType: 'credit_card',
-              paymentAmount: allocation.amount,
-              paymentDate: new Date(),
-              notes: `Live credit card payment - Trans: ${transactionId}, Auth: ${result.authCode || 'N/A'}`,
-              batchId: liveBatch.id,
-            })
-            .returning();
+          const payment = await db.transaction(async (tx) => {
+            const [record] = await tx
+              .insert(payments)
+              .values({
+                orderId: allocation.orderId,
+                paymentType: 'credit_card',
+                paymentAmount: allocation.amount,
+                paymentDate: new Date(),
+                notes: `Live credit card payment - Trans: ${transactionId}, Auth: ${result.authCode || 'N/A'}`,
+                batchId: liveBatch.id,
+              })
+              .returning();
 
-          try {
-            await accountingService.createOrUpdateFromPayment(payment, (req as any).user);
-          } catch (accountingError) {
-            console.error('[Accounting] Failed to create journal entry for bulk-live payment:', accountingError);
-          }
+            await tryPostP1PaymentJournalEntry(record.id, (req as any).user, tx);
+            return record;
+          });
 
           // Create credit card transaction record for this order
           const [transaction] = await db

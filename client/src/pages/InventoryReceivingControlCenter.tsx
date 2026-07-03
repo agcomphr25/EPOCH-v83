@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { compareReceiptLines } from '@/lib/receiptLineSort';
@@ -103,6 +103,15 @@ interface InventoryDepartment {
   defaultReceivingFreezer?: number | null;
 }
 
+interface EmployeeOption {
+  id: number;
+  name?: string;
+  preferredName?: string | null;
+  employeeCode?: string | null;
+  department?: string | null;
+  isActive?: boolean;
+}
+
 interface VendorPO {
   id: number;
   poNumber: string;
@@ -187,6 +196,16 @@ interface ReceivedUnit {
   freezerNumber?: number;
   allocatedToType?: string;
   allocatedToId?: number;
+  materialLotId?: string;
+  targetProjectId?: string | null;
+}
+
+interface ReceivingProjectTarget {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  status: string;
+  customerName?: string | null;
 }
 
 interface ReceiptDocument {
@@ -470,12 +489,15 @@ function DepartmentDefaultsManager() {
 
 function LeftPanel({
   onStartReceipt,
+  onSelectReceipt,
   activeReceiptId,
 }: {
   onStartReceipt: (po: VendorPO | null) => void;
+  onSelectReceipt: (receipt: Receipt) => void;
   activeReceiptId: number | null;
 }) {
   const [search, setSearch] = useState('');
+  const queryClient = useQueryClient();
 
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
     queryKey: ['currentUser'],
@@ -496,6 +518,33 @@ function LeftPanel({
     queryKey: ['/api/receipts/pending-by-po'],
     queryFn: () => apiRequest('/api/receipts/pending-by-po'),
     refetchInterval: 30000,
+  });
+
+  const { data: completedReceipts = [] } = useQuery<Receipt[]>({
+    queryKey: ['/api/receipts', 'complete'],
+    queryFn: () => apiRequest('/api/receipts?status=complete'),
+    refetchInterval: 60000,
+  });
+
+  const reopenReceiptMutation = useMutation({
+    mutationFn: async (receipt: Receipt) => {
+      await apiRequest(`/api/receipts/${receipt.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'in_progress',
+          reopenReason: 'Correction to receiving entry',
+        }),
+      });
+      return apiRequest(`/api/receipts/${receipt.id}`);
+    },
+    onSuccess: (receipt: Receipt) => {
+      onSelectReceipt(receipt);
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts', 'complete'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts/pending-by-po'] });
+      toast.success(`Reopened ${receipt.receiptNumber} for adjustment`);
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to reopen receipt'),
   });
 
   // Merge Sent + Partially Received POs, deduplicate by id
@@ -519,6 +568,26 @@ function LeftPanel({
     return acc;
   }, {});
 
+  const pendingCount = filteredPOs.length;
+  const sortedCompletedReceipts = [...completedReceipts].sort((a, b) => {
+    const aTime = new Date(a.receivedAt ?? a.receiptDate ?? 0).getTime();
+    const bTime = new Date(b.receivedAt ?? b.receiptDate ?? 0).getTime();
+    return bTime - aTime;
+  });
+  const recentCount = sortedCompletedReceipts.length;
+
+  const TAB_STORAGE_KEY = 'rcc:leftPanelTab';
+  const [leftTab, setLeftTab] = useState<'pending' | 'recent'>(() => {
+    if (typeof window === 'undefined') return 'pending';
+    const stored = window.localStorage.getItem(TAB_STORAGE_KEY);
+    return stored === 'recent' ? 'recent' : 'pending';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(TAB_STORAGE_KEY, leftTab);
+    }
+  }, [leftTab]);
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-3 border-b bg-gray-50 dark:bg-gray-900">
@@ -537,79 +606,149 @@ function LeftPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
-        {/* Manual Receipt Option */}
-        <button
-          onClick={() => onStartReceipt(null)}
-          className="w-full text-left p-2 border border-dashed border-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-        >
-          <div className="flex items-center gap-2 text-blue-600 text-xs font-medium">
-            <Plus className="w-3.5 h-3.5" />
-            Manual Receipt (no PO)
-          </div>
-        </button>
+      <Tabs
+        value={leftTab}
+        onValueChange={(v) => setLeftTab(v as 'pending' | 'recent')}
+        className="flex-1 flex flex-col overflow-hidden"
+      >
+        <TabsList className="mx-2 mt-2 grid grid-cols-2 h-8">
+          <TabsTrigger value="pending" className="text-xs h-7" data-testid="tab-receiving-pending">
+            Pending
+            <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px]" data-testid="badge-pending-count">
+              {pendingCount}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="recent" className="text-xs h-7" data-testid="tab-receiving-recent">
+            Recently Received
+            <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px]" data-testid="badge-recent-count">
+              {recentCount}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
 
-        {isLoadingPOs && (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-          </div>
-        )}
-
-        {Object.values(grouped).map(group => (
-          <div key={group.vendor} className="border rounded-lg overflow-hidden">
-            <div className="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1">
-              <Building2 className="w-3 h-3" />
-              {group.vendor}
+        <TabsContent value="pending" className="flex-1 overflow-y-auto p-2 space-y-2 mt-2">
+          {/* Manual Receipt Option */}
+          <button
+            onClick={() => onStartReceipt(null)}
+            className="w-full text-left p-2 border border-dashed border-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+            data-testid="button-manual-receipt"
+          >
+            <div className="flex items-center gap-2 text-blue-600 text-xs font-medium">
+              <Plus className="w-3.5 h-3.5" />
+              Manual Receipt (no PO)
             </div>
-            {group.pos.map(po => {
-              const pending = pendingByPo?.[po.id];
-              const isResuming = !!(pending || (po.pendingReceiptCount && po.pendingReceiptCount > 0));
-              const isPartial = partialPoIds.has(po.id);
-              return (
-                <div key={po.id} className="p-2 border-t text-xs hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1 flex-wrap">
-                        {po.poNumber}
-                        {isPartial && (
-                          <span className="inline-flex items-center px-1 py-0.5 rounded text-xs bg-amber-400/20 text-amber-700 border border-amber-400 dark:bg-amber-400/10 dark:text-amber-400 dark:border-amber-500 ml-1">
-                            Partial
-                          </span>
-                        )}
-                        {isResuming && (
-                          <span className="inline-flex items-center px-1 py-0.5 rounded text-xs bg-amber-100 text-amber-700 border border-amber-200 ml-1">
-                            In Progress
-                          </span>
-                        )}
+          </button>
+
+          {isLoadingPOs && (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+            </div>
+          )}
+
+          {Object.values(grouped).map(group => (
+            <div key={group.vendor} className="border rounded-lg overflow-hidden">
+              <div className="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                <Building2 className="w-3 h-3" />
+                {group.vendor}
+              </div>
+              {group.pos.map(po => {
+                const pending = pendingByPo?.[po.id];
+                const isResuming = !!(pending || (po.pendingReceiptCount && po.pendingReceiptCount > 0));
+                const isPartial = partialPoIds.has(po.id);
+                return (
+                  <div key={po.id} className="p-2 border-t text-xs hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1 flex-wrap">
+                          {po.poNumber}
+                          {isPartial && (
+                            <span className="inline-flex items-center px-1 py-0.5 rounded text-xs bg-amber-400/20 text-amber-700 border border-amber-400 dark:bg-amber-400/10 dark:text-amber-400 dark:border-amber-500 ml-1">
+                              Partial
+                            </span>
+                          )}
+                          {isResuming && (
+                            <span className="inline-flex items-center px-1 py-0.5 rounded text-xs bg-amber-100 text-amber-700 border border-amber-200 ml-1">
+                              In Progress
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-gray-500 mt-0.5">
+                          {po.expectedDeliveryDate
+                            ? `Expected: ${new Date(po.expectedDeliveryDate).toLocaleDateString()}`
+                            : po.requestedDeliveryDate
+                            ? `Requested: ${new Date(po.requestedDeliveryDate).toLocaleDateString()}`
+                            : 'No delivery date'}
+                        </div>
                       </div>
-                      <div className="text-gray-500 mt-0.5">
-                        {po.expectedDeliveryDate
-                          ? `Expected: ${new Date(po.expectedDeliveryDate).toLocaleDateString()}`
-                          : po.requestedDeliveryDate
-                          ? `Requested: ${new Date(po.requestedDeliveryDate).toLocaleDateString()}`
-                          : 'No delivery date'}
-                      </div>
+                      <Button
+                        size="sm"
+                        className={`h-6 text-xs px-2 shrink-0 ${isResuming ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
+                        onClick={() => onStartReceipt(po)}
+                        data-testid={`button-start-po-${po.id}`}
+                      >
+                        {isResuming ? 'Resume' : 'Start'}
+                      </Button>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+
+          {filteredPOs.length === 0 && !isLoadingPOs && (
+            <div className="text-center text-xs text-gray-500 py-4">
+              No open POs found
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="recent" className="flex-1 overflow-y-auto p-2 mt-2">
+          {sortedCompletedReceipts.length === 0 ? (
+            <div className="text-center text-xs text-gray-500 py-4">
+              No recently received receipts
+            </div>
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                <History className="w-3 h-3" />
+                Recent Completed Receipts
+              </div>
+              {sortedCompletedReceipts.map(receipt => (
+                <div
+                  key={receipt.id}
+                  className={`p-2 border-t text-xs hover:bg-gray-50 dark:hover:bg-gray-800/50 ${activeReceiptId === receipt.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                  data-testid={`row-recent-receipt-${receipt.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <button
+                      type="button"
+                      className="text-left min-w-0 flex-1"
+                      onClick={() => onSelectReceipt(receipt)}
+                      data-testid={`button-open-receipt-${receipt.id}`}
+                    >
+                      <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{receipt.receiptNumber}</div>
+                      <div className="text-gray-500 mt-0.5 truncate">
+                        {receipt.vendorName ?? 'Manual receipt'} {receipt.vendorPoNumber ? `· PO ${receipt.vendorPoNumber}` : ''}
+                      </div>
+                    </button>
                     <Button
                       size="sm"
-                      className={`h-6 text-xs px-2 shrink-0 ${isResuming ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
-                      onClick={() => onStartReceipt(po)}
+                      variant="outline"
+                      className="h-6 text-xs px-2 shrink-0"
+                      onClick={() => reopenReceiptMutation.mutate(receipt)}
+                      disabled={reopenReceiptMutation.isPending}
+                      title="Reopen receipt for correction"
+                      data-testid={`button-reopen-receipt-${receipt.id}`}
                     >
-                      {isResuming ? 'Resume' : 'Start'}
+                      {reopenReceiptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Reopen'}
                     </Button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        ))}
-
-        {filteredPOs.length === 0 && !isLoadingPOs && (
-          <div className="text-center text-xs text-gray-500 py-4">
-            No open POs found
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
       {isAdminOrOwner && <DepartmentDefaultsManager />}
     </div>
   );
@@ -753,6 +892,27 @@ function CenterPanel({
 }) {
   const [step, setStep] = useState(0);
   const queryClient = useQueryClient();
+  const reopenActiveReceiptMutation = useMutation({
+    mutationFn: async () => {
+      if (!receipt) throw new Error('No receipt selected');
+      await apiRequest(`/api/receipts/${receipt.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'in_progress',
+          reopenReason: 'Correction to receiving entry',
+        }),
+      });
+      return apiRequest(`/api/receipts/${receipt.id}`);
+    },
+    onSuccess: (updated: Receipt) => {
+      onReceiptUpdate(updated);
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts', 'complete'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts/pending-by-po'] });
+      toast.success(`Reopened ${updated.receiptNumber} for adjustment`);
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to reopen receipt'),
+  });
 
   if (!receipt) {
     return (
@@ -789,7 +949,21 @@ function CenterPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
-        {step === 0 && (
+        {receipt.status === 'complete' ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="border rounded-lg p-4 max-w-md text-center space-y-3 bg-gray-50 dark:bg-gray-900">
+              <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto" />
+              <div>
+                <div className="text-sm font-semibold">Receipt Complete</div>
+                <div className="text-xs text-gray-500 mt-1">Reopen this receipt before correcting quantities, traceability, documents, or putaway details.</div>
+              </div>
+              <Button size="sm" onClick={() => reopenActiveReceiptMutation.mutate()} disabled={reopenActiveReceiptMutation.isPending}>
+                {reopenActiveReceiptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                Reopen for Adjustment
+              </Button>
+            </div>
+          </div>
+        ) : step === 0 && (
           <ShipmentInfoStep
             receipt={receipt}
             onNext={() => setStep(1)}
@@ -828,16 +1002,18 @@ function CenterPanel({
         )}
       </div>
 
-      <div className="p-3 border-t flex items-center justify-between bg-white dark:bg-gray-950">
-        <Button variant="outline" size="sm" onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}>
-          Back
-        </Button>
-        {step < 4 && (
-          <Button size="sm" onClick={() => setStep(s => Math.min(4, s + 1))}>
-            Save & Continue
+      {receipt.status !== 'complete' && (
+        <div className="p-3 border-t flex items-center justify-between bg-white dark:bg-gray-950">
+          <Button variant="outline" size="sm" onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}>
+            Back
           </Button>
-        )}
-      </div>
+          {step < 4 && (
+            <Button size="sm" onClick={() => setStep(s => Math.min(4, s + 1))}>
+              Save & Continue
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1422,6 +1598,8 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
     certReference: '',
   });
   const [confirmDeleteUnitId, setConfirmDeleteUnitId] = useState<number | null>(null);
+  const [adjustingUnit, setAdjustingUnit] = useState<ReceivedUnit | null>(null);
+  const [adjustUnitForm, setAdjustUnitForm] = useState<Record<string, string>>({});
 
   const deleteUnitMutation = useMutation({
     mutationFn: (unitId: number) => apiRequest(`/api/receipts/${receipt.id}/units/${unitId}`, {
@@ -1475,23 +1653,14 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
       }
       if (splitMode === 'by_rolls') {
         payload.sqmPerRollArray = rollSqms.map(v => parseFloat(v));
+        payload.rollNumbers = rollNumbers.map(v => v.trim());
       }
       return apiRequest(`/api/receipts/${receipt.id}/lines/${selectedLineId}/split`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
     },
-    onSuccess: async (createdUnits: ReceivedUnit[]) => {
-      if (splitMode === 'by_rolls') {
-        await Promise.all((createdUnits ?? []).map((unit, idx) => {
-          const rollNumber = rollNumbers[idx]?.trim();
-          if (!rollNumber) return Promise.resolve();
-          return apiRequest(`/api/receipts/${receipt.id}/units/${unit.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ rollNumber }),
-          });
-        }));
-      }
+    onSuccess: async () => {
       const updated = await apiRequest(`/api/receipts/${receipt.id}`);
       onUpdate(updated);
       setShowSplitDialog(false);
@@ -1513,6 +1682,57 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
       toast.success('Unit cloned');
     },
     onError: (err: any) => toast.error(err?.message ?? 'Failed to clone unit'),
+  });
+
+  const beginAdjustUnit = (unit: ReceivedUnit) => {
+    setAdjustingUnit(unit);
+    setAdjustUnitForm({
+      quantity: unit.quantity ?? '',
+      uom: unit.uom ?? '',
+      unitType: unit.unitType ?? 'other',
+      lotNumber: unit.lotNumber ?? '',
+      batchNumber: unit.batchNumber ?? '',
+      serialNumber: unit.serialNumber ?? '',
+      rollNumber: unit.rollNumber ?? '',
+      heatLot: unit.heatLot ?? '',
+      manufactureDate: unit.manufactureDate ? unit.manufactureDate.slice(0, 10) : '',
+      expirationDate: unit.expirationDate ? unit.expirationDate.slice(0, 10) : '',
+      certReference: unit.certReference ?? '',
+      location: unit.location ?? '',
+      freezerNumber: unit.freezerNumber != null ? String(unit.freezerNumber) : '',
+    });
+  };
+
+  const adjustUnitMutation = useMutation({
+    mutationFn: () => {
+      if (!adjustingUnit) throw new Error('No unit selected');
+      const payload: Record<string, string | number | null> = {
+        quantity: adjustUnitForm.quantity,
+        uom: adjustUnitForm.uom,
+        unitType: adjustUnitForm.unitType,
+        lotNumber: adjustUnitForm.lotNumber || null,
+        batchNumber: adjustUnitForm.batchNumber || null,
+        serialNumber: adjustUnitForm.serialNumber || null,
+        rollNumber: adjustUnitForm.rollNumber || null,
+        heatLot: adjustUnitForm.heatLot || null,
+        manufactureDate: adjustUnitForm.manufactureDate || null,
+        expirationDate: adjustUnitForm.expirationDate || null,
+        certReference: adjustUnitForm.certReference || null,
+        location: adjustUnitForm.location || null,
+        freezerNumber: adjustUnitForm.freezerNumber ? parseInt(adjustUnitForm.freezerNumber, 10) : null,
+      };
+      return apiRequest(`/api/receipts/${receipt.id}/units/${adjustingUnit.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: async () => {
+      const updated = await apiRequest(`/api/receipts/${receipt.id}`);
+      onUpdate(updated);
+      setAdjustingUnit(null);
+      toast.success('Unit corrected');
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to adjust unit'),
   });
 
   // Fetch traceability config for every line so we can preview which lines will
@@ -1538,7 +1758,7 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
         }
       }));
       if (cancelled) return;
-      const STRICT_KEYS = ['serialNumber', 'rollNumber', 'lotNumber'] as const;
+      const STRICT_KEYS = ['serialNumber', 'rollNumber'] as const;
       const next: Record<number, { strict: boolean; fields: string[] }> = {};
       for (const line of lines) {
         const cfg = line.agPartNumber ? cfgByPart[line.agPartNumber] : null;
@@ -1557,7 +1777,6 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
   const STRICT_FIELD_LABELS: Record<string, string> = {
     serialNumber: 'Serial #',
     rollNumber: 'Roll #',
-    lotNumber: 'Lot #',
   };
   const pendingLines = lines.filter(l => {
     const qty = parseFloat(String(l.receivedQty ?? '0'));
@@ -1676,6 +1895,14 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                   <>
                     <Button
                       variant="ghost" size="sm" className="h-5 px-1 text-xs"
+                      title="Adjust unit"
+                      onClick={() => beginAdjustUnit(unit)}
+                      disabled={adjustUnitMutation.isPending}
+                    >
+                      <Pencil className="w-2.5 h-2.5" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm" className="h-5 px-1 text-xs"
                       title="Clone unit"
                       onClick={() => cloneUnitMutation.mutate(unit.id)}
                       disabled={cloneUnitMutation.isPending}
@@ -1704,6 +1931,84 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
           <ChevronDown className="w-3 h-3 mr-1" /> Split Line into Units
         </Button>
       )}
+
+      <Dialog open={!!adjustingUnit} onOpenChange={open => !open && setAdjustingUnit(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Adjust Received Unit</DialogTitle>
+            <DialogDescription className="text-xs">
+              Correct quantity, traceability, and storage details. Accepted units keep their material-lot link and record an adjustment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {adjustingUnit?.materialLotId && (
+              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                This unit already created inventory. Quantity changes will adjust the linked material lot when unissued quantity is available.
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">Qty</Label>
+                <Input className="h-7 text-xs mt-0.5" type="number" step="0.001" value={adjustUnitForm.quantity ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, quantity: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">UOM</Label>
+                <Input className="h-7 text-xs mt-0.5" value={adjustUnitForm.uom ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, uom: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Unit Type</Label>
+                <Select value={adjustUnitForm.unitType ?? 'other'} onValueChange={v => setAdjustUnitForm(f => ({ ...f, unitType: v }))}>
+                  <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {UNIT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ['lotNumber', 'Lot Number'],
+                ['batchNumber', 'Batch Number'],
+                ['serialNumber', 'Serial Number'],
+                ['rollNumber', 'Roll Number'],
+                ['heatLot', 'Heat Lot'],
+                ['certReference', 'Cert Reference'],
+              ].map(([key, label]) => (
+                <div key={key}>
+                  <Label className="text-xs">{label}</Label>
+                  <Input className="h-7 text-xs mt-0.5" value={adjustUnitForm[key] ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, [key]: e.target.value }))} />
+                </div>
+              ))}
+              <div>
+                <Label className="text-xs">Mfg Date</Label>
+                <Input className="h-7 text-xs mt-0.5" type="date" value={adjustUnitForm.manufactureDate ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, manufactureDate: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Exp Date</Label>
+                <Input className="h-7 text-xs mt-0.5" type="date" value={adjustUnitForm.expirationDate ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, expirationDate: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Location</Label>
+                <Input className="h-7 text-xs mt-0.5" value={adjustUnitForm.location ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, location: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Freezer #</Label>
+                <Input className="h-7 text-xs mt-0.5" type="number" min={1} value={adjustUnitForm.freezerNumber ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, freezerNumber: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setAdjustingUnit(null)}>Cancel</Button>
+            <Button
+              size="sm"
+              onClick={() => adjustUnitMutation.mutate()}
+              disabled={adjustUnitMutation.isPending || !adjustUnitForm.quantity || Number(adjustUnitForm.quantity) <= 0}
+            >
+              {adjustUnitMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save Correction'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Split dialog */}
       <Dialog open={showSplitDialog} onOpenChange={open => { setShowSplitDialog(open); if (!open) { setSplitMode('equal'); setSplitCount('2'); setRollSqms(['', '']); setRollNumbers(['', '']); setSplitTemplate({ lotNumber: '', batchNumber: '', heatLot: '', manufactureDate: '', expirationDate: '', certReference: '' }); } }}>
@@ -1740,7 +2045,7 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="equal">Equal split — divide total quantity evenly</SelectItem>
-                  <SelectItem value="by_rolls">By rolls — enter SQM per roll</SelectItem>
+                  <SelectItem value="by_rolls">By rolls — enter exact roll # and SQM</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1812,13 +2117,16 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                     }}
                   />
                 </div>
+                <p className="text-xs text-gray-500">
+                  Enter the exact supplier/manufacturer roll number for each roll before creating the units.
+                </p>
                 <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                   {rollSqms.map((val, idx) => (
                     <div key={idx} className="grid grid-cols-[56px_1fr_1fr_34px] items-center gap-2">
                       <Label className="text-xs w-14 shrink-0">Roll {idx + 1}</Label>
                       <Input
                         className="h-7 text-xs"
-                        placeholder="Roll #"
+                        placeholder="Exact roll #"
                         value={rollNumbers[idx] ?? ''}
                         onChange={e => setRollNumbers(prev => {
                           const next = [...prev];
@@ -1863,7 +2171,10 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
               disabled={
                 splitLineMutation.isPending ||
                 parseInt(splitCount, 10) < 2 ||
-                (splitMode === 'by_rolls' && rollSqms.some(v => { const n = parseFloat(v); return !Number.isFinite(n) || n <= 0; }))
+                (splitMode === 'by_rolls' && (
+                  rollNumbers.some(v => !v.trim()) ||
+                  rollSqms.some(v => { const n = parseFloat(v); return !Number.isFinite(n) || n <= 0; })
+                ))
               }
             >
               {splitLineMutation.isPending
@@ -2062,14 +2373,19 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
   onUpdate: (r: Receipt) => void;
 }) {
   const units = receipt.units ?? [];
+  const NONE_SENTINEL = '__none__';
   const [settingDisposition, setSettingDisposition] = useState<{
     unitId: number;
     disposition: string;
     notes: string;
     rejectionOutcome: string;
     departmentId: string;
+    approverEmployeeId: string;
     supervisorConfirmed: boolean;
   } | null>(null);
+  const [approvalScope, setApprovalScope] = useState<'all' | 'per_item'>('all');
+  const [defaultApprovalDepartmentId, setDefaultApprovalDepartmentId] = useState(NONE_SENTINEL);
+  const [defaultApproverEmployeeId, setDefaultApproverEmployeeId] = useState('');
   const [dispositionError, setDispositionError] = useState<{ error: string; missingDocuments?: string[] } | null>(null);
 
   // Safety net: when Disposition opens, ensure any non-split lines have been promoted
@@ -2113,6 +2429,37 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
     queryKey: ['/api/inventory/departments'],
   });
 
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number } | null>({
+    queryKey: ['currentUser'],
+  });
+
+  const activeEmployees = useMemo(
+    () => employees.filter(emp => emp.isActive !== false),
+    [employees]
+  );
+
+  useEffect(() => {
+    if (defaultApproverEmployeeId || !currentUser?.employeeId || activeEmployees.length === 0) return;
+    const currentEmployee = activeEmployees.find(emp => emp.id === currentUser.employeeId);
+    if (currentEmployee) setDefaultApproverEmployeeId(String(currentEmployee.id));
+  }, [activeEmployees, currentUser?.employeeId, defaultApproverEmployeeId]);
+
+  const employeeLabel = (employee: EmployeeOption) => {
+    const displayName = employee.preferredName || employee.name || `Employee ${employee.id}`;
+    return employee.employeeCode ? `${displayName} (${employee.employeeCode})` : displayName;
+  };
+
+  const selectedDefaultDepartment = departments.find(d => String(d.id) === defaultApprovalDepartmentId);
+  const selectedDefaultApprover = activeEmployees.find(emp => String(emp.id) === defaultApproverEmployeeId);
+  const approvalDefaultsLabel = [
+    selectedDefaultDepartment?.name ?? 'Receiving',
+    selectedDefaultApprover ? employeeLabel(selectedDefaultApprover) : currentUser?.username ?? 'Current user',
+  ].join(' / ');
+
   // Fetch missing required docs for this receipt
   const { data: requiredDocsData } = useQuery({
     queryKey: ['/api/receipts', receipt.id, 'required-docs'],
@@ -2128,18 +2475,26 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
     mutationFn: async () => {
       const draft = settingDisposition!;
       const selectedDepartment = departments.find(d => String(d.id) === draft.departmentId);
+      const selectedApprover = activeEmployees.find(emp => String(emp.id) === draft.approverEmployeeId);
       const finalDisposition = draft.disposition === 'rejected'
         ? draft.rejectionOutcome
         : draft.disposition;
       const notes = [
         draft.notes.trim(),
-        selectedDepartment ? `Department: ${selectedDepartment.name}` : '',
-        draft.supervisorConfirmed ? 'Supervisor confirmation recorded by current user' : '',
+        `Approved department: ${selectedDepartment?.name ?? 'Receiving'}`,
+        selectedApprover ? `Approved employee: ${employeeLabel(selectedApprover)}` : `Approved employee: ${currentUser?.username ?? 'Current user'}`,
+        `Approval scope: ${approvalScope === 'all' ? 'All items' : 'Per item'}`,
+        draft.supervisorConfirmed ? 'Supervisor confirmation recorded' : '',
       ].filter(Boolean).join('\n');
       if (selectedDepartment && receipt.departmentId !== selectedDepartment.id) {
         await apiRequest(`/api/receipts/${receipt.id}`, {
           method: 'PATCH',
           body: JSON.stringify({ departmentId: selectedDepartment.id }),
+        });
+      } else if (!selectedDepartment && receipt.departmentId) {
+        await apiRequest(`/api/receipts/${receipt.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ departmentId: null }),
         });
       }
       return apiRequest(`/api/receipts/${receipt.id}/units/${draft.unitId}/disposition`, {
@@ -2208,6 +2563,73 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
       {units.length === 0 && (
         <div className="text-center text-xs text-gray-500 py-4">No units to disposition yet</div>
       )}
+      {units.length > 0 && (
+        <div className="border rounded-lg p-3 bg-slate-50 dark:bg-slate-900/20 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-medium">Approval Defaults</div>
+              <div className="text-xs text-gray-500">Applied when opening an item disposition.</div>
+            </div>
+            <Badge variant="outline" className="text-[10px] font-normal">
+              {approvalScope === 'all' ? 'All items' : 'Per item'}
+            </Badge>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div>
+              <Label className="text-xs">Approved Department</Label>
+              <Select
+                value={defaultApprovalDepartmentId}
+                onValueChange={setDefaultApprovalDepartmentId}
+              >
+                <SelectTrigger className="h-8 text-xs mt-1">
+                  <SelectValue placeholder="Receiving" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_SENTINEL}>Receiving</SelectItem>
+                  {departments.map(dept => (
+                    <SelectItem key={dept.id} value={String(dept.id)}>{dept.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Approved Employee</Label>
+              <Select
+                value={defaultApproverEmployeeId || NONE_SENTINEL}
+                onValueChange={v => setDefaultApproverEmployeeId(v === NONE_SENTINEL ? '' : v)}
+              >
+                <SelectTrigger className="h-8 text-xs mt-1">
+                  <SelectValue placeholder={currentUser?.username ?? 'Current user'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_SENTINEL}>{currentUser?.username ?? 'Current user'}</SelectItem>
+                  {activeEmployees.map(emp => (
+                    <SelectItem key={emp.id} value={String(emp.id)}>{employeeLabel(emp)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Apply To</Label>
+              <Select
+                value={approvalScope}
+                onValueChange={v => setApprovalScope(v as 'all' | 'per_item')}
+              >
+                <SelectTrigger className="h-8 text-xs mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All items</SelectItem>
+                  <SelectItem value="per_item">Per item</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="text-[11px] text-gray-500">
+            Current approval default: <span className="font-medium text-gray-700 dark:text-gray-300">{approvalDefaultsLabel}</span>
+          </div>
+        </div>
+      )}
       {units.map(unit => {
         const expStatus = getExpirationStatus(unit.expirationDate);
         return (
@@ -2243,7 +2665,8 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
                       disposition: d,
                       notes: '',
                       rejectionOutcome: 'rejected_returned',
-                      departmentId: receipt.departmentId ? String(receipt.departmentId) : '',
+                      departmentId: defaultApprovalDepartmentId === NONE_SENTINEL ? '' : defaultApprovalDepartmentId,
+                      approverEmployeeId: defaultApproverEmployeeId,
                       supervisorConfirmed: false,
                     });
                     setDispositionError(null);
@@ -2273,18 +2696,35 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
                 Setting disposition to: <span className="font-medium">{DISPOSITION_LABELS[settingDisposition.disposition]}</span>
               </div>
               <div>
-                <Label className="text-xs">Department / Supervisor Area</Label>
+                <Label className="text-xs">Approved Department</Label>
                 <Select
-                  value={settingDisposition.departmentId || '__none__'}
-                  onValueChange={v => setSettingDisposition(s => s ? { ...s, departmentId: v === '__none__' ? '' : v } : s)}
+                  value={settingDisposition.departmentId || NONE_SENTINEL}
+                  onValueChange={v => setSettingDisposition(s => s ? { ...s, departmentId: v === NONE_SENTINEL ? '' : v } : s)}
                 >
                   <SelectTrigger className="h-8 text-xs mt-1">
-                    <SelectValue placeholder="Receiving or department supervisor" />
+                    <SelectValue placeholder="Receiving" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">Receiving</SelectItem>
+                    <SelectItem value={NONE_SENTINEL}>Receiving</SelectItem>
                     {departments.map(dept => (
                       <SelectItem key={dept.id} value={String(dept.id)}>{dept.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Approved Employee</Label>
+                <Select
+                  value={settingDisposition.approverEmployeeId || NONE_SENTINEL}
+                  onValueChange={v => setSettingDisposition(s => s ? { ...s, approverEmployeeId: v === NONE_SENTINEL ? '' : v } : s)}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1">
+                    <SelectValue placeholder={currentUser?.username ?? 'Current user'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE_SENTINEL}>{currentUser?.username ?? 'Current user'}</SelectItem>
+                    {activeEmployees.map(emp => (
+                      <SelectItem key={emp.id} value={String(emp.id)}>{employeeLabel(emp)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2372,14 +2812,14 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
   const queryClient = useQueryClient();
 
   const NONE_SENTINEL = '__none__';
+  const LEAVE_OPEN_SENTINEL = '__leave_open__';
 
   const [batchLocation, setBatchLocation] = useState('');
   const [batchFreezer, setBatchFreezer] = useState('');
   const [batchStorageType, setBatchStorageType] = useState<(typeof STORAGE_TYPES)[number]>('conex');
   const [batchStorageIdentifier, setBatchStorageIdentifier] = useState('');
   const [batchStorageNote, setBatchStorageNote] = useState('');
-  const [batchAllocType, setBatchAllocType] = useState('stock');
-  const [batchAllocId, setBatchAllocId] = useState('');
+  const [batchTargetProjectId, setBatchTargetProjectId] = useState(NONE_SENTINEL);
   const [batchPending, setBatchPending] = useState(false);
   const [selectedDeptId, setSelectedDeptId] = useState(
     receipt.departmentId ? String(receipt.departmentId) : NONE_SENTINEL,
@@ -2389,6 +2829,14 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
   const { data: departments = [] } = useQuery<InventoryDepartment[]>({
     queryKey: ['/api/inventory/departments'],
   });
+
+  const { data: projectTargetsResponse } = useQuery<{ data: ReceivingProjectTarget[] }>({
+    queryKey: ['/api/receipts/project-targets/open'],
+  });
+  const projectTargets = projectTargetsResponse?.data ?? [];
+
+  const renderProjectTargetLabel = (project: ReceivingProjectTarget) =>
+    `${project.projectCode} - ${project.projectName}${project.customerName ? ` (${project.customerName})` : ''}`;
 
   const applyDeptDefaults = async (dept: InventoryDepartment | null, newLocation: string | null, newFreezer: number | null, silent = false) => {
     if (!dept || (newLocation == null && newFreezer == null)) return;
@@ -2461,19 +2909,23 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
 
   const handleBatchAssign = async () => {
     const structuredLocation = buildStorageLocation(batchStorageType, batchStorageIdentifier, batchStorageNote);
-    if (!batchLocation && !structuredLocation && !batchFreezer && !batchAllocId) {
+    if (!batchLocation && !structuredLocation && !batchFreezer && batchTargetProjectId === NONE_SENTINEL) {
       toast.error('Enter at least one field to batch-assign');
       return;
     }
     setBatchPending(true);
-    const updates: Record<string, any> = { allocatedToType: batchAllocType };
+    const updates: Record<string, any> = {};
     if (structuredLocation || batchLocation) updates.location = structuredLocation || batchLocation;
     if (batchStorageType === 'freezer' && batchStorageIdentifier) {
       updates.freezerNumber = parseInt(batchStorageIdentifier, 10);
     } else if (batchFreezer) {
       updates.freezerNumber = parseInt(batchFreezer, 10);
     }
-    if (batchAllocId) updates.allocatedToId = parseInt(batchAllocId, 10);
+    if (batchTargetProjectId !== NONE_SENTINEL) {
+      updates.targetProjectId = batchTargetProjectId === LEAVE_OPEN_SENTINEL ? null : batchTargetProjectId;
+      updates.allocatedToType = batchTargetProjectId === LEAVE_OPEN_SENTINEL ? 'stock' : 'project';
+      updates.allocatedToId = null;
+    }
     try {
       await Promise.all(units.map(u =>
         apiRequest(`/api/receipts/${receipt.id}/units/${u.id}`, {
@@ -2503,7 +2955,7 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
       }
       onComplete();
     },
-    onError: (err: any) => toast.error(err?.message ?? 'Failed to complete receipt'),
+    onError: () => toast.error('Failed to complete receipt'),
   });
 
   return (
@@ -2578,21 +3030,20 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
               <Label className="text-xs">Freezer #</Label>
               <Input className="h-7 text-xs mt-0.5" type="number" min={1} value={batchFreezer} onChange={e => setBatchFreezer(e.target.value)} placeholder="1–5" />
             </div>
-            <div>
-              <Label className="text-xs">Allocation Type</Label>
-              <Select value={batchAllocType} onValueChange={setBatchAllocType}>
-                <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue /></SelectTrigger>
+            <div className="col-span-2">
+              <Label className="text-xs">Target Project</Label>
+              <Select value={batchTargetProjectId} onValueChange={setBatchTargetProjectId}>
+                <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue placeholder="No batch project change" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="stock">Stock</SelectItem>
-                  <SelectItem value="work_order">Work Order</SelectItem>
-                  <SelectItem value="po_demand">PO Demand</SelectItem>
-                  <SelectItem value="quarantine">Quarantine</SelectItem>
+                  <SelectItem value={NONE_SENTINEL}>No batch project change</SelectItem>
+                  <SelectItem value={LEAVE_OPEN_SENTINEL}>Leave open</SelectItem>
+                  {projectTargets.map(project => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {renderProjectTargetLabel(project)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Target ID <span className="text-gray-400">(WO/PO #)</span></Label>
-              <Input className="h-7 text-xs mt-0.5" type="number" value={batchAllocId} onChange={e => setBatchAllocId(e.target.value)} placeholder="Optional" />
             </div>
           </div>
           <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={handleBatchAssign} disabled={batchPending}>
@@ -2644,37 +3095,31 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
                 }}
               />
             </div>
-            <div>
-              <Label className="text-xs">Allocation</Label>
+            <div className="col-span-2">
+              <Label className="text-xs">Target Project</Label>
               <Select
-                defaultValue={unit.allocatedToType ?? 'stock'}
-                onValueChange={v => updateUnitMutation.mutate({ unitId: unit.id, updates: { allocatedToType: v } })}
+                value={unit.targetProjectId ?? LEAVE_OPEN_SENTINEL}
+                onValueChange={v => updateUnitMutation.mutate({
+                  unitId: unit.id,
+                  updates: {
+                    targetProjectId: v === LEAVE_OPEN_SENTINEL ? null : v,
+                    allocatedToType: v === LEAVE_OPEN_SENTINEL ? 'stock' : 'project',
+                    allocatedToId: null,
+                  },
+                })}
               >
                 <SelectTrigger className="h-7 text-xs mt-0.5">
-                  <SelectValue />
+                  <SelectValue placeholder="Leave open" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="stock">Stock</SelectItem>
-                  <SelectItem value="work_order">Work Order</SelectItem>
-                  <SelectItem value="po_demand">PO Demand</SelectItem>
-                  <SelectItem value="quarantine">Quarantine</SelectItem>
+                  <SelectItem value={LEAVE_OPEN_SENTINEL}>Leave open</SelectItem>
+                  {projectTargets.map(project => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {renderProjectTargetLabel(project)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Target ID <span className="text-gray-400">(WO/PO #)</span></Label>
-              <Input
-                className="h-7 text-xs mt-0.5"
-                type="number"
-                defaultValue={unit.allocatedToId ?? ''}
-                placeholder="Optional"
-                onBlur={e => {
-                  const val = e.target.value ? parseInt(e.target.value, 10) : null;
-                  if (val !== (unit.allocatedToId ?? null)) {
-                    updateUnitMutation.mutate({ unitId: unit.id, updates: { allocatedToId: val } });
-                  }
-                }}
-              />
             </div>
           </div>
         </div>
@@ -2832,15 +3277,24 @@ function DocumentsTab({ receipt, onUpdate }: { receipt: Receipt; onUpdate: (r: R
           Authorization: `Bearer ${localStorage.getItem('sessionToken') ?? localStorage.getItem('jwtToken') ?? ''}`,
         },
       });
-      if (!resp.ok) throw new Error('Upload failed');
+      if (!resp.ok) {
+        let message = 'Upload failed';
+        try {
+          const payload = await resp.json();
+          message = payload?.error || payload?.message || message;
+        } catch {
+          // Keep the generic message when the server did not return JSON.
+        }
+        throw new Error(message);
+      }
       const updated = await apiRequest(`/api/receipts/${receipt.id}`);
       onUpdate(updated);
       queryClient.invalidateQueries({ queryKey: ['/api/receipts', receipt.id, 'required-docs'] });
       setDocNotes('');
       setAssignToUnit(RECEIPT_LEVEL);
       toast.success('Document uploaded');
-    } catch (err) {
-      toast.error('Failed to upload document');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to upload document');
     } finally {
       setUploading(false);
     }
@@ -3243,7 +3697,7 @@ export default function InventoryReceivingControlCenter() {
         {/* Desktop grid */}
         <div className="hidden md:grid h-full" style={{ gridTemplateColumns: '280px 1fr 320px' }}>
           <div className="border-r overflow-hidden">
-            <LeftPanel onStartReceipt={handleStartReceipt} activeReceiptId={activeReceipt?.id ?? null} />
+            <LeftPanel onStartReceipt={handleStartReceipt} onSelectReceipt={handleUpdate} activeReceiptId={activeReceipt?.id ?? null} />
           </div>
           <div className="overflow-hidden border-r">
             {showSupervisorQueue ? (
@@ -3266,7 +3720,7 @@ export default function InventoryReceivingControlCenter() {
         {/* Mobile single-panel */}
         <div className="md:hidden h-full overflow-hidden">
           {mobileTab === 'pos' && (
-            <LeftPanel onStartReceipt={handleStartReceipt} activeReceiptId={activeReceipt?.id ?? null} />
+            <LeftPanel onStartReceipt={handleStartReceipt} onSelectReceipt={handleUpdate} activeReceiptId={activeReceipt?.id ?? null} />
           )}
           {mobileTab === 'workflow' && (
             showSupervisorQueue ? (

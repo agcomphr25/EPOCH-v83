@@ -61,11 +61,20 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
   angiet: {
     routes: [
       '/order-entry',
+      '/department-queue/cnc',
+      '/cnc-dashboard',
+      '/cnc-part-routings',
+      '/department-queue/gunsmith',
+      '/cutting-control-center',
+      '/fabric-inventory',
+      '/all-orders',
       '/orders-list',
       '/orders-management',
       '/department-queue/production-queue',
       '/department-queue/layup-plugging',
       '/customers',
+      '/inventory/parts-request',
+      '/training',
     ],
   },
 
@@ -142,9 +151,12 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/cnc-part-routings',
       '/department-queue/gunsmith',
       '/cutting-control-center',
+      '/fabric-inventory',
+      '/all-orders',
       '/orders-list',
       '/orders-management',
       '/inventory/parts-request',
+      '/training',
     ],
   },
 
@@ -206,6 +218,7 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-management',
       '/maintenance',
       '/inventory/parts-request',
+      '/employee-portal',
     ],
   },
 };
@@ -214,6 +227,7 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/orders': ['ADMIN', 'OWNER'],
   '/gateway-reports': ['ADMIN', 'OWNER'],
   '/inventory/enhanced-mrp': ['ADMIN', 'INVENTORY_MANAGER'],
+  '/inventory/consolidated-needs': ['ADMIN', 'OWNER'],
   '/user-management': ['ADMIN', 'OWNER'],
   '/employee': ['ADMIN', 'OWNER'],
   // /time-clock-admin: ADMIN/OWNER via role; non-admins via capability
@@ -267,6 +281,9 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
  */
 const ROUTE_CAPABILITY_ACCESS: Record<string, string> = {
   '/time-clock-admin': 'timekeeping.time_clock_admin.access',
+  '/finance/bulk-payment': 'finance.manage_payments',
+  '/finance/bulk-payment-history': 'finance.view',
+  '/inventory/consolidated-needs': 'purchasing.view_requisitions',
 };
 
 const API_TO_FRONTEND_ROUTE_MAPPING: Record<string, string[]> = {
@@ -279,7 +296,7 @@ const API_TO_FRONTEND_ROUTE_MAPPING: Record<string, string[]> = {
   '/api/credit-memos': ['/credit-memo'],
   '/api/ar-invoices': ['/finance/invoices'],
   '/api/refunds': ['/refund-queue'],
-  '/api/vendors': ['/vendors', '/vendor-pos'],
+  '/api/vendors': ['/vendors', '/vendor-pos', '/inventory/enhanced-mrp'],
   '/api/purchase-orders': ['/purchase-orders'],
   '/api/cost-centers': ['/finance/cost-centers'],
   '/api/cost-accounting': ['/finance/cost-accounting'],

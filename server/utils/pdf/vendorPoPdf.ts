@@ -1,114 +1,33 @@
-import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import { storage } from '../../storage';
-import { resolveAssetPath } from '../../src/utils/assetPaths';
-import * as fs from 'fs';
+import { resolveVendorPoContactName, resolveVendorPoReturnEmail } from '../vendorPoContact';
 
 const PAGE = { WIDTH: 612, HEIGHT: 792, MARGIN: 40 } as const;
 const PRINTABLE_WIDTH = PAGE.WIDTH - PAGE.MARGIN * 2;
 
-const FONT_SIZE = {
-  FOOTER: 7,
-  TABLE_CELL: 8,
-  SECTION_LABEL: 8,
-  BODY: 9,
-  SECTION_TITLE: 10,
-  PO_NUMBER: 14,
-  DOC_TITLE: 16,
-} as const;
-
-const LINE_HEIGHT = {
-  SMALL: 11,
-  BODY: 13,
-  SECTION_GAP: 16,
-  AFTER_DIVIDER: 18,
-  TOTAL_ROW: 15,
-} as const;
-
-const SPACING = {
-  CELL_PAD: 4,
-  LOGO_GAP: 8,
-  TEXT_INSET: 5,
-  ROW_TEXT_OFFSET: 10,
-  SECTION_BREAK: 12,
-  DETAIL_LABEL_OFFSET: 10,
-  DETAIL_VALUE_OFFSET: 80,
-  TOTAL_BAR_HEIGHT: 18,
-  TOTAL_BAR_PAD: 5,
-  TOTAL_BAR_OFFSET: 2,
-  AFTER_TOTAL: 30,
-  NOTES_GAP: 10,
-  NOTES_TITLE_GAP: 14,
-  TERMS_TITLE_GAP: 16,
-  TERMS_SUBSECTION_GAP: 12,
-  TERMS_SUBSECTION_TAIL: 4,
-  MIN_ROW_HEIGHT: 14,
-  ROW_HEIGHT_PAD: 3,
-  FOOTER_OFFSET: 5,
-  FOOTER_LINE_OFFSET: 12,
-} as const;
-
-const PAGE_BREAK = {
-  TABLE_ROW: 40,
-  TERMS_SECTION: 80,
-  TERMS_INNER: 15,
-  NOTES_SECTION: 50,
-} as const;
-
-const TITLE_BOX = { WIDTH: 200, HEIGHT: 60, TITLE_Y: 24, NUMBER_Y: 44, BELOW_GAP: 15 } as const;
-const LOGO_WIDTH = 140;
-
 const COLOR = {
-  PRIMARY_TEXT: rgb(0.2, 0.2, 0.2),
-  SECONDARY_TEXT: rgb(0.3, 0.3, 0.3),
-  MUTED_TEXT: rgb(0.4, 0.4, 0.4),
-  FOOTER_TEXT: rgb(0.6, 0.6, 0.6),
-  DIVIDER: rgb(0.85, 0.85, 0.85),
-  ALT_ROW_BG: rgb(0.97, 0.97, 0.97),
+  PRIMARY_TEXT: rgb(0.1, 0.1, 0.1),
+  SECONDARY_TEXT: rgb(0.28, 0.28, 0.28),
+  MUTED_TEXT: rgb(0.42, 0.42, 0.42),
+  BORDER: rgb(0.82, 0.82, 0.82),
+  LIGHT_BORDER: rgb(0.9, 0.9, 0.9),
+  HEADER_BG: rgb(0.96, 0.96, 0.96),
+  ROW_ALT: rgb(0.985, 0.985, 0.985),
+  PANEL_BG: rgb(0.98, 0.98, 0.98),
+  WATERMARK: rgb(0.93, 0.93, 0.93),
   WHITE: rgb(1, 1, 1),
   ACCENT_PO: rgb(0.1, 0.23, 0.36),
   ACCENT_RFQ: rgb(0.9, 0.49, 0.13),
 } as const;
 
-const TABLE_COL_WIDTHS_BASE = {
-  LINE: 30,
-  PART_NUM: 90,
-  UNIT: 50,
-  QTY: 60,
-  UNIT_PRICE: 70,
-  TOTAL: 70,
+const FONT_SIZE = {
+  WATERMARK: 52,
+  COMPANY: 22,
+  META_TITLE: 14,
+  SECTION_LABEL: 11,
+  BODY: 10.5,
+  SMALL: 8.5,
 } as const;
-
-const TABLE_COL_WIDTHS_WITH_NOTES = {
-  LINE: 25,
-  PART_NUM: 75,
-  UNIT: 40,
-  QTY: 45,
-  UNIT_PRICE: 65,
-  TOTAL: 65,
-  NOTES: 97,
-} as const;
-
-function computeDescWidth(withNotes: boolean): number {
-  if (withNotes) {
-    return PRINTABLE_WIDTH
-      - TABLE_COL_WIDTHS_WITH_NOTES.LINE
-      - TABLE_COL_WIDTHS_WITH_NOTES.PART_NUM
-      - TABLE_COL_WIDTHS_WITH_NOTES.NOTES
-      - TABLE_COL_WIDTHS_WITH_NOTES.UNIT
-      - TABLE_COL_WIDTHS_WITH_NOTES.QTY
-      - TABLE_COL_WIDTHS_WITH_NOTES.UNIT_PRICE
-      - TABLE_COL_WIDTHS_WITH_NOTES.TOTAL;
-  }
-  return PRINTABLE_WIDTH
-    - TABLE_COL_WIDTHS_BASE.LINE
-    - TABLE_COL_WIDTHS_BASE.PART_NUM
-    - TABLE_COL_WIDTHS_BASE.UNIT
-    - TABLE_COL_WIDTHS_BASE.QTY
-    - TABLE_COL_WIDTHS_BASE.UNIT_PRICE
-    - TABLE_COL_WIDTHS_BASE.TOTAL;
-}
-
-const HEADER_ROW_HEIGHT = SPACING.TOTAL_BAR_HEIGHT;
 
 interface VendorPOData {
   po: any;
@@ -116,22 +35,44 @@ interface VendorPOData {
   items: any[];
   companySettings: any;
   poSettings: any;
+  optionalSettings: any[];
 }
+
+interface Fonts {
+  regular: PDFFont;
+  bold: PDFFont;
+}
+
+interface DrawState {
+  pdfDoc: PDFDocument;
+  page: PDFPage;
+  fonts: Fonts;
+  accentColor: ReturnType<typeof rgb>;
+}
+
+type TextLine = { text: string; font?: PDFFont; size?: number; color?: ReturnType<typeof rgb> };
 
 async function fetchVendorPOData(poId: number): Promise<VendorPOData> {
   const po = await storage.getVendorPO(poId);
   if (!po) throw new Error(`Vendor PO #${poId} not found`);
 
-  const [vendor, items, companySettings, poSettings] = await Promise.all([
+  const [vendor, items, companySettings, poSettings, optionalSettings] = await Promise.all([
     storage.getVendor(po.vendorId),
     storage.getVendorPOItems(poId),
     storage.getCompanySettings(),
     storage.getVendorPOSettings(),
+    storage.getPOOptionalSettings(poId),
   ]);
 
   if (!vendor) throw new Error(`Vendor #${po.vendorId} not found for PO #${poId}`);
+  return { po, vendor, items: items ?? [], companySettings, poSettings, optionalSettings: optionalSettings ?? [] };
+}
 
-  return { po, vendor, items: items ?? [], companySettings, poSettings };
+function cleanText(value: unknown): string {
+  return String(value ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '');
 }
 
 function formatDate(dateValue: any): string {
@@ -144,333 +85,485 @@ function formatDate(dateValue: any): string {
 function formatCurrency(value: any): string {
   const num = Number(value);
   if (isNaN(num)) return '$0.00';
-  return `$${num.toFixed(2)}`;
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
-function truncateText(text: string, maxWidth: number, font: PDFFont, fontSize: number): string {
-  if (font.widthOfTextAtSize(text, fontSize) <= maxWidth) return text;
-  let truncated = text;
-  while (truncated.length > 0 && font.widthOfTextAtSize(truncated + '...', fontSize) > maxWidth) {
-    truncated = truncated.slice(0, -1);
+function formatNumber(value: any): string {
+  const num = Number(value);
+  if (isNaN(num)) return '0.00';
+  return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function joinParts(parts: unknown[], separator = ' '): string {
+  return parts.map(cleanText).filter(Boolean).join(separator);
+}
+
+function widthOf(text: string, font: PDFFont, size: number): number {
+  return font.widthOfTextAtSize(cleanText(text), size);
+}
+
+function drawText(
+  page: PDFPage,
+  text: unknown,
+  x: number,
+  y: number,
+  font: PDFFont,
+  size: number,
+  color = COLOR.PRIMARY_TEXT,
+) {
+  const value = cleanText(text);
+  if (!value) return;
+  page.drawText(value, { x, y, size, font, color });
+}
+
+function drawRightText(
+  page: PDFPage,
+  text: unknown,
+  rightX: number,
+  y: number,
+  font: PDFFont,
+  size: number,
+  color = COLOR.PRIMARY_TEXT,
+) {
+  const value = cleanText(text);
+  if (!value) return;
+  page.drawText(value, { x: rightX - widthOf(value, font, size), y, size, font, color });
+}
+
+function drawRightTextFit(
+  page: PDFPage,
+  text: unknown,
+  rightX: number,
+  minX: number,
+  y: number,
+  font: PDFFont,
+  size: number,
+  color = COLOR.PRIMARY_TEXT,
+) {
+  const value = cleanText(text);
+  if (!value) return;
+
+  let fontSize = size;
+  while (fontSize > 7 && widthOf(value, font, fontSize) > rightX - minX) {
+    fontSize -= 0.25;
   }
-  return truncated + '...';
+
+  page.drawText(value, { x: Math.max(minX, rightX - widthOf(value, font, fontSize)), y, size: fontSize, font, color });
 }
 
-function wrapText(text: string, maxWidth: number, font: PDFFont, fontSize: number): string[] {
-  const words = text.split(' ');
+function wrapText(text: unknown, maxWidth: number, font: PDFFont, fontSize: number): string[] {
+  const paragraphs = cleanText(text).split('\n');
   const lines: string[] = [];
-  let currentLine = '';
 
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    if (font.widthOfTextAtSize(testLine, fontSize) > maxWidth && currentLine) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
+  for (const paragraph of paragraphs) {
+    const words = paragraph.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      lines.push('');
+      continue;
     }
+
+    let currentLine = '';
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (widthOf(testLine, font, fontSize) > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
   }
-  if (currentLine) lines.push(currentLine);
-  return lines;
+
+  return lines.length ? lines : [''];
 }
 
-async function embedLogo(pdfDoc: PDFDocument) {
-  try {
-    const logoPath = resolveAssetPath('logo_updated.png');
-    if (fs.existsSync(logoPath)) {
-      const logoBytes = fs.readFileSync(logoPath);
-      return await pdfDoc.embedPng(logoBytes);
-    }
-  } catch {}
-  return null;
+function drawWrappedText(
+  page: PDFPage,
+  text: unknown,
+  x: number,
+  y: number,
+  maxWidth: number,
+  font: PDFFont,
+  fontSize: number,
+  lineHeight: number,
+  color = COLOR.PRIMARY_TEXT,
+): number {
+  const lines = wrapText(text, maxWidth, font, fontSize);
+  let cursorY = y;
+  for (const line of lines) {
+    drawText(page, line, x, cursorY, font, fontSize, color);
+    cursorY -= lineHeight;
+  }
+  return cursorY;
 }
 
-function buildTableColumnPositions(margin: number, withNotes: boolean) {
-  const colW = withNotes ? TABLE_COL_WIDTHS_WITH_NOTES : TABLE_COL_WIDTHS_BASE;
-  const descWidth = computeDescWidth(withNotes);
-  const line = margin;
-  const partNum = line + colW.LINE;
-  const description = partNum + colW.PART_NUM;
-  const notes = description + descWidth;
-  const unit = withNotes ? notes + TABLE_COL_WIDTHS_WITH_NOTES.NOTES : notes;
-  const qty = unit + colW.UNIT;
-  const unitPrice = qty + colW.QTY;
-  const total = unitPrice + colW.UNIT_PRICE;
-  return { line, partNum, description, notes: withNotes ? notes : null, unit, qty, unitPrice, total };
+function addPage(state: DrawState): PDFPage {
+  state.page = state.pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
+  return state.page;
 }
 
-export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
-  const data = await fetchVendorPOData(poId);
-  const { po, vendor, items, companySettings, poSettings } = data;
+function ensureSpace(state: DrawState, y: number, requiredHeight: number): number {
+  if (y - requiredHeight >= PAGE.MARGIN + 20) return y;
+  addPage(state);
+  return PAGE.HEIGHT - PAGE.MARGIN;
+}
 
-  const isRFQ = !po.poNumber;
+function drawHeaderBox(
+  page: PDFPage,
+  x: number,
+  yTop: number,
+  width: number,
+  height: number,
+  title: string,
+  fonts: Fonts,
+) {
+  const headerHeight = 22;
+  page.drawRectangle({ x, y: yTop - height, width, height, borderColor: COLOR.BORDER, borderWidth: 1 });
+  page.drawRectangle({ x, y: yTop - headerHeight, width, height: headerHeight, color: COLOR.HEADER_BG, borderColor: COLOR.BORDER, borderWidth: 1 });
+  drawText(page, title.toUpperCase(), x + 14, yTop - 15, fonts.bold, FONT_SIZE.SECTION_LABEL, COLOR.MUTED_TEXT);
+}
+
+function drawPanel(page: PDFPage, x: number, yTop: number, width: number, title: string, lines: TextLine[], fonts: Fonts): number {
+  const bodyLineHeight = 14;
+  const bodyHeight = Math.max(52, lines.length * bodyLineHeight + 22);
+  const panelHeight = bodyHeight + 22;
+  drawHeaderBox(page, x, yTop, width, panelHeight, title, fonts);
+
+  let y = yTop - 39;
+  for (const line of lines) {
+    drawText(page, line.text, x + 14, y, line.font ?? fonts.regular, line.size ?? FONT_SIZE.BODY, line.color ?? COLOR.PRIMARY_TEXT);
+    y -= bodyLineHeight;
+  }
+
+  return yTop - panelHeight;
+}
+
+function drawContactStrip(page: PDFPage, yTop: number, settings: any, fonts: Fonts): number {
+  const contactName = cleanText(settings.contactName);
+  const contactTitle = cleanText(settings.contactTitle);
+  const contactPhone = cleanText(settings.contactPhone);
+  const contactEmail = cleanText(settings.contactEmail);
+  if (!contactName && !contactPhone && !contactEmail) return yTop;
+
+  const stripHeight = 34;
+  page.drawRectangle({
+    x: PAGE.MARGIN,
+    y: yTop - stripHeight,
+    width: PRINTABLE_WIDTH,
+    height: stripHeight,
+    color: COLOR.PANEL_BG,
+    borderColor: COLOR.LIGHT_BORDER,
+    borderWidth: 1,
+  });
+
+  drawText(page, 'Purchasing Contact:', PAGE.MARGIN + 14, yTop - 21, fonts.bold, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
+  const contactLine = joinParts([contactName, contactTitle], contactTitle ? ', ' : '');
+  drawText(page, contactLine, PAGE.MARGIN + 122, yTop - 21, fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+  drawRightText(
+    page,
+    [contactPhone, contactEmail].filter(Boolean).join(' | '),
+    PAGE.WIDTH - PAGE.MARGIN - 12,
+    yTop - 21,
+    fonts.regular,
+    FONT_SIZE.BODY,
+    COLOR.PRIMARY_TEXT,
+  );
+
+  return yTop - stripHeight - 20;
+}
+
+function drawMetaRow(page: PDFPage, label: string, value: unknown, x: number, rightX: number, y: number, fonts: Fonts) {
+  drawText(page, label, x, y, fonts.regular, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
+  drawRightText(page, value, rightX, y, fonts.bold, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+}
+
+function drawDocumentHeader(state: DrawState, data: VendorPOData, settings: any, isRFQ: boolean): number {
+  const { page, fonts, accentColor } = state;
   const docTitle = isRFQ ? 'REQUEST FOR QUOTE' : 'PURCHASE ORDER';
-  const accentColor = isRFQ ? COLOR.ACCENT_RFQ : COLOR.ACCENT_PO;
+  const metaWidth = 260;
+  const titleX = PAGE.WIDTH - PAGE.MARGIN - metaWidth;
+  const titleY = PAGE.HEIGHT - PAGE.MARGIN;
+  const titleHeight = isRFQ ? 124 : 108;
 
-  const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-  let page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
-  const { width, height } = page.getSize();
-  let y = height - PAGE.MARGIN;
-
-  const logo = await embedLogo(pdfDoc);
-  if (logo) {
-    const logoHeight = LOGO_WIDTH * (logo.height / logo.width);
-    page.drawImage(logo, { x: PAGE.MARGIN, y: y - logoHeight, width: LOGO_WIDTH, height: logoHeight });
-    y -= logoHeight + SPACING.LOGO_GAP;
+  if (isRFQ) {
+    page.drawText('REQUEST FOR QUOTE', {
+      x: 62,
+      y: 365,
+      size: FONT_SIZE.WATERMARK,
+      font: fonts.bold,
+      color: COLOR.WATERMARK,
+      rotate: degrees(-35),
+    });
   }
 
-  const companyName = companySettings?.companyName || 'AG Composites';
-  const companyAddress = companySettings?.companyAddress || '';
-  const companyPhone = companySettings?.companyPhone || '';
-  const companyEmail = companySettings?.companyEmail || '';
-
-  if (companyAddress) {
-    page.drawText(companyAddress, { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.MUTED_TEXT });
-    y -= LINE_HEIGHT.SMALL;
+  drawText(page, settings.companyName || 'AG Composites', PAGE.MARGIN, titleY - 18, fonts.bold, FONT_SIZE.COMPANY, COLOR.PRIMARY_TEXT);
+  let companyY = titleY - 40;
+  companyY = drawWrappedText(page, settings.companyAddress || '', PAGE.MARGIN, companyY, 250, fonts.regular, FONT_SIZE.BODY, 13, COLOR.MUTED_TEXT);
+  if (settings.companyPhone) {
+    drawText(page, settings.companyPhone, PAGE.MARGIN, companyY - 2, fonts.regular, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
+    companyY -= 14;
   }
-  if (companyPhone || companyEmail) {
-    const contactLine = [companyPhone ? `Phone: ${companyPhone}` : '', companyEmail ? `Email: ${companyEmail}` : ''].filter(Boolean).join(' | ');
-    page.drawText(contactLine, { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.MUTED_TEXT });
-    y -= LINE_HEIGHT.SECTION_GAP;
+  if (settings.companyWebsite) {
+    drawText(page, settings.companyWebsite, PAGE.MARGIN, companyY - 2, fonts.regular, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
   }
 
-  const titleBoxX = width - PAGE.MARGIN - TITLE_BOX.WIDTH;
-  const titleBoxY = height - PAGE.MARGIN - TITLE_BOX.HEIGHT;
+  page.drawRectangle({ x: titleX, y: titleY - titleHeight, width: metaWidth, height: titleHeight, borderColor: accentColor, borderWidth: 1.5 });
+  page.drawRectangle({ x: titleX, y: titleY - 32, width: metaWidth, height: 32, color: accentColor });
+  drawText(page, docTitle, titleX + (metaWidth - widthOf(docTitle, fonts.bold, FONT_SIZE.META_TITLE)) / 2, titleY - 21, fonts.bold, FONT_SIZE.META_TITLE, COLOR.WHITE);
 
-  page.drawRectangle({ x: titleBoxX, y: titleBoxY, width: TITLE_BOX.WIDTH, height: TITLE_BOX.HEIGHT, color: accentColor });
-  const titleWidth = boldFont.widthOfTextAtSize(docTitle, FONT_SIZE.DOC_TITLE);
-  page.drawText(docTitle, { x: titleBoxX + (TITLE_BOX.WIDTH - titleWidth) / 2, y: titleBoxY + TITLE_BOX.HEIGHT - TITLE_BOX.TITLE_Y, size: FONT_SIZE.DOC_TITLE, font: boldFont, color: COLOR.WHITE });
-
-  const displayPoNumber = po.poNumber?.startsWith('VPO-')
-    ? po.poNumber.slice(4)
-    : (po.poNumber ?? '');
-
-  if (po.poNumber) {
-    const poNumStr = displayPoNumber;
-    const poNumWidth = boldFont.widthOfTextAtSize(`#${poNumStr}`, FONT_SIZE.PO_NUMBER);
-    page.drawText(`#${poNumStr}`, { x: titleBoxX + (TITLE_BOX.WIDTH - poNumWidth) / 2, y: titleBoxY + TITLE_BOX.HEIGHT - TITLE_BOX.NUMBER_Y, size: FONT_SIZE.PO_NUMBER, font: boldFont, color: COLOR.WHITE });
+  const displayPoNumber = data.po.poNumber?.startsWith('VPO-') ? data.po.poNumber.slice(4) : (data.po.poNumber ?? '');
+  let metaY = titleY - 48;
+  if (isRFQ) {
+    drawText(page, 'Non-binding quote request', titleX + 46, metaY, fonts.bold, FONT_SIZE.SMALL, accentColor);
+    metaY -= 16;
+  } else {
+    drawMetaRow(page, 'PO Number', displayPoNumber, titleX + 16, titleX + metaWidth - 16, metaY, fonts);
+    metaY -= 15;
   }
 
-  y = Math.min(y, titleBoxY - TITLE_BOX.BELOW_GAP);
-
-  page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: width - PAGE.MARGIN, y }, thickness: 1, color: COLOR.DIVIDER });
-  y -= LINE_HEIGHT.AFTER_DIVIDER;
-
-  const colMid = width / 2;
-
-  page.drawText('VENDOR', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: accentColor });
-  page.drawText('ORDER DETAILS', { x: colMid + SPACING.DETAIL_LABEL_OFFSET, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: accentColor });
-  y -= LINE_HEIGHT.BODY + 1;
-
-  const vendorLines = [
-    vendor.name,
-    vendor.contactPerson || '',
-    vendor.address || '',
-    vendor.email || '',
-    vendor.phone || '',
-  ].filter(Boolean);
-
-  let vendorY = y;
-  for (const line of vendorLines) {
-    page.drawText(line, { x: PAGE.MARGIN, y: vendorY, size: FONT_SIZE.BODY, font, color: COLOR.PRIMARY_TEXT });
-    vendorY -= LINE_HEIGHT.BODY;
+  if (data.po.externalPoNumber) {
+    drawMetaRow(page, 'Legacy ERP PO #', data.po.externalPoNumber, titleX + 16, titleX + metaWidth - 16, metaY, fonts);
+    metaY -= 15;
   }
 
-  let detailY = y;
-  const details = [
-    ['Date:', formatDate(po.createdAt)],
-    ['Delivery:', formatDate(po.expectedDeliveryDate)],
-    po.poNumber ? ['PO #:', displayPoNumber] : null,
-    po.externalPoNumber ? ['Legacy ERP PO #:', po.externalPoNumber] : null,
-    po.status ? ['Status:', po.status] : null,
-  ].filter(Boolean) as string[][];
+  drawMetaRow(page, 'Date', formatDate(data.po.orderDate || data.po.createdAt), titleX + 16, titleX + metaWidth - 16, metaY, fonts);
+  metaY -= 15;
+  drawMetaRow(page, 'Requested Delivery Date', formatDate(data.po.expectedDeliveryDate), titleX + 16, titleX + metaWidth - 16, metaY, fonts);
+  metaY -= 15;
+  drawMetaRow(page, 'Ship Via', data.po.shipVia || 'N/A', titleX + 16, titleX + metaWidth - 16, metaY, fonts);
 
-  for (const [label, value] of details) {
-    page.drawText(label, { x: colMid + SPACING.DETAIL_LABEL_OFFSET, y: detailY, size: FONT_SIZE.BODY, font: boldFont, color: COLOR.SECONDARY_TEXT });
-    page.drawText(value, { x: colMid + SPACING.DETAIL_VALUE_OFFSET, y: detailY, size: FONT_SIZE.BODY, font, color: COLOR.PRIMARY_TEXT });
-    detailY -= LINE_HEIGHT.BODY;
-  }
+  const dividerY = Math.min(companyY - 12, titleY - titleHeight - 20);
+  page.drawLine({ start: { x: PAGE.MARGIN, y: dividerY }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y: dividerY }, thickness: 1, color: COLOR.BORDER });
+  return dividerY - 20;
+}
 
-  y = Math.min(vendorY, detailY) - SPACING.SECTION_BREAK;
+function vendorLines(vendor: any, fonts: Fonts): TextLine[] {
+  const cityStateZip = [
+    joinParts([vendor.city, vendor.state], ', '),
+    vendor.zip_code || vendor.zipCode,
+  ].filter(Boolean).join(' ');
 
-  page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: width - PAGE.MARGIN, y }, thickness: 1, color: COLOR.DIVIDER });
-  y -= SPACING.TEXT_INSET;
+  return [
+    { text: vendor.name || '', font: fonts.bold },
+    { text: vendor.street || vendor.address || '' },
+    { text: cityStateZip },
+    { text: vendor.phone ? `Ph: ${vendor.phone}` : '' },
+    { text: vendor.email || '' },
+    { text: vendor.contactPerson ? `Attn: ${vendor.contactPerson}` : '' },
+  ].filter(line => cleanText(line.text));
+}
 
-  const hasAnyNotes = items.some(item => item.notes?.trim());
-  const cols = buildTableColumnPositions(PAGE.MARGIN, hasAnyNotes);
-  const activeDescWidth = computeDescWidth(hasAnyNotes);
-  const activePartNumWidth = hasAnyNotes ? TABLE_COL_WIDTHS_WITH_NOTES.PART_NUM : TABLE_COL_WIDTHS_BASE.PART_NUM;
-  const activeNotesWidth = hasAnyNotes ? TABLE_COL_WIDTHS_WITH_NOTES.NOTES : 0;
+function shipToLines(settings: any, fonts: Fonts): TextLine[] {
+  return [
+    { text: settings.companyName || 'AG Composites', font: fonts.bold },
+    ...wrapText(settings.companyAddress || '', 210, fonts.regular, FONT_SIZE.BODY).map(text => ({ text })),
+    { text: settings.companyPhone ? `Ph: ${settings.companyPhone}` : '' },
+  ].filter(line => cleanText(line.text));
+}
 
-  page.drawRectangle({ x: PAGE.MARGIN, y: y - HEADER_ROW_HEIGHT, width: PRINTABLE_WIDTH, height: HEADER_ROW_HEIGHT, color: accentColor });
-  y -= HEADER_ROW_HEIGHT - SPACING.CELL_PAD;
+function drawParties(state: DrawState, data: VendorPOData, settings: any, y: number): number {
+  y = drawContactStrip(state.page, y, settings, state.fonts);
 
-  const headers: { text: string; x: number }[] = [
-    { text: '#', x: cols.line + SPACING.CELL_PAD },
-    { text: 'Part Number', x: cols.partNum + SPACING.CELL_PAD },
-    { text: 'Description', x: cols.description + SPACING.CELL_PAD },
-    ...(hasAnyNotes && cols.notes !== null ? [{ text: 'Notes', x: cols.notes + SPACING.CELL_PAD }] : []),
-    { text: 'Unit', x: cols.unit + SPACING.CELL_PAD },
-    { text: 'Qty', x: cols.qty + SPACING.CELL_PAD },
-    { text: 'Unit Price', x: cols.unitPrice + SPACING.CELL_PAD },
-    { text: 'Total', x: cols.total + SPACING.CELL_PAD },
-  ];
+  const gap = 16;
+  const panelWidth = (PRINTABLE_WIDTH - gap) / 2;
+  const vendorBottom = drawPanel(state.page, PAGE.MARGIN, y, panelWidth, 'Vendor', vendorLines(data.vendor, state.fonts), state.fonts);
+  const shipBottom = drawPanel(state.page, PAGE.MARGIN + panelWidth + gap, y, panelWidth, 'Ship To', shipToLines(settings, state.fonts), state.fonts);
+  return Math.min(vendorBottom, shipBottom) - 18;
+}
 
-  for (const h of headers) {
-    page.drawText(h.text, { x: h.x, y, size: FONT_SIZE.TABLE_CELL, font: boldFont, color: COLOR.WHITE });
-  }
-  y -= FONT_SIZE.TABLE_CELL;
+function drawTableHeader(page: PDFPage, y: number, fonts: Fonts): number {
+  const headerHeight = 26;
+  const cols = tableColumns();
+  page.drawRectangle({ x: PAGE.MARGIN, y: y - headerHeight, width: PRINTABLE_WIDTH, height: headerHeight, color: COLOR.HEADER_BG });
+  page.drawLine({ start: { x: PAGE.MARGIN, y: y - headerHeight }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y: y - headerHeight }, thickness: 1.5, color: COLOR.BORDER });
 
-  let lineTotal = 0;
+  const headerY = y - 17;
+  drawText(page, 'Line', cols.line, headerY, fonts.bold, FONT_SIZE.SMALL, COLOR.SECONDARY_TEXT);
+  drawText(page, 'Supplier Part #', cols.part, headerY, fonts.bold, FONT_SIZE.SMALL, COLOR.SECONDARY_TEXT);
+  drawText(page, 'Description', cols.description, headerY, fonts.bold, FONT_SIZE.SMALL, COLOR.SECONDARY_TEXT);
+  drawRightText(page, 'Qty', cols.qtyRight, headerY, fonts.bold, FONT_SIZE.SMALL, COLOR.SECONDARY_TEXT);
+  drawText(page, 'Unit', cols.unit, headerY, fonts.bold, FONT_SIZE.SMALL, COLOR.SECONDARY_TEXT);
+  drawRightText(page, 'Unit Price', cols.priceRight, headerY, fonts.bold, FONT_SIZE.SMALL, COLOR.SECONDARY_TEXT);
+  drawRightText(page, 'Line Total', cols.totalRight, headerY, fonts.bold, FONT_SIZE.SMALL, COLOR.SECONDARY_TEXT);
+  return y - headerHeight;
+}
+
+function tableColumns() {
+  const x = PAGE.MARGIN;
+  return {
+    line: x + 10,
+    part: x + 48,
+    description: x + 140,
+    qtyRight: x + 348,
+    unit: x + 360,
+    priceLeft: x + 386,
+    priceRight: x + 446,
+    totalLeft: x + 472,
+    totalRight: x + 526,
+    descWidth: 154,
+    partWidth: 84,
+  };
+}
+
+function drawItemsTable(state: DrawState, items: any[], startY: number): { y: number; subtotal: number } {
+  const cols = tableColumns();
+  let y = drawTableHeader(state.page, startY, state.fonts);
+  let subtotal = 0;
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unitPrice) || 0;
-    const itemTotal = qty * price;
-    lineTotal += itemTotal;
+    const total = qty * price;
+    subtotal += total;
 
-    const descText = item.description || item.itemDescription || '';
-    const descLines = wrapText(descText, activeDescWidth - SPACING.CELL_PAD, font, FONT_SIZE.TABLE_CELL);
+    const purchaseDetail = item.purchaseQty != null && Number(item.purchaseQty) > 0 && item.purchaseUnit
+      ? ` (${formatNumber(item.purchaseQty)} ${item.purchaseUnit} ordered)`
+      : '';
+    const descriptionLines = [
+      ...wrapText(`${item.description || item.itemDescription || '-'}${purchaseDetail}`, cols.descWidth, state.fonts.regular, FONT_SIZE.BODY),
+      ...(item.notes ? wrapText(`Details: ${item.notes}`, cols.descWidth, state.fonts.regular, FONT_SIZE.SMALL) : []),
+    ];
+    const rowHeight = Math.max(32, descriptionLines.length * 12 + 16);
 
-    const noteText = hasAnyNotes ? (item.notes?.trim() || '') : '';
-    const noteLines = noteText
-      ? wrapText(noteText, activeNotesWidth - SPACING.CELL_PAD, font, FONT_SIZE.TABLE_CELL)
-      : [];
-
-    const contentLineCount = Math.max(descLines.length, noteLines.length, 1);
-    const rowHeight = Math.max(SPACING.MIN_ROW_HEIGHT, contentLineCount * LINE_HEIGHT.SMALL + SPACING.ROW_HEIGHT_PAD);
-
-    if (y - rowHeight < PAGE.MARGIN + PAGE_BREAK.TABLE_ROW) {
-      page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
-      y = height - PAGE.MARGIN;
+    y = ensureSpace(state, y, rowHeight + 28);
+    if (y === PAGE.HEIGHT - PAGE.MARGIN) {
+      y = drawTableHeader(state.page, y, state.fonts);
     }
 
     if (i % 2 === 1) {
-      page.drawRectangle({ x: PAGE.MARGIN, y: y - rowHeight, width: PRINTABLE_WIDTH, height: rowHeight, color: COLOR.ALT_ROW_BG });
+      state.page.drawRectangle({ x: PAGE.MARGIN, y: y - rowHeight, width: PRINTABLE_WIDTH, height: rowHeight, color: COLOR.ROW_ALT });
+    }
+    state.page.drawLine({ start: { x: PAGE.MARGIN, y: y - rowHeight }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y: y - rowHeight }, thickness: 0.5, color: COLOR.LIGHT_BORDER });
+
+    const textY = y - 18;
+    drawText(state.page, item.lineNumber ?? i + 1, cols.line, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+    drawText(state.page, cleanText(item.supplierPartNumber || item.agPartNumber || '-').slice(0, 22), cols.part, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+
+    let descY = textY;
+    for (let index = 0; index < descriptionLines.length; index++) {
+      const line = descriptionLines[index];
+      drawText(state.page, line, cols.description, descY, state.fonts.regular, index === 0 ? FONT_SIZE.BODY : FONT_SIZE.SMALL, index === 0 ? COLOR.PRIMARY_TEXT : COLOR.SECONDARY_TEXT);
+      descY -= 12;
     }
 
-    const textY = y - SPACING.ROW_TEXT_OFFSET;
-    page.drawText(String(item.lineNumber ?? i + 1), { x: cols.line + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.SECONDARY_TEXT });
-    page.drawText(truncateText(item.supplierPartNumber || item.agPartNumber || '', activePartNumWidth - SPACING.CELL_PAD, font, FONT_SIZE.TABLE_CELL), { x: cols.partNum + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
-
-    for (let dl = 0; dl < descLines.length; dl++) {
-      page.drawText(descLines[dl], { x: cols.description + SPACING.CELL_PAD, y: textY - (dl * LINE_HEIGHT.SMALL), size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
-    }
-
-    if (hasAnyNotes && cols.notes !== null) {
-      for (let nl = 0; nl < noteLines.length; nl++) {
-        page.drawText(noteLines[nl], { x: cols.notes + SPACING.CELL_PAD, y: textY - (nl * LINE_HEIGHT.SMALL), size: FONT_SIZE.TABLE_CELL, font, color: COLOR.MUTED_TEXT });
-      }
-    }
-
-    page.drawText(item.unit || 'EA', { x: cols.unit + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.SECONDARY_TEXT });
-    page.drawText(String(qty), { x: cols.qty + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
-    page.drawText(formatCurrency(price), { x: cols.unitPrice + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
-    page.drawText(formatCurrency(itemTotal), { x: cols.total + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font: boldFont, color: COLOR.PRIMARY_TEXT });
-
+    drawRightText(state.page, formatNumber(qty), cols.qtyRight, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+    drawText(state.page, item.vendorUnit || item.unit || item.uom || '-', cols.unit, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+    drawRightTextFit(state.page, formatCurrency(price), cols.priceRight, cols.priceLeft, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+    drawRightTextFit(state.page, formatCurrency(total), cols.totalRight, cols.totalLeft, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
     y -= rowHeight;
   }
 
-  y -= SPACING.TEXT_INSET;
-  page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: width - PAGE.MARGIN, y }, thickness: 1, color: COLOR.DIVIDER });
-  y -= LINE_HEIGHT.SECTION_GAP;
+  return { y: y - 12, subtotal };
+}
 
-  const totalLabelX = cols.unitPrice - SPACING.DETAIL_LABEL_OFFSET;
-  const totalValueX = cols.total + SPACING.CELL_PAD;
+function drawTotals(state: DrawState, y: number, subtotal: number, po: any): number {
+  const boxWidth = 220;
+  const boxX = PAGE.WIDTH - PAGE.MARGIN - boxWidth;
+  const shipping = Number(po.shippingCost) || 0;
+  const total = Number(po.totalCost) || subtotal + shipping;
+  const boxHeight = shipping > 0 ? 74 : 54;
 
-  page.drawText('Subtotal:', { x: totalLabelX, y, size: FONT_SIZE.BODY, font: boldFont, color: COLOR.SECONDARY_TEXT });
-  page.drawText(formatCurrency(lineTotal), { x: totalValueX, y, size: FONT_SIZE.BODY, font: boldFont, color: COLOR.PRIMARY_TEXT });
-  y -= LINE_HEIGHT.TOTAL_ROW;
+  y = ensureSpace(state, y, boxHeight + 20);
+  state.page.drawRectangle({ x: boxX, y: y - boxHeight, width: boxWidth, height: boxHeight, color: COLOR.PANEL_BG, borderColor: COLOR.LIGHT_BORDER, borderWidth: 1 });
+  drawText(state.page, 'Subtotal', boxX + 20, y - 19, state.fonts.regular, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
+  drawRightText(state.page, formatCurrency(subtotal), boxX + boxWidth - 20, y - 19, state.fonts.bold, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
 
-  if (po.shippingCost && Number(po.shippingCost) > 0) {
-    page.drawText('Shipping:', { x: totalLabelX, y, size: FONT_SIZE.BODY, font, color: COLOR.SECONDARY_TEXT });
-    page.drawText(formatCurrency(po.shippingCost), { x: totalValueX, y, size: FONT_SIZE.BODY, font, color: COLOR.PRIMARY_TEXT });
-    y -= LINE_HEIGHT.TOTAL_ROW;
-    lineTotal += Number(po.shippingCost);
+  let totalY = y - 39;
+  if (shipping > 0) {
+    drawText(state.page, 'Shipping', boxX + 20, y - 39, state.fonts.regular, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
+    drawRightText(state.page, formatCurrency(shipping), boxX + boxWidth - 20, y - 39, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+    totalY = y - 59;
   }
 
-  page.drawRectangle({ x: totalLabelX - SPACING.TOTAL_BAR_PAD, y: y - SPACING.TOTAL_BAR_OFFSET, width: PRINTABLE_WIDTH - (totalLabelX - PAGE.MARGIN) + SPACING.TOTAL_BAR_PAD, height: SPACING.TOTAL_BAR_HEIGHT, color: accentColor });
-  page.drawText('TOTAL:', { x: totalLabelX, y: y + SPACING.TOTAL_BAR_OFFSET, size: FONT_SIZE.SECTION_TITLE, font: boldFont, color: COLOR.WHITE });
-  page.drawText(formatCurrency(po.totalCost || lineTotal), { x: totalValueX, y: y + SPACING.TOTAL_BAR_OFFSET, size: FONT_SIZE.SECTION_TITLE, font: boldFont, color: COLOR.WHITE });
-  y -= SPACING.AFTER_TOTAL;
+  drawText(state.page, 'Total', boxX + 20, totalY, state.fonts.bold, FONT_SIZE.META_TITLE, COLOR.PRIMARY_TEXT);
+  drawRightText(state.page, formatCurrency(total), boxX + boxWidth - 20, totalY, state.fonts.bold, FONT_SIZE.META_TITLE, COLOR.PRIMARY_TEXT);
+  return y - boxHeight - 22;
+}
 
-  const terms = vendor.termsAndConditions || poSettings?.termsAndConditions;
-  const paymentTerms = vendor.paymentTerms || poSettings?.paymentTerms;
-  const shippingInstructions = vendor.shippingInstructions || poSettings?.shippingInstructions;
+function drawBlock(state: DrawState, y: number, title: string, body: unknown): number {
+  const text = cleanText(body);
+  if (!text) return y;
 
-  if (paymentTerms || shippingInstructions || terms) {
-    if (y < PAGE.MARGIN + PAGE_BREAK.TERMS_SECTION) {
-      page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
-      y = height - PAGE.MARGIN;
-    }
+  const lines = wrapText(text, PRINTABLE_WIDTH, state.fonts.regular, FONT_SIZE.BODY);
+  const requiredHeight = 24 + lines.length * 12;
+  y = ensureSpace(state, y, requiredHeight);
+  drawText(state.page, title, PAGE.MARGIN, y, state.fonts.bold, FONT_SIZE.SECTION_LABEL, COLOR.PRIMARY_TEXT);
+  y -= 16;
+  for (const line of lines) {
+    drawText(state.page, line, PAGE.MARGIN, y, state.fonts.regular, FONT_SIZE.BODY, COLOR.SECONDARY_TEXT);
+    y -= 12;
+  }
+  return y - 8;
+}
 
-    page.drawText('TERMS & CONDITIONS', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_TITLE, font: boldFont, color: accentColor });
-    y -= SPACING.TERMS_TITLE_GAP;
+function drawTermsAndNotes(state: DrawState, data: VendorPOData, settings: any, y: number): number {
+  y = drawBlock(state, y, 'Notes', data.po.notes);
 
-    if (paymentTerms) {
-      page.drawText('Payment Terms:', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: COLOR.SECONDARY_TEXT });
-      y -= SPACING.TERMS_SUBSECTION_GAP;
-      const ptLines = wrapText(paymentTerms, PRINTABLE_WIDTH - SPACING.DETAIL_LABEL_OFFSET, font, FONT_SIZE.SECTION_LABEL);
-      for (const line of ptLines) {
-        page.drawText(line, { x: PAGE.MARGIN + SPACING.TEXT_INSET, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.SECONDARY_TEXT });
-        y -= LINE_HEIGHT.SMALL;
-      }
-      y -= SPACING.TERMS_SUBSECTION_TAIL;
-    }
+  const hasTerms = settings.paymentTerms || settings.shippingInstructions || settings.termsAndConditions || data.optionalSettings.length > 0;
+  if (!hasTerms) return y;
 
-    if (shippingInstructions) {
-      page.drawText('Shipping Instructions:', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: COLOR.SECONDARY_TEXT });
-      y -= SPACING.TERMS_SUBSECTION_GAP;
-      const siLines = wrapText(shippingInstructions, PRINTABLE_WIDTH - SPACING.DETAIL_LABEL_OFFSET, font, FONT_SIZE.SECTION_LABEL);
-      for (const line of siLines) {
-        page.drawText(line, { x: PAGE.MARGIN + SPACING.TEXT_INSET, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.SECONDARY_TEXT });
-        y -= LINE_HEIGHT.SMALL;
-      }
-      y -= SPACING.TERMS_SUBSECTION_TAIL;
-    }
+  y = ensureSpace(state, y, 50);
+  state.page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y }, thickness: 1, color: COLOR.BORDER });
+  y -= 18;
 
-    if (terms) {
-      page.drawText('General Terms:', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: COLOR.SECONDARY_TEXT });
-      y -= SPACING.TERMS_SUBSECTION_GAP;
-      const tLines = wrapText(terms, PRINTABLE_WIDTH - SPACING.DETAIL_LABEL_OFFSET, font, FONT_SIZE.SECTION_LABEL);
-      for (const line of tLines.slice(0, 20)) {
-        if (y < PAGE.MARGIN + PAGE_BREAK.TERMS_INNER) {
-          page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
-          y = height - PAGE.MARGIN;
-        }
-        page.drawText(line, { x: PAGE.MARGIN + SPACING.TEXT_INSET, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.SECONDARY_TEXT });
-        y -= LINE_HEIGHT.SMALL;
-      }
+  y = drawBlock(state, y, 'Payment Terms', settings.paymentTerms);
+  y = drawBlock(state, y, 'Shipping Instructions', settings.shippingInstructions);
+  y = drawBlock(state, y, 'Terms and Conditions', settings.termsAndConditions);
+
+  if (data.optionalSettings.length > 0) {
+    y = ensureSpace(state, y, 40);
+    drawText(state.page, 'Additional Requirements', PAGE.MARGIN, y, state.fonts.bold, FONT_SIZE.SECTION_LABEL, COLOR.PRIMARY_TEXT);
+    y -= 16;
+    for (let i = 0; i < data.optionalSettings.length; i++) {
+      const setting = data.optionalSettings[i];
+      y = drawBlock(state, y, `${i + 1}. ${setting.name || 'Requirement'}`, setting.statement);
     }
   }
 
-  if (po.notes) {
-    if (y < PAGE.MARGIN + PAGE_BREAK.NOTES_SECTION) {
-      page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
-      y = height - PAGE.MARGIN;
-    }
-    y -= SPACING.NOTES_GAP;
-    page.drawText('NOTES', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_TITLE, font: boldFont, color: accentColor });
-    y -= SPACING.NOTES_TITLE_GAP;
-    const noteLines = wrapText(po.notes, PRINTABLE_WIDTH - SPACING.DETAIL_LABEL_OFFSET, font, FONT_SIZE.SECTION_LABEL);
-    for (const line of noteLines.slice(0, 15)) {
-      page.drawText(line, { x: PAGE.MARGIN + SPACING.TEXT_INSET, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.SECONDARY_TEXT });
-      y -= LINE_HEIGHT.SMALL;
-    }
-  }
+  return y;
+}
 
-  const footerY = PAGE.MARGIN - SPACING.FOOTER_OFFSET;
-  for (const pg of pdfDoc.getPages()) {
-    pg.drawLine({ start: { x: PAGE.MARGIN, y: footerY + SPACING.FOOTER_LINE_OFFSET }, end: { x: width - PAGE.MARGIN, y: footerY + SPACING.FOOTER_LINE_OFFSET }, thickness: 0.5, color: COLOR.DIVIDER });
-    pg.drawText(`${companyName} — Generated by EPOCH`, { x: PAGE.MARGIN, y: footerY, size: FONT_SIZE.FOOTER, font, color: COLOR.FOOTER_TEXT });
-    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    const dateWidth = font.widthOfTextAtSize(dateStr, FONT_SIZE.FOOTER);
-    pg.drawText(dateStr, { x: width - PAGE.MARGIN - dateWidth, y: footerY, size: FONT_SIZE.FOOTER, font, color: COLOR.FOOTER_TEXT });
-  }
+export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
+  const data = await fetchVendorPOData(poId);
+  const { po, vendor, items, companySettings, poSettings } = data;
+  const isRFQ = !po.poNumber;
+  const accentColor = isRFQ ? COLOR.ACCENT_RFQ : COLOR.ACCENT_PO;
+
+  const settings = {
+    companyName: companySettings?.companyName || 'AG Composites',
+    companyAddress: companySettings?.companyAddress || '',
+    companyPhone: companySettings?.companyPhone || '',
+    companyEmail: companySettings?.companyEmail || '',
+    companyWebsite: companySettings?.companyWebsite || '',
+    contactName: resolveVendorPoContactName(poSettings),
+    contactTitle: poSettings?.contactTitle || '',
+    contactPhone: poSettings?.contactPhone || '',
+    contactEmail: resolveVendorPoReturnEmail(poSettings) || companySettings?.companyEmail || '',
+    termsAndConditions: vendor?.termsAndConditions || poSettings?.termsAndConditions || '',
+    paymentTerms: vendor?.paymentTerms || poSettings?.paymentTerms || '',
+    shippingInstructions: vendor?.shippingInstructions || poSettings?.shippingInstructions || '',
+  };
+
+  const pdfDoc = await PDFDocument.create();
+  const fonts: Fonts = {
+    regular: await pdfDoc.embedFont(StandardFonts.Helvetica),
+    bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
+  };
+
+  const state: DrawState = {
+    pdfDoc,
+    page: pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]),
+    fonts,
+    accentColor,
+  };
+
+  let y = drawDocumentHeader(state, data, settings, isRFQ);
+  y = drawParties(state, data, settings, y);
+  const tableResult = drawItemsTable(state, items, y);
+  y = drawTotals(state, tableResult.y, tableResult.subtotal, po);
+  drawTermsAndNotes(state, data, settings, y);
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);

@@ -15,13 +15,12 @@ import {
   sha256Hex,
   readPolicyDoc,
 } from '../services/policiesService';
-import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
 import { db } from '../../db';
 import { policies, policyVersions } from '../../schema';
 import { eq } from 'drizzle-orm';
+import { getFileStorageProvider } from '../services/fileStorageProvider';
 
 const router = Router();
-const objectStorage = new ObjectStorageService();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
@@ -170,26 +169,21 @@ router.post(
       }
 
       // Upload bytes to object storage via signed URL
-      const uploadUrl = await objectStorage.getObjectEntityUploadURL();
-      const putRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: file.buffer,
-        headers: { 'Content-Type': file.mimetype || 'application/octet-stream' },
+      const actor = actorFromReq(req);
+      const provider = getFileStorageProvider();
+      const normalizedPath = await provider.uploadBuffer({
+        buffer: file.buffer,
+        fileName: file.originalname,
+        contentType: file.mimetype || 'application/octet-stream',
+        scope: 'policies',
+        entityId: req.params.key,
       });
-      if (!putRes.ok) {
-        throw new Error(`Object storage upload failed: ${putRes.status}`);
-      }
+      await provider.setPublicReadPolicy(normalizedPath, String(actor?.userId ?? 'system'));
 
       // Set ACL on uploaded object so all authenticated users can read it.
       // Policies are intentionally readable by every user in scope, so we
       // mark visibility "public" — which `canAccessObject` allows for any
       // GET request once metadata is present.
-      const actor = actorFromReq(req);
-      const normalizedPath = await objectStorage.trySetObjectEntityAclPolicy(uploadUrl, {
-        owner: String(actor?.userId ?? 'system'),
-        visibility: 'public',
-      });
-
       const hash = sha256Hex(file.buffer);
       const version = await publishExternalVersion({
         policyKey: req.params.key,

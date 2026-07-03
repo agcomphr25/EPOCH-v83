@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAdminUser } from '@/config/userPermissions';
 import { apiRequest } from '@/lib/queryClient';
@@ -38,6 +38,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Collapsible,
   CollapsibleContent,
@@ -63,6 +64,7 @@ import {
   CalendarCheck,
   Settings,
   RotateCcw,
+  BarChart3,
 } from 'lucide-react';
 import OrderActionButtons from '@/components/OrderActionButtons';
 import type { P1POQueueCustomer } from '@shared/schema';
@@ -82,6 +84,7 @@ interface ProductionQueueOrder {
   customerId: string;
   customerName?: string;
   features?: any;
+  isFlattop?: boolean;
   priorityScore: number;
   urgency?: 'critical' | 'high' | 'medium' | 'low';
   isManualUrgency?: boolean;
@@ -90,6 +93,75 @@ interface ProductionQueueOrder {
   isOverdue: boolean;
   urgencyLevel: 'critical' | 'high' | 'medium' | 'normal';
 }
+
+interface ProductionQueueReconciliation {
+  department: string;
+  total: number;
+  ready: number;
+  needsAttention: number;
+  otherNotReady: number;
+}
+
+type QueueView = 'orders' | 'customer' | 'stock-model' | 'due-date';
+
+interface QueueSummaryRow {
+  key: string;
+  orderCount: number;
+  overdueCount: number;
+  earliestDueDate: string | null;
+}
+
+interface StockModelSummaryRow extends QueueSummaryRow {
+  customerCount: number;
+}
+
+interface DueDateSummaryRow {
+  dueDate: string;
+  orderCount: number;
+  stockModels: Array<{ stockModel: string; orderCount: number }>;
+}
+
+const parseQueueDueDate = (dateValue: string | null | undefined) => {
+  if (!dateValue) return null;
+
+  const dateOnlyMatch = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  const date = new Date(dateValue);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatDueDate = (dateValue: string | null) => {
+  const date = parseQueueDueDate(dateValue);
+  if (!date) return 'No due date';
+  return date.toLocaleDateString();
+};
+
+const getDueDateKey = (dateValue: string | null | undefined) => {
+  const date = parseQueueDueDate(dateValue);
+  if (!date) return 'No due date';
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const isEarlierDueDate = (candidate: string | null, current: string | null) => {
+  if (!candidate) return false;
+  if (!current) return true;
+
+  const candidateTime = parseQueueDueDate(candidate)?.getTime();
+  const currentTime = parseQueueDueDate(current)?.getTime();
+
+  if (candidateTime === undefined) return false;
+  if (currentTime === undefined) return true;
+
+  return candidateTime < currentTime;
+};
 
 // POItem interface removed - P1 POs now managed via OEM Priority Settings only
 
@@ -152,6 +224,10 @@ export default function ProductionQueueManager() {
 
   // State for regular production queue search
   const [queueSearchQuery, setQueueSearchQuery] = useState<string>('');
+
+  // Read-only analysis views for the regular production queue
+  const [queueView, setQueueView] = useState<QueueView>('orders');
+  const [stockModelAnalysisQuery, setStockModelAnalysisQuery] = useState<string>('');
 
   // State for layup schedule preview modal
   const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
@@ -235,6 +311,14 @@ export default function ProductionQueueManager() {
     queryFn: () => apiRequest('/api/production-queue/attention'),
   });
 
+  const {
+    data: queueReconciliation,
+    refetch: refetchReconciliation,
+  } = useQuery<ProductionQueueReconciliation>({
+    queryKey: ['/api/production-queue/reconciliation'],
+    queryFn: () => apiRequest('/api/production-queue/reconciliation'),
+  });
+
   // Auto-populate production queue mutation
   const autoPopulateMutation = useMutation({
     mutationFn: () =>
@@ -246,6 +330,9 @@ export default function ProductionQueueManager() {
       });
       queryClient.invalidateQueries({
         queryKey: ['/api/production-queue/prioritized'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/production-queue/reconciliation'],
       });
     },
     onError: (error: any) => {
@@ -302,6 +389,9 @@ export default function ProductionQueueManager() {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['/api/production-queue/prioritized'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/production-queue/reconciliation'],
       });
       toast({
         title: 'Success',
@@ -411,6 +501,7 @@ export default function ProductionQueueManager() {
       
       // Refresh queues
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/reconciliation'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p1-po-queue/purchase-orders/open'] });
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule/weeks'] });
     },
@@ -723,6 +814,7 @@ export default function ProductionQueueManager() {
         refetchPOs();
         refetchStuckCounts();
         queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/production-queue/reconciliation'] });
       } else if (result.stuckSelectionsFound === 0) {
         toast({
           title: 'No Stuck Items',
@@ -879,9 +971,121 @@ export default function ProductionQueueManager() {
            customerName.includes(searchLower);
   });
 
+  const customerSummary = useMemo<QueueSummaryRow[]>(() => {
+    const rows = new Map<string, QueueSummaryRow>();
+
+    productionQueue.forEach((order) => {
+      const key = order.customerName || order.customerId || 'Unknown Customer';
+      const existing =
+        rows.get(key) ||
+        {
+          key,
+          orderCount: 0,
+          overdueCount: 0,
+          earliestDueDate: null,
+        };
+
+      existing.orderCount += 1;
+      existing.overdueCount += order.isOverdue ? 1 : 0;
+      if (isEarlierDueDate(order.dueDate, existing.earliestDueDate)) {
+        existing.earliestDueDate = order.dueDate;
+      }
+
+      rows.set(key, existing);
+    });
+
+    return Array.from(rows.values()).sort((a, b) => {
+      if (b.orderCount !== a.orderCount) return b.orderCount - a.orderCount;
+      return a.key.localeCompare(b.key);
+    });
+  }, [productionQueue]);
+
+  const stockModelSummary = useMemo<StockModelSummaryRow[]>(() => {
+    const rows = new Map<string, StockModelSummaryRow & { customers: Set<string> }>();
+
+    productionQueue.forEach((order) => {
+      const key = order.stockModelId || order.modelId || 'Unknown Stock Model';
+      const existing =
+        rows.get(key) ||
+        {
+          key,
+          orderCount: 0,
+          overdueCount: 0,
+          earliestDueDate: null,
+          customerCount: 0,
+          customers: new Set<string>(),
+        };
+
+      existing.orderCount += 1;
+      existing.overdueCount += order.isOverdue ? 1 : 0;
+      existing.customers.add(order.customerName || order.customerId || 'Unknown Customer');
+      existing.customerCount = existing.customers.size;
+      if (isEarlierDueDate(order.dueDate, existing.earliestDueDate)) {
+        existing.earliestDueDate = order.dueDate;
+      }
+
+      rows.set(key, existing);
+    });
+
+    return Array.from(rows.values())
+      .map(({ customers: _customers, ...row }) => row)
+      .sort((a, b) => {
+        if (b.orderCount !== a.orderCount) return b.orderCount - a.orderCount;
+        return a.key.localeCompare(b.key);
+      });
+  }, [productionQueue]);
+
+  const filteredStockModelSummary = useMemo(() => {
+    const query = stockModelAnalysisQuery.trim().toLowerCase();
+    if (!query) return stockModelSummary;
+
+    return stockModelSummary.filter((row) =>
+      row.key.toLowerCase().includes(query)
+    );
+  }, [stockModelAnalysisQuery, stockModelSummary]);
+
+  const dueDateSummary = useMemo<DueDateSummaryRow[]>(() => {
+    const rows = new Map<string, Map<string, number>>();
+
+    productionQueue.forEach((order) => {
+      const dueDate = getDueDateKey(order.dueDate);
+      const stockModel = order.stockModelId || order.modelId || 'Unknown Stock Model';
+      const stockModels = rows.get(dueDate) || new Map<string, number>();
+
+      stockModels.set(stockModel, (stockModels.get(stockModel) || 0) + 1);
+      rows.set(dueDate, stockModels);
+    });
+
+    return Array.from(rows.entries())
+      .map(([dueDate, stockModels]) => {
+        const stockModelRows = Array.from(stockModels.entries())
+          .map(([stockModel, orderCount]) => ({ stockModel, orderCount }))
+          .sort((a, b) => {
+            if (b.orderCount !== a.orderCount) return b.orderCount - a.orderCount;
+            return a.stockModel.localeCompare(b.stockModel);
+          });
+
+        return {
+          dueDate,
+          orderCount: stockModelRows.reduce((sum, row) => sum + row.orderCount, 0),
+          stockModels: stockModelRows,
+        };
+      })
+      .sort((a, b) => {
+        if (a.dueDate === 'No due date') return 1;
+        if (b.dueDate === 'No due date') return -1;
+        return a.dueDate.localeCompare(b.dueDate);
+      });
+  }, [productionQueue]);
+
   // Explicit guards to distinguish truly empty queue from filtered-to-empty
   const isTrulyEmpty = productionQueue.length === 0;
   const isFilteredEmpty = productionQueue.length > 0 && filteredProductionQueue.length === 0;
+  const readyOrderCount = queueReconciliation?.ready ?? productionQueue.length;
+  const needsAttentionCount = queueReconciliation?.needsAttention ?? attentionOrders.length;
+  const departmentTotal =
+    queueReconciliation?.total ?? readyOrderCount + needsAttentionCount;
+  const otherNotReadyCount = queueReconciliation?.otherNotReady ?? 0;
 
   if (isLoading || isLoadingAttention || isLoadingPOs) {
     return (
@@ -932,6 +1136,8 @@ export default function ProductionQueueManager() {
           <Button
             onClick={() => {
               refetch();
+              refetchAttention();
+              refetchReconciliation();
               refetchPOs();
             }}
             variant="outline"
@@ -1034,14 +1240,44 @@ export default function ProductionQueueManager() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-blue-500" />
               <div>
-                <p className="text-sm text-gray-500">Total Orders</p>
-                <p className="text-xl font-bold">{productionQueue.length}</p>
+                <p className="text-sm text-gray-500">P1 Dept Total</p>
+                <p className="text-xl font-bold">{departmentTotal}</p>
+                <p className="text-xs text-gray-400">Matches pipeline</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-sky-500" />
+              <div>
+                <p className="text-sm text-gray-500">Ready Orders</p>
+                <p className="text-xl font-bold">{readyOrderCount}</p>
+                <p className="text-xs text-gray-400">Actionable below</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={needsAttentionCount > 0 || otherNotReadyCount > 0 ? 'bg-red-50 border-red-200' : ''}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              <div>
+                <p className="text-sm text-gray-500">Not Ready</p>
+                <p className="text-xl font-bold">{needsAttentionCount + otherNotReadyCount}</p>
+                <p className="text-xs text-gray-400">
+                  {needsAttentionCount} attention
+                  {otherNotReadyCount > 0 ? ` + ${otherNotReadyCount} other` : ''}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -1549,6 +1785,25 @@ export default function ProductionQueueManager() {
             </AccordionTrigger>
             <AccordionContent>
               <CardContent>
+                <Tabs
+                  value={queueView}
+                  onValueChange={(value) => setQueueView(value as QueueView)}
+                  className="space-y-4"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <BarChart3 className="w-4 h-4 text-blue-600" />
+                      <span>Queue Views</span>
+                    </div>
+                    <TabsList className="grid h-auto w-full grid-cols-2 lg:w-auto lg:grid-cols-4">
+                      <TabsTrigger value="orders">Orders</TabsTrigger>
+                      <TabsTrigger value="customer">By Customer</TabsTrigger>
+                      <TabsTrigger value="stock-model">By Stock Model</TabsTrigger>
+                      <TabsTrigger value="due-date">By Due Date</TabsTrigger>
+                    </TabsList>
+                  </div>
+
+                  <TabsContent value="orders" className="mt-0">
                 {productionQueue.length > 0 && (
                   <div className="space-y-4 mb-4">
                     {/* Search box */}
@@ -1701,6 +1956,8 @@ export default function ProductionQueueManager() {
                               actionLength = 'Long';
                           }
                         }
+                        const hasActionLength = actionLength && actionLength !== 'none';
+                        const isTikkaModel = (order.modelId || '').toLowerCase().includes('tikka');
 
                         // Check if bottom metal contains "adl"
                         const bottomMetal = order.features?.bottom_metal;
@@ -1787,13 +2044,30 @@ export default function ProductionQueueManager() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              {actionLength && actionLength !== 'none' && (
+                              {hasActionLength ? (
                                 <Badge
                                   variant="secondary"
                                   className="font-medium"
                                 >
                                   {actionLength}
                                 </Badge>
+                              ) : order.isFlattop ? (
+                                <Badge
+                                  className="bg-yellow-100 text-yellow-900 border-yellow-300 font-semibold"
+                                  title="Flattop stock: action length is not machined"
+                                >
+                                  FLATTOP
+                                </Badge>
+                              ) : isTikkaModel ? (
+                                <Badge
+                                  variant="secondary"
+                                  className="font-medium"
+                                  title="Tikka stock: action length is not differentiated"
+                                >
+                                  None
+                                </Badge>
+                              ) : (
+                                <span className="text-gray-400">-</span>
                               )}
                             </TableCell>
                             <TableCell>
@@ -1880,6 +2154,158 @@ export default function ProductionQueueManager() {
                     </TableBody>
                   </Table>
                 )}
+                  </TabsContent>
+
+                  <TabsContent value="customer" className="mt-0">
+                    {customerSummary.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <User className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                        <p>No customer summary available</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Customer</TableHead>
+                            <TableHead className="text-right">Orders</TableHead>
+                            <TableHead className="text-right">Overdue</TableHead>
+                            <TableHead>Earliest Due Date</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {customerSummary.map((row) => (
+                            <TableRow key={row.key}>
+                              <TableCell className="font-medium">{row.key}</TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {row.orderCount}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {row.overdueCount > 0 ? (
+                                  <Badge className="bg-red-100 text-red-800 border-red-200">
+                                    {row.overdueCount}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-gray-400">0</span>
+                                )}
+                              </TableCell>
+                              <TableCell>{formatDueDate(row.earliestDueDate)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="stock-model" className="mt-0 space-y-4">
+                    <div className="flex flex-col gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20 sm:flex-row sm:items-center">
+                      <Input
+                        type="text"
+                        placeholder="Filter stock model contains... e.g. privateer"
+                        value={stockModelAnalysisQuery}
+                        onChange={(e) => setStockModelAnalysisQuery(e.target.value)}
+                        className="flex-1"
+                        data-testid="input-stock-model-analysis-filter"
+                      />
+                      {stockModelAnalysisQuery && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setStockModelAnalysisQuery('')}
+                          data-testid="button-clear-stock-model-analysis-filter"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                    {filteredStockModelSummary.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                        <p>No stock models match your filter</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Stock Model</TableHead>
+                            <TableHead className="text-right">Orders</TableHead>
+                            <TableHead className="text-right">Customers</TableHead>
+                            <TableHead className="text-right">Overdue</TableHead>
+                            <TableHead>Earliest Due Date</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredStockModelSummary.map((row) => (
+                            <TableRow key={row.key}>
+                              <TableCell>
+                                <Badge variant="outline">{row.key}</Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {row.orderCount}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {row.customerCount}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {row.overdueCount > 0 ? (
+                                  <Badge className="bg-red-100 text-red-800 border-red-200">
+                                    {row.overdueCount}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-gray-400">0</span>
+                                )}
+                              </TableCell>
+                              <TableCell>{formatDueDate(row.earliestDueDate)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="due-date" className="mt-0">
+                    {dueDateSummary.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                        <p>No due date summary available</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Due Date</TableHead>
+                            <TableHead className="text-right">Orders</TableHead>
+                            <TableHead>Stock Model Breakdown</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {dueDateSummary.map((row) => (
+                            <TableRow key={row.dueDate}>
+                              <TableCell className="font-medium">
+                                {formatDueDate(row.dueDate)}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {row.orderCount}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap gap-2">
+                                  {row.stockModels.map((stockModelRow) => (
+                                    <Badge
+                                      key={stockModelRow.stockModel}
+                                      variant="outline"
+                                      className="bg-white"
+                                    >
+                                      {stockModelRow.stockModel}: {stockModelRow.orderCount}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </AccordionContent>
           </Card>

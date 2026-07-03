@@ -116,13 +116,16 @@ export const KioskPunchBody = z
       .union([
         z.literal("clock_in"),
         z.literal("clock_out"),
+        z.literal("break_start"),
+        z.literal("break_end"),
         z.literal(null),
       ])
       .nullish(),
     costCode: z.string().nullish(),
     travelerId: z.string().nullish(),
+    dailyCertificationConfirmed: z.boolean().optional(),
   })
-  .describe("employeeId is required; only clock_in and clock_out are valid kiosk actions");
+  .describe("employeeId is required; clock_in, clock_out, break_start, and break_end are valid kiosk actions");
 
 // ---------------------------------------------------------------------------
 // Timesheets

@@ -17,7 +17,11 @@
 
 import { Router, Request, Response } from 'express';
 import { authenticateToken } from '../../middleware/auth';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+} from '../services/fileStorageProvider';
 import {
   listTemplates,
   getTemplate,
@@ -29,7 +33,6 @@ import {
 } from '../services/productionControl/productionControlTemplateService';
 
 const router = Router();
-const objectStorageService = new ObjectStorageService();
 
 // ── List ────────────────────────────────────────────────────────────────────
 
@@ -73,13 +76,21 @@ router.post('/request-upload-url', authenticateToken, async (req: Request, res: 
       return res.status(400).json({ error: 'name is required' });
     }
 
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+    const uploadTarget = await getFileStorageProvider().createUploadTarget({
+      fileName: name,
+      scope: 'production-control-templates',
+    });
 
-    return res.json({ uploadURL, objectPath, fileName: name });
+    return res.json({
+      uploadURL: uploadTarget.uploadURL,
+      objectPath: uploadTarget.objectPath,
+      provider: uploadTarget.provider,
+      fileName: name,
+    });
   } catch (err: unknown) {
-    console.error('[Templates] request-upload-url error:', err);
-    return res.status(500).json({ error: 'Failed to generate upload URL' });
+    const { status, reason, message } = getStorageErrorResponse(err);
+    console.error('[Templates] request-upload-url error:', { status, reason, message });
+    return res.status(status).json({ error: 'Failed to generate upload URL', reason, details: message });
   }
 });
 
@@ -121,10 +132,10 @@ router.post('/:id/link-file', authenticateToken, async (req: Request, res: Respo
     }
 
     try {
-      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
-        owner: user?.id?.toString() ?? 'system',
-        visibility: 'public',
-      });
+      await getFileStorageProviderForObjectPath(objectPath).setPublicReadPolicy(
+        objectPath,
+        user?.id?.toString() ?? 'system',
+      );
     } catch {
       // ACL errors are non-fatal
     }

@@ -139,6 +139,9 @@ async function handleExport(
       `attachment; filename="traceability-${q.key}-${safeValue}-${ts}.pdf"`,
     );
     res.setHeader('X-Trace-Sha256', pdf.sha256);
+    res.setHeader('X-Trace-Signature', pdf.signature);
+    res.setHeader('X-Trace-Signature-Algorithm', pdf.signatureAlgorithm);
+    res.setHeader('X-Trace-Signature-Key-Id', pdf.signatureKeyId);
     res.setHeader('X-Trace-Row-Count', String(pdf.rowCount));
     return res.send(pdf.buffer);
   }
@@ -150,6 +153,9 @@ async function handleExport(
     `attachment; filename="traceability-${q.key}-${safeValue}-${ts}.csv"`,
   );
   res.setHeader('X-Trace-Sha256', csv.manifest.sha256);
+  res.setHeader('X-Trace-Signature', csv.manifest.signature);
+  res.setHeader('X-Trace-Signature-Algorithm', csv.manifest.signatureAlgorithm);
+  res.setHeader('X-Trace-Signature-Key-Id', csv.manifest.signatureKeyId);
   res.setHeader('X-Trace-Row-Count', String(csv.manifest.rowCount));
   res.setHeader(
     'X-Trace-Manifest',

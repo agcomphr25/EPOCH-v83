@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle2, XCircle, Clock, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, AlertTriangle, ShieldAlert, UserPlus } from 'lucide-react';
 
 interface ApprovalRequest {
   id: string;
@@ -18,12 +18,21 @@ interface ApprovalRequest {
   subjectType: string | null;
   subjectId: string | null;
   requestedByDisplayName: string;
+  requestedByUserId: number | null;
   status: string;
   currentApproverRole: string | null;
   currentApproverUserId: number | null;
   escalationLevel: number;
   currentLevelDeadline: string | null;
   createdAt: string;
+}
+
+interface EmployeeOption {
+  id: number;
+  name: string;
+  employeeCode?: string | null;
+  department?: string | null;
+  userId?: number | null;
 }
 
 interface DecisionState {
@@ -48,6 +57,24 @@ const INVENTORY_REQUEST_LABELS: Record<string, string> = {
   INV_ALLOCATION_OVERRIDE: 'Allocation override',
   INV_EXPIRED_USE: 'Expired material use',
   INV_QUARANTINE_RELEASE: 'Quarantine release',
+};
+
+const PRODUCTION_CHANGE_ACTION_LABELS: Record<string, string> = {
+  UPDATE_ROUTING: 'Update routing',
+  UPDATE_BOM: 'Update BOM',
+  UPDATE_TRAVELER: 'Revise traveler or instructions',
+  UPDATE_INSPECTION: 'Revise inspection requirements',
+  CUSTOMER_APPROVAL: 'Obtain customer approval',
+  TRAINING_REQUIRED: 'Assign operator training',
+};
+
+const PRODUCTION_CHANGE_DOCUMENT_LABELS: Record<string, string> = {
+  ROUTING: 'Routing',
+  BOM: 'BOM',
+  TRAVELER: 'Traveler',
+  WORK_INSTRUCTION: 'Work instruction',
+  INSPECTION_PLAN: 'Inspection plan',
+  CUSTOMER_SPEC: 'Customer specification',
 };
 
 function InventoryApprovalSummary({
@@ -109,6 +136,80 @@ function InventoryApprovalSummary({
   );
 }
 
+function ProductionChangeApprovalSummary({ payload }: { payload: Record<string, any> }) {
+  const affectedDocuments: string[] = Array.isArray(payload.affectedDocuments) ? payload.affectedDocuments : [];
+  const requiredActions: string[] = Array.isArray(payload.requiredActions) ? payload.requiredActions : [];
+  const rows: Array<[string, React.ReactNode]> = [
+    ['PCF #', <span className="font-mono">{payload.changeNumber ?? 'Pending number'}</span>],
+    ['Signature role', payload.approvalRoleLabel ?? 'Production change approver'],
+    ['Type', <Badge variant="outline">{payload.changeType ?? 'Production change'}</Badge>],
+    ['Scope', payload.scope ?? '-'],
+  ];
+  if (payload.partNumber) rows.push(['Part #', payload.partNumber]);
+  if (payload.poId) rows.push(['PO ID', payload.poId]);
+  if (payload.currentRevision) rows.push(['Current revision', payload.currentRevision]);
+  if (payload.proposedRevision) rows.push(['Proposed revision', payload.proposedRevision]);
+
+  return (
+    <div className="border rounded p-4 bg-muted/30 space-y-3" data-testid="production-change-approval-summary">
+      <div className="flex items-center gap-2">
+        <Badge className="bg-blue-600">AS9100 PCF</Badge>
+        <span className="font-semibold text-sm">Production Change Form</span>
+      </div>
+      <table className="text-xs w-full">
+        <tbody>
+          {rows.map(([k, v]) => (
+            <tr key={k} className="border-t border-muted-foreground/20">
+              <td className="py-1 pr-3 text-muted-foreground font-medium">{k}</td>
+              <td className="py-1">{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground">Proposed Change</div>
+          <p className="text-sm whitespace-pre-wrap">{payload.proposedChange ?? '-'}</p>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground">Reason</div>
+          <p className="text-sm whitespace-pre-wrap">{payload.reason ?? '-'}</p>
+        </div>
+      </div>
+      {payload.riskAssessment && (
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground">Risk Assessment</div>
+          <p className="text-sm whitespace-pre-wrap">{payload.riskAssessment}</p>
+        </div>
+      )}
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground mb-1">Affected Records</div>
+          <div className="flex flex-wrap gap-1">
+            {affectedDocuments.length > 0
+              ? affectedDocuments.map((item) => <Badge key={item} variant="outline">{PRODUCTION_CHANGE_DOCUMENT_LABELS[item] ?? item}</Badge>)
+              : <span className="text-xs text-muted-foreground">None selected</span>}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground mb-1">Follow-Up Tasks</div>
+          <div className="flex flex-wrap gap-1">
+            {requiredActions.length > 0
+              ? requiredActions.map((item) => <Badge key={item} variant="secondary">{PRODUCTION_CHANGE_ACTION_LABELS[item] ?? item}</Badge>)
+              : <span className="text-xs text-muted-foreground">No extra tasks selected</span>}
+          </div>
+        </div>
+      </div>
+      {(payload.requiresCustomerApproval || payload.implementationRequired) && (
+        <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+          {payload.requiresCustomerApproval && <div>Customer approval must be verified before implementation.</div>}
+          {payload.implementationRequired && <div>Implementation follow-up is required after signature.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ApprovalsInbox() {
   const { toast } = useToast();
   const [selected, setSelected] = useState<ApprovalRequest | null>(null);
@@ -117,6 +218,17 @@ export default function ApprovalsInbox() {
   const { data: rows = [], isLoading } = useQuery<ApprovalRequest[]>({
     queryKey: ['/api/approvals'],
     refetchInterval: 30000,
+  });
+
+  useEffect(() => {
+    const requestId = new URLSearchParams(window.location.search).get('requestId');
+    if (!requestId || selected || rows.length === 0) return;
+    const match = rows.find((row) => row.id === requestId);
+    if (match) setSelected(match);
+  }, [rows, selected]);
+
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['/api/employees'],
   });
 
   const { data: detail } = useQuery<{
@@ -132,12 +244,12 @@ export default function ApprovalsInbox() {
     mutationFn: async (vars: { id: string; action: 'approve' | 'reject'; body: DecisionState }) =>
       apiRequest(`/api/approvals/${vars.id}/${vars.action}`, {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           notes: vars.body.notes || null,
           reasonCode: vars.body.reasonCode || null,
           signature: vars.body.signature || null,
-        }),
-      }).then((r) => r.json()),
+        },
+      }),
     onSuccess: (_data, vars) => {
       toast({
         title: vars.action === 'approve' ? 'Approved' : 'Rejected',
@@ -156,9 +268,43 @@ export default function ApprovalsInbox() {
     },
   });
 
+  const assignApproval = useMutation({
+    mutationFn: async (vars: { id: string; employeeId: number | null }) =>
+      apiRequest(`/api/approvals/${vars.id}/assignment`, {
+        method: 'PATCH',
+        body: { employeeId: vars.employeeId },
+      }),
+    onSuccess: (updated: ApprovalRequest) => {
+      const assignedEmployee = employees.find((emp) => emp.userId === updated.currentApproverUserId);
+      setSelected(updated);
+      toast({
+        title: assignedEmployee ? 'Approval assigned' : 'Assignment cleared',
+        description: assignedEmployee
+          ? `${updated.requestType} now appears on ${assignedEmployee.name}'s dashboard.`
+          : `${updated.requestType} is back in the role queue.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/approvals', updated.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/approvals/my-tasks'] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Assignment failed',
+        description: err?.message ?? 'Could not assign this approval',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const policy = detail?.policy;
   const requiresSignature = !!policy?.requiresSignature;
   const reasonCodes: string[] = Array.isArray(policy?.reasonCodes) ? policy.reasonCodes : [];
+  const selectedRequest = detail?.request ?? selected;
+  const assignableEmployees = employees.filter((emp) => emp.userId);
+  const assignedEmployeeId =
+    selectedRequest?.currentApproverUserId != null
+      ? assignableEmployees.find((emp) => emp.userId === selectedRequest.currentApproverUserId)?.id
+      : null;
 
   return (
     <div className="container mx-auto p-4 max-w-7xl" data-testid="page-approvals">
@@ -223,37 +369,80 @@ export default function ApprovalsInbox() {
                 Choose a pending approval from the list to review and act on it.
               </div>
             )}
-            {selected && (
+            {selectedRequest && (
               <>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Status:</span>{' '}
-                    <Badge variant="outline" data-testid="text-status">{selected.status}</Badge>
+                    <Badge variant="outline" data-testid="text-status">{selectedRequest.status}</Badge>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Level:</span> {selected.escalationLevel}
+                    <span className="text-muted-foreground">Level:</span> {selectedRequest.escalationLevel}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Approver role:</span>{' '}
-                    {selected.currentApproverRole ?? '—'}
+                    {selectedRequest.currentApproverRole ?? '—'}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Requested by:</span>{' '}
-                    {selected.requestedByDisplayName}
+                    {selectedRequest.requestedByDisplayName}
                   </div>
                 </div>
 
-                {INVENTORY_REQUEST_TYPES.has(selected.requestType) ? (
+                <div className="rounded border bg-muted/20 p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <UserPlus className="h-4 w-4" />
+                    Assign approval task
+                  </div>
+                  <Select
+                    value={assignedEmployeeId ? String(assignedEmployeeId) : 'none'}
+                    onValueChange={(value) =>
+                      assignApproval.mutate({
+                        id: selectedRequest.id,
+                        employeeId: value === 'none' ? null : Number(value),
+                      })
+                    }
+                    disabled={assignApproval.isPending}
+                  >
+                    <SelectTrigger data-testid="select-approval-assignee">
+                      <SelectValue placeholder="Send to employee dashboard" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Role queue only</SelectItem>
+                      {assignableEmployees.map((emp) => {
+                        const isRequester = emp.userId === selectedRequest.requestedByUserId;
+                        return (
+                          <SelectItem
+                            key={emp.id}
+                            value={String(emp.id)}
+                            disabled={isRequester}
+                          >
+                            {emp.name}
+                            {emp.employeeCode ? ` (${emp.employeeCode})` : ''}
+                            {isRequester ? ' - requester' : ''}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Assigned approvals appear as tasks on the linked employee dashboard.
+                  </p>
+                </div>
+
+                {selectedRequest.requestType === 'PRODUCTION_CHANGE_FORM' ? (
+                  <ProductionChangeApprovalSummary payload={selectedRequest.requestPayload ?? {}} />
+                ) : INVENTORY_REQUEST_TYPES.has(selectedRequest.requestType) ? (
                   <InventoryApprovalSummary
-                    requestType={selected.requestType}
-                    payload={selected.requestPayload ?? {}}
+                    requestType={selectedRequest.requestType}
+                    payload={selectedRequest.requestPayload ?? {}}
                   />
                 ) : (
-                  selected.requestPayload && Object.keys(selected.requestPayload).length > 0 && (
+                  selectedRequest.requestPayload && Object.keys(selectedRequest.requestPayload).length > 0 && (
                     <div>
                       <div className="text-xs font-semibold text-muted-foreground mb-1">Payload</div>
                       <pre className="bg-muted p-2 rounded text-xs overflow-x-auto max-h-48">
-                        {JSON.stringify(selected.requestPayload, null, 2)}
+                        {JSON.stringify(selectedRequest.requestPayload, null, 2)}
                       </pre>
                     </div>
                   )
@@ -322,7 +511,7 @@ export default function ApprovalsInbox() {
                   <div className="flex gap-2 pt-2">
                     <Button
                       onClick={() =>
-                        decide.mutate({ id: selected.id, action: 'approve', body: decision })
+                        decide.mutate({ id: selectedRequest.id, action: 'approve', body: decision })
                       }
                       disabled={
                         decide.isPending || (requiresSignature && !decision.signature)
@@ -335,7 +524,7 @@ export default function ApprovalsInbox() {
                     <Button
                       variant="destructive"
                       onClick={() =>
-                        decide.mutate({ id: selected.id, action: 'reject', body: decision })
+                        decide.mutate({ id: selectedRequest.id, action: 'reject', body: decision })
                       }
                       disabled={
                         decide.isPending || (!decision.notes && !decision.reasonCode)

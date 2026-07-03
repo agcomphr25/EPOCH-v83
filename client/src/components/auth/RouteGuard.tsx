@@ -4,6 +4,7 @@ import { useLocation } from 'wouter';
 import { hasRouteAccess, hasFullAccess, getRequiredCapability } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import AccessDenied from '@/pages/AccessDenied';
+import { Button } from '@/components/ui/button';
 
 interface RouteGuardProps {
   children: React.ReactNode;
@@ -30,13 +31,13 @@ const PUBLIC_ROUTE_PREFIXES = [
   '/p2-traveler', // P2 traveler viewer - public access for customers/vendors
   '/travelers/',  // Traveler execution - production floor access via barcode scan
   '/employee-portal/', // Employee portal with portalId - public access for employees
+  '/onboarding/invite/', // New-hire onboarding invite verification and paperwork
   '/app/production/stations', // Timer Station - public access for production floor
   '/tv-display', // TV Display - public access for production floor screens
   '/app/production/timer-history', // Timer History - public access for production floor
   '/app/production/timer-programs', // Timer Programs - public access for production floor
   '/fill-and-sign/', // Fill and sign PDF forms - public access for customers
   '/kiosk', // Time-clock kiosk — PIN-based auth, no EPOCH login required
-  '/vendor-confirm', // Vendor PO confirmation page - public access for vendors
 ];
 
 function isDeploymentEnvironment(): boolean {
@@ -102,7 +103,8 @@ function computeAccess(currentUser: UserData | null | undefined, location: strin
   if (requiredCap) {
     const roleUpper = userRole.toUpperCase();
     if (roleUpper === 'ADMIN' || roleUpper === 'OWNER') return true;
-    if (capabilitySet && capabilitySet.has(requiredCap)) return true;
+    const requiredCaps = Array.isArray(requiredCap) ? requiredCap : [requiredCap];
+    if (capabilitySet && requiredCaps.some((cap) => capabilitySet.has(cap))) return true;
     return hasRouteAccess(username, location, userRole);
   }
 
@@ -185,7 +187,7 @@ export default function RouteGuard({ children }: RouteGuardProps) {
   // performing navigation during render, which avoids React strict-mode warnings.
   useEffect(() => {
     if (!isLoading && !isPublicRoute(location) && currentUser === null) {
-      setLocation('/login');
+      setLocation('/login', { replace: true });
     }
   }, [isLoading, currentUser, location, setLocation]);
 
@@ -202,7 +204,31 @@ export default function RouteGuard({ children }: RouteGuardProps) {
 
   // Auth resolved — unauthenticated: render nothing while the useEffect redirects
   if (!currentUser) {
-    return null;
+    const redirectTarget = `${location}${window.location.search || ''}`;
+
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="max-w-md rounded-lg border bg-white p-6 text-center shadow-sm">
+          <h1 className="text-lg font-semibold text-gray-900">Sign-in Required</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Your session needs to be refreshed before this page can load.
+          </p>
+          <div className="mt-4 flex justify-center gap-2">
+            <Button
+              type="button"
+              onClick={() =>
+                setLocation(`/login?redirect=${encodeURIComponent(redirectTarget)}`)
+              }
+            >
+              Go to Login
+            </Button>
+            <Button type="button" variant="outline" onClick={() => window.location.reload()}>
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Authenticated — check route-level permissions (including capability-gated routes)

@@ -26,8 +26,8 @@ import {
   leaveEntriesTable,
   laborEntryDraftsTable,
 } from "../../schema/timekeeping";
-import { employees, travelers } from "../../../schema";
-import { eq, and, gte, lte, asc, desc, isNull, inArray } from "drizzle-orm";
+import { chargeCodes, employees, travelers } from "../../../schema";
+import { eq, and, gte, lte, asc, desc, isNull, inArray, sql } from "drizzle-orm";
 
 /**
  * Minimal interface for a Drizzle transaction client (or the db itself).
@@ -274,6 +274,32 @@ export async function getOrCreateWeeklyTimesheet(
     .returning();
 
   return created!;
+}
+
+/**
+ * Recompute the weekly header total from the authoritative line rows.
+ * This keeps certification, review, and audit packet totals aligned with the
+ * actual daily allocation records.
+ */
+export async function recalculateTimesheetTotal(
+  timesheetId: number,
+  tx?: TxClient,
+): Promise<number> {
+  const client = tx ?? (db as unknown as TxClient);
+  const [row] = await client
+    .select({
+      total: sql<string>`COALESCE(SUM(${salariedTimesheetLinesTable.hours}), 0)`,
+    })
+    .from(salariedTimesheetLinesTable)
+    .where(eq(salariedTimesheetLinesTable.timesheetId, timesheetId));
+
+  const total = Number(row?.total ?? 0);
+  await client
+    .update(salariedTimesheetsTable)
+    .set({ totalActualHours: total })
+    .where(eq(salariedTimesheetsTable.id, timesheetId));
+
+  return total;
 }
 
 /**
@@ -546,6 +572,7 @@ export async function getSalariedTimesheetView(
   // Inject locked rows (idempotent — skips if already present)
   await injectHolidayLines(timesheet.id, weekStart, weekEnd);
   await injectApprovedPTO(timesheet.id, epochEmployeeId, weekStart, weekEnd);
+  const totalActualHours = await recalculateTimesheetTotal(timesheet.id);
 
   const lines = await db
     .select()
@@ -553,7 +580,7 @@ export async function getSalariedTimesheetView(
     .where(eq(salariedTimesheetLinesTable.timesheetId, timesheet.id))
     .orderBy(asc(salariedTimesheetLinesTable.date), asc(salariedTimesheetLinesTable.id));
 
-  return { timesheet, lines };
+  return { timesheet: { ...timesheet, totalActualHours }, lines };
 }
 
 /**
@@ -580,6 +607,7 @@ export async function getSalariedTimesheetList(
 
 export interface AddLinePayload {
   lineType: "DIRECT" | "INDIRECT";
+  chargeCodeId?: number | null;
   travelerId?: string | null;
   indirectCodeId?: number | null;
   hours: number;
@@ -589,10 +617,141 @@ export interface AddLinePayload {
 }
 
 export interface UpdateLinePayload {
+  lineType?: "DIRECT" | "INDIRECT";
+  chargeCodeId?: number | null;
+  travelerId?: string | null;
+  indirectCodeId?: number | null;
   hours?: number;
   date?: string;
   note?: string | null;
   originalNarrative?: string | null;
+}
+
+type ResolvedLineAttribution = {
+  lineType: "DIRECT" | "INDIRECT";
+  chargeCodeId: number;
+  indirectCodeId: number | null;
+  travelerId: string | null;
+};
+
+async function resolveLineAttribution(payload: {
+  lineType: "DIRECT" | "INDIRECT";
+  chargeCodeId?: number | null;
+  travelerId?: string | null;
+  indirectCodeId?: number | null;
+}): Promise<ResolvedLineAttribution> {
+  if (payload.lineType === "DIRECT") {
+    if (!payload.travelerId) {
+      const err = new Error("Direct labor lines require a travelerId.");
+      (err as any).statusCode = 400;
+      throw err;
+    }
+    const [traveler] = await db
+      .select({ id: travelers.id, defaultChargeCodeId: travelers.defaultChargeCodeId })
+      .from(travelers)
+      .where(eq(travelers.id, payload.travelerId))
+      .limit(1);
+
+    if (!traveler) {
+      const err = new Error(`Traveler '${payload.travelerId}' not found.`);
+      (err as any).statusCode = 400;
+      throw err;
+    }
+
+    let resolvedChargeCodeId = payload.chargeCodeId ?? traveler.defaultChargeCodeId ?? null;
+    if (!resolvedChargeCodeId) {
+      const err = new Error(
+        `Traveler '${payload.travelerId}' has no default charge code. Select a direct charge code before adding direct labor.`,
+      );
+      (err as any).statusCode = 422;
+      throw err;
+    }
+
+    const [code] = await db
+      .select({ id: chargeCodes.id, type: chargeCodes.type, active: chargeCodes.active })
+      .from(chargeCodes)
+      .where(eq(chargeCodes.id, resolvedChargeCodeId))
+      .limit(1);
+
+    if (!code || !code.active) {
+      const err = new Error(`Charge code ${resolvedChargeCodeId} not found or inactive.`);
+      (err as any).statusCode = 400;
+      throw err;
+    }
+    if (code.type !== "DIRECT") {
+      const err = new Error("Direct labor lines require a direct labor charge code.");
+      (err as any).statusCode = 400;
+      throw err;
+    }
+
+    return {
+      lineType: "DIRECT",
+      chargeCodeId: resolvedChargeCodeId,
+      indirectCodeId: null,
+      travelerId: traveler.id,
+    };
+  }
+
+  if (payload.indirectCodeId) {
+    const [ic] = await db
+      .select({ id: indirectCodesTable.id, chargeCodeId: indirectCodesTable.chargeCodeId, isActive: indirectCodesTable.isActive })
+      .from(indirectCodesTable)
+      .where(eq(indirectCodesTable.id, payload.indirectCodeId))
+      .limit(1);
+
+    if (!ic || !ic.isActive) {
+      const err = new Error(`Indirect code ${payload.indirectCodeId} not found or inactive.`);
+      (err as any).statusCode = 400;
+      throw err;
+    }
+    if (!ic.chargeCodeId) {
+      const err = new Error(`Indirect code ${payload.indirectCodeId} has no charge code mapping.`);
+      (err as any).statusCode = 422;
+      throw err;
+    }
+    return {
+      lineType: "INDIRECT",
+      chargeCodeId: ic.chargeCodeId,
+      indirectCodeId: ic.id,
+      travelerId: null,
+    };
+  }
+
+  if (!payload.chargeCodeId) {
+    const err = new Error("Indirect labor lines require a chargeCodeId.");
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const [code] = await db
+    .select({ id: chargeCodes.id, type: chargeCodes.type, active: chargeCodes.active })
+    .from(chargeCodes)
+    .where(eq(chargeCodes.id, payload.chargeCodeId))
+    .limit(1);
+
+  if (!code || !code.active) {
+    const err = new Error(`Charge code ${payload.chargeCodeId} not found or inactive.`);
+    (err as any).statusCode = 400;
+    throw err;
+  }
+  if (code.type === "DIRECT") {
+    const err = new Error("Direct labor charge codes require a traveler.");
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const [mappedIndirectCode] = await db
+    .select({ id: indirectCodesTable.id })
+    .from(indirectCodesTable)
+    .where(and(eq(indirectCodesTable.chargeCodeId, payload.chargeCodeId), eq(indirectCodesTable.isActive, true)))
+    .limit(1);
+
+  return {
+    lineType: "INDIRECT",
+    chargeCodeId: code.id,
+    indirectCodeId: mappedIndirectCode?.id ?? null,
+    travelerId: null,
+  };
 }
 
 /**
@@ -648,61 +807,7 @@ export async function addLine(
     throw err;
   }
 
-  let chargeCodeId: number | null = null;
-  let resolvedIndirectCodeId: number | null = null;
-  let resolvedTravelerId: string | null = null;
-
-  if (payload.lineType === "DIRECT") {
-    if (!payload.travelerId) {
-      const err = new Error("Direct labor lines require a travelerId.");
-      (err as any).statusCode = 400;
-      throw err;
-    }
-    const [traveler] = await db
-      .select({ id: travelers.id, defaultChargeCodeId: travelers.defaultChargeCodeId })
-      .from(travelers)
-      .where(eq(travelers.id, payload.travelerId))
-      .limit(1);
-
-    if (!traveler) {
-      const err = new Error(`Traveler '${payload.travelerId}' not found.`);
-      (err as any).statusCode = 400;
-      throw err;
-    }
-    if (!traveler.defaultChargeCodeId) {
-      const err = new Error(
-        `Traveler '${payload.travelerId}' has no default charge code. Set a WAD charge code before adding direct labor.`,
-      );
-      (err as any).statusCode = 422;
-      throw err;
-    }
-    chargeCodeId = traveler.defaultChargeCodeId;
-    resolvedTravelerId = traveler.id;
-  } else {
-    if (!payload.indirectCodeId) {
-      const err = new Error("Indirect labor lines require an indirectCodeId.");
-      (err as any).statusCode = 400;
-      throw err;
-    }
-    const [ic] = await db
-      .select({ id: indirectCodesTable.id, chargeCodeId: indirectCodesTable.chargeCodeId, isActive: indirectCodesTable.isActive })
-      .from(indirectCodesTable)
-      .where(eq(indirectCodesTable.id, payload.indirectCodeId))
-      .limit(1);
-
-    if (!ic || !ic.isActive) {
-      const err = new Error(`Indirect code ${payload.indirectCodeId} not found or inactive.`);
-      (err as any).statusCode = 400;
-      throw err;
-    }
-    if (!ic.chargeCodeId) {
-      const err = new Error(`Indirect code ${payload.indirectCodeId} has no charge code mapping.`);
-      (err as any).statusCode = 422;
-      throw err;
-    }
-    chargeCodeId = ic.chargeCodeId;
-    resolvedIndirectCodeId = ic.id;
-  }
+  const attribution = await resolveLineAttribution(payload);
 
   return db.transaction(async (tx) => {
     const [line] = await tx
@@ -710,10 +815,10 @@ export async function addLine(
       .values({
         timesheetId,
         date: payload.date,
-        lineType: payload.lineType,
-        chargeCodeId,
-        indirectCodeId: resolvedIndirectCodeId,
-        travelerId: resolvedTravelerId,
+        lineType: attribution.lineType,
+        chargeCodeId: attribution.chargeCodeId,
+        indirectCodeId: attribution.indirectCodeId,
+        travelerId: attribution.travelerId,
         hours: payload.hours,
         source: "MANUAL",
         note: payload.note ?? null,
@@ -732,13 +837,15 @@ export async function addLine(
       actorName,
       actorRole: null,
       afterState: {
-        lineType: payload.lineType,
+        lineType: attribution.lineType,
         hours: payload.hours,
         date: payload.date,
-        chargeCodeId,
+        chargeCodeId: attribution.chargeCodeId,
       },
       source: "API",
     });
+
+    await recalculateTimesheetTotal(timesheetId, tx as unknown as TxClient);
 
     return line!;
   });
@@ -809,6 +916,26 @@ export async function updateLine(
   const updates: Partial<typeof salariedTimesheetLinesTable.$inferInsert> = {
     updatedBy: actorId,
   };
+  const shouldResolveAttribution =
+    payload.lineType !== undefined ||
+    payload.chargeCodeId !== undefined ||
+    payload.travelerId !== undefined ||
+    payload.indirectCodeId !== undefined;
+  if (shouldResolveAttribution) {
+    const hasChargeCode = Object.prototype.hasOwnProperty.call(payload, "chargeCodeId");
+    const hasTraveler = Object.prototype.hasOwnProperty.call(payload, "travelerId");
+    const hasIndirectCode = Object.prototype.hasOwnProperty.call(payload, "indirectCodeId");
+    const attribution = await resolveLineAttribution({
+      lineType: payload.lineType ?? (existing.lineType === "DIRECT" ? "DIRECT" : "INDIRECT"),
+      chargeCodeId: hasChargeCode ? payload.chargeCodeId : existing.chargeCodeId,
+      travelerId: hasTraveler ? payload.travelerId : existing.travelerId,
+      indirectCodeId: hasIndirectCode ? payload.indirectCodeId : existing.indirectCodeId,
+    });
+    updates.lineType = attribution.lineType;
+    updates.chargeCodeId = attribution.chargeCodeId;
+    updates.indirectCodeId = attribution.indirectCodeId;
+    updates.travelerId = attribution.travelerId;
+  }
   if (payload.hours !== undefined) updates.hours = payload.hours;
   if (payload.date !== undefined) updates.date = payload.date;
   if (payload.note !== undefined) updates.note = payload.note;
@@ -834,9 +961,19 @@ export async function updateLine(
       actorName,
       actorRole: null,
       beforeState: { hours: existing.hours, date: existing.date, note: existing.note },
-      afterState: { hours: updated!.hours, date: updated!.date, note: updated!.note },
+      afterState: {
+        hours: updated!.hours,
+        date: updated!.date,
+        note: updated!.note,
+        lineType: updated!.lineType,
+        chargeCodeId: updated!.chargeCodeId,
+        travelerId: updated!.travelerId,
+        indirectCodeId: updated!.indirectCodeId,
+      },
       source: "API",
     });
+
+    await recalculateTimesheetTotal(timesheetId, tx as unknown as TxClient);
 
     return updated!;
   });
@@ -918,6 +1055,8 @@ export async function deleteLine(
       },
       source: "API",
     });
+
+    await recalculateTimesheetTotal(timesheetId, tx as unknown as TxClient);
   });
 }
 

@@ -17,6 +17,11 @@ import request from 'supertest';
 // Module mocks (hoisted by vitest before any imports)
 // ---------------------------------------------------------------------------
 
+const p2NumberMocks = vi.hoisted(() => ({
+  syncP2InvoiceSequenceFromManualNumber: vi.fn(),
+  recordP2InvoiceNumberAudit: vi.fn(),
+}));
+
 // Auth: authenticateToken is a no-op (the test middleware below sets req.user).
 // requireRole is a faithful re-implementation that returns 403 when the
 // authenticated user's role is not in the allowed list — this lets us cover
@@ -60,6 +65,21 @@ vi.mock('../db', () => ({
 // Stub side-effecting service imports so the route file loads cleanly.
 vi.mock('../src/services/invoiceFromPackingSlip', () => ({
   createInvoiceFromPackingSlip: vi.fn(),
+}));
+
+vi.mock('../src/services/p2InvoiceNumberService', () => ({
+  reserveP2InvoiceNumber: vi.fn(async () => ({
+    invoiceNumber: 'RW26-0001',
+    prefix: 'RW',
+    year: 2026,
+    sequenceNumber: 1,
+    customerId: 'RWC',
+    customerName: 'Rock West Composites',
+  })),
+  syncP2InvoiceSequenceFromManualNumber: (...args: any[]) =>
+    p2NumberMocks.syncP2InvoiceSequenceFromManualNumber(...args),
+  recordP2InvoiceNumberAudit: (...args: any[]) =>
+    p2NumberMocks.recordP2InvoiceNumberAudit(...args),
 }));
 
 vi.mock('../utils/pdf/packingSlipPdf', () => ({
@@ -109,18 +129,24 @@ const LOT_ID = '22222222-2222-2222-2222-222222222222';
 type SlipRow = {
   id: string;
   packing_slip_number: string;
+  invoice_number: string | null;
   ship_date: string | null;
   lot_number: string | null;
   lot_number_id: string | null;
+  customer_id: string;
+  customer_name: string;
 };
 
 function slipRow(overrides: Partial<SlipRow> = {}): SlipRow {
   return {
     id: SLIP_ID,
     packing_slip_number: 'PS-100',
+    invoice_number: 'PS-100',
     ship_date: null,
     lot_number: 'LOT-100',
     lot_number_id: LOT_ID,
+    customer_id: 'RWC',
+    customer_name: 'Rock West Composites',
     ...overrides,
   };
 }
@@ -139,7 +165,9 @@ function slipRow(overrides: Partial<SlipRow> = {}): SlipRow {
 function setupPoolQuery(opts: {
   slip: SlipRow | null;
   duplicateSlipNumber?: boolean;
+  duplicateInvoiceNumber?: boolean;
   duplicateLotNumber?: boolean;
+  linkedInvoiceNumber?: string;
 }) {
   poolQuery.mockImplementation(async (sql: string, _params?: any[]) => {
     const s = sql.replace(/\s+/g, ' ');
@@ -152,6 +180,16 @@ function setupPoolQuery(opts: {
     }
     if (s.includes('FROM p2_packing_slips') && s.includes('packing_slip_number = $1')) {
       const rows = opts.duplicateSlipNumber ? [{ id: 'other-slip' }] : [];
+      return Object.assign(rows, { rowCount: rows.length });
+    }
+    if (s.includes('FROM ar_invoices') && s.includes('packing_slip_id = $1')) {
+      const rows = opts.linkedInvoiceNumber
+        ? [{ id: 'invoice-1', invoice_number: opts.linkedInvoiceNumber }]
+        : [];
+      return Object.assign(rows, { rowCount: rows.length });
+    }
+    if (s.includes('FROM ar_invoices') && s.includes('invoice_number = $1')) {
+      const rows = opts.duplicateInvoiceNumber ? [{ id: 'invoice-dup' }] : [];
       return Object.assign(rows, { rowCount: rows.length });
     }
     if (s.includes('FROM p2_lot_numbers') && s.includes('lot_number = $1')) {
@@ -205,33 +243,50 @@ describe('PATCH /api/p2/packing-slips/:id', () => {
     vi.clearAllMocks();
   });
 
-  it('updates only the packing slip number and writes a single audit entry', async () => {
+  it('updates packing slip and invoice number together and clears the frozen PDF snapshot', async () => {
     setupPoolQuery({ slip: slipRow() });
-    setupClientQuery({ id: SLIP_ID, packing_slip_number: 'PS-200' });
+    setupClientQuery({ id: SLIP_ID, packing_slip_number: 'RW26-0200', invoice_number: 'RW26-0200' });
 
     const app = await buildApp(ADMIN);
 
     const res = await request(app)
       .patch(`/api/p2/packing-slips/${SLIP_ID}`)
-      .send({ packingSlipNumber: 'PS-200', reason: 'corrected typo' });
+      .send({ packingSlipNumber: 'RW26-0200', reason: 'corrected typo' });
 
     expect(res.status).toBe(200);
-    expect(res.body.packing_slip_number).toBe('PS-200');
+    expect(res.body.packing_slip_number).toBe('RW26-0200');
 
     // Single audit entry, recording the slip-number change with the
     // authenticated session actor — never a body-supplied changedBy.
     const audits = auditCalls();
-    expect(audits).toHaveLength(1);
-    const [, params] = audits[0];
-    expect(params).toEqual([
-      'packing_slip',
-      SLIP_ID,
-      'packing_slip_number',
-      'PS-100',
-      'PS-200',
-      ADMIN.username,
-      'corrected typo',
-    ]);
+    expect(audits).toHaveLength(2);
+    const fields = audits.map(([, params]) => (params as any[])[2]).sort();
+    expect(fields).toEqual(['invoice_number', 'packing_slip_number']);
+    for (const [, params] of audits) {
+      expect((params as any[])[5]).toBe(ADMIN.username);
+      expect((params as any[])[6]).toBe('corrected typo');
+    }
+
+    const updateSql = String(clientQuery.mock.calls.find(([sql]) =>
+      String(sql).toUpperCase().startsWith('UPDATE P2_PACKING_SLIPS'),
+    )?.[0] || '');
+    expect(updateSql).toContain('packing_slip_number');
+    expect(updateSql).toContain('invoice_number');
+    expect(updateSql).toContain('external_pdf_url = NULL');
+    expect(p2NumberMocks.syncP2InvoiceSequenceFromManualNumber).toHaveBeenCalledWith({
+      customerId: 'RWC',
+      customerName: 'Rock West Composites',
+      invoiceNumber: 'RW26-0200',
+    });
+    expect(p2NumberMocks.recordP2InvoiceNumberAudit).toHaveBeenCalledWith(expect.objectContaining({
+      packingSlipId: SLIP_ID,
+      oldPackingSlipNumber: 'PS-100',
+      newPackingSlipNumber: 'RW26-0200',
+      oldInvoiceNumber: 'PS-100',
+      newInvoiceNumber: 'RW26-0200',
+      action: 'MANUAL_EDIT',
+      changedBy: ADMIN.username,
+    }));
 
     // No write into p2_lot_numbers when lot # is unchanged.
     const lotUpdates = clientQuery.mock.calls.filter(([sql]) =>
@@ -244,7 +299,8 @@ describe('PATCH /api/p2/packing-slips/:id', () => {
     setupPoolQuery({ slip: slipRow() });
     setupClientQuery({
       id: SLIP_ID,
-      packing_slip_number: 'PS-201',
+      packing_slip_number: 'RW26-0201',
+      invoice_number: 'RW26-0201',
       ship_date: '2026-04-01T00:00:00.000Z',
       lot_number: 'LOT-201',
     });
@@ -254,7 +310,7 @@ describe('PATCH /api/p2/packing-slips/:id', () => {
     const res = await request(app)
       .patch(`/api/p2/packing-slips/${SLIP_ID}`)
       .send({
-        packingSlipNumber: 'PS-201',
+        packingSlipNumber: 'RW26-0201',
         shipDate: '2026-04-01T00:00:00.000Z',
         lotNumber: 'LOT-201',
         reason: 'reissue after carrier reroute',
@@ -263,9 +319,9 @@ describe('PATCH /api/p2/packing-slips/:id', () => {
     expect(res.status).toBe(200);
 
     const audits = auditCalls();
-    expect(audits).toHaveLength(3);
+    expect(audits).toHaveLength(4);
     const fields = audits.map(([, params]) => (params as any[])[2]).sort();
-    expect(fields).toEqual(['lot_number', 'packing_slip_number', 'ship_date']);
+    expect(fields).toEqual(['invoice_number', 'lot_number', 'packing_slip_number', 'ship_date']);
 
     // Every audit row carries the session actor and supplied reason.
     for (const [, params] of audits) {

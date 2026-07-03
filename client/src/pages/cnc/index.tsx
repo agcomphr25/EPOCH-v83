@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { BarcodeDisplay } from '@/components/BarcodeDisplay';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -20,7 +21,7 @@ import {
   Plus, Play, Square, CheckCircle, Camera, ClipboardList,
   Settings, User, Flag, Trash2, Edit2, Save, X,
   Lightbulb, ArrowRight, ChevronRight, Link as LinkIcon, PauseCircle, BookOpen,
-  ChevronDown, AlertTriangle, Calendar,
+  ChevronDown, AlertTriangle, Calendar, Package, Printer, Ban, Layers,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import type {
@@ -30,7 +31,8 @@ import type {
   CreateJobPayload, UpdateJobPayload, CreateOperationPayload, UpdateOperationPayload,
   CreateToolPayload, CreateProgramPayload, CreatePhotoPayload,
   CreateCheckpointPayload, CreateQcResultPayload, CreateTimeLogPayload,
-  CncScheduleSettings, MachineLoadSummary,
+  CncScheduleSettings, MachineLoadSummary, CncOperationBatch, EmployeeOption,
+  BulkCreateOperationBatchPayload, AssignOperationBatchPayload,
 } from './types';
 import { extractErrorMessage as getErrMsg, CNC_MACHINE_TYPES } from './types';
 
@@ -64,6 +66,26 @@ const OP_STATUS_COLORS: Record<string, string> = {
   complete: 'bg-emerald-100 text-emerald-700', hold: 'bg-red-100 text-red-700',
 };
 
+const BATCH_STATUS_LABELS: Record<string, string> = {
+  queued: 'Queued',
+  assigned: 'Assigned',
+  in_progress: 'In Progress',
+  paused: 'Paused',
+  hold: 'Hold',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+const BATCH_STATUS_COLORS: Record<string, string> = {
+  queued: 'bg-gray-100 text-gray-600',
+  assigned: 'bg-blue-100 text-blue-700',
+  in_progress: 'bg-green-100 text-green-700',
+  paused: 'bg-yellow-100 text-yellow-700',
+  hold: 'bg-red-100 text-red-700',
+  completed: 'bg-emerald-100 text-emerald-700',
+  cancelled: 'bg-slate-100 text-slate-500',
+};
+
 const FORWARD_DESTINATIONS = ['Deburr', 'Inspection', 'Assembly', 'Stock', 'Shipping', 'Outside Process'];
 const PHOTO_CATEGORIES = ['Workholding', 'Tool Holder', 'Part Orientation', 'Finished Example', 'QC Reference', 'Setup Shot'];
 
@@ -82,6 +104,14 @@ function PriorityDot({ priority }: { priority: string }) {
     critical: 'bg-red-500', high: 'bg-orange-500', medium: 'bg-yellow-500', low: 'bg-gray-400',
   };
   return <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${colors[priority] ?? 'bg-gray-400'}`} title={priority} />;
+}
+
+function BatchStatusBadge({ status }: { status: string }) {
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${BATCH_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-600'}`}>
+      {BATCH_STATUS_LABELS[status] ?? status}
+    </span>
+  );
 }
 
 // ── Inline Editable Field ─────────────────────────────────────────────────────
@@ -219,6 +249,21 @@ export default function CNCDashboardPage() {
   // ── Complete job dialog ────────────────────────────────────────────────────
   const [completeJobOpen, setCompleteJobOpen] = useState(false);
   const [forwardDestination, setForwardDestination] = useState('');
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [batchOperationId, setBatchOperationId] = useState<number | null>(null);
+  const [batchForm, setBatchForm] = useState({
+    batchQty: '1',
+    numberOfBatches: '1',
+    machineId: '__none__',
+    employeeId: '__none__',
+    priority: 'medium',
+    dueDate: '',
+    notes: '',
+    autoPrint: true,
+  });
+  const [assignBatch, setAssignBatch] = useState<CncOperationBatch | null>(null);
+  const [assignForm, setAssignForm] = useState({ machineId: '__none__', employeeId: '__none__', notes: '' });
+  const [barcodeBatch, setBarcodeBatch] = useState<CncOperationBatch | null>(null);
 
   // ── Tribal knowledge editing ───────────────────────────────────────────────
   const [editingTribal, setEditingTribal] = useState(false);
@@ -323,7 +368,19 @@ export default function CNCDashboardPage() {
     queryKey: ['/api/cnc/machines'],
   });
 
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  const { data: operationBatches = [] } = useQuery<CncOperationBatch[]>({
+    queryKey: ['/api/cnc/operation-batches'],
+  });
+
   const activeMachines = useMemo(() => machines.filter(m => m.active), [machines]);
+  const activeEmployees = useMemo(
+    () => employees.filter(e => e.isActive !== false && e.employmentStatus !== 'TERMINATED'),
+    [employees],
+  );
 
   const { data: scheduleSettings } = useQuery<CncScheduleSettings>({
     queryKey: ['/api/cnc/schedule-settings'],
@@ -369,6 +426,51 @@ export default function CNCDashboardPage() {
 
   const selectedOp = useMemo(() => operations.find(o => o.id === selectedOpId) ?? null, [operations, selectedOpId]);
   const executionOp = selectedOp ?? operations.find(o => o.status !== 'complete') ?? null;
+  const stepQty = travelerInfo?.quantity ?? selectedJob?.qty ?? 0;
+  const woQty = selectedJob?.qty ?? travelerInfo?.quantity ?? 0;
+  const selectedJobBatches = useMemo(() => {
+    if (!selectedJob) return [];
+    return operationBatches.filter(b =>
+      (!!selectedJob.linkedTravelerId && b.travelerId === selectedJob.linkedTravelerId)
+      || b.workOrderNumber === selectedJob.workOrder
+    );
+  }, [operationBatches, selectedJob]);
+  const selectedStepBatches = useMemo(() => {
+    if (!selectedJob?.linkedTravelerStepId) return selectedJobBatches;
+    return selectedJobBatches.filter(b => b.travelerStepId === selectedJob.linkedTravelerStepId);
+  }, [selectedJob?.linkedTravelerStepId, selectedJobBatches]);
+  const activeStepBatches = useMemo(
+    () => selectedStepBatches.filter(b => b.status !== 'cancelled'),
+    [selectedStepBatches],
+  );
+  const selectedOpBatches = useMemo(() => {
+    if (!selectedOpId) return [];
+    return selectedStepBatches.filter(b => b.operationId === selectedOpId);
+  }, [selectedOpId, selectedStepBatches]);
+  const alreadyBatchedQty = activeStepBatches.reduce((sum, b) => sum + b.batchQty, 0);
+  const availableToBatchQty = Math.max(stepQty - alreadyBatchedQty, 0);
+  const selectedStepRollups = useMemo(() => {
+    const serverRollup = activeStepBatches.find(b => b.totalStepQty !== undefined);
+    const completedQty = serverRollup?.completedQty ?? activeStepBatches.reduce((sum, b) => sum + b.qtyCompleted, 0);
+    const scrappedQty = serverRollup?.scrappedQty ?? activeStepBatches.reduce((sum, b) => sum + b.qtyScrapped, 0);
+    const totalStepQty = serverRollup?.totalStepQty ?? stepQty;
+    const batchedQty = serverRollup?.batchedQty ?? alreadyBatchedQty;
+    return {
+      totalStepQty,
+      batchedQty,
+      availableToBatchQty: serverRollup?.availableToBatchQty ?? Math.max(totalStepQty - batchedQty, 0),
+      inProgressQty: serverRollup?.inProgressQty ?? activeStepBatches
+        .filter(b => b.status === 'in_progress' || b.status === 'paused')
+        .reduce((sum, b) => sum + Math.max(b.batchQty - b.qtyCompleted - b.qtyScrapped, 0), 0),
+      completedQty,
+      scrappedQty,
+      remainingQty: serverRollup?.remainingQty ?? Math.max(totalStepQty - completedQty - scrappedQty, 0),
+    };
+  }, [activeStepBatches, alreadyBatchedQty, stepQty]);
+  const batchStatusRollups = useMemo(() => selectedJobBatches.reduce<Record<string, number>>((acc, b) => {
+    acc[b.status] = (acc[b.status] ?? 0) + 1;
+    return acc;
+  }, {}), [selectedJobBatches]);
 
   const filteredJobs = useMemo(() => jobs.filter(j => {
     if (filterMachine && !j.machine?.toLowerCase().includes(filterMachine.toLowerCase())) return false;
@@ -396,6 +498,7 @@ export default function CNCDashboardPage() {
   function invalidatePhotos() { queryClient.invalidateQueries({ queryKey: ['/api/cnc/operations', selectedOpId, 'photos'] }); }
   function invalidateCheckpoints() { queryClient.invalidateQueries({ queryKey: ['/api/cnc/operations', selectedOpId, 'qc-checkpoints'] }); }
   function invalidateQcResults() { queryClient.invalidateQueries({ queryKey: ['/api/cnc/operations', selectedOpId, 'qc-results'] }); }
+  function invalidateBatches() { queryClient.invalidateQueries({ queryKey: ['/api/cnc/operation-batches'] }); }
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -588,6 +691,39 @@ export default function CNCDashboardPage() {
 
   // ── Action Handlers ────────────────────────────────────────────────────────
 
+  const createBatches = useMutation<{ count: number; batches: CncOperationBatch[] }, unknown, BulkCreateOperationBatchPayload>({
+    mutationFn: (payload) => apiRequest('/api/cnc/operation-batches/bulk', { method: 'POST', body: payload }),
+    onSuccess: (result) => {
+      invalidateBatches();
+      setBatchDialogOpen(false);
+      toast({ title: `${result.count} batch${result.count === 1 ? '' : 'es'} created` });
+      if (batchForm.autoPrint && result.batches[0]) setBarcodeBatch(result.batches[0]);
+    },
+    onError: showErr,
+  });
+
+  const assignOperationBatch = useMutation<CncOperationBatch, unknown, { id: number; data: AssignOperationBatchPayload }>({
+    mutationFn: ({ id, data }) => apiRequest(`/api/cnc/operation-batches/${id}/assign`, { method: 'PATCH', body: data }),
+    onSuccess: () => {
+      invalidateBatches();
+      setAssignBatch(null);
+      toast({ title: 'Batch assignment updated' });
+    },
+    onError: showErr,
+  });
+
+  const holdOperationBatch = useMutation<CncOperationBatch, unknown, number>({
+    mutationFn: (id) => apiRequest(`/api/cnc/operation-batches/${id}/hold`, { method: 'PATCH', body: {} }),
+    onSuccess: () => { invalidateBatches(); toast({ title: 'Batch placed on hold' }); },
+    onError: showErr,
+  });
+
+  const cancelOperationBatch = useMutation<CncOperationBatch, unknown, number>({
+    mutationFn: (id) => apiRequest(`/api/cnc/operation-batches/${id}/cancel`, { method: 'PATCH', body: {} }),
+    onSuccess: () => { invalidateBatches(); toast({ title: 'Batch cancelled' }); },
+    onError: showErr,
+  });
+
   function handleSelectJob(jobId: number) {
     setSelectedJobId(jobId);
     setSelectedOpId(null);
@@ -640,6 +776,86 @@ export default function CNCDashboardPage() {
       warmupNotes: newOpForm.warmupNotes || null,
     };
     createOperation.mutate(payload);
+  }
+
+  function openBatchDialog(op?: CncJobOperation | null) {
+    if (!selectedJob || !travelerInfo?.productionWorkOrderId || !selectedJob.linkedTravelerStepId) {
+      toast({
+        title: 'Traveler step required',
+        description: 'Link the CNC job to a traveler step before creating operation batches.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const targetOp = op ?? selectedOp ?? executionOp;
+    const defaultMachineName = targetOp?.machine ?? selectedJob.machine ?? '';
+    const defaultMachine = activeMachines.find(m => m.machineName === defaultMachineName);
+    setBatchOperationId(targetOp?.id ?? null);
+    setBatchForm({
+      batchQty: availableToBatchQty > 0 ? String(availableToBatchQty) : '1',
+      numberOfBatches: '1',
+      machineId: defaultMachine ? String(defaultMachine.id) : '__none__',
+      employeeId: '__none__',
+      priority: selectedJob.priority,
+      dueDate: selectedJob.dueDate ?? '',
+      notes: '',
+      autoPrint: true,
+    });
+    setBatchDialogOpen(true);
+  }
+
+  function handleCreateBatches() {
+    if (!selectedJob || !travelerInfo?.productionWorkOrderId || !selectedJob.linkedTravelerStepId) return;
+    const batchQty = parseInt(batchForm.batchQty, 10);
+    const count = parseInt(batchForm.numberOfBatches, 10);
+    if (!Number.isFinite(batchQty) || batchQty <= 0 || !Number.isFinite(count) || count <= 0) {
+      toast({ title: 'Invalid batch quantity', description: 'Batch quantity and number of batches must be positive.', variant: 'destructive' });
+      return;
+    }
+    if (batchQty * count > availableToBatchQty) {
+      toast({ title: 'Quantity exceeds available step quantity', description: `${availableToBatchQty} part(s) remain available to batch.`, variant: 'destructive' });
+      return;
+    }
+    const machine = batchForm.machineId === '__none__' ? null : activeMachines.find(m => String(m.id) === batchForm.machineId) ?? null;
+    const employee = batchForm.employeeId === '__none__' ? null : activeEmployees.find(e => String(e.id) === batchForm.employeeId) ?? null;
+    createBatches.mutate({
+      workOrderId: travelerInfo.productionWorkOrderId,
+      travelerStepId: selectedJob.linkedTravelerStepId,
+      operationId: batchOperationId,
+      batchQtys: Array.from({ length: count }, () => batchQty),
+      assignedMachineId: machine?.id ?? null,
+      assignedMachineName: machine?.machineName ?? null,
+      assignedEmployeeId: employee?.id ?? null,
+      assignedEmployeeDisplayName: employee?.name ?? null,
+      priority: batchForm.priority,
+      dueDate: batchForm.dueDate || null,
+      notes: batchForm.notes || null,
+    });
+  }
+
+  function openAssignBatchDialog(batch: CncOperationBatch) {
+    setAssignBatch(batch);
+    setAssignForm({
+      machineId: batch.assignedMachineId ? String(batch.assignedMachineId) : '__none__',
+      employeeId: batch.assignedEmployeeId ? String(batch.assignedEmployeeId) : '__none__',
+      notes: batch.notes ?? '',
+    });
+  }
+
+  function handleAssignBatch() {
+    if (!assignBatch) return;
+    const machine = assignForm.machineId === '__none__' ? null : activeMachines.find(m => String(m.id) === assignForm.machineId) ?? null;
+    const employee = assignForm.employeeId === '__none__' ? null : activeEmployees.find(e => String(e.id) === assignForm.employeeId) ?? null;
+    assignOperationBatch.mutate({
+      id: assignBatch.id,
+      data: {
+        assignedMachineId: machine?.id ?? null,
+        assignedMachineName: machine?.machineName ?? null,
+        assignedEmployeeId: employee?.id ?? null,
+        assignedEmployeeDisplayName: employee?.name ?? null,
+        notes: assignForm.notes || null,
+      },
+    });
   }
 
   function saveInlineOpField(opId: number, field: keyof UpdateOperationPayload, rawValue: string) {
@@ -1206,10 +1422,27 @@ export default function CNCDashboardPage() {
                   <Button size="sm" variant={selectedJob.qcHold ? 'destructive' : 'outline'} className="text-xs h-7" onClick={() => updateJob.mutate({ id: selectedJob.id, data: { qcHold: !selectedJob.qcHold } })}>
                     {selectedJob.qcHold ? 'Clear QC Hold' : 'QC Hold'}
                   </Button>
+                  <Button size="sm" variant="outline" className="text-xs h-7" disabled={!travelerInfo?.productionWorkOrderId || !selectedJob.linkedTravelerStepId || availableToBatchQty <= 0} onClick={() => openBatchDialog(executionOp)}>
+                    <Package className="w-3 h-3 mr-1" /> Batch This Step
+                  </Button>
                   <Button size="sm" variant="ghost" className="text-xs h-7 text-red-500 px-2" onClick={() => { if (confirm('Delete this job?')) deleteJob.mutate(selectedJob.id); }}>
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 px-2 py-0.5">
+                  <Layers className="w-3 h-3" />Batches {selectedJobBatches.length}
+                </span>
+                <span className="rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">WO Qty {woQty}</span>
+                <span className="rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">Step Qty {stepQty}</span>
+                <span className="rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">Batched {alreadyBatchedQty}</span>
+                <span className="rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5">Available {availableToBatchQty}</span>
+                {Object.entries(batchStatusRollups).map(([status, count]) => (
+                  <span key={status} className="rounded-full bg-gray-50 border px-2 py-0.5 text-gray-600">
+                    {BATCH_STATUS_LABELS[status] ?? status}: {count}
+                  </span>
+                ))}
               </div>
               {selectedJob.notes && <p className="mt-2 text-xs text-gray-600 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">{selectedJob.notes}</p>}
             </div>
@@ -1235,6 +1468,9 @@ export default function CNCDashboardPage() {
                       <span className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${OP_STATUS_COLORS[op.status] ?? 'bg-gray-100 text-gray-600'}`}>{op.status}</span>
                       {op.status === 'complete' && <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
                       {op.claimedByDisplayName && <span className="text-xs text-gray-400 hidden md:inline"><User className="w-3 h-3 inline" /> {op.claimedByDisplayName}</span>}
+                      <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 flex-shrink-0" disabled={!travelerInfo?.productionWorkOrderId || !selectedJob.linkedTravelerStepId || availableToBatchQty <= 0} onClick={e => { e.stopPropagation(); handleSelectOp(op); openBatchDialog(op); }}>
+                        <Package className="w-3 h-3 mr-1" />Batch
+                      </Button>
                       <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-400 hover:text-red-600 flex-shrink-0" onClick={e => { e.stopPropagation(); deleteOperation.mutate(op.id); }}>
                         <Trash2 className="w-3 h-3" />
                       </Button>
@@ -1250,6 +1486,7 @@ export default function CNCDashboardPage() {
                             <TabsTrigger value="program" className="text-xs h-7">Program</TabsTrigger>
                             <TabsTrigger value="photos" className="text-xs h-7">Photos</TabsTrigger>
                             <TabsTrigger value="qc" className="text-xs h-7">QC</TabsTrigger>
+                            <TabsTrigger value="batches" className="text-xs h-7"><Package className="w-3 h-3 mr-1" />Batches</TabsTrigger>
                             <TabsTrigger value="tribal" className="text-xs h-7"><Lightbulb className="w-3 h-3 mr-1" />Tips</TabsTrigger>
                           </TabsList>
 
@@ -1454,6 +1691,33 @@ export default function CNCDashboardPage() {
                             )}
                           </TabsContent>
 
+                          {/* Operation Batches Tab */}
+                          <TabsContent value="batches" className="p-3 m-0">
+                            <div className="flex justify-between items-center mb-2">
+                              <p className="text-xs font-semibold text-gray-600">Operation Batches</p>
+                              <Button size="sm" variant="outline" className="h-6 text-xs" disabled={availableToBatchQty <= 0} onClick={() => openBatchDialog(op)}>
+                                <Plus className="w-3 h-3 mr-1" /> Create Batch
+                              </Button>
+                            </div>
+                            {selectedOpBatches.length === 0 ? (
+                              <p className="text-xs text-gray-400 text-center py-4">No batches for this operation</p>
+                            ) : (
+                              <div className="space-y-1">
+                                {selectedOpBatches.map(batch => (
+                                  <div key={batch.id} className="flex items-center gap-2 rounded border bg-gray-50 px-2 py-1.5 text-xs">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-semibold text-gray-800 truncate">{batch.batchCode}</p>
+                                      <p className="text-gray-500 truncate">Qty {batch.batchQty} | Done {batch.qtyCompleted} | Scrap {batch.qtyScrapped}</p>
+                                    </div>
+                                    <BatchStatusBadge status={batch.status} />
+                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => openAssignBatchDialog(batch)}><User className="w-3 h-3" /></Button>
+                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setBarcodeBatch(batch)}><Printer className="w-3 h-3" /></Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </TabsContent>
+
                           {/* Tribal Knowledge Tab */}
                           <TabsContent value="tribal" className="p-3 m-0">
                             <div className="flex items-center justify-between mb-2">
@@ -1484,6 +1748,62 @@ export default function CNCDashboardPage() {
                     )}
                   </div>
                 ))}
+
+                <div className="rounded-lg border bg-white shadow-sm">
+                  <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><Layers className="w-4 h-4 text-blue-600" />Operation Batches</h3>
+                      <p className="text-xs text-gray-500">Total {selectedStepRollups.totalStepQty}; batched {selectedStepRollups.batchedQty}; available {selectedStepRollups.availableToBatchQty}</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!travelerInfo?.productionWorkOrderId || !selectedJob.linkedTravelerStepId || availableToBatchQty <= 0} onClick={() => openBatchDialog(executionOp)}>
+                      <Plus className="w-3 h-3 mr-1" />Create Partial Job
+                    </Button>
+                  </div>
+                  {selectedJobBatches.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-6">No operation batches created for this job</p>
+                  ) : (
+                    <div>
+                      <div className="grid grid-cols-3 gap-2 border-b bg-gray-50 px-3 py-2 text-xs md:grid-cols-7">
+                        <div><p className="text-[10px] uppercase text-gray-400">Total step</p><p className="font-semibold">{selectedStepRollups.totalStepQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">Batched</p><p className="font-semibold">{selectedStepRollups.batchedQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">Available</p><p className="font-semibold">{selectedStepRollups.availableToBatchQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">In progress</p><p className="font-semibold">{selectedStepRollups.inProgressQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">Completed</p><p className="font-semibold">{selectedStepRollups.completedQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">Scrap</p><p className="font-semibold text-red-600">{selectedStepRollups.scrappedQty}</p></div>
+                        <div><p className="text-[10px] uppercase text-gray-400">Remaining</p><p className="font-semibold">{selectedStepRollups.remainingQty}</p></div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[1120px]">
+                          <div className="grid items-center border-b bg-gray-50 px-2 py-1.5 text-[11px] font-semibold text-gray-500" style={{ gridTemplateColumns: '118px 74px 112px 96px 64px 76px 64px 100px 126px 86px 72px 74px 118px' }}>
+                            <span>Batch code</span><span>WO</span><span>Part</span><span>Step</span><span>Batch qty</span><span>Completed</span><span>Scrap</span><span>Machine</span><span>Technician</span><span>Status</span><span>Priority</span><span>Due</span><span>Actions</span>
+                          </div>
+                          {selectedJobBatches.map(batch => (
+                            <div key={batch.id} className="grid items-center border-b last:border-b-0 px-2 py-2 text-xs" style={{ gridTemplateColumns: '118px 74px 112px 96px 64px 76px 64px 100px 126px 86px 72px 74px 118px' }}>
+                              <span className="font-semibold text-blue-700 truncate">{batch.batchCode}</span>
+                              <span className="truncate">{batch.workOrderNumber}</span>
+                              <span className="truncate" title={batch.partName ?? batch.partNumber ?? ''}>{batch.partNumber ?? batch.partName ?? '-'}</span>
+                              <span className="truncate">{batch.operationSequence ? `Op ${batch.operationSequence}` : `Step ${batch.travelerStepNumber}`}</span>
+                              <span>{batch.batchQty}</span>
+                              <span>{batch.qtyCompleted}</span>
+                              <span className={batch.qtyScrapped > 0 ? 'text-red-600 font-semibold' : ''}>{batch.qtyScrapped}</span>
+                              <span className="truncate">{batch.assignedMachineName ?? '-'}</span>
+                              <span className="truncate">{batch.assignedEmployeeDisplayName ?? '-'}</span>
+                              <BatchStatusBadge status={batch.status} />
+                              <span className="capitalize">{batch.priority}</span>
+                              <span>{batch.dueDate ? format(new Date(batch.dueDate), 'MM/dd') : '-'}</span>
+                              <span className="flex gap-1">
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Assign" onClick={() => openAssignBatchDialog(batch)}><User className="w-3 h-3" /></Button>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Hold" disabled={batch.status === 'cancelled' || batch.status === 'completed' || holdOperationBatch.isPending} onClick={() => holdOperationBatch.mutate(batch.id)}><PauseCircle className="w-3 h-3" /></Button>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" title="Cancel" disabled={batch.status === 'cancelled' || batch.status === 'completed' || cancelOperationBatch.isPending} onClick={() => { if (confirm(`Cancel ${batch.batchCode}?`)) cancelOperationBatch.mutate(batch.id); }}><Ban className="w-3 h-3" /></Button>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Print barcode" onClick={() => setBarcodeBatch(batch)}><Printer className="w-3 h-3" /></Button>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </ScrollArea>
           </>
@@ -1786,6 +2106,123 @@ export default function CNCDashboardPage() {
       </div>
 
       {/* ── Dialogs ───────────────────────────────────────────────────────── */}
+
+      {/* Create Operation Batch */}
+      <Dialog open={batchDialogOpen} onOpenChange={setBatchDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Create Partial Job / Batch This Step</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-4 gap-2 text-xs">
+              <div className="rounded border bg-gray-50 px-2 py-1.5"><p className="text-gray-500">Work order</p><p className="font-semibold text-gray-800 truncate">{selectedJob?.workOrder ?? '-'}</p></div>
+              <div className="rounded border bg-gray-50 px-2 py-1.5"><p className="text-gray-500">Routing step</p><p className="font-semibold text-gray-800 truncate">{travelerInfo?.currentStepNumber ? `Step ${travelerInfo.currentStepNumber}` : selectedJob?.linkedTravelerStepId ?? '-'}</p></div>
+              <div className="rounded border bg-gray-50 px-2 py-1.5"><p className="text-gray-500">WO quantity</p><p className="font-semibold text-gray-800">{woQty}</p></div>
+              <div className="rounded border bg-gray-50 px-2 py-1.5"><p className="text-gray-500">Step quantity</p><p className="font-semibold text-gray-800">{stepQty}</p></div>
+              <div className="rounded border bg-gray-50 px-2 py-1.5"><p className="text-gray-500">Already batched</p><p className="font-semibold text-gray-800">{alreadyBatchedQty}</p></div>
+              <div className="rounded border bg-emerald-50 border-emerald-100 px-2 py-1.5"><p className="text-emerald-700">Available</p><p className="font-semibold text-emerald-800">{availableToBatchQty}</p></div>
+              <div className="rounded border bg-gray-50 px-2 py-1.5 col-span-2"><p className="text-gray-500">Selected operation</p><p className="font-semibold text-gray-800 truncate">{operations.find(o => o.id === batchOperationId)?.opName ?? 'No dashboard operation selected'}</p></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">Batch quantity</Label><Input type="number" min="1" value={batchForm.batchQty} onChange={e => setBatchForm(p => ({ ...p, batchQty: e.target.value }))} className="h-8 text-sm mt-1" /></div>
+              <div><Label className="text-xs">Number of batches</Label><Input type="number" min="1" value={batchForm.numberOfBatches} onChange={e => setBatchForm(p => ({ ...p, numberOfBatches: e.target.value }))} className="h-8 text-sm mt-1" /></div>
+              <div><Label className="text-xs">Machine</Label>
+                <Select value={batchForm.machineId} onValueChange={v => setBatchForm(p => ({ ...p, machineId: v }))}>
+                  <SelectTrigger className="h-8 text-sm mt-1"><SelectValue placeholder="Select machine..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Unassigned</SelectItem>
+                    {activeMachines.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.machineName}{m.machineNumber ? ` - ${m.machineNumber}` : ''}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-xs">Technician</Label>
+                <Select value={batchForm.employeeId} onValueChange={v => setBatchForm(p => ({ ...p, employeeId: v }))}>
+                  <SelectTrigger className="h-8 text-sm mt-1"><SelectValue placeholder="Select technician..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Unassigned</SelectItem>
+                    {activeEmployees.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-xs">Priority</Label>
+                <Select value={batchForm.priority} onValueChange={v => setBatchForm(p => ({ ...p, priority: v }))}>
+                  <SelectTrigger className="h-8 text-sm mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-xs">Due date</Label><Input type="date" value={batchForm.dueDate} onChange={e => setBatchForm(p => ({ ...p, dueDate: e.target.value }))} className="h-8 text-sm mt-1" /></div>
+              <div className="col-span-2"><Label className="text-xs">Notes</Label><Textarea value={batchForm.notes} onChange={e => setBatchForm(p => ({ ...p, notes: e.target.value }))} className="text-sm mt-1 min-h-[56px]" /></div>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <input type="checkbox" checked={batchForm.autoPrint} onChange={e => setBatchForm(p => ({ ...p, autoPrint: e.target.checked }))} />
+              Auto-print barcode after create
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchDialogOpen(false)}>Cancel</Button>
+            <Button disabled={createBatches.isPending || availableToBatchQty <= 0} onClick={handleCreateBatches}>
+              {createBatches.isPending ? 'Creating...' : 'Create Batch'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Operation Batch */}
+      <Dialog open={!!assignBatch} onOpenChange={open => { if (!open) setAssignBatch(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Assign Batch</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm font-semibold text-gray-800">{assignBatch?.batchCode}</p>
+            <div><Label className="text-xs">Machine</Label>
+              <Select value={assignForm.machineId} onValueChange={v => setAssignForm(p => ({ ...p, machineId: v }))}>
+                <SelectTrigger className="h-8 text-sm mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Unassigned</SelectItem>
+                  {activeMachines.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.machineName}{m.machineNumber ? ` - ${m.machineNumber}` : ''}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-xs">Technician</Label>
+              <Select value={assignForm.employeeId} onValueChange={v => setAssignForm(p => ({ ...p, employeeId: v }))}>
+                <SelectTrigger className="h-8 text-sm mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Unassigned</SelectItem>
+                  {activeEmployees.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-xs">Notes</Label><Textarea value={assignForm.notes} onChange={e => setAssignForm(p => ({ ...p, notes: e.target.value }))} className="text-sm mt-1 min-h-[56px]" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignBatch(null)}>Cancel</Button>
+            <Button disabled={assignOperationBatch.isPending} onClick={handleAssignBatch}>{assignOperationBatch.isPending ? 'Saving...' : 'Save Assignment'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Barcode */}
+      <Dialog open={!!barcodeBatch} onOpenChange={open => { if (!open) setBarcodeBatch(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Batch Barcode</DialogTitle></DialogHeader>
+          {barcodeBatch && (
+            <BarcodeDisplay
+              orderId={barcodeBatch.batchCode}
+              barcode={barcodeBatch.barcodeValue}
+              showTitle
+              size="medium"
+              customerName={barcodeBatch.workOrderNumber}
+              dueDate={barcodeBatch.dueDate ?? undefined}
+              status={BATCH_STATUS_LABELS[barcodeBatch.status] ?? barcodeBatch.status}
+              isHighPriority={barcodeBatch.priority === 'critical' || barcodeBatch.priority === 'high'}
+              titleLabel="Operation Batch Barcode"
+              printHeaderLabel="CNC OP BATCH"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* New Job */}
       <Dialog open={newJobOpen} onOpenChange={setNewJobOpen}>

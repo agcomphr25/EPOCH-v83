@@ -35,6 +35,10 @@ const CRITICAL_TABLES = new Set([
   'followup_orders',
   'schema_change_log',
   'nonconformance_records',
+  'capa_records',
+  'calibration_assets',
+  'calibration_events',
+  'calibration_use_logs',
 ]);
 
 /**

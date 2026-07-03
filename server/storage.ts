@@ -19,6 +19,7 @@ import {
   inventoryDepartments,
   inventoryItemDepartments,
   inventoryItemCostHistory,
+  inventoryTransactionLedger,
   inventoryScans,
   itemGroups,
   inventoryItemGroups,
@@ -131,7 +132,6 @@ import {
   employeeDocuments,
   employeeAuditLog,
   adminAuditLog,
-  auditEvents,
   // Capability-based permission system tables
   capabilities,
   employeeCapabilities,
@@ -506,6 +506,7 @@ import {
   projects,
   projectSteps,
   projectActivityLog,
+  projectRevisions,
   projectNotifications,
   projectStepAttachments,
   projectClosings,
@@ -516,6 +517,8 @@ import {
   type Project,
   type InsertProject,
   type ProjectStep,
+  type ProjectRevision,
+  type InsertProjectRevision,
   type ProjectStepAttachment,
   type InsertProjectStepAttachment,
   type InsertProjectStep,
@@ -555,8 +558,7 @@ import {
   type InsertTicketOrder,
   type TicketActivity,
   type InsertTicketActivity,
-  getSupplySourceDashboard,
-  supplySourceDashboardToLegacyDept,
+  getManufacturingRouteDefinition,
   type ManufacturedCategory,
   // CNC Dashboard types
   type CncScheduleSettings,
@@ -630,6 +632,7 @@ import {
   type InsertTravelerComponentAssociation,
   p2LotNumbers,
   productionWorkOrders,
+  wadRevisions,
   type ProductionWorkOrder,
   type InsertProductionWorkOrder,
   // Labor → GL Posting Engine
@@ -707,6 +710,14 @@ import {
   type InsertLocalCalendarEvent,
 } from './schema';
 import { db, pool, rawSql } from './db';
+import { recordAuditEvent } from './src/services/auditLedgerService';
+import { recordInventoryLedgerEntry } from './src/services/inventoryTransactionLedgerService';
+import { assignDashboardForWorkOrder } from './src/lib/workOrderDashboardAssignment';
+import {
+  getProgramBuilds,
+  getProgramBuildStatus,
+  type ProgramBuildStatus,
+} from './src/lib/programManufacturingOrchestration';
 
 // Drizzle's transaction handle is API-compatible with `db` for the CRUD
 // surface our helpers use, but its TS type is a `PgTransaction` (not the
@@ -761,6 +772,8 @@ import {
 import { DEFAULT_SESSIONS_LIMIT } from './src/constants/sessions';
 import { userHasScopedCapability as _userHasScopedCapability } from './src/services/permissionService';
 import { formatDates } from './utils/formatDates';
+import { deriveP1ProductionStatus } from './src/utils/p1ProductionStatus';
+import { ensureP2PurchaseOrderReadSchema } from './src/lib/p2PurchaseOrderReadiness';
 import {
   laborEntryDraftsTable,
   type LaborEntryDraftInsert,
@@ -792,7 +805,7 @@ import {
 const VENDOR_DATE_COLUMNS = ['evaluationDate', 'startRenewalDate', 'approvalExpiration'] as const;
 
 // Employee date columns that must be normalised to "YYYY-MM-DD" strings.
-const EMPLOYEE_DATE_COLUMNS = ['hireDate', 'dateOfBirth', 'driversLicenseExpiration'] as const;
+const EMPLOYEE_DATE_COLUMNS = ['hireDate', 'dateOfBirth', 'driversLicenseExpiration', 'terminationDate', 'finalPaycheckDate'] as const;
 
 // Vendor PO date columns that must be normalised to "YYYY-MM-DD" strings.
 const VENDOR_PO_DATE_COLUMNS = ['orderDate', 'expectedDeliveryDate', 'actualDeliveryDate'] as const;
@@ -861,6 +874,90 @@ const productionOrdersColumns = {
   p2PoItemId: productionOrders.p2PoItemId,
   itemCode: productionOrders.itemCode,
 };
+
+const productionWorkOrderReadColumns = {
+  id: productionWorkOrders.id,
+  workOrderNumber: productionWorkOrders.workOrderNumber,
+  projectId: productionWorkOrders.projectId,
+  partNumber: productionWorkOrders.partNumber,
+  description: productionWorkOrders.description,
+  quantity: productionWorkOrders.quantity,
+  status: productionWorkOrders.status,
+  departmentBudgets: productionWorkOrders.departmentBudgets,
+  totalBudgetHours: productionWorkOrders.totalBudgetHours,
+  materialBudgetAmount: productionWorkOrders.materialBudgetAmount,
+  startDate: productionWorkOrders.startDate,
+  dueDate: productionWorkOrders.dueDate,
+  warningThreshold: productionWorkOrders.warningThreshold,
+  blockedThreshold: productionWorkOrders.blockedThreshold,
+  defaultChargeCodeId: productionWorkOrders.defaultChargeCodeId,
+  dashboardType: productionWorkOrders.dashboardType,
+  queueType: productionWorkOrders.queueType,
+  assignedDepartment: productionWorkOrders.assignedDepartment,
+  assignedDashboardRoute: productionWorkOrders.assignedDashboardRoute,
+  manufacturingQueueId: productionWorkOrders.manufacturingQueueId,
+  wadStatus: productionWorkOrders.wadStatus,
+  wizardData: productionWorkOrders.wizardData,
+  createdAt: productionWorkOrders.createdAt,
+  updatedAt: productionWorkOrders.updatedAt,
+};
+
+function withDefaultMaterialBudgetAmount<T extends Record<string, unknown>>(row: T | undefined): (T & { materialBudgetAmount: string }) | undefined {
+  return row ? ({ ...row, materialBudgetAmount: row.materialBudgetAmount ?? '0' } as T & { materialBudgetAmount: string }) : undefined;
+}
+
+type P1OrderNoteParts = {
+  productionOrderNotes?: string | null;
+  poItemProductionNotes?: string | null;
+  poItemNotes?: string | null;
+  poNotes?: string | null;
+};
+
+type P1DepartmentNote = {
+  id?: string;
+  text: string;
+  departments: string[];
+};
+
+function normalizeP1DepartmentNotes(value: unknown): P1DepartmentNote[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const raw = entry as { id?: unknown; text?: unknown; departments?: unknown };
+      const text = typeof raw.text === 'string' ? raw.text.trim() : '';
+      if (!text) return null;
+      const departments = Array.isArray(raw.departments)
+        ? raw.departments.filter((dept): dept is string => typeof dept === 'string' && dept.trim().length > 0)
+        : [];
+      return {
+        id: typeof raw.id === 'string' ? raw.id : undefined,
+        text,
+        departments,
+      };
+    })
+    .filter((entry): entry is P1DepartmentNote => entry !== null);
+}
+
+function combineP1OrderNotes(parts: P1OrderNoteParts): string | null {
+  const seen = new Set<string>();
+  const notes = [
+    parts.productionOrderNotes,
+    parts.poItemProductionNotes,
+    parts.poItemNotes,
+    parts.poNotes,
+  ]
+    .map((note) => (note ?? '').trim())
+    .filter((note) => {
+      if (!note) return false;
+      const key = note.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  return notes.length > 0 ? notes.join('\n\n') : null;
+}
 
 // modify the interface with any CRUD methods
 // you might need
@@ -1183,7 +1280,7 @@ export interface IStorage {
   deleteFormSubmission(id: number): Promise<void>;
 
   // Inventory Items CRUD
-  getAllInventoryItems(): Promise<InventoryItem[]>;
+  getAllInventoryItems(options?: { includeInactive?: boolean }): Promise<InventoryItem[]>;
   getInventoryItem(id: number): Promise<InventoryItem | undefined>;
   getInventoryItemByAgPartNumber(
     agPartNumber: string
@@ -1236,7 +1333,7 @@ export interface IStorage {
   ): Promise<PartsRequest>;
   deletePartsRequest(id: number): Promise<void>;
   getPartsRequestsByDepartment(departmentId: number): Promise<PartsRequest[]>;
-  getPartsRequestsByUser(username: string): Promise<PartsRequest[]>;
+  getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null, requestedByNames?: string[]): Promise<PartsRequest[]>;
   getConsolidatedPartsNeeds(): Promise<PartsRequest[]>; // All PENDING/APPROVED requests for inventory manager
 
   // Departments CRUD
@@ -1534,6 +1631,7 @@ export interface IStorage {
     clockOut?: Date | null;
     chargeCodeId?: number | null;
     travelerId?: string | null;
+    laborClass?: string;
     isEdited?: boolean;
     editNote?: string | null;
     updatedBy?: number | null;
@@ -1676,6 +1774,7 @@ export interface IStorage {
 
   // Module 12: Purchase Orders CRUD
   getAllPurchaseOrders(): Promise<PurchaseOrder[]>;
+  reopenClosedP1PurchaseOrdersWithActiveProductionItems(): Promise<number>;
   getPurchaseOrder(
     id: number,
     options?: { includeItems?: boolean; includeOrderCount?: boolean }
@@ -1777,6 +1876,10 @@ export interface IStorage {
   updateRFQRiskAssessment(id: number, data: Partial<InsertRFQRiskAssessment>): Promise<RFQRiskAssessment | undefined>;
   submitRFQRiskAssessment(id: number, username: string): Promise<RFQRiskAssessment | undefined>;
 
+  // Program Manufacturing Orchestration read methods
+  getProgramBuilds(filters?: { projectId?: string | null }): Promise<ProgramBuildStatus['build'][]>;
+  getProgramBuildStatus(buildId?: string | null, filters?: { projectId?: string | null }): Promise<ProgramBuildStatus | null>;
+
   // P2 Purchase Orders CRUD
   getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]>;
   getP2PurchaseOrder(
@@ -1784,6 +1887,25 @@ export interface IStorage {
     options?: { includeItems?: boolean }
   ): Promise<(P2PurchaseOrder & { items?: P2PurchaseOrderItem[] }) | undefined>;
   createP2PurchaseOrder(data: InsertP2PurchaseOrder): Promise<P2PurchaseOrder>;
+  createP2PurchaseOrderRevision(
+    poId: number,
+    changeReason: string,
+    revisedBy?: string,
+    overrides?: {
+      poNumber?: string;
+      expectedDelivery?: string;
+      lineItems?: Array<{
+        sourceItemId?: number;
+        inventoryItemId?: number | null;
+        partNumber: string;
+        partName: string;
+        quantity: number;
+        unitPrice?: number | null;
+        specifications?: string | null;
+        notes?: string | null;
+      }>;
+    }
+  ): Promise<P2PurchaseOrder>;
   updateP2PurchaseOrder(
     id: number,
     data: Partial<InsertP2PurchaseOrder>
@@ -2035,6 +2157,7 @@ export interface IStorage {
     partNumber?: string;
     workOrderId?: string;
     inventoryItemId?: string;
+    partRoutingId?: string;
   }): Promise<Traveler[]>;
   getTraveler(id: string): Promise<Traveler | undefined>;
   getTravelerByNumber(travelerNumber: string): Promise<Traveler | undefined>;
@@ -2478,7 +2601,8 @@ export interface IStorage {
   getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined>;
   updateFinalizedOrder(
     orderId: string,
-    data: Partial<InsertAllOrder>
+    data: Partial<InsertAllOrder>,
+    options?: { allowDueDateUpdate?: boolean }
   ): Promise<AllOrder>;
   fulfillOrder(orderId: string): Promise<AllOrder>;
   syncVerificationStatus(): Promise<{ updatedOrders: number; message: string }>;
@@ -2877,6 +3001,10 @@ export interface IStorage {
   getProjectActivityLog(projectId: string): Promise<ProjectActivityLog[]>;
   createProjectActivityLog(data: InsertProjectActivityLog): Promise<ProjectActivityLog>;
 
+  // Project Revisions
+  getProjectRevisions(projectId: string): Promise<ProjectRevision[]>;
+  createProjectRevision(data: InsertProjectRevision): Promise<ProjectRevision>;
+
   // Project Notifications
   getProjectNotifications(recipientId: number, unreadOnly?: boolean): Promise<ProjectNotification[]>;
   createProjectNotification(data: InsertProjectNotification): Promise<ProjectNotification>;
@@ -3097,6 +3225,7 @@ export interface IStorage {
 
   // Cutting documents
   listCuttingDocuments(): Promise<CuttingDocument[]>;
+  getCuttingDocument(id: number): Promise<CuttingDocument | undefined>;
   createCuttingDocument(data: InsertCuttingDocument): Promise<CuttingDocument>;
   deleteCuttingDocument(id: number): Promise<CuttingDocument | undefined>;
 
@@ -3903,6 +4032,7 @@ export class DatabaseStorage implements IStorage {
         customerPO: allOrders.customerPO,
         fbOrderNumber: allOrders.fbOrderNumber,
         agrOrderDetails: allOrders.agrOrderDetails,
+        isFlattop: allOrders.isFlattop,
         isCustomOrder: allOrders.isCustomOrder,
         modelId: allOrders.modelId,
         handedness: allOrders.handedness,
@@ -3911,6 +4041,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -3993,7 +4124,7 @@ export class DatabaseStorage implements IStorage {
       customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
       // Add product field for frontend compatibility
       product: order.modelId || 'Unknown Product',
-      isFlattop: false, // Add missing field
+      isFlattop: order.isFlattop || false,
     })) as any;
   }
 
@@ -4017,6 +4148,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -4109,12 +4241,29 @@ export class DatabaseStorage implements IStorage {
     // Get purchase order items for P1 PO item name lookup
     const poItems = await db.select({
       id: purchaseOrderItems.id,
+      poId: purchaseOrderItems.poId,
       itemName: purchaseOrderItems.itemName,
       stockModelId: purchaseOrderItems.stockModelId,
+      productionNotes: purchaseOrderItems.productionNotes,
+      notes: purchaseOrderItems.notes,
     }).from(purchaseOrderItems);
     const poItemMap = new Map(
       poItems.map((poi) => [poi.id.toString(), stockModelMap.get(poi.stockModelId || '') || poi.itemName || poi.id.toString()])
     );
+    const poItemNotesMap = new Map(
+      poItems.map((poi) => [
+        poi.id.toString(),
+        {
+          poId: poi.poId,
+          productionNotes: poi.productionNotes,
+          notes: poi.notes,
+        },
+      ])
+    );
+    const p1PoNotesRows = await db
+      .select({ id: purchaseOrders.id, notes: purchaseOrders.notes })
+      .from(purchaseOrders);
+    const p1PoNotesMap = new Map(p1PoNotesRows.map((po) => [po.id, po.notes]));
 
     // Get P2 purchase order items for P2 PO item name lookup
     const p2PoItems = await db.select({
@@ -4221,6 +4370,13 @@ export class DatabaseStorage implements IStorage {
       // Look up the proper item name — prefer the stock model display name (from specifications.stockModel),
       // then fall back to the FK-based poItemMap lookup, then itemName, then itemId
       const resolvedItemName = stockModelMap.get(derivedModelId) || p2PoItemMap.get(po.p2PoItemId?.toString() || '') || poItemMap.get(po.itemId?.toString() || '') || p2PoItemMap.get(po.itemId?.toString() || '') || po.itemName || po.itemId || 'Unknown Product';
+      const poItemNotes = po.poItemId ? poItemNotesMap.get(String(po.poItemId)) : undefined;
+      const orderNotes = combineP1OrderNotes({
+        productionOrderNotes: po.notes,
+        poItemProductionNotes: poItemNotes?.productionNotes,
+        poItemNotes: poItemNotes?.notes,
+        poNotes: p1PoNotesMap.get(po.poId),
+      });
 
       // If modelId is still numeric or empty, attempt match from resolvedItemName
       if (!derivedModelId || /^\d+$/.test(String(derivedModelId))) {
@@ -4271,7 +4427,11 @@ export class DatabaseStorage implements IStorage {
         features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,
         featureQuantities: null,
         discountCode: null,
-        notes: po.notes,
+        notes: orderNotes,
+        productionOrderNotes: po.notes,
+        poItemProductionNotes: poItemNotes?.productionNotes ?? null,
+        poItemNotes: poItemNotes?.notes ?? null,
+        poNotes: p1PoNotesMap.get(po.poId) ?? null,
         customDiscountType: null,
         customDiscountValue: 0,
         showCustomDiscount: false,
@@ -4817,7 +4977,7 @@ export class DatabaseStorage implements IStorage {
           totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
         })
         .from(payments)
-        .where(eq(payments.orderId, orderId));
+        .where(and(eq(payments.orderId, orderId), eq(payments.status, 'posted')));
       
       const paymentTotal = paymentResult.length > 0 ? Number(paymentResult[0].totalPayments) : 0;
 
@@ -5250,7 +5410,7 @@ export class DatabaseStorage implements IStorage {
               totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
             })
             .from(payments)
-            .where(eq(payments.orderId, order.orderId))
+            .where(and(eq(payments.orderId, order.orderId), eq(payments.status, 'posted')))
             .groupBy(payments.orderId);
 
           const totalPaid =
@@ -5330,7 +5490,7 @@ export class DatabaseStorage implements IStorage {
               totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
             })
             .from(payments)
-            .where(eq(payments.orderId, order.orderId))
+            .where(and(eq(payments.orderId, order.orderId), eq(payments.status, 'posted')))
             .groupBy(payments.orderId);
 
           const totalPaid =
@@ -5441,6 +5601,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -5531,6 +5692,7 @@ export class DatabaseStorage implements IStorage {
         totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
+      .where(eq(payments.status, 'posted'))
       .groupBy(payments.orderId);
 
     // Create payment map for fast lookup
@@ -5608,6 +5770,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -5690,6 +5853,7 @@ export class DatabaseStorage implements IStorage {
         totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
+      .where(eq(payments.status, 'posted'))
       .groupBy(payments.orderId);
 
     const paymentMap = new Map(
@@ -5868,6 +6032,7 @@ export class DatabaseStorage implements IStorage {
         status: allOrders.status,
         modelId: allOrders.modelId,
         shipping: allOrders.shipping,
+        shippingMethod: allOrders.shippingMethod,
         paymentAmount: allOrders.paymentAmount,
         isPaid: allOrders.isPaid,
         isVerified: allOrders.isVerified,
@@ -5910,6 +6075,7 @@ export class DatabaseStorage implements IStorage {
         totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
+      .where(eq(payments.status, 'posted'))
       .groupBy(payments.orderId);
 
     // Create payment map for fast lookup
@@ -5978,6 +6144,7 @@ export class DatabaseStorage implements IStorage {
           featureQuantities: allOrders.featureQuantities,
           discountCode: allOrders.discountCode,
           notes: allOrders.notes,
+          departmentNotes: allOrders.departmentNotes,
           customDiscountType: allOrders.customDiscountType,
           customDiscountValue: allOrders.customDiscountValue,
           showCustomDiscount: allOrders.showCustomDiscount,
@@ -6066,6 +6233,29 @@ export class DatabaseStorage implements IStorage {
         allStockModels.map((sm) => [sm.id, sm.displayName || sm.name])
       );
 
+      const poItems = await db
+        .select({
+          id: purchaseOrderItems.id,
+          poId: purchaseOrderItems.poId,
+          productionNotes: purchaseOrderItems.productionNotes,
+          notes: purchaseOrderItems.notes,
+        })
+        .from(purchaseOrderItems);
+      const poItemNotesMap = new Map(
+        poItems.map((poi) => [
+          poi.id.toString(),
+          {
+            poId: poi.poId,
+            productionNotes: poi.productionNotes,
+            notes: poi.notes,
+          },
+        ])
+      );
+      const p1PoNotesRows = await db
+        .select({ id: purchaseOrders.id, notes: purchaseOrders.notes })
+        .from(purchaseOrders);
+      const p1PoNotesMap = new Map(p1PoNotesRows.map((po) => [po.id, po.notes]));
+
       // Enrich orders with customer names and stock model display names
       const enrichedOrders = orders.map((order) => ({
         ...order,
@@ -6121,6 +6311,13 @@ export class DatabaseStorage implements IStorage {
             Object.assign(mappedFeatures, parsedSpecs.features);
           }
         }
+        const poItemNotes = po.poItemId ? poItemNotesMap.get(String(po.poItemId)) : undefined;
+        const orderNotes = combineP1OrderNotes({
+          productionOrderNotes: po.notes,
+          poItemProductionNotes: poItemNotes?.productionNotes,
+          poItemNotes: poItemNotes?.notes,
+          poNotes: p1PoNotesMap.get(po.poId),
+        });
         
         return {
           id: po.id,
@@ -6144,7 +6341,11 @@ export class DatabaseStorage implements IStorage {
           features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,
           featureQuantities: null,
         discountCode: null,
-        notes: po.notes,
+        notes: orderNotes,
+        productionOrderNotes: po.notes,
+        poItemProductionNotes: poItemNotes?.productionNotes ?? null,
+        poItemNotes: poItemNotes?.notes ?? null,
+        poNotes: p1PoNotesMap.get(po.poId) ?? null,
         customDiscountType: null,
         customDiscountValue: 0,
         showCustomDiscount: false,
@@ -6424,13 +6625,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Inventory Items CRUD
-  async getAllInventoryItems(): Promise<InventoryItem[]> {
+  async getAllInventoryItems(options: { includeInactive?: boolean } = {}): Promise<InventoryItem[]> {
     // Include items where isActive is true OR isActive is null (treat null as active)
-    return await db
-      .select()
-      .from(inventoryItems)
-      .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)))
-      .orderBy(inventoryItems.name);
+    try {
+      const query = db.select().from(inventoryItems);
+      if (options.includeInactive) {
+        return await query.orderBy(inventoryItems.name);
+      }
+      return await query
+        .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)))
+        .orderBy(inventoryItems.name);
+    } catch (error: any) {
+      const message = String(error?.message || error);
+      const code = error?.code || error?.cause?.code;
+      if (code !== '42703' && !/column .* does not exist/i.test(message)) {
+        throw error;
+      }
+
+      console.warn('[Inventory] Falling back to runtime inventory_items columns:', message);
+      const result = options.includeInactive
+        ? await db.execute(sql`
+            SELECT *
+            FROM inventory_items
+            ORDER BY name
+          `)
+        : await db.execute(sql`
+            SELECT *
+            FROM inventory_items
+            WHERE is_active = TRUE OR is_active IS NULL
+            ORDER BY name
+          `);
+
+      const rows = Array.isArray(result) ? result : ((result as any).rows || []);
+      return rows.map((row: Record<string, unknown>) => {
+        const item: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(row)) {
+          item[key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())] = value;
+        }
+        return item as InventoryItem;
+      });
+    }
   }
 
   async getInventoryItem(id: number): Promise<InventoryItem | undefined> {
@@ -6913,16 +7147,29 @@ export class DatabaseStorage implements IStorage {
       .select({
         request: partsRequests,
         invId: inventoryItems.id,
+        invAgPartNumber: inventoryItems.agPartNumber,
         invName: inventoryItems.name,
         invSource: inventoryItems.source,
         invVendorId: inventoryItems.vendorId,
+        invDefaultOrderMethod: inventoryItems.defaultOrderMethod,
+        invSupplierPartNumber: inventoryItems.supplierPartNumber,
         invUsageUnit: inventoryItems.usageUnit,
         projectCode: projects.projectCode,
         projectName: projects.projectName,
+        vendorPoNumber: vendorPOs.poNumber,
+        vendorPoExternalNumber: vendorPOs.externalPoNumber,
+        vendorPoStatus: vendorPOs.status,
       })
       .from(partsRequests)
-      .leftJoin(inventoryItems, eq(inventoryItems.agPartNumber, partsRequests.agPartNumber))
+      .leftJoin(
+        inventoryItems,
+        eq(
+          inventoryItems.agPartNumber,
+          sql`COALESCE(NULLIF(${partsRequests.agPartNumber}, ''), NULLIF(${partsRequests.partNumber}, ''))`
+        )
+      )
       .leftJoin(projects, eq(projects.id, partsRequests.projectId))
+      .leftJoin(vendorPOs, eq(vendorPOs.id, partsRequests.vendorPoId))
       .where(eq(partsRequests.isActive, true))
       .orderBy(desc(partsRequests.requestDate));
 
@@ -6930,16 +7177,25 @@ export class DatabaseStorage implements IStorage {
       ...r.request,
       inventoryItem: r.invId ? {
         id: r.invId,
-        agPartNumber: r.request.agPartNumber,
+        agPartNumber: r.invAgPartNumber ?? r.request.agPartNumber ?? r.request.partNumber,
         name: r.invName,
         source: r.invSource,
+        vendorName: r.invSource,
         vendorId: r.invVendorId,
+        defaultOrderMethod: r.invDefaultOrderMethod,
+        supplierPartNumber: r.invSupplierPartNumber,
         usageUnit: r.invUsageUnit,
       } : undefined,
       project: r.projectCode ? {
         id: r.request.projectId,
         projectCode: r.projectCode,
         projectName: r.projectName,
+      } : undefined,
+      vendorPO: r.request.vendorPoId ? {
+        id: r.request.vendorPoId,
+        poNumber: r.vendorPoNumber,
+        externalPoNumber: r.vendorPoExternalNumber,
+        status: r.vendorPoStatus,
       } : undefined,
     }));
   }
@@ -7013,15 +7269,45 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(partsRequests.requestDate));
   }
 
-  async getPartsRequestsByUser(username: string): Promise<PartsRequest[]> {
-    return await db
-      .select()
+  async getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null, requestedByNames: string[] = []): Promise<PartsRequest[]> {
+    const participantFilters = [eq(partsRequests.requestedBy, username)];
+    if (userId) {
+      participantFilters.push(eq(partsRequests.requestedByUserId, userId));
+    }
+    if (employeeId) {
+      participantFilters.push(eq(partsRequests.requestedForEmployeeId, employeeId));
+    }
+    for (const name of requestedByNames) {
+      const trimmed = name.trim();
+      if (trimmed && trimmed !== username) {
+        participantFilters.push(eq(partsRequests.requestedBy, trimmed));
+      }
+    }
+
+    const results = await db
+      .select({
+        request: partsRequests,
+        vendorPoNumber: vendorPOs.poNumber,
+        vendorPoExternalNumber: vendorPOs.externalPoNumber,
+        vendorPoStatus: vendorPOs.status,
+      })
       .from(partsRequests)
+      .leftJoin(vendorPOs, eq(vendorPOs.id, partsRequests.vendorPoId))
       .where(and(
-        eq(partsRequests.requestedBy, username),
+        or(...participantFilters),
         eq(partsRequests.isActive, true)
       ))
       .orderBy(desc(partsRequests.requestDate));
+
+    return results.map((r) => ({
+      ...r.request,
+      vendorPO: r.request.vendorPoId ? {
+        id: r.request.vendorPoId,
+        poNumber: r.vendorPoNumber,
+        externalPoNumber: r.vendorPoExternalNumber,
+        status: r.vendorPoStatus,
+      } : undefined,
+    } as PartsRequest));
   }
 
   async getConsolidatedPartsNeeds(): Promise<any[]> {
@@ -7035,7 +7321,13 @@ export class DatabaseStorage implements IStorage {
         projectName: projects.projectName,
       })
       .from(partsRequests)
-      .leftJoin(inventoryItems, eq(partsRequests.agPartNumber, inventoryItems.agPartNumber))
+      .leftJoin(
+        inventoryItems,
+        eq(
+          inventoryItems.agPartNumber,
+          sql`COALESCE(NULLIF(${partsRequests.agPartNumber}, ''), NULLIF(${partsRequests.partNumber}, ''))`
+        )
+      )
       .leftJoin(departments, eq(partsRequests.departmentId, departments.id))
       .leftJoin(projects, eq(projects.id, partsRequests.projectId))
       .where(and(
@@ -7047,17 +7339,71 @@ export class DatabaseStorage implements IStorage {
         eq(partsRequests.isActive, true)
       ))
       .orderBy(desc(partsRequests.urgency), desc(partsRequests.requestDate));
+
+    const allVendors = await db
+      .select({
+        id: vendors.id,
+        name: vendors.name,
+        website: vendors.website,
+        defaultOrderMethod: vendors.defaultOrderMethod,
+      })
+      .from(vendors)
+      .where(eq(vendors.isActive, true));
+
+    const vendorById = new Map(allVendors.map((vendor) => [vendor.id, vendor]));
+    const normalizeVendorName = (value?: string | null) =>
+      (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const vendorByName = new Map(
+      allVendors
+        .map((vendor) => [normalizeVendorName(vendor.name), vendor] as const)
+        .filter(([key]) => key.length > 0)
+    );
+
+    const resolveVendorByName = (value?: string | null) => {
+      const sourceKey = normalizeVendorName(value);
+      if (!sourceKey) return null;
+      if (vendorByName.has(sourceKey)) return vendorByName.get(sourceKey)!;
+      for (const [vendorKey, vendor] of vendorByName) {
+        if (vendorKey.includes(sourceKey) || sourceKey.includes(vendorKey)) {
+          return vendor;
+        }
+      }
+      return null;
+    };
     
-    return results.map(r => ({
-      ...r.request,
-      inventoryItem: r.inventoryItem,
-      department: r.department,
-      project: r.projectCode ? {
-        id: r.request.projectId,
-        projectCode: r.projectCode,
-        projectName: r.projectName,
-      } : undefined,
-    }));
+    return results.map(r => {
+      const requestVendor = r.request.vendorId ? vendorById.get(r.request.vendorId) : null;
+      const itemVendor = r.inventoryItem?.vendorId ? vendorById.get(r.inventoryItem.vendorId) : null;
+      const sourceVendor = resolveVendorByName(r.inventoryItem?.source || r.request.supplier);
+      const resolvedVendor = requestVendor ?? itemVendor ?? sourceVendor;
+      const resolvedVendorId = r.request.vendorId ?? resolvedVendor?.id ?? r.inventoryItem?.vendorId ?? null;
+      const resolvedVendorName = resolvedVendor?.name ?? r.request.supplier ?? r.inventoryItem?.source ?? null;
+      const effectiveOrderMethod = r.request.orderMethod || r.inventoryItem?.defaultOrderMethod || resolvedVendor?.defaultOrderMethod || null;
+
+      return {
+        ...r.request,
+        orderMethod: effectiveOrderMethod,
+        vendorId: resolvedVendorId,
+        supplier: resolvedVendorName,
+        vendor: resolvedVendor ? {
+          id: resolvedVendor.id,
+          name: resolvedVendor.name,
+          website: resolvedVendor.website,
+          defaultOrderMethod: resolvedVendor.defaultOrderMethod,
+        } : undefined,
+        inventoryItem: r.inventoryItem ? {
+          ...r.inventoryItem,
+          vendorId: r.inventoryItem.vendorId ?? resolvedVendorId,
+          vendorName: resolvedVendorName,
+        } : undefined,
+        department: r.department,
+        project: r.projectCode ? {
+          id: r.request.projectId,
+          projectCode: r.projectCode,
+          projectName: r.projectName,
+        } : undefined,
+      };
+    });
   }
 
   // Departments CRUD
@@ -7248,6 +7594,12 @@ export class DatabaseStorage implements IStorage {
     if (insertData.hireDate instanceof Date) {
       insertData.hireDate = insertData.hireDate.toISOString().split('T')[0];
     }
+    if (insertData.terminationDate instanceof Date) {
+      insertData.terminationDate = insertData.terminationDate.toISOString().split('T')[0];
+    }
+    if (insertData.finalPaycheckDate instanceof Date) {
+      insertData.finalPaycheckDate = insertData.finalPaycheckDate.toISOString().split('T')[0];
+    }
 
     const [employee] = await db
       .insert(employees)
@@ -7277,6 +7629,12 @@ export class DatabaseStorage implements IStorage {
     }
     if (updateData.driversLicenseExpiration instanceof Date) {
       updateData.driversLicenseExpiration = updateData.driversLicenseExpiration.toISOString().split('T')[0];
+    }
+    if (updateData.terminationDate instanceof Date) {
+      updateData.terminationDate = updateData.terminationDate.toISOString().split('T')[0];
+    }
+    if (updateData.finalPaycheckDate instanceof Date) {
+      updateData.finalPaycheckDate = updateData.finalPaycheckDate.toISOString().split('T')[0];
     }
 
     // Convert portalTokenExpiry string → Date for Drizzle's timestamp column
@@ -8514,6 +8872,7 @@ export class DatabaseStorage implements IStorage {
         ...(updates.clockOut !== undefined ? { clockOut: updates.clockOut } : {}),
         ...(updates.chargeCodeId !== undefined ? { chargeCodeId: updates.chargeCodeId, chargeCode: derivedChargeCode ?? null } : {}),
         ...(updates.travelerId !== undefined ? { travelerId: updates.travelerId } : {}),
+        ...(updates.laborClass !== undefined ? { laborClass: updates.laborClass } : {}),
         ...(updates.isEdited !== undefined ? { isEdited: updates.isEdited } : {}),
         ...(updates.editNote !== undefined ? { editNote: updates.editNote } : {}),
         ...(updates.updatedBy !== undefined ? { updatedBy: updates.updatedBy } : {}),
@@ -8931,37 +9290,40 @@ export class DatabaseStorage implements IStorage {
         pageSize = 10,
       } = params || {};
 
+      const evaluatedExpr = `(COALESCE(v.evaluated, false) OR COALESCE(er.has_scored_evaluation, false))`;
+      const evaluationDateExpr = `COALESCE(v.evaluation_date, er.latest_evaluation_date)`;
+
       // Build WHERE clauses for raw SQL
-      const conditions: string[] = ['is_active = true'];
+      const conditions: string[] = ['v.is_active = true'];
       
       // Search filter
       if (search && search.trim()) {
         const searchTerm = search.trim().replace(/'/g, "''"); // Escape single quotes
         conditions.push(`(
-          name ILIKE '%${searchTerm}%' OR
-          contact_person ILIKE '%${searchTerm}%' OR
-          email ILIKE '%${searchTerm}%' OR
-          phone ILIKE '%${searchTerm}%' OR
-          address ILIKE '%${searchTerm}%'
+          v.name ILIKE '%${searchTerm}%' OR
+          v.contact_person ILIKE '%${searchTerm}%' OR
+          v.email ILIKE '%${searchTerm}%' OR
+          v.phone ILIKE '%${searchTerm}%' OR
+          v.address ILIKE '%${searchTerm}%'
         )`);
       }
 
       // Approved filter
       if (approved !== 'any') {
-        conditions.push(`approved = ${approved === 'true'}`);
+        conditions.push(`v.approved = ${approved === 'true'}`);
       }
 
       // Evaluated filter
       if (evaluated !== 'any') {
-        conditions.push(`evaluated = ${evaluated === 'true'}`);
+        conditions.push(`${evaluatedExpr} = ${evaluated === 'true'}`);
       }
 
       // Evaluation date range filters
       if (evalFrom) {
-        conditions.push(`evaluation_date >= '${evalFrom}'`);
+        conditions.push(`${evaluationDateExpr} >= '${evalFrom}'`);
       }
       if (evalTo) {
-        conditions.push(`evaluation_date <= '${evalTo}'`);
+        conditions.push(`${evaluationDateExpr} <= '${evalTo}'`);
       }
 
       const whereClause = conditions.join(' AND ');
@@ -8969,15 +9331,15 @@ export class DatabaseStorage implements IStorage {
       // Parse sort
       const [sortField, sortDir] = sort.split(':');
       const sortColMap: Record<string, string> = {
-        name: 'name',
-        approved: 'approved',
-        evaluated: 'evaluated',
-        evaluationDate: 'evaluation_date',
-        updatedAt: 'updated_at',
-        createdAt: 'created_at',
-        approvalLevel: "CASE approval_level WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END",
+        name: 'v.name',
+        approved: 'v.approved',
+        evaluated: evaluatedExpr,
+        evaluationDate: evaluationDateExpr,
+        updatedAt: 'v.updated_at',
+        createdAt: 'v.created_at',
+        approvalLevel: "CASE v.approval_level WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END",
       };
-      const sortColumn = sortColMap[sortField] || 'created_at';
+      const sortColumn = sortColMap[sortField] || 'v.created_at';
       const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
 
       // Calculate offset
@@ -8985,28 +9347,96 @@ export class DatabaseStorage implements IStorage {
 
       // Execute queries using pool.query for raw SQL with dynamic parts
       const dataQuerySql = `
+        WITH scored_evaluations AS (
+          SELECT
+            vendor_id,
+            id,
+            year,
+            month,
+            quality_score,
+            cost_score,
+            delivery_score,
+            response_score,
+            make_date(year, GREATEST(LEAST(COALESCE(month, 1), 12), 1), 1) AS evaluation_date
+          FROM vendor_monthly_evaluations
+          WHERE quality_score IS NOT NULL
+             OR cost_score IS NOT NULL
+             OR delivery_score IS NOT NULL
+             OR response_score IS NOT NULL
+        ),
+        evaluation_rollup AS (
+          SELECT
+            vendor_id,
+            true AS has_scored_evaluation,
+            MAX(evaluation_date) AS latest_evaluation_date
+          FROM scored_evaluations
+          GROUP BY vendor_id
+        ),
+        latest_evaluation AS (
+          SELECT DISTINCT ON (vendor_id)
+            vendor_id,
+            quality_score,
+            cost_score,
+            delivery_score,
+            response_score,
+            (
+              COALESCE(quality_score, 0) +
+              COALESCE(cost_score, 0) +
+              COALESCE(delivery_score, 0) +
+              COALESCE(response_score, 0)
+            )::float AS latest_total_score
+          FROM scored_evaluations
+          ORDER BY vendor_id, year DESC, month DESC, id DESC
+        )
         SELECT 
-          id, name, contact_person as "contactPerson", email, additional_email as "additionalEmail",
-          phone, address, approved, evaluated,
-          evaluation_date as "evaluationDate", notes,
-          is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt",
-          street, city, state, zip_code as "zipCode", country, scope_approved_for as "scopeApprovedFor",
-          scope, quality_score as "qualityScore", cost_score as "costScore", 
-          delivery_score as "deliveryScore", response_score as "responseScore",
-          approval_source as "approvalSource", approval_pdf_url as "approvalPdfUrl",
-          start_renewal_date as "startRenewalDate",
-          approval_expiration as "approvalExpiration",
-          approval_level as "approvalLevel", main_document_url as "mainDocumentUrl",
-          terms_and_conditions as "termsAndConditions", payment_terms as "paymentTerms",
-          shipping_instructions as "shippingInstructions"
-        FROM vendors
+          v.id, v.name, v.contact_person as "contactPerson", v.email, v.additional_email as "additionalEmail",
+          v.phone, v.address, v.approved, ${evaluatedExpr} as "evaluated",
+          ${evaluationDateExpr} as "evaluationDate", v.notes,
+          v.is_active as "isActive", v.created_at as "createdAt", v.updated_at as "updatedAt",
+          v.street, v.city, v.state, v.zip_code as "zipCode", v.country, v.scope_approved_for as "scopeApprovedFor",
+          v.scope, COALESCE(v.quality_score, le.quality_score) as "qualityScore", COALESCE(v.cost_score, le.cost_score) as "costScore",
+          COALESCE(v.delivery_score, le.delivery_score) as "deliveryScore", COALESCE(v.response_score, le.response_score) as "responseScore",
+          v.approval_source as "approvalSource", v.approval_pdf_url as "approvalPdfUrl",
+          v.start_renewal_date as "startRenewalDate",
+          v.approval_expiration as "approvalExpiration",
+          v.approval_level as "approvalLevel", v.main_document_url as "mainDocumentUrl",
+          v.terms_and_conditions as "termsAndConditions", v.payment_terms as "paymentTerms",
+          v.shipping_instructions as "shippingInstructions",
+          v.default_order_method as "defaultOrderMethod",
+          le.latest_total_score as "ytdTotalScore"
+        FROM vendors v
+        LEFT JOIN evaluation_rollup er ON er.vendor_id = v.id
+        LEFT JOIN latest_evaluation le ON le.vendor_id = v.id
         WHERE ${whereClause}
         ORDER BY ${sortColumn} ${sortDirection}
         LIMIT ${pageSize}
         OFFSET ${offset}
       `;
 
-      const countQuerySql = `SELECT COUNT(*) as count FROM vendors WHERE ${whereClause}`;
+      const countQuerySql = `
+        WITH scored_evaluations AS (
+          SELECT
+            vendor_id,
+            make_date(year, GREATEST(LEAST(COALESCE(month, 1), 12), 1), 1) AS evaluation_date
+          FROM vendor_monthly_evaluations
+          WHERE quality_score IS NOT NULL
+             OR cost_score IS NOT NULL
+             OR delivery_score IS NOT NULL
+             OR response_score IS NOT NULL
+        ),
+        evaluation_rollup AS (
+          SELECT
+            vendor_id,
+            true AS has_scored_evaluation,
+            MAX(evaluation_date) AS latest_evaluation_date
+          FROM scored_evaluations
+          GROUP BY vendor_id
+        )
+        SELECT COUNT(*) as count
+        FROM vendors v
+        LEFT JOIN evaluation_rollup er ON er.vendor_id = v.id
+        WHERE ${whereClause}
+      `;
 
       const [data, countResult] = await Promise.all([
         pool.query(dataQuerySql),
@@ -9020,7 +9450,7 @@ export class DatabaseStorage implements IStorage {
       // Enrich vendor data with YTD total scores (skip if no vendors)
       const enrichedData = vendorData.map(vendor => ({
         ...formatDates(vendor as Record<string, unknown>, VENDOR_DATE_COLUMNS),
-        ytdTotalScore: null, // Simplified - skip YTD calculation for now
+        ytdTotalScore: (vendor as any).ytdTotalScore,
       })) as Vendor[];
 
       return {
@@ -9053,7 +9483,8 @@ export class DatabaseStorage implements IStorage {
         approval_expiration as "approvalExpiration",
         approval_level as "approvalLevel", main_document_url as "mainDocumentUrl",
         terms_and_conditions as "termsAndConditions", payment_terms as "paymentTerms",
-        shipping_instructions as "shippingInstructions"
+        shipping_instructions as "shippingInstructions",
+        default_order_method as "defaultOrderMethod"
       FROM vendors
       WHERE is_active = true
         AND (
@@ -9100,7 +9531,8 @@ export class DatabaseStorage implements IStorage {
         approval_expiration as "approvalExpiration",
         approval_level as "approvalLevel", main_document_url as "mainDocumentUrl",
         terms_and_conditions as "termsAndConditions", payment_terms as "paymentTerms",
-        shipping_instructions as "shippingInstructions"
+        shipping_instructions as "shippingInstructions",
+        default_order_method as "defaultOrderMethod"
       FROM vendors
       WHERE id = $1
       LIMIT 1
@@ -10066,6 +10498,46 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
+  private getVendorPOInventoryCost(poLineItem: any): number | null {
+    const purchaseUnitCost = Number(poLineItem?.purchaseUnitPrice);
+    if (Number.isFinite(purchaseUnitCost) && purchaseUnitCost > 0) {
+      return purchaseUnitCost;
+    }
+
+    const vendorUnitCost = Number(poLineItem?.unitPrice);
+    return Number.isFinite(vendorUnitCost) && vendorUnitCost > 0 ? vendorUnitCost : null;
+  }
+
+  private async syncInventoryItemCostFromVendorPOLine(poLineItem: any): Promise<void> {
+    const agPartNumber = poLineItem?.agPartNumber;
+    const nextCost = this.getVendorPOInventoryCost(poLineItem);
+    if (!agPartNumber || nextCost === null) return;
+
+    const [inventoryItem] = await db
+      .select({
+        id: inventoryItems.id,
+        costPer: inventoryItems.costPer,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, agPartNumber))
+      .limit(1);
+
+    if (!inventoryItem) return;
+
+    const currentCost = inventoryItem.costPer == null ? null : Number(inventoryItem.costPer);
+    if (currentCost !== null && Number.isFinite(currentCost) && Math.abs(currentCost - nextCost) < 0.0001) {
+      return;
+    }
+
+    await db
+      .update(inventoryItems)
+      .set({
+        costPer: nextCost,
+        updatedAt: new Date(),
+      })
+      .where(eq(inventoryItems.id, inventoryItem.id));
+  }
+
   async createVendorPOItem(data: any): Promise<any> {
     // If purchase unit data is provided, derive vendor unit values server-side
     let processedData = { ...data };
@@ -10118,6 +10590,8 @@ export class DatabaseStorage implements IStorage {
         throw err;
       }
     }
+
+    await this.syncInventoryItemCostFromVendorPOLine(item);
 
     // Reopen a fully-received (closed) PO when a new item is added
     if (data.vendorPoId) {
@@ -10185,6 +10659,10 @@ export class DatabaseStorage implements IStorage {
       .set({ ...processedData, updatedAt: new Date() })
       .where(eq(vendorPOItems.id, id))
       .returning();
+
+    if (item) {
+      await this.syncInventoryItemCostFromVendorPOLine(item);
+    }
     
     // Sync manufacturing queue if quantity changed
     const newQuantity = processedData.quantity !== undefined ? processedData.quantity : data.quantity;
@@ -10218,8 +10696,37 @@ export class DatabaseStorage implements IStorage {
     notes?: string;
     createdBy?: number;
     cocLink?: string;
+    /**
+     * Optional per-unit traceability splits (Task #240). When provided, each
+     * entry creates its own material_lots row plus its own ITL RECEIVE row
+     * (keyed by `${poLineItemId}:${newCumulative}:${unitIndex}` for idempotency).
+     * Quantities must sum to `receivedQuantity`. The PO line cumulative
+     * receivedQuantity, status auto-promotion, and COGS calculation are
+     * unchanged. When omitted, behavior is unchanged from pre-Task #240.
+     */
+    units?: Array<{
+      quantity: number;
+      traceability?: Record<string, string>;
+      notes?: string;
+    }>;
   }): Promise<any> {
-    const { poLineItemId, receivedQuantity, receivedDate, notes, createdBy, cocLink } = params;
+    const { poLineItemId, receivedQuantity, receivedDate, notes, createdBy, cocLink, units } = params;
+
+    // Validate per-unit splits if supplied
+    if (units && units.length > 0) {
+      const sum = units.reduce((s, u) => s + Number(u.quantity ?? 0), 0);
+      if (Math.abs(sum - receivedQuantity) > 0.0001) {
+        throw new Error(
+          `Per-unit quantities (sum=${sum}) must equal receivedQuantity (${receivedQuantity})`,
+        );
+      }
+      for (const u of units) {
+        const q = Number(u.quantity);
+        if (!Number.isFinite(q) || q <= 0) {
+          throw new Error(`Each per-unit split must have a positive quantity (got ${u.quantity})`);
+        }
+      }
+    }
 
     // Validate received date is valid and not in the future
     if (isNaN(receivedDate.getTime())) {
@@ -10239,6 +10746,7 @@ export class DatabaseStorage implements IStorage {
         agPartNumber: vendorPOItems.agPartNumber,
         unitPrice: vendorPOItems.unitPrice,
         vendorPoId: vendorPOItems.vendorPoId,
+        description: vendorPOItems.description,
       })
       .from(vendorPOItems)
       .where(eq(vendorPOItems.id, poLineItemId));
@@ -10259,7 +10767,10 @@ export class DatabaseStorage implements IStorage {
 
     // Get the vendor PO to get vendorId
     const [vendorPO] = await db
-      .select({ vendorId: vendorPOs.vendorId })
+      .select({
+        vendorId: vendorPOs.vendorId,
+        poNumber: vendorPOs.poNumber,
+      })
       .from(vendorPOs)
       .where(eq(vendorPOs.id, poLineItem.vendorPoId));
 
@@ -10268,7 +10779,10 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Get the inventory item's UOM conversion data and cutting table flags
-    const [inventoryItem] = await db
+    // (Task #248: `let` so the receiving transaction below can replace this
+    // with an auto-created placeholder when the part has no inventory_items
+    // row yet, ensuring the ITL write can proceed.)
+    let [inventoryItem] = await db
       .select({
         id: inventoryItems.id,
         agPartNumber: inventoryItems.agPartNumber,
@@ -10379,16 +10893,301 @@ export class DatabaseStorage implements IStorage {
     // Atomically update the line-item received quantity AND re-derive the parent
     // PO status within a single DB transaction, so they always commit or roll
     // back together — no gap where receipt is recorded but status is stale.
+    // Task #229 — also write a `RECEIVE` row to inventory_transaction_ledger so
+    // PO receipts surface in the Material Traceability Viewer / Inventory Ledger.
     let derivedPoStatus: string = 'Sent';
+    let receiptAccrualJournal: any = null;
     await db.transaction(async (tx) => {
+      // The route/UI sends `receivedQuantity` as the PER-ACTION amount being
+      // received in this call (e.g. `expectedQuantity - alreadyReceived` in
+      // the receiving dialog). Read prior cumulative under FOR UPDATE so we
+      // compute newCumulative = prev + delta atomically; ITL delta = the
+      // per-action amount directly.
+      const [priorRow] = await tx
+        .select({ receivedQuantity: vendorPOItems.receivedQuantity })
+        .from(vendorPOItems)
+        .where(eq(vendorPOItems.id, poLineItemId))
+        .for('update');
+      const prevReceivedQty = Number(priorRow?.receivedQuantity ?? 0);
+      const newCumulative = prevReceivedQty + receivedQuantity;
+
       await tx
         .update(vendorPOItems)
         .set({
-          receivedQuantity,
-          receivedDate,
+          receivedQuantity: newCumulative,
+          receivedDate: receivedDate.toISOString().slice(0, 10),
           updatedAt: new Date(),
         })
         .where(eq(vendorPOItems.id, poLineItemId));
+
+      // ── Inventory Transaction Ledger write (Task #229 / #248) ───────────
+      // The ITL inventory_item_id FK is NOT NULL. Previously, when the AG
+      // part number on the PO line had no matching inventory_items row we
+      // silently skipped the ledger write — the bug behind Task #248 (Rock
+      // West receipt missing from the Transactions list). Now we auto-create
+      // a placeholder inventory_items row inside this transaction so the
+      // ledger write can proceed. Truly ad-hoc PO lines with no agPartNumber
+      // still bypass the ITL because there's no part identity to track.
+      if (!inventoryItem && poLineItem.agPartNumber) {
+        const { ensureInventoryItemForReceipt } = await import(
+          './src/services/ensureInventoryItemForReceipt'
+        );
+        const ensured = await ensureInventoryItemForReceipt(tx, {
+          agPartNumber: poLineItem.agPartNumber,
+          fallbackName: poLineItem.description ?? poLineItem.agPartNumber,
+          vendorId: vendorPO.vendorId ?? null,
+          createdBy: createdBy != null ? `user:${createdBy}` : null,
+        });
+        inventoryItem = {
+          id: ensured.id,
+          agPartNumber: ensured.agPartNumber,
+          name: ensured.name,
+          source: null,
+          supplierPartNumber: null,
+          vendorUnit: null,
+          purchaseUnit: ensured.purchaseUnit,
+          purchaseQuantity: null,
+          consumptionRate: null,
+          usageUnit: ensured.usageUnit,
+          utilizedInPL1: false,
+          utilizedInPL2: false,
+          isFabric: false,
+        } as typeof inventoryItem;
+        console.warn(
+          `[vendor-po/receive] Auto-created inventory_items placeholder for ag_part_number="${poLineItem.agPartNumber}" (poLineItemId=${poLineItemId}) so ledger row could be written. Edit Parts Management to fill metadata.`,
+        );
+      }
+      if (inventoryItem) {
+        const ledgerSourceModule = 'receiving:vendor-po';
+
+        // Resolve receiver display name from users table (fall back to
+        // username, then a system marker) so traceability shows a human name.
+        let receiverDisplayName = 'system:vendor-po-receive';
+        if (createdBy != null) {
+          const [u] = await tx
+            .select({
+              username: users.username,
+              firstName: users.firstName,
+              lastName: users.lastName,
+            })
+            .from(users)
+            .where(eq(users.id, createdBy))
+            .limit(1);
+          if (u) {
+            const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+            receiverDisplayName = full || u.username || `user:${createdBy}`;
+          } else {
+            receiverDisplayName = `user:${createdBy}`;
+          }
+        }
+
+        // Resolve vendor name for richer traceability metadata.
+        let vendorName: string | null = null;
+        if (vendorPO.vendorId != null) {
+          const [v] = await tx
+            .select({ name: vendors.name })
+            .from(vendors)
+            .where(eq(vendors.id, vendorPO.vendorId))
+            .limit(1);
+          vendorName = v?.name ?? null;
+        }
+
+        // Best-effort prior on-hand: aggregate across locations. Defaults to
+        // 0 when no balance row exists (vendor-PO receipts do not directly
+        // mutate inventory_balances). Used for both consolidated and per-unit
+        // ledger writes; for per-unit, the running balance is chained.
+        const balanceRows = await tx
+          .select({ quantityOnHand: inventoryBalances.quantityOnHand })
+          .from(inventoryBalances)
+          .where(eq(inventoryBalances.agPartNumber, inventoryItem.agPartNumber));
+        const baselineQuantity = balanceRows.reduce(
+          (sum, b) => sum + Number(b.quantityOnHand ?? 0),
+          0,
+        );
+
+        if (units && units.length > 0) {
+          // ── Per-unit traceability path (Task #240) ─────────────────────
+          // For each split unit, create a material_lots row carrying its own
+          // lot/roll/heat traceability values, and write a dedicated ITL
+          // RECEIVE row keyed by `${poLineItemId}:${newCumulative}:${idx}`
+          // so re-runs are idempotent at the per-unit grain.
+          const uomForLot =
+            inventoryItem.purchaseUnit ?? inventoryItem.usageUnit ?? 'EA';
+          let runningBalance = baselineQuantity;
+
+          // Pre-fetch latest ICN sequence for today; we'll increment locally
+          // as we insert multiple lots so ICNs remain unique within the batch.
+          const today = new Date();
+          const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+          const icnPrefix = `ICN-MAT-${dateStr}-`;
+          const icnRows = await tx
+            .select({ icn: materialLots.internalControlNumber })
+            .from(materialLots)
+            .where(like(materialLots.internalControlNumber, `${icnPrefix}%`))
+            .orderBy(desc(materialLots.internalControlNumber))
+            .limit(1);
+          const lastSeq = icnRows.length > 0
+            ? parseInt(String(icnRows[0].icn ?? '').split('-').pop() ?? '0', 10)
+            : 0;
+          let nextSeq = lastSeq + 1;
+
+          for (let idx = 0; idx < units.length; idx++) {
+            const unit = units[idx];
+            const unitQty = Number(unit.quantity);
+            const trace = unit.traceability ?? {};
+
+            const ledgerSourceRecordId = `${poLineItemId}:${newCumulative}:${idx}`;
+            const [existingLedger] = await tx
+              .select({ id: inventoryTransactionLedger.id })
+              .from(inventoryTransactionLedger)
+              .where(
+                and(
+                  eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+                  eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+                ),
+              )
+              .limit(1);
+            if (existingLedger) continue;
+
+            // Map traceability fields → material_lots columns.
+            const supplierLotNumber =
+              trace.batchLotNumber || trace.rollNumber || trace.supplierBatchLotC ||
+              trace.manufactureRoll || null;
+            const parseTraceDate = (v?: string): Date | null => {
+              if (!v) return null;
+              const d = new Date(v);
+              return isNaN(d.getTime()) ? null : d;
+            };
+            const manufactureDate = parseTraceDate(trace.manufactureDate);
+            const expirationDate = parseTraceDate(trace.expirationDate);
+
+            // Compose per-unit notes: traceability key:value list + free notes.
+            const traceParts: string[] = [];
+            for (const [k, v] of Object.entries(trace)) {
+              if (v && String(v).trim()) traceParts.push(`${k}: ${v}`);
+            }
+            const unitNotes = [
+              `Unit ${idx + 1} of ${units.length}`,
+              traceParts.length ? traceParts.join(' | ') : null,
+              unit.notes || null,
+              notes && idx === 0 ? notes : null,
+            ].filter(Boolean).join(' · ');
+
+            const icn = `${icnPrefix}${String(nextSeq++).padStart(6, '0')}`;
+
+            const [lot] = await tx.insert(materialLots).values({
+              inventoryItemId: inventoryItem.id,
+              materialPartNumber: inventoryItem.agPartNumber,
+              materialName: inventoryItem.name ?? poLineItem.agPartNumber,
+              internalControlNumber: icn,
+              supplier: vendorName ?? 'Unknown',
+              supplierLotNumber,
+              supplierPartNumber: inventoryItem.supplierPartNumber ?? null,
+              purchaseOrderNumber: vendorPO.poNumber ?? null,
+              receivingRecordNumber: null,
+              receivedQty: String(unitQty),
+              remainingQty: String(unitQty),
+              unitOfMeasure: uomForLot,
+              expirationDate,
+              manufactureDate,
+              status: 'ACCEPTED',
+              receivedBy: receiverDisplayName,
+              receivedAt: receivedDate,
+              notes: unitNotes,
+            }).returning();
+
+            const quantityBefore = runningBalance;
+            const quantityAfter = quantityBefore + unitQty;
+            runningBalance = quantityAfter;
+
+            await recordInventoryLedgerEntry({
+              transactionType: 'RECEIVE',
+              inventoryItemId: inventoryItem.id,
+              agPartNumber: inventoryItem.agPartNumber,
+              lotId: lot?.id ?? null,
+              unitOfMeasure: uomForLot,
+              quantityBefore,
+              quantityDelta: unitQty,
+              quantityAfter,
+              performedByUserId: createdBy ?? null,
+              performedByDisplayName: receiverDisplayName,
+              reasonCode: 'VENDOR_PO_RECEIPT',
+              notes: unitNotes,
+              sourceModule: ledgerSourceModule,
+              sourceRecordId: ledgerSourceRecordId,
+              metadata: {
+                vendorPoId: poLineItem.vendorPoId,
+                poNumber: vendorPO.poNumber ?? null,
+                vendorId: vendorPO.vendorId ?? null,
+                vendorName,
+                poLineItemId,
+                cumulativeReceivedQuantity: newCumulative,
+                prevReceivedQuantity: prevReceivedQty,
+                receivedQuantityThisAction: receivedQuantity,
+                receivedDate: receivedDate.toISOString(),
+                cocLink: cocLink ?? null,
+                unitIndex: idx,
+                unitCount: units.length,
+                unitQuantity: unitQty,
+                traceability: trace,
+                materialLotId: lot?.id ?? null,
+                internalControlNumber: icn,
+              },
+            }, tx);
+          }
+        } else {
+          // ── Consolidated single-row path (existing behavior) ───────────
+          const ledgerSourceRecordId = `${poLineItemId}:${newCumulative}`;
+          const [existingLedger] = await tx
+            .select({ id: inventoryTransactionLedger.id })
+            .from(inventoryTransactionLedger)
+            .where(
+              and(
+                eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+                eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+              ),
+            )
+            .limit(1);
+
+          if (!existingLedger) {
+            const delta = receivedQuantity;
+            const quantityBefore = baselineQuantity;
+            const quantityAfter = quantityBefore + delta;
+
+            await recordInventoryLedgerEntry({
+              transactionType: 'RECEIVE',
+              inventoryItemId: inventoryItem.id,
+              agPartNumber: inventoryItem.agPartNumber,
+              unitOfMeasure: inventoryItem.purchaseUnit ?? inventoryItem.usageUnit ?? 'EA',
+              quantityBefore,
+              quantityDelta: delta,
+              quantityAfter,
+              performedByUserId: createdBy ?? null,
+              performedByDisplayName: receiverDisplayName,
+              reasonCode: 'VENDOR_PO_RECEIPT',
+              notes: notes ?? null,
+              sourceModule: ledgerSourceModule,
+              sourceRecordId: ledgerSourceRecordId,
+              metadata: {
+                vendorPoId: poLineItem.vendorPoId,
+                poNumber: vendorPO.poNumber ?? null,
+                vendorId: vendorPO.vendorId ?? null,
+                vendorName,
+                poLineItemId,
+                cumulativeReceivedQuantity: newCumulative,
+                prevReceivedQuantity: prevReceivedQty,
+                receivedQuantityThisAction: receivedQuantity,
+                receivedDate: receivedDate.toISOString(),
+                cocLink: cocLink ?? null,
+              },
+            }, tx);
+          }
+        }
+      } else {
+        console.warn(
+          `[recordVendorPOReceipt] No inventory_items record for ag_part_number="${poLineItem.agPartNumber}" — skipping ITL write for poLineItemId=${poLineItemId}`,
+        );
+      }
 
       // Re-read all line items inside the transaction so we see the updated row
       const allLineItems = await tx
@@ -10418,6 +11217,18 @@ export class DatabaseStorage implements IStorage {
         .update(vendorPOs)
         .set({ status: derivedPoStatus, updatedAt: new Date() })
         .where(eq(vendorPOs.id, poLineItem.vendorPoId));
+
+      const { createOrUpdateVendorPOReceiptAccrualJournalEntry } = await import(
+        './src/services/vendorPOReceiptAccountingService.js'
+      );
+      receiptAccrualJournal = await createOrUpdateVendorPOReceiptAccrualJournalEntry({
+        poLineItemId,
+        receivedQuantity,
+        receivedDate,
+        cumulativeReceivedQuantity: newCumulative,
+        createdBy,
+        notes: notes ?? null,
+      }, tx);
     });
     console.log(`📦 PO ${poLineItem.vendorPoId} status set to "${derivedPoStatus}"`);
 
@@ -10644,8 +11455,9 @@ export class DatabaseStorage implements IStorage {
           // - expirationDate: Expiration Date column
           const purchaseUnitNormSingle = (inventoryItem.purchaseUnit || '').toLowerCase().trim();
           const sqMeterUnitsSingle = ['sq m', 'sqm', 'square meters', 'm2', 'm²'];
-          const sqMetersPerRollSingle = sqMeterUnitsSingle.includes(purchaseUnitNormSingle) && inventoryItem.purchaseQuantity > 0
-            ? String(inventoryItem.purchaseQuantity)
+          const purchaseQuantitySingle = Number(inventoryItem.purchaseQuantity ?? 0);
+          const sqMetersPerRollSingle = sqMeterUnitsSingle.includes(purchaseUnitNormSingle) && purchaseQuantitySingle > 0
+            ? String(purchaseQuantitySingle)
             : undefined;
           const fabricRecord = await db
             .insert(cuttingFabricInventory)
@@ -10709,6 +11521,9 @@ export class DatabaseStorage implements IStorage {
         isPL2Item: inventoryItem?.utilizedInPL2 ?? false,
         productionLines: productionLines || undefined,
       } : null,
+      accounting: {
+        inventoryReceiptAccrual: receiptAccrualJournal,
+      },
     };
   }
 
@@ -11068,13 +11883,36 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Mandatory audit event — transactional with review write.
-      await tx.insert(auditEvents).values({
+      await recordAuditEvent({
+        eventType: isUpdate ? 'COMPLIANCE_REVIEW_UPDATED' : 'COMPLIANCE_REVIEW_SUBMITTED',
+        subjectType: 'vendor',
+        subjectId: String(data.vendorPoId),
+        sourceService: 'storage.vendorPoComplianceReview',
+        actor: {
+          id: data.reviewedByUserId ?? null,
+          username: data.reviewedByDisplayName ?? null,
+          role: null,
+        },
+        reason: data.reviewNotes ?? null,
         entityType: 'vendor',
         entityId: String(data.vendorPoId),
-        action: isUpdate ? 'COMPLIANCE_REVIEW_UPDATED' : 'COMPLIANCE_REVIEW_SUBMITTED',
-        actorId: data.reviewedByUserId ?? null,
-        actorName: data.reviewedByDisplayName ?? null,
-        reason: data.reviewNotes,
+        payload: {
+          vendorPoId: data.vendorPoId,
+          reviewStatus: computedStatus,
+          governmentContract: data.governmentContract,
+          farRequired: data.farRequired,
+          dpasRequired: data.dpasRequired,
+          cocRequired: data.cocRequired,
+          mtrRequired: data.mtrRequired,
+          sourceInspectionRequired: data.sourceInspectionRequired,
+          secondPartyComplete: data.secondPartyComplete,
+          vendorApproved: data.vendorApproved,
+          reviewNotes: data.reviewNotes,
+          reviewedByUserId: data.reviewedByUserId ?? null,
+          reviewedByDisplayName: data.reviewedByDisplayName ?? null,
+          reviewedAt: now.toISOString(),
+          isUpdate,
+        },
         meta: {
           // Full field snapshot for audit completeness
           vendorPoId: data.vendorPoId,
@@ -11093,7 +11931,7 @@ export class DatabaseStorage implements IStorage {
           reviewedAt: now.toISOString(),
           isUpdate,
         },
-      });
+      }, tx);
 
       return savedReview;
     });
@@ -11124,20 +11962,32 @@ export class DatabaseStorage implements IStorage {
         .set({ reviewStatus: 'requires_attention', updatedAt: now })
         .where(eq(vendorPoComplianceReviews.vendorPoId, poId));
 
-      await tx.insert(auditEvents).values({
+      await recordAuditEvent({
+        eventType: 'COMPLIANCE_REVIEW_INVALIDATED',
+        subjectType: 'vendor',
+        subjectId: String(poId),
+        sourceService: 'storage.vendorPoComplianceReview',
+        actor: {
+          id: actorId ?? null,
+          username: actorId ? String(actorId) : 'system',
+          role: null,
+        },
+        reason,
         entityType: 'vendor',
         entityId: String(poId),
-        action: 'COMPLIANCE_REVIEW_INVALIDATED',
-        actorId: actorId ?? null,
-        actorName: actorId ? String(actorId) : 'system',
-        reason,
+        payload: {
+          vendorPoId: poId,
+          previousStatus,
+          newStatus: 'requires_attention',
+          ...meta,
+        },
         meta: {
           vendorPoId: poId,
           previousStatus,
           newStatus: 'requires_attention',
           ...meta,
         },
-      });
+      }, tx);
     });
   }
 
@@ -11625,7 +12475,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Module 12: Purchase Orders CRUD
+  async reopenClosedP1PurchaseOrdersWithActiveProductionItems(): Promise<number> {
+    const result = await pool.query(`
+      UPDATE purchase_orders po
+         SET status = 'OPEN',
+             updated_at = NOW()
+       WHERE UPPER(COALESCE(po.status, '')) IN ('CLOSED', 'COMPLETE', 'COMPLETED')
+         AND EXISTS (
+           SELECT 1
+             FROM production_orders prod
+            WHERE prod.po_id = po.id
+              AND COALESCE(UPPER(prod.production_status), '') NOT IN ('SHIPPED', 'CANCELLED', 'CANCELED', 'SCRAPPED')
+         )
+    `);
+
+    const reopenedCount = result.rowCount ?? 0;
+    if (reopenedCount > 0) {
+      console.log(`📦 Reopened ${reopenedCount} P1 purchase order(s) with active production items`);
+    }
+    return reopenedCount;
+  }
+
   async getAllPurchaseOrders(): Promise<PurchaseOrder[]> {
+    await this.reopenClosedP1PurchaseOrdersWithActiveProductionItems();
+
     const rows = await db
       .select()
       .from(purchaseOrders)
@@ -11988,6 +12861,8 @@ export class DatabaseStorage implements IStorage {
           prod.order_id as "orderId",
           prod.current_department as "currentDepartment",
           prod.production_status as "productionStatus",
+          COALESCE(prod.is_fulfilled, false) as "isFulfilled",
+          prod.fulfilled_date as "fulfilledDate",
           pp.customer_product_number as "customerProductNumber"
         FROM purchase_orders po
         INNER JOIN purchase_order_items poi ON po.id = poi.po_id
@@ -12037,6 +12912,8 @@ export class DatabaseStorage implements IStorage {
           prod.order_id as "orderId",
           prod.current_department as "currentDepartment",
           prod.production_status as "productionStatus",
+          COALESCE(prod.is_fulfilled, false) as "isFulfilled",
+          prod.fulfilled_date as "fulfilledDate",
           pp.customer_product_number as "customerProductNumber"
         FROM production_orders prod
         INNER JOIN purchase_orders po ON prod.po_id = po.id
@@ -12103,6 +12980,8 @@ export class DatabaseStorage implements IStorage {
       orderId: string | null;
       currentDepartment: string | null;
       productionStatus: string | null;
+      isFulfilled: boolean;
+      fulfilledDate: Date | string | null;
       customerProductNumber: string | null;
     };
     const rows = (result.rows || []) as P1PORow[];
@@ -12148,7 +13027,7 @@ export class DatabaseStorage implements IStorage {
         
         po.itemsMap.set(row.poItemId, {
           poItemId: row.poItemId,
-          description: row.customerProductNumber || row.itemName || row.stockModelName || row.stockModelId || 'Unknown Item',
+          description: row.itemName || row.stockModelName || row.stockModelId || row.customerProductNumber || 'Unknown Item',
           quantity: row.quantity,
           actionLength: specs.actionLength || null,
           material: specs.material || null,
@@ -12176,7 +13055,7 @@ export class DatabaseStorage implements IStorage {
         // poi.stock_status can be stale (e.g. marked SHIPPED at the item level while individual
         // production orders are still LAID_UP in Shipping QC), which would incorrectly hide
         // those units from the queue (bug: PO002612 / RFPO-002612).
-        const isShipped = row.productionStatus === 'SHIPPED';
+        const isShipped = row.isFulfilled || row.productionStatus === 'SHIPPED';
         const isInShippingDept = row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping';
 
         poItem.productionOrders.push({
@@ -12184,8 +13063,8 @@ export class DatabaseStorage implements IStorage {
           unitNumber,
           currentDepartment: row.currentDepartment,
           productionStatus: row.productionStatus,
-          isFulfilled: isShipped,
-          fulfilledDate: null,
+          isFulfilled: row.isFulfilled || isShipped,
+          fulfilledDate: row.fulfilledDate ? String(row.fulfilledDate) : null,
           fulfilledBy: null,
           isReadyToShip: isInShippingDept && !isShipped,
         });
@@ -12252,9 +13131,12 @@ export class DatabaseStorage implements IStorage {
               const isShippedProdOrder = prodOrder.isFulfilled || prodOrder.productionStatus === 'SHIPPED';
               let effectiveDepartment = prodOrder.currentDepartment;
               let effectiveStatus = prodOrder.productionStatus;
-              if (isMetalAccessoryWithProdOrder) {
-                effectiveDepartment = isShippedProdOrder ? 'Shipped' : 'Shipping QC';
-                effectiveStatus = isShippedProdOrder ? 'SHIPPED' : 'IN_SHIPPING_QC';
+              if (isShippedProdOrder) {
+                effectiveDepartment = 'Shipped';
+                effectiveStatus = 'SHIPPED';
+              } else if (isMetalAccessoryWithProdOrder) {
+                effectiveDepartment = 'Shipping QC';
+                effectiveStatus = 'IN_SHIPPING_QC';
               }
               allItems.push({
                 orderId: prodOrder.orderId,
@@ -12537,6 +13419,7 @@ export class DatabaseStorage implements IStorage {
       'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
       'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment',
       'materialCanonical', 'sourceSnapshot',
+      'isFulfilled', 'fulfilledDate',
       'finishAcceptedAt', 'finishAcceptedBy',
       'status', 'assignedTechnician', 'finishCompletedAt',
     ]);
@@ -12705,11 +13588,12 @@ export class DatabaseStorage implements IStorage {
               .limit(1);
             const childInvItem = rows[0] ?? null;
 
-            // Trigger BOM explosion when manufacturedCategory is ASSEMBLY or SUB_ASSEMBLY.
+            // Trigger BOM explosion when manufacturedCategory is ASSEMBLY, FINAL_ASSEMBLY, or SUB_ASSEMBLY.
             // itemType === 'MANUFACTURED' is an optional guard — some legacy rows may lack itemType
             // while still having a valid manufacturedCategory, so category is the primary signal.
             const isAssembly =
               childInvItem?.manufacturedCategory === 'ASSEMBLY' ||
+              childInvItem?.manufacturedCategory === 'FINAL_ASSEMBLY' ||
               childInvItem?.manufacturedCategory === 'SUB_ASSEMBLY';
             const isManufactured =
               !childInvItem?.itemType || childInvItem?.itemType === 'MANUFACTURED';
@@ -13258,10 +14142,14 @@ export class DatabaseStorage implements IStorage {
     try {
       // Departments that are initial queue placements — orders there may keep FINALIZED.
       // Any other department is a real production department and must be IN_PROGRESS.
-      const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue', 'Shipping QC'];
+      const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue'];
       const resolvedStatus = INITIAL_QUEUE_DEPARTMENTS.includes(department)
         ? status
         : 'IN_PROGRESS';
+      const resolvedProductionStatus = deriveP1ProductionStatus({
+        currentDepartment: department,
+        currentStatus: status,
+      });
 
       console.log(
         ` প্রক্র PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${resolvedStatus}`
@@ -13299,7 +14187,7 @@ export class DatabaseStorage implements IStorage {
         .update(productionOrders)
         .set({
           currentDepartment: department,
-          productionStatus: resolvedStatus,
+          productionStatus: resolvedProductionStatus,
           updatedAt: new Date(),
         })
         .where(eq(productionOrders.orderId, orderId))
@@ -13311,7 +14199,7 @@ export class DatabaseStorage implements IStorage {
         );
         return {
           success: true,
-          message: `Production order ${orderId} updated to ${resolvedStatus} status`,
+          message: `Production order ${orderId} updated to ${resolvedProductionStatus} status`,
         };
       }
 
@@ -14007,6 +14895,11 @@ export class DatabaseStorage implements IStorage {
           departmentHistory: updatedHistory,
           updatedAt: now,
         };
+        productionCompletionUpdates.productionStatus = deriveP1ProductionStatus({
+          currentDepartment: nextDept,
+          isFulfilled: (productionOrderRecord as any).isFulfilled,
+          currentStatus: productionOrderRecord.productionStatus,
+        });
         
         // Map completion timestamps for production orders (using schema column names)
         // Schema columns: barcodeCompletedAt, layupCompletedAt, cncCompletedAt, 
@@ -14018,7 +14911,6 @@ export class DatabaseStorage implements IStorage {
           case 'Layup/Plugging':
             productionCompletionUpdates.layupCompletedAt = now;
             productionCompletionUpdates.laidUpAt = now;
-            productionCompletionUpdates.productionStatus = 'LAID_UP';
             break;
           case 'CNC':
             productionCompletionUpdates.cncCompletedAt = now;
@@ -14040,7 +14932,6 @@ export class DatabaseStorage implements IStorage {
             break;
           case 'Shipping':
             productionCompletionUpdates.shippingCompletedAt = now;
-            productionCompletionUpdates.productionStatus = 'SHIPPED';
             productionCompletionUpdates.shippedAt = now;
             break;
         }
@@ -14170,6 +15061,8 @@ export class DatabaseStorage implements IStorage {
           shankLength: scrapOrder.shankLength,
           features: scrapOrder.features,
           featureQuantities: scrapOrder.featureQuantities,
+          notes: scrapOrder.notes,
+          departmentNotes: normalizeP1DepartmentNotes((scrapOrder as any).departmentNotes),
           status: 'ACTIVE',
           currentDepartment: 'Layup', // Reset to start of pipeline
           isReplacement: true,
@@ -14573,7 +15466,7 @@ export class DatabaseStorage implements IStorage {
           created_at as "createdAt", updated_at as "updatedAt"
         FROM p2_customers WHERE id = $1
       `, [id]);
-      return result[0] as P2Customer | undefined;
+      return result.rows[0] as P2Customer | undefined;
     }
     
     // Add updated_at
@@ -14596,7 +15489,7 @@ export class DatabaseStorage implements IStorage {
         created_at as "createdAt", updated_at as "updatedAt"
     `, params);
     
-    return result[0] as P2Customer | undefined;
+    return result.rows[0] as P2Customer | undefined;
   }
 
   async deleteP2Customer(id: number): Promise<void> {
@@ -14763,8 +15656,21 @@ export class DatabaseStorage implements IStorage {
     return submitted;
   }
 
+  async getProgramBuilds(filters?: { projectId?: string | null }): Promise<ProgramBuildStatus['build'][]> {
+    return getProgramBuilds(filters);
+  }
+
+  async getProgramBuildStatus(
+    buildId?: string | null,
+    filters?: { projectId?: string | null }
+  ): Promise<ProgramBuildStatus | null> {
+    return getProgramBuildStatus(buildId, filters);
+  }
+
   // P2 Purchase Orders CRUD
   async getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]> {
+    await ensureP2PurchaseOrderReadSchema();
+
     // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
     const result = await pool.query(`
       SELECT 
@@ -14776,17 +15682,22 @@ export class DatabaseStorage implements IStorage {
         tolerance_authorizer_name as "toleranceAuthorizerName",
         tolerance_notes as "toleranceNotes", bom_configured as "bomConfigured",
         locked_at as "lockedAt", locked_by as "lockedBy",
-        source_quote_id as "sourceQuoteId", created_by_id as "createdById",
+        source_quote_id as "sourceQuoteId", contract_review_role as "contractReviewRole",
+        created_by_id as "createdById",
         created_by_name as "createdByName", assigned_to_id as "assignedToId",
         assigned_to_name as "assignedToName", bom_owner_id as "bomOwnerId",
         bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
         scheduled_by_name as "scheduledByName", production_lead_id as "productionLeadId",
         production_lead_name as "productionLeadName",
-        project_name as "projectName"
+        project_id as "projectId",
+        project_name as "projectName",
+        revision_number as "revisionNumber", parent_po_id as "parentPoId",
+        change_reason as "changeReason", is_current_revision as "isCurrentRevision",
+        revised_at as "revisedAt", revised_by as "revisedBy"
       FROM p2_purchase_orders 
       ORDER BY created_at DESC
     `);
-    return result as P2PurchaseOrder[];
+    return result.rows as P2PurchaseOrder[];
   }
 
   async getP2PurchaseOrder(
@@ -14795,6 +15706,8 @@ export class DatabaseStorage implements IStorage {
   ): Promise<
     (P2PurchaseOrder & { items?: P2PurchaseOrderItem[] }) | undefined
   > {
+    await ensureP2PurchaseOrderReadSchema();
+
     const [po] = await db
       .select()
       .from(p2PurchaseOrders)
@@ -14814,17 +15727,19 @@ export class DatabaseStorage implements IStorage {
   async createP2PurchaseOrder(
     data: InsertP2PurchaseOrder
   ): Promise<P2PurchaseOrder> {
+    await ensureP2PurchaseOrderReadSchema();
+
     // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
     const result = await pool.query(`
       INSERT INTO p2_purchase_orders (
         po_number, customer_id, customer_name, po_date, expected_delivery,
         status, notes, attachments, tolerance_authorizer_id, tolerance_authorizer_name,
-        tolerance_notes, bom_configured, source_quote_id, created_by_id, created_by_name,
-        assigned_to_id, assigned_to_name, bom_owner_id, bom_owner_name,
+        tolerance_notes, bom_configured, source_quote_id, contract_review_role,
+        created_by_id, created_by_name, assigned_to_id, assigned_to_name, bom_owner_id, bom_owner_name,
         scheduled_by_id, scheduled_by_name, production_lead_id, production_lead_name,
-        project_name
+        project_id, project_name
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
       )
       RETURNING id, po_number as "poNumber", customer_id as "customerId",
         customer_name as "customerName", po_date as "poDate",
@@ -14833,12 +15748,14 @@ export class DatabaseStorage implements IStorage {
         tolerance_authorizer_name as "toleranceAuthorizerName",
         tolerance_notes as "toleranceNotes", bom_configured as "bomConfigured",
         locked_at as "lockedAt", locked_by as "lockedBy",
-        source_quote_id as "sourceQuoteId", created_by_id as "createdById",
+        source_quote_id as "sourceQuoteId", contract_review_role as "contractReviewRole",
+        created_by_id as "createdById",
         created_by_name as "createdByName", assigned_to_id as "assignedToId",
         assigned_to_name as "assignedToName", bom_owner_id as "bomOwnerId",
         bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
         scheduled_by_name as "scheduledByName", production_lead_id as "productionLeadId",
         production_lead_name as "productionLeadName",
+        project_id as "projectId",
         project_name as "projectName",
         created_at as "createdAt", updated_at as "updatedAt"
     `, [
@@ -14855,6 +15772,7 @@ export class DatabaseStorage implements IStorage {
       data.toleranceNotes || null,
       data.bomConfigured || false,
       data.sourceQuoteId || null,
+      data.contractReviewRole || 'secondary',
       data.createdById || null,
       data.createdByName || null,
       data.assignedToId || null,
@@ -14865,18 +15783,201 @@ export class DatabaseStorage implements IStorage {
       data.scheduledByName || null,
       data.productionLeadId || null,
       data.productionLeadName || null,
+      data.projectId || null,
       data.projectName || null,
     ]);
-    return result[0] as P2PurchaseOrder;
+    return result.rows[0] as P2PurchaseOrder;
+  }
+
+  async createP2PurchaseOrderRevision(
+    poId: number,
+    changeReason: string,
+    revisedBy?: string,
+    overrides?: {
+      poNumber?: string;
+      expectedDelivery?: string;
+      lineItems?: Array<{
+        sourceItemId?: number;
+        inventoryItemId?: number | null;
+        partNumber: string;
+        partName: string;
+        quantity: number;
+        unitPrice?: number | null;
+        specifications?: string | null;
+        notes?: string | null;
+      }>;
+    }
+  ): Promise<P2PurchaseOrder> {
+    await ensureP2PurchaseOrderReadSchema();
+
+    return await db.transaction(async (tx) => {
+      const [originalPO] = await tx
+        .select()
+        .from(p2PurchaseOrders)
+        .where(eq(p2PurchaseOrders.id, poId))
+        .for('update');
+
+      if (!originalPO) {
+        throw new Error('P2 purchase order not found');
+      }
+
+      const rootParentId = originalPO.parentPoId || originalPO.id;
+      const existingRevisions = await tx
+        .select({ revisionNumber: p2PurchaseOrders.revisionNumber })
+        .from(p2PurchaseOrders)
+        .where(
+          or(
+            eq(p2PurchaseOrders.id, rootParentId),
+            eq(p2PurchaseOrders.parentPoId, rootParentId)
+          )
+        )
+        .orderBy(desc(p2PurchaseOrders.revisionNumber))
+        .limit(1)
+        .for('update');
+
+      const nextRevisionNumber = (existingRevisions[0]?.revisionNumber || 0) + 1;
+      const basePONumber = originalPO.poNumber.replace(/-R[A-Z]+$/, '');
+      const revisionLetter = String.fromCharCode(64 + nextRevisionNumber);
+      const newPONumber = overrides?.poNumber?.trim() || `${basePONumber}-R${revisionLetter}`;
+      const revisedExpectedDelivery = overrides?.expectedDelivery?.trim() || originalPO.expectedDelivery;
+
+      await tx
+        .update(p2PurchaseOrders)
+        .set({ isCurrentRevision: false, updatedAt: new Date() })
+        .where(eq(p2PurchaseOrders.id, originalPO.id));
+
+      const [newRevision] = await tx
+        .insert(p2PurchaseOrders)
+        .values({
+          poNumber: newPONumber,
+          customerId: originalPO.customerId,
+          customerName: originalPO.customerName,
+          poDate: originalPO.poDate,
+          expectedDelivery: revisedExpectedDelivery,
+          status: 'OPEN',
+          notes: originalPO.notes,
+          attachments: originalPO.attachments || [],
+          toleranceAuthorizerId: originalPO.toleranceAuthorizerId,
+          toleranceAuthorizerName: originalPO.toleranceAuthorizerName,
+          toleranceNotes: originalPO.toleranceNotes,
+          bomConfigured: originalPO.bomConfigured,
+          sourceQuoteId: originalPO.sourceQuoteId,
+          contractReviewRole: originalPO.contractReviewRole,
+          createdById: originalPO.createdById,
+          createdByName: originalPO.createdByName,
+          assignedToId: originalPO.assignedToId,
+          assignedToName: originalPO.assignedToName,
+          bomOwnerId: originalPO.bomOwnerId,
+          bomOwnerName: originalPO.bomOwnerName,
+          scheduledById: originalPO.scheduledById,
+          scheduledByName: originalPO.scheduledByName,
+          productionLeadId: originalPO.productionLeadId,
+          productionLeadName: originalPO.productionLeadName,
+          projectId: originalPO.projectId,
+          projectName: originalPO.projectName,
+          securityClassification: originalPO.securityClassification,
+          cuiCategory: originalPO.cuiCategory,
+          itarCategory: originalPO.itarCategory,
+          exportControlJurisdiction: originalPO.exportControlJurisdiction,
+          customerFileAccessRule: originalPO.customerFileAccessRule,
+          scrappedItemCount: 0,
+          scrapRatePercent: 0,
+          revisionNumber: nextRevisionNumber,
+          parentPoId: rootParentId,
+          changeReason,
+          isCurrentRevision: true,
+          revisedAt: new Date(),
+          revisedBy: revisedBy || null,
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      const originalItems = await tx
+        .select()
+        .from(p2PurchaseOrderItems)
+        .where(eq(p2PurchaseOrderItems.poId, originalPO.id));
+
+      const revisedItems = overrides?.lineItems?.length
+        ? overrides.lineItems
+        : originalItems.map((item) => ({
+            sourceItemId: item.id,
+            inventoryItemId: item.inventoryItemId,
+            partNumber: item.partNumber,
+            partName: item.partName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            specifications: item.specifications,
+            notes: item.notes,
+          }));
+
+      const itemIdMap = new Map<number, number>();
+      for (const item of revisedItems) {
+        const quantity = Number(item.quantity) || 1;
+        const unitPrice = Number(item.unitPrice) || 0;
+        const [copiedItem] = await tx.insert(p2PurchaseOrderItems).values({
+          poId: newRevision.id,
+          inventoryItemId: item.inventoryItemId ?? null,
+          partNumber: item.partNumber,
+          partName: item.partName,
+          quantity,
+          unitPrice,
+          totalPrice: quantity * unitPrice,
+          specifications: item.specifications ?? null,
+          notes: item.notes ?? null,
+        }).returning({ id: p2PurchaseOrderItems.id });
+
+        if (item.sourceItemId) {
+          itemIdMap.set(item.sourceItemId, copiedItem.id);
+        }
+      }
+
+      for (const [oldItemId, newItemId] of itemIdMap.entries()) {
+        await tx
+          .update(p2ProductionOrders)
+          .set({ p2PoId: newRevision.id, p2PoItemId: newItemId, updatedAt: new Date() })
+          .where(and(
+            eq(p2ProductionOrders.p2PoId, originalPO.id),
+            eq(p2ProductionOrders.p2PoItemId, oldItemId)
+          ));
+
+        await tx
+          .update(p2SerializedItems)
+          .set({ poId: newRevision.id, poItemId: newItemId, updatedAt: new Date() })
+          .where(and(
+            eq(p2SerializedItems.poId, originalPO.id),
+            eq(p2SerializedItems.poItemId, oldItemId)
+          ));
+
+        await tx.execute(sql`
+          UPDATE manufacturing_queue
+             SET p2_po_id = ${newRevision.id},
+                 p2_po_item_id = ${newItemId},
+                 updated_at = NOW()
+           WHERE p2_po_id = ${originalPO.id}
+             AND p2_po_item_id = ${oldItemId}
+        `);
+      }
+
+      await tx.execute(sql`
+        UPDATE program_builds
+           SET p2_purchase_order_id = ${newRevision.id},
+               updated_at = NOW()
+         WHERE p2_purchase_order_id = ${originalPO.id}
+      `);
+
+      return newRevision;
+    });
   }
 
   async updateP2PurchaseOrder(
     id: number,
     data: Partial<InsertP2PurchaseOrder>
   ): Promise<P2PurchaseOrder> {
+    await ensureP2PurchaseOrderReadSchema();
+
     const [po] = await db
       .update(p2PurchaseOrders)
-      .set(data)
+      .set({ ...data, updatedAt: new Date() })
       .where(eq(p2PurchaseOrders.id, id))
       .returning();
     return po;
@@ -15160,6 +16261,28 @@ export class DatabaseStorage implements IStorage {
       notes: string;
     }
 
+    // Task #242: tag generated rows with the owning project when the PO
+    // is linked to exactly one project (via projects.po_id OR
+    // project_steps.linked_p2_order_id). When multiple projects share
+    // this PO, leave project_id NULL so the dashboard falls back to
+    // PO-wide behavior rather than mis-attributing rows.
+    const projectLinkRows = await dbClient.execute(sql`
+      SELECT DISTINCT project_id::text AS project_id
+      FROM (
+        SELECT p.id AS project_id
+        FROM ${projects} p
+        WHERE p.po_id = ${poId}
+        UNION
+        SELECT ps.project_id
+        FROM ${projectSteps} ps
+        WHERE ps.linked_p2_order_id = ${poId}
+      ) s
+      WHERE project_id IS NOT NULL
+    `);
+    const projectLinks = (projectLinkRows.rows ?? projectLinkRows) as Array<{ project_id: string }>;
+    const soleProjectId: string | null =
+      projectLinks.length === 1 ? projectLinks[0].project_id : null;
+
     const pendingOrders: PendingOrder[] = [];
 
     const collectOrderSpecs = async (
@@ -15239,10 +16362,8 @@ export class DatabaseStorage implements IStorage {
             }
 
             // Derive department: category takes priority; fall back to legacy isPacket/manufacturingDepartment for unmigrated items.
-            const derivedDashboard = getSupplySourceDashboard(part.manufacturedCategory as ManufacturedCategory);
-            const effectiveDepartment = derivedDashboard
-              ? supplySourceDashboardToLegacyDept(derivedDashboard)
-              : (isPacketItem ? 'Cutting Table' : part.manufacturingDepartment);
+            const route = getManufacturingRouteDefinition(part.manufacturedCategory as ManufacturedCategory);
+            const effectiveDepartment = route?.department || (isPacketItem ? 'Cutting Table' : part.manufacturingDepartment);
 
             if (!effectiveDepartment) {
               const skipMsg = `Manufactured part ${line.childPartAgNumber} has no manufacturing department assigned`;
@@ -15332,10 +16453,8 @@ export class DatabaseStorage implements IStorage {
             }
 
             // Derive department: category takes priority; fall back to legacy isPacket/manufacturingDepartment for unmigrated items.
-            const derivedDashboard2 = getSupplySourceDashboard(part?.manufacturedCategory as ManufacturedCategory);
-            const effectiveDepartment = derivedDashboard2
-              ? supplySourceDashboardToLegacyDept(derivedDashboard2)
-              : (isPacketItem ? 'Cutting Table' : (item.firstDept || part?.manufacturingDepartment || null));
+            const route = getManufacturingRouteDefinition(part?.manufacturedCategory as ManufacturedCategory);
+            const effectiveDepartment = route?.department || (isPacketItem ? 'Cutting Table' : (item.firstDept || part?.manufacturingDepartment || null));
 
             if (!effectiveDepartment) {
               const skipMsg = `Part ${itemPartNumber} has no department assigned`;
@@ -15393,10 +16512,8 @@ export class DatabaseStorage implements IStorage {
 
       if (topLevelPart.length > 0 && (topIsManufactured || topIsPacket)) {
         const part = topLevelPart[0];
-        const topDerivedDashboard = getSupplySourceDashboard(part.manufacturedCategory as ManufacturedCategory);
-        const topDepartment = topDerivedDashboard
-          ? supplySourceDashboardToLegacyDept(topDerivedDashboard)
-          : (topIsPacket ? 'Cutting Table' : part.manufacturingDepartment);
+        const topRoute = getManufacturingRouteDefinition(part.manufacturedCategory as ManufacturedCategory);
+        const topDepartment = topRoute?.department || (topIsPacket ? 'Cutting Table' : part.manufacturingDepartment);
         
         if (topDepartment) {
           console.log(`🔧 Top-level item ${poItem.partNumber} is ${topIsPacket ? 'Packet' : 'Manufactured'} (dept: ${topDepartment}) - queuing ${effectiveQuantity} production orders`);
@@ -15457,6 +16574,7 @@ export class DatabaseStorage implements IStorage {
           orderId,
           p2PoId: order.p2PoId,
           p2PoItemId: order.p2PoItemId,
+          projectId: soleProjectId, // Task #242: NULL when PO is shared by multiple projects
           bomDefinitionId: order.bomDefinitionId,
           bomItemId: order.bomItemId,
           sku: order.sku,
@@ -15488,6 +16606,95 @@ export class DatabaseStorage implements IStorage {
     return productionOrders;
   }
 
+  private normalizeP2SerialPrefix(preferredPrefix?: string | null, fallbackName?: string | null): string {
+    const source = preferredPrefix || fallbackName || 'UNK';
+    const normalized = source.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase();
+    return normalized || 'UNK';
+  }
+
+  private async allocateP2CustomerYearSerialRange(
+    po: Pick<P2PurchaseOrder, 'customerId' | 'customerName'>,
+    count: number,
+    dbClient: DbOrTx
+  ): Promise<{ prefix: string; yearSuffix: string; startSequence: number; endSequence: number }> {
+    if (count <= 0) {
+      throw new Error('Serial range allocation count must be greater than zero');
+    }
+
+    const currentYear = new Date().getFullYear().toString();
+    const yearSuffix = currentYear.slice(-2);
+
+    const customerResult = await dbClient.execute(sql`
+      SELECT rfq_prefix, customer_name
+      FROM p2_customers
+      WHERE customer_id = ${po.customerId}::text
+      LIMIT 1
+    `);
+    const customer = (customerResult.rows?.[0] || {}) as { rfq_prefix?: string | null; customer_name?: string | null };
+    const prefix = this.normalizeP2SerialPrefix(customer.rfq_prefix, customer.customer_name || po.customerName);
+    const serialPattern = `^${prefix}${yearSuffix}[0-9]{5}$`;
+
+    const seqResult = await dbClient.execute(sql`
+      WITH locked_customer AS (
+        SELECT
+          COALESCE((serial_sequences->>${currentYear}::text)::int, 0) AS stored_sequence
+        FROM p2_customers
+        WHERE customer_id = ${po.customerId}::text
+        FOR UPDATE
+      ),
+      existing_serials AS (
+        SELECT COALESCE(
+          MAX((substring(upper(serial_number) from ${`^${prefix}${yearSuffix}([0-9]{5})$`}))::int),
+          0
+        ) AS max_sequence
+        FROM p2_serialized_items
+        WHERE customer_id = ${po.customerId}::text
+          AND upper(serial_number) ~ ${serialPattern}
+      ),
+      base_sequence AS (
+        SELECT GREATEST(
+          COALESCE((SELECT stored_sequence FROM locked_customer), 0),
+          COALESCE((SELECT max_sequence FROM existing_serials), 0)
+        ) AS value
+      )
+      UPDATE p2_customers
+      SET serial_sequences = COALESCE(serial_sequences, '{}'::jsonb) ||
+        jsonb_build_object(${currentYear}::text, (SELECT value FROM base_sequence) + ${count})
+      WHERE customer_id = ${po.customerId}::text
+      RETURNING ((SELECT value FROM base_sequence) + ${count}) AS end_sequence
+    `);
+
+    const endSequence = Number((seqResult.rows?.[0] as { end_sequence?: unknown } | undefined)?.end_sequence);
+    if (Number.isFinite(endSequence) && endSequence > 0) {
+      return {
+        prefix,
+        yearSuffix,
+        startSequence: endSequence - count + 1,
+        endSequence,
+      };
+    }
+
+    const fallbackResult = await dbClient.execute(sql`
+      SELECT COALESCE(
+        MAX((substring(upper(serial_number) from ${`^${prefix}${yearSuffix}([0-9]{5})$`}))::int),
+        0
+      ) AS max_sequence
+      FROM p2_serialized_items
+      WHERE customer_id = ${po.customerId}::text
+        AND upper(serial_number) ~ ${serialPattern}
+    `);
+    const fallbackMax = Number(
+      (fallbackResult.rows?.[0] as { max_sequence?: unknown } | undefined)?.max_sequence || 0
+    );
+    const fallbackEnd = fallbackMax + count;
+    return {
+      prefix,
+      yearSuffix,
+      startSequence: fallbackMax + 1,
+      endSequence: fallbackEnd,
+    };
+  }
+
   async addP2SerializedItemsForPoItem(
     poItemId: number,
     addCount: number,
@@ -15511,19 +16718,57 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`P2 PO ${poItem.poId} not found`);
     }
 
-    // Continue the per-PO barcode sequence (max+1 across ALL items on this PO)
-    const maxSeqResult = await dbClient
-      .select({ maxSeq: max(p2SerializedItems.sequenceNumber) })
-      .from(p2SerializedItems)
-      .where(eq(p2SerializedItems.poId, po.id));
-    const startSeq = (maxSeqResult[0]?.maxSeq ?? 0) + 1;
+    const { prefix, yearSuffix, startSequence } =
+      await this.allocateP2CustomerYearSerialRange(po, addCount, dbClient);
 
-    let itemRouting = await dbClient.query.partRoutings.findFirst({
-      where: and(eq(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
-    });
+    const [projectForPoItem] = await dbClient
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.poId, po.id), eq(projects.p2PoItemId, poItem.id)))
+      .limit(1);
+    const [projectForPo] = projectForPoItem
+      ? [projectForPoItem]
+      : await dbClient
+          .select({ id: projects.id })
+          .from(projects)
+          .where(eq(projects.poId, po.id))
+          .limit(1);
+    const projectId = projectForPo?.id ?? null;
+
+    let itemRouting = projectId
+      ? await dbClient.query.partRoutings.findFirst({
+          where: and(
+            eq(partRoutings.projectId, projectId),
+            eq(partRoutings.partNumber, poItem.partNumber),
+            eq(partRoutings.isActive, true)
+          ),
+        })
+      : null;
+    if (!itemRouting && projectId) {
+      itemRouting = await dbClient.query.partRoutings.findFirst({
+        where: and(
+          eq(partRoutings.projectId, projectId),
+          ilike(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
     if (!itemRouting) {
       itemRouting = await dbClient.query.partRoutings.findFirst({
-        where: and(ilike(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
+        where: and(
+          isNull(partRoutings.projectId),
+          eq(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
+    if (!itemRouting) {
+      itemRouting = await dbClient.query.partRoutings.findFirst({
+        where: and(
+          isNull(partRoutings.projectId),
+          ilike(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
       });
     }
     const baseMatch = poItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
@@ -15557,13 +16802,12 @@ export class DatabaseStorage implements IStorage {
     };
     const itemsToCreate: SerializedInsertShape[] = [];
     for (let i = 0; i < addCount; i++) {
-      const seq = startSeq + i;
-      const seq4 = seq.toString().padStart(4, '0');
-      const barcode = `${po.poNumber}-UNIT-${seq4}`;
+      const seq = startSequence + i;
+      const serialNumber = `${prefix}${yearSuffix}${String(seq).padStart(5, '0')}`;
       itemsToCreate.push({
-        serialNumber: barcode,
-        barcode,
-        travelerBarcode: barcode,
+        serialNumber,
+        barcode: serialNumber,
+        travelerBarcode: serialNumber,
         poId: po.id,
         poItemId: poItem.id,
         poNumber: po.poNumber,
@@ -15761,8 +17005,9 @@ export class DatabaseStorage implements IStorage {
   async updateP2PoItemWithQtySync(
     poId: number,
     itemId: number,
-    updateData: Partial<InsertP2PurchaseOrderItem>,
-    actor: { username: string; role: string; ipAddress?: string; userAgent?: string | null }
+    updateData: Partial<InsertP2PurchaseOrderItem> & { quantityDelta?: number },
+    actor: { username: string; role: string; ipAddress?: string; userAgent?: string | null },
+    existingTx?: DbOrTx,
   ): Promise<{
     item: P2PurchaseOrderItem;
     sync:
@@ -15780,7 +17025,7 @@ export class DatabaseStorage implements IStorage {
           productionOrdersRemoved: number;
         };
   }> {
-    return await db.transaction(async (tx) => {
+    const runner = async (tx: DbOrTx) => {
       // Lock the PO row first to serialize concurrent qty edits
       const [po] = await tx
         .select()
@@ -15817,8 +17062,12 @@ export class DatabaseStorage implements IStorage {
       }
 
       const oldQty = existingItem.quantity;
-      const newQty = updateData.quantity ?? oldQty;
-      const qtyChanged = updateData.quantity !== undefined && newQty !== oldQty;
+      const newQty = updateData.quantityDelta !== undefined
+        ? oldQty + updateData.quantityDelta
+        : (updateData.quantity ?? oldQty);
+      const qtyChanged =
+        (updateData.quantityDelta !== undefined && updateData.quantityDelta !== 0) ||
+        (updateData.quantity !== undefined && newQty !== oldQty);
 
       // Re-read counts inside the transaction so the in-progress guard sees a
       // consistent view of serialized units / production orders.
@@ -15848,11 +17097,16 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Build the partial update payload (recompute totalPrice if needed)
+      // Build the partial update payload (recompute totalPrice if needed).
+      // Strip the synthetic `quantityDelta` flag — it's not a column.
+      const { quantityDelta: _delta, ...rest } = updateData;
       const persistData: Partial<InsertP2PurchaseOrderItem> & { totalPrice?: number } = {
-        ...updateData,
+        ...rest,
       };
-      if (updateData.quantity !== undefined || updateData.unitPrice !== undefined) {
+      if (updateData.quantityDelta !== undefined) {
+        persistData.quantity = newQty;
+      }
+      if (qtyChanged || updateData.unitPrice !== undefined) {
         const unitPrice = updateData.unitPrice ?? existingItem.unitPrice ?? 0;
         persistData.totalPrice = newQty * unitPrice;
       }
@@ -16021,7 +17275,8 @@ export class DatabaseStorage implements IStorage {
       }
 
       return { item: updatedItem, sync };
-    });
+    };
+    return existingTx ? await runner(existingTx) : await db.transaction(runner);
   }
 
   async getP2MaterialRequirements(poId: number): Promise<any[]> {
@@ -16121,21 +17376,37 @@ export class DatabaseStorage implements IStorage {
   async createP2ProductionChange(data: InsertP2ProductionChange): Promise<P2ProductionChange> {
     // Generate change number: PCF-YYYY-NNN
     const year = new Date().getFullYear();
-    const existingChanges = await db.select().from(p2ProductionChanges);
-    const yearChanges = existingChanges.filter(c => c.changeNumber?.startsWith(`PCF-${year}`));
-    const nextNum = yearChanges.length + 1;
+    const [{ lastNumber } = { lastNumber: null }] = await db
+      .select({
+        lastNumber: sql<number | null>`MAX(NULLIF(SUBSTRING(${p2ProductionChanges.changeNumber} FROM ${`^PCF-${year}-(\\d+)$`}), '')::int)`,
+      })
+      .from(p2ProductionChanges)
+      .where(like(p2ProductionChanges.changeNumber, `PCF-${year}-%`));
+    const nextNum = (lastNumber ?? 0) + 1;
     const changeNumber = `PCF-${year}-${String(nextNum).padStart(3, '0')}`;
+    const changeData = this.normalizeP2ProductionChangeDates(data);
     
-    const [change] = await db.insert(p2ProductionChanges).values({ ...data, changeNumber }).returning();
+    const [change] = await db.insert(p2ProductionChanges).values({ ...changeData, changeNumber }).returning();
     return change;
   }
 
   async updateP2ProductionChange(id: string, data: Partial<InsertP2ProductionChange>): Promise<P2ProductionChange> {
+    const changeData = this.normalizeP2ProductionChangeDates(data);
     const [change] = await db.update(p2ProductionChanges)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...changeData, updatedAt: new Date() })
       .where(eq(p2ProductionChanges.id, id))
       .returning();
     return change;
+  }
+
+  private normalizeP2ProductionChangeDates<T extends Partial<InsertP2ProductionChange>>(data: T): T {
+    const normalized: any = { ...data };
+    for (const field of ['submittedAt', 'approvedAt', 'rejectedAt', 'implementedAt'] as const) {
+      if (typeof normalized[field] === 'string' && normalized[field].trim()) {
+        normalized[field] = new Date(normalized[field]);
+      }
+    }
+    return normalized;
   }
 
   // P2 Traveler Changes (Deviations) CRUD
@@ -16195,40 +17466,8 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`PO ${poItem.poId} not found`);
       }
 
-      // Get the customer's RFQ prefix for serial number generation
-      const currentYear = new Date().getFullYear().toString();
-      const yearSuffix = currentYear.slice(-2);
-      let prefix = '';
-
-      // Look up customer by customerId to get rfqPrefix
-      const customerResult = await tx.execute(sql`
-        SELECT rfq_prefix, customer_name, serial_sequences
-        FROM p2_customers
-        WHERE customer_id = ${po.customerId}::text
-        LIMIT 1
-      `);
-
-      if (customerResult.rows && customerResult.rows.length > 0) {
-        const customer = customerResult.rows[0] as any;
-        prefix = customer.rfq_prefix || customer.customer_name.substring(0, 3).toUpperCase();
-      } else {
-        prefix = (po.customerName || 'UNK').substring(0, 3).toUpperCase();
-      }
-
-      // Atomically increment serial sequence counter for this customer+year
-      const seqResult = await tx.execute(sql`
-        UPDATE p2_customers
-        SET serial_sequences = COALESCE(serial_sequences, '{}'::jsonb) ||
-          jsonb_build_object(
-            ${currentYear}::text,
-            COALESCE((serial_sequences->>${currentYear}::text)::int, 0) + ${poItem.quantity}
-          )
-        WHERE customer_id = ${po.customerId}::text
-        RETURNING (COALESCE((serial_sequences->>${currentYear}::text)::int, 0)) as end_sequence
-      `);
-
-      const endSequence = seqResult.rows?.[0] ? (seqResult.rows[0] as any).end_sequence : poItem.quantity;
-      const startSequence = endSequence - poItem.quantity + 1;
+      const { prefix, yearSuffix, startSequence } =
+        await this.allocateP2CustomerYearSerialRange(po, poItem.quantity, tx);
 
       const serializedItems: P2SerializedItem[] = [];
 
@@ -16241,6 +17480,7 @@ export class DatabaseStorage implements IStorage {
         const itemData: InsertP2SerializedItem = {
           serialNumber,
           barcode,
+          travelerBarcode: barcode,
           poId: po.id,
           poItemId: poItem.id,
           poNumber: po.poNumber,
@@ -16284,6 +17524,8 @@ export class DatabaseStorage implements IStorage {
     department?: string;
     status?: string;
   }): Promise<P2SerializedItem[]> {
+    await ensureP2PurchaseOrderReadSchema();
+
     // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
     let whereClause = '';
     const params: any[] = [];
@@ -16335,7 +17577,7 @@ export class DatabaseStorage implements IStorage {
       ${whereClause}
       ORDER BY created_at
     `, params);
-    return result as P2SerializedItem[];
+    return result.rows as P2SerializedItem[];
   }
 
   async getP2SerializedItem(id: string): Promise<P2SerializedItem | undefined> {
@@ -16718,7 +17960,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(routingOperations)
       .where(eq(routingOperations.partRoutingId, partRoutingId))
-      .orderBy(routingOperations.stepNumber);
+      .orderBy(asc(routingOperations.stepNumber), asc(routingOperations.id));
   }
 
   async createRoutingOperation(data: InsertRoutingOperation): Promise<RoutingOperation> {
@@ -17804,6 +19046,7 @@ export class DatabaseStorage implements IStorage {
     partNumber?: string;
     workOrderId?: string;
     inventoryItemId?: string;
+    partRoutingId?: string;
   }): Promise<Traveler[]> {
     const conditions = [];
 
@@ -17818,6 +19061,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (filters?.inventoryItemId) {
       conditions.push(eq(travelers.inventoryItemId, filters.inventoryItemId));
+    }
+    if (filters?.partRoutingId) {
+      conditions.push(eq(travelers.partRoutingId, filters.partRoutingId));
     }
 
     if (conditions.length === 0) {
@@ -17863,11 +19109,11 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     if (!traveler?.productionWorkOrderId) return undefined;
     const [wad] = await db
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, traveler.productionWorkOrderId))
       .limit(1);
-    return wad;
+    return withDefaultMaterialBudgetAmount(wad) as ProductionWorkOrder | undefined;
   }
 
   async createTimeClockEntryWithChargeContext(data: InsertTimeClockEntry): Promise<TimeClockEntry> {
@@ -18348,10 +19594,44 @@ export class DatabaseStorage implements IStorage {
 
   // Training enforcement helpers
 
+  private getP2PartNumberVariants(partNumber: string): string[] {
+    const variants = new Set<string>();
+    const add = (value?: string | null) => {
+      const trimmed = value?.trim();
+      if (trimmed) variants.add(trimmed);
+    };
+
+    add(partNumber);
+    add(partNumber.replace(/\s+/g, ' '));
+
+    for (const value of Array.from(variants)) {
+      const base = value.match(/^(.+?)(?:\s+|\s*-\s*)(?:rev|revision)\.?\s*[a-z0-9]+$/i)?.[1]?.trim();
+      add(base);
+    }
+
+    return Array.from(variants);
+  }
+
+  private getP2DepartmentKeys(department: string): string[] {
+    const normalize = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const keys = new Set<string>([normalize(department)]);
+    const [compact] = Array.from(keys);
+
+    if (compact === 'assembledisassembly') {
+      keys.add('assemblydisassembly');
+    }
+    if (compact === 'assemblydisassembly') {
+      keys.add('assembledisassembly');
+    }
+
+    return Array.from(keys);
+  }
+
   async getP2PartCertificationForStep(
     partNumber: string,
     department: string
   ): Promise<{ id: number; partNumber: string; departments: string[] } | undefined> {
+    const partVariants = this.getP2PartNumberVariants(partNumber);
     const rows = await db
       .select({
         id: p2PartCertifications.id,
@@ -18359,12 +19639,18 @@ export class DatabaseStorage implements IStorage {
         departments: p2PartCertifications.departments,
       })
       .from(p2PartCertifications)
-      .where(eq(p2PartCertifications.partNumber, partNumber));
+      .where(
+        or(
+          ...partVariants.map((variant) =>
+            sql`lower(trim(${p2PartCertifications.partNumber})) = lower(trim(${variant}))`
+          )
+        )
+      );
 
-    const deptLower = department.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const deptKeys = this.getP2DepartmentKeys(department);
     return rows.find((r) => {
       const depts = (r.departments as string[]) || [];
-      return depts.some((d) => d.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === deptLower);
+      return depts.some((d) => deptKeys.includes(d.toLowerCase().trim().replace(/[^a-z0-9]/g, '')));
     });
   }
 
@@ -18373,6 +19659,20 @@ export class DatabaseStorage implements IStorage {
     partNumber: string,
     department: string
   ): Promise<boolean> {
+    const [employee] = await db
+      .select({ name: employees.name })
+      .from(employees)
+      .where(eq(employees.id, employeeId))
+      .limit(1);
+    const partVariants = this.getP2PartNumberVariants(partNumber);
+    const employeeIdentityFilters: SQL<unknown>[] = [
+      eq(p2EmployeePartCertifications.employeeId, employeeId),
+    ];
+    if (employee?.name?.trim()) {
+      employeeIdentityFilters.push(
+        sql`lower(regexp_replace(trim(${p2EmployeePartCertifications.employeeName}), '[^a-z0-9]', '', 'g')) = lower(regexp_replace(trim(${employee.name}), '[^a-z0-9]', '', 'g'))`
+      );
+    }
     const rows = await db
       .select({
         id: p2EmployeePartCertifications.id,
@@ -18385,22 +19685,25 @@ export class DatabaseStorage implements IStorage {
       .from(p2EmployeePartCertifications)
       .where(
         and(
-          eq(p2EmployeePartCertifications.employeeId, employeeId),
-          eq(p2EmployeePartCertifications.partNumber, partNumber)
+          or(...employeeIdentityFilters),
+          or(
+            ...partVariants.map((variant) =>
+              sql`lower(trim(${p2EmployeePartCertifications.partNumber})) = lower(trim(${variant}))`
+            )
+          )
         )
       );
 
-    const deptLower = department.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const deptKeys = this.getP2DepartmentKeys(department);
     const match = rows.find(
-      (r) => r.department.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === deptLower
+      (r) => deptKeys.includes(r.department.toLowerCase().trim().replace(/[^a-z0-9]/g, ''))
     );
 
     if (!match) return false;
     return !!(
       match.drawingKnowledge &&
       match.specSheetUnderstanding &&
-      match.procedureCompletion &&
-      match.certifiedDate
+      match.procedureCompletion
     );
   }
 
@@ -18409,6 +19712,7 @@ export class DatabaseStorage implements IStorage {
     partNumber: string
   ): Promise<{ id: number; expiresAt: Date | null } | undefined> {
     const now = new Date();
+    const partVariants = this.getP2PartNumberVariants(partNumber);
     const rows = await db
       .select({
         id: travelerAuthorizations.id,
@@ -18418,7 +19722,11 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(travelerAuthorizations.employeeId, employeeId),
-          eq(travelerAuthorizations.partNumber, partNumber),
+          or(
+            ...partVariants.map((variant) =>
+              sql`lower(trim(${travelerAuthorizations.partNumber})) = lower(trim(${variant}))`
+            )
+          ),
           eq(travelerAuthorizations.isActive, true)
         )
       );
@@ -18432,12 +19740,17 @@ export class DatabaseStorage implements IStorage {
    * bypass the check) from "auth records exist but this employee doesn't have one" (block).
    */
   async anyAuthorizationsExistForPart(partNumber: string): Promise<boolean> {
+    const partVariants = this.getP2PartNumberVariants(partNumber);
     const rows = await db
       .select({ id: travelerAuthorizations.id })
       .from(travelerAuthorizations)
       .where(
         and(
-          eq(travelerAuthorizations.partNumber, partNumber),
+          or(
+            ...partVariants.map((variant) =>
+              sql`lower(trim(${travelerAuthorizations.partNumber})) = lower(trim(${variant}))`
+            )
+          ),
           eq(travelerAuthorizations.isActive, true)
         )
       )
@@ -18734,6 +20047,46 @@ export class DatabaseStorage implements IStorage {
     return out;
   }
 
+  private _customDataFieldKey(field: any): string {
+    return String(field?.fieldKey || field?.fieldName || '')
+      .trim()
+      .replace(/\s+/g, '_')
+      .toLowerCase();
+  }
+
+  private _dedupeCustomDataFieldsByKey<T extends { fieldKey?: string; fieldName?: string }>(
+    fields: T[],
+    seen: Set<string>,
+  ): T[] {
+    const out: T[] = [];
+    for (const field of fields) {
+      const key = this._customDataFieldKey(field);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(field);
+    }
+    return out;
+  }
+
+  private _qcStandardKey(standard: any): string {
+    return [
+      standard?.standard || standard?.standardName || standard?.name || standard?.title || '',
+      standard?.tolerance || '',
+      standard?.requirement || standard?.specification || standard?.acceptanceCriteria || '',
+    ].map((value) => String(value).trim().toLowerCase()).join('|');
+  }
+
+  private _dedupeQcStandardsAcrossPhases<T>(standards: T[], seen: Set<string>): T[] {
+    const out: T[] = [];
+    for (const standard of standards) {
+      const key = this._qcStandardKey(standard);
+      if (!key.replace(/\|/g, '') || seen.has(key)) continue;
+      seen.add(key);
+      out.push(standard);
+    }
+    return out;
+  }
+
   private _taskDedupeKey(phase: string, taskType: string, title: string): string {
     return `${this._normalizePhase(phase)}|${taskType}|${title}`.toLowerCase();
   }
@@ -18785,7 +20138,7 @@ export class DatabaseStorage implements IStorage {
       serialNumber: data.serialNumber || null,
       internalControlNumber: data.internalControlNumber || null,
       quantity: data.quantity || 1,
-      status: 'DRAFT',
+      status: data.workOrderId ? 'IN_PROGRESS' : 'DRAFT',
       partRoutingId: routing.id,
       partRoutingRevision: (routing as any).routingRevision || 1,
       createdBy: data.createdBy,
@@ -18801,6 +20154,9 @@ export class DatabaseStorage implements IStorage {
     const departmentSequence = routing.departmentSequence as string[];
     const traceabilityConfig = routing.traceabilityConfig as Record<string, string[]>;
     const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
+    const routingHasExplicitMaterials = Object.values(departmentConfig).some(
+      (config: any) => Array.isArray(config?.materials) && config.materials.length > 0,
+    );
 
     let stepCounter = 0;
     for (let i = 0; i < departmentSequence.length; i++) {
@@ -18808,40 +20164,10 @@ export class DatabaseStorage implements IStorage {
       const deptConfig = departmentConfig[deptName] || {};
       const enabledPhases = this._getEnabledPhases(deptConfig);
       const createdTaskKeys = new Set<string>();
+      const createdCustomFieldKeys = new Set<string>();
+      const createdQcStandardKeys = new Set<string>();
 
-      const hasStartChecks = (deptConfig.startChecks || []).length > 0;
-      const hasFinishChecks = (deptConfig.finishChecks || []).length > 0;
-      const hasMaterials = (deptConfig.materials || []).length > 0;
-      const metadataOnlyFields = new Set(['operator', 'timestamp']);
-      const hasTraceFields = (traceabilityConfig[deptName] || []).filter(
-        (f: string) => !metadataOnlyFields.has(f)
-      ).length > 0;
-      const hasCustomFields = (deptConfig.customDataFields || []).length > 0;
-      const hasStartCustomFields = (deptConfig.startCustomDataFields || []).length > 0;
-      const hasFinishCustomFields = (deptConfig.finishCustomDataFields || []).length > 0;
-      const hasQcStandards = (deptConfig.qcStandards || []).length > 0;
-      const hasStartQcStandards = (deptConfig.startQcStandards || []).length > 0;
-      const hasFinishQcStandards = (deptConfig.finishQcStandards || []).length > 0;
-      const hasOvenCuring = (deptConfig.ovenCuringSteps || []).length > 0;
-      const routingInstPack = deptConfig.instructionPack || null;
-      const hasInstructionPackContent = routingInstPack && (
-        (routingInstPack.workInstructionRefs?.length > 0) ||
-        (routingInstPack.aiSnippets?.length > 0) ||
-        (routingInstPack.specialNotes) ||
-        (routingInstPack.media?.length > 0)
-      );
       const hasTimerConfig = deptConfig.timerConfig?.enabled;
-      const hasStdProcesses = (deptConfig.standardProcesses || []).length > 0;
-      const hasSpecialProcess = !!deptConfig.specialProcessConfig?.processName;
-
-      const hasAnyContent = hasStartChecks || hasFinishChecks || hasMaterials || hasTraceFields ||
-        hasCustomFields || hasStartCustomFields || hasFinishCustomFields ||
-        hasQcStandards || hasStartQcStandards || hasFinishQcStandards || hasOvenCuring || hasInstructionPackContent ||
-        hasTimerConfig || hasStdProcesses || hasSpecialProcess;
-
-      if (!hasAnyContent) {
-        continue;
-      }
 
       stepCounter++;
       const stepNumber = stepCounter; // 1, 2, 3, etc.
@@ -18860,18 +20186,19 @@ export class DatabaseStorage implements IStorage {
       // ===== POLICY-DRIVEN MATERIAL TRACEABILITY =====
       const tracePolicy = this._getTracePolicyForDepartment(deptName);
       const routingMaterials = deptConfig.materials || [];
-      if (tracePolicy.enabled) {
-        if (routingMaterials.length > 1) {
+      if (tracePolicy.enabled && (!routingHasExplicitMaterials || routingMaterials.length > 0)) {
+        if (routingMaterials.length > 0) {
           for (let matIdx = 0; matIdx < routingMaterials.length; matIdx++) {
             const mat = routingMaterials[matIdx];
             const matLabel = mat.partName || mat.partNumber || `Material ${matIdx + 1}`;
             const matShort = mat.partNumber ? `#${mat.partNumber}` : `Material ${matIdx + 1}`;
             const perMatFields = this._buildTraceFields(tracePolicy.capture);
+            const traceTaskPhase = this._normalizePhase(mat.traceabilityPhase || tracePolicy.phase);
             if (perMatFields.length > 0) {
               const matTraceTask = await this._createTaskIfAllowed({
                 travelerStepId: step.id,
                 taskType: 'TRACE',
-                taskPhase: tracePolicy.phase,
+                taskPhase: traceTaskPhase,
                 title: `Material Traceability — ${matShort}`,
                 instructions: `Select ${matLabel} from inventory. Fields will auto-fill.`,
                 required: true,
@@ -19035,7 +20362,10 @@ export class DatabaseStorage implements IStorage {
       const finishMaterials = materials.filter((m: any) => m.traceabilityPhase === 'FINISH');
 
       // START Phase Custom Data Fields
-      const startCustomFields = deptConfig.startCustomDataFields || [];
+      const startCustomFields = this._dedupeCustomDataFieldsByKey(
+        deptConfig.startCustomDataFields || [],
+        createdCustomFieldKeys,
+      );
       if (startCustomFields.length > 0) {
         const startDataTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
@@ -19066,21 +20396,8 @@ export class DatabaseStorage implements IStorage {
 
       // Phase-separated QC Standards - create separate QC tasks per phase
       const startQcStandards = deptConfig.startQcStandards || [];
+      const workQcStandards = deptConfig.qcStandards || [];
       const finishQcStandards = deptConfig.finishQcStandards || [];
-      const hasPhaseQcStandards = startQcStandards.length > 0 || finishQcStandards.length > 0;
-      const workQcStandards = hasPhaseQcStandards ? [] : (deptConfig.qcStandards || []);
-
-      const dedupeQcStandards = (standards: any[]): any[] => {
-        const seenFieldKeys = new Set<string>();
-        const out: any[] = [];
-        for (const qc of standards) {
-          const fieldKey = `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`;
-          if (seenFieldKeys.has(fieldKey)) continue;
-          seenFieldKeys.add(fieldKey);
-          out.push(qc);
-        }
-        return out;
-      };
 
       const qcPhaseConfigs = [
         { standards: startQcStandards, phase: 'START' as const, title: 'Incoming QC Inspection', instructions: 'Complete START phase quality control verifications' },
@@ -19090,7 +20407,7 @@ export class DatabaseStorage implements IStorage {
 
       for (const qcPhase of qcPhaseConfigs) {
         if (qcPhase.standards.length === 0) continue;
-        const uniqueStandards = dedupeQcStandards(qcPhase.standards);
+        const uniqueStandards = this._dedupeQcStandardsAcrossPhases(qcPhase.standards, createdQcStandardKeys);
         if (uniqueStandards.length === 0) continue;
 
         const qcTask = await this._createTaskIfAllowed({
@@ -19182,6 +20499,25 @@ export class DatabaseStorage implements IStorage {
           requiresSignature: false,
           requiresCertification: false,
           instructionPack: routingInstructionPack,
+          status: 'NOT_STARTED',
+        }, enabledPhases, createdTaskKeys);
+      }
+
+      // Explicit WORK checks from routing template
+      for (const check of deptConfig.workChecks || []) {
+        await this._createTaskIfAllowed({
+          travelerStepId: step.id,
+          taskType: check.taskType || 'CHECK',
+          taskPhase: 'WORK',
+          title: check.title,
+          instructions: check.instructions || `Complete: ${check.title}`,
+          required: check.required !== false,
+          sortOrder: sortOrder++,
+          timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+          requiresSignature: check.requiresSignature || false,
+          signatureRole: check.requiresSignature ? (check.signatureRole || 'OPERATOR') : null,
+          requiresCertification: check.requiresCertification || false,
+          instructionPack: check.instructionPack || null,
           status: 'NOT_STARTED',
         }, enabledPhases, createdTaskKeys);
       }
@@ -19428,7 +20764,10 @@ export class DatabaseStorage implements IStorage {
       }
 
       // FINISH Phase Custom Data Fields
-      const finishCustomFields = deptConfig.finishCustomDataFields || [];
+      const finishCustomFields = this._dedupeCustomDataFieldsByKey(
+        deptConfig.finishCustomDataFields || [],
+        createdCustomFieldKeys,
+      );
       if (finishCustomFields.length > 0) {
         const finishDataTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
@@ -19534,7 +20873,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     const [wad] = await db
-      .select()
+      .select({ id: productionWorkOrders.id })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId));
     if (!wad) {
@@ -19568,15 +20907,15 @@ export class DatabaseStorage implements IStorage {
 
   async getProductionWorkOrderWithProject(id: string): Promise<ProductionWorkOrder | undefined> {
     const [wad] = await db
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, id));
-    return wad ?? undefined;
+    return withDefaultMaterialBudgetAmount(wad) as ProductionWorkOrder | undefined;
   }
 
   async findRoutingForProductionWorkOrder(wadId: string): Promise<PartRouting | undefined> {
     const [wad] = await db
-      .select()
+      .select({ partNumber: productionWorkOrders.partNumber })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, wadId));
     if (!wad) return undefined;
@@ -19585,7 +20924,13 @@ export class DatabaseStorage implements IStorage {
 
   async createTravelerFromProductionWorkOrder(wadId: string, createdBy: string): Promise<Traveler> {
     const [wad] = await db
-      .select()
+      .select({
+        id: productionWorkOrders.id,
+        workOrderNumber: productionWorkOrders.workOrderNumber,
+        partNumber: productionWorkOrders.partNumber,
+        description: productionWorkOrders.description,
+        quantity: productionWorkOrders.quantity,
+      })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, wadId));
     if (!wad) {
@@ -19614,6 +20959,16 @@ export class DatabaseStorage implements IStorage {
 
     traveler = await this.linkTravelerToProductionWorkOrder(traveler.id, wadId);
 
+    const [activeWadRevision] = await db
+      .select({
+        id: wadRevisions.id,
+        revisionCode: wadRevisions.revisionCode,
+      })
+      .from(wadRevisions)
+      .where(and(eq(wadRevisions.wadId, wadId), eq(wadRevisions.status, 'approved')))
+      .orderBy(desc(wadRevisions.approvedAt), desc(wadRevisions.createdAt))
+      .limit(1);
+
     // Patch traveler to inherit part number, description, and quantity from the WAD
     const [patched] = await db
       .update(travelers)
@@ -19621,6 +20976,7 @@ export class DatabaseStorage implements IStorage {
         partNumber: wad.partNumber,
         partName: wad.description ?? traveler.partName,
         quantity: wad.quantity,
+        wadRevisionId: activeWadRevision?.id ?? null,
         updatedAt: new Date(),
       })
       .where(eq(travelers.id, traveler.id))
@@ -19651,28 +21007,181 @@ export class DatabaseStorage implements IStorage {
       switch (t) {
         case 'SETUP': return 'START';
         case 'MATERIAL': return 'START';
-        case 'QC': return 'FINISH';
-        case 'INSPECT': return 'FINISH';
+        case 'QC': return 'WORK';
+        case 'INSPECT': return 'WORK';
         default: return 'WORK';
       }
     };
+    const normalizeExplicitPhase = (value: any): 'START' | 'WORK' | 'FINISH' | null => {
+      const normalized = String(value || '').trim().toUpperCase();
+      return normalized === 'START' || normalized === 'WORK' || normalized === 'FINISH'
+        ? normalized
+        : null;
+    };
+    const operationTaskPhase = (op: RoutingOperation): 'START' | 'WORK' | 'FINISH' => {
+      const pack = (op.instructionPack || {}) as any;
+      return normalizeExplicitPhase(pack.taskPhase || pack.phase || pack.qcPhase || pack.workPhase)
+        || operationTypeToPhase(op.operationType) as 'START' | 'WORK' | 'FINISH';
+    };
+    const sanitizeFieldKey = (value: string) =>
+      String(value || '')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase() || 'check';
+    const normalizeQcStandards = (raw: any): any[] => {
+      if (!Array.isArray(raw)) return [];
+      const standards = raw
+        .map((qc: any) => ({
+          standard: qc.standard || qc.standardName || qc.name || qc.title || qc.characteristic || qc.checkpoint || '',
+          tolerance: qc.tolerance || qc.acceptanceTolerance || qc.nominalTolerance || '',
+          requirement: qc.requirement || qc.specification || qc.acceptanceCriteria || qc.criteria || qc.nominal || '',
+          hardQcStop: qc.hardQcStop || qc.hardStop || false,
+          referenceLink: qc.referenceLink || qc.referenceUrl || qc.documentUrl || '',
+        }))
+        .filter((qc) => qc.standard || qc.tolerance || qc.requirement);
 
-    // Group ops by unique (stepNumber, departmentName)
-    const stepGroups: Map<string, RoutingOperation[]> = new Map();
-    for (const op of ops) {
-      const key = `${op.stepNumber}__${op.departmentName}`;
-      if (!stepGroups.has(key)) stepGroups.set(key, []);
-      stepGroups.get(key)!.push(op);
+      const seen = new Set<string>();
+      return standards.filter((qc) => {
+        const key = `${qc.standard}|${qc.tolerance}|${qc.requirement}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+    const getOperationQcStandards = (op: RoutingOperation, taskPhase: string): any[] => {
+      const pack = (op.instructionPack || {}) as any;
+      const packStandards = normalizeQcStandards(
+        pack.qcStandards ||
+        pack.qcRequirements ||
+        pack.qualityChecks ||
+        pack.inspectionRequirements ||
+        pack.checkpoints
+      );
+      if (packStandards.length > 0) return packStandards;
+
+      const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
+      const deptConfig = departmentConfig[op.departmentName] || {};
+      const phaseStandards =
+        taskPhase === 'START'
+          ? normalizeQcStandards(deptConfig.startQcStandards)
+          : taskPhase === 'FINISH'
+            ? normalizeQcStandards(deptConfig.finishQcStandards)
+            : normalizeQcStandards(deptConfig.qcStandards);
+      if (phaseStandards.length > 0) return phaseStandards;
+
+      const fallbackStandards =
+        taskPhase === 'FINISH'
+          ? normalizeQcStandards(deptConfig.qcStandards)
+          : [];
+      if (fallbackStandards.length > 0) return fallbackStandards;
+
+      if (pack.specialNotes) {
+        return [{
+          standard: op.operationName,
+          tolerance: '',
+          requirement: pack.specialNotes,
+          hardQcStop: false,
+          referenceLink: '',
+        }];
+      }
+      return [];
+    };
+    const buildOperationEvidenceFields = (op: RoutingOperation) => {
+      const baseKey = `routing_op_${op.id}`;
+      const fields: Array<{
+        fieldKey: string;
+        fieldLabel: string;
+        fieldType: string;
+        required: boolean;
+        validation?: any;
+      }> = [
+        {
+          fieldKey: `${baseKey}_complete`,
+          fieldLabel: `Completed: ${op.operationName}`,
+          fieldType: 'yes_no',
+          required: true,
+        },
+        {
+          fieldKey: `${baseKey}_department`,
+          fieldLabel: 'Routing Department',
+          fieldType: 'text',
+          required: false,
+          validation: { readonly: true, value: op.departmentName },
+        },
+        {
+          fieldKey: `${baseKey}_operation_type`,
+          fieldLabel: 'Operation Type',
+          fieldType: 'text',
+          required: false,
+          validation: { readonly: true, value: op.operationType },
+        },
+      ];
+
+      if (op.workCenter) {
+        fields.push({
+          fieldKey: `${baseKey}_work_center`,
+          fieldLabel: 'Work Center',
+          fieldType: 'text',
+          required: false,
+          validation: { readonly: true, value: op.workCenter },
+        });
+      }
+      if (op.estimatedMinutes) {
+        fields.push({
+          fieldKey: `${baseKey}_estimated_minutes`,
+          fieldLabel: 'Estimated Minutes',
+          fieldType: 'number',
+          required: false,
+          validation: { readonly: true, value: String(op.estimatedMinutes) },
+        });
+        fields.push({
+          fieldKey: `${baseKey}_actual_minutes`,
+          fieldLabel: 'Actual Minutes',
+          fieldType: 'number',
+          required: false,
+        });
+      }
+
+      return fields;
+    };
+
+    const departmentSequence = Array.isArray(routing.departmentSequence)
+      ? (routing.departmentSequence as string[])
+      : [];
+    const departmentOrder = new Map(
+      departmentSequence.map((dept, index) => [String(dept).trim().toLowerCase(), index])
+    );
+    const getDepartmentOrder = (departmentName: string) =>
+      departmentOrder.get(String(departmentName || '').trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+    const compareOperations = (a: RoutingOperation, b: RoutingOperation) => {
+      const aStep = Number.isFinite(Number(a.stepNumber)) ? Number(a.stepNumber) : Number.MAX_SAFE_INTEGER;
+      const bStep = Number.isFinite(Number(b.stepNumber)) ? Number(b.stepNumber) : Number.MAX_SAFE_INTEGER;
+      if (aStep !== bStep) return aStep - bStep;
+
+      const deptDiff = getDepartmentOrder(a.departmentName) - getDepartmentOrder(b.departmentName);
+      if (deptDiff !== 0) return deptDiff;
+
+      return (a.id ?? 0) - (b.id ?? 0);
+    };
+
+    const orderedOps = [...ops].sort(compareOperations);
+
+    // Keep the exact operation placement in the traveler flow. Consecutive
+    // operations for the same department become one traveler step; if a
+    // department appears again later in the routing, it remains a later step.
+    const stepGroups: RoutingOperation[][] = [];
+    for (const op of orderedOps) {
+      const currentGroup = stepGroups[stepGroups.length - 1];
+      const currentDept = currentGroup?.[0]?.departmentName;
+      if (currentGroup && currentDept === op.departmentName) {
+        currentGroup.push(op);
+      } else {
+        stepGroups.push([op]);
+      }
     }
-    const sortedKeys = Array.from(stepGroups.keys()).sort((a, b) => {
-      const [aStep] = a.split('__').map(Number);
-      const [bStep] = b.split('__').map(Number);
-      return aStep - bStep;
-    });
 
     let stepCounter = 0;
-    for (const key of sortedKeys) {
-      const groupOps = stepGroups.get(key)!;
+    for (const groupOps of stepGroups) {
       const deptName = groupOps[0].departmentName;
       stepCounter++;
       const step = await this.createTravelerStep({
@@ -19686,11 +21195,42 @@ export class DatabaseStorage implements IStorage {
       let sortOrder = 0;
       for (const op of groupOps) {
         const taskType = operationTypeToTaskType(op.operationType);
-        const taskPhase = operationTypeToPhase(op.operationType);
-        const instPack = op.instructionPack as any;
-        const instructions = instPack?.specialNotes || op.operationName;
+        const taskPhase = operationTaskPhase(op);
+        const instPack = (op.instructionPack || {}) as any;
+        const operationDetails = [
+          instPack?.specialNotes,
+          op.workCenter ? `Work center: ${op.workCenter}` : null,
+          op.estimatedMinutes ? `Estimated time: ${op.estimatedMinutes} minutes` : null,
+          op.isOutsideProcess ? 'Outside process required' : null,
+          op.certificateRequired ? 'Certificate required' : null,
+          op.receivingInspectionRequired ? 'Receiving inspection required' : null,
+          Array.isArray(op.requiredCalibrationAssetTags) && op.requiredCalibrationAssetTags.length > 0
+            ? `Required calibration assets: ${op.requiredCalibrationAssetTags.join(', ')}`
+            : null,
+        ].filter(Boolean);
+        const instructions = operationDetails.length > 0
+          ? operationDetails.join('\n')
+          : op.operationName;
+        const instructionPack = {
+          ...instPack,
+          routingOperation: {
+            id: op.id,
+            stepNumber: op.stepNumber,
+            departmentName: op.departmentName,
+            operationName: op.operationName,
+            operationType: op.operationType,
+            workCenter: op.workCenter,
+            estimatedMinutes: op.estimatedMinutes,
+            isOutsideProcess: op.isOutsideProcess,
+            outsideProcessType: op.outsideProcessType,
+            expectedLeadDays: op.expectedLeadDays,
+            certificateRequired: op.certificateRequired,
+            receivingInspectionRequired: op.receivingInspectionRequired,
+            requiredCalibrationAssetTags: op.requiredCalibrationAssetTags || [],
+          },
+        };
 
-        await this.createTravelerTask({
+        const task = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: taskType as any,
           taskPhase: taskPhase as any,
@@ -19703,8 +21243,48 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: op.requiresCertification ?? false,
           signatureRole: op.requiresSignature ? 'OPERATOR' : null,
           status: 'NOT_STARTED',
-          instructionPack: op.instructionPack as any,
+          instructionPack,
         });
+
+        if (taskType === 'QC') {
+          const qcStandards = getOperationQcStandards(op, taskPhase);
+          const fields = [
+            ...buildOperationEvidenceFields(op),
+            ...qcStandards.map((qc) => ({
+              fieldKey: `qc_${op.id}_${sanitizeFieldKey(qc.standard || op.operationName)}`,
+              fieldLabel: qc.standard || op.operationName,
+              fieldType: 'yes_no',
+              required: true,
+              validation: {
+                tolerance: qc.tolerance || '',
+                requirement: qc.requirement || '',
+                ...(qc.hardQcStop ? { hardQcStop: true } : {}),
+                ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
+              },
+            })),
+          ];
+          for (const field of this._dedupeFieldsByKey(fields)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: task.id,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+              fieldType: field.fieldType,
+              required: field.required,
+              validation: field.validation,
+            });
+          }
+        } else {
+          for (const field of buildOperationEvidenceFields(op)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: task.id,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+              fieldType: field.fieldType,
+              required: field.required,
+              validation: field.validation,
+            });
+          }
+        }
       }
     }
 
@@ -20984,40 +22564,25 @@ export class DatabaseStorage implements IStorage {
     orderData: InsertOrderDraft,
     finalizedBy?: string
   ): Promise<AllOrder> {
-    // If status is PENDING_SIGNATURE, don't auto-route to production
-    const isPendingSignature = orderData.status === 'PENDING_SIGNATURE';
+    // New All Orders always enter the P1 production queue as finalized.
+    const status = 'FINALIZED';
+    const currentDepartment = 'P1 Production Queue';
+    const barcode = orderData.barcode || `P1-${orderData.orderId}`;
     
-    // Special handling for orders with no stock model - route directly to Shipping QC (unless pending signature)
+    // Retained only for creation diagnostics.
     const hasNoStockModel =
       !orderData.modelId ||
       orderData.modelId.toLowerCase() === 'none' ||
       orderData.modelId.toLowerCase().trim() === '';
 
-    let currentDepartment: string;
-    let barcode: string;
-    let status: string;
-
-    if (isPendingSignature) {
+    if (hasNoStockModel) {
       console.log(
-        `📝 Order ${orderData.orderId} created with PENDING_SIGNATURE status - awaiting customer confirmation`
+        `CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing to P1 Production Queue`
       );
-      currentDepartment = orderData.currentDepartment || 'Awaiting Customer Signature';
-      barcode = orderData.barcode || `PENDING-${orderData.orderId}`;
-      status = 'PENDING_SIGNATURE';
-    } else if (hasNoStockModel) {
-      console.log(
-        `🚀 CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing directly to Shipping QC`
-      );
-      currentDepartment = 'Shipping QC';
-      barcode = orderData.barcode || `NOSTOCK-${orderData.orderId}`;
-      status = 'FINALIZED';
     } else {
       console.log(
         `✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`
       );
-      currentDepartment = 'P1 Production Queue';
-      barcode = orderData.barcode || `P1-${orderData.orderId}`;
-      status = 'FINALIZED';
     }
 
     // Create the finalized order data directly - exclude id field explicitly
@@ -21041,6 +22606,7 @@ export class DatabaseStorage implements IStorage {
       discountValue: (orderData.discountValue !== '' && orderData.discountValue != null) ? Number(orderData.discountValue) : null,
       discountAppliesTo: orderData.discountAppliesTo,
       notes: orderData.notes || '',
+      departmentNotes: normalizeP1DepartmentNotes((orderData as any).departmentNotes),
       customDiscountType: orderData.customDiscountType || 'percent',
       customDiscountValue: (orderData.customDiscountValue !== '' && orderData.customDiscountValue != null) ? Number(orderData.customDiscountValue) : 0,
       showCustomDiscount: orderData.showCustomDiscount || false,
@@ -21233,6 +22799,7 @@ export class DatabaseStorage implements IStorage {
       featureQuantities: draft.featureQuantities,
       discountCode: draft.discountCode,
       notes: draft.notes,
+      departmentNotes: normalizeP1DepartmentNotes((draft as any).departmentNotes),
       customDiscountType: draft.customDiscountType,
       customDiscountValue: draft.customDiscountValue,
       showCustomDiscount: draft.showCustomDiscount,
@@ -21462,22 +23029,30 @@ export class DatabaseStorage implements IStorage {
   // Update finalized order
   async updateFinalizedOrder(
     orderId: string,
-    data: Partial<InsertAllOrder>
+    data: Partial<InsertAllOrder>,
+    options: { allowDueDateUpdate?: boolean } = {}
   ): Promise<AllOrder> {
     try {
-      console.log(`[updateFinalizedOrder] Updating order ${orderId} with keys:`, Object.keys(data));
+      const updateData: Partial<InsertAllOrder> = { ...data };
+      if (!options.allowDueDateUpdate && Object.prototype.hasOwnProperty.call(updateData, 'dueDate')) {
+        delete updateData.dueDate;
+      }
+
+      console.log(`[updateFinalizedOrder] Updating order ${orderId} with keys:`, Object.keys(updateData));
 
       // Check upfront whether a production_orders record exists so we can sync it atomically.
       const productionRecord =
-        data.currentDepartment !== undefined
+        updateData.currentDepartment !== undefined || updateData.dueDate !== undefined
           ? await this.getProductionOrderByOrderId(orderId)
           : undefined;
 
       const order = await db.transaction(async (tx) => {
-        await tx
-          .update(allOrders)
-          .set({ ...data, updatedAt: new Date() })
-          .where(eq(allOrders.orderId, orderId));
+        if (Object.keys(updateData).length > 0) {
+          await tx
+            .update(allOrders)
+            .set({ ...updateData, updatedAt: new Date() })
+            .where(eq(allOrders.orderId, orderId));
+        }
 
         const [updated] = await tx
           .select()
@@ -21492,11 +23067,19 @@ export class DatabaseStorage implements IStorage {
         // If currentDepartment is being updated and a production_orders record exists,
         // sync it within the same transaction so getAllOrders deduplication
         // (which prefers production_orders) always returns the correct department.
-        if (data.currentDepartment !== undefined && productionRecord) {
+        if (updateData.currentDepartment !== undefined && productionRecord) {
           await tx.execute(
-            sql`UPDATE production_orders SET current_department = ${data.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
+            sql`UPDATE production_orders SET current_department = ${updateData.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
           );
-          console.log(`[updateFinalizedOrder] Synced production_orders.current_department for ${orderId} → ${data.currentDepartment}`);
+          console.log(`[updateFinalizedOrder] Synced production_orders.current_department for ${orderId} → ${updateData.currentDepartment}`);
+        }
+
+        if (updateData.dueDate !== undefined && productionRecord) {
+          await tx
+            .update(productionOrders)
+            .set({ dueDate: updateData.dueDate, updatedAt: new Date() })
+            .where(eq(productionOrders.orderId, orderId));
+          console.log(`[updateFinalizedOrder] Synced production_orders.due_date for ${orderId}`);
         }
 
         return updated;
@@ -23847,6 +25430,19 @@ export class DatabaseStorage implements IStorage {
     return log;
   }
 
+  async getProjectRevisions(projectId: string): Promise<ProjectRevision[]> {
+    return await db
+      .select()
+      .from(projectRevisions)
+      .where(eq(projectRevisions.projectId, projectId))
+      .orderBy(desc(projectRevisions.revisionDate), desc(projectRevisions.createdAt));
+  }
+
+  async createProjectRevision(data: InsertProjectRevision): Promise<ProjectRevision> {
+    const [revision] = await db.insert(projectRevisions).values(data).returning();
+    return revision;
+  }
+
   // Project Notifications
   async getProjectNotifications(recipientId: number, unreadOnly: boolean = false): Promise<ProjectNotification[]> {
     const conditions = [eq(projectNotifications.recipientId, recipientId)];
@@ -25478,36 +27074,55 @@ export class DatabaseStorage implements IStorage {
   // ── Production Work Orders (WAD) ──────────────────────────────────────────
 
   async createProductionWorkOrder(data: InsertProductionWorkOrder): Promise<ProductionWorkOrder> {
-    const [row] = await db.insert(productionWorkOrders).values(data).returning();
+    const assignment = assignDashboardForWorkOrder({
+      department: data.assignedDepartment,
+      queueType: data.queueType,
+      dashboardType: data.dashboardType,
+      assignedDashboardRoute: data.assignedDashboardRoute,
+      wizardData: data.wizardData,
+      departmentBudgets: data.departmentBudgets,
+    });
+    const [row] = await db.insert(productionWorkOrders).values({
+      ...data,
+      dashboardType: assignment.dashboardType,
+      queueType: assignment.queueType,
+      assignedDepartment: assignment.assignedDepartment,
+      assignedDashboardRoute: assignment.assignedDashboardRoute,
+    }).returning();
     return row;
   }
 
   async getAllProductionWorkOrders(): Promise<ProductionWorkOrder[]> {
-    return await db
-      .select()
+    const rows = await db
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .orderBy(desc(productionWorkOrders.createdAt));
+    return rows.map((row) => withDefaultMaterialBudgetAmount(row)!) as ProductionWorkOrder[];
   }
 
   async getWorkOrdersByProject(projectId: string): Promise<ProductionWorkOrder[]> {
-    return await db
-      .select()
+    const rows = await db
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.projectId, projectId))
       .orderBy(desc(productionWorkOrders.createdAt));
+    return rows.map((row) => withDefaultMaterialBudgetAmount(row)!) as ProductionWorkOrder[];
   }
 
   async getWorkOrderById(id: string): Promise<ProductionWorkOrder | undefined> {
     const [row] = await db
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, id));
-    return row || undefined;
+    return withDefaultMaterialBudgetAmount(row) as ProductionWorkOrder | undefined;
   }
 
   async checkWorkOrderMaterialAvailability(workOrderId: string): Promise<boolean> {
     const [wad] = await db
-      .select()
+      .select({
+        partNumber: productionWorkOrders.partNumber,
+        quantity: productionWorkOrders.quantity,
+      })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId))
       .limit(1);
@@ -25551,7 +27166,10 @@ export class DatabaseStorage implements IStorage {
 
   async getMaterialShortageDetail(workOrderId: string): Promise<string | null> {
     const [wad] = await db
-      .select()
+      .select({
+        partNumber: productionWorkOrders.partNumber,
+        quantity: productionWorkOrders.quantity,
+      })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId))
       .limit(1);
@@ -25594,7 +27212,7 @@ export class DatabaseStorage implements IStorage {
 
   async checkWorkOrderTrainingCoverage(workOrderId: string): Promise<boolean> {
     const [wad] = await db
-      .select()
+      .select({ partNumber: productionWorkOrders.partNumber })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId))
       .limit(1);
@@ -25658,8 +27276,8 @@ export class DatabaseStorage implements IStorage {
       .update(productionWorkOrders)
       .set({ status, updatedAt: new Date() })
       .where(eq(productionWorkOrders.id, workOrderId))
-      .returning();
-    return updated;
+      .returning(productionWorkOrderReadColumns);
+    return withDefaultMaterialBudgetAmount(updated) as ProductionWorkOrder;
   }
 
   // ── Estimating – RFQs ────────────────────────────────────────────────────────
@@ -26532,6 +28150,11 @@ export class DatabaseStorage implements IStorage {
 
   async listCuttingDocuments(): Promise<CuttingDocument[]> {
     return db.select().from(cuttingDocuments).orderBy(desc(cuttingDocuments.uploadedAt));
+  }
+
+  async getCuttingDocument(id: number): Promise<CuttingDocument | undefined> {
+    const [row] = await db.select().from(cuttingDocuments).where(eq(cuttingDocuments.id, id));
+    return row ?? undefined;
   }
 
   async createCuttingDocument(data: InsertCuttingDocument): Promise<CuttingDocument> {

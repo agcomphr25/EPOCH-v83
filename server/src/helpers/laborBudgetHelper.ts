@@ -63,7 +63,12 @@ export async function evaluateWorkOrderLaborStatus(
   department?: string | null
 ): Promise<WorkOrderLaborStatusResult> {
   const [wad] = await db
-    .select()
+    .select({
+      totalBudgetHours: productionWorkOrders.totalBudgetHours,
+      departmentBudgets: productionWorkOrders.departmentBudgets,
+      warningThreshold: productionWorkOrders.warningThreshold,
+      blockedThreshold: productionWorkOrders.blockedThreshold,
+    })
     .from(productionWorkOrders)
     .where(eq(productionWorkOrders.id, workOrderId))
     .limit(1);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { AlertTriangle, CheckCircle2, Calculator, Layers, History, FlaskConical } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Calculator, Layers, History, FlaskConical, FileSpreadsheet, Plus, Save } from 'lucide-react';
 
 type Pool = {
   id: number;
@@ -58,8 +58,64 @@ type Run = {
   notes: string | null;
 };
 
+type AccumulationPayload = {
+  accumulation: {
+    id: number;
+    calculationYear: number;
+    lookbackStart: string;
+    lookbackEnd: string;
+    rateType: 'PROVISIONAL' | 'BILLING' | 'FINAL';
+    effectiveFrom: string;
+    status: 'DRAFT' | 'POSTED';
+    createdBy: string;
+    createdAt: string;
+    postedAt: string | null;
+  };
+  expenseLines: {
+    id: number;
+    accumulationId: number;
+    poolId: number;
+    lineItem: string;
+    monthlyAmounts: Record<string, number>;
+    notes: string | null;
+    createdAt: string;
+  }[];
+  bases: {
+    id: number;
+    accumulationId: number;
+    poolId: number;
+    baseAmount: string;
+    baseSource: string | null;
+    createdAt: string;
+  }[];
+  summary: {
+    poolId: number;
+    poolCode: string;
+    poolName: string;
+    expenseTotal: number;
+    baseAmount: number;
+    calculatedRate: number;
+  }[];
+};
+
 const fmtMoney = (v: number | string) =>
   Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+
+const monthKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+
+const monthKeysBetween = (start: string, end: string) => {
+  const keys: string[] = [];
+  const startDate = new Date(`${start}T00:00:00Z`);
+  const endDate = new Date(`${end}T00:00:00Z`);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return keys;
+  const cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
+  const final = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), 1));
+  while (cursor <= final && keys.length < 12) {
+    keys.push(monthKey(cursor));
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  return keys;
+};
 
 export default function BurdenRatesAdmin() {
   const { toast } = useToast();
@@ -86,6 +142,7 @@ export default function BurdenRatesAdmin() {
       <Tabs defaultValue="apply" className="space-y-4">
         <TabsList>
           <TabsTrigger value="apply" data-testid="tab-apply">Apply &amp; Verify</TabsTrigger>
+          <TabsTrigger value="accumulation" data-testid="tab-accumulation">Accumulation</TabsTrigger>
           <TabsTrigger value="pools" data-testid="tab-pools">Pools</TabsTrigger>
           <TabsTrigger value="rates" data-testid="tab-rates">Rates</TabsTrigger>
           <TabsTrigger value="bases" data-testid="tab-bases">Bases</TabsTrigger>
@@ -95,6 +152,9 @@ export default function BurdenRatesAdmin() {
 
         <TabsContent value="apply">
           <ApplyTab period={period} setPeriod={setPeriod} />
+        </TabsContent>
+        <TabsContent value="accumulation">
+          <AccumulationTab pools={pools.data ?? []} />
         </TabsContent>
         <TabsContent value="pools">
           <PoolsTab pools={pools.data ?? []} bases={bases.data ?? []} />
@@ -116,6 +176,254 @@ export default function BurdenRatesAdmin() {
   );
 
   // ── Apply tab ─────────────────────────────────────────────────────────────
+  function AccumulationTab({ pools }: { pools: Pool[] }) {
+    const defaultYear = now.getUTCFullYear();
+    const [form, setForm] = useState({
+      calculationYear: defaultYear,
+      lookbackStart: `${defaultYear - 1}-01-01`,
+      lookbackEnd: `${defaultYear - 1}-12-31`,
+      rateType: 'PROVISIONAL' as 'PROVISIONAL' | 'BILLING' | 'FINAL',
+      effectiveFrom: `${defaultYear}-01-01`,
+      notes: '',
+    });
+    const [lines, setLines] = useState<Array<{ localId: number; poolId: number; lineItem: string; monthlyAmounts: Record<string, string> }>>([
+      { localId: 1, poolId: pools[0]?.id ?? 0, lineItem: '', monthlyAmounts: {} },
+    ]);
+    const [basesByPool, setBasesByPool] = useState<Record<number, { baseAmount: string; baseSource: string }>>({});
+    const [result, setResult] = useState<AccumulationPayload | null>(null);
+    const [loadedAccumulationId, setLoadedAccumulationId] = useState<number | null>(null);
+
+    const months = monthKeysBetween(form.lookbackStart, form.lookbackEnd);
+    const activePools = pools.filter((pool) => pool.isActive);
+    const selectablePools = activePools.length > 0 ? activePools : pools;
+    const defaultPoolId = selectablePools[0]?.id ?? 0;
+
+    const latest = useQuery<AccumulationPayload | null>({
+      queryKey: ['/api/burden-rates/accumulations/latest', form.calculationYear],
+      queryFn: async () => {
+        const r = await fetch(`/api/burden-rates/accumulations/latest?year=${form.calculationYear}`, { credentials: 'include' });
+        if (!r.ok) throw new Error('Failed to load latest accumulation');
+        return r.json();
+      },
+    });
+
+    const loadAccumulationIntoForm = useCallback((payload: AccumulationPayload) => {
+      setResult(payload);
+      setForm({
+        calculationYear: payload.accumulation.calculationYear,
+        lookbackStart: payload.accumulation.lookbackStart,
+        lookbackEnd: payload.accumulation.lookbackEnd,
+        rateType: payload.accumulation.rateType,
+        effectiveFrom: payload.accumulation.effectiveFrom,
+        notes: '',
+      });
+      setLines(payload.expenseLines.length > 0
+        ? payload.expenseLines.map((line) => ({
+          localId: line.id,
+          poolId: line.poolId,
+          lineItem: line.lineItem,
+          monthlyAmounts: Object.fromEntries(
+            Object.entries(line.monthlyAmounts ?? {}).map(([month, value]) => [month, String(value ?? '')]),
+          ),
+        }))
+        : [{ localId: Date.now(), poolId: defaultPoolId, lineItem: '', monthlyAmounts: {} }]);
+      setBasesByPool(Object.fromEntries(
+        payload.bases.map((base) => [
+          base.poolId,
+          { baseAmount: String(base.baseAmount ?? ''), baseSource: base.baseSource ?? '' },
+        ]),
+      ));
+      setLoadedAccumulationId(payload.accumulation.id);
+    }, [defaultPoolId]);
+
+    useEffect(() => {
+      if (!latest.data?.accumulation || loadedAccumulationId === latest.data.accumulation.id || result) return;
+      const hasUserEnteredData = lines.some((line) =>
+        line.lineItem.trim() || Object.values(line.monthlyAmounts).some((value) => Number(value || 0) !== 0),
+      );
+      if (!hasUserEnteredData) loadAccumulationIntoForm(latest.data);
+    }, [latest.data, loadedAccumulationId, result, lines, loadAccumulationIntoForm]);
+
+    const save = useMutation({
+      mutationFn: async () => {
+        const rowsWithAmounts = lines.filter((line) =>
+          months.some((m) => Number(line.monthlyAmounts[m] || 0) !== 0),
+        );
+        const unnamedRows = rowsWithAmounts.filter((line) => line.lineItem.trim().length === 0);
+        if (unnamedRows.length > 0) {
+          throw new Error('Name each expense row before saving, such as Utilities, Machine Maintenance, or Janitorial.');
+        }
+
+        const expenseLines = lines
+          .map((line) => ({
+            poolId: line.poolId || selectablePools[0]?.id,
+            lineItem: line.lineItem.trim(),
+            monthlyAmounts: Object.fromEntries(months.map((m) => [m, Number(line.monthlyAmounts[m] || 0)])),
+          }))
+          .filter((line) => line.poolId && line.lineItem);
+        if (expenseLines.length === 0) {
+          throw new Error('Add at least one named QuickBooks expense line with monthly dollars before saving.');
+        }
+
+        const bases = selectablePools.map((pool) => ({
+          poolId: pool.id,
+          baseAmount: Number(basesByPool[pool.id]?.baseAmount || 0),
+          baseSource: basesByPool[pool.id]?.baseSource || null,
+        }));
+        return apiRequest('/api/burden-rates/accumulations', {
+          method: 'POST',
+          body: { ...form, expenseLines, bases },
+        });
+      },
+      onSuccess: (data: any) => {
+        loadAccumulationIntoForm(data);
+        queryClient.invalidateQueries({ queryKey: ['/api/burden-rates/accumulations/latest', form.calculationYear] });
+        toast({ title: 'Accumulation saved', description: `Calculation #${data.accumulation.id} is ready to review.` });
+      },
+      onError: (e: any) => toast({ title: 'Save failed', description: e?.message || 'Unable to save accumulation', variant: 'destructive' }),
+    });
+
+    const postRates = useMutation({
+      mutationFn: async () => {
+        if (!result?.accumulation.id) throw new Error('Save an accumulation first');
+        return apiRequest(`/api/burden-rates/accumulations/${result.accumulation.id}/post-rates`, { method: 'POST' });
+      },
+      onSuccess: () => {
+        toast({ title: 'Rates posted', description: 'Calculated rates were added to the rate history.' });
+        queryClient.invalidateQueries({ queryKey: ['/api/burden-rates/pools'] });
+        setResult((current) => current ? { ...current, accumulation: { ...current.accumulation, status: 'POSTED' } } : current);
+      },
+      onError: (e: any) => toast({ title: 'Post failed', description: e?.message || 'Unable to post rates', variant: 'destructive' }),
+    });
+
+    const addLine = () => setLines((current) => [
+      ...current,
+      { localId: Date.now(), poolId: selectablePools[0]?.id ?? 0, lineItem: '', monthlyAmounts: {} },
+    ]);
+    const updateLine = (localId: number, patch: Partial<(typeof lines)[number]>) =>
+      setLines((current) => current.map((line) => (line.localId === localId ? { ...line, ...patch } : line)));
+    const updateMonth = (localId: number, month: string, value: string) =>
+      setLines((current) => current.map((line) => line.localId === localId
+        ? { ...line, monthlyAmounts: { ...line.monthlyAmounts, [month]: value } }
+        : line));
+
+    const draftSummary = selectablePools.map((pool) => {
+      const expenseTotal = lines
+        .filter((line) => (line.poolId || selectablePools[0]?.id) === pool.id)
+        .reduce((sum, line) => sum + months.reduce((monthSum, m) => monthSum + Number(line.monthlyAmounts[m] || 0), 0), 0);
+      const baseAmount = Number(basesByPool[pool.id]?.baseAmount || 0);
+      return { poolId: pool.id, poolCode: pool.code, poolName: pool.name, expenseTotal, baseAmount, calculatedRate: baseAmount > 0 ? expenseTotal / baseAmount : 0 };
+    });
+    const summary = result?.summary ?? draftSummary;
+    const displayedAccumulation = result?.accumulation ?? latest.data?.accumulation;
+
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5" /> Rate Accumulation</CardTitle>
+            <CardDescription>
+              Enter the last 12 months of QuickBooks actuals by pool, then enter the allocation base used for each pool.
+              The calculated rate can be posted into the existing insert-only rate history.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <div><Label>Rate Year</Label><Input type="number" value={form.calculationYear} onChange={(e) => setForm({ ...form, calculationYear: Number(e.target.value), effectiveFrom: `${Number(e.target.value)}-01-01` })} data-testid="input-accumulation-year" /></div>
+              <div><Label>Lookback Start</Label><Input type="date" value={form.lookbackStart} onChange={(e) => setForm({ ...form, lookbackStart: e.target.value })} data-testid="input-accumulation-start" /></div>
+              <div><Label>Lookback End</Label><Input type="date" value={form.lookbackEnd} onChange={(e) => setForm({ ...form, lookbackEnd: e.target.value })} data-testid="input-accumulation-end" /></div>
+              <div>
+                <Label>Rate Type</Label>
+                <Select value={form.rateType} onValueChange={(v) => setForm({ ...form, rateType: v as any })}>
+                  <SelectTrigger data-testid="select-accumulation-rate-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PROVISIONAL">PROVISIONAL</SelectItem>
+                    <SelectItem value="BILLING">BILLING</SelectItem>
+                    <SelectItem value="FINAL">FINAL</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Effective From</Label><Input type="date" value={form.effectiveFrom} onChange={(e) => setForm({ ...form, effectiveFrom: e.target.value })} data-testid="input-accumulation-effective" /></div>
+            </div>
+
+            {displayedAccumulation && (
+              <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                Loaded calculation for {displayedAccumulation.calculationYear}: #{displayedAccumulation.id} ({displayedAccumulation.status})
+              </div>
+            )}
+
+            <div className="overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[160px]">Pool</TableHead>
+                    <TableHead className="min-w-[220px]">QuickBooks Line Item</TableHead>
+                    {months.map((m) => <TableHead key={m} className="text-right min-w-[110px]">{m}</TableHead>)}
+                    <TableHead className="text-right min-w-[120px]">Line Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lines.map((line) => {
+                    const lineTotal = months.reduce((sum, m) => sum + Number(line.monthlyAmounts[m] || 0), 0);
+                    return (
+                      <TableRow key={line.localId}>
+                        <TableCell>
+                          <Select value={String(line.poolId || selectablePools[0]?.id || '')} onValueChange={(v) => updateLine(line.localId, { poolId: Number(v) })}>
+                            <SelectTrigger><SelectValue placeholder="Pool" /></SelectTrigger>
+                            <SelectContent>
+                              {selectablePools.map((pool) => <SelectItem key={pool.id} value={String(pool.id)}>{pool.code}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell><Input value={line.lineItem} placeholder="Utilities, maintenance, janitorial..." onChange={(e) => updateLine(line.localId, { lineItem: e.target.value })} /></TableCell>
+                        {months.map((m) => (
+                          <TableCell key={m}><Input className="text-right" type="number" step="0.01" value={line.monthlyAmounts[m] ?? ''} onChange={(e) => updateMonth(line.localId, m, e.target.value)} /></TableCell>
+                        ))}
+                        <TableCell className="text-right font-mono">{fmtMoney(lineTotal)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            <Button variant="outline" onClick={addLine} data-testid="button-add-accumulation-line"><Plus className="h-4 w-4 mr-2" /> Add Line</Button>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {selectablePools.map((pool) => (
+                <Card key={pool.id}>
+                  <CardHeader className="pb-2"><CardTitle className="text-base">{pool.code} Base</CardTitle><CardDescription>{pool.name}</CardDescription></CardHeader>
+                  <CardContent className="space-y-2">
+                    <Input type="number" step="0.01" placeholder="Allocation base amount" value={basesByPool[pool.id]?.baseAmount ?? ''} onChange={(e) => setBasesByPool({ ...basesByPool, [pool.id]: { ...(basesByPool[pool.id] ?? { baseSource: '' }), baseAmount: e.target.value } })} data-testid={`input-base-${pool.code}`} />
+                    <Input placeholder="Base source / note" value={basesByPool[pool.id]?.baseSource ?? ''} onChange={(e) => setBasesByPool({ ...basesByPool, [pool.id]: { ...(basesByPool[pool.id] ?? { baseAmount: '' }), baseSource: e.target.value } })} />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={() => save.mutate()} disabled={save.isPending || selectablePools.length === 0} data-testid="button-save-accumulation"><Save className="h-4 w-4 mr-2" /> {save.isPending ? 'Saving...' : 'Save Calculation'}</Button>
+              <Button variant="outline" onClick={() => postRates.mutate()} disabled={postRates.isPending || !result || result.accumulation.status === 'POSTED'} data-testid="button-post-accumulation-rates">{postRates.isPending ? 'Posting...' : 'Post Calculated Rates'}</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {summary.map((row) => (
+            <Card key={row.poolId}>
+              <CardHeader className="pb-2"><CardTitle className="text-base">{row.poolCode}</CardTitle><CardDescription>{row.poolName}</CardDescription></CardHeader>
+              <CardContent className="space-y-1 text-sm">
+                <div className="flex justify-between"><span>Expense pool</span><span className="font-mono">{fmtMoney(row.expenseTotal)}</span></div>
+                <div className="flex justify-between"><span>Allocation base</span><span className="font-mono">{fmtMoney(row.baseAmount)}</span></div>
+                <div className="flex justify-between text-base font-semibold"><span>Rate</span><span className="font-mono">{(row.calculatedRate * 100).toFixed(4)}%</span></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   function ApplyTab({
     period,
     setPeriod,
@@ -137,7 +445,7 @@ export default function BurdenRatesAdmin() {
 
     const apply = useMutation({
       mutationFn: async () => {
-        return await apiRequest('POST', '/api/burden-rates/apply', { ...period, runType, rateType });
+        return await apiRequest('/api/burden-rates/apply', { method: 'POST', body: { ...period, runType, rateType } });
       },
       onSuccess: (data: any) => {
         toast({
@@ -268,7 +576,7 @@ export default function BurdenRatesAdmin() {
       code: '', name: '', poolType: 'OVERHEAD', allocationBaseId: bases[0]?.id ?? 0, applyOrder: 100, isActive: true,
     });
     const create = useMutation({
-      mutationFn: async () => apiRequest('POST', '/api/burden-rates/pools', form),
+      mutationFn: async () => apiRequest('/api/burden-rates/pools', { method: 'POST', body: form }),
       onSuccess: () => {
         toast({ title: 'Pool created' });
         queryClient.invalidateQueries({ queryKey: ['/api/burden-rates/pools'] });
@@ -278,7 +586,7 @@ export default function BurdenRatesAdmin() {
     });
     const toggleActive = useMutation({
       mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) =>
-        apiRequest('PATCH', `/api/burden-rates/pools/${id}`, { isActive }),
+        apiRequest(`/api/burden-rates/pools/${id}`, { method: 'PATCH', body: { isActive } }),
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/burden-rates/pools'] }),
     });
 
@@ -387,7 +695,7 @@ export default function BurdenRatesAdmin() {
     });
 
     const create = useMutation({
-      mutationFn: async () => apiRequest('POST', `/api/burden-rates/pools/${poolId}/rates`, newRate),
+      mutationFn: async () => apiRequest(`/api/burden-rates/pools/${poolId}/rates`, { method: 'POST', body: newRate }),
       onSuccess: () => {
         toast({ title: 'Rate added' });
         queryClient.invalidateQueries({ queryKey: ['/api/burden-rates/pools', poolId, 'rates'] });
@@ -577,7 +885,7 @@ export default function BurdenRatesAdmin() {
     const [result, setResult] = useState<any>(null);
 
     const preview = useMutation({
-      mutationFn: async () => apiRequest('POST', '/api/burden-rates/preview', form),
+      mutationFn: async () => apiRequest('/api/burden-rates/preview', { method: 'POST', body: form }),
       onSuccess: (data: any) => setResult(data),
       onError: (e: any) => toast({ title: 'Preview failed', description: e?.body?.error || e.message, variant: 'destructive' }),
     });

@@ -128,6 +128,12 @@ function OrderToItemCodeTab() {
   const directItemCode: string | null = (() => {
     if (!data?.order) return null;
     const o = data.order;
+    const resolved = typeof o.resolved_item_code === 'string' ? o.resolved_item_code.trim() : '';
+    if (resolved) return resolved;
+
+    const direct = typeof o.item_code === 'string' ? o.item_code.trim() : '';
+    if (direct) return direct;
+
     const candidate = o.poi_item_id || o.item_id || null;
     if (!candidate || /^\d+$/.test(candidate.trim())) return null;
     return candidate.trim();

@@ -39,6 +39,8 @@ import {
 
 type TraceabilitySearchKey =
   | 'lotIcn'
+  | 'rollNumber'
+  | 'serializedItemNumber'
   | 'travelerNumber'
   | 'workOrder'
   | 'chargeCode'
@@ -48,7 +50,9 @@ type TraceabilitySearchKey =
   | 'barcode';
 
 const SEARCH_KEYS: Array<{ value: TraceabilitySearchKey; label: string; placeholder: string }> = [
-  { value: 'lotIcn', label: 'Lot ICN', placeholder: 'ICN-MAT-20251223-000184' },
+  { value: 'lotIcn', label: 'Material ICN', placeholder: 'ICN-MAT-20251223-000184' },
+  { value: 'rollNumber', label: 'Roll #', placeholder: 'ROLL-001 or fabric ICN' },
+  { value: 'serializedItemNumber', label: 'Serialized Item #', placeholder: 'serial number, item barcode, or traveler barcode' },
   { value: 'travelerNumber', label: 'Traveler #', placeholder: 'TRV-000123' },
   { value: 'workOrder', label: 'WAD / Work Order #', placeholder: 'WO-000456' },
   { value: 'chargeCode', label: 'Charge Code', placeholder: 'DLM-100' },
@@ -119,6 +123,8 @@ interface TraceabilityChain {
   nodes: TraceabilityNode[];
   edges: TraceabilityEdge[];
   branches: Array<{ key: string; label: string; rootIds: string[]; nodeIds: string[] }>;
+  travelerCaptures: TravelerMaterialCapture[];
+  expiringMaterials: ExpiringMaterial[];
   ncrs: Array<{
     id: number;
     rmaNumber: string | null;
@@ -129,6 +135,53 @@ interface TraceabilityChain {
     href: string;
   }>;
   generatedAt: string;
+}
+
+interface TravelerMaterialCapture {
+  id: string;
+  source: 'p2_serialized_item_traceability' | 'p2_work_tasks.traceability_data';
+  serializedItemId: string;
+  serialNumber: string;
+  barcode: string;
+  travelerBarcode: string | null;
+  poNumber: string;
+  partNumber: string;
+  partName: string;
+  status: string;
+  currentDepartment: string;
+  department: string;
+  travelerId: string | null;
+  travelerNumber: string | null;
+  travelerStatus: string | null;
+  workOrderNumber: string | null;
+  projectName: string | null;
+  inventoryPartNumber: string | null;
+  traceabilityType: string;
+  traceabilityLabel: string;
+  traceabilityValue: string;
+  recordedBy: string;
+  recordedAt: string;
+  materialIcn: string | null;
+  materialRollNumber: string | null;
+  materialExpirationDate: string | null;
+  materialStatus: string | null;
+  materialLocation: string | null;
+  href: string;
+}
+
+interface ExpiringMaterial {
+  id: string;
+  source: 'material_lots' | 'cutting_fabric_inventory';
+  internalControlNumber: string | null;
+  rollNumber: string | null;
+  materialPartNumber: string | null;
+  materialName: string | null;
+  status: string | null;
+  location: string | null;
+  expirationDate: string;
+  daysUntilExpiration: number;
+  quantityRemaining: string | null;
+  href: string | null;
 }
 
 interface VerifyResponse {
@@ -409,7 +462,7 @@ export default function InventoryTraceabilityPage() {
     onSuccess: (data) => {
       setChain(data);
       setVerifyResult(null);
-      if (!data.nodes.length) {
+      if (!data.nodes.length && !data.travelerCaptures?.length) {
         const notFound = data.resolved.notFound === true;
         toast({
           title: notFound
@@ -584,6 +637,7 @@ export default function InventoryTraceabilityPage() {
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
                     {chain.nodes.length} ledger event(s) across {chain.branches.length} branch(es)
+                    {chain.travelerCaptures.length > 0 && ` - ${chain.travelerCaptures.length} traveler material capture(s)`}
                     {chain.ncrs.length > 0 && ` · ${chain.ncrs.length} linked NCR(s)`}
                   </p>
                   {chain.resolved.matchedEntities.length > 0 && (
@@ -682,10 +736,92 @@ export default function InventoryTraceabilityPage() {
             )}
           </Card>
 
+          {chain.travelerCaptures.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Serialized Items Using This Material</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {chain.travelerCaptures.map((capture) => (
+                  <div key={`${capture.source}-${capture.id}`} className="rounded border p-3 text-sm" data-testid={`traveler-capture-${capture.id}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">{capture.currentDepartment}</Badge>
+                          <span className="font-mono text-xs">{capture.serialNumber}</span>
+                          <span className="text-xs text-muted-foreground">{capture.poNumber}</span>
+                          <Badge variant="outline" className="text-[10px]">{capture.status}</Badge>
+                        </div>
+                        <div className="font-medium">{capture.partNumber} - {capture.partName}</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                          <span><span className="text-muted-foreground">Traveler:</span> {capture.travelerNumber ?? capture.travelerBarcode ?? 'Not linked'}</span>
+                          <span><span className="text-muted-foreground">Department:</span> {capture.department}</span>
+                          <span><span className="text-muted-foreground">Captured:</span> {capture.traceabilityLabel} = <span className="font-mono">{capture.traceabilityValue}</span></span>
+                          <span><span className="text-muted-foreground">Recorded by:</span> {capture.recordedBy} on {fmt(capture.recordedAt)}</span>
+                          {capture.materialIcn && (
+                            <span><span className="text-muted-foreground">Material ICN:</span> <span className="font-mono">{capture.materialIcn}</span></span>
+                          )}
+                          {capture.materialRollNumber && (
+                            <span><span className="text-muted-foreground">Roll #:</span> <span className="font-mono">{capture.materialRollNumber}</span></span>
+                          )}
+                          {capture.materialExpirationDate && (
+                            <span><span className="text-muted-foreground">Expires:</span> {new Date(capture.materialExpirationDate).toLocaleDateString()}</span>
+                          )}
+                          {capture.materialLocation && (
+                            <span><span className="text-muted-foreground">Location:</span> {capture.materialLocation}</span>
+                          )}
+                        </div>
+                      </div>
+                      <Link href={capture.href}>
+                        <a className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 whitespace-nowrap">
+                          Traveler info <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {chain.expiringMaterials.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Materials Expiring Soon</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {chain.expiringMaterials.slice(0, 12).map((material) => (
+                  <div key={`${material.source}-${material.id}`} className="rounded border p-3 text-sm" data-testid={`expiring-material-${material.id}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-medium">{material.materialPartNumber ?? 'Material'}{material.materialName ? ` - ${material.materialName}` : ''}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {material.internalControlNumber && <span className="font-mono">{material.internalControlNumber}</span>}
+                          {material.rollNumber && <span className="font-mono"> - Roll {material.rollNumber}</span>}
+                        </div>
+                      </div>
+                      <Badge variant={material.daysUntilExpiration <= 7 ? 'destructive' : 'outline'}>
+                        {material.daysUntilExpiration}d
+                      </Badge>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                      <span><span className="text-muted-foreground">Expires:</span> {new Date(material.expirationDate).toLocaleDateString()}</span>
+                      <span><span className="text-muted-foreground">Qty:</span> {material.quantityRemaining ?? 'N/A'}</span>
+                      <span><span className="text-muted-foreground">Status:</span> {material.status ?? 'N/A'}</span>
+                      <span><span className="text-muted-foreground">Location:</span> {material.location ?? 'N/A'}</span>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           {chain.nodes.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center text-sm text-muted-foreground" data-testid="text-empty-chain">
-                No ledger events linked to this anchor yet.
+                {chain.travelerCaptures.length > 0
+                  ? 'No immutable ledger events are linked to this anchor yet. Traveler material captures are shown above.'
+                  : 'No ledger events linked to this anchor yet.'}
               </CardContent>
             </Card>
           ) : (

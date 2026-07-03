@@ -19,6 +19,7 @@ import {
   inventoryTransactions,
   inventoryBalances,
   inventoryItems,
+  inventoryTransactionLedger,
 } from '../../schema';
 import { db } from '../../db';
 import { eq, sql, and, like } from 'drizzle-orm';
@@ -573,7 +574,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         const ru = ruArr[0];
         // Expose receivedUnit summary so the scanner can forward receivedUnitId in the consume payload
         validationResults.receivedUnit = { id: ru.id, quantity: Number(ru.quantity), barcode: ru.barcode, disposition: ru.disposition };
-        const blockedDispositions = ['pending_inspection', 'quarantine', 'rejected'];
+        const blockedDispositions = ['pending_inspection', 'document_hold', 'quarantine', 'rejected'];
         if (blockedDispositions.includes(ru.disposition)) {
           validationResults.valid = false;
           validationResults.status = 'RECEIVING_DISPOSITION_BLOCKED';
@@ -815,20 +816,94 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     const validatedData = insertMaterialLotSchema.parse(incoming);
-    const lot = await storage.createMaterialLot(validatedData);
 
-    // Create initial transaction record
-    await storage.createMaterialLotTransaction(createTransaction({
-      materialLotId: lot.id,
-      internalControlNumber: lot.internalControlNumber,
-      transactionType: 'RECEIVE',
-      qtyBefore: '0',
-      qtyChange: lot.receivedQty,
-      qtyAfter: lot.receivedQty,
-      toLocation: lot.storageLocation || undefined,
-      performedBy: lot.receivedBy,
-      notes: `Initial receiving from ${lot.supplier}. PO: ${lot.purchaseOrderNumber || 'N/A'}`,
-    }));
+    // Task #229 — atomically insert the lot, the initial RECEIVE
+    // material_lot_transactions row, and the inventory_transaction_ledger
+    // RECEIVE row so the lot appears in the Material Traceability Viewer
+    // immediately. If any step fails, none of them persist.
+    const lot = await db.transaction(async (tx) => {
+      const [insertedLot] = await tx.insert(materialLots).values(validatedData).returning();
+      if (!insertedLot?.id) throw new Error('material_lots insert returned no row');
+
+      await tx.insert(materialLotTransactions).values(createTransaction({
+        materialLotId: insertedLot.id,
+        internalControlNumber: insertedLot.internalControlNumber,
+        transactionType: 'RECEIVE',
+        qtyBefore: '0',
+        qtyChange: insertedLot.receivedQty,
+        qtyAfter: insertedLot.receivedQty,
+        toLocation: insertedLot.storageLocation || undefined,
+        performedBy: insertedLot.receivedBy,
+        notes: `Initial receiving from ${insertedLot.supplier}. PO: ${insertedLot.purchaseOrderNumber || 'N/A'}`,
+      }));
+
+      // Resolve the linked inventory_items row to satisfy the ITL FK
+      // (Task #248). If the lot lacks an inventoryItemId, look up by AG part
+      // number; if no row exists, auto-create a placeholder so the ledger
+      // write can proceed (no more silent skips).
+      let invItemId: number | null = insertedLot.inventoryItemId ?? null;
+      if (!invItemId && insertedLot.materialPartNumber) {
+        const { ensureInventoryItemForReceipt } = await import(
+          '../services/ensureInventoryItemForReceipt'
+        );
+        const ensured = await ensureInventoryItemForReceipt(tx, {
+          agPartNumber: insertedLot.materialPartNumber,
+          fallbackName: insertedLot.materialName ?? null,
+          source: insertedLot.supplier ?? null,
+          supplierPartNumber: insertedLot.supplierPartNumber ?? null,
+          createdBy: insertedLot.receivedBy ?? null,
+        });
+        invItemId = ensured.id;
+      }
+
+      if (invItemId) {
+        const ledgerSourceModule = 'material-lots:create';
+        const ledgerSourceRecordId = String(insertedLot.id);
+        const [existingLedger] = await tx
+          .select({ id: inventoryTransactionLedger.id })
+          .from(inventoryTransactionLedger)
+          .where(
+            and(
+              eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+              eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+            ),
+          )
+          .limit(1);
+
+        if (!existingLedger) {
+          const receivedQty = Number(insertedLot.receivedQty);
+          await recordInventoryLedgerEntry({
+            transactionType: 'RECEIVE',
+            inventoryItemId: invItemId,
+            agPartNumber: insertedLot.materialPartNumber,
+            lotId: insertedLot.id,
+            locationId: insertedLot.storageLocation ?? null,
+            unitOfMeasure: insertedLot.unitOfMeasure ?? 'EA',
+            quantityBefore: 0,
+            quantityDelta: receivedQty,
+            quantityAfter: receivedQty,
+            performedByDisplayName: insertedLot.receivedBy || 'system:material-lot-create',
+            reasonCode: 'MATERIAL_LOT_RECEIVED',
+            notes: `Initial receiving from ${insertedLot.supplier}. PO: ${insertedLot.purchaseOrderNumber || 'N/A'}`,
+            sourceModule: ledgerSourceModule,
+            sourceRecordId: ledgerSourceRecordId,
+            metadata: {
+              internalControlNumber: insertedLot.internalControlNumber,
+              supplier: insertedLot.supplier,
+              supplierLotNumber: insertedLot.supplierLotNumber,
+              purchaseOrderNumber: insertedLot.purchaseOrderNumber,
+              receivingRecordNumber: insertedLot.receivingRecordNumber,
+            },
+          }, tx);
+        }
+      } else {
+        console.warn(
+          `[materialLots POST] Skipping ITL write — no inventory_items row for lot=${insertedLot.id} part=${insertedLot.materialPartNumber}`,
+        );
+      }
+
+      return insertedLot;
+    });
 
     res.status(201).json(lot);
   } catch (error: any) {
@@ -839,7 +914,20 @@ router.post('/', async (req: Request, res: Response) => {
         details: error.errors,
       });
     }
-    res.status(500).json({ error: 'Failed to create material lot', message: error.message });
+    // Map inventory-ledger invariant/FK failures to a structured 422 so the
+    // caller can distinguish ledger-write rollbacks from generic 500s.
+    const msg = String(error?.message ?? '');
+    if (
+      error?.code === 'INVENTORY_LEDGER_VALIDATION' ||
+      /inventory[_ ]?ledger|inventory_transaction_ledger|recordInventoryLedgerEntry/i.test(msg)
+    ) {
+      return res.status(422).json({
+        error: 'Inventory ledger write failed',
+        code: 'INVENTORY_LEDGER_WRITE_FAILED',
+        message: msg,
+      });
+    }
+    res.status(500).json({ error: 'Failed to create material lot', message: msg });
   }
 });
 
@@ -1391,7 +1479,31 @@ router.post('/consume', async (req: Request, res: Response) => {
     }
 
     // ── Guard 1: Lot status (QUARANTINE/REJECTED/SCRAPPED/HOLD/LOCKED never consumable; EXPIRED handled below)
-    const hardBlockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'SCRAPPED', 'HOLD', 'LOCKED'];
+    if (lot.status === 'HOLD') {
+      if (!approvalRequestId) {
+        return res.status(403).json({
+          error: 'APPROVAL_REQUIRED',
+          code: 'DOCUMENT_HOLD_APPROVAL_REQUIRED',
+          message: 'Document-held material requires an approved document-hold release before consumption.',
+          status: lot.status,
+        });
+      }
+      const [appr] = await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalRequestId)).limit(1);
+      if (
+        !appr ||
+        appr.status !== 'APPROVED' ||
+        appr.subjectId !== lot.id ||
+        !['INV_DOCUMENT_HOLD_USE', 'INV_DOCUMENT_HOLD_RELEASE'].includes(appr.requestType)
+      ) {
+        return res.status(409).json({
+          error: 'APPROVAL_INVALID',
+          code: 'DOCUMENT_HOLD_APPROVAL_INVALID',
+          message: 'Approval is not valid for this document-held material lot.',
+        });
+      }
+    }
+
+    const hardBlockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'SCRAPPED', 'LOCKED'];
     if (hardBlockedStatuses.includes(lot.status as MaterialLotStatus)) {
       return res.status(400).json({
         error: 'LOT_NOT_USABLE',

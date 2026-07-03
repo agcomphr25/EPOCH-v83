@@ -1,5 +1,5 @@
-import { db } from "../../../db";
-import { punchesTable, timesheetsTable, certificationsTable, timeOffRequestsTable, auditLogTable, timesheetCorrectionsTable } from "../../schema/timekeeping";
+import { db, pool } from "../../../db";
+import { punchesTable, timesheetsTable, certificationsTable, timeOffRequestsTable, auditLogTable, timesheetCorrectionsTable, leaveEntriesTable, salariedTimesheetsTable } from "../../schema/timekeeping";
 import { gte, lte, and, desc, eq, isNull, or, lt, sql, inArray, notInArray } from "drizzle-orm";
 import type { Punch } from "../../schema/timekeeping";
 import { punchLedger, employees as publicEmployees } from "../../../schema";
@@ -16,7 +16,7 @@ import {
 } from "../../lib/timekeeping";
 import { getOrCreateSettings } from "./settings.service";
 import * as ledger from "../../lib/punchLedger";
-import { getPayPeriodDates } from "../payPeriod";
+import { getPayPeriod, getPayPeriodDates } from "../payPeriod";
 import { punchLedgerCutoverDate } from "../../lib/featureFlags";
 
 /**
@@ -25,6 +25,10 @@ import { punchLedgerCutoverDate } from "../../lib/featureFlags";
  * surfaced in the Missing Punches banner instead.
  */
 const STALE_SESSION_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function isHourlyTimekeepingEmployee(employee: { payType?: string | null }): boolean {
+  return (employee.payType ?? "HOURLY").toUpperCase() !== "SALARY";
+}
 
 export interface DashboardSummary {
   totalEmployees: number;
@@ -92,7 +96,7 @@ function computeAttendanceState(
   // Only include employees with a timekeeping anchor (timekeepingId != null).
   // Public-only employees (no timekeeping.employees row) cannot be mapped to the
   // Employee API shape via toApiEmployee() and must be excluded from the board.
-  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null);
+  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null && isHourlyTimekeepingEmployee(e));
   const activeEpochIds = new Set(activeEmployees.map((e) => e.epochEmployeeId));
   const empByEpochId = new Map(activeEmployees.map((e) => [e.epochEmployeeId, e]));
 
@@ -291,7 +295,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const totalEmployees = allEmployees.length;
   // Count only employees enrolled in timekeeping (timekeepingId != null), consistent
   // with the In/Out Board which excludes public-only employees from its list.
-  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null).length;
+  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null && isHourlyTimekeepingEmployee(e)).length;
 
   // Build latestLegacyPunch map: epochEmployeeId → most-recent punch row.
   // punchesTable.employeeId references public.employees.id (epochEmployeeId),
@@ -357,7 +361,11 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const legacyHoursByEmp = new Map<number, number>();
 
   if (needsLedger) {
-    const activeEpochIdsForHours = new Set(allEmployees.filter((e) => e.isActive).map((e) => e.epochEmployeeId));
+    const activeEpochIdsForHours = new Set(
+      allEmployees
+        .filter((e) => e.isActive && isHourlyTimekeepingEmployee(e))
+        .map((e) => e.epochEmployeeId)
+    );
     const ledgerStartMs = ledgerStart.getTime();
     // Defensive end clip — for the in-progress current week, summaryNow is the
     // natural upper bound; weekEnd guards the case where the function is ever
@@ -458,7 +466,7 @@ export async function getEmployeeStatus(): Promise<EmployeeStatusEntry[]> {
   const allEmployees = await listResolvedEmployees();
   // Only include employees with a timekeeping anchor — public-only employees
   // cannot be mapped to the Employee API shape via toApiEmployee().
-  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null);
+  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null && isHourlyTimekeepingEmployee(e));
   const empByEpochId = new Map(activeEmployees.map((e) => [e.epochEmployeeId, e]));
 
   // IMPORTANT — ID namespace:
@@ -792,6 +800,428 @@ export interface EmployeePeriodHours {
   regularHours: number;
 }
 
+export interface PayrollReviewIssue {
+  code: string;
+  label: string;
+  severity: "error" | "warning" | "info";
+  blocksPayroll: boolean;
+}
+
+export interface PayrollReviewSegment {
+  id: number;
+  type: "work" | "break";
+  label: string;
+  clockIn: string;
+  clockOut: string | null;
+  hours: number;
+  isOpen: boolean;
+  isEdited: boolean;
+  chargeCode: string | null;
+  source: string | null;
+}
+
+export interface PayrollReviewDay {
+  date: string;
+  totalHours: number;
+  breakHours: number;
+  hasIssue: boolean;
+  segments: PayrollReviewSegment[];
+}
+
+export interface HourlyPayrollReviewRow {
+  employeeId: number;
+  timekeepingEmployeeId: number | null;
+  employeeName: string;
+  department: string | null;
+  timesheetId: number | null;
+  status: string;
+  totalHours: number;
+  regularHours: number;
+  overtimeHours: number;
+  leaveHours: number;
+  readyForPayroll: boolean;
+  locked: boolean;
+  issues: PayrollReviewIssue[];
+  days: PayrollReviewDay[];
+}
+
+export interface SalariedPayrollReviewRow {
+  employeeId: number;
+  employeeName: string;
+  department: string | null;
+  timesheetId: number | null;
+  status: string;
+  totalHours: number;
+  leaveHours: number;
+  readyForPayroll: boolean;
+  payrollApproved: boolean;
+  issues: PayrollReviewIssue[];
+}
+
+export interface PayrollReviewSummary {
+  employeeCount: number;
+  totalHours: number;
+  regularHours: number;
+  overtimeHours: number;
+  leaveHours: number;
+  missingPunchCount: number;
+  blockedCount: number;
+  readyCount: number;
+  lockedCount: number;
+  pendingCorrectionCount: number;
+}
+
+export interface PayrollReviewBatch {
+  periodStart: string;
+  periodEnd: string;
+  label: string;
+  generatedAt: string;
+  summary: PayrollReviewSummary;
+  hourly: HourlyPayrollReviewRow[];
+  salaried: SalariedPayrollReviewRow[];
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function addIssue(
+  issues: PayrollReviewIssue[],
+  code: string,
+  label: string,
+  severity: PayrollReviewIssue["severity"],
+  blocksPayroll: boolean,
+): void {
+  if (issues.some((issue) => issue.code === code)) return;
+  issues.push({ code, label, severity, blocksPayroll });
+}
+
+function issueBlocked(issues: PayrollReviewIssue[]): boolean {
+  return issues.some((issue) => issue.blocksPayroll);
+}
+
+function formatPayPeriodLabel(periodStart: string, periodEnd: string): string {
+  const start = new Date(`${periodStart}T12:00:00Z`);
+  const end = new Date(`${periodEnd}T12:00:00Z`);
+  const startLabel = start.toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const endLabel = end.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  return `${startLabel} - ${endLabel}`;
+}
+
+function dateRange(periodStart: string, periodEnd: string): string[] {
+  const dates: string[] = [];
+  for (let d = new Date(`${periodStart}T12:00:00Z`); d <= new Date(`${periodEnd}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)) {
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+function initialDayMap(periodStart: string, periodEnd: string): Map<string, PayrollReviewDay> {
+  const days = new Map<string, PayrollReviewDay>();
+  for (const date of dateRange(periodStart, periodEnd)) {
+    days.set(date, { date, totalHours: 0, breakHours: 0, hasIssue: false, segments: [] });
+  }
+  return days;
+}
+
+function computePeriodOvertime(totalHours: number, rangeStart: Date, rangeEnd: Date, weeklyThreshold: number): { regularHours: number; overtimeHours: number } {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const rangeDays = Math.max(1, Math.round((rangeEnd.getTime() - rangeStart.getTime()) / DAY_MS) + 1);
+  const numWeeks = Math.max(1, Math.ceil(rangeDays / 7));
+  const regularCap = weeklyThreshold * numWeeks;
+  const regularHours = round2(Math.min(totalHours, regularCap));
+  return { regularHours, overtimeHours: round2(Math.max(0, totalHours - regularHours)) };
+}
+
+export async function getPayrollReviewBatch(
+  periodStart?: string | null,
+  periodEnd?: string | null,
+): Promise<PayrollReviewBatch> {
+  const settings = await getOrCreateSettings();
+  const tz = settings.timezone;
+  const defaultPeriod = getPayPeriod(undefined, tz);
+  const startStr = periodStart ?? toTZDateStr(defaultPeriod.start, tz);
+  const endStr = periodEnd ?? toTZDateStr(defaultPeriod.end, tz);
+  const rangeStart = midnightInTZ(startStr, tz);
+  const nextDayAfterEnd = dateRange(endStr, endStr)[0]!;
+  const endPlusOne = new Date(`${nextDayAfterEnd}T12:00:00Z`);
+  endPlusOne.setUTCDate(endPlusOne.getUTCDate() + 1);
+  const rangeEnd = new Date(midnightInTZ(endPlusOne.toISOString().slice(0, 10), tz).getTime() - 1);
+  const now = new Date();
+
+  const allEmployees = await listResolvedEmployees();
+  const activeEmployees = allEmployees.filter((employee) => employee.isActive);
+  const empByEpochId = new Map(activeEmployees.map((employee) => [employee.epochEmployeeId, employee]));
+  const activeTkIds = activeEmployees.map((employee) => employee.timekeepingId).filter((id): id is number => id != null);
+
+  const [ledgerSessions, timesheets, corrections, leaves, salariedSheets, salariedLines, unapprovedLabor] = await Promise.all([
+    db
+      .select()
+      .from(punchLedger)
+      .where(
+        and(
+          lte(punchLedger.clockIn, rangeEnd),
+          or(gte(punchLedger.clockOut, rangeStart), isNull(punchLedger.clockOut)),
+        ),
+      ),
+    activeTkIds.length
+      ? db
+          .select()
+          .from(timesheetsTable)
+          .where(
+            and(
+              inArray(timesheetsTable.employeeId, activeTkIds),
+              eq(timesheetsTable.periodStart, startStr),
+              eq(timesheetsTable.periodEnd, endStr),
+            ),
+          )
+      : Promise.resolve([]),
+    db
+      .select()
+      .from(timesheetCorrectionsTable)
+      .where(eq(timesheetCorrectionsTable.status, "pending")),
+    activeTkIds.length
+      ? db
+          .select()
+          .from(leaveEntriesTable)
+          .where(
+            and(
+              inArray(leaveEntriesTable.employeeId, activeTkIds),
+              gte(leaveEntriesTable.date, startStr),
+              lte(leaveEntriesTable.date, endStr),
+              isNull(leaveEntriesTable.voidedAt),
+            ),
+          )
+      : Promise.resolve([]),
+    activeTkIds.length
+      ? db
+          .select()
+          .from(salariedTimesheetsTable)
+          .where(
+            and(
+              inArray(salariedTimesheetsTable.employeeId, activeTkIds),
+              eq(salariedTimesheetsTable.periodStart, startStr),
+              eq(salariedTimesheetsTable.periodEnd, endStr),
+            ),
+          )
+      : Promise.resolve([]),
+    pool.query<{ employee_id: string; leave_hours: string; total_hours: string }>(
+      `
+        SELECT st.employee_id,
+               COALESCE(SUM(stl.hours) FILTER (WHERE stl.leave_entry_id IS NOT NULL OR lower(stl.line_type) LIKE '%leave%' OR lower(stl.line_type) LIKE '%pto%'), 0)::text AS leave_hours,
+               COALESCE(SUM(stl.hours), 0)::text AS total_hours
+        FROM timekeeping.salaried_timesheets st
+        JOIN timekeeping.salaried_timesheet_lines stl ON stl.timesheet_id = st.id
+        WHERE st.period_start = $1 AND st.period_end = $2
+        GROUP BY st.employee_id
+      `,
+      [startStr, endStr],
+    ),
+    pool.query<{ employee_id: string; count: string }>(
+      `
+        SELECT pl.employee_id, COUNT(*)::text AS count
+        FROM punch_ledger pl
+        WHERE pl.clock_in <= $2
+          AND COALESCE(pl.clock_out, NOW()) >= $1
+          AND pl.clock_out IS NOT NULL
+          AND pl.labor_class = 'REGULAR'
+          AND pl.source NOT IN ('SALARIED_ENTRY', 'CONVERSATIONAL_ENTRY')
+          AND pl.production_work_order_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM labor_approvals la
+            WHERE la.employee_id = pl.employee_id::text
+              AND la.production_work_order_id = pl.production_work_order_id::text
+          )
+        GROUP BY pl.employee_id
+      `,
+      [rangeStart, rangeEnd],
+    ),
+  ]);
+
+  const timesheetByTkId = new Map(timesheets.map((timesheet) => [timesheet.employeeId, timesheet]));
+  const pendingCorrectionsByTimesheet = new Map<number, number>();
+  for (const correction of corrections) {
+    pendingCorrectionsByTimesheet.set(correction.timesheetId, (pendingCorrectionsByTimesheet.get(correction.timesheetId) ?? 0) + 1);
+  }
+
+  const leaveByTkId = new Map<number, number>();
+  for (const leave of leaves) {
+    leaveByTkId.set(leave.employeeId, round2((leaveByTkId.get(leave.employeeId) ?? 0) + Number(leave.hours ?? 0)));
+  }
+
+  const unapprovedByEpochId = new Map<number, number>();
+  for (const row of unapprovedLabor.rows) {
+    unapprovedByEpochId.set(Number(row.employee_id), Number(row.count));
+  }
+
+  const dayMapsByEpochId = new Map<number, Map<string, PayrollReviewDay>>();
+  const totalHoursByEpochId = new Map<number, number>();
+  const missingPunchByEpochId = new Set<number>();
+  const editedByEpochId = new Set<number>();
+
+  for (const session of ledgerSessions) {
+    if (session.source === "SALARIED_ENTRY" || session.source === "CONVERSATIONAL_ENTRY") continue;
+    const emp = empByEpochId.get(session.employeeId);
+    if (!emp) continue;
+    if (!dayMapsByEpochId.has(session.employeeId)) {
+      dayMapsByEpochId.set(session.employeeId, initialDayMap(startStr, endStr));
+    }
+    const dayMap = dayMapsByEpochId.get(session.employeeId)!;
+    const sessionStart = Math.max(new Date(session.clockIn).getTime(), rangeStart.getTime());
+    const rawEnd = session.clockOut ? new Date(session.clockOut).getTime() : now.getTime();
+    const sessionEnd = Math.min(rawEnd, rangeEnd.getTime());
+    if (session.clockOut == null && session.laborClass !== "BREAK") missingPunchByEpochId.add(session.employeeId);
+    if (session.isEdited) editedByEpochId.add(session.employeeId);
+    if (sessionEnd <= sessionStart) continue;
+
+    let cursor = sessionStart;
+    while (cursor < sessionEnd) {
+      const dayKey = toTZDateStr(new Date(cursor), tz);
+      const nextDay = new Date(`${dayKey}T12:00:00Z`);
+      nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+      const dayEnd = midnightInTZ(nextDay.toISOString().slice(0, 10), tz).getTime();
+      const sliceEnd = Math.min(sessionEnd, dayEnd);
+      const hours = round2((sliceEnd - cursor) / 3_600_000);
+      const isBreak = session.laborClass === "BREAK";
+      const day = dayMap.get(dayKey);
+      if (day) {
+        if (isBreak) day.breakHours = round2(day.breakHours + hours);
+        else {
+          day.totalHours = round2(day.totalHours + hours);
+          totalHoursByEpochId.set(session.employeeId, round2((totalHoursByEpochId.get(session.employeeId) ?? 0) + hours));
+        }
+        day.segments.push({
+          id: session.id,
+          type: isBreak ? "break" : "work",
+          label: isBreak ? "Break" : (session.chargeCode ?? session.source ?? "Work"),
+          clockIn: new Date(cursor).toISOString(),
+          clockOut: session.clockOut == null && sliceEnd === sessionEnd ? null : new Date(sliceEnd).toISOString(),
+          hours,
+          isOpen: session.clockOut == null && sliceEnd === sessionEnd,
+          isEdited: Boolean(session.isEdited),
+          chargeCode: session.chargeCode ?? null,
+          source: session.source ?? null,
+        });
+        if (session.clockOut == null && sliceEnd === sessionEnd) day.hasIssue = true;
+      }
+      cursor = sliceEnd;
+    }
+  }
+
+  const hourlyEmployees = activeEmployees.filter(isHourlyTimekeepingEmployee);
+  const salariedEmployees = activeEmployees.filter((employee) => !isHourlyTimekeepingEmployee(employee));
+
+  const hourly: HourlyPayrollReviewRow[] = hourlyEmployees.map((emp) => {
+    const timesheet = emp.timekeepingId != null ? timesheetByTkId.get(emp.timekeepingId) : undefined;
+    const totalHours = round2(totalHoursByEpochId.get(emp.epochEmployeeId) ?? 0);
+    const { regularHours, overtimeHours } = computePeriodOvertime(totalHours, rangeStart, rangeEnd, settings.overtimeThresholdWeekly);
+    const leaveHours = emp.timekeepingId != null ? (leaveByTkId.get(emp.timekeepingId) ?? 0) : 0;
+    const issues: PayrollReviewIssue[] = [];
+
+    if (missingPunchByEpochId.has(emp.epochEmployeeId)) {
+      addIssue(issues, "missing_punch", "Missing clock-out", "error", true);
+    }
+    if (timesheet && pendingCorrectionsByTimesheet.has(timesheet.id)) {
+      addIssue(issues, "pending_correction", "Pending correction", "error", true);
+    }
+    const unapprovedCount = unapprovedByEpochId.get(emp.epochEmployeeId) ?? 0;
+    if (unapprovedCount > 0) {
+      addIssue(issues, "unapproved_labor", `${unapprovedCount} unapproved labor session${unapprovedCount === 1 ? "" : "s"}`, "error", true);
+    }
+    if (!timesheet && (totalHours > 0 || leaveHours > 0)) {
+      addIssue(issues, "missing_timesheet", "No generated timesheet", "error", true);
+    }
+    if (timesheet && !["certified", "locked"].includes(timesheet.status)) {
+      addIssue(issues, "not_supervisor_approved", `Supervisor approval needed (${timesheet.status})`, "error", true);
+    }
+    if (editedByEpochId.has(emp.epochEmployeeId)) {
+      addIssue(issues, "edited_punch", "Edited punch in period", "warning", false);
+    }
+
+    const days = Array.from((dayMapsByEpochId.get(emp.epochEmployeeId) ?? initialDayMap(startStr, endStr)).values())
+      .map((day) => ({
+        ...day,
+        segments: [...day.segments].sort((a, b) => a.clockIn.localeCompare(b.clockIn)),
+      }));
+    const blocked = issueBlocked(issues);
+    return {
+      employeeId: emp.epochEmployeeId,
+      timekeepingEmployeeId: emp.timekeepingId,
+      employeeName: `${emp.firstName} ${emp.lastName}`,
+      department: emp.department ?? null,
+      timesheetId: timesheet?.id ?? null,
+      status: timesheet?.status ?? "not_generated",
+      totalHours,
+      regularHours,
+      overtimeHours,
+      leaveHours,
+      readyForPayroll: Boolean(timesheet && timesheet.status === "certified" && !blocked),
+      locked: timesheet?.status === "locked",
+      issues,
+      days,
+    };
+  });
+
+  const salariedLineByTkId = new Map<number, { totalHours: number; leaveHours: number }>();
+  for (const row of salariedLines.rows) {
+    salariedLineByTkId.set(Number(row.employee_id), {
+      totalHours: round2(Number(row.total_hours ?? 0)),
+      leaveHours: round2(Number(row.leave_hours ?? 0)),
+    });
+  }
+  const salariedByTkId = new Map(salariedSheets.map((timesheet) => [timesheet.employeeId, timesheet]));
+  const salaried = salariedEmployees
+    .filter((emp) => emp.timekeepingId != null)
+    .map((emp): SalariedPayrollReviewRow => {
+      const tkId = emp.timekeepingId!;
+      const timesheet = salariedByTkId.get(tkId);
+      const lines = salariedLineByTkId.get(tkId);
+      const issues: PayrollReviewIssue[] = [];
+      if (!timesheet && lines && lines.totalHours > 0) {
+        addIssue(issues, "missing_salaried_timesheet", "No salaried timesheet", "error", true);
+      }
+      if (timesheet && timesheet.status !== "PAYROLL_APPROVED" && timesheet.status !== "SUPERVISOR_APPROVED") {
+        addIssue(issues, "not_supervisor_approved", `Supervisor approval needed (${timesheet.status})`, "error", true);
+      }
+      return {
+        employeeId: emp.epochEmployeeId,
+        employeeName: `${emp.firstName} ${emp.lastName}`,
+        department: emp.department ?? null,
+        timesheetId: timesheet?.id ?? null,
+        status: timesheet?.status ?? "not_generated",
+        totalHours: round2(timesheet?.totalActualHours ?? lines?.totalHours ?? 0),
+        leaveHours: round2(lines?.leaveHours ?? 0),
+        readyForPayroll: Boolean(timesheet && timesheet.status === "SUPERVISOR_APPROVED" && !issueBlocked(issues)),
+        payrollApproved: timesheet?.status === "PAYROLL_APPROVED",
+        issues,
+      };
+    });
+
+  const summary: PayrollReviewSummary = {
+    employeeCount: hourly.length,
+    totalHours: round2(hourly.reduce((sum, row) => sum + row.totalHours, 0)),
+    regularHours: round2(hourly.reduce((sum, row) => sum + row.regularHours, 0)),
+    overtimeHours: round2(hourly.reduce((sum, row) => sum + row.overtimeHours, 0)),
+    leaveHours: round2(hourly.reduce((sum, row) => sum + row.leaveHours, 0)),
+    missingPunchCount: hourly.filter((row) => row.issues.some((issue) => issue.code === "missing_punch")).length,
+    blockedCount: hourly.filter((row) => issueBlocked(row.issues)).length,
+    readyCount: hourly.filter((row) => row.readyForPayroll).length,
+    lockedCount: hourly.filter((row) => row.locked).length,
+    pendingCorrectionCount: hourly.filter((row) => row.issues.some((issue) => issue.code === "pending_correction")).length,
+  };
+
+  return {
+    periodStart: startStr,
+    periodEnd: endStr,
+    label: formatPayPeriodLabel(startStr, endStr),
+    generatedAt: now.toISOString(),
+    summary,
+    hourly: hourly.sort((a, b) => a.employeeName.localeCompare(b.employeeName)),
+    salaried: salaried.sort((a, b) => a.employeeName.localeCompare(b.employeeName)),
+  };
+}
+
 export async function getEmployeeHoursForPeriod(
   from?: Date,
   to?: Date
@@ -803,7 +1233,7 @@ export async function getEmployeeHoursForPeriod(
   const rangeEnd = to ?? defaultEnd;
 
   const allEmployees = await listResolvedEmployees();
-  const activeEmployees = allEmployees.filter((e) => e.isActive);
+  const activeEmployees = allEmployees.filter((e) => e.isActive && isHourlyTimekeepingEmployee(e));
   const now = new Date();
 
   const hoursByEpochId = new Map<number, number>();

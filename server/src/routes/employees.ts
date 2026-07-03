@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
+import { z } from 'zod';
 import { storage } from '../../storage';
 import { pool, pgPool } from '../../db';
+import { authenticateToken, requireRole } from '../../middleware/auth';
+import { recordAuditEvent } from '../services/auditLedgerService';
 import {
   fetchRecertificationRecords,
   countRecertificationRecords,
@@ -27,6 +30,237 @@ import {
 } from '@shared/schema';
 
 const router = Router();
+
+let chargeCodeAssignmentTableReady: Promise<void> | null = null;
+let employeeTerminationSchemaReady: Promise<void> | null = null;
+
+const employeeListColumns = [
+  ['id', 'id'],
+  ['employee_code', 'employeeCode'],
+  ['canonical_id', 'canonicalId'],
+  ['name', 'name'],
+  ['preferred_name', 'preferredName'],
+  ['email', 'email'],
+  ['phone', 'phone'],
+  ['job_title', 'jobTitle'],
+  ['user_role', 'userRole'],
+  ['department', 'department'],
+  ['hire_date', 'hireDate'],
+  ['date_of_birth', 'dateOfBirth'],
+  ['address', 'address'],
+  ['city', 'city'],
+  ['state', 'state'],
+  ['zip_code', 'zipCode'],
+  ['emergency_contact', 'emergencyContact'],
+  ['emergency_phone', 'emergencyPhone'],
+  ['gate_card_number', 'gateCardNumber'],
+  ['vehicle_type', 'vehicleType'],
+  ['vehicle_make_model', 'vehicleMakeModel'],
+  ['license_plate', 'licensePlate'],
+  ['drivers_license_number', 'driversLicenseNumber'],
+  ['drivers_license_state', 'driversLicenseState'],
+  ['drivers_license_expiration', 'driversLicenseExpiration'],
+  ['bank_name', 'bankName'],
+  ['bank_routing_number', 'bankRoutingNumber'],
+  ['bank_account_number', 'bankAccountNumber'],
+  ['bank_account_type', 'bankAccountType'],
+  ['building_key_access', 'buildingKeyAccess'],
+  ['tci_access', 'tciAccess'],
+  ['employment_type', 'employmentType'],
+  ['pay_type', 'payType'],
+  ['hourly_rate', 'hourlyRate'],
+  ['salary', 'salary'],
+  ['is_finish_technician', 'isFinishTechnician'],
+  ['is_tolerance_authorizer', 'isToleranceAuthorizer'],
+  ['badge_scan_code', 'badgeScanCode'],
+  ['is_active', 'isActive'],
+  ['timekeeper_pin', 'timekeeperPin'],
+  ['timezone', 'timezone'],
+  ['supervisor_employee_id', 'supervisorEmployeeId'],
+  ['employment_status', 'employmentStatus'],
+  ['termination_date', 'terminationDate'],
+  ['termination_reason_code', 'terminationReasonCode'],
+  ['termination_reason', 'terminationReason'],
+  ['eligible_for_rehire', 'eligibleForRehire'],
+  ['final_paycheck_date', 'finalPaycheckDate'],
+  ['termination_notes', 'terminationNotes'],
+  ['terminated_by_user_id', 'terminatedByUserId'],
+  ['terminated_by_name', 'terminatedByName'],
+  ['terminated_at', 'terminatedAt'],
+  ['created_at', 'createdAt'],
+  ['updated_at', 'updatedAt'],
+] as const;
+
+function rows<T = any>(result: any): T[] {
+  return Array.isArray(result) ? result : (result?.rows ?? []);
+}
+
+async function getEmployeesWithAvailableColumns() {
+  const availableRows = await pool.query(
+    `SELECT column_name AS "columnName"
+     FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'employees'`
+  );
+  const availableColumns = new Set(rows<{ columnName: string }>(availableRows).map((row) => row.columnName));
+  const selectedColumns = employeeListColumns.filter(([column]) =>
+    availableColumns.has(column)
+  );
+
+  if (!selectedColumns.some(([column]) => column === 'id')) {
+    throw new Error('employees.id column is required');
+  }
+
+  const selectList = selectedColumns
+    .map(([column, alias]) => `"${column}" AS "${alias}"`)
+    .join(', ');
+  const orderBy = availableColumns.has('name') ? 'ORDER BY "name"' : 'ORDER BY "id"';
+
+  return rows(await pool.query(`SELECT ${selectList} FROM employees ${orderBy}`));
+}
+
+function requireAdminOrOwner(req: Request, res: Response): boolean {
+  const role = String(req.user?.role ?? '').toUpperCase();
+  if (role === 'ADMIN' || role === 'OWNER') return true;
+  res.status(403).json({ error: 'Admin or owner access required' });
+  return false;
+}
+
+function actor(req: Request) {
+  return {
+    id: req.user?.id ?? null,
+    username: req.user?.username ?? 'unknown',
+    role: req.user?.role ?? null,
+  };
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function ensureEmployeeTerminationSchema(): Promise<void> {
+  if (!employeeTerminationSchemaReady) {
+    employeeTerminationSchemaReady = pool.query(`
+      ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS employment_status TEXT NOT NULL DEFAULT 'ACTIVE',
+        ADD COLUMN IF NOT EXISTS termination_date DATE,
+        ADD COLUMN IF NOT EXISTS termination_reason_code TEXT,
+        ADD COLUMN IF NOT EXISTS termination_reason TEXT,
+        ADD COLUMN IF NOT EXISTS eligible_for_rehire BOOLEAN,
+        ADD COLUMN IF NOT EXISTS final_paycheck_date DATE,
+        ADD COLUMN IF NOT EXISTS termination_notes TEXT,
+        ADD COLUMN IF NOT EXISTS terminated_by_user_id INTEGER REFERENCES users(id),
+        ADD COLUMN IF NOT EXISTS terminated_by_name TEXT,
+        ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{}'::jsonb
+    `).then(() => pool.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS access_status TEXT NOT NULL DEFAULT 'ACTIVE',
+        ADD COLUMN IF NOT EXISTS access_exception_reason TEXT,
+        ADD COLUMN IF NOT EXISTS access_exception_approved_by_user_id INTEGER REFERENCES users(id),
+        ADD COLUMN IF NOT EXISTS access_exception_approved_by_name TEXT,
+        ADD COLUMN IF NOT EXISTS access_exception_approved_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS access_exception_expires_at TIMESTAMP
+    `)).then(() => undefined).catch((error) => {
+      employeeTerminationSchemaReady = null;
+      throw error;
+    });
+  }
+  return employeeTerminationSchemaReady;
+}
+
+const terminationSchema = z.object({
+  terminationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  terminationReasonCode: z.string().trim().min(1),
+  terminationReason: z.string().trim().min(1),
+  eligibleForRehire: z.boolean().nullable().optional(),
+  finalPaycheckDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  terminationNotes: z.string().trim().nullable().optional(),
+  retainAccess: z.boolean().default(false),
+  accessExceptionReason: z.string().trim().optional().nullable(),
+});
+
+const notificationTopicSchema = z.object({
+  email: z.boolean().optional().default(false),
+  popup: z.boolean().optional().default(false),
+});
+
+const employeeNotificationPreferencesSchema = z.object({
+  taskList: notificationTopicSchema.optional().default({ email: false, popup: false }),
+  maintenanceSchedules: notificationTopicSchema.optional().default({ email: false, popup: false }),
+  trainingExpirations: notificationTopicSchema.optional().default({ email: false, popup: false }),
+});
+
+function normalizeEmployeeNotificationPreferences(value: unknown) {
+  const parsed = employeeNotificationPreferencesSchema.safeParse(value ?? {});
+  return parsed.success
+    ? parsed.data
+    : employeeNotificationPreferencesSchema.parse({});
+}
+
+function ensureChargeCodeAssignmentTable(): Promise<void> {
+  if (!chargeCodeAssignmentTableReady) {
+    chargeCodeAssignmentTableReady = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS charge_code_employee_assignments (
+          id SERIAL PRIMARY KEY,
+          charge_code_id INTEGER NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
+          employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+          assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          is_default BOOLEAN NOT NULL DEFAULT FALSE,
+          assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (charge_code_id, employee_id)
+        )
+      `);
+      await pool.query(`ALTER TABLE charge_code_employee_assignments ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_charge_code_idx ON charge_code_employee_assignments(charge_code_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_employee_idx ON charge_code_employee_assignments(employee_id)`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS charge_code_employee_assignments_one_default_per_employee_idx ON charge_code_employee_assignments(employee_id) WHERE is_default = TRUE`);
+    })().catch((error) => {
+      chargeCodeAssignmentTableReady = null;
+      throw error;
+    });
+  }
+  return chargeCodeAssignmentTableReady;
+}
+
+function normalizeEmployeeChargeCodeIds(value: unknown): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const ids = value
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  return Array.from(new Set(ids)).sort((a, b) => a - b);
+}
+
+function normalizeOptionalPositiveInteger(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : NaN;
+}
+
+async function getEmployeeAssignedChargeCodes(employeeId: number) {
+  await ensureChargeCodeAssignmentTable();
+  return pool.query(
+    `SELECT
+       cc.id,
+       cc.code,
+       cc.description,
+       cc.type,
+       cc.cost_handling AS "costHandling",
+       cc.department,
+       cc.billable,
+       cc.requires_approval AS "requiresApproval",
+       cc.active,
+       cca.is_default AS "isDefault",
+       cca.assigned_at AS "assignedAt"
+     FROM charge_code_employee_assignments cca
+     JOIN charge_codes cc ON cc.id = cca.charge_code_id
+     WHERE cca.employee_id = $1
+     ORDER BY cc.code`,
+    [employeeId]
+  );
+}
 
 // Helper function to generate next employee code
 async function generateNextEmployeeCode(): Promise<string> {
@@ -60,17 +294,48 @@ async function generateNextEmployeeCode(): Promise<string> {
 // Employee Management Routes
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const employees = await storage.getAllEmployees();
+    try {
+      await ensureEmployeeTerminationSchema();
+    } catch (error) {
+      console.warn('[Employees] Continuing list response after optional schema maintenance failed:', error);
+    }
+    const includeInactive =
+      req.query.includeInactive === 'true' ||
+      req.query.includeTerminated === 'true' ||
+      req.query.isActive === 'false';
+    let allEmployees;
+    try {
+      allEmployees = await storage.getAllEmployees();
+    } catch (error) {
+      console.warn('[Employees] Falling back to available-column employee list:', error);
+      allEmployees = await getEmployeesWithAvailableColumns();
+    }
+    const employees = includeInactive
+      ? allEmployees
+      : allEmployees.filter((employee: any) =>
+          employee.isActive !== false &&
+          String(employee.employmentStatus ?? 'ACTIVE').toUpperCase() !== 'TERMINATED'
+        );
     // Enrich each employee with the linked auth user's integer ID so that
     // callers can map ownerUserId (auth user ID) → employee name.
-    let userIdByEmployeeId: Record<number, number> = {};
+    let userByEmployeeId: Record<number, any> = {};
     try {
-      const rows = await pool.query(
-        `SELECT id AS "userId", employee_id AS "employeeId" FROM users WHERE employee_id IS NOT NULL AND is_active = true`
+      const userRows = await pool.query(
+        `SELECT
+           id AS "userId",
+           employee_id AS "employeeId",
+           is_active AS "userIsActive",
+           access_status AS "accessStatus",
+           access_exception_reason AS "accessExceptionReason",
+           access_exception_approved_by_name AS "accessExceptionApprovedByName",
+           access_exception_approved_at AS "accessExceptionApprovedAt",
+           access_exception_expires_at AS "accessExceptionExpiresAt"
+         FROM users
+         WHERE employee_id IS NOT NULL`
       );
-      for (const row of rows) {
+      for (const row of rows<any>(userRows)) {
         if (row.employeeId) {
-          userIdByEmployeeId[row.employeeId] = row.userId;
+          userByEmployeeId[row.employeeId] = row;
         }
       }
     } catch (e) {
@@ -78,9 +343,19 @@ router.get('/', async (req: Request, res: Response) => {
     }
     const enriched = employees.map((emp) => {
       const { timekeeperPin, ...rest } = emp;
+      const linkedUser = userByEmployeeId[emp.id] ?? null;
       return {
         ...rest,
-        userId: userIdByEmployeeId[emp.id] ?? null,
+        userId: linkedUser?.userId ?? null,
+        userIsActive: linkedUser?.userIsActive ?? null,
+        accessStatus: linkedUser?.accessStatus ?? null,
+        accessExceptionReason: linkedUser?.accessExceptionReason ?? null,
+        accessExceptionApprovedByName: linkedUser?.accessExceptionApprovedByName ?? null,
+        accessExceptionApprovedAt: linkedUser?.accessExceptionApprovedAt ?? null,
+        accessExceptionExpiresAt: linkedUser?.accessExceptionExpiresAt ?? null,
+        terminatedWithAccess:
+          String((emp as any).employmentStatus ?? '').toUpperCase() === 'TERMINATED' &&
+          linkedUser?.userIsActive === true,
         hasPin: timekeeperPin !== null && timekeeperPin !== undefined,
       };
     });
@@ -152,6 +427,153 @@ router.delete(
     }
   }
 );
+
+router.get('/:id/charge-codes', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(employeeId) || employeeId <= 0) {
+      res.status(400).json({ error: 'Invalid employee id' });
+      return;
+    }
+
+    const employeeRows = await pool.query(
+      `SELECT id, name FROM employees WHERE id = $1 LIMIT 1`,
+      [employeeId]
+    );
+    if (employeeRows.length === 0) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    const assignedChargeCodes = await getEmployeeAssignedChargeCodes(employeeId);
+    res.json({
+      employeeId,
+      assignedChargeCodeIds: assignedChargeCodes.map((code: any) => code.id),
+      defaultChargeCodeId: assignedChargeCodes.find((code: any) => code.isDefault)?.id ?? null,
+      assignedChargeCodes,
+    });
+  } catch (error) {
+    console.error('Get employee charge codes error:', error);
+    res.status(500).json({ error: 'Failed to fetch employee charge codes' });
+  }
+});
+
+router.put('/:id/charge-codes', authenticateToken, requireRole('ADMIN'), async (req: Request, res: Response) => {
+  const employeeId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(employeeId) || employeeId <= 0) {
+    res.status(400).json({ error: 'Invalid employee id' });
+    return;
+  }
+
+  const nextChargeCodeIds = normalizeEmployeeChargeCodeIds(req.body?.chargeCodeIds);
+  if (!nextChargeCodeIds) {
+    res.status(400).json({ error: 'chargeCodeIds must be an array' });
+    return;
+  }
+  const defaultChargeCodeId = normalizeOptionalPositiveInteger(req.body?.defaultChargeCodeId);
+  if (Number.isNaN(defaultChargeCodeId)) {
+    res.status(400).json({ error: 'defaultChargeCodeId must be a positive integer or null' });
+    return;
+  }
+  if (defaultChargeCodeId !== null && !nextChargeCodeIds.includes(defaultChargeCodeId)) {
+    res.status(400).json({ error: 'Default charge code must be assigned to the employee' });
+    return;
+  }
+
+  try {
+    const employeeRows = await pool.query(
+      `SELECT id, name FROM employees WHERE id = $1 LIMIT 1`,
+      [employeeId]
+    );
+    const employee = employeeRows[0];
+    if (!employee) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    if (nextChargeCodeIds.length > 0) {
+      const validRows = await pool.query(`SELECT id, active FROM charge_codes WHERE id = ANY($1::int[])`, [nextChargeCodeIds]);
+      const validIds = new Set(validRows.map((row: any) => row.id));
+      const missingIds = nextChargeCodeIds.filter((chargeCodeId) => !validIds.has(chargeCodeId));
+      if (missingIds.length > 0) {
+        res.status(400).json({ error: `Unknown charge code id(s): ${missingIds.join(', ')}` });
+        return;
+      }
+      if (defaultChargeCodeId !== null) {
+        const defaultRow = validRows.find((row: any) => row.id === defaultChargeCodeId);
+        if (!defaultRow?.active) {
+          res.status(400).json({ error: 'Default charge code must be active' });
+          return;
+        }
+      }
+    }
+
+    const beforeCodes = await getEmployeeAssignedChargeCodes(employeeId);
+    const beforeIds = beforeCodes.map((code: any) => code.id).sort((a: number, b: number) => a - b);
+
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM charge_code_employee_assignments WHERE employee_id = $1`, [employeeId]);
+      if (nextChargeCodeIds.length > 0) {
+        await client.query(
+          `INSERT INTO charge_code_employee_assignments (charge_code_id, employee_id, assigned_by_user_id, is_default)
+           SELECT t.charge_code_id, $2, $3, t.charge_code_id = $4
+           FROM unnest($1::int[]) AS t(charge_code_id)
+           ON CONFLICT (charge_code_id, employee_id) DO NOTHING`,
+          [nextChargeCodeIds, employeeId, req.user?.id ?? null, defaultChargeCodeId]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const assignedChargeCodes = await getEmployeeAssignedChargeCodes(employeeId);
+    await recordAuditEvent({
+      eventType: 'EMPLOYEE_CHARGE_CODE_ASSIGNMENTS_UPDATED',
+      subjectType: 'employee',
+      subjectId: String(employeeId),
+      sourceService: 'employees.routes',
+      actor: {
+        id: req.user?.id ?? null,
+        username: req.user?.username ?? 'admin',
+        role: req.user?.role ?? 'admin',
+      },
+      fieldsChanged: {
+        chargeCodeIds: {
+          before: beforeIds,
+          after: assignedChargeCodes.map((code: any) => code.id),
+        },
+        defaultChargeCodeId: {
+          before: beforeCodes.find((code: any) => code.isDefault)?.id ?? null,
+          after: assignedChargeCodes.find((code: any) => code.isDefault)?.id ?? null,
+        },
+      },
+      meta: { employeeName: employee.name },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+      payload: {
+        employeeId,
+        employeeName: employee.name,
+        chargeCodeIds: assignedChargeCodes.map((code: any) => code.id),
+      },
+    });
+
+    res.json({
+      employeeId,
+      assignedChargeCodeIds: assignedChargeCodes.map((code: any) => code.id),
+      defaultChargeCodeId: assignedChargeCodes.find((code: any) => code.isDefault)?.id ?? null,
+      assignedChargeCodes,
+    });
+  } catch (error) {
+    console.error('Update employee charge codes error:', error);
+    res.status(500).json({ error: 'Failed to update employee charge codes' });
+  }
+});
 
 router.patch(
   '/employee-capabilities/:id/toggle',
@@ -728,10 +1150,31 @@ router.delete('/certifications/:id', async (req: Request, res: Response) => {
 router.get('/finish-technicians', async (req: Request, res: Response) => {
   try {
     const finishTechnicians = await pool.query(
-      `SELECT id, name, employee_code as "employeeCode"
-       FROM employees
-       WHERE is_finish_technician = true AND is_active = true
-       ORDER BY name`
+      `WITH finish_technicians AS (
+        SELECT
+          id::text as id,
+          name,
+          employee_code as "employeeCode",
+          'employee' as source
+        FROM employees
+        WHERE is_finish_technician = true AND is_active = true
+
+        UNION ALL
+
+        SELECT
+          ('user:' || u.id::text) as id,
+          COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.username) as name,
+          u.username as "employeeCode",
+          'user' as source
+        FROM users u
+        LEFT JOIN employees e ON u.employee_id = e.id
+        WHERE u.is_finish_technician = true
+          AND u.is_active = true
+          AND NOT COALESCE(e.is_finish_technician = true AND e.is_active = true, false)
+      )
+      SELECT DISTINCT ON (LOWER(name)) id, name, "employeeCode", source
+      FROM finish_technicians
+      ORDER BY LOWER(name), source`
     );
     res.json(finishTechnicians || []);
   } catch (error) {
@@ -1164,14 +1607,232 @@ router.get('/:id/training-matrix', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Parametric routes MUST come after all specific routes
+router.post('/:id/terminate', authenticateToken, async (req: Request, res: Response) => {
+  if (!requireAdminOrOwner(req, res)) return;
+
+  const employeeId = Number(req.params.id);
+  if (!Number.isInteger(employeeId) || employeeId <= 0) {
+    res.status(400).json({ error: 'Invalid employee id' });
+    return;
+  }
+
+  const parsed = terminationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid termination data', details: parsed.error.flatten() });
+    return;
+  }
+
+  if (parsed.data.retainAccess && !parsed.data.accessExceptionReason?.trim()) {
+    res.status(400).json({ error: 'Retained access requires an access exception reason.' });
+    return;
+  }
+
+  try {
+    await ensureEmployeeTerminationSchema();
+    const currentEmployee = await storage.getEmployee(employeeId);
+    if (!currentEmployee) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    const termDate = new Date(`${parsed.data.terminationDate}T00:00:00`);
+    const accessExpiresAt = addDays(termDate, 90);
+    const currentActor = actor(req);
+
+    const client = await pgPool.connect();
+    let updatedEmployee: any = null;
+    let linkedUser: any = null;
+    try {
+      await client.query('BEGIN');
+      const employeeResult = await client.query(
+        `UPDATE employees
+         SET employment_status = 'TERMINATED',
+             is_active = false,
+             termination_date = $1,
+             termination_reason_code = $2,
+             termination_reason = $3,
+             eligible_for_rehire = $4,
+             final_paycheck_date = $5,
+             termination_notes = $6,
+             terminated_by_user_id = $7,
+             terminated_by_name = $8,
+             terminated_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $9
+         RETURNING *`,
+        [
+          parsed.data.terminationDate,
+          parsed.data.terminationReasonCode,
+          parsed.data.terminationReason,
+          parsed.data.eligibleForRehire ?? null,
+          parsed.data.finalPaycheckDate ?? null,
+          parsed.data.terminationNotes ?? null,
+          currentActor.id,
+          currentActor.username,
+          employeeId,
+        ]
+      );
+      updatedEmployee = rows(employeeResult)[0];
+
+      const userResult = await client.query(
+        `UPDATE users
+         SET is_active = $1,
+             access_status = $2,
+             access_exception_reason = $3,
+             access_exception_approved_by_user_id = $4,
+             access_exception_approved_by_name = $5,
+             access_exception_approved_at = CASE WHEN $1 THEN NOW() ELSE NULL END,
+             access_exception_expires_at = $6,
+             updated_at = NOW()
+         WHERE employee_id = $7
+         RETURNING id, username, role, is_active AS "userIsActive",
+                   access_status AS "accessStatus",
+                   access_exception_reason AS "accessExceptionReason",
+                   access_exception_approved_by_name AS "accessExceptionApprovedByName",
+                   access_exception_approved_at AS "accessExceptionApprovedAt",
+                   access_exception_expires_at AS "accessExceptionExpiresAt"`,
+        [
+          parsed.data.retainAccess,
+          parsed.data.retainAccess ? 'ACTIVE' : 'DISABLED',
+          parsed.data.retainAccess ? parsed.data.accessExceptionReason : null,
+          parsed.data.retainAccess ? currentActor.id : null,
+          parsed.data.retainAccess ? currentActor.username : null,
+          parsed.data.retainAccess ? accessExpiresAt : null,
+          employeeId,
+        ]
+      );
+      linkedUser = rows(userResult)[0] ?? null;
+
+      if (!parsed.data.retainAccess) {
+        await client.query(
+          `UPDATE user_sessions
+           SET is_active = false
+           WHERE user_id IN (SELECT id FROM users WHERE employee_id = $1)`,
+          [employeeId]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    await recordAuditEvent({
+      eventType: 'EMPLOYEE_TERMINATED',
+      subjectType: 'employee',
+      subjectId: String(employeeId),
+      sourceService: 'employees.routes',
+      actor: currentActor,
+      reason: parsed.data.terminationReason,
+      fieldsChanged: {
+        employmentStatus: { before: (currentEmployee as any).employmentStatus ?? 'ACTIVE', after: 'TERMINATED' },
+        isActive: { before: currentEmployee.isActive, after: false },
+        terminationDate: { before: (currentEmployee as any).terminationDate ?? null, after: parsed.data.terminationDate },
+      },
+      meta: { employeeName: currentEmployee.name, retainAccess: parsed.data.retainAccess },
+      payload: {
+        employeeId,
+        employeeName: currentEmployee.name,
+        terminationDate: parsed.data.terminationDate,
+        terminationReasonCode: parsed.data.terminationReasonCode,
+        eligibleForRehire: parsed.data.eligibleForRehire ?? null,
+        finalPaycheckDate: parsed.data.finalPaycheckDate ?? null,
+        retainAccess: parsed.data.retainAccess,
+        accessExceptionExpiresAt: parsed.data.retainAccess ? accessExpiresAt.toISOString() : null,
+      },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+
+    if (parsed.data.retainAccess && linkedUser) {
+      await recordAuditEvent({
+        eventType: 'TERMINATED_EMPLOYEE_ACCESS_RETAINED',
+        subjectType: 'user',
+        subjectId: String(linkedUser.id),
+        sourceService: 'employees.routes',
+        actor: currentActor,
+        reason: parsed.data.accessExceptionReason,
+        fieldsChanged: {
+          userIsActive: { before: null, after: true },
+          accessExceptionExpiresAt: { before: null, after: accessExpiresAt.toISOString() },
+        },
+        meta: { employeeId, employeeName: currentEmployee.name },
+        payload: {
+          employeeId,
+          employeeName: currentEmployee.name,
+          username: linkedUser.username,
+          role: linkedUser.role,
+          accessExceptionExpiresAt: accessExpiresAt.toISOString(),
+        },
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers['user-agent'] ?? null,
+      });
+    }
+
+    res.json({
+      ...updatedEmployee,
+      userId: linkedUser?.id ?? null,
+      userIsActive: linkedUser?.userIsActive ?? null,
+      accessStatus: linkedUser?.accessStatus ?? null,
+      accessExceptionReason: linkedUser?.accessExceptionReason ?? null,
+      accessExceptionApprovedByName: linkedUser?.accessExceptionApprovedByName ?? null,
+      accessExceptionApprovedAt: linkedUser?.accessExceptionApprovedAt ?? null,
+      accessExceptionExpiresAt: linkedUser?.accessExceptionExpiresAt ?? null,
+      terminatedWithAccess: Boolean(linkedUser?.userIsActive),
+    });
+  } catch (error) {
+    console.error('Terminate employee error:', error);
+    res.status(500).json({ error: 'Failed to terminate employee' });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
+    await ensureEmployeeTerminationSchema();
     const raw = await storage.getEmployee(parseInt(req.params.id));
     if (!raw) {
       return res.status(404).json({ error: 'Employee not found' });
     }
     const { timekeeperPin, ...employee } = raw;
-    res.json({ ...employee, hasPin: timekeeperPin !== null && timekeeperPin !== undefined });
+    let linkedUser: any = null;
+    try {
+      const userResult = await pool.query(
+        `SELECT
+           id AS "userId",
+           is_active AS "userIsActive",
+           access_status AS "accessStatus",
+           access_exception_reason AS "accessExceptionReason",
+           access_exception_approved_by_name AS "accessExceptionApprovedByName",
+           access_exception_approved_at AS "accessExceptionApprovedAt",
+           access_exception_expires_at AS "accessExceptionExpiresAt"
+         FROM users
+         WHERE employee_id = $1
+         ORDER BY id DESC
+         LIMIT 1`,
+        [employee.id]
+      );
+      linkedUser = rows(userResult)[0] ?? null;
+    } catch (error) {
+      console.error('Error fetching employee linked user:', error);
+    }
+    res.json({
+      ...employee,
+      notificationPreferences: normalizeEmployeeNotificationPreferences((employee as any).notificationPreferences),
+      userId: linkedUser?.userId ?? null,
+      userIsActive: linkedUser?.userIsActive ?? null,
+      accessStatus: linkedUser?.accessStatus ?? null,
+      accessExceptionReason: linkedUser?.accessExceptionReason ?? null,
+      accessExceptionApprovedByName: linkedUser?.accessExceptionApprovedByName ?? null,
+      accessExceptionApprovedAt: linkedUser?.accessExceptionApprovedAt ?? null,
+      accessExceptionExpiresAt: linkedUser?.accessExceptionExpiresAt ?? null,
+      terminatedWithAccess:
+        String((employee as any).employmentStatus ?? '').toUpperCase() === 'TERMINATED' &&
+        linkedUser?.userIsActive === true,
+      hasPin: timekeeperPin !== null && timekeeperPin !== undefined,
+    });
   } catch (error) {
     console.error('Get employee error:', error);
     res.status(500).json({ error: 'Failed to fetch employee' });
@@ -1180,12 +1841,16 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
+    await ensureEmployeeTerminationSchema();
     const rawBody = { ...req.body };
     if (typeof rawBody.email === 'string' && rawBody.email.trim() === '') {
       rawBody.email = undefined;
     }
 
     let employeeData = insertEmployeeSchema.parse(rawBody);
+    employeeData.notificationPreferences = normalizeEmployeeNotificationPreferences(
+      (employeeData as any).notificationPreferences
+    );
 
     // Normalize employeeCode — trim whitespace, treat blank as absent
     if (typeof employeeData.employeeCode === 'string') {
@@ -1277,6 +1942,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.put('/:id', async (req: Request, res: Response) => {
   try {
+    await ensureEmployeeTerminationSchema();
     const employeeId = parseInt(req.params.id);
     let updates = req.body;
     
@@ -1309,6 +1975,10 @@ router.put('/:id', async (req: Request, res: Response) => {
         }
         updates.supervisorEmployeeId = supervisorId;
       }
+    }
+
+    if (updates.notificationPreferences !== undefined) {
+      updates.notificationPreferences = normalizeEmployeeNotificationPreferences(updates.notificationPreferences);
     }
     
     // Validate / resolve employee code on update

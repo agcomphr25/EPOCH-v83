@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, CheckCircle, XCircle, ShieldAlert, Delete, Lock, Search } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, ShieldAlert, Delete, Lock, Search, Coffee, LogOut, Play, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type KioskStep = 'idle' | 'pin-entry' | 'loading' | 'confirm' | 'punching' | 'success' | 'error' | 'locked-out';
+type KioskStep = 'idle' | 'pin-entry' | 'loading' | 'confirm' | 'punching' | 'correction' | 'success' | 'error' | 'locked-out';
 
 interface DcaaPolicyViolation {
   ruleId: string;
@@ -22,6 +22,21 @@ interface PunchStatus {
   status: string;
   clockedInAt: string | null;
   hoursToday: number;
+  periodProgress?: NormalHoursProgress | null;
+  openEntry?: { id?: number; clockIn?: string; clockOut?: string | null; chargeCode?: string | null } | null;
+}
+
+interface NormalHoursProgress {
+  periodStart: string;
+  periodEnd: string;
+  normalHoursLimit: number;
+  totalHours: number;
+  normalHours: number;
+  overtimeHours: number;
+  remainingNormalHours: number;
+  percentOfNormal: number;
+  warningLevel: 'none' | 'watch' | 'near' | 'over';
+  message: string | null;
 }
 
 interface ChargeCode {
@@ -29,6 +44,26 @@ interface ChargeCode {
   code: string;
   description: string | null;
   type: string;
+}
+
+type PunchEventType = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+
+interface PunchEvent {
+  id: number;
+  sessionId: number;
+  type: PunchEventType;
+  punchedAt: string;
+  costCode: string | null;
+  hasMissingClockOut?: boolean;
+}
+
+interface ShiftRow {
+  sessionId: number;
+  label: string;
+  startAt: string | null;
+  endAt: string | null;
+  costCode: string | null;
+  isOpen: boolean;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -74,7 +109,7 @@ function ChargeCodePicker({ chargeCodes, value, onChange, onInteraction }: Charg
   return (
     <div className="space-y-2 text-left">
       <label className="text-xs uppercase tracking-widest text-gray-400 block">
-        Charge Code <span className="text-gray-300 normal-case">(optional)</span>
+        Charge Code
       </label>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
@@ -87,15 +122,6 @@ function ChargeCodePicker({ chargeCodes, value, onChange, onInteraction }: Charg
         />
       </div>
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
-        {value && (
-          <button
-            type="button"
-            onClick={() => { onChange(''); onInteraction(); }}
-            className="w-full text-left px-4 py-3 text-sm text-gray-400 border-b border-gray-100 hover:bg-gray-50 active:bg-gray-100"
-          >
-            — No charge code —
-          </button>
-        )}
         {filtered.length === 0 && (
           <p className="px-4 py-3 text-sm text-gray-400">No matching codes</p>
         )}
@@ -137,24 +163,108 @@ function ChargeCodePicker({ chargeCodes, value, onChange, onInteraction }: Charg
   );
 }
 
+type KioskAction = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+
 interface ActionMeta {
   currentLabel: string;
   verb: string;
-  action: 'clock_in' | 'clock_out';
+  action: KioskAction;
 }
 
 function getActionMeta(status: string): ActionMeta {
-  if (status === 'clocked_in' || status === 'on_break') {
-    return { currentLabel: status === 'on_break' ? 'ON BREAK' : 'CLOCKED IN', verb: 'Clock Out', action: 'clock_out' };
+  if (status === 'clocked_in') {
+    return { currentLabel: 'CLOCKED IN', verb: 'Clock Out', action: 'clock_out' };
+  }
+  if (status === 'on_break') {
+    return { currentLabel: 'ON BREAK', verb: 'Clock In from Break', action: 'break_end' };
   }
   return { currentLabel: 'CLOCKED OUT', verb: 'Clock In', action: 'clock_in' };
 }
 
 const IDLE_TIMEOUT_MS = 45_000;
-const RESULT_DISPLAY_SEC = 5;
+const RESULT_DISPLAY_SEC = 8;
 const PIN_LENGTH = 4;
 
 const PIN_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'backspace', '0', 'submit'];
+
+function formatKioskTime(ts: string | null): string {
+  if (!ts) return 'In progress';
+  return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function toLocalDateTimeInput(ts: string | Date): string {
+  const date = ts instanceof Date ? ts : new Date(ts);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function todayBoundsIso() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  return { from: start.toISOString(), to: end.toISOString() };
+}
+
+function formatKioskHours(hours: number): string {
+  return `${hours.toFixed(2)} hr${Math.abs(hours - 1) < 0.005 ? '' : 's'}`;
+}
+
+function NormalHoursProgressCard({ progress, compact = false }: { progress?: NormalHoursProgress | null; compact?: boolean }) {
+  if (!progress) return null;
+  const color = progress.warningLevel === 'over'
+    ? 'bg-red-500'
+    : progress.warningLevel === 'near'
+      ? 'bg-amber-500'
+      : 'bg-blue-500';
+  return (
+    <div className={`rounded-2xl border bg-white p-4 text-left shadow-sm ${compact ? 'space-y-2' : 'space-y-3'}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-gray-400">Pay Period Normal Hours</p>
+          <p className="text-lg font-semibold text-gray-900">
+            {progress.normalHours.toFixed(2)} / {progress.normalHoursLimit.toFixed(2)}h
+          </p>
+        </div>
+        <p className="text-sm font-medium text-gray-500">{progress.remainingNormalHours.toFixed(2)}h left</p>
+      </div>
+      <div className="h-3 overflow-hidden rounded-full bg-gray-100">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, progress.percentOfNormal)}%` }} />
+      </div>
+      {progress.message && (
+        <p className={`text-sm font-medium ${progress.warningLevel === 'over' ? 'text-red-700' : 'text-amber-700'}`}>
+          {progress.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function buildShiftRows(punches: PunchEvent[]): ShiftRow[] {
+  const rows = new Map<number, ShiftRow>();
+
+  for (const punch of punches) {
+    const existing = rows.get(punch.sessionId) ?? {
+      sessionId: punch.sessionId,
+      label: punch.type === 'break_start' || punch.type === 'break_end' ? 'Break' : 'Work',
+      startAt: null,
+      endAt: null,
+      costCode: punch.costCode,
+      isOpen: false,
+    };
+
+    if (punch.type === 'clock_in' || punch.type === 'break_start') {
+      existing.startAt = punch.punchedAt;
+    } else {
+      existing.endAt = punch.punchedAt;
+    }
+    existing.costCode = existing.costCode ?? punch.costCode;
+    existing.isOpen = !!punch.hasMissingClockOut || !existing.endAt;
+    rows.set(punch.sessionId, existing);
+  }
+
+  return Array.from(rows.values()).sort((a, b) => (a.startAt ?? '').localeCompare(b.startAt ?? ''));
+}
 
 export default function KioskPage() {
   const [step, setStep] = useState<KioskStep>('idle');
@@ -164,11 +274,28 @@ export default function KioskPage() {
   const [punchStatus, setPunchStatus] = useState<PunchStatus | null>(null);
   const [chargeCodes, setChargeCodes] = useState<ChargeCode[]>([]);
   const [selectedChargeCode, setSelectedChargeCode] = useState('');
+  const [dailyCertificationConfirmed, setDailyCertificationConfirmed] = useState(false);
+  const [showClockOutCertification, setShowClockOutCertification] = useState(false);
   const [resultMsg, setResultMsg] = useState('');
+  const [resultProgress, setResultProgress] = useState<NormalHoursProgress | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [dcaaViolation, setDcaaViolation] = useState<DcaaPolicyViolation | null>(null);
   const [countdown, setCountdown] = useState(RESULT_DISPLAY_SEC);
+  const [idleCountdown, setIdleCountdown] = useState(Math.ceil(IDLE_TIMEOUT_MS / 1000));
   const [lockoutSecondsRemaining, setLockoutSecondsRemaining] = useState(0);
+  const [certificationReviewLoading, setCertificationReviewLoading] = useState(false);
+  const [correctionForm, setCorrectionForm] = useState({
+    requestType: 'edit_session',
+    punchLedgerId: '',
+    selectedPunchType: 'clock_in' as PunchEventType,
+    chargeCodeId: '',
+    clockIn: '',
+    clockOut: '',
+    reason: '',
+  });
+  const [activeShiftPunches, setActiveShiftPunches] = useState<PunchEvent[]>([]);
+  const [selectedCorrectionPunch, setSelectedCorrectionPunch] = useState<PunchEvent | null>(null);
+  const [correctionLoading, setCorrectionLoading] = useState(false);
 
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -188,11 +315,20 @@ export default function KioskPage() {
     setPunchStatus(null);
     setChargeCodes([]);
     setSelectedChargeCode('');
+    setDailyCertificationConfirmed(false);
+    setShowClockOutCertification(false);
     setResultMsg('');
+    setResultProgress(null);
     setErrorMsg('');
     setDcaaViolation(null);
     setCountdown(RESULT_DISPLAY_SEC);
+    setIdleCountdown(Math.ceil(IDLE_TIMEOUT_MS / 1000));
     setLockoutSecondsRemaining(0);
+    setCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', chargeCodeId: '', clockIn: '', clockOut: '', reason: '' });
+    setActiveShiftPunches([]);
+    setSelectedCorrectionPunch(null);
+    setCorrectionLoading(false);
+    setCertificationReviewLoading(false);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (lockoutRef.current) clearInterval(lockoutRef.current);
@@ -200,13 +336,20 @@ export default function KioskPage() {
 
   const restartIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    setIdleCountdown(Math.ceil(IDLE_TIMEOUT_MS / 1000));
     idleTimerRef.current = setTimeout(resetToIdle, IDLE_TIMEOUT_MS);
   }, [resetToIdle]);
 
   useEffect(() => {
     if (step !== 'idle' && step !== 'success' && step !== 'error' && step !== 'locked-out') {
       restartIdleTimer();
-      return () => { if (idleTimerRef.current) clearTimeout(idleTimerRef.current); };
+      const iv = setInterval(() => {
+        setIdleCountdown((prev) => Math.max(0, prev - 1));
+      }, 1000);
+      return () => {
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        clearInterval(iv);
+      };
     }
   }, [step, restartIdleTimer]);
 
@@ -304,12 +447,26 @@ export default function KioskPage() {
         status = await statusRes.json();
       }
       setPunchStatus(status);
+      setSelectedChargeCode(status?.openEntry?.chargeCode ?? '');
+      setDailyCertificationConfirmed(false);
+      setShowClockOutCertification(false);
 
       // Load charge codes
-      const codesRes = await fetch('/api/timekeeping/kiosk/charge-codes');
+      const codesRes = await fetch(`/api/timekeeping/kiosk/charge-codes?employeeId=${encodeURIComponent(String(emp.id))}`);
       if (codesRes.ok) {
         const codes: ChargeCode[] = await codesRes.json();
         setChargeCodes(codes);
+      }
+
+      const { from, to } = todayBoundsIso();
+      const punchesRes = await fetch(`/api/timekeeping/kiosk/punches/employee/${emp.id}/active-shift`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, from, to }),
+      });
+      if (punchesRes.ok) {
+        const punchesData = await punchesRes.json();
+        setActiveShiftPunches(Array.isArray(punchesData.punches) ? punchesData.punches as PunchEvent[] : []);
       }
 
       setStep('confirm');
@@ -319,11 +476,18 @@ export default function KioskPage() {
     }
   }, [pin]);
 
-  const handleConfirm = useCallback(async () => {
+  const handleConfirm = useCallback(async (requestedAction?: KioskAction) => {
     if (!employee || !punchStatus) return;
-    setStep('punching');
 
     const meta = getActionMeta(punchStatus.status);
+    const action = requestedAction ?? meta.action;
+    if (action === 'clock_out' && !dailyCertificationConfirmed) {
+      setShowClockOutCertification(true);
+      restartIdleTimer();
+      return;
+    }
+
+    setStep('punching');
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     try {
@@ -332,8 +496,9 @@ export default function KioskPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           employeeId: employee.id,
-          requestedAction: meta.action,
+          requestedAction: action,
           timezone: tz,
+          ...(action === 'clock_out' ? { dailyCertificationConfirmed } : {}),
           ...(selectedChargeCode ? { costCode: selectedChargeCode } : {}),
         }),
       });
@@ -351,12 +516,109 @@ export default function KioskPage() {
       }
 
       setResultMsg(data.message ?? 'Punch recorded successfully!');
+      setResultProgress(data.periodProgress ?? null);
       setStep('success');
     } catch {
       setErrorMsg('Network error. Punch was not recorded.');
       setStep('error');
     }
-  }, [employee, punchStatus, selectedChargeCode]);
+  }, [dailyCertificationConfirmed, employee, punchStatus, restartIdleTimer, selectedChargeCode]);
+
+  const loadActiveShiftPunches = useCallback(async () => {
+    if (!employee) return [];
+    const { from, to } = todayBoundsIso();
+    const res = await fetch(`/api/timekeeping/kiosk/punches/employee/${employee.id}/active-shift`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin, from, to }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.punches) ? data.punches as PunchEvent[] : [];
+  }, [employee, pin]);
+
+  const handleClockOutIntent = useCallback(async () => {
+    setShowClockOutCertification(true);
+    setDailyCertificationConfirmed(false);
+    restartIdleTimer();
+    setCertificationReviewLoading(true);
+    try {
+      setActiveShiftPunches(await loadActiveShiftPunches());
+    } finally {
+      setCertificationReviewLoading(false);
+    }
+  }, [loadActiveShiftPunches, restartIdleTimer]);
+
+  const selectCorrectionPunch = useCallback((punch: PunchEvent) => {
+    const local = toLocalDateTimeInput(punch.punchedAt);
+    setSelectedCorrectionPunch(punch);
+    setCorrectionForm((prev) => ({
+      ...prev,
+      requestType: 'edit_session',
+      punchLedgerId: String(punch.sessionId),
+      selectedPunchType: punch.type,
+      chargeCodeId: chargeCodes.find((cc) => cc.code === punch.costCode)?.id.toString() ?? '',
+      clockIn: punch.type === 'clock_in' || punch.type === 'break_start' ? local : '',
+      clockOut: punch.type === 'clock_out' || punch.type === 'break_end' ? local : '',
+    }));
+    restartIdleTimer();
+  }, [chargeCodes, restartIdleTimer]);
+
+  const startMissingPunchCorrection = useCallback(() => {
+    setSelectedCorrectionPunch(null);
+    setCorrectionForm((prev) => ({
+      ...prev,
+      requestType: 'add_session',
+      punchLedgerId: '',
+      selectedPunchType: 'clock_in',
+      chargeCodeId: '',
+      clockIn: '',
+      clockOut: '',
+    }));
+    restartIdleTimer();
+  }, [restartIdleTimer]);
+
+  const submitCorrectionRequest = useCallback(async () => {
+    if (!employee || pin.length !== PIN_LENGTH) return;
+    if (correctionForm.reason.trim().length < 5) {
+      setErrorMsg('Please enter a correction reason.');
+      setStep('error');
+      return;
+    }
+
+    setStep('punching');
+    try {
+      const res = await fetch('/api/timekeeping/kiosk/punch-corrections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          pin,
+          requestType: correctionForm.requestType,
+          punchLedgerId: correctionForm.punchLedgerId ? Number(correctionForm.punchLedgerId) : null,
+          reason: correctionForm.reason.trim(),
+          proposedChanges: {
+            punchType: correctionForm.selectedPunchType,
+            laborClass: correctionForm.selectedPunchType === 'break_start' || correctionForm.selectedPunchType === 'break_end' ? 'BREAK' : 'REGULAR',
+            ...(correctionForm.chargeCodeId ? { chargeCodeId: Number(correctionForm.chargeCodeId) } : {}),
+            ...(correctionForm.clockIn ? { clockIn: new Date(correctionForm.clockIn).toISOString() } : {}),
+            ...(correctionForm.clockOut ? { clockOut: new Date(correctionForm.clockOut).toISOString() } : {}),
+          },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMsg(data.error ?? 'Correction request failed. Please see an administrator.');
+        setStep('error');
+        return;
+      }
+      setResultMsg('Correction request submitted for supervisor review.');
+      setStep('success');
+    } catch {
+      setErrorMsg('Network error. Correction request was not submitted.');
+      setStep('error');
+    }
+  }, [correctionForm, employee, pin]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -416,6 +678,10 @@ export default function KioskPage() {
             (active instanceof HTMLElement && active.isContentEditable);
           if (isTextInput) return;
           e.preventDefault();
+          if (punchStatus?.status === 'clocked_in' && !showClockOutCertification) {
+            handleClockOutIntent();
+            return;
+          }
           handleConfirm();
           return;
         }
@@ -424,7 +690,7 @@ export default function KioskPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [step, pin, handleIdleTap, handlePinKey, handlePinSubmit, handleConfirm, resetToIdle]);
+  }, [step, pin, punchStatus, showClockOutCertification, handleIdleTap, handlePinKey, handlePinSubmit, handleConfirm, handleClockOutIntent, resetToIdle]);
 
   const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -470,6 +736,9 @@ export default function KioskPage() {
       >
         <CheckCircle className="h-24 w-24 text-green-500 mb-6" />
         <p className="text-3xl font-bold text-green-700 mb-3 max-w-sm">{resultMsg}</p>
+        <div className="mb-5 w-full max-w-sm">
+          <NormalHoursProgressCard progress={resultProgress} compact />
+        </div>
         <p className="text-gray-400">Tap to dismiss · resets in {countdown}s</p>
       </div>
     );
@@ -630,9 +899,64 @@ export default function KioskPage() {
   if (step === 'confirm' && employee && punchStatus) {
     const meta = getActionMeta(punchStatus.status);
     const isClockIn = meta.action === 'clock_in';
+    const isClockedIn = punchStatus.status === 'clocked_in';
+    const isOnBreak = punchStatus.status === 'on_break';
+    const isClockOut = meta.action === 'clock_out';
+    const showPrimaryActions = !showClockOutCertification;
+    const requiresChargeCode = isClockIn || isOnBreak;
+    const hasRequiredChargeCode = !requiresChargeCode || !!selectedChargeCode;
+    const showChargeCodePicker = requiresChargeCode && chargeCodes.length > 0;
+    const shiftRows = buildShiftRows(activeShiftPunches);
+    const todaysPunchesCard = (
+      <div className="rounded-2xl border bg-white p-4 space-y-3 text-left shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-gray-400">Today&apos;s Punches</p>
+            <p className="text-xs text-gray-500">Tap a punch to request a correction.</p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              startMissingPunchCorrection();
+              setStep('correction');
+            }}
+          >
+            Add Missing Punch
+          </Button>
+        </div>
+
+        <div className="space-y-2 max-h-[22rem] overflow-y-auto lg:max-h-[32rem]">
+          {activeShiftPunches.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">No punches found for today.</div>
+          ) : (
+            activeShiftPunches.map((punch) => (
+              <button
+                key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
+                type="button"
+                onClick={() => {
+                  selectCorrectionPunch(punch);
+                  setStep('correction');
+                }}
+                className="w-full rounded-xl border border-gray-200 bg-white p-3 text-left transition-colors hover:bg-gray-50"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold capitalize">{punch.type.replace(/_/g, ' ')}</span>
+                  <span className="text-sm font-medium text-gray-700">
+                    {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                {punch.costCode && <p className="text-xs text-gray-500 mt-1">CC {punch.costCode}</p>}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    );
     return (
       <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
-        <div className="w-full max-w-sm space-y-6 text-center">
+        <div className="w-full max-w-5xl space-y-6 text-center">
           <div>
             <p className="text-3xl font-bold text-gray-900">{employee.firstName} {employee.lastName}</p>
             {employee.jobTitle && (
@@ -640,38 +964,357 @@ export default function KioskPage() {
             )}
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-2 shadow-sm">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Current Status</p>
-            <p className="text-2xl font-semibold text-blue-600">{meta.currentLabel}</p>
-            {punchStatus.hoursToday > 0 && (
-              <p className="text-gray-400 text-sm">
-                {punchStatus.hoursToday.toFixed(2)} hours worked today
-              </p>
-            )}
+          <div className={showPrimaryActions ? "grid gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,28rem)] lg:items-start lg:justify-center" : "mx-auto max-w-sm space-y-6"}>
+            <div className="space-y-6">
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-2 shadow-sm">
+                <p className="text-xs uppercase tracking-widest text-gray-400">Current Status</p>
+                <p className="text-2xl font-semibold text-blue-600">{meta.currentLabel}</p>
+                {punchStatus.hoursToday > 0 && (
+                  <p className="text-gray-400 text-sm">
+                    {punchStatus.hoursToday.toFixed(2)} hours worked today
+                  </p>
+                )}
+              </div>
+
+              {showChargeCodePicker && (
+                <ChargeCodePicker
+                  chargeCodes={chargeCodes}
+                  value={selectedChargeCode}
+                  onChange={setSelectedChargeCode}
+                  onInteraction={restartIdleTimer}
+                />
+              )}
+              {requiresChargeCode && chargeCodes.length === 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  No charge codes are available. Please see a supervisor before clocking in.
+                </div>
+              )}
+              {requiresChargeCode && chargeCodes.length > 0 && !selectedChargeCode && (
+                <p className="text-sm font-medium text-amber-700">
+                  Select a charge code before clocking in.
+                </p>
+              )}
+
+              <NormalHoursProgressCard progress={punchStatus.periodProgress} compact />
+
+              {showPrimaryActions && (
+                <div className="space-y-3">
+                  {isClockIn && (
+                    <Button
+                      size="lg"
+                      onClick={() => handleConfirm('clock_in')}
+                      disabled={!hasRequiredChargeCode}
+                      className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white gap-3"
+                    >
+                      <LogIn className="h-6 w-6" />
+                      Clock In
+                    </Button>
+                  )}
+
+                  {isClockedIn && (
+                    <>
+                      <Button
+                        size="lg"
+                        onClick={() => handleConfirm('break_start')}
+                        className="w-full h-16 text-xl font-bold bg-amber-600 hover:bg-amber-700 rounded-2xl text-white gap-3"
+                      >
+                        <Coffee className="h-6 w-6" />
+                        Clock Out for Break
+                      </Button>
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        onClick={handleClockOutIntent}
+                        className="w-full h-16 text-xl font-bold rounded-2xl border-red-300 text-red-700 hover:bg-red-50 gap-3"
+                      >
+                        <LogOut className="h-6 w-6" />
+                        Clock Out
+                      </Button>
+                    </>
+                  )}
+
+                  {isOnBreak && (
+                    <Button
+                      size="lg"
+                      onClick={() => handleConfirm('break_end')}
+                      disabled={!hasRequiredChargeCode}
+                      className="w-full h-16 text-xl font-bold bg-amber-600 hover:bg-amber-700 rounded-2xl text-white gap-3"
+                    >
+                      <Play className="h-6 w-6" />
+                      Clock In from Break
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {showPrimaryActions && todaysPunchesCard}
           </div>
 
-          {isClockIn && chargeCodes.length > 0 && (
-            <ChargeCodePicker
-              chargeCodes={chargeCodes}
-              value={selectedChargeCode}
-              onChange={setSelectedChargeCode}
-              onInteraction={restartIdleTimer}
-            />
-          )}
+          {isClockOut && showClockOutCertification && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 px-6">
+              <div className="w-full max-w-lg rounded-3xl bg-white p-6 text-left shadow-2xl">
+                <div className="text-center">
+                  <p className="text-xs uppercase tracking-[0.24em] text-gray-400">Review Today</p>
+                  <p className="mt-1 text-3xl font-bold text-gray-900">{formatKioskHours(punchStatus.hoursToday)}</p>
+                  <p className="mt-1 text-sm text-gray-500">Worked today before this clock-out</p>
+                </div>
 
-          <Button
-            size="lg"
-            onClick={handleConfirm}
-            className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white"
-          >
-            {meta.verb}
-          </Button>
+                <div className="mt-5 max-h-64 space-y-2 overflow-y-auto">
+                  {certificationReviewLoading ? (
+                    <div className="rounded-2xl border border-gray-200 p-4 text-center text-sm text-gray-500">Loading today&apos;s punches...</div>
+                  ) : shiftRows.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-gray-200 p-4 text-center text-sm text-gray-500">No punch breakdown available.</div>
+                  ) : (
+                    shiftRows.map((row) => {
+                      const startMs = row.startAt ? new Date(row.startAt).getTime() : null;
+                      const endMs = row.endAt ? new Date(row.endAt).getTime() : (row.isOpen ? now.getTime() : null);
+                      const rowHours = startMs && endMs && endMs > startMs ? (endMs - startMs) / 3_600_000 : 0;
+                      return (
+                        <div key={row.sessionId} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">{row.label}</p>
+                              {row.costCode && <p className="mt-0.5 text-xs text-gray-500">CC {row.costCode}</p>}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-gray-900">{formatKioskHours(rowHours)}</p>
+                              <p className="text-xs text-gray-500">
+                                {formatKioskTime(row.startAt)} - {formatKioskTime(row.endAt)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <label className="mt-5 flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                  <input
+                    type="checkbox"
+                    checked={dailyCertificationConfirmed}
+                    onChange={(event) => {
+                      setDailyCertificationConfirmed(event.target.checked);
+                      restartIdleTimer();
+                    }}
+                    className="mt-1 h-5 w-5 rounded border-blue-300 text-blue-600"
+                  />
+                  <span className="text-sm text-blue-900">
+                    I certify that today&apos;s recorded time is complete, accurate, and represents work I actually performed.
+                  </span>
+                </label>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowClockOutCertification(false);
+                      setDailyCertificationConfirmed(false);
+                      restartIdleTimer();
+                    }}
+                    className="h-14 rounded-2xl"
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={() => handleConfirm('clock_out')}
+                    disabled={!dailyCertificationConfirmed}
+                    className="h-14 rounded-2xl bg-blue-600 text-lg font-bold text-white hover:bg-blue-700"
+                  >
+                    Clock Out
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <button
             onClick={resetToIdle}
             className="text-gray-400 hover:text-gray-600 text-sm"
           >
             ← Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'correction' && employee) {
+    const isMissingPunchRequest = correctionForm.requestType === 'add_session';
+    const correctionNeedsChargeCode = correctionForm.selectedPunchType === 'clock_in' || correctionForm.selectedPunchType === 'break_end';
+    const correctionPunches = selectedCorrectionPunch ? [selectedCorrectionPunch] : activeShiftPunches;
+    return (
+      <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
+        <div className="w-full max-w-sm space-y-4">
+          <div className="text-center">
+            <p className="text-2xl font-bold">{isMissingPunchRequest ? 'Add Missing Punch' : 'Request Punch Correction'}</p>
+            <p className="text-sm text-gray-500">{employee.firstName} {employee.lastName}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {isMissingPunchRequest ? 'Submit a punch that was missed and needs supervisor approval.' : 'Select an existing punch and submit the corrected details for supervisor approval.'}
+            </p>
+            <p className="mt-1 text-xs text-gray-400">This screen resets after inactivity in {idleCountdown}s.</p>
+          </div>
+
+          <div className="rounded-2xl border bg-white p-4 space-y-3 shadow-sm">
+            {!isMissingPunchRequest ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-gray-400">
+                      {selectedCorrectionPunch ? 'Selected Punch' : "Today's Punches"}
+                    </label>
+                    <p className="text-xs text-gray-500">
+                      {selectedCorrectionPunch ? 'Only this punch will be included in the edit request.' : 'Tap a punch to edit it.'}
+                    </p>
+                  </div>
+                  {!selectedCorrectionPunch && (
+                    <Button type="button" variant="outline" size="sm" onClick={startMissingPunchCorrection}>
+                      Add Missing Punch
+                    </Button>
+                  )}
+                </div>
+
+                <div className="space-y-2 max-h-44 overflow-y-auto">
+                  {correctionLoading ? (
+                    <div className="rounded-xl border border-gray-200 p-3 text-sm text-gray-500">Loading punches...</div>
+                  ) : correctionPunches.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">No punches found for today.</div>
+                  ) : (
+                    correctionPunches.map((punch) => {
+                      const selected = correctionForm.requestType === 'edit_session' && correctionForm.punchLedgerId === String(punch.sessionId) && correctionForm.selectedPunchType === punch.type;
+                      return (
+                        <button
+                          key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
+                          type="button"
+                          onClick={() => selectCorrectionPunch(punch)}
+                          className={`w-full rounded-xl border p-3 text-left transition-colors ${selected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold capitalize">{punch.type.replace(/_/g, ' ')}</span>
+                            <span className="text-sm font-medium text-gray-700">
+                              {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          {punch.costCode && <p className="text-xs text-gray-500 mt-1">CC {punch.costCode}</p>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
+                Use this form only for a punch that was never recorded. To change a punch that already exists, go back and select that punch from today&apos;s list.
+              </div>
+            )}
+
+            <label className="block text-xs uppercase tracking-widest text-gray-400">
+              {correctionForm.requestType === 'add_session' ? 'Missing Punch Type' : 'Correct Punch Type'}
+            </label>
+            <select
+              value={correctionForm.selectedPunchType}
+              onChange={(event) => {
+                const nextType = event.target.value as PunchEventType;
+                setCorrectionForm((prev) => {
+                  const isEndPunch = nextType === 'clock_out' || nextType === 'break_end';
+                  const movableTime = prev.clockIn || prev.clockOut;
+                  return {
+                    ...prev,
+                    selectedPunchType: nextType,
+                    clockIn: isEndPunch ? (prev.clockIn && prev.clockOut ? prev.clockIn : '') : movableTime,
+                    clockOut: isEndPunch ? movableTime : (prev.clockIn && prev.clockOut ? prev.clockOut : ''),
+                  };
+                });
+                restartIdleTimer();
+              }}
+              className="w-full rounded-xl border border-gray-200 p-3"
+            >
+              <option value="clock_in">Clock in</option>
+              <option value="break_start">Meal out</option>
+              {correctionForm.requestType === 'edit_session' && (
+                <>
+                  <option value="clock_out">Clock out</option>
+                  <option value="break_end">Meal in</option>
+                </>
+              )}
+            </select>
+
+            <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Charge Code</label>
+            <select
+              value={correctionForm.chargeCodeId}
+              onChange={(event) => {
+                setCorrectionForm((prev) => ({ ...prev, chargeCodeId: event.target.value }));
+                restartIdleTimer();
+              }}
+              className="w-full rounded-xl border border-gray-200 p-3"
+            >
+              <option value="">Select charge code</option>
+              {chargeCodes.map((cc) => (
+                <option key={cc.id} value={String(cc.id)}>
+                  {cc.code}{cc.description ? ` - ${cc.description}` : ''}
+                </option>
+              ))}
+            </select>
+            {correctionNeedsChargeCode && !correctionForm.chargeCodeId && (
+              <p className="text-xs font-medium text-amber-700">A charge code is required for clock-in punches.</p>
+            )}
+
+            <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Start Time</label>
+            <input
+              type="datetime-local"
+              value={correctionForm.clockIn}
+              onChange={(event) => {
+                setCorrectionForm((prev) => ({ ...prev, clockIn: event.target.value }));
+                restartIdleTimer();
+              }}
+              className="w-full rounded-xl border border-gray-200 p-3"
+            />
+
+            {correctionForm.requestType === 'edit_session' && (
+              <>
+                <label className="block text-xs uppercase tracking-widest text-gray-400">Correct End Time</label>
+                <input
+                  type="datetime-local"
+                  value={correctionForm.clockOut}
+                  onChange={(event) => {
+                    setCorrectionForm((prev) => ({ ...prev, clockOut: event.target.value }));
+                    restartIdleTimer();
+                  }}
+                  className="w-full rounded-xl border border-gray-200 p-3"
+                />
+              </>
+            )}
+
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-gray-400">Reason</label>
+              <p className="mt-1 text-xs font-medium text-gray-600">
+                Required - enter at least 5 characters explaining why this {isMissingPunchRequest ? 'punch was missed' : 'correction is needed'}.
+              </p>
+            </div>
+            <textarea
+              value={correctionForm.reason}
+              onChange={(event) => {
+                setCorrectionForm((prev) => ({ ...prev, reason: event.target.value }));
+                restartIdleTimer();
+              }}
+              rows={3}
+              placeholder={isMissingPunchRequest ? 'Required: explain why this punch was missed...' : 'Required: explain what needs to be fixed...'}
+              className="w-full rounded-xl border border-gray-200 p-3"
+            />
+          </div>
+
+          <Button
+            onClick={submitCorrectionRequest}
+            disabled={correctionForm.reason.trim().length < 5 || (correctionForm.requestType === 'add_session' && !correctionForm.clockIn) || (correctionForm.requestType === 'edit_session' && !correctionForm.punchLedgerId) || (correctionNeedsChargeCode && !correctionForm.chargeCodeId)}
+            className="w-full h-14 rounded-2xl"
+          >
+            {isMissingPunchRequest ? 'Submit Missing Punch' : 'Submit Correction Request'}
+          </Button>
+          <button onClick={() => setStep('confirm')} className="w-full text-center text-gray-400 hover:text-gray-600 text-sm">
+            Back
           </button>
         </div>
       </div>

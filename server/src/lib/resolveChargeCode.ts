@@ -20,7 +20,7 @@ import {
   travelerSteps,
   routingOperations,
 } from '../../schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { storage } from '../../storage';
 
 export type CertificationStatus = 'VALID' | 'EXPIRED' | 'MISSING';
@@ -28,7 +28,7 @@ export type CertificationStatus = 'VALID' | 'EXPIRED' | 'MISSING';
 export interface ResolvedChargeCode {
   chargeCodeId: number;
   chargeCode: string;
-  resolvedFrom: 'wad_default' | 'traveler_default' | 'department_match' | 'wad_wizard';
+  resolvedFrom: 'wad_default' | 'traveler_default' | 'wad_department' | 'department_match' | 'wad_wizard';
 }
 
 export interface ResolveChargeCodeError {
@@ -107,6 +107,64 @@ export function pickWizardChargeCode(
   const nonQcRows = rows.filter((row) => !isQcDepartment(row.row.department));
   if (!isQcDepartment(department) && nonQcRows.length === 1) {
     return nonQcRows[0].code;
+  }
+
+  return null;
+}
+
+const DEPARTMENT_ALIASES: Record<string, string[]> = {
+  QC: ['QC', 'Quality Control'],
+  QUALITYCONTROL: ['Quality Control', 'QC'],
+  FINALQC: ['Final QC', 'QC', 'Quality Control'],
+};
+
+function departmentKey(department: string): string {
+  return department.trim().replace(/[^a-z0-9]/gi, '').toUpperCase();
+}
+
+function sqlList(values: string[]) {
+  return sql.join(values.map((value) => sql`${value}`), sql`, `);
+}
+
+export function getDepartmentChargeCodeCandidates(department: string | null | undefined): string[] {
+  if (!department) return [];
+
+  const trimmed = department.trim();
+  if (!trimmed) return [];
+
+  const aliases = DEPARTMENT_ALIASES[departmentKey(trimmed)] ?? [];
+  return Array.from(new Set([trimmed, ...aliases]));
+}
+
+export function getDepartmentChargeCodeCandidateKeys(department: string | null | undefined): string[] {
+  return Array.from(new Set(getDepartmentChargeCodeCandidates(department).map(departmentKey)));
+}
+
+interface WadChargeCodeRow {
+  department?: unknown;
+  chargeCode?: unknown;
+}
+
+export function findWadDepartmentChargeCode(
+  wizardData: unknown,
+  department: string | null | undefined
+): string | null {
+  const departmentCandidates = getDepartmentChargeCodeCandidates(department).map(departmentKey);
+  if (departmentCandidates.length === 0 || !wizardData || typeof wizardData !== 'object') return null;
+
+  const step4 = (wizardData as { step4?: unknown }).step4;
+  if (!step4 || typeof step4 !== 'object') return null;
+
+  const rows = (step4 as { chargeCodes?: unknown }).chargeCodes;
+  if (!Array.isArray(rows)) return null;
+
+  for (const row of rows as WadChargeCodeRow[]) {
+    const rowDepartment = typeof row.department === 'string' ? row.department.trim() : '';
+    const rowChargeCode = typeof row.chargeCode === 'string' ? row.chargeCode.trim() : '';
+    if (!rowDepartment || !rowChargeCode) continue;
+    if (departmentCandidates.includes(departmentKey(rowDepartment))) {
+      return rowChargeCode;
+    }
   }
 
   return null;
@@ -251,18 +309,59 @@ export async function resolveChargeCode(params: {
     }
   }
 
-  // Priority 3: Active charge code whose department matches the routing operation's
+  // Priority 3: WAD-authored Step 4 charge-code row for this department.
+  // This is the direct WAD source of truth when the routing says "Quality Control"
+  // and the WAD row carries the active code "QC".
+  const wadDepartmentChargeCode = findWadDepartmentChargeCode(wad.wizardData, effectiveDepartment);
+  if (wadDepartmentChargeCode) {
+    const wadChargeCodeKeys = getDepartmentChargeCodeCandidateKeys(wadDepartmentChargeCode);
+    const [cc] = await db
+      .select({ id: chargeCodes.id, code: chargeCodes.code })
+      .from(chargeCodes)
+      .where(and(
+        sql`upper(regexp_replace(coalesce(${chargeCodes.code}, ''), '[^a-zA-Z0-9]', '', 'g')) in (${sqlList(wadChargeCodeKeys)})`,
+        eq(chargeCodes.active, true)
+      ))
+      .orderBy(sql`case when upper(regexp_replace(coalesce(${chargeCodes.code}, ''), '[^a-zA-Z0-9]', '', 'g')) = ${departmentKey(wadDepartmentChargeCode)} then 0 else 1 end`)
+      .limit(1);
+
+    if (cc) {
+      return { chargeCodeId: cc.id, chargeCode: cc.code, resolvedFrom: 'wad_department' };
+    }
+  }
+
+  // Priority 4: Active charge code whose department matches the routing operation's
   // departmentName (operation-scoped via effectiveDepartment resolved from travelerStepId,
   // or caller-supplied department as fallback).
-  if (effectiveDepartment) {
+  const departmentCandidates = getDepartmentChargeCodeCandidates(effectiveDepartment);
+  const departmentCandidateKeys = getDepartmentChargeCodeCandidateKeys(effectiveDepartment);
+  if (departmentCandidateKeys.length > 0) {
     const [deptCc] = await db
       .select({ id: chargeCodes.id, code: chargeCodes.code })
       .from(chargeCodes)
-      .where(and(eq(chargeCodes.department, effectiveDepartment), eq(chargeCodes.active, true)))
+      .where(and(
+        sql`upper(regexp_replace(coalesce(${chargeCodes.department}, ''), '[^a-zA-Z0-9]', '', 'g')) in (${sqlList(departmentCandidateKeys)})`,
+        eq(chargeCodes.active, true)
+      ))
+      .orderBy(sql`case when upper(regexp_replace(coalesce(${chargeCodes.department}, ''), '[^a-zA-Z0-9]', '', 'g')) = ${departmentKey(departmentCandidates[0])} then 0 else 1 end`)
       .limit(1);
 
     if (deptCc) {
       return { chargeCodeId: deptCc.id, chargeCode: deptCc.code, resolvedFrom: 'department_match' };
+    }
+
+    const [codeCc] = await db
+      .select({ id: chargeCodes.id, code: chargeCodes.code })
+      .from(chargeCodes)
+      .where(and(
+        sql`upper(regexp_replace(coalesce(${chargeCodes.code}, ''), '[^a-zA-Z0-9]', '', 'g')) in (${sqlList(departmentCandidateKeys)})`,
+        eq(chargeCodes.active, true)
+      ))
+      .orderBy(sql`case when upper(regexp_replace(coalesce(${chargeCodes.code}, ''), '[^a-zA-Z0-9]', '', 'g')) = ${departmentKey(departmentCandidates[0])} then 0 else 1 end`)
+      .limit(1);
+
+    if (codeCc) {
+      return { chargeCodeId: codeCc.id, chargeCode: codeCc.code, resolvedFrom: 'department_match' };
     }
   }
 

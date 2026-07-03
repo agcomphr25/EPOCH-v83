@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import { quotes, quoteLineItems, projectSteps, projects, productionWorkOrders, projectStepTypeEnum, insertQuoteSchema, insertQuoteLineItemSchema, customers, type QuoteExecutionFeedback } from '../../schema';
 import { eq, desc, max } from 'drizzle-orm';
 import { resolveCustomersIntegerId } from '../lib/customerResolver';
@@ -49,6 +49,7 @@ import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
 import { storage } from '../../storage';
+import { createQuoteSnapshot } from '../services/quoteContractService';
 
 type ProjectStepTypeValue = typeof projectStepTypeEnum.enumValues[number];
 
@@ -61,6 +62,78 @@ const PROJECT_STEP_TYPES: Array<{ type: ProjectStepTypeValue; order: number }> =
 ];
 
 const router = Router();
+
+async function getEstimatingQuoteReleaseGate(quoteId: string) {
+  const rfqRows = await pool.query(
+    `SELECT id, rfq_number FROM estimating_rfqs WHERE quote_id = $1 LIMIT 1`,
+    [quoteId]
+  );
+  const rfq = rfqRows[0];
+  if (!rfq) return null;
+
+  const [approvals, pricingRows, latestRiskRows, blockingRiskItems] = await Promise.all([
+    pool.query(`SELECT approval_role, approval_status FROM estimating_approvals WHERE rfq_id = $1`, [rfq.id]),
+    pool.query(`SELECT extended_price, margin_percent FROM estimating_pricing_snapshots WHERE rfq_id = $1`, [rfq.id]),
+    pool.query(
+      `SELECT * FROM risk_assessments
+       WHERE rfq_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [rfq.id]
+    ),
+    pool.query(
+      `SELECT ri.*
+       FROM risk_items ri
+       JOIN risk_assessments ra ON ra.id = ri.risk_assessment_id
+       WHERE ra.rfq_id = $1
+         AND ri.status NOT IN ('CLOSED', 'MITIGATED', 'ACCEPTED')
+         AND (ri.requires_approval = true OR ri.score >= 10)`,
+      [rfq.id]
+    ),
+  ]);
+
+  const totalEstimateValue = pricingRows.reduce((sum: number, row: any) => sum + Number(row.extended_price || 0), 0);
+  const margins = pricingRows.map((row: any) => Number(row.margin_percent || 0));
+  const minMarginPercent = margins.length ? Math.min(...margins) : null;
+  const latestRisk = latestRiskRows[0] ?? null;
+  const riskScore = Number(latestRisk?.overall_score ?? 0);
+  const riskLevel = latestRisk?.overall_level ?? 'UNKNOWN';
+  const executiveTriggers = [
+    totalEstimateValue >= 50000 ? 'VALUE_50000_OR_GREATER' : null,
+    minMarginPercent !== null && minMarginPercent < 15 ? 'MARGIN_BELOW_15_PERCENT' : null,
+    riskScore >= 10 ? 'RISK_SCORE_10_OR_GREATER' : null,
+    ['HIGH', 'CRITICAL'].includes(riskLevel) ? `RISK_LEVEL_${riskLevel}` : null,
+  ].filter(Boolean);
+  const requiredRoles = ['ESTIMATOR', 'ENGINEERING', 'FINANCE'];
+  if (executiveTriggers.length > 0) requiredRoles.push('EXECUTIVE');
+
+  const approvedRoles = new Set(
+    approvals
+      .filter((row: any) => row.approval_status === 'APPROVED')
+      .map((row: any) => row.approval_role)
+  );
+  const missingRoles = requiredRoles.filter((role) => !approvedRoles.has(role));
+  const riskReady = Boolean(latestRisk)
+    && ['APPROVED', 'CLOSED'].includes(String(latestRisk.status))
+    && blockingRiskItems.length === 0;
+
+  return {
+    rfqId: rfq.id,
+    rfqNumber: rfq.rfq_number,
+    readyForQuoteRelease: missingRoles.length === 0 && riskReady,
+    requiredRoles,
+    missingRoles,
+    executiveRequired: executiveTriggers.length > 0,
+    executiveTriggers,
+    risk: {
+      assessmentId: latestRisk?.id ?? null,
+      status: latestRisk?.status ?? null,
+      overallScore: riskScore,
+      overallLevel: riskLevel,
+      blockingRiskCount: blockingRiskItems.length,
+    },
+  };
+}
 
 // Generate unique quote number
 async function generateQuoteNumber(): Promise<string> {
@@ -225,6 +298,41 @@ router.get('/api/quotes/:id', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/api/quotes/:id/snapshots', async (req: Request, res: Response) => {
+  try {
+    const quoteId = req.params.id;
+    const { pool } = await import('../../db');
+
+    const snapshotResult = await pool.query(
+      `SELECT *
+       FROM quote_snapshots
+       WHERE quote_id = $1
+       ORDER BY revision_number DESC`,
+      [quoteId],
+    );
+    const snapshots = Array.isArray(snapshotResult) ? snapshotResult : snapshotResult.rows ?? [];
+
+    const snapshotsWithLines = await Promise.all(
+      snapshots.map(async (snapshot: any) => {
+        const lineResult = await pool.query(
+          `SELECT *
+           FROM quote_line_snapshots
+           WHERE quote_snapshot_id = $1
+           ORDER BY line_number`,
+          [snapshot.id],
+        );
+        const lines = Array.isArray(lineResult) ? lineResult : lineResult.rows ?? [];
+        return { ...snapshot, lineItems: lines };
+      }),
+    );
+
+    res.json(snapshotsWithLines);
+  } catch (error) {
+    console.error('Get quote snapshots error:', error);
+    res.status(500).json({ error: 'Failed to fetch quote snapshots' });
+  }
+});
+
 // Save quote (create or update as draft)
 router.post('/api/quotes/save', async (req: Request, res: Response) => {
   try {
@@ -310,6 +418,22 @@ router.post('/api/quotes/save', async (req: Request, res: Response) => {
 
       quoteId = newQuote[0].id;
     } else {
+      const [existingQuote] = await db
+        .select({ status: quotes.status })
+        .from(quotes)
+        .where(eq(quotes.id, quoteId))
+        .limit(1);
+
+      if (!existingQuote) {
+        return res.status(404).json({ error: 'Quote not found' });
+      }
+      if (existingQuote.status !== 'DRAFT') {
+        return res.status(409).json({
+          error: 'Sent quotes are immutable. Create a new quote revision instead of editing the submitted quote.',
+          currentStatus: existingQuote.status,
+        });
+      }
+
       // Update existing quote.
       // customersIntegerId update policy:
       //   - customerId provided (non-empty): always sync bridge FK to the resolved
@@ -385,26 +509,44 @@ router.post('/api/quotes/save', async (req: Request, res: Response) => {
 // Submit quote (change status to SENT and send email)
 router.post('/api/quotes/submit', async (req: Request, res: Response) => {
   try {
-    const { id } = req.body;
+    const { id, revisionLabel, exclusions, certRequirements, contractualClauses } = req.body;
 
     if (!id) {
       return res.status(400).json({ error: 'Quote ID is required' });
     }
 
-    // Update quote status to SENT
-    await db
+    const [currentQuote] = await db
+      .select()
+      .from(quotes)
+      .where(eq(quotes.id, id))
+      .limit(1);
+
+    if (!currentQuote) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+    if (currentQuote.status !== 'DRAFT') {
+      return res.status(409).json({
+        error: 'Only draft quotes can be submitted. Sent quotes are immutable; create a new revision instead.',
+        currentStatus: currentQuote.status,
+      });
+    }
+
+    const estimatingGate = await getEstimatingQuoteReleaseGate(id);
+    if (estimatingGate && !estimatingGate.readyForQuoteRelease) {
+      return res.status(409).json({
+        error: 'Quote cannot be submitted until the source RFQ has completed estimating approvals and risk release.',
+        readiness: estimatingGate,
+      });
+    }
+
+    const [submittedQuote] = await db
       .update(quotes)
       .set({
         status: 'SENT',
         updatedAt: new Date(),
       })
-      .where(eq(quotes.id, id));
-
-    // Fetch complete quote
-    const [submittedQuote] = await db
-      .select()
-      .from(quotes)
-      .where(eq(quotes.id, id));
+      .where(eq(quotes.id, id))
+      .returning();
 
     const submittedLineItems = await db
       .select()
@@ -415,10 +557,17 @@ router.post('/api/quotes/submit', async (req: Request, res: Response) => {
     // TODO: Send email notification to customer
     // This would integrate with SendGrid or your email service
     // For now, we'll just update the status
+    const snapshot = await createQuoteSnapshot(id, {
+      revisionLabel,
+      exclusions,
+      certRequirements,
+      contractualClauses,
+    });
 
     res.json({
       ...submittedQuote,
       lineItems: submittedLineItems,
+      snapshot,
       message: 'Quote submitted successfully',
     });
   } catch (error) {
@@ -445,11 +594,32 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
 
     // For non-ACCEPTED status changes, just update and return
     if (status !== 'ACCEPTED' || quote.status === 'ACCEPTED') {
+      if (status === 'SENT' && quote.status !== 'DRAFT') {
+        return res.status(409).json({
+          error: 'Only draft quotes can be sent. Sent quotes are immutable; create a new revision instead.',
+          currentStatus: quote.status,
+        });
+      }
+      if (status === 'SENT') {
+        const estimatingGate = await getEstimatingQuoteReleaseGate(quoteId);
+        if (estimatingGate && !estimatingGate.readyForQuoteRelease) {
+          return res.status(409).json({
+            error: 'Quote cannot be sent until the source RFQ has completed estimating approvals and risk release.',
+            readiness: estimatingGate,
+          });
+        }
+      }
+
       const [updated] = await db
         .update(quotes)
         .set({ status, updatedAt: new Date() })
         .where(eq(quotes.id, quoteId))
         .returning();
+
+      let snapshot = null;
+      if (status === 'SENT') {
+        snapshot = await createQuoteSnapshot(quoteId);
+      }
 
       // Recovery path for legacy ACCEPTED quotes missing projectId:
       // scan project steps for a linked quote step to backfill the projectId.
@@ -471,7 +641,7 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
         }
       }
 
-      return res.json({ ...updated, projectId: resolvedProjectId });
+      return res.json({ ...updated, projectId: resolvedProjectId, snapshot });
     }
 
     // ── ACCEPTANCE PATH: wrap everything in a transaction ──────────────────

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,6 +53,8 @@ import {
   Trash2,
   Loader2,
   Printer,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   getCurrentOperationalWeek,
@@ -120,6 +122,18 @@ interface NotificationHistoryResponse {
   notifications: NotificationHistoryItem[];
 }
 
+function formatNotificationFailure(result: any): string {
+  const details = Array.isArray(result?.details)
+    ? result.details.filter(Boolean).join('; ')
+    : typeof result?.details === 'string'
+      ? result.details
+      : '';
+
+  return [result?.error || 'Failed to send notification', details]
+    .filter(Boolean)
+    .join(': ');
+}
+
 type DateRangeMode = 'week' | 'month' | 'quarter';
 
 const MONTH_NAMES = [
@@ -128,6 +142,7 @@ const MONTH_NAMES = [
 ];
 
 const QUARTER_LABELS = ['Q1 (Jan-Mar)', 'Q2 (Apr-Jun)', 'Q3 (Jul-Sep)', 'Q4 (Oct-Dec)'];
+const SHIPMENT_PAGE_SIZE = 50;
 
 export default function ShippingTracker() {
   const { week: currentWeek, year: currentOpYear } = getCurrentOperationalWeek();
@@ -150,6 +165,7 @@ export default function ShippingTracker() {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editTrackingNumber, setEditTrackingNumber] = useState('');
   const [editCarrier, setEditCarrier] = useState('UPS');
+  const [shipmentPage, setShipmentPage] = useState(1);
 
   // Mutation to update tracking info
   const updateTrackingMutation = useMutation({
@@ -297,7 +313,7 @@ export default function ShippingTracker() {
 
       if (!response.ok) {
         console.error('[NOTIFY FAIL RESULT]', result);
-        throw new Error(result.error || 'Failed to send notification');
+        throw new Error(formatNotificationFailure(result));
       }
 
       return result;
@@ -315,7 +331,7 @@ export default function ShippingTracker() {
       console.error('[UI ERROR] Failed notification for order:', orderId, error);
       toast({
         title: 'Failed to Send Notification',
-        description: error.message + ' — see browser console for details',
+        description: error.message,
         variant: 'destructive',
       });
     },
@@ -410,6 +426,18 @@ export default function ShippingTracker() {
       return new Date(b.shippedDate).getTime() - new Date(a.shippedDate).getTime();
     });
   }, [orders, searchTerm, customers, isAdmin, dateRangeMode, getDateRangeForMode]);
+
+  useEffect(() => {
+    setShipmentPage(1);
+  }, [searchTerm, dateRangeMode, selectedYear, selectedWeek, selectedMonth, selectedQuarter]);
+
+  const shipmentTotalPages = Math.max(1, Math.ceil(filteredOrders.length / SHIPMENT_PAGE_SIZE));
+  const currentShipmentPage = Math.min(shipmentPage, shipmentTotalPages);
+  const shipmentStartIndex = (currentShipmentPage - 1) * SHIPMENT_PAGE_SIZE;
+  const paginatedShipmentOrders = filteredOrders.slice(
+    shipmentStartIndex,
+    shipmentStartIndex + SHIPMENT_PAGE_SIZE
+  );
 
   // Group orders by tracking number to identify consolidated shipments
   const trackingGroups = useMemo(() => {
@@ -883,7 +911,7 @@ export default function ShippingTracker() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredOrders.slice(0, dateRangeMode === 'week' ? 50 : 200).map((order) => {
+                    {paginatedShipmentOrders.map((order) => {
                       const customer = customers?.find(
                         (c) => String(c.id) === String(order.customerId)
                       );
@@ -1065,10 +1093,39 @@ export default function ShippingTracker() {
                     })}
                   </TableBody>
                 </Table>
-                {filteredOrders.length > 50 && (
-                  <p className="text-sm text-gray-500 mt-2 text-center">
-                    Showing first 50 of {filteredOrders.length} results
-                  </p>
+                {filteredOrders.length > SHIPMENT_PAGE_SIZE && (
+                  <div className="mt-4 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-gray-600 text-center sm:text-left">
+                      Showing {shipmentStartIndex + 1}-
+                      {Math.min(shipmentStartIndex + SHIPMENT_PAGE_SIZE, filteredOrders.length)} of{' '}
+                      {filteredOrders.length} shipments
+                    </p>
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShipmentPage((page) => Math.max(1, page - 1))}
+                        disabled={currentShipmentPage === 1}
+                        data-testid="button-shipping-previous-page"
+                      >
+                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        Previous
+                      </Button>
+                      <span className="text-sm text-gray-600 min-w-24 text-center">
+                        Page {currentShipmentPage} of {shipmentTotalPages}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShipmentPage((page) => Math.min(shipmentTotalPages, page + 1))}
+                        disabled={currentShipmentPage === shipmentTotalPages}
+                        data-testid="button-shipping-next-page"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
             ) : searchTerm ? (

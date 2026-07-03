@@ -188,6 +188,7 @@ interface Slot {
   isEmpty: boolean;
   isOverflow: boolean;
   travelerId?: string;
+  itemIdentifier?: string;
   travelerNumber?: string;
   partNumber?: string;
   partName?: string;
@@ -205,8 +206,10 @@ interface Slot {
   currentStepStatus?: string | null;
   currentStepStartedAt?: string | null;
   currentStepCompletedAt?: string | null;
+  activeOvenRun?: ActiveOvenRun | null;
   detail: {
     travelerId?: string;
+    itemIdentifier?: string;
     travelerNumber?: string;
     partNumber?: string;
     partName?: string;
@@ -218,6 +221,7 @@ interface Slot {
     elapsedMs?: number | null;
     isGreen?: boolean;
     blockReason?: string | null;
+    activeOvenRun?: ActiveOvenRun | null;
     steps: {
       id: string;
       departmentName: string;
@@ -237,6 +241,17 @@ interface Slot {
       createdAt: string;
     }[];
   };
+}
+
+interface ActiveOvenRun {
+  runId: string;
+  programName: string | null;
+  serialNumber: string | null;
+  ovenNumber: number | null;
+  ovenSlot: string | null;
+  startedAt: string | null;
+  status: string;
+  currentStepIndex: number;
 }
 
 interface BoardData {
@@ -382,6 +397,8 @@ function SlotCard({
   const cureBlocks = useMemo(() => (isOvenActive ? computeCureBlocks(slot) : 0), [isOvenActive, slot]);
 
   const deptLabel = slot.currentDepartment ?? (slot.displayLabel !== 'NOT_STARTED' ? slot.displayLabel : null);
+  const identifier = slot.itemIdentifier ?? slot.travelerNumber ?? slot.serialNumber ?? slot.lotNumber;
+  const activeOvenRun = slot.activeOvenRun ?? slot.detail?.activeOvenRun ?? null;
 
   return (
     <div
@@ -475,7 +492,7 @@ function SlotCard({
             maxWidth: '55%',
           }}
         >
-          {isEmpty ? 'EMPTY' : (slot.travelerNumber ?? '—')}
+          {isEmpty ? 'EMPTY' : (identifier ?? '—')}
         </span>
         {!isEmpty && slot.partNumber && (
           <span
@@ -509,6 +526,47 @@ function SlotCard({
           }}
         >
           {slot.partName}
+        </div>
+      )}
+
+      {!isEmpty && activeOvenRun && (
+        <div
+          style={{
+            marginTop: 5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 6,
+            background: '#fff7ed',
+            border: '1px solid #fb923c',
+            borderLeft: '3px solid #ea580c',
+            padding: '3px 6px',
+            borderRadius: 3,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: FONT_STACK,
+              fontSize: isTvMode ? '0.72rem' : '0.6rem',
+              color: '#c2410c',
+              fontWeight: 900,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+            }}
+          >
+            In oven
+          </span>
+          <span
+            style={{
+              fontFamily: FONT_STACK,
+              fontSize: isTvMode ? '0.72rem' : '0.6rem',
+              color: '#9a3412',
+              fontWeight: 800,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Oven {activeOvenRun.ovenNumber ?? '—'} {activeOvenRun.ovenSlot ? (activeOvenRun.ovenSlot === 'A' ? 'R' : activeOvenRun.ovenSlot === 'B' ? 'L' : activeOvenRun.ovenSlot) : ''}
+          </span>
         </div>
       )}
 
@@ -725,6 +783,7 @@ function DetailDrawer({
         <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ background: '#f9fafb', border: `1px solid ${CARD_BORDER}`, padding: '12px 14px', borderRadius: 4 }}>
             <Row label="Traveler #" value={slot.travelerNumber} />
+            <Row label="Item ID" value={slot.itemIdentifier} />
             <Row label="Part Number" value={slot.partNumber} />
             <Row label="Part Name" value={slot.partName} />
             <Row label="Serial #" value={slot.serialNumber} />
@@ -737,6 +796,14 @@ function DetailDrawer({
             <SectionTitle>Timing</SectionTitle>
             <Row label="Layup Started" value={formatDateTime(slot.layupStartedAt)} />
             <Row label="Oven/Cure Started" value={slot.greenAt ? formatDateTime(slot.greenAt) : '—'} />
+            <Row
+              label="Timer Oven Item"
+              value={
+                slot.activeOvenRun
+                  ? `${slot.activeOvenRun.programName ?? 'Timer'} / Oven ${slot.activeOvenRun.ovenNumber ?? '—'} ${slot.activeOvenRun.ovenSlot ? (slot.activeOvenRun.ovenSlot === 'A' ? 'R' : slot.activeOvenRun.ovenSlot === 'B' ? 'L' : slot.activeOvenRun.ovenSlot) : ''}`
+                  : '—'
+              }
+            />
             <Row label="Elapsed" value={formatElapsed(slot.elapsedMs)} />
             <Row label="Green" value={slot.isGreen ? 'Yes' : 'No'} valueStyle={{ color: slot.isGreen ? '#16a34a' : '#9ca3af' }} />
             {slot.blockReason && (
@@ -874,7 +941,7 @@ export default function DailyThroughputBoard() {
 
   const displaySlots = useMemo(() => {
     if (!data) return [];
-    return data.slots.slice(0, 22 + data.slots.filter((s) => s.isOverflow).length);
+    return data.slots.slice(0, data.targetSlots + data.slots.filter((s) => s.isOverflow).length);
   }, [data]);
 
   const lastUpdated = dataUpdatedAt

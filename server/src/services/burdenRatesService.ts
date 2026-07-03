@@ -18,6 +18,9 @@ import { db } from '../../db';
 import {
   appliedBurdenAmounts,
   burdenApplicationRuns,
+  burdenRateAccumulationBases,
+  burdenRateAccumulationExpenseLines,
+  burdenRateAccumulations,
   indirectCostPools,
   indirectRates,
   laborCostRecords,
@@ -28,6 +31,39 @@ import { and, asc, desc, eq, inArray, lte, sql } from 'drizzle-orm';
 
 export type RateType = 'PROVISIONAL' | 'BILLING' | 'FINAL';
 export type RunType = 'INITIAL' | 'TRUE_UP';
+
+export interface AccumulationExpenseLineInput {
+  poolId: number;
+  lineItem: string;
+  monthlyAmounts: Record<string, number>;
+  notes?: string | null;
+}
+
+export interface AccumulationBaseInput {
+  poolId: number;
+  baseAmount: number;
+  baseSource?: string | null;
+}
+
+export interface BurdenRateAccumulationInput {
+  calculationYear: number;
+  lookbackStart: string;
+  lookbackEnd: string;
+  rateType: RateType;
+  effectiveFrom: string;
+  notes?: string | null;
+  expenseLines: AccumulationExpenseLineInput[];
+  bases: AccumulationBaseInput[];
+}
+
+export interface AccumulationPoolSummary {
+  poolId: number;
+  poolCode: string;
+  poolName: string;
+  expenseTotal: number;
+  baseAmount: number;
+  calculatedRate: number;
+}
 
 export interface ResolvedPoolRate {
   pool: IndirectCostPool;
@@ -132,6 +168,283 @@ function periodBounds(year: number, month: number): { start: Date; end: Date } {
     start: new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0)),
     end: new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)),
   };
+}
+
+function round6(n: number): number {
+  return Math.round((n + Number.EPSILON) * 1000000) / 1000000;
+}
+
+function sumMonthlyAmounts(monthlyAmounts: Record<string, number> | null | undefined): number {
+  return Object.values(monthlyAmounts ?? {}).reduce((sum, value) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? sum + n : sum;
+  }, 0);
+}
+
+function summarizeAccumulation(
+  pools: Array<{ id: number; code: string; name: string }>,
+  expenseLines: Array<{ poolId: number; monthlyAmounts: Record<string, number> }>,
+  bases: Array<{ poolId: number; baseAmount: string | number }>,
+): AccumulationPoolSummary[] {
+  const expensesByPool = new Map<number, number>();
+  for (const line of expenseLines) {
+    expensesByPool.set(line.poolId, (expensesByPool.get(line.poolId) ?? 0) + sumMonthlyAmounts(line.monthlyAmounts));
+  }
+
+  const baseByPool = new Map<number, number>();
+  for (const base of bases) {
+    baseByPool.set(base.poolId, Number(base.baseAmount) || 0);
+  }
+
+  return pools.map((pool) => {
+    const expenseTotal = round4(expensesByPool.get(pool.id) ?? 0);
+    const baseAmount = round4(baseByPool.get(pool.id) ?? 0);
+    return {
+      poolId: pool.id,
+      poolCode: pool.code,
+      poolName: pool.name,
+      expenseTotal,
+      baseAmount,
+      calculatedRate: baseAmount > 0 ? round6(expenseTotal / baseAmount) : 0,
+    };
+  });
+}
+
+let accumulationSchemaReady: Promise<void> | null = null;
+
+async function ensureAccumulationSchema(): Promise<void> {
+  accumulationSchemaReady ??= (async () => {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS burden_rate_accumulations (
+        id                  SERIAL PRIMARY KEY,
+        calculation_year    INTEGER     NOT NULL,
+        lookback_start      DATE        NOT NULL,
+        lookback_end        DATE        NOT NULL,
+        rate_type           TEXT        NOT NULL DEFAULT 'PROVISIONAL',
+        effective_from      DATE        NOT NULL,
+        status              TEXT        NOT NULL DEFAULT 'DRAFT',
+        notes               TEXT,
+        created_by          TEXT        NOT NULL,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        posted_at           TIMESTAMPTZ,
+        CONSTRAINT burden_rate_accumulations_rate_type_chk
+          CHECK (rate_type IN ('PROVISIONAL', 'BILLING', 'FINAL')),
+        CONSTRAINT burden_rate_accumulations_status_chk
+          CHECK (status IN ('DRAFT', 'POSTED'))
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_burden_rate_accumulations_year
+        ON burden_rate_accumulations (calculation_year, rate_type, created_at DESC)
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS burden_rate_accumulation_expense_lines (
+        id                  SERIAL PRIMARY KEY,
+        accumulation_id     INTEGER     NOT NULL REFERENCES burden_rate_accumulations(id) ON DELETE CASCADE,
+        pool_id             INTEGER     NOT NULL REFERENCES indirect_cost_pools(id),
+        line_item           TEXT        NOT NULL,
+        monthly_amounts     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+        notes               TEXT,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_burden_rate_accumulation_expense_lines_accumulation
+        ON burden_rate_accumulation_expense_lines (accumulation_id, pool_id)
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS burden_rate_accumulation_bases (
+        id                  SERIAL PRIMARY KEY,
+        accumulation_id     INTEGER     NOT NULL REFERENCES burden_rate_accumulations(id) ON DELETE CASCADE,
+        pool_id             INTEGER     NOT NULL REFERENCES indirect_cost_pools(id),
+        base_amount         NUMERIC(14,4) NOT NULL DEFAULT 0,
+        base_source         TEXT,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT burden_rate_accumulation_bases_unique
+          UNIQUE (accumulation_id, pool_id)
+      )
+    `);
+  })().catch((err) => {
+    accumulationSchemaReady = null;
+    throw err;
+  });
+
+  return accumulationSchemaReady;
+}
+
+export async function getBurdenRateAccumulation(accumulationId: number) {
+  await ensureAccumulationSchema();
+
+  const [accumulation] = await db
+    .select()
+    .from(burdenRateAccumulations)
+    .where(eq(burdenRateAccumulations.id, accumulationId))
+    .limit(1);
+
+  if (!accumulation) return null;
+
+  const [pools, expenseLines, bases] = await Promise.all([
+    db.select().from(indirectCostPools).orderBy(asc(indirectCostPools.applyOrder)),
+    db
+      .select()
+      .from(burdenRateAccumulationExpenseLines)
+      .where(eq(burdenRateAccumulationExpenseLines.accumulationId, accumulationId)),
+    db
+      .select()
+      .from(burdenRateAccumulationBases)
+      .where(eq(burdenRateAccumulationBases.accumulationId, accumulationId)),
+  ]);
+
+  return {
+    accumulation,
+    expenseLines,
+    bases,
+    summary: summarizeAccumulation(pools, expenseLines, bases),
+  };
+}
+
+export async function getLatestBurdenRateAccumulation(calculationYear?: number) {
+  await ensureAccumulationSchema();
+
+  const rows = calculationYear
+    ? await db
+      .select()
+      .from(burdenRateAccumulations)
+      .where(eq(burdenRateAccumulations.calculationYear, calculationYear))
+      .orderBy(desc(burdenRateAccumulations.createdAt), desc(burdenRateAccumulations.id))
+      .limit(1)
+    : await db
+      .select()
+      .from(burdenRateAccumulations)
+      .orderBy(desc(burdenRateAccumulations.createdAt), desc(burdenRateAccumulations.id))
+      .limit(1);
+
+  if (!rows[0]) return null;
+  return getBurdenRateAccumulation(rows[0].id);
+}
+
+export async function saveBurdenRateAccumulation(input: BurdenRateAccumulationInput, createdBy: string) {
+  await ensureAccumulationSchema();
+
+  const expenseLines = input.expenseLines
+    .map((line) => ({
+      ...line,
+      lineItem: line.lineItem.trim(),
+      monthlyAmounts: Object.fromEntries(
+        Object.entries(line.monthlyAmounts ?? {}).map(([month, value]) => [month, Number(value) || 0]),
+      ),
+    }))
+    .filter((line) => line.lineItem.length > 0);
+
+  const bases = input.bases.map((base) => ({
+    poolId: base.poolId,
+    baseAmount: (Number(base.baseAmount) || 0).toFixed(4),
+    baseSource: base.baseSource?.trim() || null,
+  }));
+
+  if (expenseLines.length === 0) {
+    throw Object.assign(new Error('At least one QuickBooks expense line is required.'), { code: 'NO_EXPENSE_LINES' });
+  }
+
+  const [row] = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(burdenRateAccumulations)
+      .values({
+        calculationYear: input.calculationYear,
+        lookbackStart: input.lookbackStart,
+        lookbackEnd: input.lookbackEnd,
+        rateType: input.rateType,
+        effectiveFrom: input.effectiveFrom,
+        notes: input.notes?.trim() || null,
+        createdBy,
+      })
+      .returning();
+
+    await tx.insert(burdenRateAccumulationExpenseLines).values(
+      expenseLines.map((line) => ({
+        accumulationId: created.id,
+        poolId: line.poolId,
+        lineItem: line.lineItem,
+        monthlyAmounts: line.monthlyAmounts,
+        notes: line.notes?.trim() || null,
+      })),
+    );
+
+    if (bases.length > 0) {
+      await tx.insert(burdenRateAccumulationBases).values(
+        bases.map((base) => ({
+          accumulationId: created.id,
+          poolId: base.poolId,
+          baseAmount: base.baseAmount,
+          baseSource: base.baseSource,
+        })),
+      );
+    }
+
+    return [created];
+  });
+
+  return getBurdenRateAccumulation(row.id);
+}
+
+export async function postAccumulationRates(accumulationId: number, actor: string) {
+  await ensureAccumulationSchema();
+
+  const payload = await getBurdenRateAccumulation(accumulationId);
+  if (!payload) throw Object.assign(new Error('Burden rate accumulation not found.'), { code: 'NOT_FOUND' });
+  if (payload.accumulation.status === 'POSTED') {
+    throw Object.assign(new Error('This accumulation has already been posted to rates.'), { code: 'ALREADY_POSTED' });
+  }
+
+  const validSummaries = payload.summary.filter((row) => row.baseAmount > 0 && row.expenseTotal > 0);
+  if (validSummaries.length === 0) {
+    throw Object.assign(new Error('No pool has both expense dollars and a base amount, so no rates can be posted.'), { code: 'NO_POSTABLE_RATES' });
+  }
+
+  try {
+    const inserted = await db.transaction(async (tx) => {
+      const rateRows = [];
+      for (const summary of validSummaries) {
+        const [rate] = await tx
+          .insert(indirectRates)
+          .values({
+            poolId: summary.poolId,
+            rateType: payload.accumulation.rateType,
+            rate: summary.calculatedRate.toFixed(6),
+            effectiveFrom: payload.accumulation.effectiveFrom,
+            notes: `Calculated from accumulation #${payload.accumulation.id}: ${payload.accumulation.lookbackStart} through ${payload.accumulation.lookbackEnd}`,
+            createdBy: actor,
+          })
+          .returning();
+        rateRows.push(rate);
+      }
+
+      await tx
+        .update(burdenRateAccumulations)
+        .set({ status: 'POSTED', postedAt: new Date() })
+        .where(eq(burdenRateAccumulations.id, accumulationId));
+
+      return rateRows;
+    });
+
+    return {
+      accumulationId,
+      insertedRates: inserted,
+      summary: validSummaries,
+    };
+  } catch (e: any) {
+    if (e.code === '23505') {
+      throw Object.assign(
+        new Error('A rate already exists for one of these pools on the selected effective date and rate type. Use a different effective date or rate type.'),
+        { code: 'RATE_EXISTS' },
+      );
+    }
+    throw e;
+  }
 }
 
 export interface ApplyBurdenResult {

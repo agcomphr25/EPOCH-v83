@@ -1,0 +1,57 @@
+index-DCY97kX2.js:5545 React initialized: Object
+index-DCY97kX2.js:5545 React hooks: Object
+index-DCY97kX2.js:5545 [EPOCH SYNC] Sync engine starting
+index-DCY97kX2.js:5545 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-DCY97kX2.js:5542 App component is rendering...
+index-DCY97kX2.js:5542 Environment: production
+index-DCY97kX2.js:5542 Base URL: /
+index-DCY97kX2.js:235 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+index-DCY97kX2.js:235 🌐 API Request to /api/inventory/ledger/locations (timeout: 15000ms, deployment: true)
+index-DCY97kX2.js:235 🌐 API Request to /api/inventory/ledger?page=1&limit=100 (timeout: 15000ms, deployment: true)
+index-DCY97kX2.js:1795 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-DCY97kX2.js:1795 [EPOCH] Install prompt captured and ready
+/inventory/ledger:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-DCY97kX2.js:235 ✅ API Response from /api/inventory/ledger/locations: 200
+index-DCY97kX2.js:235 ✅ API Response from /api/inventory/ledger?page=1&limit=100: 200
+index-DCY97kX2.js:235 ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 200
+index-DCY97kX2.js:5542 App component is rendering...
+index-DCY97kX2.js:5542 Environment: production
+index-DCY97kX2.js:5542 Base URL: /
+index-DCY97kX2.js:5542 App component is rendering...
+index-DCY97kX2.js:5542 Environment: production
+index-DCY97kX2.js:5542 Base URL: /
+index-DCY97kX2.js:5545 TypeError: S.filter is not a function
+    at N7n (index-DCY97kX2.js:5360:85127)
+    at GRe (index-DCY97kX2.js:38:17178)
+    at Qke (index-DCY97kX2.js:40:3170)
+    at u1t (index-DCY97kX2.js:40:45310)
+    at l1t (index-DCY97kX2.js:40:40186)
+    at dis (index-DCY97kX2.js:40:40109)
+    at Bde (index-DCY97kX2.js:40:39956)
+    at e4e (index-DCY97kX2.js:40:36268)
+    at Qze (index-DCY97kX2.js:40:37082)
+    at OT (index-DCY97kX2.js:38:3324)
+console.error @ index-DCY97kX2.js:5545
+index-DCY97kX2.js:5545 Global error caught: TypeError: S.filter is not a function
+    at N7n (index-DCY97kX2.js:5360:85127)
+    at GRe (index-DCY97kX2.js:38:17178)
+    at Qke (index-DCY97kX2.js:40:3170)
+    at u1t (index-DCY97kX2.js:40:45310)
+    at l1t (index-DCY97kX2.js:40:40186)
+    at dis (index-DCY97kX2.js:40:40109)
+    at Bde (index-DCY97kX2.js:40:39956)
+    at e4e (index-DCY97kX2.js:40:36268)
+    at Qze (index-DCY97kX2.js:40:37082)
+    at OT (index-DCY97kX2.js:38:3324)
+console.error @ index-DCY97kX2.js:5545
+index-DCY97kX2.js:38 Uncaught TypeError: S.filter is not a function
+    at N7n (index-DCY97kX2.js:5360:85127)
+    at GRe (index-DCY97kX2.js:38:17178)
+    at Qke (index-DCY97kX2.js:40:3170)
+    at u1t (index-DCY97kX2.js:40:45310)
+    at l1t (index-DCY97kX2.js:40:40186)
+    at dis (index-DCY97kX2.js:40:40109)
+    at Bde (index-DCY97kX2.js:40:39956)
+    at e4e (index-DCY97kX2.js:40:36268)
+    at Qze (index-DCY97kX2.js:40:37082)
+    at OT (index-DCY97kX2.js:38:3324)

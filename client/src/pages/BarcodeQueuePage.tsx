@@ -71,6 +71,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import OrderActionButtons from '@/components/OrderActionButtons';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 import { deriveOrderLabels, logBarcodeDebug } from '@/utils/deriveOrderLabels';
 
 // Kickback form validation schema
@@ -101,6 +102,23 @@ const kickbackFormSchema = z.object({
 type KickbackFormData = z.infer<typeof kickbackFormSchema>;
 
 type ViewMode = 'grouped' | 'flat' | 'list';
+
+const isFlatTopValue = (value: unknown) =>
+  value === true ||
+  (typeof value === 'string' && ['true', 'yes', 'flat top', 'flattop'].includes(value.trim().toLowerCase()));
+
+const isRegularFlatTopOrder = (order: any) => {
+  if (!order || String(order.orderId || '').startsWith('PO-')) return false;
+
+  return (
+    isFlatTopValue(order.isFlattop) ||
+    isFlatTopValue(order.isFlatTop) ||
+    isFlatTopValue(order.flatTop) ||
+    isFlatTopValue(order.features?.flattop) ||
+    isFlatTopValue(order.features?.flatTop) ||
+    isFlatTopValue(order.features?.flat_top)
+  );
+};
 
 export default function BarcodeQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -499,7 +517,7 @@ export default function BarcodeQueuePage() {
             }
           } else {
             // Regular orders: check if flat top
-            const isFlatTop = (order as any).isFlattop === true;
+            const isFlatTop = isRegularFlatTopOrder(order);
             if (isFlatTop) {
               flatTopOrderIds.push(orderId);
             } else {
@@ -935,6 +953,7 @@ export default function BarcodeQueuePage() {
               const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
               const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
               const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
+              const isRegularFlatTop = isRegularFlatTopOrder(order);
 
               return (
                 <Card
@@ -991,6 +1010,7 @@ export default function BarcodeQueuePage() {
                                 {materialType}
                               </Badge>
                             )}
+                            {isRegularFlatTop && <Badge variant="outline" className="text-xs border-purple-500 text-purple-700 bg-purple-50 font-semibold">Flat Top</Badge>}
                             {isTikka && <Badge variant="outline" className="text-xs border-purple-600 text-purple-700 bg-purple-50 font-semibold">Tikka</Badge>}
                             <Badge variant="outline" className={`text-xs ${actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' : actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' : actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-500 text-gray-700 bg-gray-50'}`}>
                               {actionLength === 'short' ? 'Short' : actionLength === 'medium' ? 'Medium' : actionLength === 'long' ? 'Long' : 'Unknown'} Action
@@ -999,6 +1019,7 @@ export default function BarcodeQueuePage() {
                             {hasHeavyFill && <Badge variant="outline" className="text-xs border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
                             {hasADL && <Badge variant="outline" className="text-xs border-violet-600 text-violet-700 bg-violet-50 font-semibold">ADL</Badge>}
                           </div>
+                          <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                           <div className="flex gap-1 pt-1">
                             <Link href={`/order-entry?draft=${order.orderId}`}>
                               <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order"><Edit className="h-3 w-3" /></Button>
@@ -1053,6 +1074,7 @@ export default function BarcodeQueuePage() {
                     const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
                     const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
                     const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
+                    const isRegularFlatTop = isRegularFlatTopOrder(order);
 
                     return (
                       <tr
@@ -1092,6 +1114,7 @@ export default function BarcodeQueuePage() {
                                 {materialType}
                               </Badge>
                             )}
+                            {isRegularFlatTop && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-500 text-purple-700 bg-purple-50 font-semibold">Flat Top</Badge>}
                             {isTikka && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-600 text-purple-700 bg-purple-50">Tikka</Badge>}
                             {lopVal && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-teal-600 text-teal-700 bg-teal-50 font-semibold">LOP {lopVal}</Badge>}
                             {hasHeavyFill && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
@@ -1222,6 +1245,7 @@ export default function BarcodeQueuePage() {
                       const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
                       const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
                       const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
+                      const isRegularFlatTop = isRegularFlatTopOrder(order);
 
                       return (
                         <Card
@@ -1317,6 +1341,14 @@ export default function BarcodeQueuePage() {
                                         }`}
                                       >
                                         {materialType}
+                                      </Badge>
+                                    )}
+                                    {isRegularFlatTop && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs border-purple-500 text-purple-700 bg-purple-50 font-semibold"
+                                      >
+                                        Flat Top
                                       </Badge>
                                     )}
                                     {isTikka && (
@@ -1418,6 +1450,8 @@ export default function BarcodeQueuePage() {
                                               FB: {order.fbOrderNumber}
                                             </div>
                                           )}
+
+                                          <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
 
                                           {/* Action Buttons */}
                                           <div className="flex gap-1 pt-2">
@@ -1544,6 +1578,7 @@ export default function BarcodeQueuePage() {
                             const actionLength = orderLabels2.actionLengthRaw;
                             const isTikka = orderLabels2.isTikka;
                             const materialType = orderLabels2.materialLabel;
+                            const isRegularFlatTop = isRegularFlatTopOrder(order);
 
                             // Check if this is a PO order (no label printing needed)
                             const isPOOrder = order.orderId.startsWith('PO-');
@@ -1628,6 +1663,14 @@ export default function BarcodeQueuePage() {
                                             {materialType}
                                           </Badge>
                                         )}
+                                        {isRegularFlatTop && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-xs border-purple-500 text-purple-700 bg-purple-50 font-semibold"
+                                          >
+                                            Flat Top
+                                          </Badge>
+                                        )}
                                         {isTikka && (
                                           <Badge
                                             variant="outline"
@@ -1703,6 +1746,8 @@ export default function BarcodeQueuePage() {
                                           FB: {order.fbOrderNumber}
                                         </div>
                                       )}
+
+                                      <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                                     </div>
                                   </div>
                                 </CardContent>

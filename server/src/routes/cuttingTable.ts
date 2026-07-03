@@ -10,8 +10,17 @@ import {
   cuttingPacketBOMParts,
   cuttingPacketBOMCuts,
   cuttingFabricInventory,
+  cuttingFabricInventoryTransactions,
+  manufacturingQueue,
+  getDashboardCategories,
+  supplySourceDashboardToLegacyDept,
 } from '../../schema';
-import { and, gte, lte, eq, desc, ilike, or, isNull } from 'drizzle-orm';
+import { and, gte, lte, eq, desc, ilike, or, isNull, inArray } from 'drizzle-orm';
+import {
+  adjustPacketInventoryForMaterial,
+  normalizeP1PacketMaterialType,
+  type P1PacketMaterialType,
+} from '../utils/p1PacketInventory';
 import {
   insertCuttingMaterialSchema,
   insertCuttingFabricTypeSchema,
@@ -33,6 +42,177 @@ import {
 } from '../../schema';
 
 const router = Router();
+
+function parseFabricStockQuantity(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 0;
+  const parsed = typeof value === 'number' ? value : parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function nonZeroInventoryDelta(quantity: number): number {
+  if (quantity === 0) return 0;
+  const magnitude = Math.max(1, Math.round(Math.abs(quantity)));
+  return quantity < 0 ? -magnitude : magnitude;
+}
+
+function syncFabricStockFields<T extends Record<string, any>>(data: T): T {
+  const next = { ...data };
+  const hasQuantityInStock = next.quantityInStock !== undefined && next.quantityInStock !== null && next.quantityInStock !== '';
+  const hasSquareMeters = next.squareMeters !== undefined && next.squareMeters !== null && next.squareMeters !== '';
+
+  if (hasSquareMeters) {
+    const quantity = parseFabricStockQuantity(next.squareMeters);
+    next.quantityInStock = quantity;
+  } else if (hasQuantityInStock) {
+    const quantity = parseFabricStockQuantity(next.quantityInStock);
+    next.squareMeters = String(quantity);
+  }
+
+  return next as T;
+}
+
+type CuttingPacketStockLevels = {
+  carbon_fiber: number;
+  fiberglass: number;
+  mesa: number;
+  cheek_riser: number;
+};
+
+function classifyPacketMaterial(item: any): keyof CuttingPacketStockLevels | null {
+  const haystack = [
+    item?.name,
+    item?.agPartNumber,
+    item?.description,
+    item?.category,
+    item?.manufacturedCategory,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (haystack.includes('cheek riser') || haystack.includes('cheekriser') || haystack.includes('cheek_riser')) return 'cheek_riser';
+  if (haystack.includes('mesa')) return 'mesa';
+  if (haystack.includes('fiberglass') || /\bfg\b/.test(haystack) || haystack.includes('fg stock')) return 'fiberglass';
+  if (haystack.includes('carbon') || haystack.includes('carbon_fiber') || /\bcf\b/.test(haystack) || haystack.includes('cf stock')) return 'carbon_fiber';
+  return null;
+}
+
+function parseP1PacketQueueNotes(notes: string | null): Record<string, any> {
+  if (!notes) return {};
+  try {
+    const parsed = JSON.parse(notes);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return { rawNotes: notes };
+  }
+}
+
+function stringifyP1PacketQueueNotes(notes: Record<string, any>): string {
+  const { rawNotes, ...serializableNotes } = notes;
+  return JSON.stringify(serializableNotes);
+}
+
+function getP1PacketMaterialFromQueueNotes(notes: Record<string, any>): P1PacketMaterialType | null {
+  const source = String(notes.source || '').toUpperCase();
+  const materialType = String(notes.materialType || '').toLowerCase();
+  if (notes.isP2Packet === true || source === 'P2' || source === 'P2_SYNC' || materialType.startsWith('p2_')) {
+    return null;
+  }
+  return normalizeP1PacketMaterialType(notes.materialType)
+    || normalizeP1PacketMaterialType(notes.packetName)
+    || normalizeP1PacketMaterialType(notes.rawNotes);
+}
+
+async function ensureP1PacketInventoryForCompletedQueueRows(): Promise<void> {
+  const cuttingTableDept = supplySourceDashboardToLegacyDept('CUTTING_TABLE')!;
+  const cuttingTableCategories = getDashboardCategories('CUTTING_TABLE');
+  const completedRows = await db
+    .select({
+      queue: manufacturingQueue,
+      item: inventoryItems,
+    })
+    .from(manufacturingQueue)
+    .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+    .where(and(
+      or(
+        eq(manufacturingQueue.department, cuttingTableDept),
+        inArray(inventoryItems.manufacturedCategory, cuttingTableCategories)
+      ),
+      eq(manufacturingQueue.status, 'COMPLETED')
+    ))
+    .orderBy(desc(manufacturingQueue.completedAt), desc(manufacturingQueue.updatedAt))
+    .limit(500);
+
+  for (const row of completedRows) {
+    const notes = parseP1PacketQueueNotes(row.queue.notes);
+    const materialType = getP1PacketMaterialFromQueueNotes(notes);
+    const completedQuantity = row.queue.quantityCompleted || 0;
+    const alreadyAdded = Number(notes.p1PacketInventoryAdded || 0);
+    const missingQuantity = completedQuantity - alreadyAdded;
+    if (!materialType || missingQuantity <= 0) continue;
+
+    await db.transaction(async (tx) => {
+      const [lockedRow] = await tx
+        .select({
+          notes: manufacturingQueue.notes,
+          quantityCompleted: manufacturingQueue.quantityCompleted,
+        })
+        .from(manufacturingQueue)
+        .where(eq(manufacturingQueue.id, row.queue.id))
+        .for('update');
+
+      if (!lockedRow) return;
+      const lockedNotes = parseP1PacketQueueNotes(lockedRow.notes);
+      const lockedMaterialType = getP1PacketMaterialFromQueueNotes(lockedNotes);
+      const lockedCompletedQuantity = lockedRow.quantityCompleted || 0;
+      const lockedAlreadyAdded = Number(lockedNotes.p1PacketInventoryAdded || 0);
+      const lockedMissingQuantity = lockedCompletedQuantity - lockedAlreadyAdded;
+      if (!lockedMaterialType || lockedMissingQuantity <= 0) return;
+
+      await adjustPacketInventoryForMaterial(tx, lockedMaterialType, lockedMissingQuantity);
+      await tx
+        .update(manufacturingQueue)
+        .set({
+          notes: stringifyP1PacketQueueNotes({
+            ...lockedNotes,
+            p1PacketInventoryAdded: lockedAlreadyAdded + lockedMissingQuantity,
+            p1PacketInventoryMaterialType: lockedMaterialType,
+          }),
+          updatedAt: new Date(),
+        })
+        .where(eq(manufacturingQueue.id, row.queue.id));
+    });
+  }
+}
+
+async function getCuttingPacketStockLevels(): Promise<CuttingPacketStockLevels> {
+  await ensureP1PacketInventoryForCompletedQueueRows();
+
+  const levels: CuttingPacketStockLevels = {
+    carbon_fiber: 0,
+    fiberglass: 0,
+    mesa: 0,
+    cheek_riser: 0,
+  };
+
+  const allItems = await storage.getAllInventoryItems();
+  const packetItems = allItems.filter((item: any) =>
+    item.isPacket === true ||
+    item.manufacturedCategory === 'PACKET' ||
+    item.category === 'packet' ||
+    String(item.name ?? '').toLowerCase().includes('packet')
+  );
+
+  for (const item of packetItems) {
+    const material = classifyPacketMaterial(item);
+    if (!material) continue;
+    const rawQty = (item as any).onHand ?? (item as any).quantityInStock ?? (item as any).available ?? 0;
+    const qty = Number(rawQty);
+    levels[material] += Number.isFinite(qty) ? qty : 0;
+  }
+
+  return levels;
+}
 
 // Materials endpoints
 router.get('/materials', async (req, res) => {
@@ -391,9 +571,20 @@ router.get('/packet-items', async (req, res) => {
   }
 });
 
-// Packet Part Items - Get inventory items with manufacturedCategory = 'PACKET'
+// Packet Part Items - Get inventory items that can be components of a packet BOM
 router.get('/packet-part-items', async (req, res) => {
   try {
+    const manufacturedComponentCondition = and(
+      or(
+        eq(inventoryItems.itemType, 'MANUFACTURED'),
+        ilike(inventoryItems.type, '%manufactur%')
+      ),
+      or(
+        eq(inventoryItems.manufacturedCategory, 'COMPONENT'),
+        eq(inventoryItems.manufacturingLevel, 'COMPONENT')
+      )
+    );
+
     const rows = await db
       .select({
         id: inventoryItems.id,
@@ -402,7 +593,7 @@ router.get('/packet-part-items', async (req, res) => {
         sku: inventoryItems.sku,
       })
       .from(inventoryItems)
-      .where(and(eq(inventoryItems.manufacturedCategory, 'PACKET'), inventoryActiveCondition))
+      .where(and(or(eq(inventoryItems.isPacketPart, true), manufacturedComponentCondition), inventoryActiveCondition))
       .orderBy(inventoryItems.name)
       .limit(CUTTING_LIST_MAX_ROWS);
 
@@ -836,30 +1027,31 @@ router.get('/fabric-inventory-by-barcode/:barcode', async (req, res) => {
 router.post('/fabric-inventory', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.parse(req.body);
+    const fabricInventoryData = syncFabricStockFields(validatedData);
     
-    if (!validatedData.barcode) {
+    if (!fabricInventoryData.barcode) {
       const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
       const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
       
       let prefix = 'FAB';
-      if (validatedData.productionLineId) {
-        const line = await storage.getCuttingProductionLine(validatedData.productionLineId);
+      if (fabricInventoryData.productionLineId) {
+        const line = await storage.getCuttingProductionLine(fabricInventoryData.productionLineId);
         if (line && line.lineName === 'P2') {
           prefix = 'FI-P2';
         }
       }
       
-      validatedData.barcode = `${prefix}-${date}-${random}`;
+      fabricInventoryData.barcode = `${prefix}-${date}-${random}`;
     }
     
-    if (!validatedData.internalControlNumber) {
+    if (!fabricInventoryData.internalControlNumber) {
       const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
       const seq = Date.now().toString().slice(-6);
       const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
-      validatedData.internalControlNumber = `ICN-${date}-${seq}-${rand}`;
+      fabricInventoryData.internalControlNumber = `ICN-${date}-${seq}-${rand}`;
     }
     
-    const inventory = await storage.createCuttingFabricInventory(validatedData);
+    const inventory = await storage.createCuttingFabricInventory(fabricInventoryData);
     res.json(inventory);
   } catch (error) {
     console.error('Error creating fabric inventory:', error);
@@ -870,7 +1062,7 @@ router.post('/fabric-inventory', async (req, res) => {
 router.put('/fabric-inventory/:id', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.partial().parse(req.body);
-    const inventory = await storage.updateCuttingFabricInventory(req.params.id, validatedData);
+    const inventory = await storage.updateCuttingFabricInventory(req.params.id, syncFabricStockFields(validatedData));
     res.json(inventory);
   } catch (error) {
     console.error('Error updating fabric inventory:', error);
@@ -881,7 +1073,7 @@ router.put('/fabric-inventory/:id', async (req, res) => {
 router.patch('/fabric-inventory/:id', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.partial().parse(req.body);
-    const inventory = await storage.updateCuttingFabricInventory(req.params.id, validatedData);
+    const inventory = await storage.updateCuttingFabricInventory(req.params.id, syncFabricStockFields(validatedData));
     res.json(inventory);
   } catch (error) {
     console.error('Error updating fabric inventory:', error);
@@ -909,6 +1101,7 @@ router.post('/fabric-inventory/:id/deplete', async (req, res) => {
       depletedAt: new Date(),
       depletedBy: depletedBy,
       quantityInStock: 0,
+      squareMeters: '0',
     });
 
     await storage.createCuttingFabricInventoryTransaction({
@@ -1031,6 +1224,14 @@ router.post('/fabric-inventory/:id/assign-freezer', async (req, res) => {
     if (!freezerNumber || isNaN(parseInt(freezerNumber))) {
       return res.status(400).json({ error: 'Valid freezer number is required' });
     }
+
+    const existing = await storage.getCuttingFabricInventory(rollId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Fabric inventory roll not found' });
+    }
+    if (existing.status === 'depleted') {
+      return res.status(409).json({ error: 'Cannot assign freezer to a depleted roll' });
+    }
     
     const inventory = await storage.updateCuttingFabricInventory(rollId, {
       freezerNumber: parseInt(freezerNumber),
@@ -1056,6 +1257,14 @@ router.post('/fabric-inventory/:id/receive', async (req, res) => {
     
     if (!freezerNumber || isNaN(parseInt(freezerNumber))) {
       return res.status(400).json({ error: 'Valid freezer number is required' });
+    }
+
+    const existing = await storage.getCuttingFabricInventory(rollId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Fabric inventory roll not found' });
+    }
+    if (existing.status === 'depleted') {
+      return res.status(409).json({ error: 'Cannot receive depleted fabric into a freezer' });
     }
     
     const updateData: any = {
@@ -1801,14 +2010,7 @@ router.post('/quick-production-entry', async (req, res) => {
 // Stock Levels - Get current packet stock counts
 router.get('/stock-levels', async (req, res) => {
   try {
-    // Query completed packets from manufacturing queue or a dedicated stock table
-    // For now, return mock data that can be replaced with actual queries
-    const stockLevels = {
-      carbon_fiber: 385,
-      fiberglass: 38,
-    };
-    
-    res.json(stockLevels);
+    res.json(await getCuttingPacketStockLevels());
   } catch (error) {
     console.error('Error fetching stock levels:', error);
     res.status(500).json({ error: 'Failed to fetch stock levels' });
@@ -1953,44 +2155,11 @@ router.get('/weekly-cutting-queue', async (req, res) => {
     let cfInventoryUsed = 0;
     let fgInventoryUsed = 0;
 
-    // Get on-hand stock levels from stock-levels endpoint data or default
+    // Get on-hand stock levels from the same packet inventory source used by the stock-levels endpoint.
     const { pool } = await import('../../db');
-    let cfOnHand = 0;
-    let fgOnHand = 0;
-    
-    // Try to get stock levels from the existing stock_levels API data (inventory_items table)
-    try {
-      const stockResult = await pool.query(`
-        SELECT 
-          CASE 
-            WHEN name ILIKE '%carbon%' OR name ILIKE '%cf%' THEN 'carbon_fiber'
-            WHEN name ILIKE '%fiberglass%' OR name ILIKE '%fg%' THEN 'fiberglass'
-            ELSE 'other'
-          END as material_type,
-          SUM(COALESCE(quantity_in_stock, 0)) as count
-        FROM inventory_items
-        WHERE category = 'packet' OR name ILIKE '%packet%'
-        GROUP BY material_type
-      `);
-      const stockRows = Array.isArray(stockResult) ? stockResult : (stockResult as any).rows || [];
-      for (const row of stockRows) {
-        if (row.material_type === 'carbon_fiber') cfOnHand = parseInt(row.count) || 0;
-        if (row.material_type === 'fiberglass') fgOnHand = parseInt(row.count) || 0;
-      }
-    } catch (stockErr) {
-      // If inventory_items doesn't have packet data, use the existing stock-levels values
-      try {
-        const sl = await pool.query(`SELECT * FROM cutting_stock_levels LIMIT 1`);
-        const slRows = Array.isArray(sl) ? sl : (sl as any).rows || [];
-        if (slRows.length > 0) {
-          cfOnHand = parseInt(slRows[0].carbon_fiber) || 0;
-          fgOnHand = parseInt(slRows[0].fiberglass) || 0;
-        }
-      } catch (e) {
-        // Default to 0 if no stock data available
-        console.log('Stock levels query skipped - using defaults');
-      }
-    }
+    const stockLevels = await getCuttingPacketStockLevels();
+    const cfOnHand = stockLevels.carbon_fiber;
+    const fgOnHand = stockLevels.fiberglass;
 
     // 1. P1 Layup Schedule - Regular orders that need packets from inventory
     try {
@@ -2216,6 +2385,28 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       console.log('Regular production queue query skipped:', err);
     }
 
+    const applyP1PacketInventory = (materialType: 'carbon_fiber' | 'fiberglass' | 'mesa' | 'cheek_riser', onHand: number) => {
+      let remainingOnHand = Math.max(0, Number(onHand) || 0);
+      for (const item of queueItems) {
+        if (item.materialType !== materialType) continue;
+        if (item.source !== 'P1' && item.source !== 'P1_PO') continue;
+
+        const packetsNeeded = Math.max(0, Number(item.packetsNeeded) || 0);
+        const inventoryApplied = Math.min(remainingOnHand, packetsNeeded);
+        remainingOnHand -= inventoryApplied;
+
+        item.inventoryApplied = inventoryApplied;
+        item.packetsToCut = Math.max(0, packetsNeeded - inventoryApplied);
+        item.usesInventory = inventoryApplied > 0;
+        item.requiresNewCut = item.packetsToCut > 0;
+      }
+    };
+
+    applyP1PacketInventory('carbon_fiber', cfOnHand);
+    applyP1PacketInventory('fiberglass', fgOnHand);
+    applyP1PacketInventory('mesa', stockLevels.mesa);
+    applyP1PacketInventory('cheek_riser', stockLevels.cheek_riser);
+
     // 4. P2 PO Items - Purchase order items with BOMs requiring cutting (packets only)
     try {
       const p2CountResult = await pool.query(`
@@ -2379,28 +2570,32 @@ router.get('/weekly-cutting-queue', async (req, res) => {
     const p2ItemCount = queueItems.filter(i => i.orderType === 'p2_po').length;
 
     // Calculate totals reconciled with inventory
-    const cfTotal = queueItems.filter(i => i.materialType === 'carbon_fiber').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0);
-    const fgTotal = queueItems.filter(i => i.materialType === 'fiberglass').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0);
-    const cfFromInventory = Math.min(cfOnHand, queueItems.filter(i => i.materialType === 'carbon_fiber' && i.usesInventory).length);
-    const fgFromInventory = Math.min(fgOnHand, queueItems.filter(i => i.materialType === 'fiberglass' && i.usesInventory).length);
+    const quantityForDemand = (item: any) => item.source === 'P1' || item.source === 'P1_PO'
+      ? Math.max(0, Number(item.packetsToCut ?? item.packetsNeeded ?? 1))
+      : Math.max(0, Number(item.packetsNeeded ?? 1));
+
+    const cfTotal = queueItems.filter(i => i.materialType === 'carbon_fiber').reduce((sum, i) => sum + quantityForDemand(i), 0);
+    const fgTotal = queueItems.filter(i => i.materialType === 'fiberglass').reduce((sum, i) => sum + quantityForDemand(i), 0);
+    const cfFromInventory = queueItems.filter(i => i.materialType === 'carbon_fiber').reduce((sum, i) => sum + (Number(i.inventoryApplied) || 0), 0);
+    const fgFromInventory = queueItems.filter(i => i.materialType === 'fiberglass').reduce((sum, i) => sum + (Number(i.inventoryApplied) || 0), 0);
 
     const summary = {
       carbon_fiber: {
-        regular: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'regular').length,
-        oem: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'oem').length,
+        regular: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'regular').reduce((sum, i) => sum + quantityForDemand(i), 0),
+        oem: queueItems.filter(i => i.materialType === 'carbon_fiber' && (i.orderType === 'oem' || i.orderType === 'p1_po')).reduce((sum, i) => sum + quantityForDemand(i), 0),
         p2: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'p2_po').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0),
         total: cfTotal,
         fromInventory: cfFromInventory,
-        needsCutting: cfTotal - cfFromInventory,
+        needsCutting: cfTotal,
         onHand: cfOnHand,
       },
       fiberglass: {
-        regular: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'regular').length,
-        oem: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'oem').length,
+        regular: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'regular').reduce((sum, i) => sum + quantityForDemand(i), 0),
+        oem: queueItems.filter(i => i.materialType === 'fiberglass' && (i.orderType === 'oem' || i.orderType === 'p1_po')).reduce((sum, i) => sum + quantityForDemand(i), 0),
         p2: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'p2_po').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0),
         total: fgTotal,
         fromInventory: fgFromInventory,
-        needsCutting: fgTotal - fgFromInventory,
+        needsCutting: fgTotal,
         onHand: fgOnHand,
       },
       weekStart: startDate.toISOString().split('T')[0],
@@ -2462,6 +2657,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
       const packetTypeName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
                              materialType === 'fiberglass' ? 'Fiberglass Packet' :
                              materialType === 'mesa' ? 'Mesa Packet' :
+                             materialType === 'cheek_riser' ? 'Cheek Riser' :
                              materialType === 'p2_disruptor' ? 'Disruptor' :
                              materialType === 'p2_disruptor_packet' ? 'Disruptor' :
                              materialType === 'p2_antenna' ? 'Antenna Cover' :
@@ -2490,6 +2686,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
                        materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
                        materialType === 'fiberglass' ? 'Fiberglass Packet' :
                        materialType === 'mesa' ? 'Mesa Packet' :
+                       materialType === 'cheek_riser' ? 'Cheek Riser' :
                        materialType === 'p2_disruptor' ? 'Disruptor Packet' :
                        materialType === 'p2_disruptor_packet' ? 'Disruptor Packet' :
                        materialType === 'p2_antenna' ? 'Antenna Cover Packet' :
@@ -3536,15 +3733,30 @@ router.post('/packet-boms/:id/cuts', async (req, res) => {
         
         if (currentInventory) {
           const currentSquareMeters = parseFloat(currentInventory.squareMeters?.toString() || '0');
+          const currentQuantityInStock = parseFabricStockQuantity(currentInventory.quantityInStock);
           const usedSquareMeters = parseFloat(squareMetersUsed) || 0;
           const newSquareMeters = Math.max(0, currentSquareMeters - usedSquareMeters);
+          const newQuantityInStock = Math.max(0, currentQuantityInStock - usedSquareMeters);
+          const isDepleted = newSquareMeters <= 0 && newQuantityInStock <= 0;
           
           await db.update(cuttingFabricInventory)
             .set({ 
               squareMeters: newSquareMeters.toString(),
+              quantityInStock: newQuantityInStock,
+              status: isDepleted ? 'depleted' : currentInventory.status,
+              depletedAt: isDepleted ? new Date() : currentInventory.depletedAt,
+              depletedBy: isDepleted ? (operatorName || 'unknown') : currentInventory.depletedBy,
               updatedAt: new Date(),
             })
             .where(eq(cuttingFabricInventory.id, fabricInventoryId));
+
+          await db.insert(cuttingFabricInventoryTransactions).values({
+            fabricInventoryId,
+            changeType: 'ISSUE',
+            quantityDelta: nonZeroInventoryDelta(-usedSquareMeters),
+            performedBy: operatorName || 'unknown',
+            notes: `Cut record ${newCut.id}: ${usedSquareMeters} square meters used from roll ${rollNumber}`,
+          });
           
           console.log(`[CUT RECORDED] Roll ${rollNumber}: ${usedSquareMeters}m² consumed, ${newSquareMeters}m² remaining`);
         }
@@ -3793,15 +4005,18 @@ router.put('/inventory-audit/settings', async (req, res) => {
 router.get('/inventory-audit/packets', async (req, res) => {
   try {
     const allItems = await storage.getAllInventoryItems();
-    const packets = allItems.filter((item: any) => item.isPacket === true);
+    const packets = allItems.filter((item: any) =>
+      item.isPacket === true || item.manufacturedCategory === 'PACKET'
+    );
     const result = await Promise.all(
       packets.map(async (p) => {
         const latest = await storage.getLatestAuditRecordByPacket(p.id);
+        const systemQty = Number((p as any).onHand ?? (p as any).quantityInStock ?? (p as any).available ?? 0);
         return {
           id: p.id,
           agPartNumber: p.agPartNumber,
           name: p.name,
-          systemQty: p.onHand ?? p.quantityInStock ?? 0,
+          systemQty: Number.isFinite(systemQty) ? systemQty : 0,
           lastAuditRecord: latest ?? null,
         };
       })
@@ -3825,14 +4040,17 @@ router.post('/inventory-audit/submit', async (req, res) => {
     }
 
     const allItems = await storage.getAllInventoryItems();
-    const packets = allItems.filter((item: any) => item.isPacket === true);
+    const packets = allItems.filter((item: any) =>
+      item.isPacket === true || item.manufacturedCategory === 'PACKET'
+    );
     const packetMap = new Map(packets.map((p) => [p.id, p]));
 
     const records = [];
     for (const entry of entries) {
       const packet = packetMap.get(entry.packetId);
       if (!packet) continue;
-      const systemQty = (packet as any).onHand ?? (packet as any).quantityInStock ?? 0;
+      const rawSystemQty = (packet as any).onHand ?? (packet as any).quantityInStock ?? (packet as any).available ?? 0;
+      const systemQty = Number.isFinite(Number(rawSystemQty)) ? Number(rawSystemQty) : 0;
       const variance = entry.actualQty - systemQty;
       const record = await storage.createInventoryAuditRecord({
         packetId: entry.packetId,

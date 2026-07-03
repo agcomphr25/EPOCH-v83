@@ -17,7 +17,13 @@ export default function useNonconformance(filters) {
       })
       .catch((err) => {
         console.error('Error fetching nonconformance records:', err);
-        setError(err.message || 'Failed to fetch records');
+        const message =
+          err?.responseData?.error ||
+          err?.responseData?.message ||
+          err?.error ||
+          err?.message ||
+          'Failed to fetch records';
+        setError(message);
         setRecords([]);
       })
       .finally(() => setLoading(false));

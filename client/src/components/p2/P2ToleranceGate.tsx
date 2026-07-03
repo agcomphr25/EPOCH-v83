@@ -89,7 +89,7 @@ export default function P2ToleranceGate({
       signature: string;
       reason: string;
     }) => {
-      const response = await apiRequest(`/api/p2/final-inspection/${inspectionId}/approve-deviation`, {
+      return apiRequest(`/api/p2/final-inspection/${inspectionId}/approve-deviation`, {
         method: 'POST',
         body: {
           serializedItemId,
@@ -99,7 +99,6 @@ export default function P2ToleranceGate({
           toleranceDeviationReason: data.reason,
         },
       });
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/final-inspection'] });
@@ -121,7 +120,7 @@ export default function P2ToleranceGate({
 
   const rejectDeviationMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest(`/api/p2/final-inspection/${inspectionId}/reject-deviation`, {
+      return apiRequest(`/api/p2/final-inspection/${inspectionId}/reject-deviation`, {
         method: 'POST',
         body: {
           serializedItemId,
@@ -129,14 +128,16 @@ export default function P2ToleranceGate({
           rejectedByName: `${currentUser?.firstName} ${currentUser?.lastName}`,
         },
       });
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/final-inspection'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
       toast({
         title: 'Deviation Rejected',
-        description: 'The item has been flagged for rework or scrapping.',
+        description: 'The item has been moved to NCR/Scrap open disposition.',
         variant: 'destructive',
       });
       onComplete(false);
@@ -370,7 +371,7 @@ export default function P2ToleranceGate({
                   data-testid="button-reject"
                 >
                   <X className="mr-2 h-4 w-4" />
-                  {rejectDeviationMutation.isPending ? 'Rejecting...' : 'Reject & Flag for Rework'}
+                  {rejectDeviationMutation.isPending ? 'Rejecting...' : 'Reject to NCR/Scrap'}
                 </Button>
                 <Button
                   onClick={handleApprove}

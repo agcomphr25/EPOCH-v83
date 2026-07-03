@@ -33,6 +33,7 @@ import OrderActionButtons from '@/components/OrderActionButtons';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 import { useRepairOrders } from '@/hooks/useRepairOrders';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 
 export default function PaintQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -617,6 +618,8 @@ export default function PaintQueuePage() {
                               );
                             })()}
                           </div>
+
+                          <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
 
                           {/* Action Buttons */}
                           <OrderActionButtons

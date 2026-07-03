@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq, and, gte, lt, sql, or, inArray, lte, desc } from 'drizzle-orm';
 
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import { allOrders, stockModels, features, orderFilterPresets } from '../../schema';
 import { insertOrderFilterPresetSchema } from '@shared/schema';
 import { storage } from '../../storage';
@@ -912,6 +912,238 @@ router.get('/po-production-orders', async (req, res) => {
   } catch (error) {
     console.error('Error fetching PO production orders:', error);
     res.status(500).json({ error: 'Failed to fetch PO production orders', details: (error as any).message });
+  }
+});
+
+// Read-only P1 PO status audit. This intentionally does not normalize or mutate rows;
+// it exposes the raw status combinations so fixes can be planned without losing state.
+router.get('/p1-po-status-audit', async (req, res) => {
+  try {
+    const requestedLimit = Number.parseInt(String(req.query.sampleLimit ?? '25'), 10);
+    const sampleLimit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 100)
+      : 25;
+    const samplesPerCombination = 3;
+
+    const rowsOf = <T = any>(result: any): T[] =>
+      Array.isArray(result) ? result : result?.rows || [];
+
+    const [
+      poStatusResult,
+      productionStatusResult,
+      itemStockStatusResult,
+      joinedCombinationResult,
+      activeChildClosedParentResult,
+      linkageIssueResult,
+      combinationSamplesResult,
+      recentRowsResult,
+    ] = await Promise.all([
+      pool.query(`
+        SELECT
+          COALESCE(NULLIF(TRIM(status), ''), '(blank)') AS status,
+          COUNT(*)::int AS count,
+          MIN(created_at) AS first_seen_at,
+          MAX(updated_at) AS last_updated_at
+        FROM purchase_orders
+        GROUP BY 1
+        ORDER BY count DESC, status ASC
+      `),
+      pool.query(`
+        SELECT
+          COALESCE(NULLIF(TRIM(production_status), ''), '(blank)') AS production_status,
+          COALESCE(NULLIF(TRIM(current_department), ''), '(blank)') AS current_department,
+          COALESCE(is_fulfilled, false) AS is_fulfilled,
+          COUNT(*)::int AS count,
+          MIN(created_at) AS first_seen_at,
+          MAX(updated_at) AS last_updated_at
+        FROM production_orders
+        WHERE po_id IS NOT NULL
+        GROUP BY 1, 2, 3
+        ORDER BY count DESC, production_status ASC, current_department ASC
+      `),
+      pool.query(`
+        SELECT
+          COALESCE(NULLIF(TRIM(stock_status), ''), '(blank)') AS stock_status,
+          COALESCE(NULLIF(TRIM(item_type), ''), '(blank)') AS item_type,
+          COUNT(*)::int AS count,
+          MIN(created_at) AS first_seen_at,
+          MAX(updated_at) AS last_updated_at
+        FROM purchase_order_items
+        GROUP BY 1, 2
+        ORDER BY count DESC, stock_status ASC, item_type ASC
+      `),
+      pool.query(`
+        SELECT
+          COALESCE(NULLIF(TRIM(po.status), ''), '(missing PO)') AS po_status,
+          COALESCE(NULLIF(TRIM(prod.production_status), ''), '(blank)') AS production_status,
+          COALESCE(NULLIF(TRIM(prod.current_department), ''), '(blank)') AS current_department,
+          COALESCE(prod.is_fulfilled, false) AS is_fulfilled,
+          COALESCE(NULLIF(TRIM(poi.stock_status), ''), '(blank)') AS stock_status,
+          COUNT(*)::int AS count,
+          MIN(prod.created_at) AS first_seen_at,
+          MAX(prod.updated_at) AS last_updated_at
+        FROM production_orders prod
+        LEFT JOIN purchase_orders po ON po.id = prod.po_id
+        LEFT JOIN purchase_order_items poi ON poi.id = prod.po_item_id
+        WHERE prod.po_id IS NOT NULL
+        GROUP BY 1, 2, 3, 4, 5
+        ORDER BY count DESC, po_status ASC, production_status ASC, current_department ASC
+      `),
+      pool.query(`
+        SELECT
+          po.id AS po_id,
+          po.po_number,
+          po.customer_name,
+          po.status AS po_status,
+          COUNT(prod.id)::int AS active_production_order_count,
+          MAX(prod.updated_at) AS last_active_order_updated_at
+        FROM purchase_orders po
+        JOIN production_orders prod ON prod.po_id = po.id
+        WHERE UPPER(COALESCE(po.status, '')) IN ('CLOSED', 'COMPLETE', 'COMPLETED')
+          AND COALESCE(UPPER(prod.production_status), '') NOT IN ('SHIPPED', 'CANCELLED', 'CANCELED', 'SCRAPPED')
+        GROUP BY po.id, po.po_number, po.customer_name, po.status
+        ORDER BY last_active_order_updated_at DESC NULLS LAST
+        LIMIT $1
+      `, [sampleLimit]),
+      pool.query(`
+        SELECT
+          prod.id,
+          prod.order_id,
+          prod.po_id,
+          prod.po_item_id,
+          prod.po_number,
+          prod.customer_name,
+          prod.production_status,
+          prod.current_department,
+          CASE
+            WHEN prod.po_id IS NULL THEN 'missing_po_id'
+            WHEN po.id IS NULL THEN 'po_id_has_no_parent'
+            WHEN prod.po_item_id IS NULL THEN 'missing_po_item_id'
+            WHEN poi.id IS NULL THEN 'po_item_id_has_no_parent'
+            ELSE 'linked'
+          END AS linkage_status,
+          prod.created_at,
+          prod.updated_at
+        FROM production_orders prod
+        LEFT JOIN purchase_orders po ON po.id = prod.po_id
+        LEFT JOIN purchase_order_items poi ON poi.id = prod.po_item_id
+        WHERE prod.po_id IS NULL
+           OR po.id IS NULL
+           OR prod.po_item_id IS NULL
+           OR poi.id IS NULL
+        ORDER BY prod.updated_at DESC NULLS LAST, prod.created_at DESC NULLS LAST
+        LIMIT $1
+      `, [sampleLimit]),
+      pool.query(`
+        WITH joined AS (
+          SELECT
+            po.id AS po_id,
+            po.po_number,
+            po.customer_name,
+            po.status AS po_status,
+            poi.id AS po_item_id,
+            poi.item_name AS po_item_name,
+            poi.item_type,
+            poi.stock_status,
+            prod.id AS production_order_pk,
+            prod.order_id,
+            prod.item_id,
+            prod.item_name AS production_item_name,
+            prod.production_status,
+            prod.current_department,
+            prod.is_fulfilled,
+            prod.shipped_at,
+            prod.fulfilled_date,
+            prod.created_at,
+            prod.updated_at
+          FROM production_orders prod
+          LEFT JOIN purchase_orders po ON po.id = prod.po_id
+          LEFT JOIN purchase_order_items poi ON poi.id = prod.po_item_id
+          WHERE prod.po_id IS NOT NULL
+        ),
+        ranked AS (
+          SELECT
+            joined.*,
+            ROW_NUMBER() OVER (
+              PARTITION BY
+                COALESCE(NULLIF(TRIM(po_status), ''), '(missing PO)'),
+                COALESCE(NULLIF(TRIM(production_status), ''), '(blank)'),
+                COALESCE(NULLIF(TRIM(current_department), ''), '(blank)'),
+                COALESCE(is_fulfilled, false),
+                COALESCE(NULLIF(TRIM(stock_status), ''), '(blank)')
+              ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+            ) AS rn
+          FROM joined
+        )
+        SELECT *
+        FROM ranked
+        WHERE rn <= $1
+        ORDER BY
+          COALESCE(NULLIF(TRIM(po_status), ''), '(missing PO)') ASC,
+          COALESCE(NULLIF(TRIM(production_status), ''), '(blank)') ASC,
+          COALESCE(NULLIF(TRIM(current_department), ''), '(blank)') ASC,
+          rn ASC
+      `, [samplesPerCombination]),
+      pool.query(`
+        SELECT
+          po.id AS po_id,
+          po.po_number,
+          po.customer_name,
+          po.status AS po_status,
+          poi.id AS po_item_id,
+          poi.item_name AS po_item_name,
+          poi.item_type,
+          poi.stock_status,
+          prod.id AS production_order_pk,
+          prod.order_id,
+          prod.item_id,
+          prod.item_name AS production_item_name,
+          prod.production_status,
+          prod.current_department,
+          prod.is_fulfilled,
+          prod.shipped_at,
+          prod.fulfilled_date,
+          prod.created_at,
+          prod.updated_at
+        FROM production_orders prod
+        LEFT JOIN purchase_orders po ON po.id = prod.po_id
+        LEFT JOIN purchase_order_items poi ON poi.id = prod.po_item_id
+        WHERE prod.po_id IS NOT NULL
+        ORDER BY prod.updated_at DESC NULLS LAST, prod.created_at DESC NULLS LAST
+        LIMIT $1
+      `, [sampleLimit]),
+    ]);
+
+    const productionStatusCounts = rowsOf(productionStatusResult);
+    const joinedCombinations = rowsOf(joinedCombinationResult);
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      sampleLimit,
+      samplesPerCombination,
+      readOnly: true,
+      summary: {
+        purchaseOrderStatusCount: rowsOf(poStatusResult).length,
+        productionStatusCombinationCount: productionStatusCounts.length,
+        joinedStatusCombinationCount: joinedCombinations.length,
+        activeChildClosedParentCount: rowsOf(activeChildClosedParentResult).length,
+        linkageIssueSampleCount: rowsOf(linkageIssueResult).length,
+      },
+      purchaseOrderStatusCounts: rowsOf(poStatusResult),
+      productionStatusCounts,
+      purchaseOrderItemStockStatusCounts: rowsOf(itemStockStatusResult),
+      joinedStatusCombinations: joinedCombinations,
+      activeChildClosedParentSamples: rowsOf(activeChildClosedParentResult),
+      linkageIssueSamples: rowsOf(linkageIssueResult),
+      samplesByStatusCombination: rowsOf(combinationSamplesResult),
+      recentProductionOrderSamples: rowsOf(recentRowsResult),
+    });
+  } catch (error) {
+    console.error('Error fetching P1 PO status audit:', error);
+    res.status(500).json({
+      error: 'Failed to fetch P1 PO status audit',
+      details: (error as any).message,
+    });
   }
 });
 

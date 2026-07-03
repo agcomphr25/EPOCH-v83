@@ -1,16 +1,159 @@
 import express, { Request, Response } from 'express';
 import { pool } from '../../db';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { auditService } from '../services/auditService';
 import { generateOnboardingBundle } from '../services/onboardingPdfBundleService';
 import { sendEmailViaSendGrid } from '../../utils/sendgrid';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import {
+  getFileStorageProviderForObjectPath,
+  isSupabaseObjectPath,
+} from '../services/fileStorageProvider';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const objectStorageService = new ObjectStorageService();
-
 const router = express.Router();
+
+const INVITE_TTL_DAYS = 7;
+const VERIFICATION_CODE_TTL_MINUTES = 10;
+const MAX_CODE_ATTEMPTS = 5;
+
+function sha256Hex(value: string): string {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function createPublicInviteToken(): string {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+function createVerificationCode(): string {
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+function hashVerificationCode(invitationId: string, channel: string, code: string): string {
+  const salt = process.env.ONBOARDING_CODE_HASH_SALT || process.env.SESSION_SECRET || 'epoch-onboarding-dev-salt';
+  return sha256Hex(`${salt}:${invitationId}:${channel}:${code}`);
+}
+
+function maskEmail(email?: string | null): string | null {
+  if (!email) return null;
+  const [local, domain] = email.split('@');
+  if (!domain) return email;
+  return `${local.slice(0, 2)}***@${domain}`;
+}
+
+function maskPhone(phone?: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 4 ? `***-***-${digits.slice(-4)}` : '***';
+}
+
+function normalizePhone(phone?: string | null): string | null {
+  if (!phone) return null;
+  const trimmed = phone.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function actorFromRequest(req: Request) {
+  const user = (req as any).user;
+  return {
+    id: user?.id,
+    username: user?.username || user?.email || 'system',
+  };
+}
+
+function requestIp(req: Request): string | null {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.length > 0) {
+    return forwardedFor.split(',')[0].trim();
+  }
+  return req.ip || req.socket.remoteAddress || null;
+}
+
+function signatureEvidenceHash(payload: Record<string, any>): string {
+  return sha256Hex(JSON.stringify(payload));
+}
+
+async function logOnboardingEvent(req: Request, entityId: string, action: string, meta: Record<string, any> = {}) {
+  try {
+    await auditService.logEvent({
+      entityType: 'employee_onboarding',
+      entityId,
+      action,
+      actor: actorFromRequest(req),
+      meta,
+    });
+  } catch (auditError) {
+    console.warn(`Audit logging failed for ${action}:`, auditError);
+  }
+}
+
+async function getInvitationByToken(token: string) {
+  const tokenHash = sha256Hex(token);
+  const invitations = await pool.query(`
+    SELECT i.id, i.session_id as "sessionId", i.employee_id as "employeeId",
+           i.delivery_mode as "deliveryMode", i.status, i.expires_at as "expiresAt",
+           i.email, i.phone, i.email_verified_at as "emailVerifiedAt",
+           i.phone_verified_at as "phoneVerifiedAt",
+           i.no_cell_phone_available as "noCellPhoneAvailable",
+           i.no_cell_phone_reason as "noCellPhoneReason",
+           s.status as "sessionStatus", s.current_step as "currentStep",
+           s.signature_auth_completed as "signatureAuthCompleted",
+           p.name as "pathName", p.path_type as "pathType", p.path_purpose as "pathPurpose",
+           e.name as "employeeName"
+    FROM onboarding_invitations i
+    JOIN onboarding_sessions s ON s.id = i.session_id
+    JOIN onboarding_paths p ON p.id = s.path_id
+    LEFT JOIN employees e ON e.id = i.employee_id
+    WHERE i.token_hash = $1
+    LIMIT 1
+  `, [tokenHash]);
+
+  if (invitations.length === 0) return null;
+  return invitations[0];
+}
+
+function inviteCanAccessPaperwork(invitation: any): boolean {
+  const emailVerified = !!invitation.emailVerifiedAt;
+  const phoneVerified = !!invitation.phoneVerifiedAt || !!invitation.noCellPhoneAvailable;
+  return emailVerified && phoneVerified && invitation.status === 'active' && new Date(invitation.expiresAt) > new Date();
+}
+
+async function sendVerificationNotice(channel: 'email' | 'phone', destination: string, code: string) {
+  if (channel === 'email') {
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn(`[Onboarding] Email verification code for ${destination}: ${code}`);
+      return { devMode: true };
+    }
+
+    await sendEmailViaSendGrid({
+      to: destination,
+      subject: 'Your EPOCH onboarding verification code',
+      text: `Your EPOCH onboarding verification code is ${code}. It expires in ${VERIFICATION_CODE_TTL_MINUTES} minutes.`,
+      html: `<p>Your EPOCH onboarding verification code is <strong>${code}</strong>.</p><p>It expires in ${VERIFICATION_CODE_TTL_MINUTES} minutes.</p>`,
+    });
+    return { devMode: false };
+  }
+
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const from = process.env.TWILIO_FROM_PHONE || process.env.TWILIO_PHONE_NUMBER;
+
+  if (!sid || !authToken || !from) {
+    console.warn(`[Onboarding] SMS verification code for ${destination}: ${code}`);
+    return { devMode: true };
+  }
+
+  const twilioFactory = require('twilio');
+  const client = twilioFactory(sid, authToken);
+  await client.messages.create({
+    to: destination,
+    from,
+    body: `Your EPOCH onboarding verification code is ${code}. It expires in ${VERIFICATION_CODE_TTL_MINUTES} minutes.`,
+  });
+
+  return { devMode: false };
+}
 
 const pathTypeSchema = z.enum(['FULL_TIME', 'CONTRACT']);
 const pathPurposeSchema = z.enum(['ONBOARDING', 'REHIRE']);
@@ -555,6 +698,16 @@ router.delete('/forms/:id', async (req: Request, res: Response) => {
 const createSessionSchema = z.object({
   onboardingPathId: z.string().uuid(),
   employeeId: z.number().int().positive().optional(),
+  employeeDraft: z.object({
+    name: z.string().min(1),
+    preferredName: z.string().optional().default(''),
+    email: z.string().email().optional(),
+    phone: z.string().optional().default(''),
+    jobTitle: z.string().optional().default(''),
+    department: z.string().optional().default(''),
+    hireDate: z.string().optional().default(''),
+    payType: z.enum(['HOURLY', 'SALARY']).optional(),
+  }).optional(),
 });
 
 const sessionStatusSchema = z.enum(['in_progress', 'paused', 'completed']);
@@ -698,7 +851,8 @@ router.post('/sessions', async (req: Request, res: Response) => {
     
     const adminId = (req as any).user?.id || 1;
     const adminUsername = (req as any).user?.username || 'system';
-    const { onboardingPathId, employeeId } = parsed.data;
+    const { onboardingPathId, employeeDraft } = parsed.data;
+    let { employeeId } = parsed.data;
     
     // Fetch the path to get intake form and document templates
     const paths = await pool.query(`
@@ -740,6 +894,34 @@ router.post('/sessions', async (req: Request, res: Response) => {
           error: 'Cannot start re-hire for active employee. Only inactive employees can be re-hired.' 
         });
       }
+    }
+
+    if (!isRehire && !employeeId && employeeDraft) {
+      const inactiveEmployee = await pool.query(`
+        INSERT INTO employees (
+          name, preferred_name, email, phone, job_title, department, hire_date,
+          user_role, employment_type, pay_type, is_active, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'EMPLOYEE', 'FULL_TIME', $8, false, NOW(), NOW())
+        RETURNING id, name
+      `, [
+        employeeDraft.name.trim(),
+        employeeDraft.preferredName?.trim() || null,
+        employeeDraft.email || null,
+        normalizePhone(employeeDraft.phone),
+        employeeDraft.jobTitle?.trim() || null,
+        employeeDraft.department?.trim() || null,
+        employeeDraft.hireDate || null,
+        employeeDraft.payType || null,
+      ]);
+
+      employeeId = inactiveEmployee[0].id;
+
+      await logOnboardingEvent(req, String(employeeId), 'ONBOARDING_INACTIVE_EMPLOYEE_CREATED', {
+        employeeId,
+        employeeName: inactiveEmployee[0].name,
+        onboardingPathId,
+        payType: employeeDraft.payType || null,
+      });
     }
     
     // Resolve intake form structure (snapshot) - optional for REHIRE paths
@@ -946,6 +1128,318 @@ router.post('/sessions', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error creating onboarding session:', error);
     res.status(500).json({ error: 'Failed to create onboarding session' });
+  }
+});
+
+const createInvitationSchema = z.object({
+  deliveryMode: z.enum(['in_person', 'send_link']).optional().default('in_person'),
+  noCellPhoneAvailable: z.boolean().optional().default(false),
+  noCellPhoneReason: z.string().optional().default(''),
+});
+
+// POST /sessions/:id/invitation - Create a 7-day employee onboarding invite
+router.post('/sessions/:id/invitation', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const parsed = createInvitationSchema.safeParse(req.body || {});
+
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid invitation request', details: parsed.error.errors });
+    }
+
+    const sessions = await pool.query(`
+      SELECT s.id, s.employee_id as "employeeId", s.status,
+             e.name as "employeeName", e.email, e.phone
+      FROM onboarding_sessions s
+      LEFT JOIN employees e ON e.id = s.employee_id
+      WHERE s.id = $1
+    `, [id]);
+
+    if (sessions.length === 0) return res.status(404).json({ error: 'Onboarding session not found' });
+
+    const session = sessions[0];
+    if (session.status !== 'in_progress') {
+      return res.status(400).json({ error: 'Only in-progress sessions can receive an invite' });
+    }
+    if (!session.employeeId) {
+      return res.status(400).json({ error: 'Create or link an inactive employee before inviting them' });
+    }
+    if (!session.email) {
+      return res.status(400).json({ error: 'Employee email is required before creating an invite' });
+    }
+
+    const phone = normalizePhone(session.phone);
+    if (!phone && !parsed.data.noCellPhoneAvailable) {
+      return res.status(400).json({ error: 'Employee cell phone is required unless no cell phone is available' });
+    }
+    if (parsed.data.noCellPhoneAvailable && parsed.data.noCellPhoneReason.trim().length < 3) {
+      return res.status(400).json({ error: 'A reason is required when marking no cell phone available' });
+    }
+
+    const actor = actorFromRequest(req);
+    const token = createPublicInviteToken();
+    const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
+
+    await pool.query(`
+      UPDATE onboarding_invitations
+      SET status = 'revoked',
+          revoked_at = NOW(),
+          revoked_by_user_id = $2,
+          revoked_reason = 'Replaced by a new invite'
+      WHERE session_id = $1 AND status = 'active'
+    `, [id, actor.id || null]);
+
+    const invitations = await pool.query(`
+      INSERT INTO onboarding_invitations (
+        session_id, employee_id, token_hash, public_token_hint, delivery_mode,
+        status, expires_at, email, phone, no_cell_phone_available,
+        no_cell_phone_reason, no_cell_phone_marked_by_user_id,
+        no_cell_phone_marked_at, created_by_user_id, created_by_display_name
+      ) VALUES (
+        $1, $2, $3, $4, $5, 'active', $6, $7, $8, $9,
+        $10, $11, CASE WHEN $9 = true THEN NOW() ELSE NULL END, $12, $13
+      )
+      RETURNING id, session_id as "sessionId", employee_id as "employeeId",
+                delivery_mode as "deliveryMode", status, expires_at as "expiresAt",
+                email, phone, no_cell_phone_available as "noCellPhoneAvailable",
+                no_cell_phone_reason as "noCellPhoneReason", created_at as "createdAt"
+    `, [
+      id,
+      session.employeeId,
+      sha256Hex(token),
+      token.slice(-6),
+      parsed.data.deliveryMode,
+      expiresAt.toISOString(),
+      session.email,
+      phone,
+      parsed.data.noCellPhoneAvailable,
+      parsed.data.noCellPhoneAvailable ? parsed.data.noCellPhoneReason.trim() : null,
+      parsed.data.noCellPhoneAvailable ? actor.id || null : null,
+      actor.id || null,
+      actor.username,
+    ]);
+
+    await logOnboardingEvent(req, id, 'ONBOARDING_INVITE_CREATED', {
+      invitationId: invitations[0].id,
+      employeeId: session.employeeId,
+      deliveryMode: parsed.data.deliveryMode,
+      expiresAt: expiresAt.toISOString(),
+      noCellPhoneAvailable: parsed.data.noCellPhoneAvailable,
+    });
+
+    if (parsed.data.noCellPhoneAvailable) {
+      await logOnboardingEvent(req, id, 'ONBOARDING_NO_CELL_PHONE_OVERRIDE', {
+        invitationId: invitations[0].id,
+        employeeId: session.employeeId,
+        reason: parsed.data.noCellPhoneReason.trim(),
+      });
+    }
+
+    res.status(201).json({
+      invitation: {
+        ...invitations[0],
+        email: maskEmail(invitations[0].email),
+        phone: maskPhone(invitations[0].phone),
+      },
+      inviteUrl: `/onboarding/invite/${token}`,
+      token,
+    });
+  } catch (error) {
+    console.error('Error creating onboarding invite:', error);
+    res.status(500).json({ error: 'Failed to create onboarding invite' });
+  }
+});
+
+// GET /invite/:token - Public invite status and gated session summary
+router.get('/invite/:token', async (req: Request, res: Response) => {
+  try {
+    const invitation = await getInvitationByToken(req.params.token);
+    if (!invitation) return res.status(404).json({ error: 'Invite not found' });
+
+    const expired = new Date(invitation.expiresAt) <= new Date();
+    if (invitation.status !== 'active' || expired) {
+      return res.status(410).json({ error: expired ? 'Invite expired' : 'Invite is no longer active' });
+    }
+
+    const canAccessPaperwork = inviteCanAccessPaperwork(invitation);
+    let documents: any[] = [];
+    if (canAccessPaperwork) {
+      documents = await pool.query(`
+        SELECT sd.id, sd.media_item_id as "mediaItemId", sd.template_id as "templateId",
+               sd.instance_id as "instanceId", sd.document_name as "documentName",
+               sd.is_fillable as "isFillable", sd.order_index as "orderIndex",
+               sd.status, sd.signed_at as "signedAt",
+               COALESCE(t.name, sd.document_name) as "templateName",
+               COALESCE(t.page_count, 1) as "pageCount"
+        FROM onboarding_session_documents sd
+        LEFT JOIN fillable_pdf_templates t ON sd.template_id = t.id
+        WHERE sd.session_id = $1
+        ORDER BY sd.order_index
+      `, [invitation.sessionId]);
+    }
+
+    res.json({
+      id: invitation.id,
+      sessionId: invitation.sessionId,
+      employeeId: invitation.employeeId,
+      employeeName: invitation.employeeName,
+      pathName: invitation.pathName,
+      pathType: invitation.pathType,
+      pathPurpose: invitation.pathPurpose,
+      sessionStatus: invitation.sessionStatus,
+      currentStep: invitation.currentStep,
+      signatureAuthCompleted: invitation.signatureAuthCompleted,
+      expiresAt: invitation.expiresAt,
+      email: maskEmail(invitation.email),
+      phone: maskPhone(invitation.phone),
+      emailVerified: !!invitation.emailVerifiedAt,
+      phoneVerified: !!invitation.phoneVerifiedAt,
+      noCellPhoneAvailable: !!invitation.noCellPhoneAvailable,
+      canAccessPaperwork,
+      documents,
+    });
+  } catch (error) {
+    console.error('Error fetching onboarding invite:', error);
+    res.status(500).json({ error: 'Failed to fetch onboarding invite' });
+  }
+});
+
+const sendInviteCodeSchema = z.object({ channel: z.enum(['email', 'phone']) });
+
+router.post('/invite/:token/send-code', async (req: Request, res: Response) => {
+  try {
+    const parsed = sendInviteCodeSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid verification request', details: parsed.error.errors });
+
+    const invitation = await getInvitationByToken(req.params.token);
+    if (!invitation) return res.status(404).json({ error: 'Invite not found' });
+    if (invitation.status !== 'active' || new Date(invitation.expiresAt) <= new Date()) {
+      return res.status(410).json({ error: 'Invite expired or inactive' });
+    }
+    if (parsed.data.channel === 'phone' && invitation.noCellPhoneAvailable) {
+      return res.status(400).json({ error: 'Phone verification has been waived by HR' });
+    }
+
+    const destination = parsed.data.channel === 'email' ? invitation.email : invitation.phone;
+    if (!destination) return res.status(400).json({ error: `${parsed.data.channel} destination is not available` });
+
+    const code = createVerificationCode();
+    const expiresAt = new Date(Date.now() + VERIFICATION_CODE_TTL_MINUTES * 60 * 1000);
+
+    await pool.query(`
+      UPDATE onboarding_verification_codes
+      SET status = 'superseded'
+      WHERE invitation_id = $1 AND channel = $2 AND status = 'pending'
+    `, [invitation.id, parsed.data.channel]);
+
+    await pool.query(`
+      INSERT INTO onboarding_verification_codes (
+        invitation_id, channel, code_hash, status, attempts, sent_to, expires_at
+      ) VALUES ($1, $2, $3, 'pending', 0, $4, $5)
+    `, [
+      invitation.id,
+      parsed.data.channel,
+      hashVerificationCode(invitation.id, parsed.data.channel, code),
+      destination,
+      expiresAt.toISOString(),
+    ]);
+
+    const delivery = await sendVerificationNotice(parsed.data.channel, destination, code);
+    await logOnboardingEvent(req, invitation.sessionId, 'ONBOARDING_VERIFICATION_CODE_SENT', {
+      invitationId: invitation.id,
+      channel: parsed.data.channel,
+      destination: parsed.data.channel === 'email' ? maskEmail(destination) : maskPhone(destination),
+      devMode: delivery.devMode,
+    });
+
+    res.json({
+      success: true,
+      channel: parsed.data.channel,
+      sentTo: parsed.data.channel === 'email' ? maskEmail(destination) : maskPhone(destination),
+      expiresAt: expiresAt.toISOString(),
+      devCode: delivery.devMode && process.env.NODE_ENV !== 'production' ? code : undefined,
+    });
+  } catch (error) {
+    console.error('Error sending onboarding verification code:', error);
+    res.status(500).json({ error: 'Failed to send verification code' });
+  }
+});
+
+const verifyInviteCodeSchema = z.object({
+  channel: z.enum(['email', 'phone']),
+  code: z.string().regex(/^\d{6}$/),
+});
+
+router.post('/invite/:token/verify-code', async (req: Request, res: Response) => {
+  try {
+    const parsed = verifyInviteCodeSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid verification code', details: parsed.error.errors });
+
+    const invitation = await getInvitationByToken(req.params.token);
+    if (!invitation) return res.status(404).json({ error: 'Invite not found' });
+    if (invitation.status !== 'active' || new Date(invitation.expiresAt) <= new Date()) {
+      return res.status(410).json({ error: 'Invite expired or inactive' });
+    }
+
+    const codes = await pool.query(`
+      SELECT id, code_hash as "codeHash", attempts, expires_at as "expiresAt"
+      FROM onboarding_verification_codes
+      WHERE invitation_id = $1 AND channel = $2 AND status = 'pending'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [invitation.id, parsed.data.channel]);
+
+    if (codes.length === 0) return res.status(400).json({ error: 'No pending verification code found' });
+
+    const codeRecord = codes[0];
+    if (new Date(codeRecord.expiresAt) <= new Date()) {
+      await pool.query(`UPDATE onboarding_verification_codes SET status = 'expired' WHERE id = $1`, [codeRecord.id]);
+      return res.status(400).json({ error: 'Verification code expired' });
+    }
+    if (codeRecord.attempts >= MAX_CODE_ATTEMPTS) {
+      await pool.query(`UPDATE onboarding_verification_codes SET status = 'locked' WHERE id = $1`, [codeRecord.id]);
+      return res.status(400).json({ error: 'Too many verification attempts' });
+    }
+
+    const submittedHash = hashVerificationCode(invitation.id, parsed.data.channel, parsed.data.code);
+    if (submittedHash !== codeRecord.codeHash) {
+      await pool.query(`
+        UPDATE onboarding_verification_codes
+        SET attempts = attempts + 1
+        WHERE id = $1
+      `, [codeRecord.id]);
+
+      await logOnboardingEvent(req, invitation.sessionId, 'ONBOARDING_VERIFICATION_FAILED', {
+        invitationId: invitation.id,
+        channel: parsed.data.channel,
+      });
+
+      return res.status(400).json({ error: 'Verification code is incorrect' });
+    }
+
+    await pool.query(`
+      UPDATE onboarding_verification_codes
+      SET status = 'verified', verified_at = NOW(), attempts = attempts + 1
+      WHERE id = $1
+    `, [codeRecord.id]);
+
+    const verifiedColumn = parsed.data.channel === 'email' ? 'email_verified_at' : 'phone_verified_at';
+    await pool.query(`UPDATE onboarding_invitations SET ${verifiedColumn} = NOW() WHERE id = $1`, [invitation.id]);
+
+    await logOnboardingEvent(req, invitation.sessionId, 'ONBOARDING_VERIFICATION_COMPLETED', {
+      invitationId: invitation.id,
+      channel: parsed.data.channel,
+    });
+
+    const updatedInvitation = await getInvitationByToken(req.params.token);
+    res.json({
+      success: true,
+      channel: parsed.data.channel,
+      canAccessPaperwork: updatedInvitation ? inviteCanAccessPaperwork(updatedInvitation) : false,
+    });
+  } catch (error) {
+    console.error('Error verifying onboarding code:', error);
+    res.status(500).json({ error: 'Failed to verify code' });
   }
 });
 
@@ -1194,8 +1688,9 @@ router.patch('/sessions/:id/demographics', async (req: Request, res: Response) =
       WHERE id = $2
     `, [JSON.stringify(demographics), id]);
     
-    // For re-hire sessions, also update the existing employee record immediately
-    if (session.pathPurpose === 'REHIRE' && session.employeeId) {
+    // Update the linked employee profile without activating it. Re-hire activation
+    // remains an admin approval/finalization action.
+    if (session.employeeId) {
       const fullName = `${demographics.firstName} ${demographics.lastName}`.trim();
       const streetAddress = demographics.aptUnit 
         ? `${demographics.address} ${demographics.aptUnit}`.trim()
@@ -1269,7 +1764,7 @@ router.patch('/sessions/:id/demographics', async (req: Request, res: Response) =
     res.json({ 
       success: true, 
       demographicsData: demographics,
-      employeeUpdated: session.pathPurpose === 'REHIRE' && session.employeeId,
+      employeeUpdated: !!session.employeeId,
     });
   } catch (error) {
     console.error('Error saving demographics:', error);
@@ -1311,6 +1806,9 @@ router.patch('/sessions/:id/signature-auth', async (req: Request, res: Response)
     const signatureAuthData: Record<string, any> = {
       acknowledged: true,
       signedAt: signedAt || new Date().toISOString(),
+      ipAddress: requestIp(req),
+      userAgent: req.get('user-agent') || null,
+      method: hasTypedSignature ? 'typed' : 'drawn',
     };
     
     if (hasTypedSignature) {
@@ -1320,6 +1818,16 @@ router.patch('/sessions/:id/signature-auth', async (req: Request, res: Response)
     if (hasDrawnSignature) {
       signatureAuthData.signatureImage = signatureImage;
     }
+
+    signatureAuthData.evidenceHash = signatureEvidenceHash({
+      sessionId: id,
+      acknowledged: signatureAuthData.acknowledged,
+      signedName: signatureAuthData.signedName || null,
+      signedAt: signatureAuthData.signedAt,
+      ipAddress: signatureAuthData.ipAddress,
+      userAgent: signatureAuthData.userAgent,
+      method: signatureAuthData.method,
+    });
     
     const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     signatureAuthData.signedFromIp = Array.isArray(clientIp) ? clientIp[0] : clientIp;
@@ -1344,6 +1852,7 @@ router.patch('/sessions/:id/signature-auth', async (req: Request, res: Response)
         meta: { 
           signedName: hasTypedSignature ? signedName.trim() : undefined,
           signatureType: hasDrawnSignature ? 'drawn' : 'typed',
+          evidenceHash: signatureAuthData.evidenceHash,
         },
       });
     } catch (auditError) {
@@ -1556,19 +2065,13 @@ router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res
       return res.status(404).json({ error: 'PDF source not available' });
     }
     
-    // Check if path is object storage (starts with /objects/)
-    if (pdfPath.startsWith('/objects/')) {
+    const normalizedPdfPath = pdfPath.startsWith('objects/') ? `/${pdfPath}` : pdfPath;
+
+    // Check if path is object storage.
+    if (normalizedPdfPath.startsWith('/objects/') || isSupabaseObjectPath(normalizedPdfPath)) {
       try {
-        // DIRECT BYPASS - fetch object and serve raw bytes
-        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-        const objectStorageService = new ObjectStorageService();
-        
-        console.log('[Onboarding PDF] DIRECT FETCH - getting object file for path:', pdfPath);
-        const objectFile = await objectStorageService.getObjectEntityFile(pdfPath);
-        console.log('[Onboarding PDF] DIRECT FETCH - objectFile obtained:', objectFile.name);
-        
-        // Download to buffer instead of streaming
-        const [buffer] = await objectFile.download();
+        console.log('[Onboarding PDF] DIRECT FETCH - downloading object path:', normalizedPdfPath);
+        const buffer = await getFileStorageProviderForObjectPath(normalizedPdfPath).downloadBuffer(normalizedPdfPath);
         
         // Log buffer details
         const first20Hex = buffer.slice(0, 20).toString('hex');
@@ -1676,6 +2179,24 @@ router.post('/sessions/:sessionId/documents/:docId/sign', async (req: Request, r
       return res.status(400).json({ error: 'Document already signed' });
     }
     
+    const signedAtValue = signedAt || new Date().toISOString();
+    const signatureEvidence = {
+      typedName: signatureData.trim(),
+      initials: initials || {},
+      signedAt: signedAtValue,
+      ipAddress: requestIp(req),
+      userAgent: req.get('user-agent') || null,
+      method: 'typed',
+    };
+    const signaturePayload = {
+      ...signatureEvidence,
+      evidenceHash: signatureEvidenceHash({
+        sessionId,
+        docId,
+        ...signatureEvidence,
+      }),
+    };
+
     // Update document status to signed
     await pool.query(`
       UPDATE onboarding_session_documents
@@ -1685,7 +2206,7 @@ router.post('/sessions/:sessionId/documents/:docId/sign', async (req: Request, r
           initials_data = $3,
           updated_at = NOW()
       WHERE id = $4
-    `, [signedAt || new Date().toISOString(), signatureData, JSON.stringify(initials || {}), docId]);
+    `, [signedAtValue, JSON.stringify(signaturePayload), JSON.stringify(initials || {}), docId]);
     
     try {
       await auditService.logEvent({
@@ -1696,7 +2217,7 @@ router.post('/sessions/:sessionId/documents/:docId/sign', async (req: Request, r
           id: (req as any).user?.id,
           username: (req as any).user?.username || 'system',
         },
-        meta: { docId, templateName: doc.templateName },
+        meta: { docId, templateName: doc.templateName, evidenceHash: signaturePayload.evidenceHash },
       });
     } catch (auditError) {
       console.warn('Audit logging failed for DOCUMENT_SIGNED:', auditError);
@@ -2029,7 +2550,7 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
             drivers_license_number, drivers_license_state, drivers_license_expiration,
             bank_name, bank_routing_number, bank_account_number, bank_account_type,
             user_role, employment_type, is_active
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, true)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, false)
           RETURNING id
         `, [
           employeeData.name || 'New Employee',
@@ -2285,9 +2806,14 @@ router.post('/sessions/:id/finalize', async (req: Request, res: Response) => {
       // E) FINALIZE SESSION (LOCK)
       await pool.query(`
         UPDATE onboarding_sessions
-        SET status = 'completed', completed_at = NOW()
+        SET status = 'completed',
+            completed_at = NOW(),
+            approval_status = 'approved',
+            approved_at = NOW(),
+            approved_by_user_id = $2,
+            approved_by_display_name = $3
         WHERE id = $1
-      `, [id]);
+      `, [id, adminId, adminUsername]);
       
       auditEvents.push({
         action: isRehire ? 'REHIRE_COMPLETED' : 'ONBOARDING_COMPLETED',
@@ -2701,11 +3227,9 @@ router.post('/sessions/:id/email-bundle', async (req: Request, res: Response) =>
         ? `/${session.storagePath}` 
         : session.storagePath;
       
-      if (normalizedBundlePath?.startsWith('/objects/')) {
+      if (normalizedBundlePath && (normalizedBundlePath.startsWith('/objects/') || isSupabaseObjectPath(normalizedBundlePath))) {
         // Download from object storage
-        const objectFile = await objectStorageService.getObjectEntityFile(normalizedBundlePath);
-        const [buffer] = await objectFile.download();
-        pdfBuffer = buffer;
+        pdfBuffer = await getFileStorageProviderForObjectPath(normalizedBundlePath).downloadBuffer(normalizedBundlePath);
       } else if (session.storagePath?.startsWith('uploads/')) {
         // Read from local filesystem
         const localPath = path.join(process.cwd(), session.storagePath);
@@ -3155,11 +3679,15 @@ router.post('/sessions/:sessionId/documents/:docId/employer-sign', async (req: R
     );
     
     // Audit log
-    await auditService.logOnboardingEvent({
-      eventType: 'EMPLOYER_SIGNATURE_COMPLETED',
-      sessionId,
-      userId: currentUser?.id,
-      details: {
+    await auditService.logEvent({
+      entityType: 'employee_onboarding',
+      entityId: sessionId,
+      action: 'EMPLOYER_SIGNATURE_COMPLETED',
+      actor: {
+        id: currentUser?.id,
+        username: currentUser?.username || 'system',
+      },
+      meta: {
         documentId: docId,
         instanceId,
         signerName,

@@ -1,8 +1,8 @@
 import { Router, type Request, type Response, type NextFunction, type RequestHandler } from 'express';
-import { and, asc, eq, ilike, or } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db';
-import { accountingPeriods, chartOfAccounts } from '../../schema';
+import { accountingPeriods, chartOfAccounts, journalEntries, journalLines } from '../../schema';
 import { authenticateToken } from '../../middleware/auth';
 import { requireAccountingAdmin } from '../middleware/requireAccountingAdmin';
 import { recordAuditEvent } from '../services/auditLedgerService';
@@ -53,6 +53,41 @@ const periodPatchSchema = z.object({
   reason: z.string().trim().min(1),
 });
 
+function extractOrderNumber(memo: string | null): string | null {
+  if (!memo) return null;
+  const orderMatch = memo.match(/\border\s+([A-Z]{1,4}\d{2,})\b/i);
+  if (orderMatch?.[1]) return orderMatch[1].toUpperCase();
+  const compactMatch = memo.match(/\b([A-Z]{1,4}\d{3,})\b/);
+  return compactMatch?.[1]?.toUpperCase() ?? null;
+}
+
+function sourceLabel(source: {
+  transactionType: string;
+  referenceType: string;
+  referenceId: number;
+  sourceDocumentNumber: string | null;
+  memo: string | null;
+}) {
+  const orderNumber = extractOrderNumber(source.memo);
+  if (orderNumber) return `Order ${orderNumber}`;
+  if (source.sourceDocumentNumber) {
+    const prefix = source.transactionType === 'AR_INVOICE' ? 'Invoice' : 'Document';
+    return `${prefix} ${source.sourceDocumentNumber}`;
+  }
+  const reference = source.referenceType.replace(/_/g, ' ');
+  return `${reference} #${source.referenceId}`;
+}
+
+function sourceContributionAmount(
+  normalBalance: string,
+  debitAmount: string | number | null,
+  creditAmount: string | number | null,
+) {
+  const debit = Number(debitAmount ?? 0);
+  const credit = Number(creditAmount ?? 0);
+  return normalBalance === 'DEBIT' ? debit - credit : credit - debit;
+}
+
 router.use(authenticateToken);
 
 router.get('/accounts', h(async (req, res) => {
@@ -74,6 +109,152 @@ router.get('/accounts', h(async (req, res) => {
     .orderBy(asc(chartOfAccounts.accountNumber), asc(chartOfAccounts.accountName));
 
   res.json(rows);
+}));
+
+router.get('/accounts-with-balances', h(async (req, res) => {
+  const activeOnly = req.query.activeOnly !== 'false';
+
+  // Get all accounts
+  const accounts = await db
+    .select()
+    .from(chartOfAccounts)
+    .where(activeOnly ? eq(chartOfAccounts.isActive, true) : undefined)
+    .orderBy(asc(chartOfAccounts.accountNumber), asc(chartOfAccounts.accountName));
+
+  // Get balance for each account by summing posted journal lines
+  const accountsWithBalances = await Promise.all(
+    accounts.map(async (account) => {
+      const balanceResult = await db
+        .select({
+          totalDebit: sql<number>`COALESCE(SUM(CAST(${journalLines.debitAmount} AS DECIMAL)), 0)`,
+          totalCredit: sql<number>`COALESCE(SUM(CAST(${journalLines.creditAmount} AS DECIMAL)), 0)`,
+          postedLineCount: sql<number>`COUNT(${journalLines.id})`,
+          postedEntryCount: sql<number>`COUNT(DISTINCT ${journalEntries.id})`,
+        })
+        .from(journalLines)
+        .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+        .where(and(
+          eq(journalLines.accountId, account.id),
+          eq(journalEntries.status, 'POSTED'),
+        ));
+
+      const sourceRows = await db
+        .select({
+          journalEntryId: journalEntries.id,
+          transactionType: journalEntries.transactionType,
+          referenceType: journalEntries.referenceType,
+          referenceId: journalEntries.referenceId,
+          sourceDocumentNumber: journalEntries.sourceDocumentNumber,
+          effectiveDate: journalEntries.effectiveDate,
+          postedAt: journalEntries.postedAt,
+          memo: journalEntries.memo,
+          debitAmount: journalLines.debitAmount,
+          creditAmount: journalLines.creditAmount,
+        })
+        .from(journalLines)
+        .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+        .where(and(
+          eq(journalLines.accountId, account.id),
+          eq(journalEntries.status, 'POSTED'),
+        ))
+        .orderBy(desc(journalEntries.effectiveDate), desc(journalEntries.id), desc(journalLines.id))
+        .limit(250);
+
+      const [balance] = balanceResult;
+      const totalDebit = Number(balance?.totalDebit ?? 0);
+      const totalCredit = Number(balance?.totalCredit ?? 0);
+      const postedLineCount = Number(balance?.postedLineCount ?? 0);
+      const postedEntryCount = Number(balance?.postedEntryCount ?? 0);
+
+      // Calculate balance based on normal balance direction
+      let currentBalance = 0;
+      if (account.normalBalance === 'DEBIT') {
+        currentBalance = totalDebit - totalCredit;
+      } else {
+        // CREDIT normal balance
+        currentBalance = totalCredit - totalDebit;
+      }
+
+      const sourceGroups = new Map<string, {
+        label: string;
+        amount: number;
+        debitAmount: number;
+        creditAmount: number;
+        lineCount: number;
+        journalEntryIds: number[];
+        transactionType: string;
+        referenceType: string;
+        referenceId: number;
+        sourceDocumentNumber: string | null;
+        effectiveDate: Date | string | null;
+      }>();
+
+      for (const row of sourceRows) {
+        const label = sourceLabel(row);
+        const key = label.startsWith('Order ')
+          ? label
+          : `${label}|${row.referenceType}|${row.referenceId}`;
+        const debit = Number(row.debitAmount ?? 0);
+        const credit = Number(row.creditAmount ?? 0);
+        const amount = sourceContributionAmount(
+          account.normalBalance,
+          row.debitAmount,
+          row.creditAmount
+        );
+        const existing = sourceGroups.get(key);
+        if (existing) {
+          existing.amount += amount;
+          existing.debitAmount += debit;
+          existing.creditAmount += credit;
+          existing.lineCount += 1;
+          if (!existing.journalEntryIds.includes(row.journalEntryId)) {
+            existing.journalEntryIds.push(row.journalEntryId);
+          }
+          continue;
+        }
+        sourceGroups.set(key, {
+          label,
+          amount,
+          debitAmount: debit,
+          creditAmount: credit,
+          lineCount: 1,
+          journalEntryIds: [row.journalEntryId],
+          transactionType: row.transactionType,
+          referenceType: row.referenceType,
+          referenceId: row.referenceId,
+          sourceDocumentNumber: row.sourceDocumentNumber,
+          effectiveDate: row.effectiveDate,
+        });
+      }
+
+      return {
+        ...account,
+        currentBalance,
+        balanceAudit: {
+          totalDebit,
+          totalCredit,
+          postedLineCount,
+          postedEntryCount,
+          normalBalance: account.normalBalance,
+          formula: account.normalBalance === 'DEBIT'
+            ? 'totalDebit - totalCredit'
+            : 'totalCredit - totalDebit',
+          latestPostedActivity: sourceRows[0] ?? null,
+          sources: Array.from(sourceGroups.values())
+            .map((source) => ({
+              ...source,
+              amount: Math.round(source.amount * 100) / 100,
+              debitAmount: Math.round(source.debitAmount * 100) / 100,
+              creditAmount: Math.round(source.creditAmount * 100) / 100,
+              journalEntryId: source.journalEntryIds[0],
+            }))
+            .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)),
+        },
+      };
+    })
+  );
+
+  res.json(accountsWithBalances);
 }));
 
 router.post('/accounts', requireAccountingAdmin, h(async (req, res) => {

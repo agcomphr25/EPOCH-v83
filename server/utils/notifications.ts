@@ -1,23 +1,15 @@
 import { customers } from '@shared/schema';
 import { allOrders, communicationLogs } from '../schema.js';
 import { eq, and } from 'drizzle-orm';
-import sgMail from '@sendgrid/mail';
 import twilio from 'twilio';
 
 import { db } from '../db.js';
 import { 
   getTwilioConfig, 
-  getSendGridConfig, 
   isTwilioConfigured, 
-  isSendGridConfigured,
   logNotificationConfig 
 } from '../config/notifications.js';
-
-// Initialize SendGrid with API key from centralized config
-const sendGridConfig = getSendGridConfig();
-if (sendGridConfig.apiKey) {
-  sgMail.setApiKey(sendGridConfig.apiKey);
-}
+import { sendEmailViaSendGrid } from './sendgrid.js';
 
 export interface NotificationData {
   orderId: string;
@@ -26,8 +18,35 @@ export interface NotificationData {
   estimatedDelivery?: Date;
   customerEmail?: string;
   customerPhone?: string;
-  preferredMethods?: string[];
+  preferredMethods?: string[] | string | null;
   forceResend?: boolean; // Set true to bypass deduplication (manual resend)
+}
+
+export function normalizeNotificationMethods(
+  preferredMethods: unknown,
+  contact: { email?: string | null; phone?: string | null } = {}
+): string[] {
+  const rawMethods = Array.isArray(preferredMethods)
+    ? preferredMethods
+    : typeof preferredMethods === 'string'
+      ? preferredMethods.split(/[\s,;|/]+/)
+      : [];
+
+  const normalized = rawMethods
+    .map((method) => String(method || '').trim().toLowerCase())
+    .map((method) => {
+      if (['text', 'txt', 'phone', 'mobile'].includes(method)) return 'sms';
+      if (['e-mail', 'mail'].includes(method)) return 'email';
+      return method;
+    })
+    .filter((method): method is 'email' | 'sms' => method === 'email' || method === 'sms');
+
+  const uniqueMethods = Array.from(new Set(normalized));
+  if (uniqueMethods.length > 0) return uniqueMethods;
+
+  if (contact.email) return ['email'];
+  if (contact.phone) return ['sms'];
+  return [];
 }
 
 export async function sendCustomerNotification(
@@ -129,21 +148,47 @@ export async function sendCustomerNotification(
   }
 
   // Determine notification methods
-  let preferredMethods = data.preferredMethods ||
-    (customer.preferredCommunicationMethod as string[]) || [];
+  let preferredMethods = normalizeNotificationMethods(
+    data.preferredMethods,
+    { email: data.customerEmail, phone: data.customerPhone }
+  );
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
+  if (!preferredMethods.length) {
+    preferredMethods = normalizeNotificationMethods(
+      customer.preferredCommunicationMethod,
+      { email, phone }
+    );
+  }
 
   // 1. Detect Twilio availability using centralized config
   const allowSms = isTwilioConfigured();
 
-  // Auto-select best possible method if preferred list empty
+  // Auto-select best possible method if preferred list empty.
+  // Prefer SMS when the customer has a phone and Twilio is configured;
+  // otherwise fall back to email. (Previously this unconditionally pushed
+  // email first, which silently dropped SMS.)
   if (!preferredMethods.length) {
+    if (phone && allowSms) preferredMethods.push('sms');
     if (email) preferredMethods.push('email');
-    else if (phone && allowSms) preferredMethods.push('sms');
+    if (!preferredMethods.length && phone) preferredMethods.push('sms');
   }
   const prefersSms = preferredMethods.includes('sms');
   const prefersEmail = preferredMethods.includes('email');
+
+  // Diagnostic: surface why SMS was skipped purely due to missing Twilio config
+  if (prefersSms && !allowSms) {
+    console.warn(
+      `[NOTIFY] SMS preferred for order ${data.orderId} but Twilio is not configured ` +
+      `(missing TWILIO_ACCOUNT_SID/TWILIO_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM_NUMBER/TWILIO_NUMBER/TWILIO_PHONE_NUMBER). ` +
+      `SMS will be skipped${email ? ' and email used as fallback' : ' and no SMS will be sent'}.`
+    );
+  }
+  if (prefersSms && allowSms && !phone) {
+    console.warn(
+      `[NOTIFY] SMS preferred for order ${data.orderId} but customer has no phone number on file.`
+    );
+  }
 
   // 2. SMS → Email Fallback rule
   const needsEmailFallback = prefersSms && !allowSms;
@@ -338,37 +383,37 @@ Owens Cross Roads, AL 35763
 Phone: 256-723-8381
   `.trim();
 
-  const emailConfig = getSendGridConfig();
-  
-  console.log('📧 [DIRECT SENDGRID] Sending email shipping notification:', {
+  console.log('📧 [TRACKING SENDGRID] Sending email shipping notification:', {
     to: data.email,
     subject,
-    from: emailConfig.fromEmail,
   });
 
-  // Validate SendGrid configuration using centralized check
-  if (!isSendGridConfigured()) {
-    throw new Error('SendGrid is not configured (missing API key or from email)');
+  const trackingFromEmail =
+    process.env.TRACKING_NOTIFICATION_FROM_EMAIL ||
+    process.env.CUSTOMER_NOTIFICATION_FROM_EMAIL ||
+    undefined;
+  const trackingReplyTo =
+    process.env.TRACKING_NOTIFICATION_REPLY_TO ||
+    trackingFromEmail ||
+    undefined;
+
+  const result = await sendEmailViaSendGrid({
+    to: data.email,
+    ...(trackingFromEmail ? { fromEmail: trackingFromEmail } : {}),
+    fromName: 'AG Composites Sales',
+    ...(trackingReplyTo ? { replyTo: trackingReplyTo } : {}),
+    subject,
+    text: message,
+    html: message.replace(/\n/g, '<br>'),
+  });
+
+  if (!result.success) {
+    console.error('❌ [TRACKING SENDGRID] Failed to send email:', result.error);
+    throw new Error(result.error || 'SendGrid email failed');
   }
 
-  try {
-    const emailData = {
-      to: data.email,
-      from: emailConfig.fromEmail,
-      subject,
-      text: message,
-      html: message.replace(/\n/g, '<br>'),
-    };
-
-    const result = await sgMail.send(emailData);
-    const messageId = result[0]?.headers?.['x-message-id'] || 'unknown';
-    
-    console.log('✅ [DIRECT SENDGRID] Email sent successfully, messageId:', messageId);
-    return { status: 'sent', messageId };
-  } catch (error: any) {
-    console.error('❌ [DIRECT SENDGRID] Failed to send email:', error?.response?.body || error.message);
-    throw error;
-  }
+  console.log('✅ [TRACKING SENDGRID] Email sent successfully, messageId:', result.messageId || 'unknown');
+  return { status: 'sent', messageId: result.messageId || 'unknown' };
 }
 
 async function sendSMSNotification(

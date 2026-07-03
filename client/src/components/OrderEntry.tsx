@@ -58,14 +58,23 @@ import {
   Package,
   Users,
   SlidersHorizontal,
+  AlertTriangle,
+  ClipboardList,
   ChevronDown,
+  DollarSign,
   Send,
   CheckCircle,
   Check,
   ChevronsUpDown,
   Paperclip,
   ExternalLink,
+  FileText,
   Loader2,
+  Palette,
+  ShieldCheck,
+  Truck,
+  UserRound,
+  Wrench,
 } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
@@ -138,6 +147,7 @@ interface OrderDraftData {
   shipping: number;
   isCustomOrder: boolean;
   notes: string;
+  departmentNotes: DepartmentNoteEntry[];
   miscItems: MiscItem[];
   otherOptionsQuantities: Record<string, number>;
   specialShipping: { international: boolean; nextDayAir: boolean; billToReceiver: boolean };
@@ -148,6 +158,12 @@ interface OrderDraftData {
   altShipToEmail: string;
   altShipToPhone: string;
   altShipToAddress: { street: string; city: string; state: string; zipCode: string; country: string };
+}
+
+interface DepartmentNoteEntry {
+  id: string;
+  text: string;
+  departments: string[];
 }
 
 const TIKKA_BARREL_OPTIONS = [
@@ -162,9 +178,42 @@ type ConsoleStyleMode = 'standard' | 'industrial' | 'retro';
 
 const consoleStyleOptions: { value: ConsoleStyleMode; label: string }[] = [
   { value: 'standard', label: 'Standard' },
-  { value: 'industrial', label: 'Industrial' },
+  { value: 'industrial', label: 'Workbench' },
   { value: 'retro', label: 'Retro' },
 ];
+
+const P1_NOTE_DEPARTMENTS = [
+  'Barcode',
+  'Layup/Plugging',
+  'CNC',
+  'Gunsmith',
+  'Finish',
+  'Finish QC',
+  'Paint',
+  'QC/Shipping',
+  'Shipping',
+] as const;
+
+const ALL_DEPARTMENTS_VALUE = 'ALL';
+
+function normalizeDepartmentNotes(value: unknown): DepartmentNoteEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry, index) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const raw = entry as { id?: unknown; text?: unknown; departments?: unknown };
+      const text = typeof raw.text === 'string' ? raw.text : '';
+      const departments = Array.isArray(raw.departments)
+        ? raw.departments.filter((dept): dept is string => typeof dept === 'string')
+        : [];
+      return {
+        id: typeof raw.id === 'string' ? raw.id : `note-${Date.now()}-${index}`,
+        text,
+        departments,
+      };
+    })
+    .filter((entry): entry is DepartmentNoteEntry => entry !== null);
+}
 
 export default function OrderEntry() {
   console.log('OrderEntry component rendering...');
@@ -270,6 +319,7 @@ export default function OrderEntry() {
   const [shipping, setShipping] = useState(36.95);
   const [isCustomOrder, setIsCustomOrder] = useState(false);
   const [notes, setNotes] = useState('');
+  const [departmentNotes, setDepartmentNotes] = useState<DepartmentNoteEntry[]>([]);
   const [isVerified, setIsVerified] = useState(false);
 
   // Payment state - simplified for multiple payments
@@ -359,6 +409,7 @@ export default function OrderEntry() {
       shipping,
       isCustomOrder,
       notes,
+      departmentNotes,
       miscItems,
       otherOptionsQuantities,
       specialShipping,
@@ -384,7 +435,7 @@ export default function OrderEntry() {
   }, [isNewOrderMode, orderDraftChecked, hasOrderDraft]);
 
   const hasUnsavedOrderChanges = isNewOrderMode && (
-    !!customer || !!modelId || Object.keys(features).length > 0 || !!customerPO || !!notes || miscItems.length > 0
+    !!customer || !!modelId || Object.keys(features).length > 0 || !!customerPO || !!notes || departmentNotes.length > 0 || miscItems.length > 0
   );
 
   useUnsavedChangesWarning(hasUnsavedOrderChanges);
@@ -407,6 +458,7 @@ export default function OrderEntry() {
       if (draft.shipping !== undefined) setShipping(draft.shipping);
       if (draft.isCustomOrder) setIsCustomOrder(true);
       if (draft.notes) setNotes(draft.notes);
+      if (draft.departmentNotes) setDepartmentNotes(normalizeDepartmentNotes(draft.departmentNotes));
       if (draft.miscItems?.length > 0) setMiscItems(draft.miscItems);
       if (draft.otherOptionsQuantities) setOtherOptionsQuantities(draft.otherOptionsQuantities);
       if (draft.specialShipping) setSpecialShipping(draft.specialShipping);
@@ -1226,6 +1278,45 @@ export default function OrderEntry() {
   // Show warning when notes mention discounts but no structured discount is applied
   const showDiscountWarning = hasDiscountTextInNotes && !hasStructuredDiscount;
 
+  const addDepartmentNote = () => {
+    setDepartmentNotes((current) => [
+      ...current,
+      { id: `note-${Date.now()}`, text: '', departments: [] },
+    ]);
+  };
+
+  const updateDepartmentNote = (
+    id: string,
+    updates: Partial<Pick<DepartmentNoteEntry, 'text' | 'departments'>>
+  ) => {
+    setDepartmentNotes((current) =>
+      current.map((note) => (note.id === id ? { ...note, ...updates } : note))
+    );
+  };
+
+  const removeDepartmentNote = (id: string) => {
+    setDepartmentNotes((current) => current.filter((note) => note.id !== id));
+  };
+
+  const toggleDepartmentNoteTarget = (
+    note: DepartmentNoteEntry,
+    department: string,
+    checked: boolean
+  ) => {
+    if (department === ALL_DEPARTMENTS_VALUE) {
+      updateDepartmentNote(note.id, {
+        departments: checked ? [ALL_DEPARTMENTS_VALUE] : [],
+      });
+      return;
+    }
+
+    const withoutAll = note.departments.filter((dept) => dept !== ALL_DEPARTMENTS_VALUE);
+    const nextDepartments = checked
+      ? [...withoutAll, department]
+      : withoutAll.filter((dept) => dept !== department);
+    updateDepartmentNote(note.id, { departments: nextDepartments });
+  };
+
   // Helper function to format currency with commas
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -1537,11 +1628,13 @@ export default function OrderEntry() {
         setModelId('');
         setFeatures({});
         setNotes('');
+        setDepartmentNotes([]);
         setMiscItems([]);
       } else {
         setModelId(order.modelId || '');
         setFeatures(order.features || {});
         setNotes(order.notes || '');
+        setDepartmentNotes(normalizeDepartmentNotes(order.departmentNotes));
         // Load miscellaneous items from features if present
         const featuresObj = order.features || {};
         if (featuresObj.miscItems && Array.isArray(featuresObj.miscItems)) {
@@ -1780,10 +1873,12 @@ export default function OrderEntry() {
         const notesFromFeatures = featuresObj.specialInstructions || '';
         const finalNotes = notesFromField || notesFromFeatures;
         setNotes(finalNotes);
+        setDepartmentNotes(normalizeDepartmentNotes(order.departmentNotes));
         console.log('✅ Loading notes:', {
           notesFromField,
           notesFromFeatures,
           finalNotes,
+          departmentNotes: order.departmentNotes,
         });
 
         // Load other options quantities from featureQuantities field
@@ -2672,6 +2767,9 @@ export default function OrderEntry() {
         status: saveAsDraft ? 'DRAFT' : 'FINALIZED',
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
         notes,
+        departmentNotes: departmentNotes
+          .map((note) => ({ ...note, text: note.text.trim() }))
+          .filter((note) => note.text.length > 0),
         discountCode,
         discountType,
         discountValue,
@@ -2865,6 +2963,7 @@ export default function OrderEntry() {
     setShipping(36.95);
     setIsCustomOrder(false);
     setNotes('');
+    setDepartmentNotes([]);
     setErrors({});
     setDiscountDetails(null);
     setIsEditMode(false);
@@ -2941,6 +3040,9 @@ export default function OrderEntry() {
         status: 'PENDING_PAYMENT',
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
         notes,
+        departmentNotes: departmentNotes
+          .map((note) => ({ ...note, text: note.text.trim() }))
+          .filter((note) => note.text.length > 0),
         discountCode,
         discountType,
         discountValue,
@@ -2967,7 +3069,10 @@ export default function OrderEntry() {
         qdSameSideConfirmed,
         qdSameSideConfirmedBy,
         qdSameSideConfirmedAt: qdSameSideConfirmedAt?.toISOString() || null,
-        createdBy: username || 'system',
+        createdBy:
+          typeof window !== 'undefined'
+            ? window.localStorage.getItem('dev_username') || 'system'
+            : 'system',
       };
 
       const response = await apiRequest('/api/orders/pending-payment', {
@@ -3014,6 +3119,94 @@ export default function OrderEntry() {
       active: orderPayments.length > 0,
     },
   ];
+  const isWorkbenchMode = consoleStyleMode === 'industrial';
+  const selectedFeatureCount = Object.entries(features).filter(([, value]) => {
+    if (value === undefined || value === null || value === '') return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'boolean') return value;
+    return true;
+  }).length;
+  const openIssueCount = Object.keys(errors).length;
+  const workbenchAlerts = [
+    !customer ? 'Customer is still open' : null,
+    !selectedModel ? 'Stock model has not been selected' : null,
+    showDiscountWarning ? 'Discount text is in notes without a structured discount' : null,
+    openIssueCount ? `${openIssueCount} validation item${openIssueCount === 1 ? '' : 's'} need review` : null,
+    !isVerified ? 'ERP verification is not checked' : null,
+  ].filter(Boolean) as string[];
+  const workbenchJumpItems = [
+    {
+      id: 'order-intake',
+      label: 'Order',
+      meta: orderId || 'New order',
+      icon: ClipboardList,
+      active: Boolean(orderId),
+    },
+    {
+      id: 'customer-intake',
+      label: 'Customer',
+      meta: customer ? customer.name || 'Selected' : 'Open',
+      icon: UserRound,
+      active: Boolean(customer),
+    },
+    {
+      id: 'product-intake',
+      label: 'Product',
+      meta: selectedModel?.displayName || selectedModel?.name || 'Choose model',
+      icon: Wrench,
+      active: Boolean(selectedModel),
+    },
+    {
+      id: 'finish-intake',
+      label: 'Finish',
+      meta: features.paint_options || features.texture_options ? 'Touched' : 'Open',
+      icon: Palette,
+      active: Boolean(features.paint_options || features.texture_options),
+    },
+    {
+      id: 'shipping-intake',
+      label: 'Shipping',
+      meta:
+        specialShipping.international ||
+        specialShipping.nextDayAir ||
+        specialShipping.billToReceiver ||
+        hasAltShipTo
+          ? 'Special'
+          : 'Standard',
+      icon: Truck,
+      active: Boolean(
+        specialShipping.international ||
+          specialShipping.nextDayAir ||
+          specialShipping.billToReceiver ||
+          hasAltShipTo
+      ),
+    },
+    {
+      id: 'pricing-intake',
+      label: 'Pricing',
+      meta: formatCurrency(totalPrice + shipping),
+      icon: DollarSign,
+      active: totalPrice + shipping > 0,
+    },
+    {
+      id: 'notes-intake',
+      label: 'Notes',
+      meta: notes.trim() ? 'Captured' : 'Open',
+      icon: FileText,
+      active: Boolean(notes.trim()),
+    },
+    {
+      id: 'review-intake',
+      label: 'Review',
+      meta: isVerified ? 'Verified' : 'Not verified',
+      icon: ShieldCheck,
+      active: isVerified,
+    },
+  ];
+  const jumpToWorkbenchSection = (sectionId: string) => {
+    const target = document.getElementById(sectionId);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <div
@@ -3043,6 +3236,77 @@ export default function OrderEntry() {
           ))}
         </div>
       </div>
+      {isWorkbenchMode && (
+        <div className="order-workbench-panel" aria-label="Order entry workbench">
+          <div className="order-workbench-hero">
+            <div>
+              <div className="order-workbench-kicker">Prototype intake lens</div>
+              <h2>Capture the order in whatever sequence the call gives it to you.</h2>
+              <p>
+                Jump to any bucket, keep the price close, and let the mistake radar
+                call out anything that needs a second look.
+              </p>
+            </div>
+            <div className="order-workbench-price">
+              <span>Current total</span>
+              <strong>{formatCurrency(totalPrice + shipping)}</strong>
+              <button
+                type="button"
+                onClick={() => jumpToWorkbenchSection('pricing-intake')}
+              >
+                Open pricing
+              </button>
+            </div>
+          </div>
+
+          <div className="order-workbench-map">
+            {workbenchJumpItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={item.active ? 'is-active' : ''}
+                  onClick={() => jumpToWorkbenchSection(item.id)}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{item.label}</span>
+                  <small>{item.meta}</small>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="order-workbench-radar">
+            <div>
+              <span>{selectedFeatureCount}</span>
+              <small>configured inputs</small>
+            </div>
+            <div>
+              <span>{miscItems.length}</span>
+              <small>misc items</small>
+            </div>
+            <div>
+              <span>{orderPayments.length}</span>
+              <small>payments</small>
+            </div>
+            <div className={workbenchAlerts.length ? 'has-alerts' : 'is-clear'}>
+              <span>{workbenchAlerts.length}</span>
+              <small>{workbenchAlerts.length ? 'radar flags' : 'clear flags'}</small>
+            </div>
+            {workbenchAlerts.length > 0 && (
+              <div className="order-workbench-alerts">
+                <AlertTriangle className="h-4 w-4" />
+                <div>
+                  {workbenchAlerts.slice(0, 3).map((alert) => (
+                    <p key={alert}>{alert}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Order Form */}
         <div className="lg:col-span-2 space-y-6">
@@ -3192,7 +3456,7 @@ export default function OrderEntry() {
               )}
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Order ID and Dates */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div id="order-intake" className="grid grid-cols-1 md:grid-cols-3 gap-4 scroll-mt-28">
                   <div>
                     <Label htmlFor="orderId">Order ID</Label>
                     <Input
@@ -3348,7 +3612,7 @@ export default function OrderEntry() {
                 </div>
 
                 {/* Customer Selection and Customer PO */}
-                <div className="grid grid-cols-2 gap-6">
+                <div id="customer-intake" className="grid grid-cols-2 gap-6 scroll-mt-28">
                   <div>
                     <CustomerSearchInput
                       value={customer}
@@ -3439,7 +3703,7 @@ export default function OrderEntry() {
                 </div>
 
                 {/* Shipping Options & Address - Combined Accordion */}
-                <div className="mt-6 border rounded-lg p-4 bg-blue-50">
+                <div id="shipping-intake" className="mt-6 border rounded-lg p-4 bg-blue-50 scroll-mt-28">
                   <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="shipping-options">
                       <AccordionTrigger className="text-left">
@@ -3868,7 +4132,7 @@ export default function OrderEntry() {
                 )}
 
                 {/* Stock Model Selection and Price Override Row */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div id="product-intake" className="grid grid-cols-1 lg:grid-cols-2 gap-4 scroll-mt-28">
                   {/* Stock Model Selection */}
                   <div>
                     <Label>Stock Model</Label>
@@ -5409,7 +5673,7 @@ export default function OrderEntry() {
                     </div>
 
                     {/* Paint Options */}
-                    <div>
+                    <div id="finish-intake" className="scroll-mt-28">
                       <Label>Paint Options</Label>
                       <Select
                         value={features.paint_options || undefined}
@@ -5508,7 +5772,7 @@ export default function OrderEntry() {
                 </div>
 
                 {/* Custom Order and Notes */}
-                <div>
+                <div id="notes-intake" className="scroll-mt-28">
                   <Label htmlFor="notes">Notes</Label>
                   <Textarea
                     id="notes"
@@ -5558,6 +5822,70 @@ export default function OrderEntry() {
                       </div>
                     </div>
                   )}
+
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <Label className="text-sm font-medium">Department Notes</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={addDepartmentNote}>
+                        Add Department Note
+                      </Button>
+                    </div>
+
+                    {departmentNotes.map((note, index) => {
+                      const allSelected = note.departments.includes(ALL_DEPARTMENTS_VALUE);
+                      return (
+                        <div key={note.id} className="rounded-md border border-gray-200 bg-gray-50 p-3 space-y-3 dark:border-gray-700 dark:bg-gray-900/40">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                              Note {index + 1}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeDepartmentNote(note.id)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                          <Textarea
+                            value={note.text}
+                            onChange={(e) => updateDepartmentNote(note.id, { text: e.target.value })}
+                            placeholder="Add a note for selected departments..."
+                            rows={2}
+                          />
+                          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
+                            <label className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={allSelected}
+                                onCheckedChange={(checked) =>
+                                  toggleDepartmentNoteTarget(note, ALL_DEPARTMENTS_VALUE, checked === true)
+                                }
+                              />
+                              All departments
+                            </label>
+                            {P1_NOTE_DEPARTMENTS.map((department) => (
+                              <label key={department} className="flex items-center gap-2 text-sm">
+                                <Checkbox
+                                  checked={!allSelected && note.departments.includes(department)}
+                                  disabled={allSelected}
+                                  onCheckedChange={(checked) =>
+                                    toggleDepartmentNoteTarget(note, department, checked === true)
+                                  }
+                                />
+                                {department}
+                              </label>
+                            ))}
+                          </div>
+                          {note.departments.length === 0 && (
+                            <p className="text-xs text-gray-500">
+                              No department selected. This note is saved on the order but will not show on department queue cards.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Miscellaneous Items */}
@@ -5695,7 +6023,7 @@ export default function OrderEntry() {
 
         {/* Right Column - Order Summary */}
         <div className="space-y-6">
-          <Card className={isConsoleMode ? 'order-console-summary-card' : undefined}>
+          <Card id="pricing-intake" className={isConsoleMode ? 'order-console-summary-card scroll-mt-28' : 'scroll-mt-28'}>
             <CardHeader>
               <CardTitle>Order Summary</CardTitle>
             </CardHeader>
@@ -6702,7 +7030,7 @@ export default function OrderEntry() {
               )}
 
               {/* Verified Checkbox */}
-              <div className="flex items-center space-x-2 pt-4 pb-2">
+              <div id="review-intake" className="flex items-center space-x-2 pt-4 pb-2 scroll-mt-28">
                 <input
                   type="checkbox"
                   id="verified-checkbox"

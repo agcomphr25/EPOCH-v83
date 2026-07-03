@@ -12,21 +12,53 @@ import {
   p2VacuumLeakTests,
   p2FinalInspectionResults,
   p2SerializedItems,
+  travelers,
+  partRoutings,
 } from '../../schema';
-import { eq, and, desc, or, inArray } from 'drizzle-orm';
+import { eq, and, desc, or, inArray, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { authenticateToken, optionalAuth } from '../../middleware/auth';
 import { validateActionToken } from '../../middleware/actionToken';
 
 // ── Auto-logging helpers ──────────────────────────────────────────────────────
 // Resolves serialized item from run serial number / sku for log creation
-async function lookupSerializedItem(serialNumber: string | null, sku: string | null) {
+async function lookupSerializedItem(serialNumber: string | null, sku: string | null, travelerId?: string | null) {
+  if (travelerId) {
+    const [traveler] = await db
+      .select({ serialNumber: travelers.serialNumber, lotNumber: travelers.lotNumber })
+      .from(travelers)
+      .where(eq(travelers.id, travelerId))
+      .limit(1);
+
+    const travelerSerial = traveler?.serialNumber || traveler?.lotNumber || null;
+    if (travelerSerial) {
+      const [item] = await db
+        .select()
+        .from(p2SerializedItems)
+        .where(
+          or(
+            ilike(p2SerializedItems.serialNumber, travelerSerial),
+            ilike(p2SerializedItems.barcode, travelerSerial),
+            ilike(p2SerializedItems.travelerBarcode, travelerSerial)
+          )
+        )
+        .limit(1);
+      if (item) return item;
+    }
+  }
+
   if (!serialNumber) return null;
   try {
     const [item] = await db
       .select()
       .from(p2SerializedItems)
-      .where(eq(p2SerializedItems.serialNumber, serialNumber))
+      .where(
+        or(
+          ilike(p2SerializedItems.serialNumber, serialNumber),
+          ilike(p2SerializedItems.barcode, serialNumber),
+          ilike(p2SerializedItems.travelerBarcode, serialNumber)
+        )
+      )
       .limit(1);
     return item || null;
   } catch {
@@ -43,14 +75,28 @@ async function autoCreateLinkedLog(
   const logType: string = program.logType || 'none';
   if (logType === 'none') return { linkedLogId: null, linkedLogType: null };
 
-  const item = await lookupSerializedItem(run.serialNumber, run.sku);
+  const item = await lookupSerializedItem(run.serialNumber, run.sku, run.travelerId || null);
   if (!item) {
     console.warn(`[ProductionTimer] No serialized item found for serial=${run.serialNumber} — skipping auto-log`);
     return { linkedLogId: null, linkedLogType: null };
   }
 
   const dept = run.departmentName || item.currentDepartment || 'Unknown';
-
+  const scannedTravelerBarcode = run.scannedTravelerBarcode || null;
+  const runMetadata = {
+    source: 'timer_station',
+    timerRunId: run.id,
+    timerProgramId: run.programId,
+    timerProgramName: program.name,
+    scannedTravelerBarcode,
+    travelerId: run.travelerId || null,
+    travelerStepId: run.travelerStepId || null,
+    travelerTaskId: run.travelerTaskId || null,
+    serialNumber: run.serialNumber || item.serialNumber || null,
+    mandrelNumber: run.mandrelNumber || null,
+    ovenNumber: run.ovenNumber || null,
+    ovenSlot: run.ovenSlot || null,
+  };
   try {
     if (logType === 'oven_cure') {
       const [log] = await db.insert(p2OvenCureLogs).values({
@@ -65,6 +111,7 @@ async function autoCreateLinkedLog(
         result: 'PENDING',
         operatorId: null,
         operatorName: null,
+        metadata: runMetadata,
         notes: `Auto-logged from timer run ${run.id} — program: ${program.name}`,
       }).returning();
       return { linkedLogId: log.id, linkedLogType: 'oven_cure' };
@@ -81,6 +128,7 @@ async function autoCreateLinkedLog(
         result: 'PENDING',
         operatorId: null,
         operatorName: null,
+        metadata: runMetadata,
         notes: `Auto-logged from timer run ${run.id} — program: ${program.name}`,
       }).returning();
       return { linkedLogId: log.id, linkedLogType: 'vacuum_leak_test' };
@@ -171,6 +219,99 @@ async function resolveUserId(req: Request): Promise<number | null> {
   return null;
 }
 
+function field(row: any, camel: string, snake: string) {
+  return row?.[camel] ?? row?.[snake] ?? null;
+}
+
+async function resolveItemIdentity(run: any): Promise<{
+  itemIdentifier: string;
+  serialNumber: string | null;
+  travelerId: string | null;
+  travelerNumber: string | null;
+}> {
+  const serialNumber = field(run, 'serialNumber', 'serial_number');
+  const travelerId = field(run, 'travelerId', 'traveler_id');
+
+  let travelerNumber: string | null = null;
+  if (travelerId) {
+    const [traveler] = await db
+      .select({
+        travelerNumber: travelers.travelerNumber,
+        serialNumber: travelers.serialNumber,
+        lotNumber: travelers.lotNumber,
+      })
+      .from(travelers)
+      .where(eq(travelers.id, travelerId))
+      .limit(1);
+
+    travelerNumber = traveler?.travelerNumber ?? null;
+    const travelerSerial = traveler?.serialNumber ?? traveler?.lotNumber ?? null;
+    return {
+      itemIdentifier: travelerNumber ?? travelerSerial ?? serialNumber ?? travelerId,
+      serialNumber: serialNumber ?? travelerSerial,
+      travelerId,
+      travelerNumber,
+    };
+  }
+
+  return {
+    itemIdentifier: serialNumber ?? field(run, 'id', 'id') ?? 'UNKNOWN_ITEM',
+    serialNumber,
+    travelerId: null,
+    travelerNumber: null,
+  };
+}
+
+function buildRunSnapshot(run: any, itemIdentity: Awaited<ReturnType<typeof resolveItemIdentity>>, eventType: string, program?: any) {
+  return {
+    id: field(run, 'id', 'id'),
+    itemIdentifier: itemIdentity.itemIdentifier,
+    travelerId: itemIdentity.travelerId,
+    travelerNumber: itemIdentity.travelerNumber,
+    serialNumber: itemIdentity.serialNumber,
+    programId: field(run, 'programId', 'program_id'),
+    programName: program?.name ?? null,
+    instanceName: field(run, 'instanceName', 'instance_name'),
+    sku: field(run, 'sku', 'sku'),
+    inventoryItemId: field(run, 'inventoryItemId', 'inventory_item_id'),
+    mandrelNumber: field(run, 'mandrelNumber', 'mandrel_number'),
+    ovenNumber: field(run, 'ovenNumber', 'oven_number'),
+    ovenSlot: field(run, 'ovenSlot', 'oven_slot'),
+    status: field(run, 'status', 'status'),
+    currentStepIndex: field(run, 'currentStepIndex', 'current_step_index'),
+    departmentName: field(run, 'departmentName', 'department_name'),
+    scannedTravelerBarcode: field(run, 'scannedTravelerBarcode', 'scanned_traveler_barcode'),
+    startedAt: field(run, 'startedAt', 'started_at'),
+    completedAt: field(run, 'completedAt', 'completed_at'),
+    totalElapsedSeconds: field(run, 'totalElapsedSeconds', 'total_elapsed_seconds'),
+    recordedEventType: eventType,
+  };
+}
+
+async function recordItemAudit(run: any, eventType: string, actorUserId: number | null, program?: any): Promise<void> {
+  try {
+    const identity = await resolveItemIdentity(run);
+    const snapshot = buildRunSnapshot(run, identity, eventType, program);
+    await pool.query(
+      `INSERT INTO production_item_audit_records
+        (item_identifier, serial_number, traveler_id, traveler_number, run_id, event_type, event_at, actor_user_id, card_snapshot)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8::jsonb)`,
+      [
+        identity.itemIdentifier,
+        identity.serialNumber,
+        identity.travelerId,
+        identity.travelerNumber,
+        field(run, 'id', 'id'),
+        eventType,
+        actorUserId,
+        JSON.stringify(snapshot),
+      ],
+    );
+  } catch (err: any) {
+    console.warn('[ProductionTimer] Item audit snapshot skipped:', err?.message ?? err);
+  }
+}
+
 const router = Router();
 
 // Apply optional auth and action token validation to all routes
@@ -193,6 +334,174 @@ const startRunSchema = z.object({
   travelerStepId: z.string().optional(),
   travelerTaskId: z.string().optional(),
   departmentName: z.string().optional(),
+  scannedTravelerBarcode: z.string().optional(),
+});
+
+function extractMandrelNumber(...sources: any[]): number | null {
+  const keys = ['mandrelNumber', 'mandrel_number', 'mandrel', 'mandrelNo', 'mandrel_no', 'mandrelId', 'mandrel_id'];
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue;
+    for (const key of keys) {
+      const value = source[key];
+      const parsed = typeof value === 'number' ? value : parseInt(String(value ?? '').replace(/[^0-9]/g, ''), 10);
+      if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 3) return parsed;
+    }
+  }
+  return null;
+}
+
+function isOvenCureDepartment(name?: string | null): boolean {
+  return /oven|cure/i.test(name || '');
+}
+
+function getDepartmentTimerConfig(routing: any, preferredDepartment?: string | null) {
+  const departmentConfig = routing?.departmentConfig && typeof routing.departmentConfig === 'object'
+    ? routing.departmentConfig as Record<string, any>
+    : {};
+
+  if (preferredDepartment && departmentConfig[preferredDepartment]?.timerConfig?.enabled) {
+    return { departmentName: preferredDepartment, timerConfig: departmentConfig[preferredDepartment].timerConfig };
+  }
+
+  const ovenDept = Object.keys(departmentConfig).find((dept) =>
+    isOvenCureDepartment(dept) && departmentConfig[dept]?.timerConfig?.enabled
+  );
+  if (ovenDept) {
+    return { departmentName: ovenDept, timerConfig: departmentConfig[ovenDept].timerConfig };
+  }
+
+  const anyTimerDept = Object.keys(departmentConfig).find((dept) => departmentConfig[dept]?.timerConfig?.enabled);
+  if (anyTimerDept) {
+    return { departmentName: anyTimerDept, timerConfig: departmentConfig[anyTimerDept].timerConfig };
+  }
+
+  return { departmentName: preferredDepartment || null, timerConfig: null };
+}
+
+async function resolveTimerTravelerScan(scanValue: string) {
+  const scannedTravelerBarcode = scanValue.trim();
+
+  let traveler = await db.query.travelers.findFirst({
+    where: or(
+      ilike(travelers.travelerNumber, scannedTravelerBarcode),
+      ilike(travelers.id, scannedTravelerBarcode),
+      ilike(travelers.serialNumber, scannedTravelerBarcode),
+      ilike(travelers.lotNumber, scannedTravelerBarcode)
+    ),
+  });
+
+  let serializedItem = await db.query.p2SerializedItems.findFirst({
+    where: or(
+      ilike(p2SerializedItems.barcode, scannedTravelerBarcode),
+      ilike(p2SerializedItems.travelerBarcode, scannedTravelerBarcode),
+      ilike(p2SerializedItems.serialNumber, scannedTravelerBarcode)
+    ),
+  });
+
+  if (!serializedItem && traveler) {
+    const travelerSerial = traveler.serialNumber || traveler.lotNumber || traveler.travelerNumber;
+    serializedItem = await db.query.p2SerializedItems.findFirst({
+      where: or(
+        ilike(p2SerializedItems.serialNumber, travelerSerial),
+        ilike(p2SerializedItems.barcode, travelerSerial),
+        ilike(p2SerializedItems.travelerBarcode, travelerSerial)
+      ),
+    });
+  }
+
+  if (!traveler && serializedItem) {
+    traveler = await db.query.travelers.findFirst({
+      where: or(
+        ilike(travelers.serialNumber, serializedItem.serialNumber || serializedItem.barcode),
+        ilike(travelers.lotNumber, serializedItem.serialNumber || serializedItem.barcode)
+      ),
+    });
+  }
+
+  if (!serializedItem && !traveler) return null;
+
+  let routing: any = null;
+  const routingId = traveler?.partRoutingId || (serializedItem as any)?.partRoutingId || null;
+  if (routingId) {
+    routing = await db.query.partRoutings.findFirst({
+      where: and(eq(partRoutings.id, routingId), eq(partRoutings.isActive, true)),
+    });
+  }
+
+  if (!routing) {
+    const partNumber = traveler?.partNumber || serializedItem?.partNumber || '';
+    if (partNumber) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(eq(partRoutings.partNumber, partNumber), eq(partRoutings.isActive, true)),
+      });
+    }
+  }
+
+  const departmentSequence = Array.isArray(routing?.departmentSequence) ? routing.departmentSequence as string[] : [];
+  const currentDepartment = serializedItem?.currentDepartment
+    || departmentSequence[serializedItem?.currentStageIndex || 0]
+    || null;
+  const timerMatch = getDepartmentTimerConfig(routing, currentDepartment);
+  const mandrelNumber = extractMandrelNumber(serializedItem?.metadata, (traveler as any)?.metadata);
+
+  return {
+    scannedTravelerBarcode,
+    traveler: traveler ? {
+      id: traveler.id,
+      travelerNumber: traveler.travelerNumber,
+      serialNumber: traveler.serialNumber,
+      lotNumber: traveler.lotNumber,
+      partNumber: traveler.partNumber,
+      partName: traveler.partName,
+      status: traveler.status,
+    } : null,
+    serializedItem: serializedItem ? {
+      id: serializedItem.id,
+      barcode: serializedItem.barcode,
+      travelerBarcode: serializedItem.travelerBarcode,
+      serialNumber: serializedItem.serialNumber,
+      partNumber: serializedItem.partNumber,
+      partName: serializedItem.partName,
+      currentDepartment: serializedItem.currentDepartment,
+      currentStageIndex: serializedItem.currentStageIndex,
+      status: serializedItem.status,
+      mandrelNumber,
+    } : null,
+    routing: routing ? {
+      id: routing.id,
+      partNumber: routing.partNumber,
+      partName: routing.partName,
+      departmentSequence,
+      ovenCureDepartment: timerMatch.departmentName,
+      timerConfig: timerMatch.timerConfig,
+    } : null,
+    timerDefaults: {
+      serialNumber: serializedItem?.serialNumber || traveler?.serialNumber || traveler?.lotNumber || scannedTravelerBarcode,
+      mandrelNumber,
+      programId: timerMatch.timerConfig?.defaultProgramId || null,
+      programName: timerMatch.timerConfig?.defaultProgramName || null,
+      departmentName: timerMatch.departmentName || currentDepartment || null,
+    },
+  };
+}
+
+router.get('/traveler-scan/:barcode', async (req: Request, res: Response) => {
+  try {
+    const scanValue = decodeURIComponent(req.params.barcode || '').trim();
+    if (!scanValue) {
+      return res.status(400).json({ error: 'Traveler barcode is required' });
+    }
+
+    const resolved = await resolveTimerTravelerScan(scanValue);
+    if (!resolved) {
+      return res.status(404).json({ error: 'Traveler or serialized item not found for scanned barcode' });
+    }
+
+    return res.json(resolved);
+  } catch (error: any) {
+    console.error('[ProductionTimer] Error resolving traveler scan:', error);
+    return res.status(500).json({ error: 'Failed to resolve traveler scan' });
+  }
 });
 
 router.post('/runs/start', async (req: Request, res: Response) => {
@@ -208,7 +517,7 @@ router.post('/runs/start', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid payload', details: parseResult.error.issues });
     }
 
-    const { programId, instanceName, sku, serialNumber, inventoryItemId, mandrelNumber, ovenNumber, ovenSlot, travelerId, travelerStepId, travelerTaskId, departmentName } = parseResult.data;
+    const { programId, instanceName, sku, serialNumber, inventoryItemId, mandrelNumber, ovenNumber, ovenSlot, travelerId, travelerStepId, travelerTaskId, departmentName, scannedTravelerBarcode } = parseResult.data;
 
     const [program] = await db
       .select()
@@ -253,12 +562,15 @@ router.post('/runs/start', async (req: Request, res: Response) => {
     });
 
     // Auto-create linked AS9100 log entry if this program type requires it
-    const { linkedLogId, linkedLogType } = await autoCreateLinkedLog(run, program, userId);
+    const runWithScan = { ...run, scannedTravelerBarcode: scannedTravelerBarcode || null };
+    const { linkedLogId, linkedLogType } = await autoCreateLinkedLog(runWithScan, program, userId);
     if (linkedLogId && linkedLogType) {
       await db.update(productionProgramRuns)
         .set({ linkedLogId, linkedLogType })
         .where(eq(productionProgramRuns.id, run.id));
     }
+
+    await recordItemAudit({ ...runWithScan, linkedLogId, linkedLogType }, 'started', userId, program);
 
     console.log(`[ProductionTimer] Run started: ${run.id} for program ${program.name}${linkedLogType ? ` (auto-linked ${linkedLogType} log ${linkedLogId})` : ''}`);
 
@@ -350,6 +662,8 @@ router.post('/runs/:id/pause', async (req: Request, res: Response) => {
       occurredAt: now,
     });
 
+    await recordItemAudit(updated, 'paused', userId);
+
     console.log(`[ProductionTimer] Run paused: ${id}`);
 
     return res.json(updated);
@@ -394,6 +708,8 @@ router.post('/runs/:id/step-timeout', async (req: Request, res: Response) => {
       stepIndex: run.currentStepIndex,
       occurredAt: now,
     });
+
+    await recordItemAudit(updated, 'step_timeout', null);
 
     console.log(`[ProductionTimer] Step timed out, awaiting next: ${id}`);
 
@@ -443,6 +759,8 @@ router.post('/runs/:id/resume', async (req: Request, res: Response) => {
       userId,
       occurredAt: new Date(),
     });
+
+    await recordItemAudit(updated, 'resumed', userId);
 
     console.log(`[ProductionTimer] Run resumed: ${id}`);
 
@@ -518,6 +836,7 @@ router.post('/runs/:id/advance', async (req: Request, res: Response) => {
 
       // Auto-close linked AS9100 log entry
       await autoCloseLinkedLog(run, 'PASS', completedAt);
+      await recordItemAudit(updated, 'program_completed', userId);
 
       console.log(`[ProductionTimer] Run completed: ${id}, elapsed: ${totalElapsedSeconds}s`);
 
@@ -541,6 +860,8 @@ router.post('/runs/:id/advance', async (req: Request, res: Response) => {
       userId,
       occurredAt: new Date(),
     });
+
+    await recordItemAudit(updated, 'advanced', userId);
 
     console.log(`[ProductionTimer] Run advanced to step ${nextStepIndex}: ${id}`);
 
@@ -598,6 +919,7 @@ router.post('/runs/:id/stop', async (req: Request, res: Response) => {
 
     // Auto-close linked AS9100 log entry (with STOPPED result so technicians know it was interrupted)
     await autoCloseLinkedLog(run, 'STOPPED', completedAt);
+    await recordItemAudit(updated, 'stopped', userId);
 
     console.log(`[ProductionTimer] Run stopped: ${id}, elapsed: ${totalElapsedSeconds}s`);
 
@@ -638,6 +960,7 @@ router.get('/runs', async (req: Request, res: Response) => {
     const runs = runsResult || [];
 
     const runsWithDetails = await Promise.all(runs.map(async (run: any) => {
+      const itemIdentity = await resolveItemIdentity(run);
       const events = await pool.query(
         `SELECT * FROM production_program_run_events WHERE run_id = $1 ORDER BY occurred_at`,
         [run.id]
@@ -667,6 +990,9 @@ router.get('/runs', async (req: Request, res: Response) => {
 
       return {
         id: run.id,
+        itemIdentifier: itemIdentity.itemIdentifier,
+        travelerId: itemIdentity.travelerId,
+        travelerNumber: itemIdentity.travelerNumber,
         programId: run.program_id,
         startedByUserId: run.started_by_user_id,
         instanceName: run.instance_name,
@@ -746,6 +1072,58 @@ router.get('/runs/history', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/runs/item-audit/:identifier', async (req: Request, res: Response) => {
+  try {
+    const identifier = decodeURIComponent(req.params.identifier || '').trim();
+    if (!identifier) {
+      return res.status(400).json({ error: 'Identifier is required' });
+    }
+
+    const records = await pool.query(
+      `SELECT
+         id,
+         item_identifier,
+         serial_number,
+         traveler_id,
+         traveler_number,
+         run_id,
+         event_type,
+         event_at,
+         actor_user_id,
+         card_snapshot,
+         created_at
+       FROM production_item_audit_records
+       WHERE item_identifier = $1
+          OR serial_number = $1
+          OR traveler_number = $1
+          OR traveler_id = $1
+       ORDER BY event_at DESC, created_at DESC
+       LIMIT 250`,
+      [identifier],
+    );
+
+    return res.json({
+      identifier,
+      records: records.map((row: any) => ({
+        id: row.id,
+        itemIdentifier: row.item_identifier,
+        serialNumber: row.serial_number,
+        travelerId: row.traveler_id,
+        travelerNumber: row.traveler_number,
+        runId: row.run_id,
+        eventType: row.event_type,
+        eventAt: row.event_at,
+        actorUserId: row.actor_user_id,
+        cardSnapshot: row.card_snapshot,
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error('[ProductionTimer] Error fetching item audit:', error);
+    return res.status(500).json({ error: 'Failed to fetch item audit records' });
+  }
+});
+
 router.get('/runs/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -778,8 +1156,12 @@ router.get('/runs/:id', async (req: Request, res: Response) => {
       .where(eq(productionProgramSteps.programId, run.programId))
       .orderBy(productionProgramSteps.stepIndex);
 
+    const itemIdentity = await resolveItemIdentity(run);
+
     return res.json({
       ...run,
+      itemIdentifier: itemIdentity.itemIdentifier,
+      travelerNumber: itemIdentity.travelerNumber,
       program,
       steps,
       events,
@@ -818,6 +1200,8 @@ router.patch('/runs/:id', async (req: Request, res: Response) => {
       })
       .where(eq(productionProgramRuns.id, id))
       .returning();
+
+    await recordItemAudit(updated, 'updated', null);
 
     console.log(`[ProductionTimer] Run updated: ${id}`);
     return res.json(updated);

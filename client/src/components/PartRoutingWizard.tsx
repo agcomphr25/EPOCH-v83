@@ -102,6 +102,13 @@ interface InventoryItem {
   description?: string;
 }
 
+interface ProjectOption {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  status?: string;
+}
+
 interface MaterialRequirement {
   partId: string;
   partNumber: string;
@@ -224,6 +231,7 @@ interface DepartmentConfiguration {
 interface PartRouting {
   id: string;
   inventoryItemId: string;
+  projectId?: string | null;
   partNumber: string;  // This comes from backend, keep as is for routing data
   partName: string;    // This comes from backend, keep as is for routing data
   departmentSequence: string[];
@@ -307,6 +315,7 @@ interface PartRoutingWizardProps {
 export default function PartRoutingWizard({ open, onOpenChange, editRouting, poId }: PartRoutingWizardProps) {
   const [step, setStep] = useState(1);
   const [selectedItemId, setSelectedItemId] = useState<string>(editRouting?.inventoryItemId || '');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(editRouting?.projectId || '');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(editRouting?.departmentSequence || []);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -392,12 +401,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   useEffect(() => {
     if (open && editRouting) {
       setSelectedItemId(editRouting.inventoryItemId || '');
+      setSelectedProjectId(editRouting.projectId || '');
       setSelectedDepartments(editRouting.departmentSequence || []);
       setDepartmentConfig(editRouting.departmentConfig || {});
       setStep(1);
     } else if (open && !editRouting) {
       // Reset for new routing
       setSelectedItemId('');
+      setSelectedProjectId('');
       setSelectedDepartments([]);
       setDepartmentConfig({});
       setStep(1);
@@ -442,6 +453,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
       })),
   });
 
+  const { data: projectsList = [] } = useQuery<ProjectOption[]>({
+    queryKey: ['/api/projects'],
+    enabled: open && step === 1,
+  });
+
   // Fetch inventory items for step 3 (materials selection)
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
@@ -461,6 +477,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
   // Use inventory parts list directly for step 1 display
   const displayItems: InventoryItem[] = inventoryPartsList;
+  const displayProjects = [...projectsList].sort((a, b) => {
+    const aLabel = `${a.projectCode || ''} ${a.projectName || ''}`.trim();
+    const bLabel = `${b.projectCode || ''} ${b.projectName || ''}`.trim();
+    return aLabel.localeCompare(bLabel);
+  });
 
   // Fetch employees for technician assignment
   const { data: employees = [] } = useQuery<Employee[]>({
@@ -565,6 +586,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
           description: undefined,
         }
       : undefined);
+  const selectedProject = displayProjects.find(project => project.id === selectedProjectId);
 
   // Create/Update mutation
   const saveMutation = useMutation({
@@ -601,6 +623,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const resetState = () => {
     setStep(1);
     setSelectedItemId('');
+    setSelectedProjectId('');
     setSelectedDepartments([]);
     setDepartmentConfig({});
     setSearchTerm('');
@@ -645,6 +668,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
       });
       return;
     }
+    if (step === 1 && !editRouting && !selectedProjectId) {
+      toast({
+        title: 'Project Required',
+        description: 'Please select the project this routing applies to',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (step === 2 && selectedDepartments.length === 0) {
       toast({
         title: 'Selection Required',
@@ -663,10 +694,10 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const handleSave = () => {
     if (!selectedItem) return;
 
-    // Build traceabilityConfig from departmentConfig materials' requiredFields
-    // Preserve existing config when editing, only update departments that have materials configured
-    const existingTraceabilityConfig = editRouting?.traceabilityConfig || {};
-    const traceabilityConfig: Record<string, string[]> = { ...existingTraceabilityConfig };
+    // Build traceabilityConfig from current material assignments only.
+    // Preserving old department keys makes material prompts appear on steps
+    // after the user has moved or removed the material in routing.
+    const traceabilityConfig: Record<string, string[]> = {};
     
     selectedDepartments.forEach(dept => {
       const config = departmentConfig[dept];
@@ -676,18 +707,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
         config.materials.forEach(material => {
           material.requiredFields?.forEach(field => allFields.add(field));
         });
-        traceabilityConfig[dept] = Array.from(allFields);
-      } else if (!existingTraceabilityConfig[dept]) {
-        // Only set empty array for new departments that don't have existing config
-        traceabilityConfig[dept] = [];
-      }
-      // If department exists in existing config and no new materials, preserve existing
-    });
-    
-    // Remove departments no longer in sequence
-    Object.keys(traceabilityConfig).forEach(dept => {
-      if (!selectedDepartments.includes(dept)) {
-        delete traceabilityConfig[dept];
+        if (allFields.size > 0) {
+          traceabilityConfig[dept] = Array.from(allFields);
+        }
       }
     });
 
@@ -705,6 +727,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
     const data = {
       inventoryItemId: String(selectedItem.id), // Ensure inventoryItemId is string
+      projectId: selectedProjectId || null,
       partNumber: selectedItem.agPartNumber,
       partName: selectedItem.name,
       departmentSequence: selectedDepartments,
@@ -1645,6 +1668,36 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                 </Select>
               </div>
 
+              <div>
+                <Label htmlFor="project-select">Project</Label>
+                <Select
+                  value={selectedProjectId}
+                  onValueChange={(value) => setSelectedProjectId(value)}
+                >
+                  <SelectTrigger id="project-select" data-testid="select-routing-project">
+                    <SelectValue placeholder={editRouting ? 'No project assigned yet' : 'Select a project...'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {displayProjects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="font-mono">{project.projectCode}</span>
+                          <span>{project.projectName}</span>
+                          {project.status && (
+                            <Badge variant="outline" className="text-xs shrink-0">{project.status}</Badge>
+                          )}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {editRouting && !selectedProjectId && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Existing routings can stay unassigned until the project is known.
+                  </p>
+                )}
+              </div>
+
               {selectedItem && (
                 <Card className="bg-muted/30">
                   <CardContent className="p-4">
@@ -1656,6 +1709,19 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                     {selectedItem.description && (
                       <p className="text-xs text-muted-foreground mt-2">{selectedItem.description}</p>
                     )}
+                    <div className="flex items-center gap-2 text-sm mt-2">
+                      <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                      {selectedProject ? (
+                        <>
+                          <span className="font-mono font-medium">{selectedProject.projectCode}</span>
+                          <span>{selectedProject.projectName}</span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {editRouting ? 'No project assigned' : 'Select a project for this routing'}
+                        </span>
+                      )}
+                    </div>
                     {itemsWithRoutings.has(selectedItem.id) && (
                       <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
                         <AlertCircle className="h-3 w-3 shrink-0" />

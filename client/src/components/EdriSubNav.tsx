@@ -1,8 +1,9 @@
 import { Link, useLocation } from 'wouter';
 import {
-  ShieldCheck, Crown, Bug, BarChart3,
+  ShieldCheck, ShieldAlert, Crown, Bug, BarChart3,
   AlertOctagon, Wrench, Clock, Tags, FileCheck2, Percent, ClipboardCheck,
-  ChevronDown, ShoppingCart, Boxes, Fingerprint, BookOpenCheck,
+  ChevronDown, ShoppingCart, Boxes, Fingerprint, BookOpenCheck, UsersRound, UserCheck, ClipboardPenLine, Network,
+  FolderOpen,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -21,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',        path: '/admin/edri',                    icon: ShieldCheck   },
   { label: 'Executive Matrix', path: '/admin/edri/executive-matrix',   icon: Crown         },
   { label: 'DCAA Findings',    path: '/admin/dcaa-findings',           icon: Bug           },
+  { label: 'Security',         path: '/admin/security-center',          icon: ShieldAlert   },
   { label: 'Heatmap',          path: '/admin/edri/heatmap',            icon: BarChart3     },
   { label: 'Red Flags',        path: '/admin/edri/red-flags',          icon: AlertOctagon  },
   { label: 'Remediation',      path: '/admin/edri/remediation',        icon: Wrench        },
@@ -28,7 +30,11 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const REPORT_ITEMS: NavItem[] = [
-  { label: 'Charge Codes',      path: '/admin/edri/charge-code-usage',  icon: Tags          },
+  { label: 'Charge Code Usage', path: '/admin/edri/charge-code-usage',  icon: Tags          },
+  { label: 'Labor Distribution', path: '/admin/edri/labor-distribution', icon: UsersRound    },
+  { label: 'Evidence Map',       path: '/admin/edri/transaction-evidence-map', icon: Network },
+  { label: 'Supervisor Exceptions', path: '/admin/edri/supervisor-approval-exceptions', icon: UserCheck },
+  { label: 'Correction Log',    path: '/admin/edri/timesheet-correction-log', icon: ClipboardPenLine },
   { label: 'Payroll Recon',     path: '/admin/edri/payroll-export-reconciliation', icon: FileCheck2 },
   { label: 'Burden Rates',      path: '/admin/edri/indirect-cost-burden-rates', icon: Percent },
   { label: 'Unallowables',      path: '/admin/edri/unallowable-cost-review', icon: ClipboardCheck },
@@ -36,6 +42,7 @@ const REPORT_ITEMS: NavItem[] = [
   { label: 'Inventory Trace',   path: '/admin/edri/inventory-traceability', icon: Boxes },
   { label: 'Audit Integrity',   path: '/admin/edri/audit-ledger-integrity', icon: Fingerprint },
   { label: 'Policy Training',   path: '/admin/edri/policy-training-acknowledgment', icon: BookOpenCheck },
+  { label: 'Supporting Docs',   path: '/admin/edri/supporting-docs', icon: FolderOpen },
 ];
 
 export default function EdriSubNav() {

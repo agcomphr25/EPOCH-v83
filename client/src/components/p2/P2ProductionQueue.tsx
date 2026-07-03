@@ -15,6 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Accordion,
   AccordionContent,
@@ -49,7 +51,9 @@ import {
   ArrowUp,
   ArrowDown,
   Check,
-  Users
+  Users,
+  FolderOpen,
+  FileText
 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import { getBarcodeFormat } from '@/lib/barcodeFormat';
@@ -65,6 +69,7 @@ interface ActiveTask {
 
 interface QueueItem {
   id: string;
+  poId: number | null;
   barcode: string;
   serialNumber: string;
   partNumber: string;
@@ -74,6 +79,25 @@ interface QueueItem {
   status: string;
   currentDepartment: string;
   currentStageIndex: number;
+  projectId: string | null;
+  projectCode: string | null;
+  projectName: string | null;
+  isReplacement?: boolean;
+  replacementForSerializedItemId?: string | null;
+  replacementForSerialNumber?: string | null;
+  replacementReason?: string | null;
+  isLegacyProductionOrder?: boolean;
+  isLegacyProjectWorkOrder?: boolean;
+  productionWorkOrderId?: string | null;
+  workOrderNumber?: string | null;
+  linkedWadId?: string | null;
+  linkedWadNumber?: string | null;
+  linkedWadStatus?: string | null;
+  linkedWadWorkOrderStatus?: string | null;
+  p2WadConnectionStatus?: 'WAD_READY' | 'WAD_INCOMPLETE' | 'WAD_MISSING' | 'WAD_NOT_MATCHED' | 'NO_PROJECT_LINK';
+  p2WadConnectionLabel?: string;
+  activeTravelerId?: string | null;
+  activeTravelerNumber?: string | null;
   hasActiveTask: boolean;
   activeTask: ActiveTask | null;
   barcodePrintedAt?: string | null;
@@ -117,9 +141,42 @@ interface PartInfo {
   traceabilityRequirements: any[];
 }
 
+const getP2WadBadgeClass = (status?: string | null) => {
+  switch (status) {
+    case 'WAD_READY':
+      return 'border-green-300 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300';
+    case 'WAD_INCOMPLETE':
+    case 'WAD_NOT_MATCHED':
+      return 'border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
+    case 'WAD_MISSING':
+      return 'border-red-300 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300';
+    default:
+      return 'border-slate-300 bg-slate-50 text-slate-700 dark:bg-slate-900 dark:text-slate-300';
+  }
+};
+
 interface P2ProductionQueueProps {
   selectedPONumbers?: string[];
 }
+
+const STANDARD_DEPARTMENT_ORDER = [
+  'Pending Layup',
+  'Layup',
+  'Assemble/Disassembly',
+  'CNC',
+  'Finish',
+  'Paint',
+  'Final QC',
+  'Shipping',
+];
+
+const isDepartmentAfterLayup = (departmentName: string) => {
+  const departmentIndex = STANDARD_DEPARTMENT_ORDER.indexOf(departmentName);
+  if (departmentIndex === -1) {
+    return departmentName !== 'Pending Layup' && departmentName !== 'Layup';
+  }
+  return departmentIndex > STANDARD_DEPARTMENT_ORDER.indexOf('Layup');
+};
 
 export default function P2ProductionQueue({ selectedPONumbers = [] }: P2ProductionQueueProps) {
   const [, setLocation] = useLocation();
@@ -133,6 +190,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
   const [holdReason, setHoldReason] = useState('');
   const [scrapReason, setScrapReason] = useState('');
+  const [scrapRequiresRma, setScrapRequiresRma] = useState<boolean | null>(null);
   const [offSystemNotes, setOffSystemNotes] = useState('');
   const [offSystemLinkedTraveler, setOffSystemLinkedTraveler] = useState('');
   const [expandedDepartments, setExpandedDepartments] = useState<string[]>([]);
@@ -140,7 +198,13 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   const [selectedLayupItems, setSelectedLayupItems] = useState<Set<string>>(new Set());
   const [sortByPO, setSortByPO] = useState<'asc' | 'desc' | null>(null);
 
-  const { data: queueDataRaw, isLoading } = useQuery<ProductionQueueData>({
+  const {
+    data: queueDataRaw,
+    error: queueError,
+    isError: isQueueError,
+    isLoading,
+    refetch: refetchQueue,
+  } = useQuery<ProductionQueueData>({
     queryKey: ['/api/p2/control-center/production-queue'],
     refetchInterval: 10000,
   });
@@ -169,7 +233,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
 
   const scanMutation = useMutation({
     mutationFn: async (barcode: string) => {
-      const response = await fetch(`/api/p2-traveler/part-info/${barcode}`);
+      const response = await fetch(`/api/p2-traveler/part-info/${encodeURIComponent(barcode)}`);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to find part');
@@ -191,21 +255,30 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ itemId, status, reason, notes, linkedTravelerId }: { itemId: string; status: string; reason: string; notes?: string; linkedTravelerId?: string }) => {
+    mutationFn: async ({ itemId, status, reason, notes, linkedTravelerId, rmaRequired }: { itemId: string; status: string; reason: string; notes?: string; linkedTravelerId?: string; rmaRequired?: boolean }) => {
       return apiRequest(`/api/p2/control-center/item-status/${itemId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status, reason, notes, linkedTravelerId, performedBy: 'Supervisor' }),
+        body: JSON.stringify({ status, reason, notes, linkedTravelerId, rmaRequired, performedBy: 'Supervisor' }),
       });
     },
-    onSuccess: (_, variables) => {
-      const desc = variables.status === 'COMPLETED' 
+    onSuccess: (data: any, variables) => {
+      const desc = variables.status === 'COMPLETED'
         ? 'Item marked as completed (off-system production) and added to traveler management'
-        : `Item status changed to ${variables.status}`;
+        : variables.status === 'SCRAPPED'
+          ? variables.rmaRequired
+            ? data?.replacementItem?.serialNumber
+              ? `NCR opened. Replacement ${data.replacementItem.serialNumber} was added for scheduling, and the original item moved to open nonconforming.`
+              : 'NCR opened. The original item moved to open nonconforming for disposition.'
+            : 'NCR opened. The item moved out of production and into open nonconforming for disposition.'
+          : `Item status changed to ${variables.status}`;
       toast({
         title: 'Status Updated',
         description: desc,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/scheduling-list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
       queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
       setShowHoldDialog(false);
       setShowScrapDialog(false);
@@ -213,6 +286,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
       setSelectedItem(null);
       setHoldReason('');
       setScrapReason('');
+      setScrapRequiresRma(null);
       setOffSystemNotes('');
       setOffSystemLinkedTraveler('');
     },
@@ -240,6 +314,67 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
     },
   });
 
+  const openLegacyTravelerMutation = useMutation({
+    mutationFn: async (item: QueueItem) => {
+      if (item.activeTravelerId) {
+        return {
+          travelerId: item.activeTravelerId,
+          travelerNumber: item.activeTravelerNumber,
+          created: false,
+        };
+      }
+
+      if (!item.productionWorkOrderId) {
+        throw new Error('This project work order is missing its production work order link.');
+      }
+
+      const traveler = await apiRequest(`/api/travelers/from-part-number/${encodeURIComponent(item.partNumber)}`, {
+        method: 'POST',
+        body: {
+          productionWorkOrderId: item.productionWorkOrderId,
+          workOrderId: item.workOrderNumber || item.productionWorkOrderId,
+          lotNumber: item.poNumber,
+          serialNumber: item.workOrderNumber || undefined,
+          quantity: 1,
+          createdBy: 'P2 Control Center',
+        },
+      });
+
+      if (traveler?.id && traveler?.status === 'DRAFT') {
+        try {
+          await apiRequest(`/api/travelers/${traveler.id}/start`, { method: 'POST' });
+        } catch (startError: any) {
+          if (!String(startError?.message || '').includes('not in DRAFT status')) {
+            throw startError;
+          }
+        }
+      }
+
+      return traveler;
+    },
+    onSuccess: (traveler: any) => {
+      const travelerId = traveler?.travelerId || traveler?.id;
+      if (!travelerId) {
+        toast({
+          title: 'Traveler Error',
+          description: 'Traveler was created, but the response did not include an ID.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      setLocation(`/travelers/${travelerId}/execute`);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Traveler Error',
+        description: error.message || 'Failed to open the linked traveler',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleScan = () => {
     if (scanInput.trim()) {
       scanMutation.mutate(scanInput.trim());
@@ -259,6 +394,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
 
   const openScrapDialog = (item: QueueItem) => {
     setSelectedItem(item);
+    setScrapRequiresRma(null);
     setShowScrapDialog(true);
   };
 
@@ -290,11 +426,12 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   };
 
   const confirmScrap = () => {
-    if (selectedItem && scrapReason.trim()) {
+    if (selectedItem && scrapReason.trim() && scrapRequiresRma !== null) {
       updateStatusMutation.mutate({
         itemId: selectedItem.id,
         status: 'SCRAPPED',
         reason: scrapReason,
+        rmaRequired: scrapRequiresRma,
       });
     }
   };
@@ -307,6 +444,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
       'CNC': 'bg-orange-50 dark:bg-orange-950 border-orange-300',
       'Finish': 'bg-amber-50 dark:bg-amber-950 border-amber-300',
       'Paint': 'bg-green-50 dark:bg-green-950 border-green-300',
+      'Repair': 'bg-rose-50 dark:bg-rose-950 border-rose-300',
       'Final QC': 'bg-emerald-50 dark:bg-emerald-950 border-emerald-300',
       'Shipping': 'bg-cyan-50 dark:bg-cyan-950 border-cyan-300',
     };
@@ -509,12 +647,43 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
     }
   };
 
+  const handlePrintItemLabel = (item: QueueItem) => {
+    const printed = printAveryLabels([item], `P2 ${item.currentDepartment} ${item.serialNumber || item.barcode} Label`);
+    if (printed && item.serialNumber) {
+      stampPrintMutation.mutate([item.serialNumber]);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
         <CardContent className="py-12 text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
           <p className="mt-4 text-muted-foreground">Loading production queue...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isQueueError) {
+    const message = queueError instanceof Error
+      ? queueError.message
+      : 'Failed to fetch production queue';
+
+    return (
+      <Card className="border-destructive/40">
+        <CardContent className="py-12 text-center">
+          <AlertTriangle className="h-12 w-12 mx-auto text-destructive mb-4" />
+          <p className="font-medium text-destructive">P2 production queue could not be loaded</p>
+          <p className="text-sm text-muted-foreground mt-2">{message}</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => refetchQueue()}
+            data-testid="button-retry-p2-production-queue"
+          >
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );
@@ -612,7 +781,10 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
             onValueChange={setExpandedDepartments}
             className="space-y-2"
           >
-            {queueData?.departments.map((dept) => (
+            {queueData?.departments.map((dept) => {
+              const isReprintDepartment = isDepartmentAfterLayup(dept.name);
+
+              return (
               <AccordionItem 
                 key={dept.name} 
                 value={dept.name}
@@ -827,6 +999,33 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                         <TableCell className="font-mono font-semibold">
                                           <div className="flex items-center gap-1.5">
                                             {item.barcode || item.serialNumber}
+                                            {item.isReplacement && (
+                                              <Badge
+                                                variant="outline"
+                                                className="border-blue-300 bg-blue-50 text-blue-700 text-[10px] font-sans"
+                                                title={item.replacementReason || undefined}
+                                              >
+                                                Replacement
+                                              </Badge>
+                                            )}
+                                            {item.isLegacyProductionOrder && (
+                                              <Badge
+                                                variant="outline"
+                                                className="border-slate-300 bg-slate-50 text-slate-700 text-[10px] font-sans"
+                                                title="Legacy production order without serialized traveler records"
+                                              >
+                                                Legacy
+                                              </Badge>
+                                            )}
+                                            {item.isLegacyProjectWorkOrder && (
+                                              <Badge
+                                                variant="outline"
+                                                className="border-blue-300 bg-blue-50 text-blue-700 text-[10px] font-sans"
+                                                title="Legacy project work order. Continue production from the linked PM Control Center."
+                                              >
+                                                Project WO
+                                              </Badge>
+                                            )}
                                             {item.barcodePrintedAt && (
                                               <span
                                                 className="inline-flex items-center gap-0.5 text-muted-foreground/70"
@@ -841,13 +1040,69 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                         <TableCell>
                                           <div>{item.partNumber}</div>
                                           <div className="text-xs text-muted-foreground">{item.partName}</div>
+                                          {item.isReplacement && (
+                                            <div className="text-xs text-blue-700 dark:text-blue-300">
+                                              Replaces {item.replacementForSerialNumber || item.replacementForSerializedItemId || 'NCR item'}
+                                            </div>
+                                          )}
                                         </TableCell>
                                         <TableCell>
                                           <div>{item.poNumber}</div>
                                           <div className="text-xs text-muted-foreground">{item.customerName}</div>
+                                          {item.projectId ? (
+                                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                                              <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                                title={item.projectName || undefined}
+                                                onClick={() => setLocation(`/projects/${item.projectId}`)}
+                                              >
+                                                <FolderOpen className="h-3 w-3" />
+                                                {item.projectCode || 'Linked Project'}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                                onClick={() => setLocation(`/pm-control-center?project=${item.projectId}`)}
+                                              >
+                                                <Factory className="h-3 w-3" />
+                                                PM Control
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <div className="mt-1 text-xs text-muted-foreground">
+                                              Assign project from the POs tab
+                                            </div>
+                                          )}
+                                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                                            {item.linkedWadId && item.linkedWadNumber && (
+                                              <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                                onClick={() => setLocation(`/production-work-orders/${item.linkedWadId}`)}
+                                                title={item.linkedWadStatus || item.linkedWadWorkOrderStatus || undefined}
+                                              >
+                                                <FileText className="h-3 w-3" />
+                                                {item.linkedWadNumber}
+                                              </button>
+                                            )}
+                                            <Badge
+                                              variant="outline"
+                                              className={`gap-1 text-[10px] ${getP2WadBadgeClass(item.p2WadConnectionStatus)}`}
+                                              title={item.linkedWadStatus || item.linkedWadWorkOrderStatus || item.p2WadConnectionLabel || undefined}
+                                            >
+                                              <FileText className="h-3 w-3" />
+                                              {item.p2WadConnectionLabel || (item.projectId ? 'WAD missing' : 'No project link')}
+                                            </Badge>
+                                          </div>
                                         </TableCell>
                                         <TableCell>
-                                          {item.hasActiveTask && item.activeTask ? (
+                                          {item.status === 'COMPLETED' ? (
+                                            <Badge className="bg-green-600">
+                                              <CheckCircle className="h-3 w-3 mr-1" />
+                                              Completed
+                                            </Badge>
+                                          ) : item.hasActiveTask && item.activeTask ? (
                                             <div className="flex items-center gap-2">
                                               <Badge className="bg-green-600">
                                                 <Play className="h-3 w-3 mr-1" />
@@ -858,6 +1113,11 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 {item.activeTask.employeeName}
                                               </span>
                                             </div>
+                                          ) : item.isLegacyProductionOrder || item.isLegacyProjectWorkOrder ? (
+                                            <Badge variant="outline">
+                                              <Clock className="h-3 w-3 mr-1" />
+                                              {item.isLegacyProjectWorkOrder ? 'Project Work Order' : 'Legacy Order'}
+                                            </Badge>
                                           ) : (
                                             <Badge variant="secondary">
                                               <Clock className="h-3 w-3 mr-1" />
@@ -867,45 +1127,90 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                         </TableCell>
                                         <TableCell className="text-right">
                                           <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => {
-                                                setScanInput(item.barcode);
-                                                scanMutation.mutate(item.barcode);
-                                              }}
-                                              data-testid={`button-view-${item.id}`}
-                                            >
-                                              <Eye className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => openHoldDialog(item)}
-                                              className="text-amber-600 hover:text-amber-700"
-                                              data-testid={`button-hold-${item.id}`}
-                                            >
-                                              <Pause className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => openOffSystemDialog(item)}
-                                              className="text-indigo-600 hover:text-indigo-700"
-                                              title="Off-System Production Complete"
-                                              data-testid={`button-off-system-${item.id}`}
-                                            >
-                                              <ExternalLink className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => openScrapDialog(item)}
-                                              className="text-red-600 hover:text-red-700"
-                                              data-testid={`button-scrap-${item.id}`}
-                                            >
-                                              <XCircle className="h-4 w-4" />
-                                            </Button>
+                                            {!item.isLegacyProductionOrder && !item.isLegacyProjectWorkOrder && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                  setScanInput(item.barcode);
+                                                  scanMutation.mutate(item.barcode);
+                                                }}
+                                                data-testid={`button-view-${item.id}`}
+                                              >
+                                                <Eye className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                            {isReprintDepartment && item.barcode && !item.isLegacyProductionOrder && !item.isLegacyProjectWorkOrder && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handlePrintItemLabel(item)}
+                                                className="text-amber-600 hover:text-amber-700"
+                                                title="Reprint Barcode"
+                                                data-testid={`button-reprint-barcode-${item.id}`}
+                                              >
+                                                <Printer className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                            {item.isLegacyProjectWorkOrder && item.projectId && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setLocation(`/pm-control-center?project=${item.projectId}`)}
+                                                title="Continue in PM Control Center"
+                                                data-testid={`button-open-pm-${item.id}`}
+                                              >
+                                                <Factory className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                            {item.isLegacyProjectWorkOrder && item.status !== 'COMPLETED' && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => openLegacyTravelerMutation.mutate(item)}
+                                                disabled={openLegacyTravelerMutation.isPending}
+                                                title={item.activeTravelerId ? 'Open active traveler' : 'Create linked traveler'}
+                                                data-testid={`button-open-legacy-traveler-${item.id}`}
+                                              >
+                                                {openLegacyTravelerMutation.isPending ? (
+                                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                  <Play className="h-4 w-4" />
+                                                )}
+                                              </Button>
+                                            )}
+                                            {item.status !== 'COMPLETED' && !item.isLegacyProductionOrder && !item.isLegacyProjectWorkOrder && (
+                                              <>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => openHoldDialog(item)}
+                                                  className="text-amber-600 hover:text-amber-700"
+                                                  data-testid={`button-hold-${item.id}`}
+                                                >
+                                                  <Pause className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => openOffSystemDialog(item)}
+                                                  className="text-indigo-600 hover:text-indigo-700"
+                                                  title="Off-System Production Complete"
+                                                  data-testid={`button-off-system-${item.id}`}
+                                                >
+                                                  <ExternalLink className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => openScrapDialog(item)}
+                                                  className="text-red-600 hover:text-red-700"
+                                                  data-testid={`button-scrap-${item.id}`}
+                                                >
+                                                  <XCircle className="h-4 w-4" />
+                                                </Button>
+                                              </>
+                                            )}
                                           </div>
                                         </TableCell>
                                       </TableRow>
@@ -921,7 +1226,8 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                   })()}
                 </AccordionContent>
               </AccordionItem>
-            ))}
+              );
+            })}
           </Accordion>
         </CardContent>
       </Card>
@@ -1112,10 +1418,10 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <XCircle className="h-5 w-5" />
-              Scrap Item
+              Mark Item NCR / Scrap
             </DialogTitle>
             <DialogDescription>
-              This action is permanent and will remove the item from production.
+              This removes the original item from active production and sends it to open nonconforming for disposition.
             </DialogDescription>
           </DialogHeader>
           
@@ -1124,7 +1430,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               <div className="bg-red-50 dark:bg-red-950 p-3 rounded-lg border border-red-200">
                 <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
                   <AlertTriangle className="h-4 w-4" />
-                  <span className="font-medium">Warning: This cannot be undone</span>
+                  <span className="font-medium">P2 NCR disposition required</span>
                 </div>
                 <div className="mt-2">
                   <div className="font-medium">{selectedItem.barcode}</div>
@@ -1133,11 +1439,39 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                   </div>
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label>Is an RMA required? *</Label>
+                <RadioGroup
+                  value={scrapRequiresRma === null ? '' : scrapRequiresRma ? 'yes' : 'no'}
+                  onValueChange={(value) => setScrapRequiresRma(value === 'yes')}
+                  className="grid gap-2"
+                >
+                  <Label className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
+                    <RadioGroupItem value="yes" className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium">Yes, create RMA replacement</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Add a schedulable replacement and keep the original item in open nonconforming.
+                      </span>
+                    </span>
+                  </Label>
+                  <Label className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
+                    <RadioGroupItem value="no" className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium">No, disposition only</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Move this item out of production so Quality can file the disposition.
+                      </span>
+                    </span>
+                  </Label>
+                </RadioGroup>
+              </div>
               
               <div>
-                <label className="text-sm font-medium">Reason for Scrapping *</label>
+                <label className="text-sm font-medium">NCR / Scrap Reason *</label>
                 <Textarea
-                  placeholder="Enter reason for scrapping this item..."
+                  placeholder="Enter the NCR reason and replacement context..."
                   value={scrapReason}
                   onChange={(e) => setScrapReason(e.target.value)}
                   className="mt-1"
@@ -1153,7 +1487,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
             </Button>
             <Button 
               onClick={confirmScrap}
-              disabled={!scrapReason.trim() || updateStatusMutation.isPending}
+              disabled={!scrapReason.trim() || scrapRequiresRma === null || updateStatusMutation.isPending}
               variant="destructive"
               data-testid="button-confirm-scrap"
             >
@@ -1162,7 +1496,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               ) : (
                 <XCircle className="h-4 w-4 mr-2" />
               )}
-              Scrap Item
+              {scrapRequiresRma ? 'Open NCR & Create Replacement' : 'Open NCR for Disposition'}
             </Button>
           </DialogFooter>
         </DialogContent>

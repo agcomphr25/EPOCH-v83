@@ -33,6 +33,7 @@ async function ensureTablesExist() {
       CREATE TABLE IF NOT EXISTS part_routings (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         inventory_item_id TEXT NOT NULL,
+        project_id UUID,
         part_number TEXT NOT NULL,
         part_name TEXT NOT NULL,
         routing_name TEXT NOT NULL DEFAULT 'Default',
@@ -50,6 +51,8 @@ async function ensureTablesExist() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
+    await pool.query(`ALTER TABLE part_routings ADD COLUMN IF NOT EXISTS project_id UUID`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS part_routings_project_idx ON part_routings(project_id)`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS routing_documents (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

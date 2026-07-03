@@ -110,6 +110,8 @@ export async function sendEmailViaSendGrid(options: {
   text: string;
   html?: string;
   replyTo?: string;
+  fromEmail?: string;
+  fromName?: string;
   cc?: string | string[];
   attachments?: Array<{
     content: string;
@@ -120,18 +122,23 @@ export async function sendEmailViaSendGrid(options: {
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     const { client, fromEmail } = await getUncachableSendGridClient();
+    const sender = options.fromEmail
+      ? { email: options.fromEmail, name: options.fromName || fromEmail.name }
+      : options.fromName
+        ? { ...fromEmail, name: options.fromName }
+        : fromEmail;
 
     const msg: any = {
       to: options.to,
-      from: fromEmail,
-      replyTo: options.replyTo || { email: 'laurie.tandy@agadvanced.com', name: 'Laurie Tandy' },
+      from: sender,
+      replyTo: options.replyTo || { email: 'glenn@agadvanced.com', name: 'Glenn Jones' },
       subject: options.subject,
       text: options.text,
       html: options.html || options.text,
     };
 
     // Add CC recipients if provided
-    if (options.cc) {
+    if (Array.isArray(options.cc) ? options.cc.length > 0 : !!options.cc) {
       msg.cc = options.cc;
     }
 
@@ -143,7 +150,7 @@ export async function sendEmailViaSendGrid(options: {
     console.log('📧 Sending email via SendGrid:', {
       to: options.to,
       cc: options.cc,
-      from: fromEmail,
+      from: sender,
       replyTo: msg.replyTo,
       subject: options.subject,
       hasText: !!options.text,
@@ -156,10 +163,10 @@ export async function sendEmailViaSendGrid(options: {
 
     // DIAGNOSTIC: Log runtime configuration before send
     console.log('[Email Debug] Provider: SendGrid');
-    console.log('[Email Debug] From:', fromEmail.email);
+    console.log('[Email Debug] From:', sender.email);
     console.log('[Email Debug] Using Key:', process.env.SENDGRID_API_KEY ? 'present' : 'missing');
     console.log('[Compare] HealthCheck From vs Notification From');
-    console.log('[Compare] Notification From:', fromEmail.email);
+    console.log('[Compare] Notification From:', sender.email);
     console.log('[Compare] ENV SENDGRID_FROM_EMAIL:', process.env.SENDGRID_FROM_EMAIL || 'NOT SET');
 
     try {

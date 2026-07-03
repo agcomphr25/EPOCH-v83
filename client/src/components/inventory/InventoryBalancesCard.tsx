@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,7 @@ import {
   Edit,
   RefreshCw,
   Target,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -69,6 +71,18 @@ interface InventoryBalance {
   updatedAt: Date;
   partName?: string;
   departmentMeta?: DepartmentBalanceMeta;
+  serializedItems?: SerializedInventoryItem[];
+}
+
+interface SerializedInventoryItem {
+  id: string;
+  serialNumber: string;
+  barcode: string;
+  travelerBarcode?: string | null;
+  travelerId?: string | null;
+  travelerNumber?: string | null;
+  dispositionId?: number | null;
+  dispositionType?: string | null;
 }
 
 interface BalancesResponse {
@@ -92,6 +106,7 @@ export default function InventoryBalancesCard() {
   );
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [expandedPart, setExpandedPart] = useState<string | null>(null);
+  const [selectedSerialByBalanceId, setSelectedSerialByBalanceId] = useState<Record<number, string>>({});
   const queryClient = useQueryClient();
 
   // Fetch inventory balances with department metadata
@@ -183,6 +198,14 @@ export default function InventoryBalancesCard() {
       color: 'bg-green-100 text-green-800',
       icon: Package,
     };
+  };
+
+  const getSelectedSerializedItem = (balance: InventoryBalance) => {
+    const serializedItems = balance.serializedItems || [];
+    if (serializedItems.length === 0) return null;
+
+    const selectedId = selectedSerialByBalanceId[balance.id] || serializedItems[0].id;
+    return serializedItems.find((item) => item.id === selectedId) || serializedItems[0];
   };
 
   const filteredBalances = balances.filter((balance) => {
@@ -408,6 +431,7 @@ export default function InventoryBalancesCard() {
                 <TableRow>
                   <TableHead>Part Number</TableHead>
                   <TableHead>Part Name</TableHead>
+                  <TableHead>Serialized Item</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead className="text-right">On Hand</TableHead>
@@ -422,6 +446,12 @@ export default function InventoryBalancesCard() {
                   const stockStatus = getStockStatus(balance);
                   const IconComponent = stockStatus.icon;
                   const deptBreakdown = departmentBreakdowns[balance.agPartNumber] || [];
+                  const selectedSerializedItem = getSelectedSerializedItem(balance);
+                  const travelerHref = selectedSerializedItem?.travelerId
+                    ? `/travelers/${selectedSerializedItem.travelerId}`
+                    : selectedSerializedItem?.barcode
+                      ? `/p2-traveler-viewer?barcode=${encodeURIComponent(selectedSerializedItem.barcode)}`
+                      : null;
 
                   return (
                     <TableRow
@@ -458,6 +488,44 @@ export default function InventoryBalancesCard() {
                         )}
                       </TableCell>
                       <TableCell>{balance.partName || 'Unknown'}</TableCell>
+                      <TableCell>
+                        {(balance.serializedItems || []).length > 0 && selectedSerializedItem ? (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={selectedSerializedItem.id}
+                              onChange={(e) =>
+                                setSelectedSerialByBalanceId((current) => ({
+                                  ...current,
+                                  [balance.id]: e.target.value,
+                                }))
+                              }
+                              className="h-8 w-40 rounded-md border border-input bg-background px-2 py-1 font-mono text-xs ring-offset-background"
+                              data-testid={`select-serialized-item-${balance.agPartNumber}`}
+                            >
+                              {balance.serializedItems!.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.serialNumber}
+                                </option>
+                              ))}
+                            </select>
+                            {travelerHref && (
+                              <Link href={travelerHref}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  title={selectedSerializedItem.travelerNumber || 'Open traveler'}
+                                  data-testid={`link-traveler-${selectedSerializedItem.serialNumber}`}
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                              </Link>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">N/A</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {balance.departmentMeta ? (
                           <Badge variant="outline" className="text-xs">

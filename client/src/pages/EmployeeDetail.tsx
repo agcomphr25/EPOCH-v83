@@ -36,6 +36,8 @@ import {
   XCircle,
   Eye,
   EyeOff,
+  Tags,
+  Bell,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -59,11 +61,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import AddCertificationModal from '@/components/employee/AddCertificationModal';
 import CertificationFormModal from '@/components/employee/CertificationFormModal';
@@ -88,6 +94,19 @@ interface Employee {
   salary: number;
   hourlyRate: number;
   isActive: boolean;
+  employmentStatus?: string;
+  terminationDate?: string | null;
+  terminationReasonCode?: string | null;
+  terminationReason?: string | null;
+  eligibleForRehire?: boolean | null;
+  finalPaycheckDate?: string | null;
+  terminationNotes?: string | null;
+  userIsActive?: boolean | null;
+  accessExceptionReason?: string | null;
+  accessExceptionApprovedByName?: string | null;
+  accessExceptionApprovedAt?: string | null;
+  accessExceptionExpiresAt?: string | null;
+  terminatedWithAccess?: boolean;
   portalToken: string;
   portalTokenExpiry: string;
   createdAt: string;
@@ -97,6 +116,77 @@ interface Employee {
   tciAccess?: boolean;
   hasPin?: boolean;
   supervisorEmployeeId?: number | null;
+  notificationPreferences?: EmployeeNotificationPreferences | null;
+}
+
+type NotificationTopicKey = 'taskList' | 'maintenanceSchedules' | 'trainingExpirations';
+type NotificationChannelKey = 'email' | 'popup';
+
+interface EmployeeNotificationTopicPreferences {
+  email: boolean;
+  popup: boolean;
+}
+
+type EmployeeNotificationPreferences = Record<NotificationTopicKey, EmployeeNotificationTopicPreferences>;
+
+const DEFAULT_NOTIFICATION_PREFERENCES: EmployeeNotificationPreferences = {
+  taskList: { email: false, popup: false },
+  maintenanceSchedules: { email: false, popup: false },
+  trainingExpirations: { email: false, popup: false },
+};
+
+const NOTIFICATION_TOPICS: Array<{
+  key: NotificationTopicKey;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: 'taskList',
+    label: 'New tasks in task list',
+    description: 'Notify this employee when a new task is assigned to their task list.',
+  },
+  {
+    key: 'maintenanceSchedules',
+    label: 'Maintenance schedules',
+    description: 'Notify this employee about maintenance work they need to prepare for or complete.',
+  },
+  {
+    key: 'trainingExpirations',
+    label: 'Training expirations',
+    description: 'Notify this employee when required training is expiring or overdue.',
+  },
+];
+
+function normalizeNotificationPreferences(
+  value?: Partial<Record<NotificationTopicKey, Partial<EmployeeNotificationTopicPreferences>>> | null
+): EmployeeNotificationPreferences {
+  return NOTIFICATION_TOPICS.reduce((prefs, topic) => {
+    prefs[topic.key] = {
+      email: Boolean(value?.[topic.key]?.email),
+      popup: Boolean(value?.[topic.key]?.popup),
+    };
+    return prefs;
+  }, { ...DEFAULT_NOTIFICATION_PREFERENCES } as EmployeeNotificationPreferences);
+}
+
+interface ChargeCodeOption {
+  id: number;
+  code: string;
+  description?: string | null;
+  type: string;
+  costHandling?: string | null;
+  productionLine?: string | null;
+  activityCategory?: string | null;
+  department?: string | null;
+  active: boolean;
+  isDefault?: boolean;
+}
+
+interface EmployeeChargeCodeAssignments {
+  employeeId: number;
+  assignedChargeCodeIds: number[];
+  defaultChargeCodeId: number | null;
+  assignedChargeCodes: ChargeCodeOption[];
 }
 
 interface CertificationFile {
@@ -477,7 +567,7 @@ function CertificationCard({
   );
 }
 
-const VALID_TABS = ['details','permissions','certifications','evaluations','training','traveler','documents','badge','journal','history','qualifications'] as const;
+const VALID_TABS = ['details','permissions','notifications','charge-codes','certifications','evaluations','training','traveler','documents','badge','journal','history','qualifications'] as const;
 type TabValue = typeof VALID_TABS[number];
 
 export default function EmployeeDetail() {
@@ -513,6 +603,22 @@ export default function EmployeeDetail() {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [selectedAssignUserId, setSelectedAssignUserId] = useState<string>('');
   const [showAssignUser, setShowAssignUser] = useState(false);
+  const [selectedChargeCodeIds, setSelectedChargeCodeIds] = useState<number[]>([]);
+  const [defaultChargeCodeId, setDefaultChargeCodeId] = useState<number | null>(null);
+  const [notificationPreferences, setNotificationPreferences] = useState<EmployeeNotificationPreferences>(
+    DEFAULT_NOTIFICATION_PREFERENCES
+  );
+  const [showTerminateDialog, setShowTerminateDialog] = useState(false);
+  const [terminationForm, setTerminationForm] = useState({
+    terminationDate: new Date().toISOString().split('T')[0],
+    terminationReasonCode: '',
+    terminationReason: '',
+    eligibleForRehire: false,
+    finalPaycheckDate: '',
+    terminationNotes: '',
+    retainAccess: false,
+    accessExceptionReason: '',
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -543,6 +649,38 @@ export default function EmployeeDetail() {
     .filter((emp) => emp.isActive !== false && String(emp.id) !== String(id))
     .sort((a, b) => a.name.localeCompare(b.name));
   const assignedSupervisor = allEmployees.find((emp) => emp.id === employee?.supervisorEmployeeId);
+
+  useEffect(() => {
+    if (employee) {
+      setNotificationPreferences(normalizeNotificationPreferences(employee.notificationPreferences));
+    }
+  }, [employee]);
+
+  const { data: allChargeCodes = [] } = useQuery<ChargeCodeOption[]>({
+    queryKey: ['/api/charge-codes'],
+    queryFn: async () => {
+      const response = await fetch('/api/charge-codes');
+      if (!response.ok) throw new Error('Failed to fetch charge codes');
+      return response.json();
+    },
+  });
+
+  const { data: employeeChargeCodes } = useQuery<EmployeeChargeCodeAssignments>({
+    queryKey: ['/api/employees', id, 'charge-codes'],
+    queryFn: async () => {
+      const response = await fetch(`/api/employees/${id}/charge-codes`);
+      if (!response.ok) throw new Error('Failed to fetch employee charge codes');
+      return response.json();
+    },
+    enabled: !!id,
+  });
+
+  useEffect(() => {
+    if (employeeChargeCodes) {
+      setSelectedChargeCodeIds(employeeChargeCodes.assignedChargeCodeIds);
+      setDefaultChargeCodeId(employeeChargeCodes.defaultChargeCodeId ?? null);
+    }
+  }, [employeeChargeCodes]);
 
   const { data: certifications = [] } = useQuery({
     queryKey: ['/api/employee-certifications', { employeeId: id }],
@@ -677,6 +815,115 @@ export default function EmployeeDetail() {
       });
     },
   });
+
+  const terminateEmployeeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/employees/${id}/terminate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...terminationForm,
+          finalPaycheckDate: terminationForm.finalPaycheckDate || null,
+          terminationNotes: terminationForm.terminationNotes || null,
+          accessExceptionReason: terminationForm.accessExceptionReason || null,
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to complete termination');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+      setShowTerminateDialog(false);
+      toast({
+        title: 'Termination recorded',
+        description: terminationForm.retainAccess
+          ? 'Employment ended and EPOCH access was retained for 90 days.'
+          : 'Employment ended and EPOCH access was disabled.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Termination failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const updateChargeCodesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/employees/${id}/charge-codes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chargeCodeIds: selectedChargeCodeIds, defaultChargeCodeId }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update charge code assignments');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id, 'charge-codes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/charge-codes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/kiosk/charge-codes'] });
+      toast({ title: 'Success', description: 'Charge code assignments updated' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const activeChargeCodes = allChargeCodes
+    .filter((code) => code.active !== false)
+    .sort((a, b) => a.code.localeCompare(b.code));
+
+  const isTerminated = employee?.employmentStatus === 'TERMINATED' || employee?.isActive === false;
+  const retainedAccessExpires = terminationForm.terminationDate
+    ? (() => {
+        const date = new Date(`${terminationForm.terminationDate}T00:00:00`);
+        date.setDate(date.getDate() + 90);
+        return date;
+      })()
+    : null;
+  const canTerminate =
+    Boolean(terminationForm.terminationDate) &&
+    Boolean(terminationForm.terminationReasonCode) &&
+    Boolean(terminationForm.terminationReason.trim()) &&
+    (!terminationForm.retainAccess ||
+      Boolean(terminationForm.accessExceptionReason.trim())) &&
+    !terminateEmployeeMutation.isPending;
+
+  const toggleChargeCode = (chargeCodeId: number) => {
+    setSelectedChargeCodeIds((current) =>
+      current.includes(chargeCodeId)
+        ? current.filter((id) => id !== chargeCodeId)
+        : [...current, chargeCodeId].sort((a, b) => a - b)
+    );
+    setDefaultChargeCodeId((current) => (current === chargeCodeId ? null : current));
+  };
+
+  const toggleNotificationPreference = (
+    topic: NotificationTopicKey,
+    channel: NotificationChannelKey,
+    checked: boolean
+  ) => {
+    setNotificationPreferences((current) => ({
+      ...current,
+      [topic]: {
+        ...current[topic],
+        [channel]: checked,
+      },
+    }));
+  };
+
+  const savedNotificationPreferences = normalizeNotificationPreferences(employee?.notificationPreferences);
+  const notificationPreferencesChanged =
+    JSON.stringify(notificationPreferences) !== JSON.stringify(savedNotificationPreferences);
 
   const generatePortalTokenMutation = useMutation({
     mutationFn: async () => {
@@ -1231,6 +1478,16 @@ export default function EmployeeDetail() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
+          {!isEditing && !isTerminated && (
+            <Button
+              variant="outline"
+              className="border-red-200 text-red-700 hover:bg-red-50"
+              onClick={() => setShowTerminateDialog(true)}
+            >
+              <Ban className="w-4 h-4 mr-2" />
+              Terminate
+            </Button>
+          )}
           {isEditing ? (
             <>
               <Button variant="outline" onClick={handleCancel}>
@@ -1253,6 +1510,25 @@ export default function EmployeeDetail() {
           )}
         </div>
       </div>
+
+      {employee.terminatedWithAccess && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="flex flex-wrap items-center gap-3 pt-6 text-red-800">
+            <AlertTriangle className="h-5 w-5" />
+            <div className="text-sm">
+              <span className="font-semibold">Terminated employee retains EPOCH access.</span>{' '}
+              Access expires{' '}
+              {employee.accessExceptionExpiresAt
+                ? new Date(employee.accessExceptionExpiresAt).toLocaleDateString()
+                : 'after review'}
+              {employee.accessExceptionApprovedByName
+                ? `, approved by ${employee.accessExceptionApprovedByName}`
+                : ''}
+              .
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Employee Profile Card */}
@@ -1278,6 +1554,19 @@ export default function EmployeeDetail() {
                 >
                   {employee.isActive ? 'Active' : 'Inactive'}
                 </Badge>
+                {employee.employmentStatus === 'TERMINATED' && (
+                  <div className="mt-2 space-y-1 text-xs text-red-700">
+                    <div>
+                      Terminated{' '}
+                      {employee.terminationDate
+                        ? formatDate(employee.terminationDate)
+                        : ''}
+                    </div>
+                    {employee.terminationReasonCode && (
+                      <div>{employee.terminationReasonCode}</div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3 text-sm">
@@ -1640,9 +1929,11 @@ export default function EmployeeDetail() {
         {/* Main Content Tabs */}
         <div className="lg:col-span-2">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-11">
+            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
+              <TabsTrigger value="charge-codes">Codes</TabsTrigger>
               <TabsTrigger value="certifications">Certs</TabsTrigger>
               <TabsTrigger value="evaluations">Reviews</TabsTrigger>
               <TabsTrigger value="training">Training</TabsTrigger>
@@ -2211,6 +2502,146 @@ export default function EmployeeDetail() {
                           </div>
                         )}
                       </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="notifications">
+              <Card>
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Bell className="w-5 h-5" />
+                      Notifications
+                    </CardTitle>
+                    <CardDescription>
+                      Choose which employee events send email and in-app popup notifications.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={() => updateEmployeeMutation.mutate({ notificationPreferences })}
+                    disabled={!notificationPreferencesChanged || updateEmployeeMutation.isPending}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!employee.email && (
+                    <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-900">Email notifications need an employee email</p>
+                        <p className="text-sm text-amber-800">
+                          Popup preferences can still be saved, but email delivery requires an email address on the employee profile.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-lg border">
+                    <div className="grid grid-cols-[1fr_96px_96px] items-center gap-3 border-b bg-muted/40 px-4 py-3 text-sm font-medium">
+                      <span>Notification</span>
+                      <span className="text-center">Email</span>
+                      <span className="text-center">Popup</span>
+                    </div>
+                    {NOTIFICATION_TOPICS.map((topic, index) => (
+                      <div
+                        key={topic.key}
+                        className={`grid grid-cols-[1fr_96px_96px] items-center gap-3 px-4 py-4 ${
+                          index < NOTIFICATION_TOPICS.length - 1 ? 'border-b' : ''
+                        }`}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{topic.label}</p>
+                          <p className="text-sm text-muted-foreground">{topic.description}</p>
+                        </div>
+                        <div className="flex justify-center">
+                          <Switch
+                            checked={notificationPreferences[topic.key].email}
+                            onCheckedChange={(checked) =>
+                              toggleNotificationPreference(topic.key, 'email', checked)
+                            }
+                            aria-label={`${topic.label} email notifications`}
+                          />
+                        </div>
+                        <div className="flex justify-center">
+                          <Switch
+                            checked={notificationPreferences[topic.key].popup}
+                            onCheckedChange={(checked) =>
+                              toggleNotificationPreference(topic.key, 'popup', checked)
+                            }
+                            aria-label={`${topic.label} popup notifications`}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="charge-codes">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Tags className="w-5 h-5" />
+                      Charge Codes
+                    </CardTitle>
+                    <CardDescription>
+                      Checked codes are added to the all-employee codes this employee can already use.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={() => updateChargeCodesMutation.mutate()}
+                    disabled={updateChargeCodesMutation.isPending}
+                  >
+                    {updateChargeCodesMutation.isPending && <Clock className="w-4 h-4 mr-2 animate-spin" />}
+                    Save Codes
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                    Employees can always use codes set to all employees. Check restricted codes this employee should be included on, then choose one assigned active code as the default.
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {activeChargeCodes.map((code) => (
+                      <label
+                        key={code.id}
+                        className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
+                      >
+                        <Checkbox
+                          checked={selectedChargeCodeIds.includes(code.id)}
+                          onCheckedChange={() => toggleChargeCode(code.id)}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span className="font-mono font-medium">{code.code}</span>
+                            <Badge variant="outline">{code.type}</Badge>
+                            {code.productionLine && <Badge variant="secondary">{code.productionLine}</Badge>}
+                          </span>
+                          <span className="block truncate text-sm text-muted-foreground">
+                            {code.description || code.activityCategory || code.department || 'No description'}
+                          </span>
+                          <span className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                            <Checkbox
+                              checked={defaultChargeCodeId === code.id}
+                              disabled={!selectedChargeCodeIds.includes(code.id)}
+                              onCheckedChange={(checked) => setDefaultChargeCodeId(checked ? code.id : null)}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                            Default
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {activeChargeCodes.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No active charge codes found.
                     </div>
                   )}
                 </CardContent>
@@ -3210,6 +3641,180 @@ export default function EmployeeDetail() {
               </Card>
             </TabsContent>
           </Tabs>
+
+          <Dialog open={showTerminateDialog} onOpenChange={setShowTerminateDialog}>
+            <DialogContent className="sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Terminate Employee</DialogTitle>
+                <DialogDescription>
+                  Record the employment termination separately from EPOCH access. Historical records will remain intact.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="termination-date">Termination Date</Label>
+                    <Input
+                      id="termination-date"
+                      type="date"
+                      value={terminationForm.terminationDate}
+                      onChange={(event) =>
+                        setTerminationForm((current) => ({
+                          ...current,
+                          terminationDate: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="termination-reason-code">Reason Code</Label>
+                    <Select
+                      value={terminationForm.terminationReasonCode}
+                      onValueChange={(value) =>
+                        setTerminationForm((current) => ({
+                          ...current,
+                          terminationReasonCode: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="termination-reason-code">
+                        <SelectValue placeholder="Select reason" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="voluntary">Voluntary</SelectItem>
+                        <SelectItem value="involuntary">Involuntary</SelectItem>
+                        <SelectItem value="layoff">Layoff</SelectItem>
+                        <SelectItem value="retirement">Retirement</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="termination-reason">Reason / Notes for Audit</Label>
+                  <Textarea
+                    id="termination-reason"
+                    value={terminationForm.terminationReason}
+                    onChange={(event) =>
+                      setTerminationForm((current) => ({
+                        ...current,
+                        terminationReason: event.target.value,
+                      }))
+                    }
+                    placeholder="Document the business reason for the employment status change."
+                    rows={3}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="final-paycheck-date">Final Paycheck Date</Label>
+                    <Input
+                      id="final-paycheck-date"
+                      type="date"
+                      value={terminationForm.finalPaycheckDate}
+                      onChange={(event) =>
+                        setTerminationForm((current) => ({
+                          ...current,
+                          finalPaycheckDate: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
+                    <Checkbox
+                      checked={terminationForm.eligibleForRehire}
+                      onCheckedChange={(checked) =>
+                        setTerminationForm((current) => ({
+                          ...current,
+                          eligibleForRehire: checked === true,
+                        }))
+                      }
+                    />
+                    Eligible for rehire
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="termination-notes">Additional Termination Notes</Label>
+                  <Textarea
+                    id="termination-notes"
+                    value={terminationForm.terminationNotes}
+                    onChange={(event) =>
+                      setTerminationForm((current) => ({
+                        ...current,
+                        terminationNotes: event.target.value,
+                      }))
+                    }
+                    rows={2}
+                  />
+                </div>
+
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <label className="flex items-start gap-3 text-sm font-medium text-amber-950">
+                    <Checkbox
+                      checked={terminationForm.retainAccess}
+                      onCheckedChange={(checked) =>
+                        setTerminationForm((current) => ({
+                          ...current,
+                          retainAccess: checked === true,
+                        }))
+                      }
+                    />
+                    Retain EPOCH access after employment termination
+                  </label>
+
+                  {terminationForm.retainAccess && (
+                    <div className="space-y-3 pl-7">
+                      <p className="text-sm text-amber-900">
+                        Current role and capabilities stay in place until manually changed. This exception expires on{' '}
+                        <span className="font-semibold">
+                          {retainedAccessExpires ? formatDate(retainedAccessExpires.toISOString()) : 'the 90-day review date'}
+                        </span>
+                        .
+                      </p>
+                      <div className="space-y-2">
+                        <Label htmlFor="access-exception-reason">Access Exception Reason</Label>
+                        <Textarea
+                          id="access-exception-reason"
+                          value={terminationForm.accessExceptionReason}
+                          onChange={(event) =>
+                            setTerminationForm((current) => ({
+                              ...current,
+                              accessExceptionReason: event.target.value,
+                            }))
+                          }
+                          placeholder="Document owner/admin approval and why access is being retained."
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowTerminateDialog(false)}
+                  disabled={terminateEmployeeMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => terminateEmployeeMutation.mutate()}
+                  disabled={!canTerminate}
+                >
+                  {terminateEmployeeMutation.isPending ? 'Recording...' : 'Record Termination'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>

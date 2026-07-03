@@ -28,6 +28,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function RFQListPage() {
   const [, setLocation] = useLocation();
+  const openNewRfq = () => setLocation('/rfq-builder');
 
   const { data: rfqs = [], isLoading } = useQuery<EstimatingRfq[]>({
     queryKey: ['/api/estimating/rfqs'],
@@ -39,25 +40,27 @@ export default function RFQListPage() {
 
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">RFQs</h1>
+            <h1 className="text-3xl font-bold text-gray-900">ROM Builder</h1>
             <p className="text-gray-500 mt-1">
-              The RFQ workspace is being added here. This page will manage incoming RFQs, draft estimating records, and quote status.
+              Build and manage rough order of magnitude estimates from incoming RFQs, draft estimating records, and quote status.
             </p>
           </div>
-          <Button disabled className="flex items-center gap-2">
+          <Button onClick={openNewRfq} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             New RFQ
-            <span className="text-xs ml-1 opacity-60">(soon)</span>
           </Button>
         </div>
 
         {isLoading ? (
           <Card>
-            <CardContent className="py-10 text-center text-gray-400">Loading RFQs…</CardContent>
+            <CardContent className="py-10 text-center text-gray-400">Loading ROM estimates…</CardContent>
           </Card>
         ) : rfqs.length === 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card className="hover:shadow-md transition-shadow border-2 border-dashed border-gray-200">
+            <Card
+              className="hover:shadow-md transition-shadow cursor-pointer border-2 border-dashed border-gray-200"
+              onClick={openNewRfq}
+            >
               <CardContent className="flex flex-col items-center justify-center py-10 text-center gap-3">
                 <div className="bg-blue-50 p-3 rounded-full">
                   <FileSearch className="h-8 w-8 text-blue-500" />
@@ -66,7 +69,7 @@ export default function RFQListPage() {
                   <p className="font-semibold text-gray-800 text-lg">Create New RFQ</p>
                   <p className="text-sm text-gray-500 mt-1">Start a new request for quotation</p>
                 </div>
-                <Button variant="outline" disabled className="mt-2">Coming Soon</Button>
+                <Button variant="outline" className="mt-2">Start RFQ</Button>
               </CardContent>
             </Card>
 
@@ -79,10 +82,10 @@ export default function RFQListPage() {
                   <Calculator className="h-8 w-8 text-green-500" />
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-800 text-lg">Open Cost Builder</p>
+                  <p className="font-semibold text-gray-800 text-lg">Open ROM Builder</p>
                   <p className="text-sm text-gray-500 mt-1">Build and review multi-part cost estimates</p>
                 </div>
-                <Button variant="outline" className="mt-2">Go to Cost Builder</Button>
+                <Button variant="outline" className="mt-2">Go to ROM Builder</Button>
               </CardContent>
             </Card>
           </div>
@@ -91,7 +94,7 @@ export default function RFQListPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-gray-800">
                 <FileSearch className="h-5 w-5 text-blue-500" />
-                All RFQs ({rfqs.length})
+                ROM Estimates ({rfqs.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -100,7 +103,7 @@ export default function RFQListPage() {
                   <li
                     key={rfq.id}
                     className="flex items-center justify-between px-6 py-4 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setLocation(`/rfq-builder?rfqId=${rfq.id}`)}
+                    onClick={() => setLocation(`/rfq-builder/${rfq.id}`)}
                   >
                     <div className="flex items-center gap-4">
                       <div>

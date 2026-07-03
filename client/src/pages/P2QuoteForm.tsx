@@ -168,50 +168,78 @@ export default function P2QuoteForm() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const quoteId = urlParams.get('id');
+    const projectId = urlParams.get('projectId');
     
-    if (quoteId) {
-      // Fetch the quote data
-      fetch(`/api/quotes/${quoteId}`)
-        .then(res => res.json())
-        .then(data => {
-          // Populate form with quote data
-          setSavedQuoteId(data.id);
-          setQuoteNumber(data.quoteNumber);
-          setQuoteStatus(data.status);
-          setLinkedProjectId(data.projectId ?? null);
-          setCustomerName(data.description?.split('(')[0]?.replace('From: ', '').trim() || '');
-          setCustomerCompany(data.customerName);
-          setNotes(data.notes || '');
-          setValidityDays(String(Math.round((new Date(data.validUntil).getTime() - new Date(data.createdAt).getTime()) / (1000 * 60 * 60 * 24))));
-          setAttachments(data.attachments || []);
-          
-          // Load line items if present
-          if (data.lineItems && data.lineItems.length > 0) {
-            const loadedItems = data.lineItems.map((item: any) => ({
-              id: `${Date.now()}-${item.lineNumber}`,
-              lineNumber: item.lineNumber,
-              quantity: item.quantity,
-              description: item.description,
-              unitPrice: item.unitPrice,
-              totalPrice: item.totalPrice,
-            }));
-            setLineItems(loadedItems);
+    if (!quoteId && !projectId) return;
+
+    const populateQuote = (data: any) => {
+      setSavedQuoteId(data.id);
+      setQuoteNumber(data.quoteNumber);
+      setQuoteStatus(data.status);
+      setLinkedProjectId(data.projectId ?? null);
+      setCustomerName(data.description?.split('(')[0]?.replace('From: ', '').trim() || '');
+      setCustomerCompany(data.customerName);
+      setNotes(data.notes || '');
+      setValidityDays(String(Math.round((new Date(data.validUntil).getTime() - new Date(data.createdAt).getTime()) / (1000 * 60 * 60 * 24))));
+      setAttachments(data.attachments || []);
+
+      if (data.lineItems && data.lineItems.length > 0) {
+        const loadedItems = data.lineItems.map((item: any) => ({
+          id: `${Date.now()}-${item.lineNumber}`,
+          lineNumber: item.lineNumber,
+          quantity: item.quantity,
+          description: item.description,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+        }));
+        setLineItems(loadedItems);
+      }
+
+      toast({
+        title: 'Quote Loaded',
+        description: `Viewing quote ${data.quoteNumber}`,
+      });
+    };
+
+    const loadQuote = async () => {
+      try {
+        let resolvedQuoteId = quoteId;
+
+        if (!resolvedQuoteId && projectId) {
+          const projectData = await apiRequest(`/api/projects/${projectId}`);
+          const projectSteps = Array.isArray(projectData?.steps) ? projectData.steps : [];
+          resolvedQuoteId =
+            projectSteps.find((step: any) => step.stepType === 'quote')?.linkedQuoteId ??
+            null;
+
+          if (!resolvedQuoteId) {
+            const feedback = await apiRequest(`/api/projects/${projectId}/quote-feedback`);
+            resolvedQuoteId = feedback?.quoteId ?? null;
           }
-          
+        }
+
+        if (!resolvedQuoteId) {
           toast({
-            title: 'Quote Loaded',
-            description: `Viewing quote ${data.quoteNumber}`,
-          });
-        })
-        .catch(error => {
-          console.error('Error loading quote:', error);
-          toast({
-            title: 'Error',
-            description: 'Failed to load quote data',
+            title: 'Quote not linked',
+            description: 'This project does not have a linked quote record yet.',
             variant: 'destructive',
           });
+          return;
+        }
+
+        const data = await apiRequest(`/api/quotes/${resolvedQuoteId}`);
+        populateQuote(data);
+      } catch (error) {
+        console.error('Error loading quote:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load quote data',
+          variant: 'destructive',
         });
-    }
+      }
+    };
+
+    void loadQuote();
   }, []);
 
   // Auto-select by rfqNumber URL param (takes priority over customerId)

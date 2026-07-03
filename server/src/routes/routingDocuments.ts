@@ -15,11 +15,15 @@ import {
 } from '@shared/schema';
 import { eq, desc, and, ilike, sql } from 'drizzle-orm';
 import OpenAI from 'openai';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+} from '../services/fileStorageProvider';
 import * as fs from 'fs';
 import * as path from 'path';
 
-async function resolveFileToBuffer(fileUrl: string, objectStorageSvc: ObjectStorageService): Promise<Buffer | null> {
+async function resolveFileToBuffer(fileUrl: string): Promise<Buffer | null> {
   if (fileUrl.startsWith('/api/media/file/')) {
     const filename = fileUrl.replace('/api/media/file/', '');
     const localPath = path.join(process.cwd(), 'uploads', 'media-library', filename);
@@ -30,11 +34,12 @@ async function resolveFileToBuffer(fileUrl: string, objectStorageSvc: ObjectStor
     const storagePath = `uploads/media-library/${filename}`;
     try {
       console.log(`[FileResolve] Trying object storage path: ${storagePath}`);
-      return await objectStorageSvc.downloadAsBuffer(storagePath);
+      return await getFileStorageProviderForObjectPath(storagePath).downloadBuffer(storagePath);
     } catch (e) {
       console.log(`[FileResolve] Object storage failed, trying /objects/ prefix`);
       try {
-        return await objectStorageSvc.downloadAsBuffer(`/objects/${storagePath}`);
+        const objectPath = `/objects/${storagePath}`;
+        return await getFileStorageProviderForObjectPath(objectPath).downloadBuffer(objectPath);
       } catch (e2) {
         console.error(`[FileResolve] All attempts failed for: ${fileUrl}`);
       }
@@ -44,14 +49,15 @@ async function resolveFileToBuffer(fileUrl: string, objectStorageSvc: ObjectStor
   if (fileUrl.startsWith('/api/media/cloud/')) {
     const cloudPath = fileUrl.replace('/api/media/cloud/', '');
     try {
-      return await objectStorageSvc.downloadAsBuffer(`/objects/${cloudPath}`);
+      const objectPath = `/objects/${cloudPath}`;
+      return await getFileStorageProviderForObjectPath(objectPath).downloadBuffer(objectPath);
     } catch (e) {
       console.error(`[FileResolve] Cloud download failed for: ${fileUrl}`);
     }
     return null;
   }
   try {
-    return await objectStorageSvc.downloadAsBuffer(fileUrl);
+    return await getFileStorageProviderForObjectPath(fileUrl).downloadBuffer(fileUrl);
   } catch (e) {
     console.error(`[FileResolve] Direct download failed for: ${fileUrl}`);
   }
@@ -93,7 +99,6 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
 }
 
 const router = Router();
-const objectStorageService = new ObjectStorageService();
 
 // Helper to format UUID bytes to string if needed
 function formatUuid(value: any): string {
@@ -533,7 +538,7 @@ router.get('/:id/sections', async (req: Request, res: Response) => {
 
     if (sections.length === 0 && document.file_url) {
       try {
-        const fileBuffer = await objectStorageService.downloadAsBuffer(document.file_url);
+        const fileBuffer = await getFileStorageProviderForObjectPath(document.file_url).downloadBuffer(document.file_url);
         let extractedText = '';
 
         const fileType = (document.file_type || document.file_name || '').toLowerCase();
@@ -651,12 +656,16 @@ router.post('/request-upload-url', async (req: Request, res: Response) => {
     }
     
     try {
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      const uploadTarget = await getFileStorageProvider().createUploadTarget({
+        fileName: name,
+        contentType,
+        scope: 'routing-documents',
+      });
       
       res.json({
-        uploadURL,
-        objectPath,
+        uploadURL: uploadTarget.uploadURL,
+        objectPath: uploadTarget.objectPath,
+        provider: uploadTarget.provider,
         metadata: { name, size, contentType },
       });
     } catch (storageError: any) {
@@ -737,7 +746,7 @@ router.get('/:id/extract-stored-text', async (req: Request, res: Response) => {
 
     if (!extractedText.trim() && document.file_url) {
       try {
-        const fileBuffer = await resolveFileToBuffer(document.file_url, objectStorageService);
+        const fileBuffer = await resolveFileToBuffer(document.file_url);
         if (fileBuffer && fileBuffer.length > 0) {
           const fileType = (document.file_type || document.file_name || document.file_url || '').toLowerCase();
           if (fileType.includes('pdf')) {
@@ -928,10 +937,10 @@ router.post('/complete-upload', async (req: Request, res: Response) => {
     
     // Set ACL policy to make file accessible
     try {
-      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
-        owner: user?.id?.toString() || 'system',
-        visibility: 'public',
-      });
+      await getFileStorageProviderForObjectPath(objectPath).setPublicReadPolicy(
+        objectPath,
+        user?.id?.toString() || 'system',
+      );
     } catch (aclError) {
       console.warn('Failed to set ACL policy for routing document:', aclError);
     }
@@ -983,7 +992,7 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
     if (!textContent.trim() && document.file_url) {
       console.log(`[AI Parse] No usable text stored. Attempting PDF extraction from file: ${document.file_url}`);
       try {
-        let fileBuffer = await resolveFileToBuffer(document.file_url, objectStorageService);
+        let fileBuffer = await resolveFileToBuffer(document.file_url);
         
         if (!fileBuffer && document.file_url.startsWith('/api/media/file/')) {
           const filename = document.file_url.replace('/api/media/file/', '');
@@ -999,7 +1008,7 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
                 fileBuffer = fs.readFileSync(localMediaPath);
                 console.log(`[AI Parse] Read ${fileBuffer.length} bytes from local media path`);
               } else {
-                fileBuffer = await resolveFileToBuffer(storagePath, objectStorageService);
+                fileBuffer = await resolveFileToBuffer(storagePath);
               }
             }
           } catch (mediaErr) {
@@ -1316,17 +1325,22 @@ router.post('/spec-sheets/request-upload-url', async (req: Request, res: Respons
       return res.status(400).json({ error: 'Missing required field: name' });
     }
     
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+    const uploadTarget = await getFileStorageProvider().createUploadTarget({
+      fileName: name,
+      contentType,
+      scope: 'spec-sheets',
+    });
     
     res.json({
-      uploadURL,
-      objectPath,
+      uploadURL: uploadTarget.uploadURL,
+      objectPath: uploadTarget.objectPath,
+      provider: uploadTarget.provider,
       metadata: { name, size, contentType },
     });
   } catch (error) {
-    console.error('Error generating upload URL for spec sheet:', error);
-    res.status(500).json({ error: 'Failed to generate upload URL' });
+    const { status, reason, message } = getStorageErrorResponse(error);
+    console.error('Error generating upload URL for spec sheet:', { status, reason, message });
+    res.status(status).json({ error: 'Failed to generate upload URL', reason, details: message });
   }
 });
 
@@ -1345,10 +1359,10 @@ router.post('/spec-sheets/complete-upload', async (req: Request, res: Response) 
     const finalSourceType = validSourceTypes.includes(sourceType) ? sourceType : 'uploaded';
     
     try {
-      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
-        owner: user?.id?.toString() || 'system',
-        visibility: 'public',
-      });
+      await getFileStorageProviderForObjectPath(objectPath).setPublicReadPolicy(
+        objectPath,
+        user?.id?.toString() || 'system',
+      );
     } catch (aclError) {
       console.warn('Failed to set ACL policy for spec sheet:', aclError);
     }
@@ -2150,7 +2164,7 @@ router.post('/:id/generate-snippets', async (req: Request, res: Response) => {
 
     if (!textContent && document.file_url) {
       try {
-        const fileBuffer = await objectStorageService.downloadAsBuffer(document.file_url);
+        const fileBuffer = await getFileStorageProviderForObjectPath(document.file_url).downloadBuffer(document.file_url);
         if (fileBuffer && (document.file_type === 'application/pdf' || document.file_name?.endsWith('.pdf'))) {
           textContent = await extractPdfText(fileBuffer);
         } else if (fileBuffer) {

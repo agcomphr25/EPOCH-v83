@@ -1,7 +1,5 @@
-const CACHE_NAME = 'epoch-v8-cache-v1';
+const CACHE_NAME = 'epoch-v8-runtime-v2';
 const urlsToCache = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icons/icon-192.svg',
   '/icons/icon-512.svg',
@@ -28,19 +26,22 @@ self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => {
-        return caches.match('/index.html');
+        return new Response(
+          '<!doctype html><title>EPOCH Offline</title><p>EPOCH is offline. Please reconnect and reload.</p>',
+          {
+            headers: { 'Content-Type': 'text/html' },
+          }
+        );
       })
     );
     return;
   }
 
-  const isStaticAsset =
-    url.pathname.startsWith('/assets/') ||
-    url.pathname.startsWith('/static/') ||
+  const isCacheableStaticAsset =
     url.pathname.startsWith('/icons/') ||
     url.pathname === '/manifest.json';
 
-  if (!isStaticAsset) {
+  if (!isCacheableStaticAsset) {
     return;
   }
 

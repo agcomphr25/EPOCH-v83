@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -84,6 +84,7 @@ import {
   Plus,
   Info,
 } from 'lucide-react';
+import { displaySignerName } from '@/lib/signerName';
 import MaterialScanner from '@/components/MaterialScanner';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
 import { Timer } from 'lucide-react';
@@ -182,6 +183,7 @@ interface Traveler {
   quantity: number;
   status: string;
   partRoutingId: string | null;
+  wadRevisionId: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -191,6 +193,34 @@ interface TravelerWithDetails {
   steps: TravelerStep[];
   events: TravelerEvent[];
 }
+
+interface WadRevisionBanner {
+  id: string;
+  revisionCode: string;
+  status: string;
+}
+
+const firstTraceValue = (...values: Array<string | undefined | null>) =>
+  values.map((value) => String(value ?? '').trim()).find(Boolean) || '';
+
+const addGeneratedTraceFieldAliases = (values: Record<string, string>) => {
+  const supplier = firstTraceValue(values.supplier, values.material_supplier);
+  const manufacturer = firstTraceValue(values.manufacturer, values.material_brand, supplier);
+
+  return {
+    ...values,
+    manufacturer,
+    material_brand: firstTraceValue(values.material_brand, manufacturer),
+    trace_internalcontrolnumber: firstTraceValue(values.internalControlNumber, values.material_internal_control_number, values.material_icn),
+    trace_supplier: supplier,
+    trace_inventorypartnumber: firstTraceValue(values.inventoryPartNumber, values.material_part_number),
+    trace_batchlotnumber: firstTraceValue(values.batchLotNumber, values.material_batch_number, values.material_lot),
+    trace_manufacturer: manufacturer,
+    trace_rollnumber: firstTraceValue(values.rollNumber),
+    trace_expirationdate: firstTraceValue(values.expirationDate, values.material_expiration_date),
+    trace_receiveddate: firstTraceValue(values.receivedDate),
+  };
+};
 
 const STEP_STATUS_COLORS: Record<string, string> = {
   NOT_STARTED: 'bg-gray-100 text-gray-800 border-gray-300',
@@ -351,13 +381,22 @@ export default function TravelerExecution() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: session } = useQuery<any>({ queryKey: ['/api/auth/session'] });
+  const { data: session } = useQuery<any | null>({
+    queryKey: ['/api/auth/session', 'traveler-execution-admin'],
+    queryFn: async () => {
+      const res = await fetch('/api/auth/session', { credentials: 'include' });
+      if (res.status === 401) return null;
+      if (!res.ok) throw new Error('Failed to fetch admin session');
+      return res.json();
+    },
+    retry: false,
+  });
   const isAdmin = session?.role === 'ADMIN' || session?.role === 'OWNER';
 
   // Labor context query — fetched per-step for NOT_STARTED steps (Task #1235)
   interface LaborContext {
     chargeCode: string | null;
-    chargeCodeResolvedFrom: 'wad_default' | 'traveler_default' | 'department_match' | 'wad_wizard' | null;
+    chargeCodeResolvedFrom: 'wad_default' | 'traveler_default' | 'wad_department' | 'department_match' | 'wad_wizard' | null;
     chargeCodeError: string | null;
     isOverrun: boolean;
     nearlyExhausted: boolean;
@@ -485,6 +524,32 @@ export default function TravelerExecution() {
   });
 
   const { traveler, steps = [], events = [] } = travelerData || {};
+  const { data: wadRevisionBanner } = useQuery<WadRevisionBanner | null>({
+    queryKey: ['/api/wad-revisions', traveler?.wadRevisionId],
+    queryFn: async () => {
+      if (!traveler?.wadRevisionId) return null;
+      return apiRequest(`/api/wad-revisions/${traveler.wadRevisionId}`);
+    },
+    enabled: !!traveler?.wadRevisionId,
+  });
+
+  const legacyRocBackfillEditScope = useMemo(() => {
+    const stepIds = new Set<string>();
+    const taskIds = new Set<string>();
+
+    for (const event of events) {
+      if (event.action !== 'LEGACY_ROC_ROUTING_STEP_BACKFILLED') continue;
+      const details = event.details ?? {};
+      if (typeof details.stepId === 'string') stepIds.add(details.stepId);
+      if (Array.isArray(details.changedTaskIds)) {
+        details.changedTaskIds.forEach((id: unknown) => {
+          if (typeof id === 'string') taskIds.add(id);
+        });
+      }
+    }
+
+    return { stepIds, taskIds };
+  }, [events]);
 
   // Labor budget status for the WAD linked to this traveler
   const { data: wadLaborStatus } = useQuery<{ status: string; totalHours: number; totalBudget: number | null; percentUsed: number | null } | null>({
@@ -747,6 +812,42 @@ export default function TravelerExecution() {
     return currentPartRouting.departmentConfig[departmentName] || null;
   };
 
+  const getRoutingQcStandardsForTask = (task: TravelerTask, departmentName: string) => {
+    if (task.taskType !== 'QC') return [];
+    const deptConfig = getDeptConfig(departmentName) as any;
+    if (!deptConfig) return [];
+
+    const phaseStandards =
+      task.taskPhase === 'START'
+        ? deptConfig.startQcStandards
+        : task.taskPhase === 'FINISH'
+          ? deptConfig.finishQcStandards
+          : deptConfig.qcStandards;
+    const fallbackStandards =
+      task.taskPhase === 'FINISH'
+        ? deptConfig.qcStandards
+        : deptConfig.finishQcStandards;
+
+    const standards = Array.isArray(phaseStandards) && phaseStandards.length > 0
+      ? phaseStandards
+      : (Array.isArray(fallbackStandards) ? fallbackStandards : []);
+    const seen = new Set<string>();
+
+    return standards
+      .map((qc: any) => ({
+        standard: qc.standard || qc.standardName || qc.name || qc.title || 'QC Check',
+        tolerance: qc.tolerance || '',
+        requirement: qc.requirement || qc.specification || qc.acceptanceCriteria || '',
+        referenceLink: qc.referenceLink || '',
+      }))
+      .filter((qc: any) => {
+        const key = `${qc.standard}|${qc.tolerance}|${qc.requirement}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return qc.standard || qc.tolerance || qc.requirement;
+      });
+  };
+
   const getTimerConfigForDepartment = (departmentName: string) => {
     const deptConfig = getDeptConfig(departmentName);
     if (deptConfig?.timerConfig?.enabled) return deptConfig.timerConfig;
@@ -846,7 +947,27 @@ export default function TravelerExecution() {
         }
       }
 
-      toast({ title: 'Step Started', description: 'Badge verified — gate checks passed. Work on this step has begun.' });
+      const autoPunch = data?.autoPunch as
+        | { action?: 'clockedIn' | 'switched' | 'unchanged'; chargeCode?: string | null; warning?: string }
+        | null
+        | undefined;
+      let punchLine = '';
+      if (autoPunch?.action === 'clockedIn' && autoPunch.chargeCode) {
+        punchLine = ` Clocked in on ${autoPunch.chargeCode}.`;
+      } else if (autoPunch?.action === 'switched' && autoPunch.chargeCode) {
+        punchLine = ` Switched charge code to ${autoPunch.chargeCode}.`;
+      } else if (autoPunch?.action === 'unchanged' && autoPunch.chargeCode) {
+        punchLine = ` Punch already on ${autoPunch.chargeCode}.`;
+      }
+
+      toast({ title: 'Step Started', description: `Badge verified — gate checks passed. Work on this step has begun.${punchLine}` });
+      if (autoPunch?.warning) {
+        toast({
+          title: 'Labor budget warning',
+          description: autoPunch.warning,
+          variant: 'destructive',
+        });
+      }
       refetch();
     },
     onError: (error: any, variables) => {
@@ -1206,8 +1327,88 @@ export default function TravelerExecution() {
     });
   };
 
+  const collectCurrentTaskFieldValues = (task: TravelerTask) => {
+    const merged: Record<string, string> = { ...(fieldValues[task.id] || {}) };
+
+    for (const field of task.fields) {
+      const fieldInput = document.getElementById(`field-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
+      const textareaInput = document.getElementById(`ta-${task.id}-${field.fieldKey}`) as HTMLTextAreaElement | null;
+      const inventoryInput = document.getElementById(`inv-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
+      const qcResultInput = document.getElementById(`qc-result-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
+      const checkboxInput = document.getElementById(field.id) as HTMLInputElement | null;
+
+      const currentValue =
+        fieldInput?.value ??
+        textareaInput?.value ??
+        inventoryInput?.value;
+
+      if (currentValue !== undefined) {
+        merged[field.fieldKey] = currentValue;
+      }
+
+      if (qcResultInput?.value !== undefined) {
+        merged[`${field.fieldKey}_result`] = qcResultInput.value;
+      }
+
+      if (checkboxInput?.type === 'checkbox') {
+        merged[field.fieldKey] = checkboxInput.checked ? 'yes' : 'no';
+      }
+    }
+
+    return merged;
+  };
+
+  const appendTraceValue = (existing: string | undefined, incoming: string | undefined) => {
+    const nextValue = String(incoming ?? '').trim();
+    if (!nextValue) return existing || '';
+    const values = String(existing ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (!values.includes(nextValue)) values.push(nextValue);
+    return values.join(', ');
+  };
+
+  const handleTraceMaterialCaptured = (
+    task: TravelerTask,
+    traceFieldVals: Record<string, string>,
+    traceFieldValidations?: Record<string, any>
+  ) => {
+    setFieldValues((prev) => {
+      const current = prev[task.id] || {};
+      const merged = { ...current };
+      for (const [key, value] of Object.entries(traceFieldVals)) {
+        merged[key] = appendTraceValue(current[key], value);
+      }
+      return { ...prev, [task.id]: merged };
+    });
+
+    if (traceFieldValidations && Object.keys(traceFieldValidations).length > 0) {
+      setPickerValidations((prev) => ({
+        ...prev,
+        [task.id]: {
+          ...(prev[task.id] || {}),
+          ...traceFieldValidations,
+        },
+      }));
+    }
+
+    const captured =
+      traceFieldVals.material_internal_control_number ||
+      traceFieldVals.internalControlNumber ||
+      traceFieldVals.material_icn ||
+      traceFieldVals.packetBarcode ||
+      traceFieldVals.packet_barcode ||
+      'material';
+
+    toast({
+      title: 'Material captured',
+      description: `${captured} added. Add another material or complete the traceability task.`,
+    });
+  };
+
   const handleCompleteTask = (task: TravelerTask, toleranceApproval?: { approvedBy: string; notes: string }) => {
-    const taskFieldVals = fieldValues[task.id] || {};
+    const taskFieldVals = collectCurrentTaskFieldValues(task);
     const traceLabelMap: Record<string, string> = {
       internalControlNumber: 'Internal Control Number',
       supplier: 'Supplier',
@@ -1265,6 +1466,9 @@ export default function TravelerExecution() {
   };
 
   const currentStep = steps.find((s) => s.id === currentStepId);
+  const canEditLegacyCurrentStepData = Boolean(
+    currentStep && legacyRocBackfillEditScope.stepIds.has(currentStep.id)
+  );
 
   useEffect(() => {
     setStepNotes(currentStep?.notes ?? '');
@@ -1316,6 +1520,15 @@ export default function TravelerExecution() {
         </div>
       </div>
 
+      {traveler.wadRevisionId && (
+        <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <ShieldCheck className="h-4 w-4 shrink-0" />
+          <span>
+            This traveler was created under WAD {wadRevisionBanner?.revisionCode ?? 'revision on record'}.
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-1 space-y-4">
           <Card>
@@ -1334,6 +1547,16 @@ export default function TravelerExecution() {
                 <p className="font-medium">{traveler.partNumber}</p>
                 <p className="text-xs text-muted-foreground">{traveler.partName}</p>
               </div>
+              {traveler.partRoutingId && (
+                <div>
+                  <span className="text-muted-foreground">Routing:</span>
+                  <Link href={`/p2-control-center?tab=routing&routingId=${traveler.partRoutingId}`}>
+                    <Button variant="link" className="h-auto p-0 font-medium text-left" data-testid={`link-routing-${traveler.partRoutingId}`}>
+                      View routing
+                    </Button>
+                  </Link>
+                </div>
+              )}
               {traveler.workOrderId && (
                 <div>
                   <span className="text-muted-foreground">Work Order:</span>
@@ -1454,6 +1677,7 @@ export default function TravelerExecution() {
                       ? 'bg-red-100 text-red-800'
                       : 'bg-gray-100 text-gray-800'
                   }`}
+                  data-testid={`text-traveler-status-${traveler.status.toLowerCase()}`}
                 >
                   {traveler.status}
                 </Badge>
@@ -1996,7 +2220,7 @@ export default function TravelerExecution() {
                               Charge code:{' '}
                               <span className="font-mono font-semibold text-foreground">{laborContext.chargeCode}</span>
                               <span className="ml-1 text-[10px] text-muted-foreground">
-                                ({laborContext.chargeCodeResolvedFrom === 'wad_default' ? 'WAD default' : laborContext.chargeCodeResolvedFrom === 'traveler_default' ? 'traveler default' : laborContext.chargeCodeResolvedFrom === 'wad_wizard' ? 'WAD Step 4' : 'dept match'})
+                                ({laborContext.chargeCodeResolvedFrom === 'wad_default' ? 'WAD default' : laborContext.chargeCodeResolvedFrom === 'traveler_default' ? 'traveler default' : laborContext.chargeCodeResolvedFrom === 'wad_department' ? 'WAD dept' : laborContext.chargeCodeResolvedFrom === 'wad_wizard' ? 'WAD Step 4' : 'dept match'})
                               </span>
                             </span>
                           ) : (
@@ -2353,7 +2577,9 @@ export default function TravelerExecution() {
                   </div>
                 )}
 
-                {currentStep.status === 'IN_PROGRESS' && (() => {
+                {(currentStep.status === 'IN_PROGRESS' || canEditLegacyCurrentStepData) && (() => {
+                  const isLegacyBackfilledStepDataEntry =
+                    currentStep.status === 'COMPLETED' && canEditLegacyCurrentStepData;
                   const isGateTask = (t: TravelerTask) => t.taskType === 'END_GATE' || t.taskType === 'SIGNATURE';
                   const allRequiredNonGateComplete = currentStep.tasks
                     .filter((t) => t.required && !isGateTask(t) && !isBadgeGateTask(t))
@@ -2361,10 +2587,18 @@ export default function TravelerExecution() {
                   const unsignedSigTasks = currentStep.tasks.filter(
                     (t) => t.requiresSignature && t.status !== 'COMPLETED' && !isGateTask(t)
                   );
-                  const canSignStep = allRequiredNonGateComplete && unsignedSigTasks.length === 0;
+                  const canSignStep =
+                    !isLegacyBackfilledStepDataEntry &&
+                    allRequiredNonGateComplete &&
+                    unsignedSigTasks.length === 0;
 
                   return (
                   <div className="space-y-6">
+                    {isLegacyBackfilledStepDataEntry && (
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                        This step was completed by the supervised legacy ROC routing backfill. Routing remains complete, and collected data fields are open for record entry with timestamped audit history.
+                      </div>
+                    )}
 
                     {/* Step-level Work Instructions from routing (always visible) */}
                     {(() => {
@@ -2521,6 +2755,10 @@ export default function TravelerExecution() {
                               {phaseTasks.map((task) => {
                                 const TaskIcon = TASK_TYPE_ICONS[task.taskType] || FileText;
                                 const isComplete = task.status === 'COMPLETED';
+                                const canEditLegacyRocBackfilledData =
+                                  legacyRocBackfillEditScope.stepIds.has(task.travelerStepId) ||
+                                  legacyRocBackfillEditScope.taskIds.has(task.id);
+                                const fieldInputDisabled = isComplete && !canEditLegacyRocBackfilledData;
 
                                 return (
                                   <AccordionItem key={task.id} value={task.id} className="border-b last:border-b-0">
@@ -2569,6 +2807,11 @@ export default function TravelerExecution() {
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4">
                                       <div className="pl-12 space-y-4 pb-4">
+                                        {isComplete && canEditLegacyRocBackfilledData && (
+                                          <div className="rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-800">
+                                            Legacy routing backfill is complete; collected data fields remain open for record entry.
+                                          </div>
+                                        )}
                                         {task.instructions && (
                                           <p className="text-sm text-muted-foreground">
                                             {task.instructions}
@@ -2654,12 +2897,13 @@ export default function TravelerExecution() {
                                           );
                                         })()}
 
-                                        {(task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') && !isComplete ? (
-                                          <MaterialScanner
-                                            travelerId={traveler.id}
-                                            travelerStepId={currentStep.id}
-                                            allowFreeTextEntry={true}
-                                            onMaterialConsumed={(result) => {
+                                        {(task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') && !fieldInputDisabled ? (
+                                          <div className="space-y-3">
+                                            <MaterialScanner
+                                              travelerId={traveler.id}
+                                              travelerStepId={currentStep.id}
+                                              allowFreeTextEntry={true}
+                                              onMaterialConsumed={(result) => {
                                               const taskFieldKeys = new Set(
                                                 task.fields.map((f) => f.fieldKey)
                                               );
@@ -2668,7 +2912,7 @@ export default function TravelerExecution() {
                                                 const icn = result.internalControlNumber || '';
                                                 const lot = result.updatedLot;
                                                 const hasInventoryMatch = !!lot;
-                                                const allManualVals: Record<string, string> = {
+                                                const allManualVals: Record<string, string> = addGeneratedTraceFieldAliases({
                                                   material_internal_control_number: icn,
                                                   internalControlNumber: icn,
                                                   material_icn: icn,
@@ -2688,7 +2932,7 @@ export default function TravelerExecution() {
                                                   manufacturer: lot?.manufacturer || 'Manual Entry',
                                                   rollNumber: lot?.rollNumber || 'N/A',
                                                   receivedDate: lot?.receivedDate || today,
-                                                };
+                                                });
                                                 const traceFieldVals: Record<string, string> = {};
                                                 for (const [key, val] of Object.entries(allManualVals)) {
                                                   if (taskFieldKeys.has(key)) {
@@ -2705,11 +2949,7 @@ export default function TravelerExecution() {
                                                 for (const key of Object.keys(traceFieldVals)) {
                                                   manualFieldValidations[key] = manualValidation;
                                                 }
-                                                completeTaskMutation.mutate({ 
-                                                  taskId: task.id, 
-                                                  fieldVals: traceFieldVals,
-                                                  fieldValidations: manualFieldValidations,
-                                                });
+                                                handleTraceMaterialCaptured(task, traceFieldVals, manualFieldValidations);
                                                 return;
                                               }
                                               const consumption = result?.consumption;
@@ -2737,7 +2977,7 @@ export default function TravelerExecution() {
                                                   const combinedIcns = batch.rolls.map((r) => r.icn).filter(Boolean).join(', ');
                                                   const icnOrBarcode = combinedIcns || batch.packetBarcode;
 
-                                                  const allScanVals: Record<string, string> = {
+                                                  const allScanVals: Record<string, string> = addGeneratedTraceFieldAliases({
                                                     packetBarcode: batch.packetBarcode,
                                                     packet_barcode: batch.packetBarcode,
                                                     material_internal_control_number: icnOrBarcode,
@@ -2759,7 +2999,7 @@ export default function TravelerExecution() {
                                                     manufacturer: primaryLot?.manufacturer || '',
                                                     rollNumber: primaryLot?.rollNumber || '',
                                                     receivedDate: primaryLot?.receivedDate || '',
-                                                  };
+                                                  });
                                                   batch.rolls.forEach((r, idx) => {
                                                     allScanVals[`internalControlNumber_${idx + 1}`] = r.icn;
                                                   });
@@ -2798,16 +3038,12 @@ export default function TravelerExecution() {
                                                   for (const key of Object.keys(traceFieldVals)) {
                                                     traceFieldValidations[key] = inventoryValidation;
                                                   }
-                                                  completeTaskMutation.mutate({
-                                                    taskId: task.id,
-                                                    fieldVals: traceFieldVals,
-                                                    fieldValidations: traceFieldValidations,
-                                                  });
+                                                  handleTraceMaterialCaptured(task, traceFieldVals, traceFieldValidations);
                                                 }, 0);
                                                 return;
                                               }
 
-                                              const allScanVals: Record<string, string> = {
+                                              const allScanVals: Record<string, string> = addGeneratedTraceFieldAliases({
                                                 material_internal_control_number: icnValue,
                                                 internalControlNumber: icnValue,
                                                 material_icn: icnValue,
@@ -2827,7 +3063,7 @@ export default function TravelerExecution() {
                                                 manufacturer: lot?.manufacturer || '',
                                                 rollNumber: lot?.rollNumber || '',
                                                 receivedDate: lot?.receivedDate || '',
-                                              };
+                                              });
                                               const traceFieldVals: Record<string, string> = {};
                                               for (const [key, val] of Object.entries(allScanVals)) {
                                                 if (taskFieldKeys.has(key)) {
@@ -2849,15 +3085,94 @@ export default function TravelerExecution() {
                                               for (const key of Object.keys(traceFieldVals)) {
                                                 traceFieldValidations[key] = inventoryValidation;
                                               }
-                                              completeTaskMutation.mutate({ 
-                                                taskId: task.id, 
-                                                fieldVals: traceFieldVals,
-                                                fieldValidations: traceFieldValidations,
-                                              });
-                                            }}
-                                          />
+                                              handleTraceMaterialCaptured(task, traceFieldVals, traceFieldValidations);
+                                              }}
+                                            />
+                                            {(() => {
+                                              const currentTraceValues = collectCurrentTaskFieldValues(task);
+                                              const capturedMaterials =
+                                                currentTraceValues.material_internal_control_number ||
+                                                currentTraceValues.internalControlNumber ||
+                                                currentTraceValues.material_icn ||
+                                                currentTraceValues.packetBarcode ||
+                                                currentTraceValues.packet_barcode ||
+                                                '';
+                                              const capturedList = capturedMaterials
+                                                .split(',')
+                                                .map((value) => value.trim())
+                                                .filter(Boolean);
+                                              if (capturedList.length === 0) return null;
+
+                                              return (
+                                                <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 space-y-3">
+                                                  <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                      <p className="text-sm font-medium text-blue-900">Captured Materials</p>
+                                                      <p className="text-xs text-blue-700">Scan or enter another material, then complete the traceability task when all materials are captured.</p>
+                                                    </div>
+                                                    <Badge variant="outline" className="border-blue-300 text-blue-800">
+                                                      {capturedList.length}
+                                                    </Badge>
+                                                  </div>
+                                                  <div className="flex flex-wrap gap-2">
+                                                    {capturedList.map((material, index) => (
+                                                      <Badge key={`${material}-${index}`} variant="secondary" className="bg-white text-blue-900 border border-blue-200">
+                                                        {material}
+                                                      </Badge>
+                                                    ))}
+                                                  </div>
+                                                  <Button
+                                                    size="sm"
+                                                    onClick={() => handleCompleteTask(task)}
+                                                    disabled={completeTaskMutation.isPending}
+                                                    data-testid={`button-complete-trace-task-${task.id}`}
+                                                  >
+                                                    {completeTaskMutation.isPending ? (
+                                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                    ) : (
+                                                      <CheckCircle className="h-4 w-4 mr-2" />
+                                                    )}
+                                                    Complete Traceability
+                                                  </Button>
+                                                </div>
+                                              );
+                                            })()}
+                                          </div>
                                         ) : (
                                           <>
+                                            {task.taskType === 'QC' && task.fields.length === 0 && getRoutingQcStandardsForTask(task, currentStep.departmentName).length > 0 && (
+                                              <div className="space-y-2 rounded-lg border border-green-200 bg-green-50/50 p-3">
+                                                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-green-800">
+                                                  <ClipboardCheck className="h-4 w-4" />
+                                                  Routing QC Requirements
+                                                </div>
+                                                {getRoutingQcStandardsForTask(task, currentStep.departmentName).map((qc: any, index: number) => (
+                                                  <div key={`${qc.standard}-${index}`} className="rounded-md border border-green-100 bg-white p-2">
+                                                    <p className="text-sm font-medium">{qc.standard}</p>
+                                                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                                                      {qc.tolerance && (
+                                                        <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">
+                                                          <Wrench className="h-3 w-3" />
+                                                          Tolerance: {qc.tolerance}
+                                                        </span>
+                                                      )}
+                                                      {qc.requirement && (
+                                                        <span className="inline-flex items-center gap-1 rounded border border-green-200 bg-green-50 px-2 py-0.5 text-green-700">
+                                                          <Shield className="h-3 w-3" />
+                                                          Requirement: {qc.requirement}
+                                                        </span>
+                                                      )}
+                                                      {qc.referenceLink && (
+                                                        <a href={qc.referenceLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-0.5 text-purple-700 hover:bg-purple-100 no-underline">
+                                                          <ExternalLink className="h-3 w-3" />
+                                                          Reference
+                                                        </a>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
                                             {task.fields.length > 0 && (
                                               <div className="space-y-3">
                                                 {task.fields.filter((field) => {
@@ -2938,7 +3253,7 @@ export default function TravelerExecution() {
                                                               placeholder={field.validation?.tolerance ? `Enter result (Tolerance: ${field.validation.tolerance})` : 'Enter measured result...'}
                                                               value={fieldValues[task.id]?.[`${field.fieldKey}_result`] || (field.value?.includes('|') ? field.value.split('|')[1] : '') || ''}
                                                               onChange={(e) => handleFieldChange(task.id, `${field.fieldKey}_result`, e.target.value)}
-                                                              disabled={isComplete}
+                                                              disabled={fieldInputDisabled}
                                                               className="text-sm h-9"
                                                             />
                                                           </div>
@@ -2958,7 +3273,7 @@ export default function TravelerExecution() {
                                                                 checked ? 'yes' : 'no'
                                                               )
                                                             }
-                                                            disabled={isComplete}
+                                                            disabled={fieldInputDisabled}
                                                           />
                                                           <Label htmlFor={field.id} className="text-sm cursor-pointer">
                                                             Verified / Pass
@@ -2980,7 +3295,7 @@ export default function TravelerExecution() {
                                                             className="text-sm bg-muted flex-1"
                                                             placeholder="Select from Fabric Inventory..."
                                                           />
-                                                          {!isComplete && (
+                                                          {!fieldInputDisabled && (
                                                             <Button
                                                               size="sm"
                                                               variant="outline"
@@ -3018,7 +3333,7 @@ export default function TravelerExecution() {
                                                             e.target.value
                                                           )
                                                         }
-                                                        disabled={isComplete}
+                                                        disabled={fieldInputDisabled}
                                                         className="text-sm"
                                                       />
                                                     ) : (
@@ -3038,7 +3353,7 @@ export default function TravelerExecution() {
                                                             e.target.value
                                                           )
                                                         }
-                                                        disabled={isComplete || (field.validation?.readonly === true && !!field.value)}
+                                                        disabled={fieldInputDisabled || (field.validation?.readonly === true && !!field.value)}
                                                         className={`text-sm ${field.validation?.readonly && field.value ? 'bg-muted' : ''}`}
                                                         placeholder={field.validation?.readonly ? 'Auto-filled from inventory' : undefined}
                                                       />
@@ -3158,6 +3473,7 @@ export default function TravelerExecution() {
                       );
                     })}
 
+                    {!isLegacyBackfilledStepDataEntry && (
                     <div className="pt-4 border-t space-y-3">
                       {!canSignStep && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -3214,6 +3530,7 @@ export default function TravelerExecution() {
                         </Button>
                       </div>
                     </div>
+                    )}
                   </div>
                   );
                 })()}
@@ -3254,14 +3571,14 @@ export default function TravelerExecution() {
                               {sig.signatureData && (
                                 <img
                                   src={sig.signatureData}
-                                  alt={`Signature by ${sig.signedByName || sig.signedBy}`}
+                                  alt={`Signature by ${displaySignerName(sig.signedByName, sig.signedBy)}`}
                                   className="h-10 w-24 object-contain border rounded bg-white"
                                 />
                               )}
                               <div className="flex-1">
 
                                 <p className="font-medium">
-                                  {sig.signedByName || sig.signedBy}
+                                  {displaySignerName(sig.signedByName, sig.signedBy)}
                                   {sig.signatureRole && (
                                     <Badge variant="outline" className="ml-2 text-[10px]">{sig.signatureRole}</Badge>
                                   )}
@@ -3275,7 +3592,7 @@ export default function TravelerExecution() {
                               <div className="border rounded bg-white p-1">
                                 <img
                                   src={sig.signatureData}
-                                  alt={`Signature by ${sig.signedByName || sig.signedBy}`}
+                                  alt={`Signature by ${displaySignerName(sig.signedByName, sig.signedBy)}`}
                                   className="h-12 object-contain mx-auto"
                                 />
                               </div>

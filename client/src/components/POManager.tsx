@@ -96,6 +96,7 @@ import POItemsManager from './POItemsManager';
 import AddressInput from './AddressInput';
 import { type AddressData } from '@/utils/addressUtils';
 import { format as formatDate } from 'date-fns';
+import { formatDateOnly } from '@shared/utils/dateNormalization';
 
 // Component to display PO quantity
 function POQuantityDisplay({ poId }: { poId: number }) {
@@ -128,12 +129,22 @@ function POQuantityDisplay({ poId }: { poId: number }) {
   );
 }
 
-type StatusFilter = 'ALL' | 'LAID_UP' | 'PENDING' | 'SHIPPED' | 'CANCELLED';
+type StatusFilter = 'ALL' | 'IN_PROGRESS' | 'PENDING' | 'SHIPPED' | 'CANCELLED';
+type ProductionItemVisibilityFilter = 'active' | 'all' | 'cancelled';
+
+function isP1InProgressStatus(status?: string | null): boolean {
+  return ['IN_PROGRESS', 'LAID_UP'].includes(String(status || '').toUpperCase());
+}
+
+function getP1EffectiveStatus(order: any): string {
+  if (order?.isFulfilled) return 'SHIPPED';
+  return String(order?.productionStatus || '');
+}
 
 function getStatusLabel(filter: StatusFilter): string {
   switch (filter) {
     case 'ALL': return 'All Orders';
-    case 'LAID_UP': return 'In Progress';
+    case 'IN_PROGRESS': return 'In Progress';
     case 'PENDING': return 'Pending';
     case 'SHIPPED': return 'Shipped';
     case 'CANCELLED': return 'Cancelled';
@@ -143,6 +154,7 @@ function getStatusLabel(filter: StatusFilter): string {
 function getOrderStatusBadge(status: string) {
   switch (status) {
     case 'PENDING': return <Badge className="bg-blue-100 text-blue-800 text-xs">Pending</Badge>;
+    case 'IN_PROGRESS': return <Badge className="bg-yellow-100 text-yellow-800 text-xs">In Progress</Badge>;
     case 'LAID_UP': return <Badge className="bg-yellow-100 text-yellow-800 text-xs">In Progress</Badge>;
     case 'ACTIVE': return <Badge className="bg-orange-100 text-orange-800 text-xs">Active</Badge>;
     case 'SHIPPED': return <Badge className="bg-green-100 text-green-800 text-xs">Shipped</Badge>;
@@ -164,17 +176,19 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
   }
 
   const total = productionOrders.length;
-  const pending = productionOrders.filter((o: any) => o.productionStatus === 'PENDING').length;
-  const inProgress = productionOrders.filter((o: any) => o.productionStatus === 'LAID_UP').length;
-  const shipped = productionOrders.filter((o: any) => o.productionStatus === 'SHIPPED').length;
-  const cancelled = productionOrders.filter((o: any) => o.productionStatus === 'CANCELLED').length;
+  const pending = productionOrders.filter((o: any) => getP1EffectiveStatus(o) === 'PENDING').length;
+  const inProgress = productionOrders.filter((o: any) => isP1InProgressStatus(getP1EffectiveStatus(o))).length;
+  const shipped = productionOrders.filter((o: any) => getP1EffectiveStatus(o) === 'SHIPPED').length;
+  const cancelled = productionOrders.filter((o: any) => getP1EffectiveStatus(o) === 'CANCELLED').length;
   const active = total - cancelled;
   // Flag when orders outnumber the PO quantity — likely indicates duplicate generation
   const hasDuplicates = totalPoQuantity > 0 && total > totalPoQuantity;
 
   const filteredOrders = selectedFilter === null ? [] : selectedFilter === 'ALL'
     ? productionOrders
-    : productionOrders.filter((o: any) => o.productionStatus === selectedFilter);
+    : selectedFilter === 'IN_PROGRESS'
+      ? productionOrders.filter((o: any) => isP1InProgressStatus(getP1EffectiveStatus(o)))
+      : productionOrders.filter((o: any) => getP1EffectiveStatus(o) === selectedFilter);
 
   const modalTitle = selectedFilter
     ? `${poNumber} — ${getStatusLabel(selectedFilter)} (${filteredOrders.length})`
@@ -207,7 +221,7 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
         {inProgress > 0 && (
           <Badge
             className="bg-yellow-100 text-yellow-800 text-xs cursor-pointer hover:bg-yellow-200 transition-colors"
-            onClick={(e) => handleBadgeClick(e, 'LAID_UP')}
+            onClick={(e) => handleBadgeClick(e, 'IN_PROGRESS')}
             title="Click to view in-progress orders"
           >
             {inProgress} In Progress
@@ -291,7 +305,7 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
                       </td>
                       <td className="p-3">{order.itemName || '—'}</td>
                       <td className="p-3 text-muted-foreground">{order.itemCode || order.materialCanonical || '—'}</td>
-                      <td className="p-3">{getOrderStatusBadge(order.productionStatus)}</td>
+                      <td className="p-3">{getOrderStatusBadge(getP1EffectiveStatus(order))}</td>
                       <td className="p-3 text-muted-foreground">{order.currentDepartment || '—'}</td>
                       <td className="p-3 text-muted-foreground">{order.operatorName || order.operator || order.assignedOperator || '—'}</td>
                       <td className="p-3 text-muted-foreground">
@@ -320,6 +334,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string>('');
   const [cancelReason, setCancelReason] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState<ProductionItemVisibilityFilter>('active');
 
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: [`/api/production-orders/by-po/${poId}`],
@@ -331,22 +346,33 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     queryFn: () => fetchPOItems(poId),
   });
 
+  const poItemById = useMemo(() => {
+    return new Map((poItems as PurchaseOrderItem[]).map((item) => [item.id, item]));
+  }, [poItems]);
+
+  const getPoLineDisplayName = (item?: PurchaseOrderItem) =>
+    item?.itemName || item?.itemId || 'Unknown PO line';
+
+  const normalizeLineName = (value?: string | null) =>
+    String(value || '').trim().toUpperCase();
+
   // Build a set of production order IDs that are duplicates.
-  // Group by normalized itemName; expected count = matching PO item quantity.
+  // Group by poItemId; expected count = the linked PO line quantity.
   // Within each group, sort by id ascending (oldest = original); the tail are duplicates.
   const duplicateOrderIds = useMemo((): Set<number> => {
     const result = new Set<number>();
-    // Build expected quantity map: normalized itemName → quantity
+    // Build expected quantity map: poItemId → quantity
     const expectedQty = new Map<string, number>();
     for (const item of poItems as PurchaseOrderItem[]) {
-      const key = (item.itemName || item.stockModelId || item.itemId || '').toLowerCase().trim();
-      if (key) expectedQty.set(key, (expectedQty.get(key) ?? 0) + item.quantity);
+      expectedQty.set(`item:${item.id}`, item.quantity);
     }
-    // Group orders by normalized itemName, excluding cancelled orders
+    // Group orders by linked PO line, excluding cancelled orders.
     const groups = new Map<string, any[]>();
     for (const order of productionOrders) {
-      if (order.productionStatus === 'CANCELLED') continue;
-      const key = (order.itemName || order.itemCode || '').toLowerCase().trim();
+      if (getP1EffectiveStatus(order) === 'CANCELLED') continue;
+      const key = order.poItemId
+        ? `item:${order.poItemId}`
+        : `name:${normalizeLineName(order.itemName || order.itemCode)}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(order);
     }
@@ -362,6 +388,49 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
   }, [productionOrders, poItems]);
 
   const duplicateCount = duplicateOrderIds.size;
+  const activeOrders = (productionOrders as any[]).filter((order: any) => getP1EffectiveStatus(order) !== 'CANCELLED');
+  const cancelledOrders = (productionOrders as any[]).filter((order: any) => getP1EffectiveStatus(order) === 'CANCELLED');
+  const missingLineItems = useMemo(() => {
+    const activeCountByPoItemId = new Map<number, number>();
+    for (const order of activeOrders) {
+      const poItemId = Number(order.poItemId);
+      if (!Number.isFinite(poItemId)) continue;
+      activeCountByPoItemId.set(poItemId, (activeCountByPoItemId.get(poItemId) ?? 0) + 1);
+    }
+
+    return (poItems as PurchaseOrderItem[])
+      .map((item) => {
+        const activeCount = activeCountByPoItemId.get(item.id) ?? 0;
+        const missing = Math.max(0, item.quantity - activeCount);
+        return { item, activeCount, missing };
+      })
+      .filter((entry) => entry.missing > 0);
+  }, [activeOrders, poItems]);
+  const missingCount = missingLineItems.reduce((sum, entry) => sum + entry.missing, 0);
+  const visibleProductionOrders =
+    visibilityFilter === 'all'
+      ? (productionOrders as any[])
+      : visibilityFilter === 'cancelled'
+        ? cancelledOrders
+        : activeOrders;
+
+  const backfillMissingMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/pos/${poId}/generate-production-orders`, { method: 'POST' });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/pos/${poId}/items`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+      const created = data?.createdOrders ?? 0;
+      toast.success(created > 0
+        ? `Created ${created} missing production order${created !== 1 ? 's' : ''}.`
+        : 'No missing production orders needed to be created.');
+    },
+    onError: (error: any) => {
+      toast.error('Failed to create missing production orders: ' + (error.message || 'Unknown error'));
+    },
+  });
 
   const cancelMutation = useMutation({
     mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
@@ -386,12 +455,41 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     mutationFn: async (orderId: string) => {
       return apiRequest(`/api/production-orders/${orderId}/reactivate`, { method: 'POST' });
     },
-    onSuccess: (_data, orderId) => {
+    onSuccess: (data: any, orderId) => {
       queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
-      toast.success(`Order ${orderId} reactivated — status reset to Pending.`);
+      queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+      const statusLabel =
+        isP1InProgressStatus(data?.order?.productionStatus)
+          ? 'In Progress'
+          : data?.order?.productionStatus === 'SHIPPED'
+            ? 'Shipped'
+            : 'Pending';
+      toast.success(
+        data?.purchaseOrderReopened
+          ? `Order ${orderId} reactivated — PO reopened as active.`
+          : `Order ${orderId} reactivated — status reset to ${statusLabel}.`
+      );
     },
     onError: (error: any) => {
       toast.error('Failed to reactivate order: ' + (error.message || 'Unknown error'));
+    },
+  });
+
+  const fulfillMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest('/api/po-orders/toggle-fulfilled', {
+        method: 'POST',
+        body: { orderId, isFulfilled: true },
+      });
+    },
+    onSuccess: (_data: any, orderId) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
+      toast.success(`Order ${orderId} marked fulfilled.`);
+    },
+    onError: (error: any) => {
+      toast.error('Failed to mark fulfilled: ' + (error.message || 'Unknown error'));
     },
   });
 
@@ -425,8 +523,10 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
         return <Badge className="bg-blue-100 text-blue-800">Pending</Badge>;
       case 'ACTIVE':
         return <Badge className="bg-yellow-100 text-yellow-800">Active</Badge>;
+      case 'IN_PROGRESS':
+        return <Badge className="bg-orange-100 text-orange-800">In Progress</Badge>;
       case 'LAID_UP':
-        return <Badge className="bg-orange-100 text-orange-800">Laid Up</Badge>;
+        return <Badge className="bg-orange-100 text-orange-800">In Progress</Badge>;
       case 'SHIPPED':
         return <Badge className="bg-green-100 text-green-800">Shipped</Badge>;
       case 'CANCELLED':
@@ -456,6 +556,22 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Package className="h-10 w-10 text-muted-foreground mb-3" />
             <p className="text-muted-foreground">No production orders generated from this PO.</p>
+            {missingCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-4 text-red-700 border-red-300 hover:bg-red-50"
+                disabled={backfillMissingMutation.isPending}
+                onClick={() => backfillMissingMutation.mutate()}
+              >
+                {backfillMissingMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                )}
+                Create Missing Production Orders
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -468,29 +584,77 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-lg flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Production Orders ({productionOrders.length})
+            Production Orders ({visibleProductionOrders.length})
+            {visibilityFilter !== 'all' && (
+              <span className="text-sm font-normal text-muted-foreground">
+                of {productionOrders.length}
+              </span>
+            )}
             {duplicateCount > 0 && (
               <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold ml-1">
                 ⚠ {duplicateCount} Duplicate{duplicateCount !== 1 ? 's' : ''} detected
               </Badge>
             )}
+            {missingCount > 0 && (
+              <Badge className="bg-red-100 text-red-800 text-xs font-semibold ml-1">
+                {missingCount} Missing
+              </Badge>
+            )}
           </CardTitle>
-          {hasMetalAccessoryOrders && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-amber-700 border-amber-300 hover:bg-amber-50 h-7 px-2 text-xs shrink-0"
-              disabled={fixMetalAccessoriesMutation.isPending}
-              onClick={() => fixMetalAccessoriesMutation.mutate()}
-              title="Move metal accessory orders to Shipping QC and correct their material"
+          <div className="flex items-center gap-2">
+            <Select
+              value={visibilityFilter}
+              onValueChange={(value) => setVisibilityFilter(value as ProductionItemVisibilityFilter)}
             >
-              {fixMetalAccessoriesMutation.isPending ? 'Fixing...' : 'Fix Metal Accessories'}
-            </Button>
-          )}
+              <SelectTrigger className="h-8 w-40" data-testid="select-production-order-visibility">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active Items ({activeOrders.length})</SelectItem>
+                <SelectItem value="all">All Items ({productionOrders.length})</SelectItem>
+                <SelectItem value="cancelled">Cancelled Items ({cancelledOrders.length})</SelectItem>
+              </SelectContent>
+            </Select>
+            {missingCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-red-700 border-red-300 hover:bg-red-50 h-7 px-2 text-xs shrink-0"
+                disabled={backfillMissingMutation.isPending}
+                onClick={() => backfillMissingMutation.mutate()}
+                title="Create only the missing production orders for PO lines that are below quantity"
+              >
+                {backfillMissingMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                )}
+                Create Missing
+              </Button>
+            )}
+            {hasMetalAccessoryOrders && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-amber-700 border-amber-300 hover:bg-amber-50 h-7 px-2 text-xs shrink-0"
+                disabled={fixMetalAccessoriesMutation.isPending}
+                onClick={() => fixMetalAccessoriesMutation.mutate()}
+                title="Move metal accessory orders to Shipping QC and correct their material"
+              >
+                {fixMetalAccessoriesMutation.isPending ? 'Fixing...' : 'Fix Metal Accessories'}
+              </Button>
+            )}
+          </div>
         </div>
         {duplicateCount > 0 && (
           <p className="text-xs text-orange-700 mt-1">
             Rows highlighted in orange were generated beyond the PO item quantity. Cancel them to clean up.
+          </p>
+        )}
+        {missingCount > 0 && (
+          <p className="text-xs text-red-700 mt-1">
+            {missingCount} production order{missingCount !== 1 ? 's are' : ' is'} missing for PO line{missingLineItems.length !== 1 ? 's' : ''}: {' '}
+            {missingLineItems.map(({ item, missing }) => `${item.itemName || item.itemId || `Line #${item.id}`} (${missing})`).join(', ')}.
           </p>
         )}
       </CardHeader>
@@ -500,6 +664,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-3 font-medium">Production Order #</th>
+                <th className="text-left p-3 font-medium">PO Line</th>
                 <th className="text-left p-3 font-medium">Item Name</th>
                 <th className="text-left p-3 font-medium">Material</th>
                 <th className="text-left p-3 font-medium">Status</th>
@@ -509,8 +674,18 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
               </tr>
             </thead>
             <tbody>
-              {productionOrders.map((order: any) => {
+              {visibleProductionOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                    No production orders match this filter.
+                  </td>
+                </tr>
+              ) : visibleProductionOrders.map((order: any) => {
                 const isDuplicate = duplicateOrderIds.has(order.id);
+                const poLine = order.poItemId ? poItemById.get(order.poItemId) : undefined;
+                const poLineName = getPoLineDisplayName(poLine);
+                const productionName = order.itemName || order.itemCode || '';
+                const itemMismatch = !!poLine && normalizeLineName(productionName) !== normalizeLineName(poLineName);
                 return (
                 <tr
                   key={order.id}
@@ -524,15 +699,34 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                       <Badge className="bg-orange-200 text-orange-900 text-[10px] ml-1.5 px-1 py-0">DUPE</Badge>
                     )}
                   </td>
-                  <td className="p-3">{order.itemName || '—'}</td>
+                  <td className="p-3">
+                    {poLine ? (
+                      <div className="space-y-0.5">
+                        <div className="font-medium">{poLineName}</div>
+                        <div className="text-xs text-muted-foreground">Line #{poLine.id} · Qty {poLine.quantity}</div>
+                      </div>
+                    ) : (
+                      <Badge variant="outline" className="text-amber-700 border-amber-300">No PO line link</Badge>
+                    )}
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      <span>{productionName || '—'}</span>
+                      {itemMismatch && (
+                        <Badge variant="outline" className="text-amber-700 border-amber-300">
+                          Mismatch
+                        </Badge>
+                      )}
+                    </div>
+                  </td>
                   <td className="p-3">{order.materialCanonical || '—'}</td>
-                  <td className="p-3">{getStatusBadge(order.productionStatus)}</td>
+                  <td className="p-3">{getStatusBadge(getP1EffectiveStatus(order))}</td>
                   <td className="p-3 text-muted-foreground">{order.currentDepartment || '—'}</td>
                   <td className="p-3 text-muted-foreground">
                     {order.createdAt ? formatDate(new Date(order.createdAt), 'M/d/yy') : '—'}
                   </td>
                   <td className="p-3 flex items-center gap-1">
-                    {order.productionStatus === 'CANCELLED' ? (
+                    {getP1EffectiveStatus(order) === 'CANCELLED' ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -546,7 +740,25 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                           : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
                         Reactivate
                       </Button>
-                    ) : order.productionStatus !== 'SHIPPED' && (
+                    ) : getP1EffectiveStatus(order) !== 'SHIPPED' && (
+                      <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-green-700 hover:text-green-800 hover:bg-green-50 border-green-300 h-7 px-2"
+                        disabled={fulfillMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm(`Mark ${order.orderId} as fulfilled/shipped off-system?`)) {
+                            fulfillMutation.mutate(order.orderId);
+                          }
+                        }}
+                        title="Mark this item as fulfilled because it was shipped outside EPOCH"
+                      >
+                        {fulfillMutation.isPending && fulfillMutation.variables === order.orderId
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                          : <Check className="h-3.5 w-3.5 mr-1" />}
+                        Fulfilled
+                      </Button>
                       <Button
                         variant={isDuplicate ? 'destructive' : 'ghost'}
                         size="sm"
@@ -560,6 +772,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                         <X className="h-3.5 w-3.5 mr-1" />
                         {isDuplicate ? 'Cancel Duplicate' : 'Cancel'}
                       </Button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -616,12 +829,49 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string>('');
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const fileInputRef = { current: null as HTMLInputElement | null };
 
-  const handlePreview = (attachmentId: string, fileName: string) => {
-    setPreviewFileName(fileName);
-    setPreviewUrl(`/api/pos/${poId}/attachments/${attachmentId}/download`);
+  const closePreview = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(null);
+    setPreviewFileName('');
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const handlePreview = async (attachmentId: string, fileName: string) => {
+    const downloadUrl = `/api/pos/${poId}/attachments/${attachmentId}/download`;
+    setPreviewLoadingId(attachmentId);
+    try {
+      const response = await fetch(downloadUrl, { credentials: 'include' });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.details || error.reason || error.error || `Unable to open PDF (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewFileName(fileName);
+      setPreviewUrl(objectUrl);
+    } catch (error: any) {
+      console.error('Preview error:', error);
+      toast.error(error.message || 'Unable to open PDF');
+    } finally {
+      setPreviewLoadingId(null);
+    }
   };
 
   const { data: attachments = [], isLoading, refetch } = useQuery({
@@ -661,36 +911,66 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
 
     setIsUploading(true);
     try {
-      const urlResponse = await apiRequest(`/api/pos/${poId}/attachments/request-upload-url`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type,
-        }),
-      });
+      const uploadViaLocalFallback = async (reason: string) => {
+        console.warn('[POAttachments] Falling back to local upload', {
+          poId,
+          fileName: file.name,
+          reason,
+        });
 
-      await fetch(urlResponse.uploadURL, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
-      });
+        const formData = new FormData();
+        formData.append('file', file);
 
-      await apiRequest(`/api/pos/${poId}/attachments/complete-upload`, {
-        method: 'POST',
-        body: JSON.stringify({
-          objectPath: urlResponse.objectPath,
-          originalFileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type,
-        }),
-      });
+        const fallbackResponse = await fetch(`/api/pos/${poId}/attachments/local-upload`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+
+        if (!fallbackResponse.ok) {
+          const error = await fallbackResponse.json().catch(() => ({}));
+          throw new Error(error.details || error.reason || error.error || `Fallback upload failed (${fallbackResponse.status})`);
+        }
+      };
+
+      try {
+        const urlResponse = await apiRequest(`/api/pos/${poId}/attachments/request-upload-url`, {
+          method: 'POST',
+          body: JSON.stringify({
+            name: file.name,
+            size: file.size,
+            contentType: file.type,
+          }),
+        });
+
+        const uploadResponse = await fetch(urlResponse.uploadURL, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type },
+        });
+        if (!uploadResponse.ok) {
+          const error = await uploadResponse.json().catch(() => ({}));
+          throw new Error(error.details || error.reason || `Storage upload failed (${uploadResponse.status})`);
+        }
+
+        await apiRequest(`/api/pos/${poId}/attachments/complete-upload`, {
+          method: 'POST',
+          body: JSON.stringify({
+            objectPath: urlResponse.objectPath,
+            originalFileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+          }),
+        });
+      } catch (storageError: any) {
+        await uploadViaLocalFallback(storageError?.message || 'storage upload failed');
+      }
 
       toast.success('PDF attached successfully');
       refetch();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      toast.error('Failed to upload PDF');
+      toast.error(error.message || 'Failed to upload PDF');
     } finally {
       setIsUploading(false);
       if (event.target) event.target.value = '';
@@ -791,9 +1071,14 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
                     <Button
                       variant="ghost"
                       size="sm"
+                      disabled={previewLoadingId === attachment.id}
                       onClick={() => handlePreview(attachment.id, attachment.originalFileName)}
                     >
-                      <Eye className="w-4 h-4" />
+                      {previewLoadingId === attachment.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
                     </Button>
                     <Button
                       variant="ghost"
@@ -822,7 +1107,7 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
       </DialogContent>
     </Dialog>
 
-    <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) { setPreviewUrl(null); setPreviewFileName(''); } }}>
+    <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) closePreview(); }}>
       <DialogContent className="max-w-4xl w-full h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -1006,11 +1291,11 @@ function POCard({
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="font-medium">PO Date:</span>{' '}
-            {new Date(po.poDate).toLocaleDateString()}
+            {formatDateOnly(po.poDate)}
           </div>
           <div>
             <span className="font-medium">Expected Delivery:</span>{' '}
-            {new Date(po.expectedDelivery).toLocaleDateString()}
+            {formatDateOnly(po.expectedDelivery)}
           </div>
         </div>
         {po.notes && (
@@ -2043,7 +2328,7 @@ export default function POManager() {
                           >
                             <div className="font-medium">Week {week.week}</div>
                             <div className="text-sm text-gray-600 dark:text-gray-400">
-                              Due: {new Date(week.dueDate).toLocaleDateString()}
+                              Due: {formatDateOnly(week.dueDate)}
                             </div>
                             <div className="text-sm">
                               Complete: {week.itemsToComplete} items

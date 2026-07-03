@@ -179,7 +179,7 @@ function CreateSessionDialog({ onCreated }: { onCreated: (id: number) => void })
 
   const { data: policies = [] } = useQuery<VariancePolicy[]>({
     queryKey: [API_BASE, 'variance-policies'],
-    queryFn: async () => (await apiRequest('GET', `${API_BASE}/variance-policies`)).json(),
+    queryFn: async () => apiRequest(`${API_BASE}/variance-policies`),
     enabled: open,
   });
 
@@ -194,8 +194,7 @@ function CreateSessionDialog({ onCreated }: { onCreated: (id: number) => void })
         variancePolicyId: variancePolicyId || null,
         notes: notes.trim() || null,
       };
-      const res = await apiRequest('POST', API_BASE, body);
-      return (await res.json()) as CycleCountSession;
+      return apiRequest(API_BASE, { method: 'POST', body }) as Promise<CycleCountSession>;
     },
     onSuccess: (sess) => {
       toast.success(`Session ${sess.sessionNumber ?? `#${sess.id}`} created`);
@@ -369,7 +368,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
 
   const { data: session, isLoading } = useQuery<CycleCountSession>({
     queryKey: [API_BASE, sessionId, reveal],
-    queryFn: async () => (await apiRequest('GET', `${API_BASE}/${sessionId}${reveal ? '?reveal=true' : ''}`)).json(),
+    queryFn: async () => apiRequest(`${API_BASE}/${sessionId}${reveal ? '?reveal=true' : ''}`),
   });
 
   const recordMutation = useMutation({
@@ -382,7 +381,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
           notes: localNotes[parseInt(lineId, 10)],
         }));
       if (counts.length === 0) throw new Error('No counts to save');
-      return (await apiRequest('POST', `${API_BASE}/${sessionId}/counts`, { counts })).json();
+      return apiRequest(`${API_BASE}/${sessionId}/counts`, { method: 'POST', body: { counts } });
     },
     onSuccess: () => {
       toast.success('Counts saved');
@@ -394,7 +393,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
 
   const transitionMutation = useMutation({
     mutationFn: async (action: 'submit' | 'approve' | 'post' | 'cancel') => {
-      return (await apiRequest('POST', `${API_BASE}/${sessionId}/${action}`)).json();
+      return apiRequest(`${API_BASE}/${sessionId}/${action}`, { method: 'POST' });
     },
     onSuccess: (_data, action) => {
       toast.success(`Session ${action}ed`);
@@ -577,7 +576,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
 function VarianceHistoryTab() {
   const { data: history = [], isLoading } = useQuery<VarianceHistoryRow[]>({
     queryKey: [API_BASE, 'variance-history'],
-    queryFn: async () => (await apiRequest('GET', `${API_BASE}/variance-history?limit=200`)).json(),
+    queryFn: async () => apiRequest(`${API_BASE}/variance-history?limit=200`),
   });
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Loading…</div>;
   if (history.length === 0) return <div className="text-center py-12 text-muted-foreground text-sm">No posted variances yet.</div>;
@@ -626,7 +625,7 @@ export default function CycleCountPage() {
 
   const { data: sessions = [], isLoading } = useQuery<CycleCountSession[]>({
     queryKey: [API_BASE],
-    queryFn: async () => (await apiRequest('GET', API_BASE)).json(),
+    queryFn: async () => apiRequest(API_BASE),
   });
 
   const buckets = useMemo(() => {

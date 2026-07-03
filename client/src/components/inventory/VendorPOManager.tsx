@@ -95,6 +95,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { getResendConfirmationKey, getSendRFQInvalidationKeys } from '@/lib/vendorPOInvalidation';
+import { formatDateOnly, formatDateOnlyMedium, toLocalDate } from '@shared/utils/dateNormalization';
 
 // Helper function to format numbers with commas
 function formatNumber(value: number | undefined | null, decimals: number = 2): string {
@@ -119,6 +120,12 @@ type EmailRecipient = {
   email: string;
   type: 'primary' | 'additional' | 'contact';
 };
+
+const DEFAULT_ISSUE_EMAIL_MESSAGE =
+  'AG Composites has issued a new Purchase Order to your company. Please see the attached purchase order PDF for details.';
+
+const DEFAULT_RESEND_EMAIL_MESSAGE =
+  'AG Composites is resending this Purchase Order. Please see the attached purchase order PDF for details.';
 
 function RecipientPickerList({
   recipients,
@@ -186,6 +193,260 @@ function RecipientPickerList({
   );
 }
 
+function formatReadinessDate(value: unknown): string {
+  if (!value) return 'None recorded';
+  return formatDateOnly(String(value));
+}
+
+function formatDateInputValue(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function IssueReadinessCard({
+  readiness,
+  isLoading,
+  onOpenPurchasingControls,
+  onOpenComplianceReview,
+}: {
+  readiness?: IssueReadiness;
+  isLoading: boolean;
+  onOpenPurchasingControls: () => void;
+  onOpenComplianceReview: () => void;
+}) {
+  const [debarmentDialogOpen, setDebarmentDialogOpen] = useState(false);
+  const [debarmentSource, setDebarmentSource] = useState<'sam.gov' | 'manual_attestation' | 'document_upload'>('manual_attestation');
+  const [debarmentResult, setDebarmentResult] = useState<'pass' | 'fail' | 'inconclusive'>('pass');
+  const [debarmentNotes, setDebarmentNotes] = useState('');
+
+  const recordDebarment = useMutation({
+    mutationFn: () => {
+      if (!readiness?.vendorId) throw new Error('Vendor ID is missing for this PO');
+      return apiRequest('/api/vendor-debarment-checks', {
+        method: 'POST',
+        body: JSON.stringify({
+          vendorId: readiness.vendorId,
+          context: 'po_issuance',
+          contextRefId: readiness.vendorPoId,
+          source: debarmentSource,
+          result: debarmentResult,
+          notes: debarmentNotes,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast.success('Debarment check recorded');
+      setDebarmentNotes('');
+      setDebarmentResult('pass');
+      setDebarmentDialogOpen(false);
+      if (readiness?.vendorPoId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', readiness.vendorPoId, 'issue-readiness'] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Failed to record debarment check'),
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-4">
+          <Skeleton className="h-5 w-48 mb-3" />
+          <Skeleton className="h-4 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!readiness) return null;
+
+  const deactivatedIssueGateKeys = new Set([
+    'vendor_master',
+    'debarment',
+    'supplier_scope',
+    'purchasing_controls',
+    'p2_compliance_review',
+  ]);
+  const displaySections = readiness.sections.map((section) =>
+    deactivatedIssueGateKeys.has(section.key)
+      ? {
+          ...section,
+          label: section.label.includes('deactivated') ? section.label : `${section.label} (deactivated)`,
+          status: 'not_applicable' as const,
+          blockers: [],
+        }
+      : section
+  );
+  const failingSections = displaySections.filter((section) => section.status === 'fail');
+  const debarment = readiness.sections.find((section) => section.key === 'debarment');
+  const latestDebarment = debarment?.details?.latestPassingCheck as any;
+  const vendorMaster = readiness.sections.find((section) => section.key === 'vendor_master');
+  const vendorMasterDetails = vendorMaster?.details as any;
+  const readyToIssue = failingSections.length === 0;
+
+  return (
+    <>
+    <Card className={readyToIssue ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/60'}>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              {readyToIssue ? (
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <ShieldAlert className="h-4 w-4 text-amber-600" />
+              )}
+              PO Issue Readiness
+            </CardTitle>
+            <CardDescription>
+              Vendor approval, supplier scope, purchasing controls, and P2 review are visible for audit context but deactivated for PO issuance.
+            </CardDescription>
+          </div>
+          <Badge className={readyToIssue ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}>
+            {readyToIssue ? 'Ready to issue' : `${failingSections.length} gate${failingSections.length === 1 ? '' : 's'} need attention`}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          {displaySections.map((section) => {
+            const passed = section.status === 'pass';
+            const skipped = section.status === 'not_applicable';
+            return (
+              <div key={section.key} className="rounded-md border bg-white/80 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  {passed ? (
+                    <CheckCircle className="h-4 w-4 text-emerald-600" />
+                  ) : skipped ? (
+                    <Clock className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-600" />
+                  )}
+                  {section.label}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {passed ? 'Clear' : skipped ? 'Not required for this PO' : section.blockers[0]}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {latestDebarment && (
+          <div className="text-xs text-muted-foreground">
+            Latest passing debarment check: {formatReadinessDate(latestDebarment.checkedAt)}
+            {latestDebarment.source ? ` via ${latestDebarment.source}` : ''}
+          </div>
+        )}
+
+        {vendorMasterDetails?.vendorId && (
+          <div className="text-xs text-muted-foreground">
+            This PO is linked to vendor #{vendorMasterDetails.vendorId}
+            {typeof vendorMasterDetails.approved === 'boolean'
+              ? `; master approved: ${vendorMasterDetails.approved ? 'Yes' : 'No'}`
+              : ''}
+            {vendorMasterDetails.approvalLevel
+              ? `; approval level: ${vendorMasterDetails.approvalLevel}`
+              : ''}
+            {vendorMasterDetails.approvalExpiration
+              ? `; expires: ${formatReadinessDate(vendorMasterDetails.approvalExpiration)}`
+              : ''}
+            {Array.isArray(vendorMasterDetails.approvedSameNameVendors) && vendorMasterDetails.approvedSameNameVendors.length > 0
+              ? `. Approved same-name vendor record(s): ${vendorMasterDetails.approvedSameNameVendors.map((v: any) => `#${v.id}`).join(', ')}`
+              : ''}
+          </div>
+        )}
+
+        {failingSections.length > 0 && (
+          <div className="rounded-md border border-amber-200 bg-white/80 p-3">
+            <div className="text-sm font-medium text-amber-900 mb-2">What to fix before issuing</div>
+            <ul className="space-y-1 text-sm text-amber-900">
+              {failingSections.flatMap((section) =>
+                section.blockers.map((blocker) => (
+                  <li key={`${section.key}-${blocker}`}>- {section.label}: {blocker}</li>
+                ))
+              )}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={onOpenPurchasingControls}>
+                Open Purchasing Controls
+              </Button>
+              {readiness.isP2 && (
+                <Button type="button" size="sm" variant="outline" onClick={onOpenComplianceReview}>
+                  Open P2 Compliance Review
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+    <Dialog open={debarmentDialogOpen} onOpenChange={setDebarmentDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Debarment Check</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            Record evidence that vendor #{readiness.vendorId} was checked for exclusions before PO issuance.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Source</Label>
+              <select
+                className="w-full border rounded px-2 py-2 text-sm"
+                value={debarmentSource}
+                onChange={(e) => setDebarmentSource(e.target.value as any)}
+              >
+                <option value="manual_attestation">Manual Attestation</option>
+                <option value="sam.gov">SAM.gov</option>
+                <option value="document_upload">Document Upload</option>
+              </select>
+            </div>
+            <div>
+              <Label>Result</Label>
+              <select
+                className="w-full border rounded px-2 py-2 text-sm"
+                value={debarmentResult}
+                onChange={(e) => setDebarmentResult(e.target.value as any)}
+              >
+                <option value="pass">Pass</option>
+                <option value="fail">Fail</option>
+                <option value="inconclusive">Inconclusive</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <Label>Notes / Evidence Reference</Label>
+            <Textarea
+              rows={3}
+              value={debarmentNotes}
+              onChange={(e) => setDebarmentNotes(e.target.value)}
+              placeholder="Example: SAM.gov search completed, no exclusions found."
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setDebarmentDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => recordDebarment.mutate()}
+            disabled={recordDebarment.isPending || !readiness.vendorId}
+          >
+            {recordDebarment.isPending ? 'Recording...' : 'Record Check'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
+  );
+}
+
 // Types based on our schema
 type VendorPO = {
   id: number;
@@ -203,6 +464,7 @@ type VendorPO = {
     | 'Partially Received'
     | 'Fully Received'
     | 'Cancelled';
+  orderDate?: string;
   expectedDeliveryDate?: string;
   shipVia?: string;
   notes?: string;
@@ -229,9 +491,7 @@ type VendorPO = {
   // Vendor confirmation badge (augmented by the list endpoint, no extra per-row calls)
   // null = non-issued PO; 'no_link' = issued but no confirmation email ever sent
   confirmationBadge?: 'confirmed' | 'awaiting' | 'expired' | 'no_link' | null;
-  // ISO timestamp of when the vendor clicked the confirmation link (only set when confirmationBadge === 'confirmed')
   confirmationUsedAt?: string | null;
-  // ISO timestamp of when the confirmation link expires (set for 'awaiting' and 'expired' badges)
   confirmationExpiresAt?: string | null;
   // Archived flag
   archived?: boolean;
@@ -247,6 +507,40 @@ type VendorPO = {
   directPoExceptionApprovedByName?: string | null;
   directPoExceptionReason?: string | null;
   directPoExceptionApprovedAt?: string | null;
+};
+
+type VendorPOTransaction = {
+  id: number;
+  action: string;
+  actorName?: string | null;
+  actorRole?: string | null;
+  reason?: string | null;
+  fieldsChanged?: Record<string, { before: unknown; after: unknown }> | null;
+  meta?: Record<string, any> | null;
+  payloadJson?: Record<string, any> | null;
+  occurredAt?: string | null;
+  timestamp?: string | null;
+  recordedAt?: string | null;
+  sequenceNumber?: number | null;
+  rowHash?: string | null;
+};
+
+type IssueReadinessSection = {
+  key: string;
+  label: string;
+  status: 'pass' | 'fail' | 'not_applicable';
+  blockers: string[];
+  details?: Record<string, any>;
+};
+
+type IssueReadiness = {
+  vendorPoId: number;
+  vendorId: number | null;
+  vendorName: string | null;
+  productionLine: string | null;
+  isP2: boolean;
+  ready: boolean;
+  sections: IssueReadinessSection[];
 };
 
 type VendorPOItem = {
@@ -277,10 +571,38 @@ type VendorPOItem = {
 type CreateVendorPOData = {
   vendorId: number;
   productionLine?: 'P1' | 'P2' | 'GENERAL' | 'R_AND_D';
+  orderDate?: string;
   expectedDeliveryDate?: string;
   shipVia?: string;
   notes?: string;
   externalPoNumber?: string;
+};
+
+const DRAFT_BOM_VENDOR_PO_HANDOFF_KEY = 'epoch:draft-bom-vendor-po-handoff';
+
+type DraftBomVendorPoHandoff = {
+  source: 'draft-bom';
+  draftId: string;
+  draftName: string;
+  revision: string;
+  project?: string | null;
+  projectId?: string | null;
+  projectType?: 'P2_PROJECT' | 'R_AND_D' | null;
+  vendors: string[];
+  lines: Array<{
+    id: string;
+    vendor: string;
+    supplierPartNumber: string;
+    manufacturer: string;
+    description: string;
+    estimatedCost: number;
+    actualCost: number;
+    quantity: number;
+    service: boolean;
+    agPartNumber: string;
+    status: string;
+    note: string;
+  }>;
 };
 
 function formatProductionLineLabel(value?: string | null): string {
@@ -790,6 +1112,17 @@ function VendorPOCard({
 
       <CardContent className="pt-0">
         <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+          {(vendorPo.orderDate || vendorPo.createdAt) && (
+            <div>
+              <span className="text-gray-500">Issue Date:</span>
+              <p
+                className="font-medium"
+                data-testid={`text-order-date-${vendorPo.id}`}
+              >
+                {formatDateOnlyMedium(vendorPo.orderDate || vendorPo.createdAt)}
+              </p>
+            </div>
+          )}
           <div>
             <span className="text-gray-500">Total Cost:</span>
             <p
@@ -806,10 +1139,7 @@ function VendorPOCard({
                 className="font-medium"
                 data-testid={`text-delivery-date-${vendorPo.id}`}
               >
-                {format(
-                  new Date(vendorPo.expectedDeliveryDate),
-                  'MMM dd, yyyy'
-                )}
+                {formatDateOnlyMedium(vendorPo.expectedDeliveryDate)}
               </p>
             </div>
           )}
@@ -927,55 +1257,143 @@ function VendorPOForm({
   isOpen,
   onClose,
   onSubmit,
+  draftBomHandoff,
   inline = false,
 }: {
   vendorPo?: VendorPO;
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: CreateVendorPOData) => void;
+  draftBomHandoff?: DraftBomVendorPoHandoff | null;
   inline?: boolean;
 }) {
   const [formData, setFormData] = useState<CreateVendorPOData>({
     vendorId: vendorPo?.vendorId || 0,
     productionLine: (vendorPo?.productionLine as CreateVendorPOData['productionLine']) || undefined,
+    orderDate: vendorPo?.orderDate || '',
     expectedDeliveryDate: vendorPo?.expectedDeliveryDate || '',
     shipVia: vendorPo?.shipVia || '',
     notes: vendorPo?.notes || '',
     externalPoNumber: vendorPo?.externalPoNumber || '',
   });
 
+  const [orderDate, setOrderDate] = useState<Date | undefined>(
+    vendorPo?.orderDate
+      ? toLocalDate(vendorPo.orderDate)
+      : vendorPo?.createdAt
+        ? toLocalDate(vendorPo.createdAt)
+        : new Date()
+  );
+
   const [deliveryDate, setDeliveryDate] = useState<Date | undefined>(
     vendorPo?.expectedDeliveryDate
-      ? new Date(vendorPo.expectedDeliveryDate)
+      ? toLocalDate(vendorPo.expectedDeliveryDate)
       : undefined
   );
 
+  const [isOrderDatePickerOpen, setIsOrderDatePickerOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   // Fetch vendors for the dropdown
-  const { data: vendorsResponse } = useQuery<{ data: any[]; meta: any }>({
+  const { data: vendorsResponse, isFetched: vendorsFetched } = useQuery<{ data: any[]; meta: any }>({
     queryKey: ['/api/vendors?pageSize=1000'],
   });
   const vendors = (vendorsResponse?.data || []).slice().sort((a: any, b: any) =>
     a.name.localeCompare(b.name)
   );
+  const [handoffApplied, setHandoffApplied] = useState(false);
+  const [isCreatingHandoffVendor, setIsCreatingHandoffVendor] = useState(false);
+  const handoffVendorName = draftBomHandoff?.vendors[0]?.trim() ?? '';
+  const matchedHandoffVendor = handoffVendorName
+    ? vendors.find((vendor: any) => vendor.name.toLowerCase() === handoffVendorName.toLowerCase())
+    : null;
+  const shouldCreateInactiveHandoffVendor =
+    !vendorPo && !!draftBomHandoff && !!handoffVendorName && vendorsFetched && !matchedHandoffVendor;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (vendorPo || handoffApplied || !draftBomHandoff || !vendorsFetched) return;
+
+    const lineSummary = draftBomHandoff.lines
+      .map((line) =>
+        [
+          line.quantity ? `Qty ${line.quantity}` : 'Qty 0',
+          line.agPartNumber || line.description,
+          line.supplierPartNumber ? `Supplier #${line.supplierPartNumber}` : '',
+          line.estimatedCost ? `Est ${formatCurrency(line.estimatedCost)}` : '',
+          line.service ? 'Service' : '',
+        ]
+          .filter(Boolean)
+          .join(' | ')
+      )
+      .join('\n');
+
+    setFormData((current) => ({
+      ...current,
+      vendorId: matchedHandoffVendor?.id ?? current.vendorId,
+      productionLine: draftBomHandoff.projectType === 'R_AND_D' ? 'R_AND_D' : draftBomHandoff.projectType === 'P2_PROJECT' ? 'P2' : current.productionLine,
+      notes: [
+        `Draft BOM handoff: ${draftBomHandoff.draftName} ${draftBomHandoff.revision}`,
+        draftBomHandoff.project ? `Project: ${draftBomHandoff.project}` : '',
+        `Vendor: ${handoffVendorName}`,
+        '',
+        lineSummary,
+        current.notes,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    }));
+    setHandoffApplied(true);
+  }, [draftBomHandoff, handoffApplied, matchedHandoffVendor, handoffVendorName, vendorPo, vendorsFetched]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (formData.vendorId === 0) {
-      toast.error('Please select a vendor');
-      return;
-    }
     if (!formData.productionLine) {
       toast.error('Please select the production line for this purchase');
       return;
     }
 
+    let vendorId = formData.vendorId;
+    if (vendorId === 0 && shouldCreateInactiveHandoffVendor) {
+      setIsCreatingHandoffVendor(true);
+      try {
+        const vendor = await apiRequest('/api/vendors', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: handoffVendorName,
+            approved: false,
+            evaluated: false,
+            isActive: false,
+            notes: `Created inactive from Draft BOM handoff: ${draftBomHandoff!.draftName} ${draftBomHandoff!.revision}`,
+            skipValidation: true,
+          }),
+        }) as { id: number; name: string };
+        vendorId = vendor.id;
+        setFormData((current) => ({ ...current, vendorId: vendor.id }));
+        queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/vendors?pageSize=1000'] });
+        toast.success(`${vendor.name} was created as an inactive vendor`);
+      } catch (error: any) {
+        toast.error(error?.message || 'Failed to create inactive vendor from Draft BOM handoff');
+        setIsCreatingHandoffVendor(false);
+        return;
+      }
+      setIsCreatingHandoffVendor(false);
+    }
+
+    if (vendorId === 0) {
+      toast.error('Please select a vendor');
+      return;
+    }
+
     onSubmit({
       ...formData,
+      vendorId,
+      orderDate: orderDate
+        ? formatDateInputValue(orderDate)
+        : undefined,
       expectedDeliveryDate: deliveryDate
-        ? deliveryDate.toISOString().split('T')[0]
+        ? formatDateInputValue(deliveryDate)
         : undefined,
     });
   };
@@ -1016,6 +1434,20 @@ function VendorPOForm({
         </Select>
       </div>
 
+      {!vendorPo && draftBomHandoff ? (
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          <div className="font-medium">Draft BOM handoff loaded</div>
+          <div className="mt-1">
+            {draftBomHandoff.lines.length} line{draftBomHandoff.lines.length === 1 ? '' : 's'} from {draftBomHandoff.draftName} for {draftBomHandoff.vendors[0]}.
+          </div>
+          {shouldCreateInactiveHandoffVendor ? (
+            <div className="mt-2 text-xs">
+              {handoffVendorName} is not in the active vendor list. Submitting will create it as an inactive vendor, then use it for this PO draft.
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div>
         <Label htmlFor="productionLine">Production Line *</Label>
         <Select
@@ -1045,6 +1477,36 @@ function VendorPOForm({
             R&D purchases can push through project allocation without the P2 compliance hold.
           </p>
         )}
+      </div>
+
+      <div>
+        <Label htmlFor="orderDate">Issue Date</Label>
+        <Popover open={isOrderDatePickerOpen} onOpenChange={setIsOrderDatePickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                'w-full justify-start text-left font-normal',
+                !orderDate && 'text-muted-foreground'
+              )}
+              data-testid="button-order-date"
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {orderDate ? format(orderDate, 'PPP') : 'Select date'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={orderDate}
+              onSelect={(date) => {
+                setOrderDate(date);
+                setIsOrderDatePickerOpen(false);
+              }}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div>
@@ -1127,8 +1589,14 @@ function VendorPOForm({
       </div>
 
       <div className="flex gap-2 pt-4">
-        <Button type="submit" className="flex-1" data-testid="button-submit">
-          {vendorPo ? 'Update' : 'Create'} Purchase Order
+        <Button type="submit" className="flex-1" data-testid="button-submit" disabled={isCreatingHandoffVendor}>
+          {isCreatingHandoffVendor
+            ? 'Creating inactive vendor...'
+            : vendorPo
+              ? 'Update Purchase Order'
+              : shouldCreateInactiveHandoffVendor
+                ? 'Create Inactive Vendor & Purchase Order'
+                : 'Create Purchase Order'}
         </Button>
         {!inline && (
           <Button
@@ -1163,337 +1631,6 @@ function VendorPOForm({
     </Dialog>
   );
 }
-
-// Small self-contained badge that opens a resend popover for 'awaiting' and 'expired' states
-export function ConfirmationBadgeResend({ vendorPo }: { vendorPo: VendorPO }) {
-  const [open, setOpen] = useState(false);
-
-  const { data: confirmationInfo } = useQuery<{
-    found: boolean;
-    email?: string;
-    expiresAt?: string;
-    usedAt?: string | null;
-  }>({
-    queryKey: ['/api/vendor-pos', vendorPo.id, 'confirmation'],
-    queryFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}/confirmation`),
-    enabled: open,
-    staleTime: 30_000,
-  });
-
-  const resendMutation = useMutation<
-    { message?: string; emailSent: boolean; emailRecipient: string },
-    Error
-  >({
-    mutationFn: () =>
-      apiRequest(`/api/vendor-pos/${vendorPo.id}/resend`, { method: 'POST' }),
-    onSuccess: (data) => {
-      toast.success(data?.message ?? 'Confirmation email resent successfully.');
-      setOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPo.id, 'confirmation'] });
-    },
-    onError: (err) => {
-      toast.error(err?.message ?? 'Failed to resend confirmation email.');
-    },
-  });
-
-  const isAwaiting = vendorPo.confirmationBadge === 'awaiting';
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <span
-          role="button"
-          tabIndex={0}
-          onPointerDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen(true);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.stopPropagation();
-              e.preventDefault();
-              setOpen(true);
-            }
-          }}
-          className={cn(
-            'inline-flex items-center gap-1 text-xs font-medium cursor-pointer hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded',
-            isAwaiting
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-red-600 dark:text-red-400'
-          )}
-        >
-          {isAwaiting ? (
-            <>
-              <Clock className="w-3.5 h-3.5" />
-              Awaiting
-            </>
-          ) : (
-            <>
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Link Expired
-            </>
-          )}
-        </span>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-64 p-3"
-        side="top"
-        align="start"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="space-y-2">
-          <p className="text-sm font-medium">
-            {isAwaiting ? 'Awaiting vendor confirmation' : 'Confirmation link expired'}
-          </p>
-          {confirmationInfo?.found && confirmationInfo.email ? (
-            <p className="text-xs text-muted-foreground">
-              Last link sent to{' '}
-              <span className="font-medium text-foreground">{confirmationInfo.email}</span>
-              .
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Resend the confirmation link to{' '}
-              <span className="font-medium">{vendorPo.vendorName ?? 'the vendor'}</span>
-              .
-            </p>
-          )}
-          <Button
-            size="sm"
-            className="w-full"
-            disabled={resendMutation.isPending}
-            onClick={() => resendMutation.mutate()}
-          >
-            {resendMutation.isPending ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                Resending…
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                Resend Confirmation
-              </>
-            )}
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ── Vendor Confirmation card content ──────────────────────────────────────────
-// Exported so automated tests can render it in isolation without needing the
-// entire VendorPOManager context.
-
-export type ConfirmationStatus = {
-  found: boolean;
-  email?: string;
-  usedAt?: string | null;
-  expiresAt?: string | null;
-};
-
-export interface VendorConfirmationCardContentProps {
-  isLoading: boolean;
-  confirmationStatus: ConfirmationStatus | undefined | null;
-  isPending: boolean;
-  onResend: () => void;
-}
-
-export function VendorConfirmationCardContent({
-  isLoading,
-  confirmationStatus,
-  isPending,
-  onResend,
-  confirmationUsedAt,
-}: VendorConfirmationCardContentProps & { confirmationUsedAt?: string | null }) {
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading confirmation status…
-      </div>
-    );
-  }
-
-  if (!confirmationStatus || !confirmationStatus.found) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground italic">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          No confirmation link on record for this PO.
-        </div>
-        <div className="pt-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onResend}
-            disabled={isPending}
-            data-testid="button-send-confirmation-link"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isPending ? 'animate-spin' : ''}`} />
-            {isPending ? 'Sending…' : 'Send Confirmation Link'}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (confirmationStatus.usedAt) {
-    return (
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
-          <CheckCircle className="h-4 w-4 shrink-0" />
-          Confirmed
-        </div>
-        <div className="text-sm text-muted-foreground">
-          {(() => {
-            const usedAt = confirmationUsedAt || confirmationStatus.usedAt;
-            const d = new Date(usedAt!);
-            const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-            return <>Confirmed on{' '}<span className="font-medium text-foreground">{datePart} at {timePart}</span></>;
-          })()}
-        </div>
-        <div className="text-sm text-muted-foreground">
-          Link sent to{' '}
-          <span className="font-medium text-foreground">
-            {confirmationStatus.email}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
-        <AlertTriangle className="h-4 w-4 shrink-0" />
-        Awaiting confirmation
-      </div>
-      <div className="text-sm text-muted-foreground">
-        Link sent to{' '}
-        <span className="font-medium text-foreground">
-          {confirmationStatus.email}
-        </span>
-      </div>
-      {confirmationStatus.expiresAt && (
-        <div className="text-sm text-muted-foreground">
-          Link expires{' '}
-          <span
-            className={`font-medium ${
-              new Date(confirmationStatus.expiresAt) < new Date()
-                ? 'text-red-600 dark:text-red-400'
-                : 'text-foreground'
-            }`}
-          >
-            {new Date(confirmationStatus.expiresAt) < new Date()
-              ? `expired on ${new Date(confirmationStatus.expiresAt).toLocaleString()}`
-              : new Date(confirmationStatus.expiresAt).toLocaleString()}
-          </span>
-        </div>
-      )}
-      <div className="pt-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onResend}
-          disabled={isPending}
-          data-testid="button-resend-confirmation-link"
-        >
-          <RefreshCw className={`w-4 h-4 mr-2 ${isPending ? 'animate-spin' : ''}`} />
-          {isPending ? 'Resending…' : 'Resend Link'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function NoLinkBadgeSend({ vendorPo }: { vendorPo: VendorPO }) {
-  const [open, setOpen] = useState(false);
-
-  const sendMutation = useMutation<
-    { message?: string; emailSent: boolean; emailRecipient: string },
-    Error
-  >({
-    mutationFn: () =>
-      apiRequest(`/api/vendor-pos/${vendorPo.id}/resend`, { method: 'POST' }),
-    onSuccess: (data) => {
-      toast.success(data?.message ?? 'Confirmation email sent successfully.');
-      setOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
-    },
-    onError: (err) => {
-      toast.error(err?.message ?? 'Failed to send confirmation email.');
-    },
-  });
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen(true);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.stopPropagation();
-              e.preventDefault();
-              setOpen(true);
-            }
-          }}
-          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground cursor-pointer hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
-        >
-          <XCircle className="w-3.5 h-3.5" />
-          No Link
-        </span>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-64 p-3"
-        side="top"
-        align="start"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="space-y-2">
-          <p className="text-sm font-medium">No confirmation sent yet</p>
-          <p className="text-xs text-muted-foreground">
-            Send the first confirmation link to{' '}
-            <span className="font-medium text-foreground">
-              {vendorPo.vendorName ?? 'the vendor'}
-            </span>
-            .
-          </p>
-          <Button
-            size="sm"
-            className="w-full"
-            disabled={sendMutation.isPending}
-            onClick={() => sendMutation.mutate()}
-          >
-            {sendMutation.isPending ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                Sending…
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                Send Confirmation
-              </>
-            )}
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ── Receipt history types ──────────────────────────────────────────────────────
 
 type ReceiptSummary = {
   id: number;
@@ -1714,6 +1851,111 @@ function ReceiptHistoryTab({ vendorPoId }: { vendorPoId: number }) {
         {receipts.map((r) => (
           <ReceiptCard key={r.id} receipt={r} />
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Transaction audit helpers for the PO detail view
+function formatTransactionAction(action: string): string {
+  return action
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatTransactionValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '-';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function VendorPOTransactionsTab({
+  transactions,
+  isLoading,
+}: {
+  transactions: VendorPOTransaction[];
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="pt-6 space-y-3">
+          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ClipboardList className="h-5 w-5" />
+          Vendor PO Transactions
+        </CardTitle>
+        <CardDescription>
+          Audit ledger activity for this RFQ / purchase order
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {transactions.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic">No audit transactions recorded for this PO yet.</p>
+        ) : (
+          <div className="divide-y rounded-md border">
+            {transactions.map((transaction) => {
+              const when = transaction.occurredAt || transaction.timestamp || transaction.recordedAt;
+              const changedEntries = Object.entries(transaction.fieldsChanged ?? {});
+              const hashPreview = transaction.rowHash ? transaction.rowHash.slice(0, 12) : null;
+
+              return (
+                <div key={transaction.id} className="p-4 space-y-2">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="font-medium text-sm">
+                        {formatTransactionAction(transaction.action)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {transaction.actorName || 'System'}
+                        {transaction.actorRole ? ` (${transaction.actorRole})` : ''}
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground md:text-right">
+                      {when ? new Date(when).toLocaleString() : 'Date not recorded'}
+                      {transaction.sequenceNumber ? (
+                        <div>Ledger #{transaction.sequenceNumber}{hashPreview ? ` | ${hashPreview}` : ''}</div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {transaction.reason ? (
+                    <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      <span className="font-medium">Reason:</span> {transaction.reason}
+                    </div>
+                  ) : null}
+
+                  {changedEntries.length > 0 ? (
+                    <div className="space-y-1 text-xs">
+                      {changedEntries.slice(0, 8).map(([field, change]) => (
+                        <div key={field} className="grid gap-1 rounded bg-muted/40 px-2 py-1 md:grid-cols-[160px_1fr]">
+                          <span className="font-medium text-muted-foreground">{field}</span>
+                          <span>
+                            {formatTransactionValue(change.before)} {'->'} {formatTransactionValue(change.after)}
+                          </span>
+                        </div>
+                      ))}
+                      {changedEntries.length > 8 ? (
+                        <div className="text-muted-foreground">+ {changedEntries.length - 8} more changed fields</div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -1957,6 +2199,7 @@ function ComplianceReviewModal({
       }) as Promise<ComplianceSaveResult>,
     onSuccess: async (saved: ComplianceSaveResult) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'compliance-review'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'issue-readiness'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
 
       // If the saved review is blocked, record it for audit trail but do NOT proceed to issue
@@ -2000,7 +2243,7 @@ function ComplianceReviewModal({
         toast.success(`Auto-selected optional statements: ${toastLines.join(', ')}`);
       }
 
-      toast.success('Compliance review approved. Proceeding to issue PO.');
+      toast.success('Compliance review saved. P2 line-item linking is now available.');
       onComplianceApproved();
       onClose();
     },
@@ -2231,7 +2474,7 @@ function ComplianceReviewModal({
             ) : (!form.secondPartyComplete || !form.vendorApproved) ? (
               <><ShieldAlert className="w-4 h-4 mr-2" />Save Blocked Review</>
             ) : (
-              <><ShieldCheck className="w-4 h-4 mr-2" />Save Review & Issue PO</>
+              <><ShieldCheck className="w-4 h-4 mr-2" />Save Review</>
             )}
           </Button>
         </DialogFooter>
@@ -2241,13 +2484,27 @@ function ComplianceReviewModal({
 }
 
 // Main component
-export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?: number } = {}) {
+export default function VendorPOManager({
+  preSelectedPoId,
+  autoOpenIssue = false,
+}: {
+  preSelectedPoId?: number;
+  autoOpenIssue?: boolean;
+} = {}) {
   const [selectedVendorPO, setSelectedVendorPO] = useState<VendorPO | null>(
     null
   );
   const [showForm, setShowForm] = useState(false);
   const [showDetailView, setShowDetailView] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
+  const [draftBomHandoff, setDraftBomHandoff] = useState<DraftBomVendorPoHandoff | null>(() => {
+    try {
+      const raw = window.localStorage.getItem(DRAFT_BOM_VENDOR_PO_HANDOFF_KEY);
+      return raw ? (JSON.parse(raw) as DraftBomVendorPoHandoff) : null;
+    } catch {
+      return null;
+    }
+  });
   // Task #83: Purchasing Controls modal
   const [purchasingControlsOpen, setPurchasingControlsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -2266,6 +2523,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   const [dialogRecipients, setDialogRecipients] = useState<EmailRecipient[]>([]);
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
+  const [emailMessage, setEmailMessage] = useState(DEFAULT_ISSUE_EMAIL_MESSAGE);
 
   // RFQ confirmation dialog state
   const [showRFQDialog, setShowRFQDialog] = useState(false);
@@ -2277,6 +2535,9 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
   const [revisionReason, setRevisionReason] = useState('');
   const [revisionPO, setRevisionPO] = useState<VendorPO | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deletePO, setDeletePO] = useState<VendorPO | null>(null);
 
   // Compliance review modal state
   const [showComplianceModal, setShowComplianceModal] = useState(false);
@@ -2285,6 +2546,17 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   const [compliancePoOptionalIds, setCompliancePoOptionalIds] = useState<number[]>([]);
 
   const queryClient = useQueryClient();
+
+  const invalidateVendorPOTransactions = (vendorPoId?: number | null) => {
+    if (vendorPoId != null) {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'transactions'] });
+    }
+  };
+
+  const clearDraftBomHandoff = () => {
+    window.localStorage.removeItem(DRAFT_BOM_VENDOR_PO_HANDOFF_KEY);
+    setDraftBomHandoff(null);
+  };
 
   // Fetch all optional settings (needed for compliance auto-selection)
   const { data: allOptionalSettings = [] } = useQuery<OptionalSetting[]>({
@@ -2321,17 +2593,25 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     enabled: !!selectedVendorPO,
   });
 
-  const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
-  const { data: confirmationStatus, isLoading: isConfirmationLoading } = useQuery<{
-    found: boolean;
-    email?: string;
-    expiresAt?: string;
-    usedAt?: string | null;
-  }>({
-    queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'confirmation'],
-    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/confirmation`),
-    enabled: !!selectedVendorPO && issuedStatuses.includes(selectedVendorPO.status),
+  const {
+    data: issueReadiness,
+    isLoading: issueReadinessLoading,
+  } = useQuery<IssueReadiness>({
+    queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'issue-readiness'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/issue-readiness`),
+    enabled: !!selectedVendorPO && ['Draft', 'RFQ Sent', 'Quote Received'].includes(selectedVendorPO.status),
   });
+
+  const {
+    data: vendorPOTransactions = [],
+    isLoading: transactionsLoading,
+  } = useQuery<VendorPOTransaction[]>({
+    queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'transactions'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/transactions`),
+    enabled: !!selectedVendorPO,
+  });
+
+  const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
 
   // Merge per-PO detail (totalLines / receivedLines / status) into selected state
   // whenever the dedicated query returns fresher data.
@@ -2356,9 +2636,23 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     if (match) {
       setSelectedVendorPO(match);
       setShowDetailView(true);
+      if (autoOpenIssue && ['Draft', 'RFQ Sent', 'Quote Received'].includes(match.status)) {
+        setNoEmailMode(false);
+        setNoEmailReason('');
+        setNoEmailConfirmed(false);
+        setEmailMessage(DEFAULT_ISSUE_EMAIL_MESSAGE);
+        setPendingStatus('Sent');
+        setShowStatusChangeDialog(true);
+        loadRecipientsForPO(match.id);
+      }
       setPreSelectApplied(true);
     }
-  }, [preSelectedPoId, vendorPOs, preSelectApplied]);
+  }, [preSelectedPoId, vendorPOs, preSelectApplied, autoOpenIssue]);
+
+  useEffect(() => {
+    if (!draftBomHandoff || selectedVendorPO || showDetailView) return;
+    setShowForm(true);
+  }, [draftBomHandoff, selectedVendorPO, showDetailView]);
 
   // Create mutation
   const createMutation = useMutation({
@@ -2367,10 +2661,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (created: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
       toast.success('Vendor purchase order created successfully');
       setShowForm(false);
+      if (created && draftBomHandoff) {
+        setSelectedVendorPO(created);
+        setShowDetailView(true);
+        setActiveTab('items');
+      }
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to create vendor purchase order');
@@ -2398,6 +2697,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       if (vars?.id != null) {
         queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vars.id] });
         queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vars.id, 'compliance-review'] });
+        invalidateVendorPOTransactions(vars.id);
       }
       toast.success('Vendor purchase order updated successfully');
       if (showForm) {
@@ -2418,13 +2718,18 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
       apiRequest(`/api/vendor-pos/${id}`, {
         method: 'DELETE',
+        body: JSON.stringify({ reason }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(variables.id);
       toast.success('Vendor purchase order deleted successfully');
+      setShowDeleteDialog(false);
+      setDeleteReason('');
+      setDeletePO(null);
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to delete vendor purchase order');
@@ -2440,6 +2745,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(selectedVendorPO?.id);
       toast.success('Status updated successfully');
       setShowStatusChangeDialog(false);
       setPendingStatus('');
@@ -2462,6 +2768,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(data?.parentPoId ?? data?.id);
       toast.success(`Revision created${data.poNumber ? `: ${data.poNumber}` : ''}. You can now edit the new draft.`);
       setShowRevisionDialog(false);
       setRevisionReason('');
@@ -2478,15 +2785,16 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     },
   });
 
-  // Issue PO mutation - sends confirmation email to vendor
+  // Issue PO mutation - sends PO email to vendor
   const issuePOMutation = useMutation({
-    mutationFn: ({ id, skipEmail = false, reason, recipients }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[] }) =>
+    mutationFn: ({ id, skipEmail = false, reason, recipients, message }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[]; message?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/issue`, {
         method: 'POST',
-        body: JSON.stringify({ skipEmail, reason, recipients }),
+        body: JSON.stringify({ skipEmail, reason, recipients, message }),
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(selectedVendorPO?.id);
       if (data.emailSent === false) {
         toast.success('PO issued internally (vendor not notified)');
       } else if (data.emailSent) {
@@ -2515,17 +2823,20 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   // Send RFQ mutation - sends quote request email to vendor
   const sendRFQMutation = useMutation({
-    mutationFn: ({ id, recipients }: { id: number; recipients: string[] }) =>
+    mutationFn: ({ id, recipients, skipEmail = false, reason }: { id: number; recipients: string[]; skipEmail?: boolean; reason?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/send-rfq`, {
         method: 'POST',
-        body: JSON.stringify({ recipients }),
+        body: JSON.stringify({ recipients, printOnly: skipEmail, reason }),
       }),
     onSuccess: (data: any, variables) => {
       getSendRFQInvalidationKeys(variables.id).forEach((key) =>
         queryClient.invalidateQueries({ queryKey: key }),
       );
+      invalidateVendorPOTransactions(variables.id);
       if (data.emailSent) {
-        toast.success(`RFQ sent to ${data.emailRecipient}`);
+        toast.success(`${data.wasResend ? 'RFQ resent' : 'RFQ sent'} to ${data.emailRecipient}`);
+      } else if (data.emailSent === false) {
+        toast.success(data.wasResend ? 'RFQ resend prepared without sending email' : 'RFQ prepared without sending email');
       } else {
         toast.error(data.message || 'Failed to send RFQ');
       }
@@ -2540,15 +2851,16 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   });
 
   const resendPOMutation = useMutation({
-    mutationFn: ({ id, recipients }: { id: number; recipients: string[] }) =>
+    mutationFn: ({ id, recipients, message }: { id: number; recipients: string[]; message?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/resend`, {
         method: 'POST',
-        body: JSON.stringify({ recipients }),
+        body: JSON.stringify({ recipients, message }),
       }),
     onSuccess: (data: any, variables) => {
       queryClient.invalidateQueries({ queryKey: getResendConfirmationKey(variables.id) });
+      invalidateVendorPOTransactions(variables.id);
       if (data.emailSent) {
-        toast.success(`PO resent! Confirmation email sent to ${data.emailRecipient}`);
+        toast.success(`PO resent! Email sent to ${data.emailRecipient}`);
       } else {
         toast.error(data.message || 'Failed to resend PO');
       }
@@ -2568,6 +2880,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(selectedVendorPO?.id);
       toast.success(`RFQ marked as ${data.status}`);
       if (selectedVendorPO) {
         setSelectedVendorPO({ ...selectedVendorPO, status: data.status, rfqOutcomeNotes: data.rfqOutcomeNotes ?? null });
@@ -2587,6 +2900,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(selectedVendorPO?.id);
       toast.success(data.archived ? 'RFQ archived' : 'RFQ unarchived');
       if (selectedVendorPO) {
         setSelectedVendorPO({ ...selectedVendorPO, archived: data.archived });
@@ -2644,14 +2958,23 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   };
 
   const handleDelete = (id: number) => {
-    if (
-      confirm('Are you sure you want to delete this vendor purchase order?')
-    ) {
-      deleteMutation.mutate(id);
-    }
+    const po = vendorPOs.find((candidate) => candidate.id === id) ?? selectedVendorPO;
+    setDeletePO(po && po.id === id ? po : ({ id } as VendorPO));
+    setDeleteReason('');
+    setShowDeleteDialog(true);
   };
 
-  const loadRecipientsForPO = async (poId: number) => {
+  const confirmDelete = () => {
+    if (!deletePO) return;
+    const reason = deleteReason.trim();
+    if (reason.length < 10) {
+      toast.error('Enter a delete reason of at least 10 characters');
+      return;
+    }
+    deleteMutation.mutate({ id: deletePO.id, reason });
+  };
+
+  async function loadRecipientsForPO(poId: number) {
     setIsLoadingRecipients(true);
     setDialogRecipients([]);
     setSelectedRecipients([]);
@@ -2670,11 +2993,11 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     } catch {
       setDialogRecipients([]);
       setSelectedRecipients([]);
-      toast.error('Could not load recipients — failed to load vendor contacts. Please close and try again.');
+      toast.error('Could not load recipients. You can still use Print Only.');
     } finally {
       setIsLoadingRecipients(false);
     }
-  };
+  }
 
   const handleOpenRFQDialog = () => {
     if (!selectedVendorPO) return;
@@ -2684,6 +3007,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   const handleOpenResendDialog = () => {
     if (!selectedVendorPO) return;
+    setEmailMessage(DEFAULT_RESEND_EMAIL_MESSAGE);
     setShowResendDialog(true);
     loadRecipientsForPO(selectedVendorPO.id);
   };
@@ -2702,16 +3026,14 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   const handleComplianceApproved = () => {
     if (!compliancePoId) return;
-    // Find the PO in the list to ensure selectedVendorPO is set
-    const poFromList = (vendorPOs as VendorPO[] | undefined)?.find((p) => p.id === compliancePoId);
-    if (poFromList) setSelectedVendorPO(poFromList);
-    // Now proceed to show the email/issue dialog
-    setNoEmailMode(false);
-    setNoEmailReason('');
-    setNoEmailConfirmed(false);
-    setPendingStatus('Sent');
-    setShowStatusChangeDialog(true);
-    loadRecipientsForPO(compliancePoId);
+    queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', compliancePoId, 'issue-readiness'] });
+    if (selectedVendorPO?.id === compliancePoId) {
+      setSelectedVendorPO({
+        ...selectedVendorPO,
+        complianceStatus: 'Reviewed',
+      });
+    }
   };
 
   const handleAutoSelectOptionals = async (newIds: number[]) => {
@@ -2735,14 +3057,10 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     }
     // Navigate into detail view so we have full PO context
     setShowDetailView(true);
-    if (isP2ProductionLine(poFromList?.productionLine)) {
-      // Show compliance review modal first before proceeding to issue
-      openComplianceModal(id);
-      return;
-    }
     setNoEmailMode(false);
     setNoEmailReason('');
     setNoEmailConfirmed(false);
+    setEmailMessage(DEFAULT_ISSUE_EMAIL_MESSAGE);
     setPendingStatus('Sent');
     setShowStatusChangeDialog(true);
     loadRecipientsForPO(id);
@@ -2779,17 +3097,13 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   const handleStatusChange = (newStatus: string) => {
     if (newStatus === 'Sent' && selectedVendorPO) {
-      if (isP2ProductionLine(selectedVendorPO.productionLine)) {
-        // P2 work stays behind the formal compliance review gate.
-        openComplianceModal(selectedVendorPO.id);
-      } else {
-        setNoEmailMode(false);
-        setNoEmailReason('');
-        setNoEmailConfirmed(false);
-        setPendingStatus('Sent');
-        setShowStatusChangeDialog(true);
-        loadRecipientsForPO(selectedVendorPO.id);
-      }
+      setNoEmailMode(false);
+      setNoEmailReason('');
+      setNoEmailConfirmed(false);
+      setEmailMessage(DEFAULT_ISSUE_EMAIL_MESSAGE);
+      setPendingStatus('Sent');
+      setShowStatusChangeDialog(true);
+      loadRecipientsForPO(selectedVendorPO.id);
       return;
     }
     setPendingStatus(newStatus);
@@ -2804,6 +3118,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           skipEmail,
           reason: skipEmail ? noEmailReason.trim() : undefined,
           recipients: skipEmail ? undefined : selectedRecipients,
+          message: skipEmail ? undefined : (emailMessage.trim() || DEFAULT_ISSUE_EMAIL_MESSAGE),
         });
         setShowStatusChangeDialog(false);
         setPendingStatus('');
@@ -2813,486 +3128,27 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     }
   };
 
+  const confirmRFQSend = (skipEmail: boolean = false) => {
+    if (!selectedVendorPO) return;
+    sendRFQMutation.mutate({
+      id: selectedVendorPO.id,
+      recipients: skipEmail ? [] : selectedRecipients,
+      skipEmail,
+      reason: skipEmail ? 'Printed and sent separately' : undefined,
+    });
+  };
+
   const handleDownloadPDF = async (poToView?: VendorPO) => {
     const po = poToView || selectedVendorPO;
     if (!po) return;
-    
-    try {
-      console.log('Starting PO view generation...');
-      
-      // Fetch line items for this PO
-      const items: VendorPOItem[] = await apiRequest(`/api/vendor-pos/${po.id}/items`);
-      console.log('Fetched items:', items);
-      
-      // Fetch vendor details to get vendor-specific PO settings
-      const vendor: any = await apiRequest(`/api/vendors/${po.vendorId}`);
-      console.log('Fetched vendor:', vendor);
-      
-      // Fetch global PO settings
-      const globalSettings: any = await apiRequest('/api/vendor-pos/settings');
-      console.log('Fetched global settings:', globalSettings);
-      
-      // Fetch central company settings
-      const companySettings: any = await apiRequest('/api/vendor-pos/company-settings');
-      console.log('Fetched company settings:', companySettings);
-      
-      // Fetch optional settings attached to this PO
-      const optionalSettings: any[] = await apiRequest(`/api/vendor-pos/${po.id}/optional-settings`);
-      console.log('Fetched optional settings:', optionalSettings);
-      
-      // Combine company info + PO contact info + PO terms
-      const settings = {
-        companyName: companySettings?.companyName || '',
-        companyAddress: companySettings?.companyAddress || '',
-        companyPhone: companySettings?.companyPhone || '',
-        companyEmail: companySettings?.companyEmail || '',
-        companyWebsite: companySettings?.companyWebsite || '',
-        contactName: globalSettings?.contactName || '',
-        contactTitle: globalSettings?.contactTitle || '',
-        contactPhone: globalSettings?.contactPhone || '',
-        contactEmail: globalSettings?.contactEmail || '',
-        termsAndConditions: vendor?.termsAndConditions || globalSettings?.termsAndConditions || '',
-        paymentTerms: vendor?.paymentTerms || globalSettings?.paymentTerms || '',
-        shippingInstructions: vendor?.shippingInstructions || globalSettings?.shippingInstructions || '',
-      };
-      
-      console.log('Building HTML content...');
-      
-      // Create a simple HTML structure for PDF conversion
-      const printWindow = window.open('', '', 'height=600,width=800');
-      if (!printWindow) {
-        toast.error('Please allow popups to view the Purchase Order');
-        return;
-      }
-      
-      console.log('Popup window opened successfully');
-      
-      const isRFQ = !po.poNumber;
-      const docTitle = isRFQ ? 'REQUEST FOR QUOTE' : 'PURCHASE ORDER';
-      const accentColor = isRFQ ? '#e67e22' : '#1a3a5c';
-      const formattedPONumber = po.poNumber ? po.poNumber.replace('VPO-', '') : '';
-      const orderDate = po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-      const deliveryDate = po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-      const lineItemTotal = items.reduce((sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
 
-      const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>${isRFQ ? 'Request for Quote' : 'Purchase Order'} - ${po.poNumber || 'Draft #' + po.id}</title>
-  
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      padding: 36px 40px;
-      color: #1a1a1a;
-      font-size: 12px;
-      line-height: 1.5;
-      position: relative;
+    const pdfWindow = window.open(`/api/vendor-pos/${po.id}/pdf`, '_blank', 'noopener,noreferrer');
+    if (!pdfWindow) {
+      toast.error('Please allow popups to view the vendor PO/RFQ PDF');
+      return;
     }
 
-    .print-controls {
-      position: fixed;
-      top: 12px;
-      right: 12px;
-      z-index: 1000;
-      display: flex;
-      gap: 8px;
-    }
-    .print-btn {
-      background-color: #2563eb;
-      color: #fff;
-      border: none;
-      padding: 8px 18px;
-      font-size: 13px;
-      font-weight: 600;
-      border-radius: 5px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-    }
-    .print-btn:hover { background-color: #1d4ed8; }
-
-    /* ── RFQ Watermark ── */
-    .rfq-watermark {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-35deg);
-      font-size: 120px;
-      font-weight: 800;
-      color: #000;
-      opacity: 0.04;
-      z-index: 0;
-      pointer-events: none;
-      white-space: nowrap;
-      letter-spacing: 8px;
-    }
-
-    /* ── Top Header Grid ── */
-    .doc-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 0;
-    }
-    .company-block h1 {
-      font-size: 22px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 4px;
-    }
-    .company-block p {
-      font-size: 12px;
-      color: #555;
-      margin: 1px 0;
-      line-height: 1.6;
-    }
-
-    .meta-panel {
-      border: 1.5px solid ${accentColor};
-      border-radius: 6px;
-      min-width: 260px;
-      max-width: 300px;
-      overflow: hidden;
-      flex-shrink: 0;
-    }
-    .meta-panel-title {
-      background-color: ${accentColor};
-      color: #fff;
-      text-align: center;
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      padding: 8px 16px;
-      text-transform: uppercase;
-    }
-    .meta-panel-body {
-      padding: 10px 16px;
-    }
-    .meta-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 3px 0;
-      font-size: 12px;
-    }
-    .meta-label { color: #666; font-weight: 500; }
-    .meta-value { font-weight: 600; color: #1a1a1a; text-align: right; }
-    .meta-divider { border-top: 1px solid #e5e5e5; margin: 6px 0; }
-    
-
-    /* ── Divider ── */
-    .section-divider {
-      border: none;
-      border-top: 1px solid #ddd;
-      margin: 20px 0;
-    }
-
-    /* ── Vendor / Ship-To Panels ── */
-    .panels-row {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-    .panel {
-      flex: 1;
-      border: 1px solid #ddd;
-      border-radius: 5px;
-      overflow: hidden;
-    }
-    .panel-header {
-      background-color: #f5f5f5;
-      padding: 6px 14px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #555;
-      border-bottom: 1px solid #ddd;
-    }
-    .panel-body {
-      padding: 12px 14px;
-      font-size: 12px;
-      line-height: 1.7;
-    }
-    .panel-body strong { color: #1a1a1a; }
-
-    /* ── Line Items Table ── */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 4px;
-    }
-    thead th {
-      background-color: #f5f5f5;
-      border-bottom: 2px solid #ccc;
-      padding: 8px 10px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-      color: #444;
-      text-align: left;
-    }
-    thead th.num { text-align: right; }
-    tbody td {
-      padding: 8px 10px;
-      border-bottom: 1px solid #eee;
-      font-size: 12px;
-      vertical-align: top;
-    }
-    tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    tbody tr:nth-child(even) { background-color: #fafafa; }
-    tbody td small { color: #777; font-size: 11px; }
-
-    /* ── Totals Box ── */
-    .totals-box {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 4px;
-      margin-bottom: 24px;
-    }
-    .totals-inner {
-      background-color: #f9f9f9;
-      border: 1px solid #e0e0e0;
-      border-radius: 5px;
-      padding: 12px 24px;
-      min-width: 220px;
-      text-align: right;
-    }
-    .totals-inner .total-label {
-      font-size: 12px;
-      color: #666;
-      font-weight: 500;
-    }
-    .totals-inner .total-amount {
-      font-size: 14px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-top: 2px;
-    }
-
-    /* ── Notes ── */
-    .notes-section {
-      margin-bottom: 20px;
-    }
-    .section-label {
-      font-size: 13px;
-      font-weight: 700;
-      color: #333;
-      margin-bottom: 4px;
-    }
-    .notes-body {
-      font-size: 12px;
-      color: #444;
-      line-height: 1.6;
-    }
-
-    /* ── Footer Terms ── */
-    .terms-section {
-      margin-top: 28px;
-      padding-top: 16px;
-      border-top: 1px solid #ddd;
-    }
-    .term-block {
-      margin-bottom: 14px;
-    }
-    .term-block-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: #333;
-      margin-bottom: 3px;
-    }
-    .term-block-body {
-      font-size: 11px;
-      color: #555;
-      white-space: pre-wrap;
-      line-height: 1.6;
-    }
-    .optional-item {
-      margin-top: 8px;
-      padding-left: 12px;
-    }
-    .optional-item-name {
-      font-size: 11px;
-      font-weight: 700;
-      color: #444;
-    }
-    .optional-item-body {
-      font-size: 11px;
-      color: #555;
-      white-space: pre-wrap;
-      margin-top: 2px;
-      line-height: 1.5;
-    }
-
-    /* ── Contact Strip ── */
-    .contact-strip {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 20px;
-      padding: 10px 14px;
-      background-color: #f9f9f9;
-      border: 1px solid #e5e5e5;
-      border-radius: 4px;
-      font-size: 12px;
-    }
-    .contact-strip strong { color: #555; font-weight: 600; }
-
-    @media print {
-      body { padding: 20px; }
-      .print-controls { display: none !important; }
-      .rfq-watermark { position: fixed; }
-    }
-  </style>
-</head>
-<body>
-  <div class="print-controls">
-    <button class="print-btn" onclick="window.print()">
-      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="6 9 6 2 18 2 18 9"></polyline>
-        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-        <rect x="6" y="14" width="12" height="8"></rect>
-      </svg>
-      Print
-    </button>
-  </div>
-
-  ${isRFQ ? '<div class="rfq-watermark">REQUEST FOR QUOTE</div>' : ''}
-
-  <!-- ── Header: Company + Meta Panel ── -->
-  <div class="doc-header">
-    <div class="company-block">
-      ${settings.companyName ? '<h1>' + settings.companyName + '</h1>' : ''}
-      ${settings.companyAddress ? '<p style="white-space:pre-wrap;">' + settings.companyAddress + '</p>' : ''}
-      ${settings.companyPhone ? '<p>' + settings.companyPhone + '</p>' : ''}
-      ${settings.companyWebsite ? '<p>' + settings.companyWebsite + '</p>' : ''}
-    </div>
-    <div class="meta-panel">
-      <div class="meta-panel-title">${docTitle}</div>
-      <div class="meta-panel-body">
-        ${isRFQ
-          ? '<div style="text-align:center;color:#e67e22;font-weight:600;font-size:11px;padding:2px 0;">Non-binding quote request</div>'
-          : '<div class="meta-row"><span class="meta-label">PO Number</span><span class="meta-value">' + formattedPONumber + '</span></div>'
-        }
-        ${po.externalPoNumber ? '<div class="meta-row"><span class="meta-label">Legacy ERP PO #</span><span class="meta-value">' + po.externalPoNumber + '</span></div>' : ''}
-        <div class="meta-row"><span class="meta-label">Date</span><span class="meta-value">${orderDate}</span></div>
-        <div class="meta-row"><span class="meta-label">Delivery</span><span class="meta-value">${deliveryDate}</span></div>
-        <div class="meta-row"><span class="meta-label">Ship Via</span><span class="meta-value">${po.shipVia || 'N/A'}</span></div>
-        <div class="meta-row"><span class="meta-label">Status</span><span class="meta-value">${po.status}</span></div>
-      </div>
-    </div>
-  </div>
-
-  <hr class="section-divider" />
-
-  <!-- ── Purchasing Contact ── -->
-  ${settings.contactName || settings.contactPhone || settings.contactEmail ? '<div class="contact-strip"><div><strong>Purchasing Contact:</strong> ' + (settings.contactName || '') + (settings.contactTitle ? ', ' + settings.contactTitle : '') + '</div>' + (settings.contactPhone || settings.contactEmail ? '<div>' + (settings.contactPhone || '') + (settings.contactPhone && settings.contactEmail ? ' | ' : '') + (settings.contactEmail || '') + '</div>' : '') + '</div>' : ''}
-
-  <!-- ── Vendor + Ship-To Panels ── -->
-  <div class="panels-row">
-    <div class="panel">
-      <div class="panel-header">Vendor</div>
-      <div class="panel-body">
-        <strong>${po.vendorName || 'Vendor ID: ' + po.vendorId}</strong>
-        ${vendor?.street ? '<br/>' + vendor.street : (vendor?.address ? '<br/>' + vendor.address : '')}
-        ${vendor?.city || vendor?.state || vendor?.zip_code ? '<br/>' + [vendor.city, vendor.state].filter(Boolean).join(', ') + (vendor.zip_code ? ' ' + vendor.zip_code : '') : ''}
-        ${vendor?.phone ? '<br/>Ph: ' + vendor.phone : ''}
-        ${vendor?.email ? '<br/>' + vendor.email : ''}
-        ${vendor?.contactPerson ? '<br/>Attn: ' + vendor.contactPerson : ''}
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-header">Ship To</div>
-      <div class="panel-body">
-        <strong>${settings.companyName || ''}</strong>
-        ${settings.companyAddress ? '<br/><span style="white-space:pre-wrap;">' + settings.companyAddress + '</span>' : ''}
-        ${settings.companyPhone ? '<br/>Ph: ' + settings.companyPhone : ''}
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Line Items ── -->
-  <table>
-    <thead>
-      <tr>
-        <th style="width:40px;">Line</th>
-        <th>Supplier Part #</th>
-        <th>Description</th>
-        <th class="num" style="width:70px;">Qty</th>
-        <th style="width:60px;">Unit</th>
-        <th class="num" style="width:90px;">Unit Price</th>
-        <th class="num" style="width:100px;">Line Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${items.map(item => {
-        const qty = Number(item.quantity) || 0;
-        const price = Number(item.unitPrice) || 0;
-        const lineTotal = qty * price;
-        return '<tr>' +
-          '<td>' + item.lineNumber + '</td>' +
-          '<td>' + (item.supplierPartNumber || '-') + '</td>' +
-          '<td>' + (item.description || '-') +
-            (item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit
-              ? '<br/><small>(' + Number(item.purchaseQty).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + item.purchaseUnit + ' ordered)</small>'
-              : '') +
-          '</td>' +
-          '<td class="num">' + qty.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
-          '<td>' + (item.vendorUnit || item.uom || '-') + '</td>' +
-          '<td class="num">$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
-          '<td class="num">$' + lineTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
-        '</tr>';
-      }).join('')}
-    </tbody>
-  </table>
-
-  <!-- ── Totals ── -->
-  <div class="totals-box">
-    <div class="totals-inner">
-      <div class="total-label">Total</div>
-      <div class="total-amount">$${lineItemTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-    </div>
-  </div>
-
-  <!-- ── Notes ── -->
-  ${po.notes ? '<div class="notes-section"><div class="section-label">Notes</div><div class="notes-body">' + po.notes + '</div></div>' : ''}
-
-  <!-- ── Terms / Footer ── -->
-  ${settings.termsAndConditions || settings.paymentTerms || settings.shippingInstructions || optionalSettings.length > 0 ? '<div class="terms-section">' +
-    (settings.paymentTerms ? '<div class="term-block"><div class="term-block-title">Payment Terms</div><div class="term-block-body">' + settings.paymentTerms + '</div></div>' : '') +
-    (settings.shippingInstructions ? '<div class="term-block"><div class="term-block-title">Shipping Instructions</div><div class="term-block-body">' + settings.shippingInstructions + '</div></div>' : '') +
-    (settings.termsAndConditions ? '<div class="term-block"><div class="term-block-title">Terms and Conditions</div><div class="term-block-body">' + settings.termsAndConditions + '</div></div>' : '') +
-    (optionalSettings.length > 0 ? '<div class="term-block"><div class="term-block-title">Additional Requirements</div>' +
-      optionalSettings.map(function(s, i) { return '<div class="optional-item"><div class="optional-item-name">' + (i+1) + '. ' + s.name + '</div><div class="optional-item-body">' + s.statement + '</div></div>'; }).join('') +
-    '</div>' : '') +
-  '</div>' : ''}
-
-  
-</body>
-</html>
-      `;
-      
-      console.log('Writing HTML to popup window...');
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-      console.log('HTML written successfully');
-      
-      // Window stays open for viewing - user can print if they want
-      toast.success(po.poNumber ? 'Purchase Order opened in new window' : 'Request for Quote opened in new window');
-      
-    } catch (error) {
-      console.error('PDF generation error:', error);
-      console.error('Error details:', {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      toast.error('Failed to view Purchase Order: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    }
+    toast.success(po.poNumber ? 'Purchase Order PDF opened' : 'Request for Quote PDF opened');
   };
 
   const getNextStatus = (currentStatus: string): string | null => {
@@ -3435,7 +3291,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               size="sm"
               onClick={() => setPurchasingControlsOpen(true)}
               data-testid="button-purchasing-controls"
-              title="Requisition link, competition method, FAR flowdowns, debarment evidence, direct-PO exception"
+              title="Requisition link, competition method, FAR flowdowns, direct-PO exception"
             >
               Purchasing Controls
             </Button>
@@ -3452,6 +3308,20 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               >
                 <Send className="w-4 h-4 mr-2" />
                 {sendRFQMutation.isPending ? 'Sending...' : 'Send RFQ'}
+              </Button>
+            )}
+
+            {selectedVendorPO.status === 'RFQ Sent' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenRFQDialog}
+                disabled={sendRFQMutation.isPending}
+                className="text-orange-600 hover:text-orange-800 border-orange-300 hover:border-orange-400"
+                data-testid="button-resend-rfq"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${sendRFQMutation.isPending ? 'animate-spin' : ''}`} />
+                {sendRFQMutation.isPending ? 'Resending...' : 'Resend RFQ'}
               </Button>
             )}
 
@@ -3625,6 +3495,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           </div>
         )}
 
+        {['Draft', 'RFQ Sent', 'Quote Received'].includes(selectedVendorPO.status) && (
+          <IssueReadinessCard
+            readiness={issueReadiness}
+            isLoading={issueReadinessLoading}
+            onOpenPurchasingControls={() => setPurchasingControlsOpen(true)}
+            onOpenComplianceReview={() => openComplianceModal(selectedVendorPO.id)}
+          />
+        )}
+
         {/* RFQ Outcome Dialog (Declined / Expired) */}
         <Dialog
           open={showRfqOutcomeDialog}
@@ -3718,20 +3597,35 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                   <AlertDialogTitle>Issue Purchase Order</AlertDialogTitle>
                   <AlertDialogDescription>
                     {noEmailMode
-                      ? 'Provide a reason for issuing this PO without notifying the vendor.'
+                      ? 'The vendor will not be emailed. A default audit reason will be used if this is left blank.'
                       : 'Choose how to issue this purchase order.'}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
 
                 {!noEmailMode && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Email Recipients</Label>
-                    <RecipientPickerList
-                      recipients={dialogRecipients}
-                      selected={selectedRecipients}
-                      onChange={setSelectedRecipients}
-                      isLoading={isLoadingRecipients}
-                    />
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Email Recipients</Label>
+                      <RecipientPickerList
+                        recipients={dialogRecipients}
+                        selected={selectedRecipients}
+                        onChange={setSelectedRecipients}
+                        isLoading={isLoadingRecipients}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="vendor-po-email-message" className="text-sm font-medium">
+                        Email Message
+                      </Label>
+                      <Textarea
+                        id="vendor-po-email-message"
+                        value={emailMessage}
+                        onChange={(e) => setEmailMessage(e.target.value)}
+                        rows={4}
+                        className="resize-none"
+                        data-testid="textarea-vendor-po-email-message"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -3743,7 +3637,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="no-email-reason" className="text-sm font-medium">
-                        Reason <span className="text-red-500">*</span>
+                        Reason <span className="text-muted-foreground">(optional)</span>
                       </Label>
                       <Textarea
                         id="no-email-reason"
@@ -3753,11 +3647,6 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                         rows={3}
                         className="resize-none"
                       />
-                      {noEmailReason.length > 0 && noEmailReason.trim().length < 10 && (
-                        <p className="text-xs text-red-500">
-                          Must be at least 10 characters ({noEmailReason.trim().length}/10)
-                        </p>
-                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Checkbox
@@ -3787,11 +3676,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                       </Button>
                       <Button
                         onClick={() => confirmStatusChange(true)}
-                        disabled={
-                          noEmailReason.trim().length < 10 ||
-                          !noEmailConfirmed ||
-                          issuePOMutation.isPending
-                        }
+                        disabled={issuePOMutation.isPending}
                         className="bg-amber-600 hover:bg-amber-700 text-white"
                         data-testid="button-confirm-internal-issue"
                       >
@@ -3848,9 +3733,9 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         <AlertDialog open={showRFQDialog} onOpenChange={setShowRFQDialog}>
           <AlertDialogContent className="sm:max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle>Send Request for Quote</AlertDialogTitle>
+              <AlertDialogTitle>{selectedVendorPO?.status === 'RFQ Sent' ? 'Resend Request for Quote' : 'Send Request for Quote'}</AlertDialogTitle>
               <AlertDialogDescription>
-                Select the recipients for this RFQ email. At least one recipient must be checked.
+                Select the recipients for this RFQ email, or print it without sending email.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-2">
@@ -3862,20 +3747,51 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                 isLoading={isLoadingRecipients}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="vendor-po-resend-message" className="text-sm font-medium">Email Message</Label>
+              <Textarea
+                id="vendor-po-resend-message"
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+                rows={4}
+                className="resize-none"
+                data-testid="textarea-vendor-po-resend-message"
+              />
+            </div>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <Button
+                variant="outline"
                 onClick={() => {
                   if (selectedVendorPO) {
-                    sendRFQMutation.mutate({ id: selectedVendorPO.id, recipients: selectedRecipients });
+                    sendRFQMutation.mutate({
+                      id: selectedVendorPO.id,
+                      recipients: [],
+                      skipEmail: true,
+                      reason: 'Printed and sent separately',
+                    });
                   }
                 }}
-                disabled={sendRFQMutation.isPending || selectedRecipients.length === 0}
+                disabled={sendRFQMutation.isPending}
+                data-testid="button-print-only-rfq"
+              >
+                Print Only
+              </Button>
+              <Button
+                onClick={() => {
+                  if (selectedVendorPO) {
+                    sendRFQMutation.mutate({
+                      id: selectedVendorPO.id,
+                      recipients: selectedRecipients,
+                    });
+                  }
+                }}
+                disabled={sendRFQMutation.isPending || selectedRecipients.length === 0 || isLoadingRecipients}
                 data-testid="button-confirm-send-rfq"
               >
                 {sendRFQMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</>
-                ) : 'Send RFQ'}
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{selectedVendorPO?.status === 'RFQ Sent' ? 'Resending...' : 'Sending...'}</>
+                ) : selectedVendorPO?.status === 'RFQ Sent' ? 'Resend RFQ' : 'Send RFQ'}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -3887,7 +3803,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
             <AlertDialogHeader>
               <AlertDialogTitle>Resend Purchase Order</AlertDialogTitle>
               <AlertDialogDescription>
-                Select the recipients for this resend email. A fresh confirmation link will be included. At least one recipient must be checked.
+                Select the recipients for this resend email. At least one recipient must be checked.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-2">
@@ -3904,7 +3820,11 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               <Button
                 onClick={() => {
                   if (selectedVendorPO) {
-                    resendPOMutation.mutate({ id: selectedVendorPO.id, recipients: selectedRecipients });
+                    resendPOMutation.mutate({
+                      id: selectedVendorPO.id,
+                      recipients: selectedRecipients,
+                      message: emailMessage.trim() || DEFAULT_RESEND_EMAIL_MESSAGE,
+                    });
                   }
                 }}
                 disabled={resendPOMutation.isPending || selectedRecipients.length === 0}
@@ -3933,6 +3853,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
             </TabsTrigger>
             <TabsTrigger value="receipts" data-testid="tab-receipts">
               Receipts
+            </TabsTrigger>
+            <TabsTrigger value="transactions" data-testid="tab-transactions">
+              <ClipboardList className="mr-1 h-4 w-4" />
+              Transactions
+              {vendorPOTransactions.length > 0 ? (
+                <span className="ml-1 rounded-full bg-muted px-1.5 text-xs">
+                  {vendorPOTransactions.length}
+                </span>
+              ) : null}
             </TabsTrigger>
           </TabsList>
 
@@ -3972,61 +3901,36 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               </CardContent>
             </Card>
 
-            {!issuedStatuses.includes(selectedVendorPO.status) && selectedVendorPO.confirmationUsedAt && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-muted-foreground" />
-                    Vendor Confirmation
-                  </CardTitle>
-                  <CardDescription>
-                    This PO has a recorded vendor confirmation date
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
-                      <CheckCircle className="h-4 w-4 shrink-0" />
-                      Confirmed
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {(() => {
-                        const d = new Date(selectedVendorPO.confirmationUsedAt!);
-                        const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                        const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                        return <>Confirmed on{' '}<span className="font-medium text-foreground">{datePart} at {timePart}</span></>;
-                      })()}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {issuedStatuses.includes(selectedVendorPO.status) && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-muted-foreground" />
-                    Vendor Confirmation
-                  </CardTitle>
-                  <CardDescription>
-                    Whether the vendor has acknowledged receipt of this purchase order
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <VendorConfirmationCardContent
-                    isLoading={isConfirmationLoading}
-                    confirmationStatus={confirmationStatus}
-                    isPending={resendPOMutation.isPending}
-                    onResend={handleOpenResendDialog}
-                    confirmationUsedAt={selectedVendorPO.confirmationUsedAt}
-                  />
-                </CardContent>
-              </Card>
-            )}
           </TabsContent>
 
           <TabsContent value="items" className="space-y-4">
+            {draftBomHandoff ? (
+              <Card className="border-blue-200 bg-blue-50/70">
+                <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-blue-950">
+                      Draft BOM lines ready for this Vendor PO
+                    </div>
+                    <div className="mt-1 text-sm text-blue-900">
+                      {draftBomHandoff.lines.length} line{draftBomHandoff.lines.length === 1 ? '' : 's'} from {draftBomHandoff.draftName}.
+                    </div>
+                    <div className="mt-2 space-y-1 text-xs text-blue-900">
+                      {draftBomHandoff.lines.slice(0, 5).map((line) => (
+                        <div key={line.id}>
+                          {line.quantity} x {line.agPartNumber || line.description}
+                          {line.supplierPartNumber ? ` | Supplier #${line.supplierPartNumber}` : ''}
+                          {line.estimatedCost ? ` | Est ${formatCurrency(line.estimatedCost)}` : ''}
+                        </div>
+                      ))}
+                      {draftBomHandoff.lines.length > 5 ? <div>...and {draftBomHandoff.lines.length - 5} more</div> : null}
+                    </div>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={clearDraftBomHandoff}>
+                    Clear handoff
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
             <VendorPOItemSelector
               vendorPoId={selectedVendorPO.id}
               vendorId={selectedVendorPO.vendorId}
@@ -4043,6 +3947,13 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
           <TabsContent value="receipts" className="space-y-4">
             <ReceiptHistoryTab vendorPoId={selectedVendorPO.id} />
+          </TabsContent>
+
+          <TabsContent value="transactions" className="space-y-4">
+            <VendorPOTransactionsTab
+              transactions={vendorPOTransactions}
+              isLoading={transactionsLoading}
+            />
           </TabsContent>
         </Tabs>
 
@@ -4085,6 +3996,31 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           Create Vendor PO
         </Button>
       </div>
+
+      {draftBomHandoff ? (
+        <Card className="border-blue-200 bg-blue-50/70">
+          <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-blue-950">
+                Draft BOM handoff: {draftBomHandoff.draftName} {draftBomHandoff.revision}
+              </div>
+              <div className="mt-1 text-sm text-blue-900">
+                {draftBomHandoff.lines.length} line{draftBomHandoff.lines.length === 1 ? '' : 's'} for {draftBomHandoff.vendors[0]}.
+                Create the Vendor PO draft, then use Line Items to finish RFQ details.
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" onClick={handleCreate}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create from BOM
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={clearDraftBomHandoff}>
+                Clear
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Tab Filter Bar */}
       <div className="flex items-center gap-2">
@@ -4248,72 +4184,6 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                     <Badge className={getStatusColor(vendorPo.status)}>
                       {vendorPo.status}
                     </Badge>
-                    {vendorPo.confirmationBadge === 'confirmed' && (
-                      <TooltipProvider>
-                        <Tooltip className="inline-flex w-auto">
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 cursor-default">
-                              <CheckCircle className="w-3.5 h-3.5" />
-                              Confirmed
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent className="w-auto px-3 py-1.5 text-xs">
-                            {vendorPo.confirmationUsedAt
-                              ? `Vendor confirmed on ${new Date(vendorPo.confirmationUsedAt).toLocaleString()}`
-                              : 'Vendor confirmed'}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                    {(vendorPo.confirmationBadge === 'awaiting' ||
-                      vendorPo.confirmationBadge === 'expired') &&
-                      (['Sent', 'Partially Received'].includes(vendorPo.status) ? (
-                        <ConfirmationBadgeResend vendorPo={vendorPo} />
-                      ) : (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                className={cn(
-                                  'inline-flex items-center gap-1 text-xs font-medium',
-                                  vendorPo.confirmationBadge === 'awaiting'
-                                    ? 'text-amber-600 dark:text-amber-400'
-                                    : 'text-red-600 dark:text-red-400'
-                                )}
-                              >
-                                {vendorPo.confirmationBadge === 'awaiting' ? (
-                                  <>
-                                    <Clock className="w-3.5 h-3.5" />
-                                    Awaiting
-                                  </>
-                                ) : (
-                                  <>
-                                    <AlertTriangle className="w-3.5 h-3.5" />
-                                    Link Expired
-                                  </>
-                                )}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="w-auto px-3 py-1.5 text-xs">
-                              {vendorPo.confirmationBadge === 'awaiting'
-                                ? 'Awaiting vendor confirmation'
-                                : 'Confirmation link expired'}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ))}
-                    {vendorPo.confirmationBadge === 'no_link' &&
-                      (['Sent', 'Partially Received'].includes(vendorPo.status) ? (
-                        <NoLinkBadgeSend vendorPo={vendorPo} />
-                      ) : (
-                        <span
-                          title="No confirmation link sent — send not available for fully received POs"
-                          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground"
-                        >
-                          <XCircle className="w-3.5 h-3.5" />
-                          No Link
-                        </span>
-                      ))}
                     {/* Compliance status badge — shown for all POs at all statuses */}
                     <ComplianceBadge
                       status={vendorPo.complianceStatus}
@@ -4359,7 +4229,58 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           setSelectedVendorPO(null);
         }}
         onSubmit={handleFormSubmit}
+        draftBomHandoff={!selectedVendorPO ? draftBomHandoff : null}
       />
+
+      {/* Delete Vendor PO Dialog */}
+      <AlertDialog
+        open={showDeleteDialog}
+        onOpenChange={(open) => {
+          setShowDeleteDialog(open);
+          if (!open) {
+            setDeleteReason('');
+            setDeletePO(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {deletePO?.poNumber || (deletePO ? `Draft #${deletePO.id}` : 'Vendor PO')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes the vendor purchase order. A reason is required and will be saved to the audit ledger.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="vendor-po-delete-reason" className="text-sm font-medium">
+              Delete Reason *
+            </Label>
+            <Textarea
+              id="vendor-po-delete-reason"
+              placeholder="Explain why this vendor PO is being deleted..."
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              rows={3}
+              data-testid="input-delete-vendor-po-reason"
+            />
+            <p className="text-xs text-muted-foreground">
+              Minimum 10 characters.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-vendor-po">Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending || deleteReason.trim().length < 10}
+              data-testid="button-confirm-delete-vendor-po"
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete PO'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Create Revision Dialog */}
       <AlertDialog open={showRevisionDialog} onOpenChange={setShowRevisionDialog}>
@@ -4426,7 +4347,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
       {/* Task #83: Purchasing Controls Modal — captures requisition link,
           competition method, sole-source justification, FAR flowdown
-          checklist, debarment-check evidence, and direct-PO exception. */}
+          checklist, and direct-PO exception. */}
       {selectedVendorPO && (
         <PurchasingControlsDialog
           open={purchasingControlsOpen}
@@ -4435,6 +4356,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           onChanged={() => {
             queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
             queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', selectedVendorPO.id] });
+            queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', selectedVendorPO.id, 'issue-readiness'] });
           }}
         />
       )}
@@ -4482,6 +4404,15 @@ function PurchasingControlsDialog({
     onError: (e: any) => toast.error(e?.message ?? 'Save failed'),
   });
 
+  const recordException = useMutation({
+    mutationFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}/direct-po-exception`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: exceptionReason }),
+    }),
+    onSuccess: () => { toast.success('Direct-PO exception approved'); setExceptionReason(''); onChanged(); },
+    onError: (e: any) => toast.error(e?.message ?? 'Exception failed'),
+  });
+
   const recordDebarment = useMutation({
     mutationFn: () => apiRequest('/api/vendor-debarment-checks', {
       method: 'POST',
@@ -4496,15 +4427,6 @@ function PurchasingControlsDialog({
     }),
     onSuccess: () => { toast.success('Debarment check recorded'); setDebarmentNotes(''); onChanged(); },
     onError: (e: any) => toast.error(e?.message ?? 'Record failed'),
-  });
-
-  const recordException = useMutation({
-    mutationFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}/direct-po-exception`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: exceptionReason }),
-    }),
-    onSuccess: () => { toast.success('Direct-PO exception approved'); setExceptionReason(''); onChanged(); },
-    onError: (e: any) => toast.error(e?.message ?? 'Exception failed'),
   });
 
   // The backend uses PUT /api/far-flowdown-clauses/po/:poId with the FULL list
@@ -4540,6 +4462,10 @@ function PurchasingControlsDialog({
           <DialogTitle>Purchasing Controls — PO #{vendorPo.poNumber ?? vendorPo.id}</DialogTitle>
         </DialogHeader>
         <div className="space-y-5">
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Purchasing controls are temporarily deactivated for PO issuance. Competition method, requisition linkage,
+            FAR flowdowns, and direct-PO exceptions can still be recorded here, but blank values will not prevent issuing.
+          </div>
           <section className="space-y-2">
             <h3 className="font-semibold">Requisition & Competition</h3>
             <div className="grid grid-cols-2 gap-3">
@@ -4548,7 +4474,7 @@ function PurchasingControlsDialog({
                 <Input value={requisitionId} onChange={(e) => setRequisitionId(e.target.value)} placeholder="APPROVED requisition id" data-testid="input-po-requisition-id" />
               </div>
               <div>
-                <Label>Competition Method</Label>
+                <Label>Competition Method <span className="text-muted-foreground">(optional while deactivated)</span></Label>
                 <select className="w-full border rounded px-2 py-2 text-sm" value={competitionMethod} onChange={(e) => setCompetitionMethod(e.target.value)} data-testid="select-po-competition-method">
                   <option value="">— select —</option>
                   <option value="competed">Competed</option>
@@ -4599,7 +4525,7 @@ function PurchasingControlsDialog({
             </div>
           </section>
 
-          <section className="space-y-2">
+          <section className="hidden">
             <h3 className="font-semibold">Debarment Check Evidence</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>

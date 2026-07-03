@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, Home, History, Settings, Volume2, VolumeX, Lock, Smartphone, Volume1 } from 'lucide-react';
+import { Loader2, Pause, Play, SkipForward, Square, Timer, AlertCircle, Home, History, Settings, Volume2, VolumeX, Smartphone, Volume1, CalendarDays, Fingerprint, ScanBarcode } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -29,6 +29,9 @@ import { initAuditSink } from '@/lib/timerAuditSink';
 interface ProductionProgramRun {
   id: string;
   programId: string;
+  itemIdentifier?: string | null;
+  travelerId?: string | null;
+  travelerNumber?: string | null;
   startedByUserId: number;
   instanceName: string | null;
   sku: string | null;
@@ -88,6 +91,13 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function formatStartDay(ts: string): string {
+  const started = new Date(ts);
+  const today = new Date();
+  const isToday = started.toDateString() === today.toDateString();
+  return `${started.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}${isToday ? ' (today)' : ''}`;
+}
+
 function getStatusColor(status: string): string {
   switch (status) {
     case 'running':
@@ -122,7 +132,7 @@ function getStatusLabel(status: string): string {
   }
 }
 
-function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { run: RunWithDetails; onTimerEvent: (event: Omit<TimerEvent, 'timestamp'>) => void; toast: ReturnType<typeof useToast>['toast']; requireAuth: (action: () => void, description?: string) => void; getAuthHeaders: () => Record<string, string> }) {
+function TimerCard({ run, onTimerEvent, toast, requireFreshAuth, getAuthHeaders }: { run: RunWithDetails; onTimerEvent: (event: Omit<TimerEvent, 'timestamp'>) => void; toast: ReturnType<typeof useToast>['toast']; requireFreshAuth: (action: () => void, description?: string) => void; getAuthHeaders: () => Record<string, string> }) {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
   const [hasTriggeredTimeout, setHasTriggeredTimeout] = useState(false);
@@ -269,6 +279,7 @@ function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { 
   const estimatedCompletion = totalProgramDuration > 0
     ? new Date(new Date(run.startedAt).getTime() + (totalProgramDuration + currentPauseSeconds) * 1000)
     : null;
+  const itemIdentifier = run.itemIdentifier || run.travelerNumber || run.serialNumber || null;
 
   return (
     <Card className="border shadow-sm hover:shadow-md transition-shadow">
@@ -288,10 +299,23 @@ function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { 
       </CardHeader>
       <CardContent className="space-y-3 pt-0">
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+          {itemIdentifier && (
+            <div className="flex items-center gap-1.5 col-span-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-800 dark:bg-slate-900">
+              <Fingerprint className="h-3.5 w-3.5 text-slate-500" />
+              <span className="text-xs text-muted-foreground">Item:</span>
+              <span className="font-mono text-sm font-semibold">{itemIdentifier}</span>
+            </div>
+          )}
           {run.serialNumber && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-muted-foreground">Serial:</span>
               <span className="font-mono text-sm">{run.serialNumber}</span>
+            </div>
+          )}
+          {run.travelerNumber && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Traveler:</span>
+              <span className="font-mono text-sm">{run.travelerNumber}</span>
             </div>
           )}
           {run.mandrelNumber && (
@@ -372,13 +396,23 @@ function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { 
           )}
         </div>
 
+        <div className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs dark:border-slate-800 dark:bg-slate-950">
+          <span className="flex items-center gap-1.5 text-muted-foreground uppercase tracking-wide">
+            <CalendarDays className="h-3.5 w-3.5" />
+            Put in
+          </span>
+          <span className="font-semibold text-slate-700 dark:text-slate-200">
+            {formatStartDay(run.startedAt)}
+          </span>
+        </div>
+
         <div className="flex gap-2 pt-1">
           {run.status === 'running' && (
             <Button
               size="sm"
               variant="outline"
               className="flex-1 h-9 text-sm font-medium"
-              onClick={() => requireAuth(() => pauseMutation.mutate(), 'pause this timer')}
+              onClick={() => requireFreshAuth(() => pauseMutation.mutate(), 'pause this timer')}
               disabled={pauseMutation.isPending}
             >
               {pauseMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pause className="w-3.5 h-3.5 mr-1.5" />}
@@ -390,7 +424,7 @@ function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { 
             <Button
               size="sm"
               className="flex-1 h-9 text-sm font-medium bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => requireAuth(() => resumeMutation.mutate(), 'resume this timer')}
+              onClick={() => requireFreshAuth(() => resumeMutation.mutate(), 'resume this timer')}
               disabled={resumeMutation.isPending}
             >
               {resumeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
@@ -402,7 +436,7 @@ function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { 
             <Button
               size="sm"
               className="flex-1 h-9 text-sm font-medium bg-sky-600 hover:bg-sky-700"
-              onClick={() => requireAuth(() => advanceMutation.mutate(), 'advance to next step')}
+              onClick={() => requireFreshAuth(() => advanceMutation.mutate(), 'advance to next step')}
               disabled={advanceMutation.isPending}
             >
               {advanceMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <SkipForward className="w-3.5 h-3.5 mr-1.5" />}
@@ -414,7 +448,7 @@ function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { 
             size="sm"
             variant="outline"
             className="h-9 px-3 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
-            onClick={() => requireAuth(() => stopMutation.mutate(), 'stop this timer')}
+            onClick={() => requireFreshAuth(() => stopMutation.mutate(), 'stop this timer')}
             disabled={stopMutation.isPending}
           >
             {stopMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
@@ -456,10 +490,10 @@ export default function ProductionStationDashboard() {
   const { toast } = useToast();
   
   const {
-    isAuthenticated,
-    user: authUser,
     showAuthModal,
+    actionDescription,
     requireAuth,
+    requireFreshAuth,
     handleAuthSuccess,
     handleAuthModalClose,
     getAuthHeaders,
@@ -601,8 +635,8 @@ export default function ProductionStationDashboard() {
               className="hidden md:inline-flex h-9 bg-emerald-600 hover:bg-emerald-700"
               onClick={() => setStartModalOpen(true)}
             >
-              <Plus className="w-4 h-4 mr-1.5" />
-              Start Timer
+              <ScanBarcode className="w-4 h-4 mr-1.5" />
+              Scan Traveler
             </Button>
             <div className="relative">
               <Button
@@ -716,7 +750,36 @@ export default function ProductionStationDashboard() {
         <StartProductionTimerModal
           open={startModalOpen}
           onOpenChange={setStartModalOpen}
+          enableTravelerScan
+          requireAuth={requireAuth}
+          getAuthHeaders={getAuthHeaders}
         />
+
+        <section className="mb-6 rounded-lg border border-emerald-200 bg-white p-4 shadow-sm dark:border-emerald-900 dark:bg-slate-900 md:p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                <ScanBarcode className="h-8 w-8" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                  Scan Traveler to Start Timer
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  After the traveler scan, enter mandrel #, oven, and side.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="lg"
+              className="h-14 w-full bg-emerald-600 text-base font-semibold hover:bg-emerald-700 md:w-auto md:px-8"
+              onClick={() => setStartModalOpen(true)}
+            >
+              <ScanBarcode className="mr-2 h-5 w-5" />
+              Scan Traveler
+            </Button>
+          </div>
+        </section>
 
         {detailedRuns.length === 0 ? (
           <Card className="border-dashed border-2 bg-white dark:bg-slate-900">
@@ -733,7 +796,7 @@ export default function ProductionStationDashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {detailedRuns.map((run) => (
-              <TimerCard key={run.id} run={run} onTimerEvent={handleTimerEvent} toast={toast} requireAuth={requireAuth} getAuthHeaders={getAuthHeaders} />
+              <TimerCard key={run.id} run={run} onTimerEvent={handleTimerEvent} toast={toast} requireFreshAuth={requireFreshAuth} getAuthHeaders={getAuthHeaders} />
             ))}
           </div>
         )}
@@ -745,8 +808,8 @@ export default function ProductionStationDashboard() {
           className="w-full h-14 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 shadow-lg rounded-xl"
           onClick={() => setStartModalOpen(true)}
         >
-          <Plus className="w-5 h-5 mr-2" />
-          Start Timer
+          <ScanBarcode className="w-5 h-5 mr-2" />
+          Scan Traveler
         </Button>
       </div>
       
@@ -754,7 +817,7 @@ export default function ProductionStationDashboard() {
         isOpen={showAuthModal}
         onClose={handleAuthModalClose}
         onSuccess={handleAuthSuccess}
-        actionDescription="control timers on the production floor"
+        actionDescription={actionDescription}
       />
     </div>
   );

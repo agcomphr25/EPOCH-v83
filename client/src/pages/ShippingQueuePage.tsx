@@ -34,6 +34,7 @@ import { LinkedOrderIndicator } from '@/components/LinkedOrderIndicator';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import { LinkedOrdersManager } from '@/components/LinkedOrdersManager';
 import KickbackReportModal from '@/components/KickbackReportModal';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -1301,6 +1302,18 @@ export default function ShippingQueuePage() {
     return null;
   }
 
+  function getShippingOptionsText(order: any) {
+    const options = [
+      order.shippingMethod && order.shippingMethod !== 'Ground'
+        ? String(order.shippingMethod)
+        : null,
+      getSpecialShippingText(order),
+    ].filter(Boolean);
+
+    if (options.length === 0) return null;
+    return options.join(' • ');
+  }
+
   // Function to get other in-progress orders for the same customer
   function getCustomerOtherOrders(customerId: string | null, currentOrderId: string) {
     if (!customerId) return [];
@@ -1352,6 +1365,7 @@ export default function ShippingQueuePage() {
     const customerInfo = getOrderShippingCustomerInfo(order);
     const customerAddress = getOrderShippingAddress(order);
     const specialShippingText = getSpecialShippingText(order);
+    const shippingOptionsText = getShippingOptionsText(order);
     const otherOrders = getCustomerOtherOrders(order.customerId, order.orderId);
 
     return (
@@ -1363,7 +1377,7 @@ export default function ShippingQueuePage() {
             ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
             : isSelected
               ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md'
-              : specialShippingText
+              : shippingOptionsText
                 ? 'border-yellow-400 bg-yellow-50 hover:border-yellow-500 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-600'
                 : 'border-gray-200 hover:border-gray-300'
         }`}
@@ -1412,9 +1426,9 @@ export default function ShippingQueuePage() {
                   NOT PAID
                 </Badge>
               )}
-              {specialShippingText && (
-                <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs">
-                  {specialShippingText}
+              {shippingOptionsText && (
+                <Badge className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wide">
+                  {shippingOptionsText}
                 </Badge>
               )}
               {materialType && (
@@ -1424,6 +1438,12 @@ export default function ShippingQueuePage() {
               )}
             </div>
           </div>
+
+          {shippingOptionsText && (
+            <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-bold uppercase tracking-wide text-red-700">
+              Shipping Option: {shippingOptionsText}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Order Info */}
@@ -1447,6 +1467,8 @@ export default function ShippingQueuePage() {
                 </div>
               )}
             </div>
+
+            <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
 
             {/* Shipping Address */}
             <div className="space-y-1 text-sm">

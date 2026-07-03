@@ -1,6 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
+import fs from 'fs';
+import multer from 'multer';
+import path from 'path';
 import { authenticateToken } from '../../middleware/auth';
-import { db } from '../../db';
+import { db, pgPool } from '../../db';
 import {
   edriScoreSnapshots,
   edriDomainScores,
@@ -28,6 +32,77 @@ import { auditService } from '../services/auditService';
 const router = Router();
 router.use(authenticateToken);
 
+const edriSupportingDocsDir = path.join(process.cwd(), 'uploads', 'edri-supporting-docs');
+
+if (!fs.existsSync(edriSupportingDocsDir)) {
+  fs.mkdirSync(edriSupportingDocsDir, { recursive: true });
+}
+
+const edriSupportingDocsUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, edriSupportingDocsDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const safeBase = path
+        .basename(file.originalname, ext)
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 90);
+      cb(null, `${Date.now()}_${crypto.randomBytes(8).toString('hex')}_${safeBase}${ext}`);
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024, files: 20 },
+  fileFilter: (_req, file, cb) => {
+    const allowedMimeTypes = new Set([
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/csv',
+      'text/plain',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+    ]);
+
+    if (allowedMimeTypes.has(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+
+    cb(new Error('Unsupported file type. Upload PDF, Word, Excel, PowerPoint, CSV, text, or image files.'));
+  },
+});
+
+async function ensureEdriSupportingDocsTable() {
+  await pgPool.query(`
+    CREATE TABLE IF NOT EXISTS edri_supporting_documents (
+      id SERIAL PRIMARY KEY,
+      folder_label TEXT NOT NULL DEFAULT 'Supporting Docs',
+      original_file_name TEXT NOT NULL,
+      stored_file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      file_size_bytes INTEGER NOT NULL,
+      file_path TEXT NOT NULL,
+      notes TEXT,
+      uploaded_by_user_id INTEGER REFERENCES users(id),
+      uploaded_by_display_name TEXT,
+      uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pgPool.query(`
+    CREATE INDEX IF NOT EXISTS edri_supporting_documents_folder_uploaded_idx
+      ON edri_supporting_documents(folder_label, uploaded_at DESC)
+  `);
+}
+
+function safeAttachmentName(name: string) {
+  return name.replace(/["\r\n]/g, '');
+}
+
 function requireEdriAccess(req: Request, res: Response, next: NextFunction): void {
   const user = (req as Request & { user?: { id: number; role: string; username: string } }).user;
   if (!user) { res.status(401).json({ error: 'Authentication required' }); return; }
@@ -50,6 +125,211 @@ function getUser(req: Request): { id: number; role: string; username: string } |
 
 // NOTE: requireEdriAccess is applied per-route below.
 // EMPLOYEE users are permitted to access /remediation and /notifications for their own items.
+
+// GET /api/edri/supporting-documents - list uploaded EDRI supporting documents
+router.get('/supporting-documents', requireEdriAccess, async (_req: Request, res: Response) => {
+  try {
+    await ensureEdriSupportingDocsTable();
+    const result = await pgPool.query(`
+      SELECT
+        id,
+        folder_label AS "folderLabel",
+        original_file_name AS "originalFileName",
+        stored_file_name AS "storedFileName",
+        mime_type AS "mimeType",
+        file_size_bytes AS "fileSizeBytes",
+        notes,
+        uploaded_by_user_id AS "uploadedByUserId",
+        uploaded_by_display_name AS "uploadedByDisplayName",
+        uploaded_at AS "uploadedAt"
+      FROM edri_supporting_documents
+      ORDER BY folder_label ASC, uploaded_at DESC
+    `);
+    res.json({ folderLabel: 'Supporting Docs', documents: result.rows });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to fetch supporting documents';
+    res.status(500).json({ error: message });
+  }
+});
+
+// POST /api/edri/supporting-documents - upload files into the Supporting Docs folder
+router.post(
+  '/supporting-documents',
+  requireEdriAccess,
+  edriSupportingDocsUpload.array('files', 20),
+  async (req: Request, res: Response) => {
+    const files = (req.files ?? []) as Express.Multer.File[];
+    try {
+      await ensureEdriSupportingDocsTable();
+      if (!files.length) {
+        res.status(400).json({ error: 'No files uploaded' });
+        return;
+      }
+
+      const user = getUser(req);
+      const folderLabel = String(req.body.folderLabel || 'Supporting Docs').trim() || 'Supporting Docs';
+      const notes = typeof req.body.notes === 'string' && req.body.notes.trim()
+        ? req.body.notes.trim()
+        : null;
+
+      const inserted = [];
+      const client = await pgPool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const file of files) {
+          const result = await client.query(
+            `
+              INSERT INTO edri_supporting_documents
+                (folder_label, original_file_name, stored_file_name, mime_type, file_size_bytes, file_path, notes, uploaded_by_user_id, uploaded_by_display_name)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              RETURNING
+                id,
+                folder_label AS "folderLabel",
+                original_file_name AS "originalFileName",
+                stored_file_name AS "storedFileName",
+                mime_type AS "mimeType",
+                file_size_bytes AS "fileSizeBytes",
+                notes,
+                uploaded_by_user_id AS "uploadedByUserId",
+                uploaded_by_display_name AS "uploadedByDisplayName",
+                uploaded_at AS "uploadedAt"
+            `,
+            [
+              folderLabel,
+              file.originalname,
+              file.filename,
+              file.mimetype,
+              file.size,
+              file.path,
+              notes,
+              user?.id ?? null,
+              user?.username ?? null,
+            ],
+          );
+          inserted.push(result.rows[0]);
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+
+      await auditService.logEvent({
+        entityType: 'edri_snapshot',
+        entityId: 'edri-supporting-documents',
+        action: 'EDRI_SUPPORTING_DOCUMENTS_UPLOADED',
+        actor: { id: user?.id, username: user?.username, role: user?.role },
+        meta: {
+          resource_type: 'EDRI',
+          folderLabel,
+          documentCount: inserted.length,
+          fileNames: inserted.map(doc => doc.originalFileName),
+        },
+      }).catch(() => {});
+
+      res.status(201).json({ documents: inserted });
+    } catch (err: unknown) {
+      for (const file of files) {
+        const resolvedPath = path.resolve(file.path);
+        if (resolvedPath.startsWith(path.resolve(edriSupportingDocsDir)) && fs.existsSync(resolvedPath)) {
+          fs.unlinkSync(resolvedPath);
+        }
+      }
+      const message = err instanceof Error ? err.message : 'Failed to upload supporting documents';
+      res.status(500).json({ error: message });
+    }
+  },
+);
+
+// GET /api/edri/supporting-documents/:id/download - download or preview a supporting document
+router.get('/supporting-documents/:id/download', requireEdriAccess, async (req: Request, res: Response) => {
+  try {
+    await ensureEdriSupportingDocsTable();
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: 'Invalid document id' });
+      return;
+    }
+
+    const result = await pgPool.query(
+      `
+        SELECT original_file_name, mime_type, file_path
+        FROM edri_supporting_documents
+        WHERE id = $1
+      `,
+      [id],
+    );
+    if (!result.rowCount) {
+      res.status(404).json({ error: 'Supporting document not found' });
+      return;
+    }
+
+    const doc = result.rows[0];
+    const resolvedPath = path.resolve(doc.file_path);
+    if (!resolvedPath.startsWith(path.resolve(edriSupportingDocsDir)) || !fs.existsSync(resolvedPath)) {
+      res.status(404).json({ error: 'Supporting document file not found' });
+      return;
+    }
+
+    const disposition = req.query.download === 'true' ? 'attachment' : 'inline';
+    res.setHeader('Content-Type', doc.mime_type);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${safeAttachmentName(doc.original_file_name)}"`);
+    res.sendFile(resolvedPath);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to download supporting document';
+    res.status(500).json({ error: message });
+  }
+});
+
+// DELETE /api/edri/supporting-documents/:id - remove a supporting document
+router.delete('/supporting-documents/:id', requireEdriAccess, async (req: Request, res: Response) => {
+  try {
+    await ensureEdriSupportingDocsTable();
+    const user = getUser(req);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: 'Invalid document id' });
+      return;
+    }
+
+    const result = await pgPool.query(
+      `
+        DELETE FROM edri_supporting_documents
+        WHERE id = $1
+        RETURNING original_file_name, file_path
+      `,
+      [id],
+    );
+    if (!result.rowCount) {
+      res.status(404).json({ error: 'Supporting document not found' });
+      return;
+    }
+
+    const resolvedPath = path.resolve(result.rows[0].file_path);
+    if (resolvedPath.startsWith(path.resolve(edriSupportingDocsDir)) && fs.existsSync(resolvedPath)) {
+      fs.unlinkSync(resolvedPath);
+    }
+
+    await auditService.logEvent({
+      entityType: 'edri_snapshot',
+      entityId: `edri-supporting-document-${id}`,
+      action: 'EDRI_SUPPORTING_DOCUMENT_DELETED',
+      actor: { id: user?.id, username: user?.username, role: user?.role },
+      meta: {
+        resource_type: 'EDRI',
+        documentId: id,
+        fileName: result.rows[0].original_file_name,
+      },
+    }).catch(() => {});
+
+    res.status(204).send();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to delete supporting document';
+    res.status(500).json({ error: message });
+  }
+});
 
 // POST /api/edri/compute — Trigger score recomputation
 router.post('/compute', requireEdriAccess, async (req: Request, res: Response) => {

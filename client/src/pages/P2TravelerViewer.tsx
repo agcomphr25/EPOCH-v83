@@ -49,6 +49,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { format, isValid } from 'date-fns';
 import { TravelerCapturedDataBySerial } from '@/components/p2/TravelerCapturedData';
+import { displaySignerName } from '@/lib/signerName';
 import AuditTimeline from '@/components/AuditTimeline';
 
 function safeFormat(dateValue: any, fmt: string): string {
@@ -1519,7 +1520,7 @@ export default function P2TravelerViewer() {
                                 </div>
                                 <div className="text-sm">
                                   <span className="text-gray-500">Signed by:</span>{' '}
-                                  <span className="font-medium">{sig.signedBy}</span>
+                                  <span className="font-medium">{displaySignerName(sig.signedBy)}</span>
                                   {sig.signedByUsername && (
                                     <span className="text-gray-400 ml-1">(@{sig.signedByUsername})</span>
                                   )}
@@ -1550,7 +1551,7 @@ export default function P2TravelerViewer() {
                                   {sig.department || sig.fromDepartment || 'N/A'}
                                 </div>
                                 <div className="text-sm">
-                                  <span className="font-medium">{sig.signedBy}</span>
+                                  <span className="font-medium">{displaySignerName(sig.signedBy)}</span>
                                 </div>
                               </div>
                               {sig.signatureData && (
@@ -1566,8 +1567,14 @@ export default function P2TravelerViewer() {
                           )}
                           
                           {sig.notes && (
-                            <div className="mt-2 pt-2 border-t text-sm text-gray-600">
-                              <span className="font-medium">Notes:</span> {sig.notes}
+                            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                              <div className="flex items-start gap-2">
+                                <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-700" />
+                                <div>
+                                  <span className="font-semibold text-amber-900">Notes</span>
+                                  <p className="mt-1 whitespace-pre-wrap leading-relaxed">{sig.notes}</p>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1632,7 +1639,17 @@ export default function P2TravelerViewer() {
                                   {safeFormat(event.createdAt, 'MMM d, yyyy h:mm a')}
                                 </span>
                               </div>
-                              {event.notes && <p className="text-sm mt-1">{event.notes}</p>}
+                              {event.notes && (
+                                <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                                  <div className="flex items-start gap-2">
+                                    <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-700" />
+                                    <div>
+                                      <span className="font-semibold text-amber-900">Notes</span>
+                                      <p className="mt-1 whitespace-pre-wrap leading-relaxed">{event.notes}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                               {isCycleSentinel && event.metadata?.travelerId && (
                                 <p className="text-xs text-gray-500 mt-0.5">
                                   Traveler: {event.metadata?.travelerNumber ?? event.metadata?.travelerId}

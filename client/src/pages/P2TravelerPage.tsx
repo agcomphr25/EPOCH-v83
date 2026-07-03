@@ -320,7 +320,7 @@ export default function P2TravelerPage() {
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
   const [pendingFocusMaterialIndex, setPendingFocusMaterialIndex] = useState<number | null>(null);
-  const [validatedMaterialIndices, setValidatedMaterialIndices] = useState<Set<number>>(new Set());
+  const [, setValidatedMaterialIndices] = useState<Set<number>>(new Set());
   const validateAbortControllersRef = useRef<Map<number, AbortController>>(new Map());
   const latestValidationIcnRef = useRef<Map<number, string>>(new Map());
   const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
@@ -435,6 +435,8 @@ export default function P2TravelerPage() {
     setQcResults([]);
     setStartQcResults([]);
     setFinishQcResults([]);
+    setOperationScanValue('');
+    setCompletionOperationScanValue('');
     setNotes('');
     setTraceabilityMode('scan');
     setValidatedMaterialIndices(new Set());
@@ -500,7 +502,8 @@ export default function P2TravelerPage() {
     }
 
     try {
-      const data = await apiRequest(`/api/p2-traveler/badge-lookup/${badgeInput.trim()}`) as Employee;
+      const encodedBadge = encodeURIComponent(badgeInput.trim());
+      const data = await apiRequest(`/api/p2-traveler/badge-lookup/${encodedBadge}`) as Employee;
       setEmployee(data);
       setScanState('BADGE_SCANNED');
       toast({
@@ -530,8 +533,10 @@ export default function P2TravelerPage() {
     }
 
     try {
+      const encodedBadge = encodeURIComponent(badgeInput.trim());
+      const encodedPartBarcode = encodeURIComponent(partInput.trim());
       const data = await apiRequest(
-        `/api/p2-traveler/verify-certification/${badgeInput}/${partInput}`
+        `/api/p2-traveler/verify-certification/${encodedBadge}/${encodedPartBarcode}`
       ) as VerificationData;
 
       setEmployee(data.employee);
@@ -539,11 +544,9 @@ export default function P2TravelerPage() {
 
       if (!data.isCertified) {
         toast({
-          title: 'Not Certified',
-          description: `${data.employee.name} is not certified for ${data.nextDepartment}`,
-          variant: 'destructive',
+          title: 'Certification Check',
+          description: `Opening traveler for ${data.nextDepartment}. Certification will be enforced at start.`,
         });
-        return;
       }
 
       // Initialize traceability fields based on requirements
@@ -656,7 +659,7 @@ export default function P2TravelerPage() {
 
       setScanState('PART_SCANNED');
 
-      if (data.isCertified && data.routing?.id) {
+      if (data.routing?.id) {
         setScanState('GENERATING_TRAVELER');
         toast({
           title: 'Part Verified',
@@ -747,7 +750,7 @@ export default function P2TravelerPage() {
           employeeId: verificationData.employee.id,
           employeeCode: verificationData.employee.employeeCode,
           employeeName: verificationData.employee.name,
-          barcode: item.barcode,
+          barcode: partInput.trim() || item.barcode,
           serializedItemId: item.id,
           department: verificationData.nextDepartment,
           partNumber: item.partNumber,
@@ -759,24 +762,75 @@ export default function P2TravelerPage() {
         }),
       }) as any;
 
-      return response.workTask || response;
+      return response;
     },
-    onSuccess: (workTask) => {
+    onSuccess: (response: any) => {
+      const workTask = response.workTask || response;
+      const punch = response.punch as
+        | { action?: 'clockedIn' | 'switched' | 'unchanged'; chargeCode?: string | null; warning?: string }
+        | undefined;
       setActiveTask(workTask);
       setScanState('TASK_ACTIVE');
       queryClient.invalidateQueries({ queryKey: ['/api/p2-traveler/active-tasks', employee?.id] });
+
+      // Task #188: surface auto-punch result to operator.
+      let punchLine = '';
+      if (punch?.action === 'clockedIn' && punch.chargeCode) {
+        punchLine = ` Clocked in on ${punch.chargeCode}.`;
+      } else if (punch?.action === 'switched' && punch.chargeCode) {
+        punchLine = ` Switched charge code to ${punch.chargeCode}.`;
+      } else if (punch?.action === 'unchanged' && punch.chargeCode) {
+        punchLine = ` Punch already on ${punch.chargeCode}.`;
+      }
+
       toast({
         title: 'Task Started',
-        description: `Working on ${workTask.partName} in ${workTask.department}`,
+        description: `Working on ${workTask.partName} in ${workTask.department}.${punchLine}`,
       });
+      if (punch?.warning) {
+        toast({
+          title: 'Labor budget warning',
+          description: punch.warning,
+          variant: 'destructive',
+        });
+      }
       setShowTimerModal(true);
     },
     onError: (error: any) => {
-      toast({
-        title: 'Failed to Start Task',
-        description: error.message,
-        variant: 'destructive',
-      });
+      // Task #188: extract structured error from server (gates can fail with
+      // PTO_DAY_BLOCK, CHARGE_CODE_UNRESOLVED, NOT_CERTIFIED, etc.). apiRequest
+      // attaches the parsed JSON body as `error.responseData`.
+      let title = 'Failed to Start Task';
+      let description = error?.message || 'Unknown error';
+      try {
+        const data = error?.responseData ?? null;
+        const code = data?.error || data?.code || error?.code;
+        const msg = data?.message || data?.error || error?.message;
+        if (code === 'PTO_DAY_BLOCK') {
+          title = 'PTO Block';
+          description = msg || 'This employee has approved PTO for today. Clock-in is not permitted.';
+        } else if (code === 'CHARGE_CODE_UNRESOLVED') {
+          title = 'Charge Code Unresolved';
+          description = msg || 'This traveler has no resolvable charge code. Set a default charge code on the work order or traveler.';
+        } else if (code === 'NOT_CERTIFIED') {
+          title = 'Not Certified';
+          description = msg || 'You are not certified to start this part in this department.';
+        } else if (code === 'EMPLOYEE_NOT_FOUND') {
+          title = 'Employee Not Found';
+          description = msg || 'Your badge could not be matched to an employee record.';
+        } else if (code === 'INVALID_LABOR_APPROVAL') {
+          title = 'Invalid Labor Approval';
+          description = msg || 'The labor approval is not valid for this employee and work order.';
+        } else if (code === 'NO_TRAVELER_LINK' || code === 'NO_WAD_LINK') {
+          title = 'No Traveler Linked';
+          description = msg || 'No traveler is linked to this serialized item. Generate a traveler before starting work.';
+        } else if (msg) {
+          description = msg;
+        }
+      } catch {
+        // Fall back to error.message
+      }
+      toast({ title, description, variant: 'destructive' });
     },
   });
 
@@ -797,6 +851,9 @@ export default function P2TravelerPage() {
           employeeCode: badgeInput,
           barcode: partInput,
           notes,
+          traceabilityData: traceabilityData.filter(item => item.value.trim()),
+          customData: Object.keys(customData).length > 0 ? customData : null,
+          qcResults: [...qcResults, ...startQcResults, ...finishQcResults],
         }),
       });
 
@@ -993,12 +1050,30 @@ export default function P2TravelerPage() {
     }
   };
 
-  // Add another material traceability entry
-  const addMaterialTraceEntry = () => {
+  const materialControlFieldTypes = new Set([
+    'material_lot',
+    'internal_control_number',
+    'material_internal_control_number',
+    'material_icn',
+    'fabric_internal_control_number',
+  ]);
+
+  const isMaterialControlField = (item: any) => {
+    const type = String(item?.type || '').toLowerCase();
+    const label = String(item?.label || '').toLowerCase();
+    return materialControlFieldTypes.has(type) || label.includes('control number') || label.includes('icn');
+  };
+
+  const getNextMaterialIndex = () => {
     const existingMaterialIndices = traceabilityData
       .filter(item => item.materialIndex !== undefined)
       .map(item => item.materialIndex!);
-    const nextIndex = existingMaterialIndices.length > 0 ? Math.max(...existingMaterialIndices) + 1 : 0;
+    return existingMaterialIndices.length > 0 ? Math.max(...existingMaterialIndices) + 1 : 0;
+  };
+
+  // Add another material traceability entry
+  const addMaterialTraceEntry = () => {
+    const nextIndex = getNextMaterialIndex();
     
     const defaultFields = ['material_lot', 'material_expiration_date'];
     const newEntries = defaultFields.map(fieldType => ({
@@ -1195,23 +1270,22 @@ export default function P2TravelerPage() {
               </Alert>
 
               {/* Certification Status */}
-              <Alert variant={verificationData.isCertified ? 'default' : 'destructive'}>
+              <Alert>
                 {verificationData.isCertified ? (
                   <CheckCircle className="h-4 w-4" />
                 ) : (
-                  <XCircle className="h-4 w-4" />
+                  <AlertCircle className="h-4 w-4" />
                 )}
                 <AlertDescription>
                   {verificationData.isCertified ? (
                     `${verificationData.employee.name} is certified for ${verificationData.nextDepartment}`
                   ) : (
-                    `${verificationData.employee.name} is NOT certified for ${verificationData.nextDepartment}`
+                    `Certification will be checked again when ${verificationData.employee.name} starts ${verificationData.nextDepartment}.`
                   )}
                 </AlertDescription>
               </Alert>
 
-              {verificationData.isCertified && (
-                <>
+              <>
                   {/* Work Instructions - Prominently displayed */}
                   {verificationData.departmentConfig.instructionPack && (
                     (() => {
@@ -1377,12 +1451,11 @@ export default function P2TravelerPage() {
 
                           {materialGroupEntries.map(([matIdx, items], groupArrayIdx) => {
                             const isLastGroup = groupArrayIdx === materialGroupEntries.length - 1;
-                            const lotItem = (items as any[]).find((i) => i.type === 'material_lot');
+                            const controlItem = (items as any[]).find(isMaterialControlField);
                             const showAddAnotherPrompt =
                               isLastGroup &&
                               traceabilityMode === 'manual' &&
-                              !!lotItem?.value?.trim() &&
-                              validatedMaterialIndices.has(matIdx);
+                              !!controlItem?.value?.trim();
                             return (
                             <div key={matIdx} className="border rounded-lg p-3 bg-blue-50/30 dark:bg-blue-950/20 space-y-2">
                               <div className="flex items-center justify-between">
@@ -1431,10 +1504,7 @@ export default function P2TravelerPage() {
                                   size="sm"
                                   className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
                                   onClick={() => {
-                                    const existing = traceabilityData
-                                      .filter((it) => it.materialIndex !== undefined)
-                                      .map((it) => it.materialIndex!);
-                                    const nextIdx = existing.length > 0 ? Math.max(...existing) + 1 : 0;
+                                    const nextIdx = getNextMaterialIndex();
                                     addMaterialTraceEntry();
                                     setPendingFocusMaterialIndex(nextIdx);
                                   }}
@@ -1832,7 +1902,6 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* Notes */}
                   <div className="space-y-2">
                     <Label htmlFor="notes">Notes (Optional)</Label>
                     <Textarea
@@ -1859,14 +1928,7 @@ export default function P2TravelerPage() {
                       {startTaskMutation.isPending ? 'Starting...' : 'Start Task'}
                     </Button>
                   </div>
-                </>
-              )}
-
-              {!verificationData.isCertified && (
-                <Button variant="outline" onClick={resetScanner} className="w-full" data-testid="button-reset">
-                  Start Over
-                </Button>
-              )}
+              </>
 
               <Button
                 variant="outline"

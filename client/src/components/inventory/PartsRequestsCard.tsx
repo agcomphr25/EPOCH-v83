@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -49,17 +49,25 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 
 interface PartsRequestFormData {
   agPartNumber: string;
   partNumber: string;
   partName: string;
   requestedBy: string;
+  requestedForEmployeeId: string;
   productionLine: string;
   projectId: string;
   department: string;
   quantity: string;
   urgency: string;
+  vendorId: string;
   supplier: string;
   estimatedCost: string;
   reason: string;
@@ -81,17 +89,53 @@ interface DepartmentOption {
   name: string;
 }
 
+interface EmployeeOption {
+  id: number;
+  name: string;
+  department?: string | null;
+  isActive?: boolean | null;
+}
+
 type PartsRequestWithProject = PartsRequest & {
+  requestedForEmployeeId?: number | null;
+  requestedForDisplayName?: string | null;
   project?: {
     id: string | null;
     projectCode: string | null;
     projectName: string | null;
   };
+  vendorPO?: {
+    id: number | null;
+    poNumber: string | null;
+    externalPoNumber: string | null;
+    status: string | null;
+  };
 };
 
 const NONE_VALUE = '__none__';
 
-export default function PartsRequestsCard() {
+interface SessionUser {
+  id: number;
+  username: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+}
+
+interface PartsRequestsCardProps {
+  scope?: 'mine' | 'all';
+}
+
+function getDefaultRequestor(user: SessionUser | null | undefined): string {
+  if (!user) return '';
+  const fullName = [user.firstName, user.lastName]
+    .filter((s) => typeof s === 'string' && s.trim().length > 0)
+    .join(' ')
+    .trim();
+  return user.username || fullName || '';
+}
+
+export default function PartsRequestsCard({ scope = 'mine' }: PartsRequestsCardProps = {}) {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -99,17 +143,35 @@ export default function PartsRequestsCard() {
   const [editingRequest, setEditingRequest] = useState<PartsRequest | null>(
     null
   );
+  const requestedByEditedRef = useRef(false);
+  const initialProjectId = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('projectId') || '';
+  }, []);
+  const openCreateFromQuery = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('create') === '1';
+  }, []);
+
+  const { data: sessionUser } = useQuery<SessionUser | null>({
+    queryKey: ['/api/auth/session'],
+  });
+  const defaultRequestor = getDefaultRequestor(sessionUser);
+  const partsRequestsQueryKey =
+    scope === 'all' ? '/api/inventory/parts-requests' : '/api/inventory/parts-requests/my';
 
   const [formData, setFormData] = useState<PartsRequestFormData>({
     agPartNumber: '',
     partNumber: '',
     partName: '',
     requestedBy: '',
+    requestedForEmployeeId: '',
     productionLine: '',
-    projectId: '',
+    projectId: initialProjectId,
     department: '',
     quantity: '',
     urgency: 'MEDIUM',
+    vendorId: '',
     supplier: '',
     estimatedCost: '',
     reason: '',
@@ -121,8 +183,8 @@ export default function PartsRequestsCard() {
 
   // Load parts requests
   const { data: requests = [], isLoading } = useQuery<PartsRequestWithProject[]>({
-    queryKey: ['/api/inventory/parts-requests'],
-    queryFn: () => apiRequest('/api/inventory/parts-requests'),
+    queryKey: [partsRequestsQueryKey],
+    queryFn: () => apiRequest(partsRequestsQueryKey),
   });
 
   const { data: projects = [] } = useQuery<ProjectOption[]>({
@@ -134,6 +196,19 @@ export default function PartsRequestsCard() {
     queryKey: ['/api/inventory/departments'],
     queryFn: () => apiRequest('/api/inventory/departments'),
   });
+
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['/api/employees'],
+    queryFn: () => apiRequest('/api/employees'),
+  });
+
+  const activeEmployees = useMemo(
+    () =>
+      employees
+        .filter((employee) => employee.isActive !== false)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [employees]
+  );
 
   const { data: inventoryItems = [], isLoading: isLoadingInventory } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
@@ -202,6 +277,7 @@ export default function PartsRequestsCard() {
       setIsCreateOpen(false);
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
     },
     onError: () => toast.error('Failed to create parts request'),
   });
@@ -219,6 +295,7 @@ export default function PartsRequestsCard() {
       setEditingRequest(null);
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
     },
     onError: () => toast.error('Failed to update parts request'),
   });
@@ -232,21 +309,25 @@ export default function PartsRequestsCard() {
     onSuccess: () => {
       toast.success('Parts request deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
     },
     onError: () => toast.error('Failed to delete parts request'),
   });
 
   const resetForm = () => {
+    requestedByEditedRef.current = false;
     setFormData({
       agPartNumber: '',
       partNumber: '',
       partName: '',
-      requestedBy: '',
+      requestedBy: getDefaultRequestor(sessionUser),
+      requestedForEmployeeId: '',
       productionLine: '',
-      projectId: '',
+      projectId: initialProjectId,
       department: '',
       quantity: '',
       urgency: 'MEDIUM',
+      vendorId: '',
       supplier: '',
       estimatedCost: '',
       reason: '',
@@ -261,8 +342,32 @@ export default function PartsRequestsCard() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
+    if (name === 'requestedBy') {
+      requestedByEditedRef.current = true;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // When the create dialog is open and the session resolves later (or
+  // changes), seed the requestedBy field from the signed-in user as long
+  // as the user hasn't typed anything into it yet.
+  useEffect(() => {
+    if (!isCreateOpen) return;
+    if (editingRequest) return;
+    if (requestedByEditedRef.current) return;
+    if (!defaultRequestor) return;
+    setFormData((prev) =>
+      prev.requestedBy ? prev : { ...prev, requestedBy: defaultRequestor }
+    );
+  }, [isCreateOpen, editingRequest, defaultRequestor]);
+
+  useEffect(() => {
+    if (!initialProjectId) return;
+    setFormData((prev) => ({ ...prev, projectId: initialProjectId }));
+    if (openCreateFromQuery) {
+      setIsCreateOpen(true);
+    }
+  }, [initialProjectId, openCreateFromQuery]);
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -274,6 +379,8 @@ export default function PartsRequestsCard() {
       agPartNumber: item.agPartNumber,
       partNumber: item.agPartNumber,
       partName: item.name,
+      vendorId: item.vendorId ? String(item.vendorId) : '',
+      supplier: item.source || prev.supplier,
     }));
     setIsPartSelectOpen(false);
   };
@@ -296,6 +403,9 @@ export default function PartsRequestsCard() {
       partNumber: formData.partNumber,
       partName: formData.partName,
       requestedBy: formData.requestedBy,
+      requestedForEmployeeId: formData.requestedForEmployeeId
+        ? parseInt(formData.requestedForEmployeeId)
+        : null,
       productionLine: formData.productionLine || null,
       projectId: formData.projectId || null,
       department: formData.department || null,
@@ -305,8 +415,15 @@ export default function PartsRequestsCard() {
       status: isManagerResponse ? formData.status : 'PENDING',
     };
 
+    const selectedVendorId = formData.vendorId
+      ? parseInt(formData.vendorId)
+      : selectedInventoryItem?.vendorId ?? null;
+    if (selectedVendorId && !Number.isNaN(selectedVendorId)) {
+      submitData.vendorId = selectedVendorId;
+    }
+    submitData.supplier = formData.supplier || selectedInventoryItem?.source || null;
+
     if (isManagerResponse) {
-      submitData.supplier = formData.supplier || null;
       submitData.estimatedCost = formData.estimatedCost
         ? parseFloat(formData.estimatedCost)
         : null;
@@ -330,17 +447,22 @@ export default function PartsRequestsCard() {
   };
 
   const handleEdit = (request: PartsRequest) => {
+    requestedByEditedRef.current = true;
     setEditingRequest(request);
     setFormData({
       agPartNumber: request.agPartNumber || '',
       partNumber: request.partNumber,
       partName: request.partName,
       requestedBy: request.requestedBy,
+      requestedForEmployeeId: request.requestedForEmployeeId
+        ? String(request.requestedForEmployeeId)
+        : '',
       productionLine: request.productionLine || '',
       projectId: request.projectId || '',
       department: request.department || '',
       quantity: request.quantity.toString(),
       urgency: request.urgency,
+      vendorId: request.vendorId ? String(request.vendorId) : '',
       supplier: request.supplier || '',
       estimatedCost: request.estimatedCost
         ? request.estimatedCost.toString()
@@ -396,78 +518,95 @@ export default function PartsRequestsCard() {
     }
   };
 
-  const FormContent = () => (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <Label htmlFor="inventoryItem">Inventory Part *</Label>
-        <Popover open={isPartSelectOpen} onOpenChange={setIsPartSelectOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              id="inventoryItem"
-              type="button"
-              variant="outline"
-              role="combobox"
-              aria-expanded={isPartSelectOpen}
-              className={cn(
-                'w-full justify-between',
-                !formData.agPartNumber && 'text-muted-foreground'
-              )}
-              disabled={isLoadingInventory}
-            >
-              {selectedInventoryItem
-                ? `${selectedInventoryItem.agPartNumber} - ${selectedInventoryItem.name}`
-                : formData.partNumber && formData.partName
-                  ? `${formData.partNumber} - ${formData.partName}`
-                  : isLoadingInventory
-                    ? 'Loading inventory...'
-                    : 'Search inventory by part number or name...'}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Type part number or name..." />
-              <CommandList>
-                <CommandEmpty>No inventory items found.</CommandEmpty>
-                <CommandGroup>
-                  {activeInventoryItems.map((item) => (
-                    <CommandItem
-                      key={item.id}
-                      value={`${item.agPartNumber} ${item.name}`}
-                      onSelect={() => handleInventoryItemSelect(item)}
-                    >
-                      <Check
-                        className={cn(
-                          'mr-2 h-4 w-4',
-                          item.agPartNumber === formData.agPartNumber
-                            ? 'opacity-100'
-                            : 'opacity-0'
-                        )}
-                      />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-sm font-medium">
-                            {item.agPartNumber}
-                          </span>
-                          <span className="truncate">{item.name}</span>
-                        </div>
-                      </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-        {formData.partNumber && formData.partName && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Selected part: {formData.partNumber} - {formData.partName}
-          </p>
-        )}
-      </div>
+  const formatRequestDate = (value?: string | Date | null) => {
+    if (!value) return 'Not recorded';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not recorded';
+    return date.toLocaleDateString();
+  };
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+  const dialogContentClass =
+    'flex max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-2xl flex-col overflow-hidden';
+
+  const renderFormContent = () => (
+    <form onSubmit={handleSubmit} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pr-1">
+        <div className="min-w-0">
+          <Label htmlFor="inventoryItem">Inventory Part *</Label>
+          <Popover open={isPartSelectOpen} onOpenChange={setIsPartSelectOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                id="inventoryItem"
+                type="button"
+                variant="outline"
+                role="combobox"
+                aria-expanded={isPartSelectOpen}
+                className={cn(
+                  'min-w-0 w-full justify-between overflow-hidden',
+                  !formData.agPartNumber && 'text-muted-foreground'
+                )}
+                disabled={isLoadingInventory}
+              >
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {selectedInventoryItem
+                    ? `${selectedInventoryItem.agPartNumber} - ${selectedInventoryItem.name}`
+                    : formData.partNumber && formData.partName
+                      ? `${formData.partNumber} - ${formData.partName}`
+                      : isLoadingInventory
+                        ? 'Loading inventory...'
+                        : 'Search inventory by part number or name...'}
+                </span>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-[--radix-popover-trigger-width] max-w-[calc(100vw-3rem)] p-0"
+              align="start"
+            >
+              <Command>
+                <CommandInput placeholder="Type part number or name..." />
+                <CommandList>
+                  <CommandEmpty>No inventory items found.</CommandEmpty>
+                  <CommandGroup>
+                    {activeInventoryItems.map((item) => (
+                      <CommandItem
+                        key={item.id}
+                        value={`${item.agPartNumber} ${item.name}`}
+                        onSelect={() => handleInventoryItemSelect(item)}
+                      >
+                        <Check
+                          className={cn(
+                            'mr-2 h-4 w-4',
+                            item.agPartNumber === formData.agPartNumber
+                              ? 'opacity-100'
+                              : 'opacity-0'
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="shrink-0 font-mono text-sm font-medium">
+                              {item.agPartNumber}
+                            </span>
+                            <span className="truncate">{item.name}</span>
+                          </div>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          {formData.partNumber && formData.partName && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Selected part: {formData.partNumber} - {formData.partName}
+              {formData.supplier ? ` | Source: ${formData.supplier}` : ''}
+            </p>
+          )}
+        </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="min-w-0">
           <Label htmlFor="requestedBy">Requested By *</Label>
           <Input
             id="requestedBy"
@@ -478,7 +617,31 @@ export default function PartsRequestsCard() {
             required
           />
         </div>
-        <div>
+        <div className="min-w-0">
+          <Label htmlFor="requestedForEmployeeId">Requested For</Label>
+          <Select
+            value={formData.requestedForEmployeeId || NONE_VALUE}
+            onValueChange={(value) =>
+              handleSelectChange('requestedForEmployeeId', value === NONE_VALUE ? '' : value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Optional employee" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>No employee selected</SelectItem>
+              {activeEmployees.map((employee) => (
+                <SelectItem key={employee.id} value={String(employee.id)}>
+                  {employee.name}{employee.department ? ` - ${employee.department}` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="min-w-0">
           <Label htmlFor="productionLine">Production Line</Label>
           <Select
             value={formData.productionLine || NONE_VALUE}
@@ -499,8 +662,8 @@ export default function PartsRequestsCard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="min-w-0">
           <Label htmlFor="projectId">Project</Label>
           <Select
             value={formData.projectId || NONE_VALUE}
@@ -521,7 +684,7 @@ export default function PartsRequestsCard() {
             </SelectContent>
           </Select>
         </div>
-        <div>
+        <div className="min-w-0">
           <Label htmlFor="department">Department</Label>
           <Select
             value={formData.department || NONE_VALUE}
@@ -544,8 +707,8 @@ export default function PartsRequestsCard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="min-w-0">
           <Label htmlFor="quantity">Quantity *</Label>
           <Input
             id="quantity"
@@ -557,7 +720,7 @@ export default function PartsRequestsCard() {
             required
           />
         </div>
-        <div>
+        <div className="min-w-0">
           <Label htmlFor="urgency">Urgency</Label>
           <Select
             value={formData.urgency}
@@ -578,8 +741,8 @@ export default function PartsRequestsCard() {
 
       {isManagerResponse && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="min-w-0">
               <Label htmlFor="status">Status</Label>
               <Select
                 value={formData.status}
@@ -600,7 +763,7 @@ export default function PartsRequestsCard() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="min-w-0">
               <Label htmlFor="supplier">Supplier</Label>
               <Input
                 id="supplier"
@@ -610,7 +773,7 @@ export default function PartsRequestsCard() {
                 placeholder="Enter supplier name"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <Label htmlFor="estimatedCost">Estimated Cost</Label>
               <Input
                 id="estimatedCost"
@@ -678,8 +841,9 @@ export default function PartsRequestsCard() {
           />
         </div>
       )}
+      </div>
 
-      <div className="flex justify-end space-x-2">
+      <div className="mt-4 flex shrink-0 justify-end space-x-2 border-t pt-4">
         <Button
           type="button"
           variant="outline"
@@ -709,18 +873,26 @@ export default function PartsRequestsCard() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Parts Requests</h3>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <Dialog
+          open={isCreateOpen}
+          onOpenChange={(open) => {
+            setIsCreateOpen(open);
+            if (!open) {
+              resetForm();
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
               New Request
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+          <DialogContent className={dialogContentClass}>
+            <DialogHeader className="shrink-0">
               <DialogTitle>Create New Parts Request</DialogTitle>
             </DialogHeader>
-            <FormContent />
+            {renderFormContent()}
           </DialogContent>
         </Dialog>
       </div>
@@ -733,76 +905,93 @@ export default function PartsRequestsCard() {
           No parts requests found
         </div>
       ) : (
-        <div className="space-y-6">
+        <Accordion
+          type="multiple"
+          defaultValue={Object.keys(requestsByDepartment)}
+          className="space-y-3"
+        >
           {Object.entries(requestsByDepartment).map(
             ([department, deptRequests]) => (
-              <div key={department} className="space-y-4">
-                {/* Department Header */}
-                <div className="bg-gray-50 px-4 py-3 rounded-lg border">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-lg font-semibold text-gray-800">
+              <AccordionItem
+                key={department}
+                value={department}
+                className="rounded-md border bg-white px-4"
+              >
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex w-full items-center justify-between pr-4">
+                    <span className="text-lg font-semibold text-gray-800">
                       {department}
-                    </h4>
-                    <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">
+                    </span>
+                    <span className="rounded bg-gray-50 px-2 py-1 text-sm text-gray-600">
                       {deptRequests.length} request
                       {deptRequests.length !== 1 ? 's' : ''}
                     </span>
                   </div>
-                </div>
+                </AccordionTrigger>
 
                 {/* Department Requests Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ml-4">
-                  {deptRequests.map((request) => (
-                    <div
-                      key={request.id}
-                      className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow bg-white"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h5 className="font-medium">{request.partName}</h5>
-                          <p className="text-sm text-gray-600">
-                            Part: {request.partNumber}
-                          </p>
+                <AccordionContent className="pt-1">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {deptRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow bg-white"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h5 className="font-medium">{request.partName}</h5>
+                            <p className="text-sm text-gray-600">
+                              Part: {request.partNumber}
+                            </p>
+                          </div>
+                          <div className="flex space-x-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(request)}
+                              title="Edit"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(request.id)}
+                              disabled={deleteMutation.isPending}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex space-x-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(request)}
-                            title="Edit"
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(request.id)}
-                            disabled={deleteMutation.isPending}
-                            title="Delete"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <Badge className={getStatusBadgeColor(request.status)}>
-                          {request.status === 'PENDING_OWNER_APPROVAL'
-                            ? 'OWNER APPROVAL'
-                            : request.status}
-                        </Badge>
-                        <Badge
-                          className={getUrgencyBadgeColor(request.urgency)}
-                        >
-                          {request.urgency}
-                        </Badge>
-                      </div>
-
-                      <div className="space-y-2 text-sm">
                         <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          <span>{request.requestedBy}</span>
+                          <Badge className={getStatusBadgeColor(request.status)}>
+                            {request.status === 'PENDING_OWNER_APPROVAL'
+                              ? 'OWNER APPROVAL'
+                              : request.status}
+                          </Badge>
+                          <Badge
+                            className={getUrgencyBadgeColor(request.urgency)}
+                          >
+                            {request.urgency}
+                          </Badge>
                         </div>
+
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-400" />
+                            <span>By: {request.requestedBy}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-400" />
+                            <span>For: {request.requestedForDisplayName || '—'}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-gray-400" />
+                            <span>Created: {formatRequestDate(request.requestDate)}</span>
+                          </div>
 
                         {(request.productionLine || request.project) && (
                           <div className="flex flex-wrap gap-2">
@@ -879,6 +1068,17 @@ export default function PartsRequestsCard() {
                           </div>
                         )}
 
+                        {request.vendorPO && (
+                          <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                            <Package className="h-3 w-3" />
+                            <span>
+                              Vendor PO:{' '}
+                              {request.vendorPO.poNumber || `Draft #${request.vendorPO.id}`}
+                              {request.vendorPO.status ? ` (${request.vendorPO.status})` : ''}
+                            </span>
+                          </div>
+                        )}
+
                         {request.reason && (
                           <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
                             {request.reason}
@@ -888,10 +1088,11 @@ export default function PartsRequestsCard() {
                     </div>
                   ))}
                 </div>
-              </div>
+                </AccordionContent>
+              </AccordionItem>
             )
           )}
-        </div>
+        </Accordion>
       )}
 
       {/* Edit Dialog */}
@@ -905,11 +1106,11 @@ export default function PartsRequestsCard() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className={dialogContentClass}>
+          <DialogHeader className="shrink-0">
             <DialogTitle>Edit Parts Request</DialogTitle>
           </DialogHeader>
-          <FormContent />
+          {renderFormContent()}
         </DialogContent>
       </Dialog>
     </div>

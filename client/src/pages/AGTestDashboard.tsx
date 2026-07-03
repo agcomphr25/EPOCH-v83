@@ -43,6 +43,11 @@ export default function AGTestDashboard() {
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser,
+  });
+  const dashboardEmployeeId = resolvedEmployee?.employeeId ?? currentUser?.employeeId ?? null;
 
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -128,6 +133,15 @@ export default function AGTestDashboard() {
           </Button>
         </div>
       </div>
+
+      {/* My Tasks Control Center */}
+      {dashboardEmployeeId && (
+        <MyTasksControlCenter
+          employeeId={dashboardEmployeeId}
+          userName={currentUser.username}
+          compact={false}
+        />
+      )}
 
       {/* Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -300,8 +314,8 @@ export default function AGTestDashboard() {
 
         <Card
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20"
-          onClick={() => navigateTo('/inventory/consolidated-needs')}
-          data-testid="card-consolidated-parts-needs"
+          onClick={() => navigateTo('/inventory/parts-request')}
+          data-testid="card-parts-requests"
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -312,7 +326,7 @@ export default function AGTestDashboard() {
               <ExternalLink className="w-4 h-4 text-gray-400" />
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Review and manage consolidated parts requests
+              Review and manage parts requests
             </p>
           </CardContent>
         </Card>
@@ -434,15 +448,6 @@ export default function AGTestDashboard() {
         {/* Weekly Shipping Widget */}
         <WeeklyShippingWidget />
       </div>
-
-      {/* My Tasks Control Center */}
-      {currentUser?.employeeId && (
-        <MyTasksControlCenter
-          employeeId={currentUser.employeeId}
-          userName={currentUser.username}
-          compact={false}
-        />
-      )}
 
       {/* Dashboard Layout */}
       {!expandedSection ? (

@@ -67,6 +67,11 @@ export default function GLENNTestDashboard() {
   const { data: currentUser, isLoading: isUserLoading } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
 
   const { data: orderStats, isLoading: isStatsLoading } = useQuery<{ pending: number; inProduction: number; completed: number }>({
     queryKey: ['/api/orders/stats'],
@@ -74,7 +79,14 @@ export default function GLENNTestDashboard() {
   });
 
   if (!isPremiumMode) {
-    return <LightModeDashboard currentUser={currentUser} isUserLoading={isUserLoading} onToggleMode={() => setIsPremiumMode(true)} />;
+    return (
+      <LightModeDashboard
+        currentUser={currentUser}
+        dashboardEmployeeId={dashboardEmployeeId}
+        isUserLoading={isUserLoading}
+        onToggleMode={() => setIsPremiumMode(true)}
+      />
+    );
   }
 
   return (
@@ -120,6 +132,28 @@ export default function GLENNTestDashboard() {
             </div>
           </div>
         </div>
+
+        {/* My Tasks Control Center */}
+        {isUserLoading ? (
+          <div className="mb-8">
+            <div className="depth-card space-y-3">
+              <div className="h-6 w-48 bg-white/10 rounded animate-pulse" />
+              <div className="h-4 w-full bg-white/10 rounded animate-pulse" />
+              <div className="h-4 w-3/4 bg-white/10 rounded animate-pulse" />
+              <div className="h-4 w-5/6 bg-white/10 rounded animate-pulse" />
+            </div>
+          </div>
+        ) : dashboardEmployeeId ? (
+          <div className="mb-8">
+            <div className="depth-card">
+              <MyTasksControlCenter
+                employeeId={dashboardEmployeeId}
+                userName={currentUser?.username ?? 'glennj'}
+                compact={false}
+              />
+            </div>
+          </div>
+        ) : null}
 
         {/* KPI Row */}
         <div className="dashboard-grid mb-8">
@@ -485,28 +519,6 @@ export default function GLENNTestDashboard() {
           <SystemHealthWidget variant="premium" />
         </div>
 
-        {/* My Tasks Control Center */}
-        {isUserLoading ? (
-          <div className="mt-8">
-            <div className="depth-card space-y-3">
-              <div className="h-6 w-48 bg-white/10 rounded animate-pulse" />
-              <div className="h-4 w-full bg-white/10 rounded animate-pulse" />
-              <div className="h-4 w-3/4 bg-white/10 rounded animate-pulse" />
-              <div className="h-4 w-5/6 bg-white/10 rounded animate-pulse" />
-            </div>
-          </div>
-        ) : currentUser?.employeeId ? (
-          <div className="mt-8">
-            <div className="depth-card">
-              <MyTasksControlCenter
-                employeeId={currentUser.employeeId}
-                userName={currentUser.username}
-                compact={false}
-              />
-            </div>
-          </div>
-        ) : null}
-
         {/* Footer */}
         <div className="section-divider"></div>
         <div className="text-center text-gray-500 text-sm">
@@ -519,10 +531,12 @@ export default function GLENNTestDashboard() {
 
 function LightModeDashboard({ 
   currentUser, 
+  dashboardEmployeeId,
   isUserLoading,
   onToggleMode 
 }: { 
   currentUser?: { id: number; username: string; role: string; employeeId?: number }; 
+  dashboardEmployeeId?: number | null;
   isUserLoading?: boolean;
   onToggleMode: () => void;
 }) {
@@ -648,6 +662,22 @@ function LightModeDashboard({
         </div>
       </div>
 
+      {/* My Tasks Control Center */}
+      {isUserLoading ? (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-3">
+          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+          <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
+          <div className="h-4 w-5/6 bg-gray-100 rounded animate-pulse" />
+        </div>
+      ) : dashboardEmployeeId ? (
+        <MyTasksControlCenter
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'glennj'}
+          compact={false}
+        />
+      ) : null}
+
 
       {/* Main Navigation Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -687,22 +717,6 @@ function LightModeDashboard({
       )}
 
       <PartsRequestOwnerApprovals userName={currentUser?.username} />
-
-      {/* My Tasks Control Center */}
-      {isUserLoading ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-3">
-          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
-          <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
-          <div className="h-4 w-5/6 bg-gray-100 rounded animate-pulse" />
-        </div>
-      ) : currentUser?.employeeId ? (
-        <MyTasksControlCenter
-          employeeId={currentUser.employeeId}
-          userName={currentUser.username}
-          compact={false}
-        />
-      ) : null}
 
       {/* Additional Navigation Items */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">

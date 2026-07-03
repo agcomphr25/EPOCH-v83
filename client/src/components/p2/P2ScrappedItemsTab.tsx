@@ -71,7 +71,7 @@ interface Rma {
     serializedItemId: string;
     rmaNumber: string;
     status: string;
-    traceableMaterials: { name: string; lot: string; qty: string }[];
+    traceableMaterials: TraceableMaterial[];
     shippedAt: string | null;
     completedAt: string | null;
     notes: string | null;
@@ -82,12 +82,28 @@ interface Rma {
 }
 
 interface TraceableMaterial {
+  partNumber?: string;
   name: string;
   lot: string;
   qty: string;
 }
 
+interface InventoryItemOption {
+  agPartNumber: string;
+  name: string;
+  purchaseUnit?: string | null;
+}
+
+interface ProjectOption {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  poId: number | null;
+  poNumber: string | null;
+}
+
 const DISPOSITION_TYPES = ['Scrap', 'Repair', 'Use as Is', 'Use for Reference', 'Return to Vendor'] as const;
+const USE_AS_IS_DEPARTMENTS = ['Pending Layup', 'Layup', 'Assemble/Disassembly', 'CNC', 'Finish', 'Paint', 'Final QC'] as const;
 const REASON_QUALITY = 'quality';
 const REASON_OTHER = 'other';
 const QUALITY_LABEL = 'Quality does not meet customer tolerances/requirements';
@@ -127,14 +143,26 @@ function DispositionDialog({
   const [dispositionDate, setDispositionDate] = useState(today);
   const [reasonType, setReasonType] = useState<string>(REASON_QUALITY);
   const [reasonOther, setReasonOther] = useState('');
+  const [useAsIsDestination, setUseAsIsDestination] = useState<'inventory' | 'production'>('inventory');
+  const [returnProjectId, setReturnProjectId] = useState('');
+  const [returnDepartment, setReturnDepartment] = useState('');
   const [notes, setNotes] = useState('');
+
+  const { data: projects = [] } = useQuery<ProjectOption[]>({
+    queryKey: ['/api/pm-dashboard/projects'],
+    enabled: dispositionType === 'Use as Is' && useAsIsDestination === 'production',
+  });
 
   const createMutation = useMutation({
     mutationFn: (data: object) =>
       apiRequest('/api/p2/nonconforming-dispositions', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/rmas'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/closed-ncr'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/nonconforming-rmas'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/scheduling-list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
       toast({ title: 'Disposition filed', description: 'The disposition report has been submitted.' });
       onSuccess();
     },
@@ -157,6 +185,16 @@ function DispositionDialog({
       toast({ title: 'Missing field', description: 'Please describe the reason.', variant: 'destructive' });
       return;
     }
+    if (dispositionType === 'Use as Is' && useAsIsDestination === 'production') {
+      if (!returnProjectId) {
+        toast({ title: 'Missing field', description: 'Please select a return project.', variant: 'destructive' });
+        return;
+      }
+      if (!returnDepartment) {
+        toast({ title: 'Missing field', description: 'Please select a return department.', variant: 'destructive' });
+        return;
+      }
+    }
     createMutation.mutate({
       serializedItemId: item.id,
       dispositionType,
@@ -168,6 +206,9 @@ function DispositionDialog({
       dispositionDate,
       reasonType,
       reasonOther: reasonType === REASON_OTHER ? reasonOther.trim() : null,
+      useAsIsDestination,
+      returnProjectId: useAsIsDestination === 'production' ? returnProjectId : null,
+      returnDepartment: useAsIsDestination === 'production' ? returnDepartment : null,
       notes: notes.trim() || null,
     });
   };
@@ -200,7 +241,15 @@ function DispositionDialog({
 
           <div>
             <Label htmlFor="dispositionType">Disposition *</Label>
-            <Select value={dispositionType} onValueChange={setDispositionType}>
+            <Select
+              value={dispositionType}
+              onValueChange={(value) => {
+                setDispositionType(value);
+                setUseAsIsDestination('inventory');
+                setReturnProjectId('');
+                setReturnDepartment('');
+              }}
+            >
               <SelectTrigger id="dispositionType">
                 <SelectValue placeholder="Select disposition..." />
               </SelectTrigger>
@@ -211,6 +260,81 @@ function DispositionDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {dispositionType === 'Use as Is' && (
+            <div className="space-y-3 rounded-md border p-3">
+              <Label>Use As Is Destination *</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3">
+                  <input
+                    type="radio"
+                    name="useAsIsDestination"
+                    value="inventory"
+                    checked={useAsIsDestination === 'inventory'}
+                    onChange={() => {
+                      setUseAsIsDestination('inventory');
+                      setReturnProjectId('');
+                      setReturnDepartment('');
+                    }}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">Send to inventory</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Capture this serial as on hand under its part number.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3">
+                  <input
+                    type="radio"
+                    name="useAsIsDestination"
+                    value="production"
+                    checked={useAsIsDestination === 'production'}
+                    onChange={() => setUseAsIsDestination('production')}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">Return to production</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Reactivate this serial at a selected project and department.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              {useAsIsDestination === 'production' && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="returnProjectId">Project *</Label>
+                    <Select value={returnProjectId} onValueChange={setReturnProjectId}>
+                      <SelectTrigger id="returnProjectId">
+                        <SelectValue placeholder="Select project..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.projectCode} - {project.projectName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="returnDepartment">Department *</Label>
+                    <Select value={returnDepartment} onValueChange={setReturnDepartment}>
+                      <SelectTrigger id="returnDepartment">
+                        <SelectValue placeholder="Select department..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {USE_AS_IS_DEPARTMENTS.map((department) => (
+                          <SelectItem key={department} value={department}>{department}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <Label htmlFor="authorization">Authorization *</Label>
@@ -298,12 +422,18 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
   );
   const [newMaterial, setNewMaterial] = useState<TraceableMaterial>({ name: '', lot: '', qty: '' });
 
+  const { data: inventoryItems = [] } = useQuery<InventoryItemOption[]>({
+    queryKey: ['/api/inventory/items/part-numbers'],
+    enabled: expanded && rma.rma.status === 'open',
+  });
+
   const updateMutation = useMutation({
     mutationFn: (data: object) =>
-      apiRequest(`/api/p2/rmas/${rma.rma.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      apiRequest(`/api/p2/nonconforming-rmas/${rma.rma.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/rmas'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/nonconforming-rmas'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/closed-ncr'] });
       onUpdated();
     },
     onError: (err: any) => {
@@ -312,11 +442,20 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
   });
 
   const addMaterial = () => {
-    if (!newMaterial.name.trim()) return;
+    if (!newMaterial.partNumber && !newMaterial.name.trim()) return;
     const updated = [...materials, { ...newMaterial }];
     setMaterials(updated);
-    setNewMaterial({ name: '', lot: '', qty: '' });
+    setNewMaterial({ partNumber: undefined, name: '', lot: '', qty: '' });
     updateMutation.mutate({ traceableMaterials: updated });
+  };
+
+  const selectMaterial = (partNumber: string) => {
+    const item = inventoryItems.find((option) => option.agPartNumber === partNumber);
+    setNewMaterial({
+      ...newMaterial,
+      partNumber,
+      name: item?.name || newMaterial.name,
+    });
   };
 
   const removeMaterial = (idx: number) => {
@@ -389,6 +528,7 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
               <Table className="mb-2">
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Part #</TableHead>
                     <TableHead>Material</TableHead>
                     <TableHead>Lot #</TableHead>
                     <TableHead>Qty</TableHead>
@@ -398,6 +538,7 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
                 <TableBody>
                   {materials.map((m, idx) => (
                     <TableRow key={idx}>
+                      <TableCell className="font-mono text-sm">{m.partNumber || 'â€”'}</TableCell>
                       <TableCell className="text-sm">{m.name}</TableCell>
                       <TableCell className="font-mono text-sm">{m.lot}</TableCell>
                       <TableCell className="text-sm">{m.qty}</TableCell>
@@ -420,13 +561,19 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
             {rma.rma.status === 'open' && (
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
-                  <Label className="text-xs">Material Name</Label>
-                  <Input
-                    placeholder="Material..."
-                    value={newMaterial.name}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, name: e.target.value })}
-                    className="h-8 text-sm"
-                  />
+                  <Label className="text-xs">Inventory Item</Label>
+                  <Select value={newMaterial.partNumber || ''} onValueChange={selectMaterial}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select item..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inventoryItems.map((item) => (
+                        <SelectItem key={item.agPartNumber} value={item.agPartNumber}>
+                          {item.agPartNumber} - {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="w-28">
                   <Label className="text-xs">Lot #</Label>
@@ -496,21 +643,34 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<ScrappedItem | null>(null);
 
-  const { data: scrappedItemsRaw = [], isLoading, isError, error, refetch: refetchItems } = useQuery<ScrappedItem[]>({
+  const { data: openNcrItemsRaw = [], isLoading, isError, error, refetch: refetchItems } = useQuery<ScrappedItem[]>({
     queryKey: ['/api/p2/serialized-items/scrapped'],
     refetchInterval: 60000,
   });
 
-  const scrappedItems = selectedPOIds.length > 0
-    ? scrappedItemsRaw.filter((item) => item.poId !== null && selectedPOIds.includes(item.poId))
-    : scrappedItemsRaw;
+  const openNcrItems = selectedPOIds.length > 0
+    ? openNcrItemsRaw.filter((item) => item.poId !== null && selectedPOIds.includes(item.poId))
+    : openNcrItemsRaw;
 
-  const { data: rmasRaw = [], refetch: refetchRmas } = useQuery<Rma[]>({
-    queryKey: ['/api/p2/rmas'],
+  const { data: closedNcrItemsRaw = [], isLoading: closedNcrLoading } = useQuery<ScrappedItem[]>({
+    queryKey: ['/api/p2/serialized-items/closed-ncr'],
     refetchInterval: 60000,
   });
 
-  const filtered = scrappedItems.filter((item) => {
+  const closedNcrItems = selectedPOIds.length > 0
+    ? closedNcrItemsRaw.filter((item) => item.poId !== null && selectedPOIds.includes(item.poId))
+    : closedNcrItemsRaw;
+
+  const { data: rmasRaw = [], refetch: refetchRmas } = useQuery<Rma[]>({
+    queryKey: ['/api/p2/nonconforming-rmas'],
+    refetchInterval: 60000,
+  });
+
+  const rmas = selectedPOIds.length > 0
+    ? rmasRaw.filter((r) => r.item?.poId !== null && r.item?.poId !== undefined && selectedPOIds.includes(r.item.poId))
+    : rmasRaw;
+
+  const filtered = openNcrItems.filter((item) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -524,9 +684,9 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
     );
   });
 
-  const pendingCount = scrappedItems.filter((i) => !i.disposition).length;
-  const openRmaCount = rmasRaw.filter((r) => r.rma.status === 'open').length;
-  const activeRmas = rmasRaw.filter((r) => r.rma.status === 'open' || r.rma.status === 'shipped');
+  const needsDispositionCount = openNcrItems.filter((i) => !i.disposition).length;
+  const openRmaCount = rmas.filter((r) => r.rma.status === 'open').length;
+  const activeRmas = rmas.filter((r) => r.rma.status === 'open' || r.rma.status === 'shipped');
 
   if (isLoading) {
     return (
@@ -567,8 +727,8 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
           <TabsTrigger value="items" className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
             Nonconforming Items
-            {pendingCount > 0 && (
-              <Badge variant="destructive" className="ml-1 text-xs px-1.5">{pendingCount}</Badge>
+            {needsDispositionCount > 0 && (
+              <Badge variant="destructive" className="ml-1 text-xs px-1.5">{needsDispositionCount}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="rmas" className="flex items-center gap-2">
@@ -580,6 +740,13 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="closed" className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4" />
+            Closed NCR
+            {closedNcrItems.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs px-1.5">{closedNcrItems.length}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="items">
@@ -588,11 +755,11 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5 text-orange-500" />
-                  Nonconforming P2 Items
-                  <Badge variant="secondary" className="ml-2">{scrappedItems.length}</Badge>
-                  {pendingCount > 0 && (
+                  Open Nonconforming P2 Items
+                  <Badge variant="secondary" className="ml-2">{openNcrItems.length}</Badge>
+                  {needsDispositionCount > 0 && (
                     <Badge variant="destructive" className="ml-1">
-                      {pendingCount} need attention
+                      {needsDispositionCount} need disposition
                     </Badge>
                   )}
                 </CardTitle>
@@ -611,10 +778,10 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
               {filtered.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <AlertTriangle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  {scrappedItems.length === 0 ? (
+                  {openNcrItems.length === 0 ? (
                     <>
-                      <p className="font-medium">No nonconforming items</p>
-                      <p className="text-sm">Items flagged as nonconforming will appear here</p>
+                      <p className="font-medium">No open nonconforming items</p>
+                      <p className="text-sm">Items opened as NCR will appear here until disposition is complete</p>
                     </>
                   ) : (
                     <>
@@ -724,9 +891,9 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
                       {openRmaCount} open
                     </Badge>
                   )}
-                  {rmasRaw.length > activeRmas.length && (
+                  {rmas.length > activeRmas.length && (
                     <span className="text-xs text-muted-foreground">
-                      {rmasRaw.length - activeRmas.length} completed
+                      {rmas.length - activeRmas.length} completed
                     </span>
                   )}
                 </div>
@@ -751,6 +918,72 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
                       }}
                     />
                   ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="closed">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  Closed NCR
+                  <Badge variant="secondary" className="ml-2">{closedNcrItems.length}</Badge>
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {closedNcrLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : closedNcrItems.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-medium">No closed NCR records</p>
+                  <p className="text-sm">Completed dispositions will appear here</p>
+                </div>
+              ) : (
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Serial Number</TableHead>
+                        <TableHead>Part Number</TableHead>
+                        <TableHead>PO Number</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Final Disposition</TableHead>
+                        <TableHead>Reason</TableHead>
+                        <TableHead>Authorized By</TableHead>
+                        <TableHead>Closed At</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {closedNcrItems.map((item) => (
+                        <TableRow key={`${item.id}-${item.disposition?.id || 'closed'}`}>
+                          <TableCell className="font-mono font-medium">{item.serialNumber}</TableCell>
+                          <TableCell className="font-mono text-sm">{item.partNumber}</TableCell>
+                          <TableCell className="font-medium">{item.poNumber}</TableCell>
+                          <TableCell>{item.customerName}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{item.disposition?.dispositionType || 'Resolved'}</Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[220px] truncate" title={item.disposition?.reasonOther || item.disposition?.reasonType || ''}>
+                            {item.disposition?.reasonType === REASON_OTHER
+                              ? item.disposition?.reasonOther || 'Other'
+                              : QUALITY_LABEL}
+                          </TableCell>
+                          <TableCell>{item.disposition?.authorization || 'â€”'}</TableCell>
+                          <TableCell className="text-sm whitespace-nowrap">
+                            {formatDateTime(item.disposition?.resolvedAt || item.disposition?.createdAt || item.scrapAt)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </CardContent>

@@ -37,6 +37,20 @@ interface ReceiverAccount {
   zipCode: string;
 }
 
+function getNotificationErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as any;
+    const details = Array.isArray(data?.details)
+      ? data.details.filter(Boolean).join('; ')
+      : typeof data?.details === 'string'
+        ? data.details
+        : '';
+    return [data?.error || error.message, details].filter(Boolean).join(': ');
+  }
+
+  return error instanceof Error ? error.message : 'Notification could not be delivered.';
+}
+
 export function BulkShippingActions({
   selectedOrders,
   onClearSelection,
@@ -278,7 +292,7 @@ export function BulkShippingActions({
           console.error("Auto notification failed:", err);
           toast({
             title: "Notification Error",
-            description: "Label created but notification could not be delivered.",
+            description: `Label created but notification could not be delivered: ${getNotificationErrorMessage(err)}`,
             variant: "destructive",
           });
         }

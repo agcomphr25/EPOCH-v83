@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  ExternalLink,
   FileSearch,
   Loader2,
   RefreshCw,
@@ -77,6 +78,16 @@ interface ChargeCodeUsageReportData {
     laborDistEndDate: string | null;
     totalHours: number;
     chargeCodeStatus: 'ACTIVE' | 'INACTIVE' | 'INVALID';
+    punchCount: number;
+    editedPunchCount: number;
+    editedPunches: Array<{
+      id: number;
+      clockIn: string | null;
+      clockOut: string | null;
+      editNote: string | null;
+      updatedAt: string | null;
+      link: string;
+    }>;
   }>;
   exceptions: Array<{
     entryId: number;
@@ -92,8 +103,13 @@ interface ChargeCodeUsageReportData {
     operation: string | null;
     approvalStatus: string | null;
     laborApprovalId: number | null;
+    isEdited: boolean;
+    editNote: string | null;
+    punchLink: string;
   }>;
 }
+
+type DistributionRow = ChargeCodeUsageReportData['distributionRows'][number];
 
 const handlingLabel: Record<string, string> = {
   DIRECT_CONTRACT: 'Direct Contract',
@@ -138,6 +154,9 @@ function downloadCsv(report: ChargeCodeUsageReportData) {
     'Labor Dist End Date',
     'Hours',
     'Charge Code Status',
+    'Punch Count',
+    'Edited Punch Count',
+    'Edited Punch IDs',
   ];
   const distributionRows = report.distributionRows.map((row) => [
     row.employeeName,
@@ -155,6 +174,9 @@ function downloadCsv(report: ChargeCodeUsageReportData) {
     row.laborDistEndDate,
     row.totalHours,
     row.chargeCodeStatus,
+    row.punchCount,
+    row.editedPunchCount,
+    row.editedPunches.map((punch) => punch.id).join('; '),
   ]);
 
   const masterHeader = [
@@ -199,6 +221,9 @@ function downloadCsv(report: ChargeCodeUsageReportData) {
     'Department',
     'Operation',
     'Approval Status',
+    'Edited',
+    'Edit Note',
+    'Punch Link',
   ];
   const exceptionRows = report.exceptions.map((row) => [
     row.exceptionType,
@@ -211,6 +236,9 @@ function downloadCsv(report: ChargeCodeUsageReportData) {
     row.department,
     row.operation,
     row.approvalStatus,
+    row.isEdited ? 'Yes' : 'No',
+    row.editNote,
+    row.punchLink,
   ]);
 
   const lines = [
@@ -263,6 +291,9 @@ function downloadDistributionCsv(report: ChargeCodeUsageReportData) {
       'Labor Dist End Date',
       'Hours',
       'Charge Code Status',
+      'Punch Count',
+      'Edited Punch Count',
+      'Edited Punch IDs',
     ],
     ...report.distributionRows.map((row) => [
       row.employeeName,
@@ -280,6 +311,9 @@ function downloadDistributionCsv(report: ChargeCodeUsageReportData) {
       row.laborDistEndDate,
       row.totalHours,
       row.chargeCodeStatus,
+      row.punchCount,
+      row.editedPunchCount,
+      row.editedPunches.map((punch) => punch.id).join('; '),
     ]),
   ];
 
@@ -321,6 +355,36 @@ export default function ChargeCodeUsageReport() {
   const totalExceptions = (data?.summary.invalidLaborEntries ?? 0)
     + (data?.summary.inactiveLaborEntries ?? 0)
     + (data?.summary.approvalExceptionEntries ?? 0);
+
+  const distributionGroups = useMemo(() => {
+    const groups: Array<{
+      employeeId: string;
+      employeeName: string;
+      totalHours: number;
+      rows: DistributionRow[];
+    }> = [];
+    const byEmployee = new Map<string, (typeof groups)[number]>();
+
+    for (const row of data?.distributionRows ?? []) {
+      const key = row.employeeId;
+      let group = byEmployee.get(key);
+      if (!group) {
+        group = {
+          employeeId: row.employeeId,
+          employeeName: row.employeeName ?? row.employeeId,
+          totalHours: 0,
+          rows: [],
+        };
+        byEmployee.set(key, group);
+        groups.push(group);
+      }
+
+      group.rows.push(row);
+      group.totalHours += row.totalHours;
+    }
+
+    return groups;
+  }, [data?.distributionRows]);
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -455,7 +519,7 @@ export default function ChargeCodeUsageReport() {
                       <TableHead>Suffix</TableHead>
                       <TableHead>Position Title</TableHead>
                       <TableHead>Hiring Org</TableHead>
-                      <TableHead className="text-right">Dist%</TableHead>
+                      <TableHead className="text-right">Employee Dist%</TableHead>
                       <TableHead>Job Start Date</TableHead>
                       <TableHead>Job End Date</TableHead>
                       <TableHead>Labor Dist Start Date</TableHead>
@@ -470,22 +534,70 @@ export default function ChargeCodeUsageReport() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      data.distributionRows.map((row, index) => (
-                        <TableRow key={`${row.employeeId}-${row.indexCode}-${index}`} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/35'}>
-                          <TableCell className="whitespace-nowrap">{row.employeeName ?? row.employeeId}</TableCell>
-                          <TableCell className="whitespace-nowrap">{row.employeeId}</TableCell>
-                          <TableCell className="font-mono">{row.indexCode}</TableCell>
-                          <TableCell>{handlingLabel[row.accountCode ?? ''] ?? row.accountCode ?? '-'}</TableCell>
-                          <TableCell>{row.position ?? '-'}</TableCell>
-                          <TableCell>{row.suffix}</TableCell>
-                          <TableCell className="whitespace-nowrap">{row.positionTitle ?? '-'}</TableCell>
-                          <TableCell>{row.hiringOrg ?? '-'}</TableCell>
-                          <TableCell className="text-right font-medium">{row.distributionPercent.toFixed(2)}</TableCell>
-                          <TableCell>{row.jobStartDate ?? '-'}</TableCell>
-                          <TableCell>{row.jobEndDate ?? '-'}</TableCell>
-                          <TableCell>{row.laborDistStartDate ?? '-'}</TableCell>
-                          <TableCell>{row.laborDistEndDate ?? '-'}</TableCell>
-                        </TableRow>
+                      distributionGroups.map((group, groupIndex) => (
+                        <Fragment key={group.employeeId}>
+                          <TableRow className={groupIndex % 2 === 0 ? 'bg-slate-100/90 hover:bg-slate-100/90' : 'bg-blue-50/80 hover:bg-blue-50/80'}>
+                            <TableCell colSpan={13} className="py-3">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                  <div className="font-semibold">{group.employeeName}</div>
+                                  <div className="text-xs text-muted-foreground">{group.employeeId}</div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  <Badge variant="outline">{group.rows.length} charge code{group.rows.length === 1 ? '' : 's'}</Badge>
+                                  <Badge variant="secondary">{formatHours(group.totalHours)}</Badge>
+                                  <span>Rows total 100% of this employee's selected-period hours</span>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          {group.rows.map((row, rowIndex) => (
+                            <TableRow
+                              key={`${row.employeeId}-${row.indexCode}-${rowIndex}`}
+                              className={
+                                row.editedPunchCount > 0
+                                  ? 'bg-amber-50/80 hover:bg-amber-50/80'
+                                  : groupIndex % 2 === 0 ? 'bg-background' : 'bg-blue-50/25'
+                              }
+                            >
+                              <TableCell className="whitespace-nowrap pl-8">{row.employeeName ?? row.employeeId}</TableCell>
+                              <TableCell className="whitespace-nowrap">{row.employeeId}</TableCell>
+                              <TableCell className="font-mono">{row.indexCode}</TableCell>
+                              <TableCell>{handlingLabel[row.accountCode ?? ''] ?? row.accountCode ?? '-'}</TableCell>
+                              <TableCell>{row.position ?? '-'}</TableCell>
+                              <TableCell>{row.suffix}</TableCell>
+                              <TableCell className="whitespace-nowrap">{row.positionTitle ?? '-'}</TableCell>
+                              <TableCell>{row.hiringOrg ?? '-'}</TableCell>
+                              <TableCell className="text-right font-medium">{row.distributionPercent.toFixed(2)}</TableCell>
+                              <TableCell>{row.jobStartDate ?? '-'}</TableCell>
+                              <TableCell>{row.jobEndDate ?? '-'}</TableCell>
+                              <TableCell>{row.laborDistStartDate ?? '-'}</TableCell>
+                              <TableCell>
+                                <div>{row.laborDistEndDate ?? '-'}</div>
+                                {row.editedPunchCount > 0 && (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {row.editedPunches.slice(0, 3).map((punch) => (
+                                      <Link
+                                        key={punch.id}
+                                        href={punch.link}
+                                        className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-200"
+                                        title={punch.editNote ?? `Open punch ${punch.id}`}
+                                      >
+                                        Edited punch #{punch.id}
+                                        <ExternalLink className="h-3 w-3" />
+                                      </Link>
+                                    ))}
+                                    {row.editedPunches.length > 3 && (
+                                      <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[11px] text-amber-900">
+                                        +{row.editedPunches.length - 3} more
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </Fragment>
                       ))
                     )}
                   </TableBody>
@@ -566,7 +678,7 @@ export default function ChargeCodeUsageReport() {
                     </TableHeader>
                     <TableBody>
                       {data.exceptions.map((row) => (
-                        <TableRow key={row.entryId}>
+                        <TableRow key={row.entryId} className={row.isEdited ? 'bg-amber-50/80 hover:bg-amber-50/80' : undefined}>
                           <TableCell><ExceptionBadge type={row.exceptionType} /></TableCell>
                           <TableCell>{row.workDate}</TableCell>
                           <TableCell>
@@ -576,7 +688,19 @@ export default function ChargeCodeUsageReport() {
                           <TableCell className="font-mono">{row.chargeCode ?? '-'}</TableCell>
                           <TableCell className="text-right">{row.hours.toLocaleString()}</TableCell>
                           <TableCell>{row.department ?? '-'}</TableCell>
-                          <TableCell>{row.approvalStatus ?? '-'}</TableCell>
+                          <TableCell>
+                            <div>{row.approvalStatus ?? '-'}</div>
+                            {row.isEdited && (
+                              <Link
+                                href={row.punchLink}
+                                className="mt-1 inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-200"
+                                title={row.editNote ?? `Open punch ${row.entryId}`}
+                              >
+                                Edited punch #{row.entryId}
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

@@ -904,24 +904,22 @@ export default function UserManagement() {
                 <Label htmlFor="isActive">Active User</Label>
               </div>
 
-              {formData.employeeId && (
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="isFinishTechnician"
-                    data-testid="checkbox-finish-technician"
-                    checked={formData.isFinishTechnician || false}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        isFinishTechnician: e.target.checked,
-                      })
-                    }
-                    className="rounded"
-                  />
-                  <Label htmlFor="isFinishTechnician">Finish Technician</Label>
-                </div>
-              )}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="isFinishTechnician"
+                  data-testid="checkbox-finish-technician"
+                  checked={formData.isFinishTechnician || false}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      isFinishTechnician: e.target.checked,
+                    })
+                  }
+                  className="rounded"
+                />
+                <Label htmlFor="isFinishTechnician">Finish Technician</Label>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4">

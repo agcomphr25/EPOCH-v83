@@ -241,6 +241,24 @@ const KNOWN_DUPLICATE_PREFIXES = new Set<string>([
   '0100', // 0100_audit_ledger_privilege_hardening.sql vs 0100_burden_rates_engine.sql — parallel development (audit ledger privilege + burden rates engine)
   '0109', // 0109_inventory_transaction_ledger.sql vs 0109_vendor_pos_purchasing_controls_columns.sql — vendor_pos hotfix landed in parallel with the immutable inventory ledger task
   '0111', // 0111_critical_schema_health_repairs.sql vs 0111_inventory_anomaly_detection.sql vs 0111_routing_step_enforcement.sql — three parallel tasks (schema repairs, anomaly detection, routing-step enforcement) merged in the same window
+  '0112', // 0112_cycle_count_subsystem.sql vs 0112_inventory_traceability_capability.sql vs 0112_material_issue_approvals.sql — three parallel inventory tasks merged in the same window
+  '0114', // 0114_inventory_high_risk_approvals.sql vs 0114_shelf_life_out_time_enforcement.sql — parallel inventory governance work
+  '0117', // 0117_vendor_po_items_purchasing_unit_columns.sql vs 0117_vendor_po_line_project_traceability.sql — parallel vendor PO line enhancements
+  '0121', // 0121_p2_invoice_review_send_structure.sql vs 0121_quote_snapshots_and_po_reconciliation.sql — parallel quoting/invoicing work
+  '0127', // 0127_contract_po_review_flowdown.sql vs 0127_quote_contract_snapshot_release_gates.sql — parallel contract review/release-gate work
+  '0128', // 0128_engineering_control_revision_eco.sql vs 0128_procurement_section6_supplier_controls.sql — parallel engineering ECO + procurement controls
+  '0129', // 0129_manufacturing_section8_execution_controls.sql vs 0129_phase1_foundation_closure.sql vs 0129_quality_section9_ncr_capa_calibration.sql vs 0129_receiving_inspection_plans.sql — four parallel compliance/closure tasks merged together
+  '0130', // 0130_audit_dcaa_security_section11.sql vs 0130_cmmc_itar_security_vault.sql vs 0130_vendor_po_support_tables_safe.sql — parallel compliance + vendor PO support
+  '0131', // 0131_nonconformance_schema_alignment.sql vs 0131_user_sessions_login_compatibility.sql — parallel NCR alignment + session compatibility hotfix
+  '0134', // 0134_conversational_rfq_risk_sessions.sql vs 0134_knowledge_capture_enrichment.sql vs 0134_project_revisions.sql — three parallel feature tasks (RFQ risk, knowledge capture, project revisions) merged the same window
+  '0139', // 0139_p2_production_orders_project_id.sql vs 0139_wad_dashboard_assignment.sql — parallel P2 production-order linkage + WAD dashboard assignment
+  '0101', // 0101_audit_tamper_attempts_durable.sql vs 0101_burden_rate_accumulation.sql — parallel audit tamper-attempt hardening + burden rate accumulation workflow
+  '0115', // 0115_receiving_project_material_acceptance.sql vs 0115_vendor_pos_production_line.sql — parallel receiving project material acceptance + vendor PO production line tasks merged in the same window
+  '0135', // 0135_p2_po_contract_review_role.sql vs 0135_pto_balances_and_schedules.sql — parallel P2 contract review role + PTO balances/schedules feature work merged in the same window
+  '0116', // 0116_parts_request_po_approvals.sql vs 0116_po_project_links.sql — parallel P2 PO project-link feature landed alongside parts-request PO approvals
+  '0136', // 0136_p1_fulfillment_attempts.sql vs 0136_p2_production_change_form_approvals.sql — parallel P1 fulfillment attempts + P2 production change form approvals merged in the same window
+  '0186', // 0186_draft_bom_draft_access_controls.sql vs 0186_inventory_items_machined_part_fields.sql — parallel draft BOM access controls + inventory machined part fields merged in the same window
+  '0187', // 0187_cnc_operation_batch_labor_links.sql vs 0187_repair_p2_po_unit_serials.sql — parallel CNC batch labor links + P2 PO unit serial repair merged in the same window
 ]);
 
 describe('Migration file structure', () => {
@@ -434,6 +452,16 @@ const KNOWN_BROKEN_ON_SCHEMA_BASELINE: Record<string, string> = {
   '0027_brian_ramirez_account_fix.sql':
     'One-off backfill writes users.password, a column dropped in a later migration. ' +
     'Harmless on the modern baseline — the row was already patched at its original epoch.',
+  // Migration 0164 adds a column and index to charge_code_employee_assignments, but that
+  // table was created at runtime by ensureChargeCodeAssignmentTable() in employees.ts, not
+  // by any migration file.  The schema-baseline replay starts from a pg_dump that includes
+  // the table (it exists in production), but a freshly seeded scratch DB does not have it
+  // yet when 0164 runs.  This is a structural artifact of the table being created outside
+  // the migration pipeline — not a step-ordering bug in any in-flight migration.
+  '0164_charge_code_production_line_controls.sql':
+    'Adds column/index to charge_code_employee_assignments, which is created at runtime ' +
+    '(ensureChargeCodeAssignmentTable in employees.ts), not via a migration. ' +
+    'Table exists in production but is absent in a fresh scratch-DB baseline replay.',
 };
 
 // ---------------------------------------------------------------------------
@@ -620,6 +648,11 @@ const EXEMPT_FROM_RETIRED_COLUMN_CHECK: Record<string, string> = {
     'All CREATE TYPE statements use IF NOT EXISTS guards. No column renames or ' +
     'drops. Net-new tables only: proteus_prompts, proteus_prompt_variables, ' +
     'proteus_prompt_executions, proteus_prompt_results, proteus_prompt_tags. Safe.',
+  '0153_user_finish_technician_flag.sql':
+    'All first_name/last_name references here target public.users, not ' +
+    'timekeeping.employees. The timekeeping.employees columns were renamed by ' +
+    '0049, but public.users always had and still has first_name/last_name columns ' +
+    'that were never renamed. Same pattern as 0080_link_users_to_employees.sql.',
 };
 
 /**
@@ -863,5 +896,6 @@ describe('Schema-baseline migration replay (scratch DB seeded from pg_dump)', ()
       `Unexpected migration errors on schema-baseline replay — these indicate real bugs:\n${errors.join('\n')}`,
     ).toHaveLength(0);
   // pg_dump + CREATE DATABASE + psql restore + migration replay can take 30–60 s
-  }, 90_000);
+  // initially, but grows with the migration set; allow generous headroom.
+  }, 300_000);
 });

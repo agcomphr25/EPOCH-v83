@@ -2,6 +2,12 @@ import type { Express, Request, Response } from "express";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { canAccessObject, ObjectPermission } from "./objectAcl";
 import { pool } from "../../db";
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+  isSupabaseObjectPath,
+} from "../../src/services/fileStorageProvider";
 
 /**
  * Register object storage routes for file uploads.
@@ -27,12 +33,17 @@ export function registerObjectStorageRoutes(app: Express): void {
         return res.status(400).json({ error: "Missing required field: name" });
       }
 
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      const provider = getFileStorageProvider();
+      const target = await provider.createUploadTarget({
+        fileName: name,
+        contentType,
+        scope: "uploads",
+      });
 
       res.json({
-        uploadURL,
-        objectPath,
+        uploadURL: target.uploadURL,
+        objectPath: target.objectPath,
+        provider: target.provider,
         metadata: { name, size, contentType },
       });
     } catch (error) {
@@ -42,16 +53,56 @@ export function registerObjectStorageRoutes(app: Express): void {
         err?.message ?? error,
         err?.status ? `(sidecar status ${err.status})` : ""
       );
-      const reason = err?.reason ?? "unknown";
-      const message = err?.message ?? "Failed to generate upload URL";
-      const httpStatus =
-        err?.status === 401 || err?.status === 403
-          ? 503
-          : isStorageUnavailableError(error)
-            ? 503
-            : 500;
+      const { status, reason, message } = getStorageErrorResponse(error);
+      const httpStatus = status === 401 || status === 403 ? 503 : status;
       res.status(httpStatus).json({
         error: "Failed to generate upload URL",
+        reason,
+        details: message,
+      });
+    }
+  });
+
+  /**
+   * GET /api/uploads/diagnostics - Summarize upload storage health without exposing secrets.
+   */
+  app.get("/api/uploads/diagnostics", async (_req: Request, res: Response) => {
+    const configuredProvider = process.env.FILE_STORAGE_PROVIDER || null;
+    const hasSupabaseConfig = Boolean(
+      process.env.SUPABASE_URL &&
+        (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY) &&
+        (process.env.SUPABASE_STORAGE_BUCKET || process.env.FILE_STORAGE_BUCKET)
+    );
+    const hasReplitPrivateDir = Boolean(process.env.PRIVATE_OBJECT_DIR);
+    const provider = getFileStorageProvider();
+
+    try {
+      const target = await provider.createUploadTarget({
+        fileName: "diagnostic.txt",
+        contentType: "text/plain",
+        scope: "diagnostics",
+        entityId: "healthcheck",
+      });
+
+      res.json({
+        ok: true,
+        provider: provider.name,
+        configuredProvider,
+        hasSupabaseConfig,
+        hasReplitPrivateDir,
+        canCreateUploadTarget: true,
+        targetProvider: target.provider,
+        objectPathPrefix: target.objectPath.split("/").slice(0, 4).join("/"),
+      });
+    } catch (error) {
+      const { status, reason, message } = getStorageErrorResponse(error);
+      res.status(status === 401 || status === 403 ? 503 : status).json({
+        ok: false,
+        provider: provider.name,
+        configuredProvider,
+        hasSupabaseConfig,
+        hasReplitPrivateDir,
+        canCreateUploadTarget: false,
         reason,
         details: message,
       });
@@ -81,6 +132,11 @@ export function registerObjectStorageRoutes(app: Express): void {
       }
 
       const user = (req as any).user;
+      if (isSupabaseObjectPath(req.path)) {
+        await getFileStorageProviderForObjectPath(req.path).downloadObject(req.path, res);
+        return;
+      }
+
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
 
       const allowed = await canAccessObject({

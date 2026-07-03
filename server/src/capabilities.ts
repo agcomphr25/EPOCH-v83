@@ -62,6 +62,7 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   // Inventory
   'inventory.adjust',
   'inventory.manage_requests',
+  'inventory.approve_parts_requests',
   'inventory.traceability.view',
   'inventory.approve_high_risk',
 
@@ -78,6 +79,8 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
 
   // Quality
   'quality.manage_definitions',
+  'quality.manage_capa',
+  'quality.manage_calibration',
 
   // Purchasing
   'purchasing.manage_pos',
@@ -254,6 +257,9 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
  *   Routes:     POST /api/ar-payments/
  *               POST /api/ar-payments/:id/allocate
  *               DELETE /api/ar-payments/:id
+ *               POST /api/orders/bulk-payment
+ *               POST /api/payments/batch
+ *               POST /api/payments/bulk-live
  *   Seeded to:  ADMIN, OWNER, MANAGER
  *
  * inventory.adjust
@@ -267,6 +273,12 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
  *   Routes:     POST /api/inventory/parts-requests/receive
  *               POST /api/inventory/parts-requests/:id/reject
  *   Seeded to:  ADMIN, OWNER, SUPERVISOR, MANAGER
+ *
+ * inventory.approve_parts_requests
+ *   Governance: Approve inventory parts requests before they enter RFQ or Vendor PO flow
+ *   Routes:     PUT /api/inventory/parts-requests/:id when status is APPROVED
+ *               POST /api/inventory/parts-requests/:id/approve
+ *   Seeded to:  ADMIN, OWNER, INVENTORY_MANAGER
  *
  * shipping.mark_shipped
  *   Governance: Mark an order as shipped and record tracking information

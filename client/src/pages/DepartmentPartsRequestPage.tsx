@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -31,6 +31,10 @@ type InventoryItem = {
   name: string;
   sku?: string;
   department?: string;
+  source?: string | null;
+  supplierPartNumber?: string | null;
+  vendorId?: number | null;
+  defaultOrderMethod?: string | null;
 
   assignedDepartmentIds?: number[];
   currentBalance?: number;
@@ -45,9 +49,13 @@ type PartsRequest = {
   partNumber: string;
   partName: string;
   requestedBy: string;
+  requestedForEmployeeId?: number | null;
+  requestedForDisplayName?: string | null;
   department: string;
   departmentId: number;
   quantity: number;
+  qtyOrdered?: number;
+  qtyReceived?: number;
   quantityOrdered?: number;
   quantityReceived?: number;
   urgency: string;
@@ -61,6 +69,12 @@ type PartsRequest = {
   cancelReason?: string;
   catalogFixNeeded?: boolean;
   outOfDeptReason?: string;
+  vendorPO?: {
+    id: number | null;
+    poNumber: string | null;
+    externalPoNumber: string | null;
+    status: string | null;
+  };
 };
 
 type User = {
@@ -71,11 +85,20 @@ type User = {
   role?: string;
   department?: string;
   departmentId?: number;
+  employeeId?: number | null;
+  employeeName?: string | null;
 };
 
 type Department = {
   id: number;
   name: string;
+};
+
+type EmployeeOption = {
+  id: number;
+  name: string;
+  department?: string | null;
+  isActive?: boolean | null;
 };
 
 export default function DepartmentPartsRequestPage() {
@@ -91,7 +114,10 @@ export default function DepartmentPartsRequestPage() {
     urgency: 'MEDIUM',
     reason: '',
     outOfDeptReason: '',
+    requestedBy: '',
+    requestedForEmployeeId: '',
   });
+  const requestedByEditedRef = useRef(false);
 
   const { data: user } = useQuery<User>({
     queryKey: ['/api/auth/session'],
@@ -99,10 +125,41 @@ export default function DepartmentPartsRequestPage() {
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'OWNER';
 
+  const defaultRequestor = (() => {
+    if (!user) return '';
+    const employeeName =
+      typeof user.employeeName === 'string' ? user.employeeName.trim() : '';
+    if (employeeName) return employeeName;
+    const fullName = [user.firstName, user.lastName]
+      .filter((s) => typeof s === 'string' && s.trim().length > 0)
+      .join(' ')
+      .trim();
+    return user.username || fullName || '';
+  })();
+
+  // Seed requestedBy from session once it resolves, unless the user has
+  // typed in the field. Re-applies on dialog open via handleRequestClick.
+  useEffect(() => {
+    if (!isRequestDialogOpen) return;
+    if (requestedByEditedRef.current) return;
+    if (!defaultRequestor) return;
+    setRequestForm((prev) =>
+      prev.requestedBy ? prev : { ...prev, requestedBy: defaultRequestor }
+    );
+  }, [isRequestDialogOpen, defaultRequestor]);
+
   const { data: departments = [] } = useQuery<Department[]>({
     queryKey: ['/api/inventory/departments'],
     enabled: isAdmin,
   });
+
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  const activeEmployees = employees
+    .filter((employee) => employee.isActive !== false)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const effectiveDepartment = isAdmin ? selectedDepartment : (user?.department || '');
   const effectiveDepartmentId = isAdmin ? selectedDepartmentId : (user?.departmentId || null);
@@ -135,8 +192,12 @@ export default function DepartmentPartsRequestPage() {
       requestedBy: string;
       department: string;
       departmentId: number | null;
+      vendorId: number | null;
+      supplier: string | null;
+      orderMethod: string | null;
       catalogFixNeeded: boolean;
       outOfDeptReason: string | null;
+      requestedForEmployeeId: number | null;
     }) => {
       return apiRequest('/api/inventory/parts-requests', {
         method: 'POST',
@@ -158,7 +219,8 @@ export default function DepartmentPartsRequestPage() {
       });
       setIsRequestDialogOpen(false);
       setSelectedItem(null);
-      setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '' });
+      requestedByEditedRef.current = false;
+      setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '', requestedBy: defaultRequestor, requestedForEmployeeId: '' });
     },
     onError: () => {
       toast({
@@ -195,7 +257,15 @@ export default function DepartmentPartsRequestPage() {
 
   const handleRequestClick = (item: InventoryItem) => {
     setSelectedItem(item);
-    setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '' });
+    requestedByEditedRef.current = false;
+    setRequestForm({
+      quantity: '',
+      urgency: 'MEDIUM',
+      reason: '',
+      outOfDeptReason: '',
+      requestedBy: defaultRequestor,
+      requestedForEmployeeId: '',
+    });
     setIsRequestDialogOpen(true);
   };
 
@@ -204,6 +274,15 @@ export default function DepartmentPartsRequestPage() {
       toast({
         title: 'Missing Information',
         description: 'Please fill in all required fields.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!requestForm.requestedBy.trim()) {
+      toast({
+        title: 'Missing Information',
+        description: 'Requested By is required.',
         variant: 'destructive',
       });
       return;
@@ -255,11 +334,17 @@ export default function DepartmentPartsRequestPage() {
       quantity,
       urgency: requestForm.urgency,
       reason: requestForm.reason.trim() || null,
-      requestedBy: user.username,
+      requestedBy: requestForm.requestedBy.trim(),
       department: effectiveDepartment,
       departmentId: effectiveDepartmentId,
+      vendorId: selectedItem.vendorId ?? null,
+      supplier: selectedItem.source || null,
+      orderMethod: selectedItem.defaultOrderMethod || null,
       catalogFixNeeded: outOfDept,
       outOfDeptReason: outOfDept ? requestForm.outOfDeptReason : null,
+      requestedForEmployeeId: requestForm.requestedForEmployeeId
+        ? Number(requestForm.requestedForEmployeeId)
+        : null,
     });
   };
 
@@ -303,8 +388,8 @@ export default function DepartmentPartsRequestPage() {
 
   const getProgressIndicator = (request: PartsRequest) => {
     const requested = request.quantity || 0;
-    const ordered = request.quantityOrdered || 0;
-    const received = request.quantityReceived || 0;
+    const ordered = request.quantityOrdered ?? request.qtyOrdered ?? 0;
+    const received = request.quantityReceived ?? request.qtyReceived ?? 0;
     if (requested === 0) return null;
 
     const orderedPct = Math.min((ordered / requested) * 100, 100);
@@ -571,6 +656,12 @@ export default function DepartmentPartsRequestPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Department
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Requested By
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Requested For
+                    </th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Qty Requested
                     </th>
@@ -607,14 +698,20 @@ export default function DepartmentPartsRequestPage() {
                       <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                         {request.department}
                       </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                        {request.requestedBy}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                        {request.requestedForDisplayName || '—'}
+                      </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-900 dark:text-gray-100" data-testid={`text-request-qty-requested-${request.id}`}>
                         {request.quantity}
                       </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-900 dark:text-gray-100" data-testid={`text-request-qty-ordered-${request.id}`}>
-                        {request.quantityOrdered ?? '—'}
+                        {request.quantityOrdered ?? request.qtyOrdered ?? '—'}
                       </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-900 dark:text-gray-100" data-testid={`text-request-qty-received-${request.id}`}>
-                        {request.quantityReceived ?? '—'}
+                        {request.quantityReceived ?? request.qtyReceived ?? '—'}
                       </td>
                       <td className="px-4 py-3 text-sm min-w-[120px]">
                         {getProgressIndicator(request)}
@@ -634,6 +731,11 @@ export default function DepartmentPartsRequestPage() {
                             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                               Reason: {request.cancelReason}
                             </p>
+                          )}
+                          {request.vendorPO && (
+                            <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                              PO {request.vendorPO.poNumber || `Draft #${request.vendorPO.id}`}
+                            </Badge>
                           )}
                         </div>
                       </td>
@@ -701,6 +803,10 @@ export default function DepartmentPartsRequestPage() {
                   <span className="text-muted-foreground">Current Balance:</span>
                   <p className="font-medium">{selectedItem?.currentBalance ?? 'N/A'}</p>
                 </div>
+                <div>
+                  <span className="text-muted-foreground">Source:</span>
+                  <p className="font-medium">{selectedItem?.source || 'Unassigned'}</p>
+                </div>
               </div>
               {selectedItemOutOfDept && (
                 <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded flex items-center gap-2">
@@ -710,6 +816,52 @@ export default function DepartmentPartsRequestPage() {
                   </span>
                 </div>
               )}
+            </div>
+
+            {/* Requested By */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Requested By <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="text"
+                placeholder="Requestor name"
+                value={requestForm.requestedBy}
+                onChange={(e) => {
+                  requestedByEditedRef.current = true;
+                  setRequestForm({ ...requestForm, requestedBy: e.target.value });
+                }}
+                required
+                data-testid="input-request-requested-by"
+              />
+            </div>
+
+            {/* Requested For */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Requested For <span className="text-muted-foreground text-xs">(optional)</span>
+              </label>
+              <Select
+                value={requestForm.requestedForEmployeeId || '__none__'}
+                onValueChange={(value) =>
+                  setRequestForm({
+                    ...requestForm,
+                    requestedForEmployeeId: value === '__none__' ? '' : value,
+                  })
+                }
+              >
+                <SelectTrigger data-testid="select-requested-for">
+                  <SelectValue placeholder="Select employee..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No employee selected</SelectItem>
+                  {activeEmployees.map((employee) => (
+                    <SelectItem key={employee.id} value={String(employee.id)}>
+                      {employee.name}{employee.department ? ` - ${employee.department}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Quantity */}
@@ -785,7 +937,8 @@ export default function DepartmentPartsRequestPage() {
                 onClick={() => {
                   setIsRequestDialogOpen(false);
                   setSelectedItem(null);
-                  setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '' });
+                  requestedByEditedRef.current = false;
+                  setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '', requestedBy: '', requestedForEmployeeId: '' });
                 }}
                 data-testid="button-cancel-request"
               >

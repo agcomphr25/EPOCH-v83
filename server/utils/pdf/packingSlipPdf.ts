@@ -1,6 +1,5 @@
 import { PDFDocument, PDFPage, StandardFonts, rgb } from 'pdf-lib';
 import {
-  drawStandardHeader,
   drawTableHeader,
   getMargins,
   wrapText,
@@ -8,6 +7,7 @@ import {
   FONT_SIZES,
   SPACING,
   LINE_HEIGHTS,
+  COMPANY_INFO,
 } from './pdfConfig';
 import type { PackingSlipData } from './types';
 
@@ -29,7 +29,35 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
 
   let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
-  let y = await drawStandardHeader(page, pdfDoc, font, boldFont, PAGE_HEIGHT - margin, margin);
+  let y = PAGE_HEIGHT - margin;
+  const invoiceNumber = data.invoiceNumber || data.packingSlipNumber;
+
+  page.drawText('AG Advanced Technologies', {
+    x: margin,
+    y,
+    size: FONT_SIZES.TITLE_SMALL,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+  y -= LINE_HEIGHTS.SECTION;
+
+  page.drawText(COMPANY_INFO.ADDRESS, {
+    x: margin,
+    y,
+    size: FONT_SIZES.BODY_SMALL,
+    font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+  y -= LINE_HEIGHTS.COMPACT;
+
+  page.drawText(`Phone: ${COMPANY_INFO.PHONE} | Email: glenn@agadvanced.com`, {
+    x: margin,
+    y,
+    size: FONT_SIZES.BODY_SMALL,
+    font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+  y -= SPACING.SECTION_GAP_SMALL;
 
   // ── Document title (right side) ──
   const titleText = 'PACKING SLIP';
@@ -42,8 +70,8 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
     color: COLORS.TEXT_PRIMARY,
   });
 
-  const slipNumWidth = font.widthOfTextAtSize(data.packingSlipNumber, FONT_SIZES.BODY_MEDIUM);
-  page.drawText(data.packingSlipNumber, {
+  const slipNumWidth = font.widthOfTextAtSize(invoiceNumber, FONT_SIZES.BODY_MEDIUM);
+  page.drawText(invoiceNumber, {
     x: PAGE_WIDTH - margin - slipNumWidth,
     y: PAGE_HEIGHT - margin - LINE_HEIGHTS.COMPACT - 4,
     size: FONT_SIZES.BODY_MEDIUM,
@@ -60,9 +88,9 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
   });
   y -= SPACING.SECTION_GAP_TINY;
 
-  // ── Info row: Packing Slip #, Date, PO #, Lot # ──
+  // ── Info row: Invoice #, Date, PO #, Lot # ──
   const infoItems: Array<{ label: string; value: string }> = [
-    { label: 'Packing Slip #', value: data.packingSlipNumber },
+    { label: 'Invoice #', value: invoiceNumber },
     { label: 'Date', value: data.date },
   ];
   if (data.poNumber) infoItems.push({ label: 'PO #', value: data.poNumber });
@@ -331,6 +359,7 @@ export async function generatePoPackingSlipPdf(data: PackingSlipData): Promise<B
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const invoiceNumber = data.invoiceNumber || data.packingSlipNumber;
 
   const margins = await getMargins();
   const margin = (margins.STANDARD as number) ?? 40;
@@ -440,7 +469,7 @@ export async function generatePoPackingSlipPdf(data: PackingSlipData): Promise<B
     font: boldFont,
     color: COLORS.TEXT_PRIMARY,
   });
-  page.drawText(data.packingSlipNumber, {
+  page.drawText(invoiceNumber, {
     x: rightBlockX + halfW + 4,
     y: boxTop - boxHeight + 5,
     size: FONT_SIZES.BODY_SMALL,

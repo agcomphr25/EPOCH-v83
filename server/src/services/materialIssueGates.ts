@@ -39,6 +39,7 @@ export type MaterialIssueBlockerCode =
   | 'LOT_NOT_FOUND'
   | 'LOT_NOT_AVAILABLE'
   | 'LOT_EXPIRED'
+  | 'LOT_DOCUMENT_HELD'
   | 'LOT_QUARANTINED'
   | 'LOT_REJECTED'
   | 'LOT_CONSUMED'
@@ -71,8 +72,11 @@ const BLOCKED_LOT_STATUSES_FOR_ISSUE = new Set([
   'QUARANTINE',
   'REJECTED',
   'EXPIRED',
+  'HOLD',
+  'DOCUMENT_HOLD',
   'CONSUMED',
   'SCRAPPED',
+  'LOCKED',
 ]);
 const ALLOWED_LOT_STATUSES_FOR_RESERVE = new Set(['ACCEPTED', 'ISSUED']);
 const RELEASED_TRAVELER_STATUSES = new Set(['RELEASED', 'IN_PROGRESS', 'ACTIVE']);
@@ -316,6 +320,13 @@ export function validateLotStatus(
     return {
       code: 'LOT_REJECTED',
       message: 'Material lot was REJECTED at inspection and cannot be issued.',
+      blockingField: 'lot',
+    };
+  }
+  if (status === 'HOLD' || status === 'DOCUMENT_HOLD') {
+    return {
+      code: 'LOT_DOCUMENT_HELD',
+      message: 'Material lot is document-held and cannot be reserved, issued, or consumed until release approval is recorded.',
       blockingField: 'lot',
     };
   }

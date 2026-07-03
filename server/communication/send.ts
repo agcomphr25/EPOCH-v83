@@ -18,6 +18,7 @@ export interface SendCommunicationOptions {
   orderId?: string;
   customerId?: string;
   emailContext?: string;
+  replyTo?: string;
 }
 
 function wrapWithSystemNotice(html: string): string {
@@ -27,6 +28,52 @@ function wrapWithSystemNotice(html: string): string {
 
 function prependSystemNoticeToText(text: string): string {
   return `This is a system-generated message from EPOCH.\n\n${text}`;
+}
+
+const VENDOR_PO_TEMPLATE_KEYS = new Set(['vendor_po_issue', 'vendor_po_resend']);
+
+export function stripRetiredVendorPoConfirmationContent(
+  templateKey: string,
+  html: string,
+  text: string,
+): { html: string; text: string } {
+  if (!VENDOR_PO_TEMPLATE_KEYS.has(templateKey)) return { html, text };
+
+  const cleanHtml = html
+    .replace(/<p[^>]*>\s*<a\b[^>]*>\s*Confirm PO Receipt\s*<\/a>\s*<\/p>/gi, '')
+    .replace(/<a\b[^>]*>\s*Confirm PO Receipt\s*<\/a>/gi, '')
+    .replace(/<p[^>]*>[\s\S]*?confirmation link will expire[\s\S]*?<\/p>/gi, '')
+    .replace(/<p[^>]*>[\s\S]*?copy and paste this link into your browser[\s\S]*?<\/p>/gi, '')
+    .replace(/<p[^>]*>[\s\S]*?(?:\/api\/magic-link\/verify|\/vendor-pos\/confirm|confirm\/preview)[\s\S]*?<\/p>/gi, '')
+    .replace(/\n{3,}/g, '\n\n');
+
+  const textLines = text.split(/\r?\n/);
+  const cleanTextLines: string[] = [];
+  let skipNextUrl = false;
+  for (const line of textLines) {
+    const trimmed = line.trim();
+    const isRetiredConfirmationLine =
+      /^Confirm PO Receipt$/i.test(trimmed) ||
+      /confirmation link will expire/i.test(trimmed) ||
+      /copy and paste this link into your browser/i.test(trimmed) ||
+      /(?:\/api\/magic-link\/verify|\/vendor-pos\/confirm|confirm\/preview)/i.test(trimmed);
+
+    if (skipNextUrl && /^https?:\/\//i.test(trimmed)) {
+      skipNextUrl = false;
+      continue;
+    }
+
+    if (isRetiredConfirmationLine) {
+      skipNextUrl = /copy and paste this link into your browser/i.test(trimmed);
+      continue;
+    }
+
+    skipNextUrl = false;
+    cleanTextLines.push(line);
+  }
+
+  const cleanText = cleanTextLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { html: cleanHtml, text: cleanText };
 }
 
 export async function sendCommunication(
@@ -88,6 +135,11 @@ export async function sendCommunication(
 
   let finalHtml = rendered.html;
   let finalText = rendered.text;
+  ({ html: finalHtml, text: finalText } = stripRetiredVendorPoConfirmationContent(
+    opts.templateKey,
+    finalHtml,
+    finalText,
+  ));
 
   if (includeNotice) {
     finalHtml = wrapWithSystemNotice(finalHtml);
@@ -100,6 +152,7 @@ export async function sendCommunication(
   const result = await sendEmailViaSendGrid({
     to: toList.join(','),
     cc: ccList,
+    replyTo: opts.replyTo,
     subject: rendered.subject,
     text: finalText,
     html: finalHtml,

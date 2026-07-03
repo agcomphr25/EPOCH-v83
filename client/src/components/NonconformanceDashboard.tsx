@@ -106,10 +106,10 @@ export default function NonconformanceDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            Nonconforming Item Tracking
+            P1 Nonconforming Item Tracking
           </h1>
           <p className="text-gray-600">
-            Track and manage quality issues and dispositions
+            Track P1 stock-line nonconforming items and dispositions
           </p>
         </div>
         <Button
@@ -271,7 +271,7 @@ export default function NonconformanceDashboard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="w-4 h-4" />
-            Nonconformance Records ({records.length})
+            P1 Nonconforming Records ({records.length})
           </CardTitle>
         </CardHeader>
         <CardContent>

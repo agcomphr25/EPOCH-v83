@@ -4,8 +4,8 @@ import { DEFAULT_ORDERS_LIMIT, MAX_ORDERS_LIMIT } from '../constants/orders';
 import { db } from '../../db';
 import { pool } from '../../db';
 import { payments, allOrders, orders, customerAddresses, communicationLogs } from '../../../shared/schema';
-import { journalEntries } from '../../schema';
-import { eq, sql, desc, and } from 'drizzle-orm';
+import { journalEntries, journalLines } from '../../schema';
+import { eq, sql, desc, and, or } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
 import {
@@ -31,11 +31,124 @@ import {
 } from '../../../shared/adminConfig';
 import { auditService } from '../services/auditService';
 import { orderActivityEvents } from '../../schema';
-import * as accountingService from '../services/accountingService';
-import { sendOrderConfirmationNotification, OrderConfirmationOutcome } from '../../utils/notifications';
+import {
+  createOrUpdateP1PaymentJournalEntry,
+  reverseP1PaymentJournalEntry,
+} from '../services/p1PaymentPostingService';
+import { getOrCreateAccountingPeriod } from '../services/accountingPeriodService';
+import { isAccountingAdminUser } from '../middleware/requireAccountingAdmin';
+import {
+  normalizeNotificationMethods,
+  sendCustomerNotification,
+  sendOrderConfirmationNotification,
+  OrderConfirmationOutcome,
+} from '../../utils/notifications';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
+import { consumeP1PacketInventoryForOrder } from '../utils/p1PacketInventory';
 
 const router = Router();
+
+const IMMUTABLE_DUE_DATE_ERROR = 'Due date is locked after order creation';
+
+function stripImmutableDueDate<T extends Record<string, any>>(updates: T): T {
+  if (!Object.prototype.hasOwnProperty.call(updates, 'dueDate')) {
+    return updates;
+  }
+
+  const sanitized = { ...updates };
+  delete sanitized.dueDate;
+  return sanitized as T;
+}
+
+const READY_FOR_SHIPPING_STATUSES = new Set([
+  'ready for shipping',
+  'ready_for_shipping',
+  'ready-to-ship',
+  'ready to ship',
+]);
+
+const FULFILLED_STATUSES = new Set(['fulfilled', 'shipped']);
+const READY_FOR_SHIPPING_STATUS = 'Ready for Shipping';
+
+function shouldResetReadyForShippingToInProgress(
+  currentDepartment: string | null | undefined,
+  targetDepartment: string | null | undefined,
+  currentStatus: string | null | undefined
+): boolean {
+  if (currentDepartment !== 'Shipping' || !targetDepartment || targetDepartment === 'Shipping') {
+    return false;
+  }
+
+  const normalizedStatus = String(currentStatus || '').trim().toLowerCase();
+  return READY_FOR_SHIPPING_STATUSES.has(normalizedStatus);
+}
+
+function shouldResetFulfilledToReadyForShipping(
+  currentDepartment: string | null | undefined,
+  targetDepartment: string | null | undefined,
+  currentStatus: string | null | undefined
+): boolean {
+  if (targetDepartment !== 'Shipping') {
+    return false;
+  }
+
+  const normalizedStatus = String(currentStatus || '').trim().toLowerCase();
+  return (
+    FULFILLED_STATUSES.has(normalizedStatus) ||
+    currentDepartment === 'Shipping Management' ||
+    currentDepartment === 'Fulfilled'
+  );
+}
+
+async function requiresP1PaymentAccountingApproval(paymentDate: Date, user: any): Promise<{ required: boolean; period: any }> {
+  const period = await getOrCreateAccountingPeriod(paymentDate);
+  const status = String(period.status).toUpperCase();
+  if (status === 'FINAL_LOCKED' || status === 'HARD_CLOSED') {
+    const err: any = new Error(`Accounting period ${period.periodYear}-${String(period.periodMonth).padStart(2, '0')} is ${status}.`);
+    err.statusCode = 423;
+    throw err;
+  }
+  if (status === 'SOFT_CLOSED' || status === 'MIGRATION') {
+    return { required: !(await isAccountingAdminUser(user)), period };
+  }
+  return { required: false, period };
+}
+
+async function deleteDraftP1PaymentJournalEntry(tx: any, paymentId: number) {
+  const [existingJournal] = await tx
+    .select({ id: journalEntries.id })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.referenceId, paymentId),
+        eq(journalEntries.referenceType, 'p1_payment'),
+        eq(journalEntries.transactionType, 'P1_CUSTOMER_PAYMENT'),
+      )
+    )
+    .limit(1);
+  if (existingJournal) {
+    await tx.delete(journalLines).where(eq(journalLines.journalEntryId, existingJournal.id));
+    await tx.delete(journalEntries).where(eq(journalEntries.id, existingJournal.id));
+  }
+}
+
+async function getExportedPaymentJournalStatus(paymentId: number) {
+  const [existingJournal] = await db
+    .select({ status: journalEntries.status })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.referenceId, paymentId),
+        or(
+          eq(journalEntries.referenceType, 'payment'),
+          eq(journalEntries.referenceType, 'p1_payment'),
+        ),
+      ),
+    )
+    .limit(1);
+
+  return existingJournal?.status === 'EXPORTED' ? existingJournal.status : null;
+}
 
 /**
  * Compute the bottom metal source from order features without side effects.
@@ -402,7 +515,7 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
             total: sql`SUM(${payments.paymentAmount})`.as('total'),
           })
           .from(payments)
-          .where(eq(payments.orderId, order.orderId));
+          .where(and(eq(payments.orderId, order.orderId), eq(payments.status, 'posted')));
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
 
@@ -488,6 +601,88 @@ router.get('/pipeline-details', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Pipeline details fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch pipeline details' });
+  }
+});
+
+const CUSTOMER_WIP_ACTIVE_WHERE = `
+  ao.status <> 'SCRAPPED'
+  AND ao.status <> 'CANCELLED'
+  AND ao.scrap_date IS NULL
+  AND ao.current_department <> 'Fulfilled'
+  AND ao.current_department <> 'Shipped'
+`;
+
+// Customer WIP customers, sourced from the same active P1 production set as production tracking.
+router.get('/customer-wip/customers', async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        ao.customer_id AS "customerId",
+        MIN(COALESCE(po.customer_name, c.name, ao.customer_id, 'Unknown Customer')) AS "customerName",
+        COUNT(*)::integer AS "wipCount"
+      FROM all_orders ao
+      LEFT JOIN purchase_orders po ON po.id = ao.source_po_id
+      LEFT JOIN customers c ON c.id::text = ao.customer_id
+      WHERE ${CUSTOMER_WIP_ACTIVE_WHERE}
+        AND ao.customer_id IS NOT NULL
+        AND ao.customer_id <> ''
+      GROUP BY ao.customer_id
+      ORDER BY "customerName" ASC
+    `);
+
+    res.json((result.rows || []).map((row) => ({
+      customerId: row.customerId,
+      customerName: row.customerName,
+      wipCount: Number(row.wipCount) || 0,
+    })));
+  } catch (error) {
+    console.error('Customer WIP customer fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch Customer WIP customers' });
+  }
+});
+
+// Customer WIP rows for one customer. This intentionally stays read-only.
+router.get('/customer-wip', async (req: Request, res: Response) => {
+  const customerId = typeof req.query.customerId === 'string' ? req.query.customerId.trim() : '';
+  if (!customerId) {
+    return res.status(400).json({ error: 'customerId is required' });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          ao.order_id AS "orderId",
+          ao.fb_order_number AS "fbOrderNumber",
+          ao.customer_id AS "customerId",
+          COALESCE(po.customer_name, c.name, ao.customer_id, 'Unknown Customer') AS "customerName",
+          COALESCE(NULLIF(po.po_number, ''), NULLIF(ao.customer_po, '')) AS "poNumber",
+          COALESCE(NULLIF(ao.fb_order_number, ''), ao.order_id) AS "stockOrderIdentifier",
+          COALESCE(NULLIF(poi.stock_model_name, ''), NULLIF(poi.item_name, ''), NULLIF(poi.item_id, ''), NULLIF(ao.model_id, ''), 'Unspecified') AS "stockModel",
+          CASE
+            WHEN ao.current_department = 'P1 Production Queue' THEN 'Production Queue'
+            ELSE ao.current_department
+          END AS "currentDepartment",
+          ao.due_date AS "dueDate"
+        FROM all_orders ao
+        LEFT JOIN purchase_orders po ON po.id = ao.source_po_id
+        LEFT JOIN purchase_order_items poi ON poi.id = ao.source_po_item_id
+        LEFT JOIN customers c ON c.id::text = ao.customer_id
+        WHERE ${CUSTOMER_WIP_ACTIVE_WHERE}
+          AND ao.customer_id = $1
+        ORDER BY
+          COALESCE(NULLIF(po.po_number, ''), NULLIF(ao.customer_po, ''), NULLIF(ao.fb_order_number, ''), ao.order_id) ASC,
+          "currentDepartment" ASC,
+          ao.due_date ASC,
+          ao.order_id ASC
+      `,
+      [customerId]
+    );
+
+    res.json({ customerId, items: result.rows || [] });
+  } catch (error) {
+    console.error('Customer WIP fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch Customer WIP' });
   }
 });
 
@@ -723,7 +918,7 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
 // each blocked attempt is written to order_activity_events for observability.
 const ordersBeingFinalized = new Set<string>();
 
-// Create order - with or without signature requirement based on whether stock is selected
+// Create order directly into the P1 production queue.
 router.post('/finalized', async (req: Request, res: Response) => {
   // Declare outside try so finally can release the guard reliably
   let incomingOrderId: string | null = null;
@@ -750,16 +945,9 @@ router.post('/finalized', async (req: Request, res: Response) => {
     }
     if (incomingOrderId) ordersBeingFinalized.add(incomingOrderId);
     
-    // Determine if stock is selected (has modelId and it's not "no_stock" or similar)
-    // Normalize the modelId for checking (trim whitespace and convert to lowercase)
-    const normalizedModelId = orderData.modelId?.trim().toLowerCase() || '';
-    const noStockIdentifiers = ['', 'no_stock', 'no stock', 'none'];
-    const hasStock: boolean = !noStockIdentifiers.includes(normalizedModelId);
-    
-    // If has stock: PENDING_SIGNATURE status, awaiting customer signature
-    // If no stock: IN_PROGRESS status, skip production pipeline, go directly to Shipping QC
-    const orderStatus = hasStock ? 'PENDING_SIGNATURE' : 'IN_PROGRESS';
-    const orderDepartment = hasStock ? 'Awaiting Customer Signature' : 'Shipping QC';
+    const orderStatus = 'FINALIZED';
+    const orderDepartment = 'P1 Production Queue';
+    const requiresCustomerSignature = false;
     
     // Compute bottomMetalSource upfront to set it on creation (no interim incorrect state)
     const bottomMetalSource = computeBottomMetalSource(orderData.features as Record<string, any>);
@@ -784,6 +972,26 @@ router.post('/finalized', async (req: Request, res: Response) => {
       currentDepartment: orderDepartment,
       bottomMetalSource,
     });
+
+    if (order.currentDepartment === 'P1 Production Queue') {
+      try {
+        const packetInventoryAdjustments = await consumeP1PacketInventoryForOrder(order);
+        const consumed = packetInventoryAdjustments.filter(adj => adj.appliedQuantity < 0);
+        if (consumed.length > 0) {
+          console.log(
+            `P1 packet inventory consumed for ${order.orderId}: ${consumed.map(adj => `${adj.packetName} ${Math.abs(adj.appliedQuantity)}`).join(', ')}`
+          );
+        }
+        const shortages = packetInventoryAdjustments.filter(adj => adj.reason);
+        if (shortages.length > 0) {
+          console.warn(
+            `P1 packet inventory shortage for ${order.orderId}: ${shortages.map(adj => `${adj.packetName} (${adj.reason})`).join(', ')}`
+          );
+        }
+      } catch (packetInventoryErr: any) {
+        console.warn(`P1 packet inventory consumption skipped for ${order.orderId}:`, packetInventoryErr?.message || packetInventoryErr);
+      }
+    }
     
     // Use idempotent helper to create demand record (skip order update since already set)
     await reconcileBottomMetalDemand(order, false);
@@ -793,11 +1001,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
       console.warn('⚠️ reconcileRailDemand skipped on order create:', railErr?.message);
     }
     
-    if (hasStock) {
-      console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
-    } else {
-      console.log(`📧 Order ${order.orderId} created as IN_PROGRESS (no stock) - skipping production, going to Shipping QC - sending thank you email to customer...`);
-    }
+    console.log(`Order ${order.orderId} created as FINALIZED and routed to P1 Production Queue - sending order confirmation email to customer...`);
     
     // Track email outcome for API response (declared outside inner try block for scoping)
     let emailOutcome: OrderConfirmationOutcome | undefined;
@@ -1040,7 +1244,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
       // Declare signatureToken outside the if block for error handling access
       let signatureToken: string | undefined;
       
-      if (hasStock) {
+      if (requiresCustomerSignature) {
         // Generate PDF via unified service with frozen snapshot for signature workflow
         const pdfResult = await generateOrderPdf(order.orderId, PdfIntent.SIGNATURE_EMAIL);
         const pdfPath = pdfResult.filePath!;
@@ -1332,6 +1536,7 @@ router.post('/pending-payment', async (req: Request, res: Response) => {
       modelId: parsed.modelId || '',
       features: parsed.features || {},
       notes: parsed.notes || '',
+      departmentNotes: Array.isArray((parsed as any).departmentNotes) ? (parsed as any).departmentNotes : [],
       shipping: parsed.shipping ?? 0,
     };
 
@@ -1391,8 +1596,12 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     console.log('Update order endpoint called for ID:', orderId);
     console.log('Update data received:', req.body);
 
-    // Validate the input data using the schema
+    // Validate the input data using the schema. Order Entry edit mode is allowed
+    // to update the visible Estimated Completion Date, which is stored as dueDate.
     const updates = insertAllOrderSchema.partial().parse(req.body);
+    if (Object.prototype.hasOwnProperty.call(updates, 'dueDate') && updates.dueDate != null) {
+      updates.dueDate = normalizeDueDateForStorage(updates.dueDate);
+    }
     console.log('Validated updates:', updates);
 
     // CRITICAL SERVER-SIDE VALIDATION: Prevent null/empty modelId for non-custom orders
@@ -1409,7 +1618,9 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     const beforeOrder = await storage.getFinalizedOrderById(orderId);
 
     // Update the order in all_orders table
-    const updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+    const updatedOrder = await storage.updateFinalizedOrder(orderId, updates, {
+      allowDueDateUpdate: true,
+    });
     console.log('Updated order successfully:', updatedOrder);
 
     // Log field-level audit changes (price, discount, shipping, etc.)
@@ -1514,6 +1725,7 @@ router.post('/duplicate/:orderId', async (req: Request, res: Response) => {
         notes: count > 1 
           ? `${original.notes || ''}\n\n🟩 DUPLICATED FROM ${orderId} (${i + 1}/${count})`
           : original.notes,
+        departmentNotes: original.departmentNotes || [],
 
         // Drop timestamps from previous workflow
         layupCompletedAt: null,
@@ -1636,7 +1848,7 @@ router.get('/finalized/:id', async (req: Request, res: Response) => {
 router.put('/finalized/:id', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;
-    const updates = req.body;
+    const updates = stripImmutableDueDate({ ...req.body });
 
     // Capture before state for audit
     const beforeOrder = await storage.getFinalizedOrderById(orderId);
@@ -1688,10 +1900,49 @@ router.post('/fulfill', async (req: Request, res: Response) => {
     };
     const updatedOrder = await storage.fulfillOrder(orderId, actor);
 
+    let notificationResult = null;
+    if (updatedOrder.trackingNumber && !updatedOrder.customerNotified) {
+      try {
+        if (!updatedOrder.customerId) {
+          console.warn(`[FULFILL-NOTIFY] Order ${orderId} has tracking but no customerId; skipping customer notification`);
+        } else {
+          const customer = await storage.getCustomerById(updatedOrder.customerId);
+          if (!customer || (!customer.email && !customer.phone)) {
+            console.warn(`[FULFILL-NOTIFY] Order ${orderId} has no usable customer contact; skipping customer notification`);
+          } else {
+            const preferredMethods = normalizeNotificationMethods(
+              customer.preferredCommunicationMethod,
+              { email: customer.email, phone: customer.phone }
+            );
+
+            notificationResult = await sendCustomerNotification({
+              orderId: updatedOrder.orderId,
+              trackingNumber: updatedOrder.trackingNumber,
+              carrier: updatedOrder.shippingCarrier || 'UPS',
+              estimatedDelivery: updatedOrder.estimatedDelivery
+                ? new Date(updatedOrder.estimatedDelivery)
+                : undefined,
+              customerEmail: customer.email || undefined,
+              customerPhone: customer.phone || undefined,
+              preferredMethods,
+            });
+
+            if (!notificationResult.success) {
+              console.error(`[FULFILL-NOTIFY] Customer notification failed for order ${orderId}:`, notificationResult.errors);
+            }
+          }
+        }
+      } catch (notificationError) {
+        console.error(`[FULFILL-NOTIFY] Customer notification failed for order ${orderId}:`, notificationError);
+      }
+    }
+
     res.json({
       success: true,
       message: 'Order fulfilled successfully',
       order: updatedOrder,
+      notificationSent: notificationResult?.success || false,
+      notificationMethods: notificationResult?.methods || [],
     });
   } catch (error) {
     console.error('Fulfill order error:', error);
@@ -1942,6 +2193,7 @@ router.post('/:id/move-to-draft', async (req: Request, res: Response) => {
       features: currentOrder.features as Record<string, any> | null,
       handedness: currentOrder.handedness,
       notes: currentOrder.notes,
+      departmentNotes: currentOrder.departmentNotes || [],
       status: 'DRAFT',
       currentDepartment: currentOrder.currentDepartment || 'Draft',
       paymentAmount: currentOrder.paymentAmount,
@@ -2048,7 +2300,7 @@ router.get('/:orderId/payments', async (req: Request, res: Response) => {
 });
 
 // Add a new payment to an order
-router.post('/:orderId/payments', async (req: Request, res: Response) => {
+router.post('/:orderId/payments', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const orderId = req.params.orderId;
     console.log('Creating payment for order:', orderId);
@@ -2057,28 +2309,52 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
     const paymentData = insertPaymentSchema.parse({ ...req.body, orderId });
     console.log('Validated payment data:', paymentData);
 
-    const newPayment = await storage.createPayment(paymentData);
+    const approval = await requiresP1PaymentAccountingApproval(paymentData.paymentDate, (req as any).user);
+    const newPayment = await db.transaction(async (tx) => {
+      const [payment] = await tx
+        .insert(payments)
+        .values({
+          ...paymentData,
+          status: approval.required ? 'pending_accounting_approval' : 'posted',
+        })
+        .returning();
+      if (!approval.required) {
+        await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+      }
+      return payment;
+    });
     console.log('Payment created successfully:', newPayment);
 
     try {
       await auditService.logEvent({
         entityType: 'p1_order',
         entityId: orderId,
-        action: 'PAYMENT_ADDED',
+        action: approval.required ? 'PAYMENT_ADDED_PENDING_ACCOUNTING_APPROVAL' : 'PAYMENT_ADDED',
         actor: { username: (req as any).user?.username || (req as any).user?.role || 'system' },
-        meta: { payment: newPayment },
+        meta: {
+          payment: newPayment,
+          accountingApprovalRequired: approval.required,
+          accountingPeriod: {
+            year: approval.period.periodYear,
+            month: approval.period.periodMonth,
+            status: approval.period.status,
+          },
+        },
       });
     } catch (auditError) {
       console.error('[Audit] Failed to log payment creation:', auditError);
       return res.status(500).json({ error: 'Payment was created but audit logging failed. Contact an administrator.' });
     }
 
-    res.status(201).json(newPayment);
+    res.status(201).json({
+      ...newPayment,
+      accountingApprovalRequired: approval.required,
+    });
   } catch (error) {
     console.error('Create payment error:', error);
     console.error('Error details:', (error as Error).message);
     res
-      .status(400)
+      .status((error as any).statusCode || 400)
       .json({
         error: 'Failed to create payment',
         details: (error as any).message,
@@ -2087,42 +2363,62 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
 });
 
 // Update a payment
-router.put('/payments/:paymentId', async (req: Request, res: Response) => {
+router.put('/payments/:paymentId', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
 
-    // Block edit if journal entry is EXPORTED
-    const [existingJournal] = await db
-      .select({ status: journalEntries.status })
-      .from(journalEntries)
-      .where(
-        and(
-          eq(journalEntries.referenceType, 'payment'),
-          eq(journalEntries.referenceId, paymentId)
-        )
-      )
-      .limit(1);
-
-    if (existingJournal?.status === 'EXPORTED') {
+    // Block edit if an old or current journal entry is EXPORTED.
+    const exportedStatus = await getExportedPaymentJournalStatus(paymentId);
+    if (exportedStatus === 'EXPORTED') {
       return res.status(409).json({
         error: 'Cannot edit payment — journal entry is EXPORTED',
       });
     }
 
     const paymentData = insertPaymentSchema.parse(req.body);
-    const updatedPayment = await storage.updatePayment(paymentId, paymentData);
+    const approval = await requiresP1PaymentAccountingApproval(paymentData.paymentDate, (req as any).user);
+    const updatedPayment = await db.transaction(async (tx) => {
+      const [payment] = await tx
+        .update(payments)
+        .set({
+          ...paymentData,
+          status: approval.required ? 'pending_accounting_approval' : 'posted',
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, paymentId))
+        .returning();
+      if (!approval.required) {
+        await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+      } else {
+        await deleteDraftP1PaymentJournalEntry(tx, payment.id);
+      }
+      return payment;
+    });
 
-    try {
-      await accountingService.createOrUpdateFromPayment(updatedPayment, (req as any).user);
-    } catch (accountingError) {
-      console.error('[Accounting] Failed to update journal entry for payment edit:', accountingError);
-    }
+    await auditService.logEvent({
+      entityType: 'p1_order',
+      entityId: updatedPayment.orderId,
+      action: approval.required ? 'PAYMENT_UPDATED_PENDING_ACCOUNTING_APPROVAL' : 'PAYMENT_UPDATED',
+      actor: { username: (req as any).user?.username || (req as any).user?.role || 'system' },
+      meta: {
+        payment: updatedPayment,
+        accountingApprovalRequired: approval.required,
+        accountingPeriod: {
+          year: approval.period.periodYear,
+          month: approval.period.periodMonth,
+          status: approval.period.status,
+        },
+      },
+    });
 
-    res.json(updatedPayment);
+    res.json({
+      ...updatedPayment,
+      accountingApprovalRequired: approval.required,
+    });
   } catch (error) {
     console.error('Update payment error:', error);
     res
-      .status(400)
+      .status((error as any).statusCode || 400)
       .json({
         error: 'Failed to update payment',
         details: (error as any).message,
@@ -2130,8 +2426,75 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
   }
 });
 
+// Approve a controlled-period payment and post its accounting journal entry.
+router.post('/payments/:paymentId/approve-accounting', requirePermission('finance.accounting_admin'), async (req: Request, res: Response) => {
+  try {
+    const paymentId = parseInt(req.params.paymentId);
+    const approvalNote = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+    const user = (req as any).user;
+
+    if (isNaN(paymentId)) {
+      return res.status(400).json({ error: 'Invalid payment ID' });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [existingPayment] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.id, paymentId))
+        .limit(1);
+
+      if (!existingPayment) {
+        const err: any = new Error('Payment not found');
+        err.statusCode = 404;
+        throw err;
+      }
+      if (existingPayment.status !== 'pending_accounting_approval') {
+        const err: any = new Error('Payment is not pending accounting approval');
+        err.statusCode = 409;
+        throw err;
+      }
+
+      const [payment] = await tx
+        .update(payments)
+        .set({
+          status: 'posted',
+          notes: approvalNote
+            ? [existingPayment.notes, `Accounting approval: ${approvalNote}`].filter(Boolean).join('\n')
+            : existingPayment.notes,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, paymentId))
+        .returning();
+
+      const journalResult = await createOrUpdateP1PaymentJournalEntry(payment.id, user, tx);
+      return { payment, journalResult };
+    });
+
+    await auditService.logEvent({
+      entityType: 'p1_order',
+      entityId: result.payment.orderId,
+      action: 'PAYMENT_ACCOUNTING_APPROVED',
+      actor: { username: user?.username || user?.role || 'system' },
+      meta: {
+        paymentId,
+        approvalNote: approvalNote || null,
+        journalResult: result.journalResult,
+      },
+    });
+
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    console.error('Approve payment accounting error:', error);
+    res.status(error.statusCode || 400).json({
+      error: 'Failed to approve payment accounting',
+      details: error.message,
+    });
+  }
+});
+
 // Void a payment. The original row is preserved and a reversal row offsets it.
-router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
+router.delete('/payments/:paymentId', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
     const voidReason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
@@ -2175,20 +2538,10 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Error validating payment' });
     }
 
-    // Check if an EXPORTED journal entry exists. Journal reversal wiring will
-    // be added after the chart of accounts is finalized.
+    // Check if an old or current journal entry has already been exported.
     try {
-      const [existingJournal] = await db
-        .select({ status: journalEntries.status })
-        .from(journalEntries)
-        .where(
-          and(
-            eq(journalEntries.referenceType, 'payment'),
-            eq(journalEntries.referenceId, paymentId)
-          )
-        )
-        .limit(1);
-      if (existingJournal?.status === 'EXPORTED') {
+      const exportedStatus = await getExportedPaymentJournalStatus(paymentId);
+      if (exportedStatus === 'EXPORTED') {
         return res.status(409).json({
           error: 'Cannot void this payment because an exported accounting journal entry exists. Contact accounting to reverse it first.',
         });
@@ -2210,6 +2563,11 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
         .where(eq(payments.id, paymentId))
         .returning();
 
+      if (existingPayment.status === 'pending_accounting_approval') {
+        await deleteDraftP1PaymentJournalEntry(tx, paymentId);
+        return { voidedPayment, reversal: null, journalReversal: null };
+      }
+
       const [reversal] = await tx
         .insert(payments)
         .values({
@@ -2225,7 +2583,9 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
         })
         .returning();
 
-      return { voidedPayment, reversal };
+      const journalReversal = await reverseP1PaymentJournalEntry(paymentId, voidReason, { username: user }, tx);
+
+      return { voidedPayment, reversal, journalReversal };
     });
 
     try {
@@ -2237,7 +2597,7 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
         reason: voidReason,
         meta: {
           paymentId,
-          reversalPaymentId: result.reversal.id,
+          reversalPaymentId: result.reversal?.id ?? null,
           originalPayment: existingPayment,
         },
       });
@@ -2245,8 +2605,8 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
       console.error('[Audit] Failed to log payment void:', auditError);
       return res.status(500).json({ error: 'Payment was reversed but audit logging failed. Contact an administrator.' });
     }
-    console.log(`Successfully voided payment ID: ${paymentId} with reversal ${result.reversal.id}`);
-    res.json({ success: true, message: 'Payment voided with reversal', ...result });
+    console.log(`Successfully voided payment ID: ${paymentId}`);
+    res.json({ success: true, message: result.reversal ? 'Payment voided with reversal' : 'Pending payment voided', ...result });
   } catch (error) {
     console.error('Void payment error:', error);
     console.error('Error details:', {
@@ -2265,7 +2625,7 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
 // NOTE: Currently accepts orderTotal from client for payment completion logic.
 // In production, this should be verified server-side using calculateOrderTotal
 // to prevent integrity issues. For now, this is acceptable as an internal CSR tool.
-router.post('/bulk-payment', async (req: Request, res: Response) => {
+router.post('/bulk-payment', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const { payments: paymentItems } = req.body;
     
@@ -2274,15 +2634,6 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
     }
 
     console.log(`💳 Processing bulk payment for ${paymentItems.length} orders`);
-
-    // Determine if this is a bulk wire — extract top-level wire metadata once
-    const firstItem = paymentItems[0];
-    const bulkPaymentType = firstItem?.paymentType || '';
-    const totalFee = bulkPaymentType === 'wire' ? (parseFloat(firstItem?.processingFee) || 0) : 0;
-    const bulkPaymentDate = firstItem?.paymentDate ? new Date(firstItem.paymentDate) : new Date();
-    const bulkMemo = firstItem?.notes || null;
-    let totalGross = 0;
-    const createdPaymentIds: number[] = [];
 
     const results = [];
     const errors = [];
@@ -2307,23 +2658,24 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
           notes: item.notes || null,
         });
 
-        const newPayment = await storage.createPayment(paymentData);
-
-        if (paymentType === 'wire') {
-          // Suppress per-row accounting for wire — ONE consolidated entry is created after the loop
-          totalGross += parseFloat(paymentAmount);
-          createdPaymentIds.push(newPayment.id);
-        } else {
-          try {
-            await accountingService.createOrUpdateFromPayment(newPayment, (req as any).user);
-          } catch (accountingError) {
-            console.error('[Accounting] Failed to create journal entry for bulk payment:', accountingError);
+        const approval = await requiresP1PaymentAccountingApproval(paymentData.paymentDate, (req as any).user);
+        const newPayment = await db.transaction(async (tx) => {
+          const [payment] = await tx
+            .insert(payments)
+            .values({
+              ...paymentData,
+              status: approval.required ? 'pending_accounting_approval' : 'posted',
+            })
+            .returning();
+          if (!approval.required) {
+            await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
           }
-        }
+          return payment;
+        });
 
         const allPayments = await storage.getPaymentsByOrderId(orderId);
         const totalPaid = allPayments.reduce(
-          (sum: number, p: any) => sum + p.paymentAmount,
+          (sum: number, p: any) => p.status === 'posted' ? sum + p.paymentAmount : sum,
           0
         );
 
@@ -2379,22 +2731,6 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
           orderId: item.orderId,
           error: (error as Error).message,
         });
-      }
-    }
-
-    // After loop: create ONE consolidated journal entry for bulk wire payments
-    if (bulkPaymentType === 'wire' && createdPaymentIds.length > 0) {
-      try {
-        await accountingService.createBulkWireJournalEntry({
-          paymentIds: createdPaymentIds,
-          totalGross: Math.round(totalGross * 100) / 100,
-          totalFee,
-          paymentDate: bulkPaymentDate,
-          memo: bulkMemo,
-          user: (req as any).user,
-        });
-      } catch (err) {
-        console.error('[Accounting] Failed to create consolidated bulk wire journal entry:', err);
       }
     }
 
@@ -2667,6 +3003,26 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       console.log(`📦 Marking order as FULFILLED with no department`);
     } else {
       updateData.currentDepartment = targetDepartment;
+      if (
+        shouldResetReadyForShippingToInProgress(
+          existingOrder.currentDepartment,
+          targetDepartment,
+          existingOrder.status
+        )
+      ) {
+        updateData.status = 'IN_PROGRESS';
+      }
+      if (
+        shouldResetFulfilledToReadyForShipping(
+          existingOrder.currentDepartment,
+          targetDepartment,
+          existingOrder.status
+        )
+      ) {
+        updateData.status = READY_FOR_SHIPPING_STATUS;
+        updateData.shippedDate = null;
+        updateData.shippingCompletedAt = null;
+      }
     }
 
     // Build actor from authenticated user
@@ -2724,6 +3080,13 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
             after: targetDepartment ?? null,
             label: 'Current Department',
           };
+          if (updateData.status && updateData.status !== existingOrder.status) {
+            fieldDiff['status'] = {
+              before: existingOrder.status ?? null,
+              after: updateData.status,
+              label: 'Order Status',
+            };
+          }
         }
 
         await tx.insert(orderActivityEvents).values({
@@ -3348,7 +3711,15 @@ router.patch(
         }
       }
 
-      // Normalize dueDate to Tuesday before persisting
+      if (fieldName === 'dueDate' && isFinalized) {
+        return res.status(409).json({
+          error: IMMUTABLE_DUE_DATE_ERROR,
+          fieldName,
+          orderId: orderStringId,
+        });
+      }
+
+      // Draft due dates can still be normalized before the order is created/finalized.
       if (fieldName === 'dueDate' && validatedValue != null) {
         validatedValue = normalizeDueDateForStorage(validatedValue);
       }
@@ -3449,7 +3820,7 @@ router.patch(
 router.patch('/:orderId', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.orderId;
-    const updates = req.body;
+    const updates = stripImmutableDueDate({ ...req.body });
 
     console.log(`📋 PATCH /${orderId} - Department progression update`);
     console.log('📋 Update data:', updates);
@@ -3495,11 +3866,6 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
           );
         }
       }
-    }
-
-    // Normalize dueDate to Tuesday if present in updates
-    if (updates.dueDate != null) {
-      updates.dueDate = normalizeDueDateForStorage(updates.dueDate);
     }
 
     // Try to find and update the order in finalized orders first
@@ -3613,21 +3979,50 @@ router.patch(
       }
     }
 
+    const shouldResetStatusToInProgress = shouldResetReadyForShippingToInProgress(
+      previousDepartment,
+      department,
+      existingOrder?.status ?? existingOrder?.productionStatus
+    );
+    const shouldResetStatusToReadyForShipping = shouldResetFulfilledToReadyForShipping(
+      previousDepartment,
+      department,
+      existingOrder?.status ?? existingOrder?.productionStatus
+    );
+
     // Try to find and update the order
     let updatedOrder;
     let orderType = '';
 
     try {
-      updatedOrder = await storage.updateFinalizedOrder(orderId, {
+      const finalizedUpdates: any = {
         currentDepartment: department,
-      });
+      };
+      if (shouldResetStatusToInProgress) {
+        finalizedUpdates.status = 'IN_PROGRESS';
+      }
+      if (shouldResetStatusToReadyForShipping) {
+        finalizedUpdates.status = READY_FOR_SHIPPING_STATUS;
+        finalizedUpdates.shippedDate = null;
+        finalizedUpdates.shippingCompletedAt = null;
+      }
+      updatedOrder = await storage.updateFinalizedOrder(orderId, finalizedUpdates);
       orderType = 'finalized';
       console.log(`✅ Updated finalized order ${orderId} to ${department}`);
     } catch (finalizedError) {
       try {
-        updatedOrder = await storage.updateOrderDraft(orderId, {
+        const draftUpdates: any = {
           currentDepartment: department,
-        });
+        };
+        if (shouldResetStatusToInProgress) {
+          draftUpdates.status = 'IN_PROGRESS';
+        }
+        if (shouldResetStatusToReadyForShipping) {
+          draftUpdates.status = READY_FOR_SHIPPING_STATUS;
+          draftUpdates.shippedDate = null;
+          draftUpdates.shippingCompletedAt = null;
+        }
+        updatedOrder = await storage.updateOrderDraft(orderId, draftUpdates);
         orderType = 'draft';
         console.log(`✅ Updated draft order ${orderId} to ${department}`);
       } catch (draftError) {
@@ -3637,7 +4032,7 @@ router.patch(
           if (productionOrder) {
             const { pool } = await import('../../db');
             await pool.query(
-              'UPDATE production_orders SET current_department = $1 WHERE order_id = $2',
+              'UPDATE production_orders SET current_department = $1, updated_at = NOW() WHERE order_id = $2',
               [department, orderId]
             );
             updatedOrder = { ...productionOrder, currentDepartment: department };
@@ -4056,6 +4451,14 @@ router.patch(
       const validatedData = adminFieldUpdateSchema.parse(req.body);
       const { fieldName, newValue } = validatedData;
 
+      if (fieldName === 'dueDate') {
+        return res.status(409).json({
+          error: IMMUTABLE_DUE_DATE_ERROR,
+          fieldName,
+          orderId,
+        });
+      }
+
       // Get field configuration
       const fieldConfig = ADMIN_FIELD_CONFIG[fieldName];
       if (!fieldConfig) {
@@ -4103,16 +4506,11 @@ router.patch(
       const dbField = fieldConfig.dbField;
       const oldValue = (currentOrder as any)[dbField];
 
-      // Normalize dueDate to Tuesday before persisting
-      const normalizedFieldValue = fieldName === 'dueDate' && newValue != null
-        ? normalizeDueDateForStorage(newValue)
-        : newValue;
-
       // Update the order
       await db
         .update(allOrders)
         .set({ 
-          [dbField]: normalizedFieldValue,
+          [dbField]: newValue,
           updatedAt: new Date(),
         })
         .where(eq(allOrders.orderId, orderId));
@@ -4123,7 +4521,7 @@ router.patch(
         fieldName,
         fieldLabel: fieldConfig.label,
         oldValue: oldValue !== null && oldValue !== undefined ? oldValue : null,
-        newValue: normalizedFieldValue,
+        newValue,
         changedBy: (req as any).user?.username || 'unknown',
         userRole: (req as any).user?.role || 'ADMIN',
         changeType: 'INLINE',
@@ -4166,6 +4564,14 @@ router.patch(
       const validatedData = adminBulkUpdateSchema.parse(req.body);
       const { orderIds, fieldName, newValue } = validatedData;
 
+      if (fieldName === 'dueDate') {
+        return res.status(409).json({
+          error: IMMUTABLE_DUE_DATE_ERROR,
+          fieldName,
+          orderIds,
+        });
+      }
+
       // Get field configuration
       const fieldConfig = ADMIN_FIELD_CONFIG[fieldName];
       if (!fieldConfig) {
@@ -4203,11 +4609,6 @@ router.patch(
 
       const dbField = fieldConfig.dbField;
 
-      // Normalize dueDate to Tuesday for bulk updates targeting the due_date field
-      const normalizedValue = fieldName === 'dueDate' && newValue != null
-        ? normalizeDueDateForStorage(newValue)
-        : newValue;
-
       const results = {
         success: [] as string[],
         failed: [] as { orderId: string; error: string }[],
@@ -4232,7 +4633,7 @@ router.patch(
           await db
             .update(allOrders)
             .set({ 
-              [dbField]: normalizedValue,
+              [dbField]: newValue,
               updatedAt: new Date(),
             })
             .where(eq(allOrders.orderId, orderId));
@@ -4243,7 +4644,7 @@ router.patch(
             fieldName,
             fieldLabel: fieldConfig.label,
             oldValue: oldValue !== null && oldValue !== undefined ? oldValue : null,
-            newValue: normalizedValue,
+            newValue,
             changedBy: (req as any).user?.username || 'unknown',
             userRole: (req as any).user?.role || 'ADMIN',
             changeType: 'BULK',

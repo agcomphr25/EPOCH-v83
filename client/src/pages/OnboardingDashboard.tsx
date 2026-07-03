@@ -23,6 +23,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 
 interface OnboardingPath {
   id: string;
@@ -62,6 +65,19 @@ export default function OnboardingDashboard() {
   const [selectedPathId, setSelectedPathId] = useState<string>('');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [showSessionDetail, setShowSessionDetail] = useState<OnboardingSession | null>(null);
+  const [employeeDraft, setEmployeeDraft] = useState({
+    name: '',
+    preferredName: '',
+    email: '',
+    phone: '',
+    jobTitle: '',
+    department: '',
+    hireDate: '',
+    payType: 'HOURLY',
+  });
+  const [noCellPhoneAvailable, setNoCellPhoneAvailable] = useState(false);
+  const [noCellPhoneReason, setNoCellPhoneReason] = useState('');
+  const [createdInviteUrl, setCreatedInviteUrl] = useState<string | null>(null);
 
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery<OnboardingSession[]>({
     queryKey: ['/api/onboarding/sessions'],
@@ -85,18 +101,38 @@ export default function OnboardingDashboard() {
   const isRehirePath = selectedPath?.pathPurpose === 'REHIRE';
 
   const createSessionMutation = useMutation({
-    mutationFn: async (data: { onboardingPathId: string; employeeId?: number }) => {
-      return apiRequest('/api/onboarding/sessions', {
+    mutationFn: async (data: { onboardingPathId: string; employeeId?: number; employeeDraft?: typeof employeeDraft }) => {
+      const session = await apiRequest('/api/onboarding/sessions', {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: data,
       });
+
+      if (!isRehirePath) {
+        const invitation = await apiRequest(`/api/onboarding/sessions/${session.id}/invitation`, {
+          method: 'POST',
+          body: {
+            deliveryMode: 'in_person',
+            noCellPhoneAvailable,
+            noCellPhoneReason,
+          },
+        });
+
+        return { session, invitation };
+      }
+
+      return { session, invitation: null };
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/onboarding/sessions'] });
-      setShowCreateDialog(false);
-      setSelectedPathId('');
-      setSelectedEmployeeId('');
-      toast({ title: 'Session started', description: 'New onboarding session created successfully' });
+      if (data.invitation?.inviteUrl) {
+        setCreatedInviteUrl(data.invitation.inviteUrl);
+        toast({ title: 'Session and invite created', description: 'Use the in-person link to start paperwork.' });
+      } else {
+        setShowCreateDialog(false);
+        setSelectedPathId('');
+        setSelectedEmployeeId('');
+        toast({ title: 'Session started', description: 'New onboarding session created successfully' });
+      }
     },
     onError: (error: any) => {
       toast({ 
@@ -149,13 +185,49 @@ export default function OnboardingDashboard() {
       });
       return;
     }
+
+    if (!isRehirePath) {
+      if (!employeeDraft.name.trim() || !employeeDraft.email.trim()) {
+        toast({
+          title: 'Employee details required',
+          description: 'Name and email are required to create the inactive employee and invite.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!employeeDraft.phone.trim() && !noCellPhoneAvailable) {
+        toast({
+          title: 'Cell phone required',
+          description: 'Enter a cell phone or mark no cell phone available.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (noCellPhoneAvailable && noCellPhoneReason.trim().length < 3) {
+        toast({
+          title: 'Reason required',
+          description: 'Add a reason for the no-cell-phone override.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
     
-    const payload: { onboardingPathId: string; employeeId?: number } = {
+    const payload: { onboardingPathId: string; employeeId?: number; employeeDraft?: typeof employeeDraft } = {
       onboardingPathId: selectedPathId,
     };
     
     if (isRehirePath && selectedEmployeeId) {
       payload.employeeId = parseInt(selectedEmployeeId, 10);
+    } else if (!isRehirePath) {
+      payload.employeeDraft = {
+        ...employeeDraft,
+        name: employeeDraft.name.trim(),
+        email: employeeDraft.email.trim(),
+        phone: noCellPhoneAvailable ? '' : employeeDraft.phone.trim(),
+      };
     }
     
     createSessionMutation.mutate(payload);
@@ -405,9 +477,22 @@ export default function OnboardingDashboard() {
         if (!open) {
           setSelectedPathId('');
           setSelectedEmployeeId('');
+          setEmployeeDraft({
+            name: '',
+            preferredName: '',
+            email: '',
+            phone: '',
+            jobTitle: '',
+            department: '',
+            hireDate: '',
+            payType: 'HOURLY',
+          });
+          setNoCellPhoneAvailable(false);
+          setNoCellPhoneReason('');
+          setCreatedInviteUrl(null);
         }
       }}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {isRehirePath ? 'Start Re-Hire Session' : 'Start New Onboarding Session'}
@@ -464,6 +549,128 @@ export default function OnboardingDashboard() {
                 </p>
               </div>
             )}
+
+            {!isRehirePath && selectedPathId && (
+              <div className="space-y-4 border-t pt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="employee-name">Legal Name</Label>
+                    <Input
+                      id="employee-name"
+                      className="mt-2"
+                      value={employeeDraft.name}
+                      onChange={(event) => setEmployeeDraft((current) => ({ ...current, name: event.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="preferred-name">Preferred Name</Label>
+                    <Input
+                      id="preferred-name"
+                      className="mt-2"
+                      value={employeeDraft.preferredName}
+                      onChange={(event) => setEmployeeDraft((current) => ({ ...current, preferredName: event.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="employee-email">Email</Label>
+                    <Input
+                      id="employee-email"
+                      className="mt-2"
+                      type="email"
+                      value={employeeDraft.email}
+                      onChange={(event) => setEmployeeDraft((current) => ({ ...current, email: event.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="employee-phone">Cell Phone</Label>
+                    <Input
+                      id="employee-phone"
+                      className="mt-2"
+                      value={employeeDraft.phone}
+                      disabled={noCellPhoneAvailable}
+                      onChange={(event) => setEmployeeDraft((current) => ({ ...current, phone: event.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="employee-job-title">Job Title</Label>
+                    <Input
+                      id="employee-job-title"
+                      className="mt-2"
+                      value={employeeDraft.jobTitle}
+                      onChange={(event) => setEmployeeDraft((current) => ({ ...current, jobTitle: event.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="employee-department">Department</Label>
+                    <Input
+                      id="employee-department"
+                      className="mt-2"
+                      value={employeeDraft.department}
+                      onChange={(event) => setEmployeeDraft((current) => ({ ...current, department: event.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="employee-hire-date">Expected Hire Date</Label>
+                    <Input
+                      id="employee-hire-date"
+                      className="mt-2"
+                      type="date"
+                      value={employeeDraft.hireDate}
+                      onChange={(event) => setEmployeeDraft((current) => ({ ...current, hireDate: event.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="pay-type-select">Pay Type</Label>
+                    <Select
+                      value={employeeDraft.payType}
+                      onValueChange={(value) => setEmployeeDraft((current) => ({ ...current, payType: value }))}
+                    >
+                      <SelectTrigger id="pay-type-select" className="mt-2">
+                        <SelectValue placeholder="Select pay type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="HOURLY">Full-time Hourly</SelectItem>
+                        <SelectItem value="SALARY">Full-time Salaried</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={noCellPhoneAvailable}
+                    onCheckedChange={(checked) => setNoCellPhoneAvailable(checked === true)}
+                  />
+                  <span>No cell phone available for verification</span>
+                </label>
+
+                {noCellPhoneAvailable && (
+                  <div>
+                    <Label htmlFor="no-cell-reason">No Cell Phone Reason</Label>
+                    <Textarea
+                      id="no-cell-reason"
+                      className="mt-2"
+                      value={noCellPhoneReason}
+                      onChange={(event) => setNoCellPhoneReason(event.target.value)}
+                      placeholder="Example: employee does not own a cell phone and is completing paperwork in person"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {createdInviteUrl && (
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4 space-y-3">
+                <div>
+                  <div className="font-medium text-green-900">In-person invite link ready</div>
+                  <div className="text-sm text-green-800">Open this on the orientation device to verify contact information and complete paperwork.</div>
+                </div>
+                <div className="flex gap-2">
+                  <Input value={`${window.location.origin}${createdInviteUrl}`} readOnly />
+                  <Button onClick={() => window.open(createdInviteUrl, '_blank')}>Open</Button>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
@@ -471,7 +678,7 @@ export default function OnboardingDashboard() {
             </Button>
             <Button 
               onClick={handleCreateSession} 
-              disabled={!selectedPathId || (isRehirePath && !selectedEmployeeId) || createSessionMutation.isPending}
+              disabled={!!createdInviteUrl || !selectedPathId || (isRehirePath && !selectedEmployeeId) || createSessionMutation.isPending}
             >
               {createSessionMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {isRehirePath ? 'Start Re-Hire' : 'Start Session'}

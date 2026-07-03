@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
+import * as fsSync from 'fs';
+import os from 'os';
+import { randomUUID } from 'crypto';
 import { sql, eq, and, gte, lte, ilike, or, inArray, desc, asc, type SQL } from 'drizzle-orm';
 import { validateSameFamily } from '../utils/unitConversionService';
 import {
@@ -25,6 +29,9 @@ import {
   getSupplySourceDashboard,
   type ManufacturedCategory,
   type InventoryItem,
+  p2NonconformingDispositions,
+  p2SerializedItems,
+  travelers,
 } from '@shared/schema';
 
 function withSupplySourceDashboard(item: InventoryItem) {
@@ -34,18 +41,76 @@ function withSupplySourceDashboard(item: InventoryItem) {
   };
 }
 
+function isServiceInventoryItem(item: InventoryItem | undefined): boolean {
+  if (!item) return false;
+  const looseType = (item.type || '').trim().toLowerCase();
+  return item.utilizedInServices === true || looseType === 'service' || looseType === 'services';
+}
+
 import { storage } from '../../storage';
 import { db } from '../../db';
 import { DEFAULT_INVENTORY_TRANSACTIONS_LIMIT, MAX_INVENTORY_TRANSACTIONS_LIMIT } from '../constants/inventory';
 import { requireRole } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
+import { getUserPermissions } from '../services/permissionService';
+import { notificationManager } from '../services/notificationManager';
 
 const router = Router();
 
-// Pre-create PDF upload directories to avoid async issues in multer
-const SDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/sds');
-const TDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/tds');
-const OTHER_DOCS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/other-docs');
+const isHostedProduction =
+  process.env.NODE_ENV === 'production' ||
+  process.env.REPL_DEPLOYMENT === 'true' ||
+  process.env.REPLIT_DEPLOYMENT === 'true';
+
+const INVENTORY_UPLOAD_ROOT = process.env.INVENTORY_UPLOAD_DIR
+  ? path.resolve(process.env.INVENTORY_UPLOAD_DIR)
+  : isHostedProduction
+    ? path.join(os.tmpdir(), 'epoch-inventory-documents')
+    : path.join(process.cwd(), 'uploads', 'inventory-documents');
+
+const draftBuilderInventoryItemSchema = z.object({
+  name: z.string().min(1, 'Part name is required'),
+  description: z.string().optional().nullable(),
+  supplier: z.string().optional().nullable(),
+  supplierPartNumber: z.string().optional().nullable(),
+  manufacturer: z.string().optional().nullable(),
+  costPer: z.number().min(0).optional().nullable(),
+  usageUnit: z.string().optional().nullable(),
+  department: z.string().optional().nullable(),
+  isManufactured: z.boolean().default(false),
+  manufacturedCategory: z
+    .enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT'])
+    .optional()
+    .nullable(),
+  project: z.string().optional().nullable(),
+  draftName: z.string().optional().nullable(),
+  draftLineId: z.string().optional().nullable(),
+});
+
+async function nextNumericInventoryPartNumber() {
+  const result = await db.execute(
+    sql`SELECT ag_part_number FROM inventory_items WHERE ag_part_number ~ '^[0-9]+$' ORDER BY CAST(ag_part_number AS INTEGER) DESC LIMIT 1`
+  );
+  const maxNum = result.rows?.[0]?.ag_part_number ? parseInt(result.rows[0].ag_part_number as string, 10) : 0;
+  return String(maxNum + 1);
+}
+
+function duplicateInventoryPartNumberError(error: unknown) {
+  return typeof error === 'object' && error !== null && (
+    (error as any).code === '23505' ||
+    (error as any).cause?.code === '23505' ||
+    String((error as any).message || '').includes('inventory_items_ag_part_number')
+  );
+}
+
+// Keep legacy locations readable so existing DB file paths still work.
+const LEGACY_SDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/sds');
+const LEGACY_TDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/tds');
+const LEGACY_OTHER_DOCS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/other-docs');
+
+const SDS_UPLOAD_DIR = path.join(INVENTORY_UPLOAD_ROOT, 'sds');
+const TDS_UPLOAD_DIR = path.join(INVENTORY_UPLOAD_ROOT, 'tds');
+const OTHER_DOCS_UPLOAD_DIR = path.join(INVENTORY_UPLOAD_ROOT, 'other-docs');
 
 fs.mkdir(SDS_UPLOAD_DIR, { recursive: true }).catch(err => {
   console.error('Failed to create SDS upload directory:', err);
@@ -57,17 +122,26 @@ fs.mkdir(OTHER_DOCS_UPLOAD_DIR, { recursive: true }).catch(err => {
   console.error('Failed to create Other Docs upload directory:', err);
 });
 
+function ensureUploadDir(uploadDir: string) {
+  fsSync.mkdirSync(uploadDir, { recursive: true });
+}
+
 // Configure multer storage for PDF uploads
 const pdfStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Determine destination based on field name
-    let uploadDir = SDS_UPLOAD_DIR;
-    if (file.fieldname === 'tdsFile') {
-      uploadDir = TDS_UPLOAD_DIR;
-    } else if (file.fieldname === 'otherDocsFile') {
-      uploadDir = OTHER_DOCS_UPLOAD_DIR;
+    try {
+      // Determine destination based on field name
+      let uploadDir = SDS_UPLOAD_DIR;
+      if (file.fieldname === 'tdsFile') {
+        uploadDir = TDS_UPLOAD_DIR;
+      } else if (file.fieldname === 'otherDocsFile') {
+        uploadDir = OTHER_DOCS_UPLOAD_DIR;
+      }
+      ensureUploadDir(uploadDir);
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error as Error, '');
     }
-    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -89,12 +163,104 @@ const pdfUpload = multer({
   }
 });
 
+const inventoryPdfUpload = pdfUpload.fields([
+  { name: 'sdsFile', maxCount: 1 },
+  { name: 'tdsFile', maxCount: 1 },
+  { name: 'otherDocsFile', maxCount: 1 },
+]);
+
+function getInventoryRequestId(req: Request, res: Response) {
+  const existingId = req.headers['x-inventory-request-id'] || req.headers['x-request-id'];
+  const requestId = Array.isArray(existingId) ? existingId[0] : existingId || randomUUID();
+  res.locals.inventoryRequestId = requestId;
+  res.setHeader('X-Inventory-Request-Id', requestId);
+  return requestId;
+}
+
+function summarizeInventoryFiles(files: unknown) {
+  if (!files || typeof files !== 'object') {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(files as Record<string, Express.Multer.File[]>).map(([field, fieldFiles]) => [
+      field,
+      fieldFiles.map(file => ({
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        path: file.path,
+      })),
+    ]),
+  );
+}
+
+function handleInventoryPdfUpload(req: Request, res: Response, next: (err?: any) => void) {
+  const requestId = getInventoryRequestId(req, res);
+  console.log(`[inventory-upload:${requestId}] start`, {
+    method: req.method,
+    path: req.originalUrl,
+    contentType: req.headers['content-type'],
+    contentLength: req.headers['content-length'],
+  });
+
+  inventoryPdfUpload(req, res, (error: any) => {
+    if (!error) {
+      console.log(`[inventory-upload:${requestId}] complete`, {
+        fields: Object.keys(req.body || {}),
+        dataBytes: typeof req.body?.data === 'string' ? Buffer.byteLength(req.body.data) : 0,
+        files: summarizeInventoryFiles(req.files),
+      });
+      return next();
+    }
+
+    console.error(`[inventory-upload:${requestId}] error`, error);
+    const message = error instanceof multer.MulterError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : 'Failed to upload inventory document';
+    const statusCode = error instanceof multer.MulterError || message === 'Only PDF files are allowed' ? 400 : 500;
+    return res.status(statusCode).json({ error: message, requestId, code: 'INVENTORY_UPLOAD_FAILED' });
+  });
+}
+
+function sendInventoryUpdateError(res: Response, error: unknown, fallbackMessage = 'Failed to update inventory item') {
+  const requestId = res.locals.inventoryRequestId;
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  const statusCode = error instanceof Error ? 400 : 500;
+  return res.status(statusCode).json({ error: message, requestId, code: 'INVENTORY_UPDATE_FAILED' });
+}
+
+async function resolveInventoryDocumentPath(primaryDir: string, legacyDir: string, filename: string) {
+  const primaryPath = path.resolve(primaryDir, filename);
+  if (!primaryPath.startsWith(path.resolve(primaryDir))) {
+    return null;
+  }
+
+  try {
+    await fs.access(primaryPath);
+    return primaryPath;
+  } catch {
+    const legacyPath = path.resolve(legacyDir, filename);
+    if (!legacyPath.startsWith(path.resolve(legacyDir))) {
+      return null;
+    }
+    try {
+      await fs.access(legacyPath);
+      return legacyPath;
+    } catch {
+      return null;
+    }
+  }
+}
+
 // Enhanced Inventory API - Get all items (mounted at /api/enhanced/inventory/items)
-// Supports optional query param: ?manufacturedCategory=MACHINED_PART
+// Supports optional query params: ?manufacturedCategory=MACHINED_PART&includeInactive=true
 router.get('/inventory/items', async (req: Request, res: Response) => {
   try {
-    let items = await storage.getAllInventoryItems();
-    const { manufacturedCategory } = req.query;
+    const { manufacturedCategory, includeInactive } = req.query;
+    let items = await storage.getAllInventoryItems({ includeInactive: includeInactive === 'true' });
     if (typeof manufacturedCategory === 'string' && manufacturedCategory) {
       items = items.filter(item => item.manufacturedCategory === manufacturedCategory);
     }
@@ -106,11 +272,11 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
 });
 
 // Also expose at /items for /api/inventory/items path
-// Supports optional query param: ?manufacturedCategory=MACHINED_PART
+// Supports optional query params: ?manufacturedCategory=MACHINED_PART&includeInactive=true
 router.get('/items', async (req: Request, res: Response) => {
   try {
-    let items = await storage.getAllInventoryItems();
-    const { manufacturedCategory } = req.query;
+    const { manufacturedCategory, includeInactive } = req.query;
+    let items = await storage.getAllInventoryItems({ includeInactive: includeInactive === 'true' });
     if (typeof manufacturedCategory === 'string' && manufacturedCategory) {
       items = items.filter(item => item.manufacturedCategory === manufacturedCategory);
     }
@@ -124,14 +290,73 @@ router.get('/items', async (req: Request, res: Response) => {
 // Get next available AG Part Number
 router.get('/items/next-part-number', async (req: Request, res: Response) => {
   try {
-    const result = await db.execute(
-      sql`SELECT ag_part_number FROM inventory_items WHERE ag_part_number ~ '^[0-9]+$' ORDER BY CAST(ag_part_number AS INTEGER) DESC LIMIT 1`
-    );
-    const maxNum = result.rows?.[0]?.ag_part_number ? parseInt(result.rows[0].ag_part_number as string, 10) : 0;
-    res.json({ nextPartNumber: String(maxNum + 1) });
+    res.json({ nextPartNumber: await nextNumericInventoryPartNumber() });
   } catch (error) {
     console.error('Get next part number error:', error);
     res.status(500).json({ error: 'Failed to get next part number' });
+  }
+});
+
+router.post('/items/from-draft-builder', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
+  try {
+    const draftPart = draftBuilderInventoryItemSchema.parse(req.body);
+    const manufacturedCategory = draftPart.isManufactured
+      ? draftPart.manufacturedCategory ?? 'COMPONENT'
+      : null;
+    const itemType = draftPart.isManufactured ? 'MANUFACTURED' : 'PURCHASED';
+    const notes = [
+      'Created from Draft Builder finalization.',
+      draftPart.project ? `Project: ${draftPart.project}` : null,
+      draftPart.draftName ? `Draft: ${draftPart.draftName}` : null,
+      draftPart.draftLineId ? `Draft line: ${draftPart.draftLineId}` : null,
+      draftPart.manufacturer ? `Manufacturer: ${draftPart.manufacturer}` : null,
+      draftPart.description && draftPart.description !== draftPart.name ? `Description: ${draftPart.description}` : null,
+    ].filter(Boolean).join('\n');
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const agPartNumber = await nextNumericInventoryPartNumber();
+      const itemData = insertInventoryItemSchema.parse({
+        agPartNumber,
+        name: draftPart.name,
+        description: draftPart.description || draftPart.name,
+        source: draftPart.supplier || null,
+        supplier: draftPart.supplier || null,
+        supplierPartNumber: draftPart.supplierPartNumber || null,
+        costPer: draftPart.costPer ?? null,
+        unitCost: draftPart.costPer ?? null,
+        usageUnit: draftPart.usageUnit || 'EA',
+        purchaseUnit: draftPart.usageUnit || 'EA',
+        department: draftPart.department || null,
+        assignedDepartments: draftPart.department ? [draftPart.department] : [],
+        notes,
+        itemType,
+        type: draftPart.isManufactured ? 'Manufactured' : 'Purchased',
+        manufacturedCategory,
+        manufacturingLevel: draftPart.isManufactured ? 'COMPONENT' : null,
+        isActive: true,
+      });
+
+      try {
+        const newItem = await storage.createInventoryItem(itemData);
+        return res.status(201).json(withSupplySourceDashboard(newItem));
+      } catch (error) {
+        if (duplicateInventoryPartNumberError(error) && attempt < 4) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return res.status(409).json({ error: 'Unable to allocate a unique AG part number. Please retry finalization.' });
+  } catch (error) {
+    console.error('Create Draft Builder inventory item error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid draft inventory item payload' });
+    }
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create inventory item from Draft Builder' });
   }
 });
 
@@ -225,8 +450,76 @@ router.get('/items/by-part-number/:partNumber', async (req: Request, res: Respon
   }
 });
 
+const setPrimaryImageSchema = z.object({
+  mediaId: z.string().uuid().nullable(),
+});
+
+router.put('/items/:id/primary-image', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return res.status(400).json({ error: 'Invalid inventory item ID' });
+    }
+
+    const { mediaId } = setPrimaryImageSchema.parse(req.body);
+    const { inventoryItems, mediaAttachments, mediaLibrary } = await import('../../schema');
+
+    const [item] = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, itemId));
+
+    if (!item) {
+      return res.status(404).json({ error: 'Inventory item not found' });
+    }
+
+    if (mediaId) {
+      const [attachedImage] = await db
+        .select({
+          mediaId: mediaLibrary.id,
+          mimeType: mediaLibrary.mimeType,
+        })
+        .from(mediaAttachments)
+        .innerJoin(mediaLibrary, eq(mediaAttachments.mediaId, mediaLibrary.id))
+        .where(and(
+          eq(mediaAttachments.entityType, 'inventory_item'),
+          eq(mediaAttachments.entityId, item.agPartNumber),
+          eq(mediaAttachments.mediaId, mediaId)
+        ));
+
+      if (!attachedImage) {
+        return res.status(422).json({ error: 'Primary image must be attached to this inventory item first.' });
+      }
+
+      if (!attachedImage.mimeType?.startsWith('image/')) {
+        return res.status(422).json({ error: 'Primary media must be an image.' });
+      }
+    }
+
+    const [updatedItem] = await db
+      .update(inventoryItems)
+      .set({
+        primaryImageMediaId: mediaId,
+        updatedAt: new Date(),
+      })
+      .where(eq(inventoryItems.id, itemId))
+      .returning();
+
+    res.json(withSupplySourceDashboard(updatedItem));
+  } catch (error) {
+    console.error('Set inventory item primary image error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid primary image payload' });
+    }
+    res.status(500).json({ error: 'Failed to update primary image' });
+  }
+});
+
 // Enhanced Inventory API - Update item
-router.put('/inventory/items/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/inventory/items/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -317,11 +610,8 @@ router.put('/inventory/items/:id', requirePermission('inventory.adjust'), pdfUpl
     
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
-    console.error('Update enhanced inventory item error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to update inventory item' });
+    console.error(`[inventory-update:${res.locals.inventoryRequestId || 'unknown'}] enhanced error`, error);
+    return sendInventoryUpdateError(res, error);
   }
 });
 
@@ -349,7 +639,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST route for creating inventory items at the root level (to match client expectations)
-router.post('/', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.post('/', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
@@ -406,7 +696,7 @@ router.post('/', requirePermission('inventory.adjust'), pdfUpload.fields([{ name
 });
 
 // PUT route for updating inventory items at the root level
-router.put('/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -451,11 +741,8 @@ router.put('/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ na
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
-    console.error('Update inventory item error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to update inventory item' });
+    console.error(`[inventory-update:${res.locals.inventoryRequestId || 'unknown'}] root error`, error);
+    return sendInventoryUpdateError(res, error);
   }
 });
 
@@ -494,6 +781,11 @@ router.get('/items/all-for-request', async (req: Request, res: Response) => {
         id: inventoryItems.id,
         agPartNumber: inventoryItems.agPartNumber,
         name: inventoryItems.name,
+        source: inventoryItems.source,
+        vendorId: inventoryItems.vendorId,
+        supplierPartNumber: inventoryItems.supplierPartNumber,
+        orderUrl: inventoryItems.orderUrl,
+        defaultOrderMethod: inventoryItems.defaultOrderMethod,
         sku: inventoryItems.sku,
         department: inventoryItems.department,
         usageUnit: inventoryItems.usageUnit,
@@ -533,7 +825,7 @@ router.get('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/items', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.post('/items', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
@@ -595,7 +887,7 @@ router.post('/items', requirePermission('inventory.adjust'), pdfUpload.fields([{
   }
 });
 
-router.put('/items/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/items/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -686,11 +978,8 @@ router.put('/items/:id', requirePermission('inventory.adjust'), pdfUpload.fields
     
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
-    console.error('Update inventory item error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to update inventory item' });
+    console.error(`[inventory-update:${res.locals.inventoryRequestId || 'unknown'}] items error`, error);
+    return sendInventoryUpdateError(res, error);
   }
 });
 
@@ -762,7 +1051,7 @@ router.post('/items/:id/routing', async (req: Request, res: Response) => {
     const inferredRoutingType = (() => {
       if (routingType) return routingType;
       const cat = (item as any).manufacturedCategory;
-      if (cat === 'ASSEMBLY') return 'ASSEMBLY';
+      if (cat === 'ASSEMBLY' || cat === 'FINAL_ASSEMBLY') return 'ASSEMBLY';
       if (cat === 'SUB_ASSEMBLY') return 'SUB_ASSEMBLY';
       if (cat === 'MACHINED_PART') return 'CNC';
       if (cat === 'KIT') return 'KIT';
@@ -995,7 +1284,18 @@ router.post('/scans', async (req: Request, res: Response) => {
 // Parts Requests
 router.get('/parts-requests', async (req: Request, res: Response) => {
   try {
-    const requests = await storage.getAllPartsRequests();
+    const canViewAll = await canViewAllPartsRequests(req);
+    const username = req.user?.username;
+    const requests = canViewAll
+      ? await storage.getAllPartsRequests()
+      : username
+        ? await storage.getPartsRequestsByUser(
+            username,
+            req.user?.id ?? null,
+            (req.user as any)?.employeeId ?? null,
+            await getPartsRequestRequestedByNameCandidates(req)
+          )
+        : [];
     res.json(requests);
   } catch (error) {
     console.error('Get parts requests error:', error);
@@ -1021,8 +1321,214 @@ function getApprovalActor(req: Request, fallback?: string | null) {
   return req.user?.username || fallback?.trim() || 'Unknown approver';
 }
 
-router.get('/parts-requests/owner-approvals', async (_req: Request, res: Response) => {
+async function userCan(req: Request, capabilityKey: string) {
+  const user = req.user as any;
+  if (!user) return false;
+  if (user.role === 'ADMIN' || user.role === 'OWNER') return true;
+  const { permissionSet } = await getUserPermissions(user.id, user.role);
+  return permissionSet.has(capabilityKey);
+}
+
+async function userCanAny(req: Request, capabilityKeys: string[]) {
+  const user = req.user as any;
+  if (!user) return false;
+  if (user.role === 'ADMIN' || user.role === 'OWNER') return true;
+  const { permissionSet } = await getUserPermissions(user.id, user.role);
+  return capabilityKeys.some((capabilityKey) => permissionSet.has(capabilityKey));
+}
+
+async function canViewAllPartsRequests(req: Request) {
+  const user = req.user as any;
+  if (!user) return false;
+  if (user.role === 'ADMIN' || user.role === 'OWNER') return true;
+
+  const username = String(user.username || '').trim().toLowerCase();
+  if (username === 'jens' || username === 'agrace') return true;
+
+  return userCanAny(req, [
+    'purchasing.manage_pos',
+    'purchasing.approve_po',
+    'purchasing.view_requisitions',
+  ]);
+}
+
+async function requireConsolidatedNeedsAccess(req: Request, res: Response) {
+  const allowed = await userCanAny(req, [
+    'purchasing.manage_pos',
+    'purchasing.approve_po',
+    'purchasing.view_requisitions',
+  ]);
+  if (!allowed) {
+    res.status(403).json({
+      error: 'Forbidden',
+      requiredCapability: 'purchasing.view_requisitions',
+      message: 'Admin or purchasing access is required to view consolidated parts needs.',
+    });
+  }
+  return allowed;
+}
+
+async function getPartsRequestRequestedByNameCandidates(req: Request) {
+  const user = req.user as any;
+  const names = new Set<string>();
+  if (!user) return [];
+  if (user.username) names.add(String(user.username));
+
   try {
+    const { users } = await import('../../schema');
+    const [row] = await db
+      .select({
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+
+    if (row?.username) names.add(row.username);
+    const fullName = [row?.firstName, row?.lastName]
+      .filter((part) => typeof part === 'string' && part.trim().length > 0)
+      .join(' ')
+      .trim();
+    if (fullName) names.add(fullName);
+  } catch (error) {
+    console.warn('[parts-requests] requested-by name lookup failed:', error instanceof Error ? error.message : error);
+  }
+
+  return Array.from(names);
+}
+
+async function canAccessPartsRequest(req: Request, requestId: number) {
+  if (await canViewAllPartsRequests(req)) return true;
+  const user = req.user as any;
+  if (!user) return false;
+
+  const request = await storage.getPartsRequest(requestId);
+  if (!request || request.isActive === false) return false;
+  if (user.id && request.requestedByUserId === user.id) return true;
+  if (user.employeeId && request.requestedForEmployeeId === user.employeeId) return true;
+
+  const names = await getPartsRequestRequestedByNameCandidates(req);
+  return names.some((name) => name.trim() && request.requestedBy === name.trim());
+}
+
+async function requirePartsRequestApprovalAuthority(req: Request, res: Response) {
+  const allowed = await userCan(req, 'inventory.approve_parts_requests');
+  if (!allowed) {
+    res.status(403).json({
+      error: 'Forbidden',
+      requiredCapability: 'inventory.approve_parts_requests',
+      message: 'Inventory manager approval authority is required to approve parts requests.',
+    });
+  }
+  return allowed;
+}
+
+function formatPartsRequestStatus(status: string | null | undefined) {
+  return String(status || 'UPDATED').replace(/_/g, ' ');
+}
+
+async function resolveRequestedForEmployee(employeeId: number | null | undefined) {
+  if (!employeeId) return null;
+  const { employees } = await import('../../schema');
+  const [employee] = await db
+    .select({ id: employees.id, name: employees.name, isActive: employees.isActive })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+  return employee ?? null;
+}
+
+async function normalizePartsRequestParticipantFields(
+  data: Record<string, any>,
+  req: Request,
+  options: { defaultRequester?: boolean } = {}
+) {
+  if (options.defaultRequester && !data.requestedByUserId && req.user?.id) {
+    data.requestedByUserId = req.user.id;
+  }
+
+  if ('requestedForEmployeeId' in data) {
+    const employeeId = data.requestedForEmployeeId == null ? null : Number(data.requestedForEmployeeId);
+    if (!employeeId) {
+      data.requestedForEmployeeId = null;
+      data.requestedForDisplayName = null;
+      return;
+    }
+
+    const employee = await resolveRequestedForEmployee(employeeId);
+    if (!employee || employee.isActive === false) {
+      throw new Error('Requested For must be an active employee.');
+    }
+
+    data.requestedForEmployeeId = employee.id;
+    data.requestedForDisplayName = employee.name;
+  }
+}
+
+async function resolvePartsRequestNotificationRecipients(request: {
+  requestedByUserId?: number | null;
+  requestedForEmployeeId?: number | null;
+}) {
+  const ids = new Set<number>();
+  if (request.requestedByUserId) ids.add(request.requestedByUserId);
+
+  if (request.requestedForEmployeeId) {
+    const { users } = await import('../../schema');
+    const linkedUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.employeeId, request.requestedForEmployeeId), eq(users.isActive, true)));
+    for (const user of linkedUsers) ids.add(user.id);
+  }
+
+  return Array.from(ids);
+}
+
+async function notifyPartsRequestParticipants(params: {
+  request: any;
+  fromStatus?: string | null;
+  toStatus: string;
+  changedBy?: string | null;
+  reason?: string | null;
+}) {
+  try {
+    const recipients = await resolvePartsRequestNotificationRecipients(params.request);
+    if (recipients.length === 0) return;
+
+    const partLabel = params.request.partName || params.request.partNumber || `Request #${params.request.id}`;
+    const statusLabel = formatPartsRequestStatus(params.toStatus);
+    const transition = params.fromStatus && params.fromStatus !== params.toStatus
+      ? `${formatPartsRequestStatus(params.fromStatus)} to ${statusLabel}`
+      : statusLabel;
+
+    notificationManager.sendToUsers(recipients, {
+      type: 'parts_request_status',
+      title: `Parts request #${params.request.id}: ${statusLabel}`,
+      message: `${partLabel} is now ${transition}.`,
+      timestamp: new Date().toISOString(),
+      data: {
+        requestId: params.request.id,
+        partNumber: params.request.partNumber,
+        partName: params.request.partName,
+        fromStatus: params.fromStatus ?? null,
+        toStatus: params.toStatus,
+        changedBy: params.changedBy ?? null,
+        reason: params.reason ?? null,
+        url: '/inventory/parts-request',
+      },
+    });
+  } catch (error) {
+    console.warn('[parts-requests] status notification failed:', error instanceof Error ? error.message : error);
+  }
+}
+
+router.get('/parts-requests/owner-approvals', async (req: Request, res: Response) => {
+  try {
+    if (!(await canViewAllPartsRequests(req))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const requests = await storage.getAllPartsRequests();
     res.json(
       requests.filter(
@@ -1055,7 +1561,8 @@ async function resolveSourceVendorId(sourceText: string | null | undefined, db: 
 
 router.post('/parts-requests', async (req: Request, res: Response) => {
   try {
-    const requestData = insertPartsRequestSchema.parse(req.body);
+    const requestData = insertPartsRequestSchema.parse(req.body) as any;
+    await normalizePartsRequestParticipantFields(requestData, req, { defaultRequester: true });
     const now = new Date();
     requestData.status = 'PENDING';
     requestData.approvalStatus = 'PENDING';
@@ -1071,38 +1578,59 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
       },
     ];
 
-    if (requestData.agPartNumber) {
+    const requestedPartNumbers = Array.from(
+      new Set(
+        [requestData.agPartNumber, requestData.partNumber]
+          .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+          .map((part) => part.trim())
+      )
+    );
+
+    if (requestedPartNumbers.length > 0) {
       const { inventoryItems } = await import('../../schema');
       const [item] = await db
         .select({
+          agPartNumber: inventoryItems.agPartNumber,
           vendorId: inventoryItems.vendorId,
           source: inventoryItems.source,
           defaultOrderMethod: inventoryItems.defaultOrderMethod,
         })
         .from(inventoryItems)
-        .where(eq(inventoryItems.agPartNumber, requestData.agPartNumber))
+        .where(inArray(inventoryItems.agPartNumber, requestedPartNumbers))
         .limit(1);
 
       if (item) {
+        requestData.agPartNumber = requestData.agPartNumber || item.agPartNumber;
+        requestData.partNumber = requestData.partNumber || item.agPartNumber;
+
         // Auto-set orderMethod from item default if not provided
         if (!requestData.orderMethod && item.defaultOrderMethod) {
           requestData.orderMethod = item.defaultOrderMethod as 'PO' | 'WEBSITE';
         }
 
-        // Auto-assign vendor from source or item vendor if not provided.
+        // Auto-assign vendor from the inventory item first; source is legacy display text.
         // Future improvement: a supplier_items table or source_vendor_id FK would replace this lookup.
         if (!requestData.vendorId) {
-          const sourceVendorId = await resolveSourceVendorId(item.source, db);
-          if (sourceVendorId) {
-            requestData.vendorId = sourceVendorId;
-          } else if (item.vendorId) {
+          if (item.vendorId) {
             requestData.vendorId = item.vendorId;
+          } else {
+            const sourceVendorId = await resolveSourceVendorId(item.source, db);
+            if (sourceVendorId) {
+              requestData.vendorId = sourceVendorId;
+            }
           }
         }
       }
     }
 
     const newRequest = await storage.createPartsRequest(requestData);
+    await notifyPartsRequestParticipants({
+      request: newRequest,
+      fromStatus: null,
+      toStatus: newRequest.status,
+      changedBy: requestData.requestedBy,
+      reason: 'Parts request submitted.',
+    });
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('Create parts request error:', error);
@@ -1115,6 +1643,8 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
 
 router.post('/parts-requests/:id/approve', async (req: Request, res: Response) => {
   try {
+    if (!(await requirePartsRequestApprovalAuthority(req, res))) return;
+
     const requestId = parseInt(req.params.id);
     const {
       approvedBy,
@@ -1178,6 +1708,14 @@ router.post('/parts-requests/:id/approve', async (req: Request, res: Response) =
       reason: isApproved ? 'Owner digital approval completed.' : notes || 'Owner rejected approval request.',
     });
 
+    await notifyPartsRequestParticipants({
+      request: updatedRequest,
+      fromStatus: existingRequest.status,
+      toStatus: nextStatus,
+      changedBy: actor,
+      reason: isApproved ? 'Owner digital approval completed.' : notes || 'Owner rejected approval request.',
+    });
+
     res.json(updatedRequest);
   } catch (error) {
     console.error('Approve owner parts request error:', error);
@@ -1191,7 +1729,8 @@ router.post('/parts-requests/:id/approve', async (req: Request, res: Response) =
 router.put('/parts-requests/:id', async (req: Request, res: Response) => {
   try {
     const requestId = parseInt(req.params.id);
-    const updates = insertPartsRequestSchema.partial().parse(req.body);
+    const updates = insertPartsRequestSchema.partial().parse(req.body) as any;
+    await normalizePartsRequestParticipantFields(updates, req);
     const existingRequest = await storage.getPartsRequest(requestId);
     if (!existingRequest) {
       return res.status(404).json({ error: 'Request not found' });
@@ -1233,6 +1772,8 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
     }
 
     if (updates.status === 'APPROVED') {
+      if (!(await requirePartsRequestApprovalAuthority(req, res))) return;
+
       const effectiveRequest = { ...existingRequest, ...updates };
       const totalCost = getPartsRequestTotalCost(effectiveRequest);
       const actor = getApprovalActor(req, updates.approvedBy ?? null);
@@ -1262,6 +1803,15 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
     }
     
     const updatedRequest = await storage.updatePartsRequest(requestId, updates);
+    if (updates.status && updatedRequest.status !== existingRequest.status) {
+      await notifyPartsRequestParticipants({
+        request: updatedRequest,
+        fromStatus: existingRequest.status,
+        toStatus: updatedRequest.status,
+        changedBy: getApprovalActor(req, updates.approvedBy ?? updates.rejectedBy ?? null),
+        reason: updates.notes ?? updates.rejectionReason ?? null,
+      });
+    }
     res.json(updatedRequest);
   } catch (error) {
     console.error('Update parts request error:', error);
@@ -1290,7 +1840,12 @@ router.get('/parts-requests/my', async (req: Request, res: Response) => {
     if (!username) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
-    const requests = await storage.getPartsRequestsByUser(username);
+    const requests = await storage.getPartsRequestsByUser(
+      username,
+      req.user?.id ?? null,
+      (req.user as any)?.employeeId ?? null,
+      await getPartsRequestRequestedByNameCandidates(req)
+    );
     res.json(requests);
   } catch (error) {
     console.error('Get user parts requests error:', error);
@@ -1302,7 +1857,17 @@ router.get('/parts-requests/my', async (req: Request, res: Response) => {
 router.get('/parts-requests/department/:departmentId', async (req: Request, res: Response) => {
   try {
     const departmentId = parseInt(req.params.departmentId);
-    const requests = await storage.getPartsRequestsByDepartment(departmentId);
+    const username = req.user?.username;
+    const requests = await canViewAllPartsRequests(req)
+      ? storage.getPartsRequestsByDepartment(departmentId)
+      : username
+        ? (await storage.getPartsRequestsByUser(
+            username,
+            req.user?.id ?? null,
+            (req.user as any)?.employeeId ?? null,
+            await getPartsRequestRequestedByNameCandidates(req)
+          )).filter((request) => request.departmentId === departmentId)
+        : [];
     res.json(requests);
   } catch (error) {
     console.error('Get department parts requests error:', error);
@@ -1313,6 +1878,7 @@ router.get('/parts-requests/department/:departmentId', async (req: Request, res:
 // Get consolidated parts needs for inventory manager
 router.get('/parts-requests/consolidated/needs', async (req: Request, res: Response) => {
   try {
+    if (!(await requireConsolidatedNeedsAccess(req, res))) return;
     const needs = await storage.getConsolidatedPartsNeeds();
     res.json(needs);
   } catch (error) {
@@ -1324,12 +1890,14 @@ router.get('/parts-requests/consolidated/needs', async (req: Request, res: Respo
 // Get parts requests grouped by vendor for consolidated ordering view
 router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
   try {
+    if (!(await requireConsolidatedNeedsAccess(req, res))) return;
     const { partsRequests, vendors, inventoryItems } = await import('../../schema');
     const { db } = await import('../../db');
     const { eq, and, inArray, isNotNull, isNull } = await import('drizzle-orm');
     
-    // Get all active parts requests that are not yet delivered
-    const activeStatuses = ['PENDING', 'APPROVED', 'ORDERED', 'RECEIVED'];
+    // Fully received requests are treated as archived out of consolidated needs.
+    // Partially received requests remain visible because they still have backorder work.
+    const activeStatuses = ['PENDING', 'APPROVED', 'ORDERED_PARTIAL', 'ORDERED', 'RECEIVED_PARTIAL'];
     const requests = await db
       .select()
       .from(partsRequests)
@@ -1343,18 +1911,43 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
     // Get all vendors for lookup
     const allVendors = await db.select().from(vendors);
     const vendorMap = new Map(allVendors.map(v => [v.id, v]));
+    const normalizeVendorName = (value?: string | null) =>
+      (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const vendorNameMap = new Map(
+      allVendors
+        .map((vendor) => [normalizeVendorName(vendor.name), vendor] as const)
+        .filter(([key]) => key.length > 0)
+    );
+    const resolveVendorByName = (value?: string | null) => {
+      const sourceKey = normalizeVendorName(value);
+      if (!sourceKey) return null;
+      if (vendorNameMap.has(sourceKey)) return vendorNameMap.get(sourceKey)!;
+      for (const [vendorKey, vendor] of vendorNameMap) {
+        if (vendorKey.includes(sourceKey) || sourceKey.includes(vendorKey)) {
+          return vendor;
+        }
+      }
+      return null;
+    };
     
-    // Get inventory items with vendor assignments for auto-suggest
+    // Get inventory items for vendor resolution by either request part-number field.
     const itemsWithVendors = await db
       .select({
         agPartNumber: inventoryItems.agPartNumber,
         vendorId: inventoryItems.vendorId,
+        defaultOrderMethod: inventoryItems.defaultOrderMethod,
+        source: inventoryItems.source,
         name: inventoryItems.name,
       })
       .from(inventoryItems)
-      .where(isNotNull(inventoryItems.vendorId));
+      .where(
+        or(
+          isNotNull(inventoryItems.vendorId),
+          isNotNull(inventoryItems.source)
+        )
+      );
     
-    const itemVendorMap = new Map(itemsWithVendors.map(i => [i.agPartNumber, i.vendorId]));
+    const itemByPartNumber = new Map(itemsWithVendors.map(i => [i.agPartNumber, i]));
     
     // Group requests by vendor
     const vendorGroups: Record<string, {
@@ -1362,7 +1955,17 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
       vendorName: string;
       orderMethod: string | null;
       websiteUrl: string | null;
-      requests: typeof requests;
+      requests: Array<typeof requests[number] & {
+        supplier?: string | null;
+        inventoryItem?: {
+          agPartNumber: string;
+          name: string;
+          source: string | null;
+          vendorId: number | null;
+          defaultOrderMethod: string | null;
+          vendorName: string | null;
+        };
+      }>;
       totalQuantity: number;
       totalEstimatedCost: number;
     }> = {};
@@ -1379,7 +1982,30 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
     };
     
     for (const request of requests) {
-      if (request.orderMethod === 'WEBSITE') {
+      const requestPartNumber = request.agPartNumber || request.partNumber;
+      const inventoryItem = requestPartNumber ? itemByPartNumber.get(requestPartNumber) : null;
+      const sourceVendor = resolveVendorByName(inventoryItem?.source || request.supplier);
+      const resolvedVendor = request.vendorId
+        ? vendorMap.get(request.vendorId)
+        : inventoryItem?.vendorId
+          ? vendorMap.get(inventoryItem.vendorId)
+          : sourceVendor;
+      const vendorId = request.vendorId ?? resolvedVendor?.id ?? inventoryItem?.vendorId ?? null;
+      const vendorName = resolvedVendor?.name ?? request.supplier ?? inventoryItem?.source ?? null;
+      const effectiveOrderMethod = request.orderMethod || inventoryItem?.defaultOrderMethod || resolvedVendor?.defaultOrderMethod || null;
+      const enrichedRequest = {
+        ...request,
+        orderMethod: effectiveOrderMethod,
+        vendorId,
+        supplier: vendorName,
+        inventoryItem: inventoryItem ? {
+          ...inventoryItem,
+          vendorId: inventoryItem.vendorId ?? vendorId,
+          vendorName,
+        } : undefined,
+      };
+
+      if (!resolvedVendor && effectiveOrderMethod === 'WEBSITE') {
         const key = 'WEBSITE';
         if (!vendorGroups[key]) {
           vendorGroups[key] = {
@@ -1392,17 +2018,11 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
             totalEstimatedCost: 0,
           };
         }
-        vendorGroups[key].requests.push(request);
+        vendorGroups[key].requests.push(enrichedRequest);
         vendorGroups[key].totalQuantity += request.quantity;
         vendorGroups[key].totalEstimatedCost += request.estimatedCost || 0;
         continue;
       }
-
-      let vendorId = request.vendorId;
-      if (!vendorId && request.agPartNumber) {
-        vendorId = itemVendorMap.get(request.agPartNumber) || null;
-      }
-      
       if (vendorId && vendorMap.has(vendorId)) {
         const vendor = vendorMap.get(vendorId)!;
         const key = `vendor-${vendorId}`;
@@ -1411,7 +2031,7 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
           vendorGroups[key] = {
             vendorId: vendor.id,
             vendorName: vendor.name,
-            orderMethod: request.orderMethod || null,
+            orderMethod: effectiveOrderMethod,
             websiteUrl: null,
             requests: [],
             totalQuantity: 0,
@@ -1419,11 +2039,11 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
           };
         }
         
-        vendorGroups[key].requests.push(request);
+        vendorGroups[key].requests.push(enrichedRequest);
         vendorGroups[key].totalQuantity += request.quantity;
         vendorGroups[key].totalEstimatedCost += request.estimatedCost || 0;
       } else {
-        vendorGroups['unassigned'].requests.push(request);
+        vendorGroups['unassigned'].requests.push(enrichedRequest);
         vendorGroups['unassigned'].totalQuantity += request.quantity;
         vendorGroups['unassigned'].totalEstimatedCost += request.estimatedCost || 0;
       }
@@ -1520,11 +2140,22 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
       
       if (validIds.length > 0) {
         updateData.status = updates.status;
-        await db
+        const updatedRequests = await db
           .update(partsRequests)
           .set(updateData)
-          .where(inArray(partsRequests.id, validIds));
+          .where(inArray(partsRequests.id, validIds))
+          .returning();
         updatedCount = validIds.length;
+        for (const request of updatedRequests) {
+          const previous = existingRequests.find((r) => r.id === request.id);
+          await notifyPartsRequestParticipants({
+            request,
+            fromStatus: previous?.status ?? null,
+            toStatus: request.status,
+            changedBy: req.user?.username ?? 'bulk update',
+            reason: updates.notes ?? null,
+          });
+        }
       }
       
       // Return detailed response about what was updated/skipped
@@ -1543,10 +2174,23 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
         updateData.status = updates.status;
       }
       
-      await db
+      const updatedRequests = await db
         .update(partsRequests)
         .set(updateData)
-        .where(inArray(partsRequests.id, requestIds));
+        .where(inArray(partsRequests.id, requestIds))
+        .returning();
+
+      if (updates.status) {
+        for (const request of updatedRequests) {
+          await notifyPartsRequestParticipants({
+            request,
+            fromStatus: null,
+            toStatus: request.status,
+            changedBy: req.user?.username ?? 'bulk update',
+            reason: updates.notes ?? null,
+          });
+        }
+      }
       
       res.json({ success: true, updatedCount: requestIds.length });
     }
@@ -1561,6 +2205,439 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
 // ==========================================
 
 // Create order batch from selected parts requests
+const linkExistingVendorPoSchema = z.object({
+  vendorPoId: z.coerce.number().int().positive(),
+  createLineItem: z.boolean().default(true),
+  quantity: z.coerce.number().positive().optional(),
+  unitPrice: z.coerce.number().min(0).optional(),
+  notes: z.string().optional().nullable(),
+});
+
+function statusFromLinkedVendorPo(poStatus: string | null | undefined, currentStatus: string) {
+  if (poStatus === 'Fully Received') return 'RECEIVED';
+  if (poStatus === 'Partially Received') return 'RECEIVED_PARTIAL';
+  if (poStatus === 'Sent') return 'ORDERED';
+  return currentStatus;
+}
+
+router.post(
+  '/parts-requests/:id/link-vendor-po',
+  requirePermission('purchasing.manage_pos'),
+  async (req: Request, res: Response) => {
+    try {
+      const requestId = Number(req.params.id);
+      if (!Number.isInteger(requestId) || requestId <= 0) {
+        return res.status(400).json({ error: 'Invalid parts request ID' });
+      }
+
+      const payload = linkExistingVendorPoSchema.parse(req.body);
+      const actor = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
+      const { partsRequests, partsRequestStatusHistory, vendorPOs, vendorPOItems, inventoryItems } = await import('../../schema');
+      const { eq: dEq, and: dAnd, or: dOr, sql: dSql } = await import('drizzle-orm');
+
+      const result = await db.transaction(async (tx) => {
+        const [request] = await tx
+          .select()
+          .from(partsRequests)
+          .where(dEq(partsRequests.id, requestId))
+          .for('update');
+
+        if (!request || request.isActive === false) {
+          throw Object.assign(new Error('Parts request not found'), { status: 404 });
+        }
+
+        if (['REJECTED', 'CANCELED', 'DELIVERED_TO_DEPT'].includes(request.status)) {
+          throw Object.assign(
+            new Error(`Cannot link a Vendor PO to a ${request.status.replace(/_/g, ' ')} request.`),
+            { status: 422 }
+          );
+        }
+
+        if (request.orderMethod === 'WEBSITE') {
+          throw Object.assign(new Error('Website-order requests cannot be linked to a Vendor PO.'), { status: 422 });
+        }
+
+        if (request.vendorPoId && request.vendorPoId !== payload.vendorPoId) {
+          throw Object.assign(
+            new Error(`Request is already linked to Vendor PO #${request.vendorPoId}.`),
+            { status: 409 }
+          );
+        }
+
+        const [vendorPO] = await tx
+          .select()
+          .from(vendorPOs)
+          .where(dEq(vendorPOs.id, payload.vendorPoId));
+
+        if (!vendorPO) {
+          throw Object.assign(new Error('Vendor PO not found'), { status: 404 });
+        }
+
+        if (vendorPO.status === 'Cancelled') {
+          throw Object.assign(new Error('Cannot link a request to a cancelled Vendor PO.'), { status: 422 });
+        }
+
+        if (request.vendorId && request.vendorId !== vendorPO.vendorId) {
+          throw Object.assign(
+            new Error(`Request vendor does not match Vendor PO vendor. Request vendor id ${request.vendorId}; PO vendor id ${vendorPO.vendorId}.`),
+            { status: 422 }
+          );
+        }
+
+        const [existingLine] = await tx
+          .select()
+          .from(vendorPOItems)
+          .where(dAnd(
+            dEq(vendorPOItems.vendorPoId, vendorPO.id),
+            dOr(
+              request.agPartNumber ? dEq(vendorPOItems.agPartNumber, request.agPartNumber) : dEq(vendorPOItems.description, request.partName),
+              dEq(vendorPOItems.description, request.partName)
+            )
+          ));
+
+        let createdLine: any = null;
+        if (payload.createLineItem && !existingLine) {
+          const maxResult = await tx.execute(dSql`
+            SELECT COALESCE(MAX(line_number), 0) + 1 AS next_line_number
+            FROM vendor_po_items
+            WHERE vendor_po_id = ${vendorPO.id}
+          `);
+          const lineNumber = Number(maxResult.rows?.[0]?.next_line_number ?? 1);
+          const quantity = Number(payload.quantity || request.quantity || 1);
+          const unitPrice =
+            payload.unitPrice != null
+              ? Number(payload.unitPrice)
+              : quantity > 0
+                ? Number(request.estimatedCost || 0) / quantity
+                : 0;
+
+          [createdLine] = await tx
+            .insert(vendorPOItems)
+            .values({
+              vendorPoId: vendorPO.id,
+              lineNumber,
+              agPartNumber: request.agPartNumber || null,
+              description: request.partName,
+              quantity,
+              unitPrice,
+              lineTotal: quantity * unitPrice,
+              notes: [
+                `Linked from parts request PR-${request.id}.`,
+                payload.notes?.trim() || null,
+              ].filter(Boolean).join('\n'),
+            })
+            .returning();
+
+          if (createdLine?.agPartNumber && unitPrice > 0) {
+            await tx
+              .update(inventoryItems)
+              .set({ costPer: unitPrice, updatedAt: new Date() })
+              .where(dAnd(
+                dEq(inventoryItems.agPartNumber, createdLine.agPartNumber),
+                dSql`${inventoryItems.costPer} IS DISTINCT FROM ${unitPrice}`
+              ));
+          }
+        }
+
+        const nextStatus = statusFromLinkedVendorPo(vendorPO.status, request.status);
+        const updateData: Record<string, unknown> = {
+          vendorPoId: vendorPO.id,
+          vendorId: vendorPO.vendorId,
+          orderMethod: 'PO',
+          status: nextStatus,
+          updatedAt: new Date(),
+        };
+
+        if (nextStatus === 'ORDERED') {
+          updateData.orderDate = vendorPO.orderDate ? new Date(vendorPO.orderDate) : new Date();
+          updateData.expectedDelivery = vendorPO.expectedDeliveryDate ?? request.expectedDelivery ?? null;
+          updateData.qtyOrdered = request.quantity;
+        }
+        if (nextStatus === 'RECEIVED' || nextStatus === 'RECEIVED_PARTIAL') {
+          updateData.orderDate = vendorPO.orderDate ? new Date(vendorPO.orderDate) : (request.orderDate ?? new Date());
+          updateData.expectedDelivery = vendorPO.expectedDeliveryDate ?? request.expectedDelivery ?? null;
+          updateData.actualDelivery = vendorPO.actualDeliveryDate ?? request.actualDelivery ?? null;
+        }
+
+        const [updatedRequest] = await tx
+          .update(partsRequests)
+          .set(updateData)
+          .where(dEq(partsRequests.id, request.id))
+          .returning();
+
+        await tx.insert(partsRequestStatusHistory).values({
+          partsRequestId: request.id,
+          fromStatus: request.status,
+          toStatus: updatedRequest.status,
+          changedBy: actor,
+          reason: [
+            `Linked to existing Vendor PO #${vendorPO.id}${vendorPO.poNumber ? ` (${vendorPO.poNumber})` : ''}.`,
+            existingLine ? `Matched existing PO line #${existingLine.lineNumber}.` : null,
+            createdLine ? `Created PO line #${createdLine.lineNumber}.` : null,
+            payload.notes?.trim() || null,
+          ].filter(Boolean).join(' '),
+        });
+
+        return {
+          request: updatedRequest,
+          vendorPO,
+          existingLine,
+          createdLine,
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error('Link parts request to Vendor PO error:', error);
+      const status = (error as any)?.status || 500;
+      res.status(status).json({
+        error: status === 500 ? 'Failed to link parts request to Vendor PO' : (error as Error).message,
+      });
+    }
+  }
+);
+
+const createVendorPoFromPartsRequestsSchema = z.object({
+  requestIds: z.array(z.number().int().positive()).min(1),
+  purchasingCategory: z.enum(['P1', 'P2', 'GENERAL', 'R_AND_D']),
+  quantities: z.record(z.coerce.number().positive()).optional(),
+  expectedDeliveryDate: z.string().optional().nullable(),
+  shipVia: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+function normalizePartsRequestCategory(value: string | null | undefined) {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized) return null;
+  if (normalized === 'G&A' || normalized === 'G_AND_A' || normalized === 'GA') return 'GENERAL';
+  if (normalized === 'R&D' || normalized === 'R_AND_D') return 'R_AND_D';
+  return normalized;
+}
+
+router.post(
+  '/parts-requests/create-vendor-po-draft',
+  requirePermission('purchasing.manage_pos'),
+  async (req: Request, res: Response) => {
+    try {
+      const payload = createVendorPoFromPartsRequestsSchema.parse(req.body);
+      const actor = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
+      const { partsRequests, partsRequestStatusHistory, vendorPOs, vendorPOItems, inventoryItems } = await import('../../schema');
+      const { eq: dEq, inArray: dInArray, and: dAnd, sql: dSql } = await import('drizzle-orm');
+
+      const uniqueRequestIds = Array.from(new Set(payload.requestIds));
+      const result = await db.transaction(async (tx) => {
+        const selected = await tx
+          .select()
+          .from(partsRequests)
+          .where(dInArray(partsRequests.id, uniqueRequestIds))
+          .for('update');
+
+        if (selected.length !== uniqueRequestIds.length) {
+          const found = new Set(selected.map((r) => r.id));
+          const missing = uniqueRequestIds.filter((id) => !found.has(id));
+          throw Object.assign(new Error(`Parts request(s) not found: ${missing.join(', ')}`), { status: 404 });
+        }
+
+        const selectedPartNumbers = Array.from(
+          new Set(
+            selected
+              .flatMap((request) => [request.agPartNumber, request.partNumber])
+              .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+              .map((part) => part.trim())
+          )
+        );
+        const inventoryVendorRows = selectedPartNumbers.length > 0
+          ? await tx
+            .select({
+              agPartNumber: inventoryItems.agPartNumber,
+              vendorId: inventoryItems.vendorId,
+            })
+            .from(inventoryItems)
+            .where(dInArray(inventoryItems.agPartNumber, selectedPartNumbers))
+          : [];
+        const vendorByPartNumber = new Map(
+          inventoryVendorRows
+            .filter((row) => typeof row.vendorId === 'number')
+            .map((row) => [row.agPartNumber, row.vendorId as number])
+        );
+        const selectedWithResolvedVendors = selected.map((request) => {
+          const resolvedVendorId = request.vendorId
+            ?? (request.agPartNumber ? vendorByPartNumber.get(request.agPartNumber) : undefined)
+            ?? (request.partNumber ? vendorByPartNumber.get(request.partNumber) : undefined)
+            ?? null;
+          return { ...request, vendorId: resolvedVendorId };
+        });
+
+        const poDraftableStatuses = ['APPROVED', 'RECEIVED_PARTIAL'];
+        const badStatus = selectedWithResolvedVendors.filter((r) => !poDraftableStatuses.includes(r.status));
+        if (badStatus.length > 0) {
+          throw Object.assign(
+            new Error(`Only APPROVED or partially received parts requests can start RFQ/PO flow. Invalid request id(s): ${badStatus.map((r) => `${r.id} (${r.status})`).join(', ')}`),
+            { status: 422 }
+          );
+        }
+
+        const websiteRequests = selectedWithResolvedVendors.filter((r) => r.orderMethod === 'WEBSITE');
+        if (websiteRequests.length > 0) {
+          throw Object.assign(
+            new Error(`Website-order request(s) cannot be used to create a Vendor PO: ${websiteRequests.map((r) => r.id).join(', ')}`),
+            { status: 422 }
+          );
+        }
+
+        const alreadyLinked = selectedWithResolvedVendors.filter((r) => r.vendorPoId != null);
+        if (alreadyLinked.length > 0) {
+          throw Object.assign(
+            new Error(`Request(s) already linked to a Vendor PO: ${alreadyLinked.map((r) => `${r.id} -> PO ${r.vendorPoId}`).join(', ')}`),
+            { status: 409 }
+          );
+        }
+
+        const vendorIds = Array.from(new Set(selectedWithResolvedVendors.map((r) => r.vendorId).filter((v): v is number => typeof v === 'number')));
+        if (vendorIds.length !== 1) {
+          throw Object.assign(new Error('All selected requests must have the same assigned vendor before creating a Vendor PO draft.'), { status: 422 });
+        }
+
+        const wrongCategory = selectedWithResolvedVendors.filter((r) => {
+          const requestCategory = normalizePartsRequestCategory(r.productionLine);
+          return requestCategory != null && requestCategory !== payload.purchasingCategory;
+        });
+        if (wrongCategory.length > 0) {
+          throw Object.assign(
+            new Error(`Selected request(s) do not match purchasing category ${payload.purchasingCategory}: ${wrongCategory.map((r) => `${r.id} (${r.productionLine})`).join(', ')}`),
+            { status: 422 }
+          );
+        }
+
+        const vendorId = vendorIds[0];
+        const estimatedTotal = selectedWithResolvedVendors.reduce((sum, r) => sum + Number(r.estimatedCost || 0), 0);
+        const requestSummary = selectedWithResolvedVendors.map((r) => `PR-${r.id}`).join(', ');
+        const [vendorPO] = await tx
+          .insert(vendorPOs)
+          .values({
+            vendorId,
+            productionLine: payload.purchasingCategory,
+            status: 'Draft',
+            expectedDeliveryDate: payload.expectedDeliveryDate || null,
+            shipVia: payload.shipVia || null,
+            subtotal: estimatedTotal,
+            totalCost: estimatedTotal,
+            notes: [
+              payload.notes?.trim() || null,
+              `Created from parts request(s): ${requestSummary}. PO/RFQ numbering remains controlled by the normal Vendor PO workflow.`,
+            ].filter(Boolean).join('\n'),
+            createdBy: actor,
+          })
+          .returning();
+
+        const grouped = new Map<string, typeof selectedWithResolvedVendors>();
+        for (const request of selectedWithResolvedVendors) {
+          const key = `${request.agPartNumber || ''}|${request.partNumber}|${request.partName}`;
+          grouped.set(key, [...(grouped.get(key) || []), request]);
+        }
+
+        let lineNumber = 1;
+        for (const requests of grouped.values()) {
+          const first = requests[0];
+          const getRemainingQty = (request: typeof requests[number]) =>
+            Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || request.qtyReceived || 0));
+          const getOrderQty = (request: typeof requests[number]) => {
+            const override = payload.quantities?.[String(request.id)] ?? payload.quantities?.[request.id as any];
+            return Number(override ?? getRemainingQty(request));
+          };
+          const totalRequestedQty = requests.reduce((sum, request) => sum + getRemainingQty(request), 0);
+          const totalQty = requests.reduce((sum, request) => {
+            return sum + getOrderQty(request);
+          }, 0);
+          const estimatedLineCost = requests.reduce((sum, request) => {
+            const qty = getOrderQty(request);
+            const unitEstimate = request.quantity > 0 ? Number(request.estimatedCost || 0) / Number(request.quantity) : 0;
+            return sum + qty * unitEstimate;
+          }, 0);
+          const unitPrice = totalQty > 0 ? estimatedLineCost / totalQty : 0;
+          const extraQty = Math.max(0, totalQty - totalRequestedQty);
+          const allocationNotes = requests
+            .map((request) => {
+              const qty = getOrderQty(request);
+              return `PR-${request.id}: ${qty} requested by ${request.requestedBy}${request.department ? ` (${request.department})` : ''}${request.reason ? ` - ${request.reason}` : ''}`;
+            })
+            .join('\n');
+
+          const [createdLine] = await tx.insert(vendorPOItems).values({
+            vendorPoId: vendorPO.id,
+            lineNumber,
+            agPartNumber: first.agPartNumber || null,
+            description: first.partName,
+            quantity: totalQty,
+            unitPrice,
+            lineTotal: totalQty * unitPrice,
+            notes: [
+              allocationNotes,
+              extraQty > 0 ? `Includes ${extraQty} extra unit(s) for stock.` : null,
+              requests.some((r) => r.vendorPartNumber) ? `Vendor part refs: ${requests.map((r) => r.vendorPartNumber).filter(Boolean).join(', ')}` : null,
+            ].filter(Boolean).join('\n'),
+          }).returning();
+
+          if (createdLine?.agPartNumber && unitPrice > 0) {
+            await tx
+              .update(inventoryItems)
+              .set({ costPer: unitPrice, updatedAt: new Date() })
+              .where(dAnd(
+                dEq(inventoryItems.agPartNumber, createdLine.agPartNumber),
+                dSql`${inventoryItems.costPer} IS DISTINCT FROM ${unitPrice}`
+              ));
+          }
+          lineNumber += 1;
+        }
+
+        await tx
+          .update(partsRequests)
+          .set({
+            vendorPoId: vendorPO.id,
+            vendorId,
+            orderMethod: 'PO',
+            updatedAt: new Date(),
+          })
+          .where(dAnd(dInArray(partsRequests.id, uniqueRequestIds), dInArray(partsRequests.status, poDraftableStatuses)));
+
+        await tx.insert(partsRequestStatusHistory).values(
+          selectedWithResolvedVendors.map((request) => ({
+            partsRequestId: request.id,
+            fromStatus: request.status,
+            toStatus: request.status,
+            changedBy: actor,
+            reason: `Linked to Vendor PO draft #${vendorPO.id}; request remains APPROVED until the PO is issued.`,
+          }))
+        );
+
+        const [totals] = await tx
+          .select({
+            subtotal: dSql<number>`COALESCE(SUM(${vendorPOItems.lineTotal}), 0)::float`,
+          })
+          .from(vendorPOItems)
+          .where(dEq(vendorPOItems.vendorPoId, vendorPO.id));
+
+        const subtotal = Number(totals?.subtotal || 0);
+        const [updatedPO] = await tx
+          .update(vendorPOs)
+          .set({ subtotal, totalCost: subtotal, updatedAt: new Date() })
+          .where(dEq(vendorPOs.id, vendorPO.id))
+          .returning();
+
+        return { vendorPO: updatedPO, linkedRequestIds: uniqueRequestIds };
+      });
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error('Create Vendor PO draft from parts requests error:', error);
+      const status = (error as any)?.status || 500;
+      res.status(status).json({
+        error: status === 500 ? 'Failed to create Vendor PO draft from parts requests' : (error as Error).message,
+      });
+    }
+  }
+);
+
 router.post('/parts-requests/batches', async (req: Request, res: Response) => {
   try {
     const { partsRequests, partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequestStatusHistory } = await import('../../schema');
@@ -1590,6 +2667,8 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
       notes: notes || null,
       orderDate: new Date(),
     }).returning();
+
+    const statusNotifications: Array<{ request: any; fromStatus: string; toStatus: string; reason: string }> = [];
 
     for (const reqId of requestIds) {
       const qtyOrdered = quantities[reqId] || 0;
@@ -1621,7 +2700,7 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
       const totalOrdered = (existing.qtyOrdered || 0) + qtyOrdered;
       const newStatus = totalOrdered >= existing.quantity ? 'ORDERED' : 'ORDERED_PARTIAL';
 
-      await db.update(partsRequests).set({
+      const [updatedRequest] = await db.update(partsRequests).set({
         batchId: batch.id,
         qtyOrdered: totalOrdered,
         status: newStatus,
@@ -1629,7 +2708,7 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
         orderMethod: orderMethod,
         orderDate: new Date(),
         updatedAt: new Date(),
-      }).where(eq(partsRequests.id, reqId));
+      }).where(eq(partsRequests.id, reqId)).returning();
 
       await db.insert(partsRequestStatusHistory).values({
         partsRequestId: reqId,
@@ -1637,6 +2716,22 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
         toStatus: newStatus,
         changedBy: createdBy,
         reason: `Order batch #${batch.id} created - ${qtyOrdered} ordered via order line #${orderLine.id}`,
+      });
+
+      if (updatedRequest) {
+        statusNotifications.push({
+          request: updatedRequest,
+          fromStatus: existing.status,
+          toStatus: newStatus,
+          reason: `Order batch #${batch.id} created - ${qtyOrdered} ordered via order line #${orderLine.id}`,
+        });
+      }
+    }
+
+    for (const notification of statusNotifications) {
+      await notifyPartsRequestParticipants({
+        ...notification,
+        changedBy: createdBy,
       });
     }
 
@@ -1647,9 +2742,232 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/parts-requests/local-pickup', requirePermission('inventory.manage_requests'), async (req: Request, res: Response) => {
+  try {
+    const {
+      partsRequests,
+      partsRequestBatches,
+      partsRequestOrderLines,
+      partsRequestOrderAllocations,
+      partsRequestReceipts,
+      partsRequestReceiptLines,
+      partsRequestStatusHistory,
+      inventoryBalances: inventoryBalancesTable,
+      inventoryTransactionLedger: inventoryTransactionLedgerTable,
+    } = await import('../../schema');
+    const { recordInventoryLedgerEntry } = await import('../services/inventoryTransactionLedgerService');
+    const { and, eq, inArray } = await import('drizzle-orm');
+
+    const payload = z.object({
+      vendorId: z.number().int().positive().nullable().optional(),
+      vendorName: z.string().trim().min(1),
+      receivedBy: z.string().trim().min(1).optional(),
+      notes: z.string().trim().optional().nullable(),
+      quantities: z.record(z.coerce.number().int().min(0)),
+    }).parse(req.body ?? {});
+
+    const requestIds = Object.entries(payload.quantities)
+      .filter(([, qty]) => qty > 0)
+      .map(([id]) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+
+    if (requestIds.length === 0) {
+      return res.status(400).json({ error: 'At least one pickup quantity is required.' });
+    }
+
+    const actor = payload.receivedBy || String(req.user?.username ?? req.user?.email ?? 'system');
+
+    const result = await db.transaction(async (tx) => {
+      const selected = await tx
+        .select()
+        .from(partsRequests)
+        .where(inArray(partsRequests.id, requestIds))
+        .for('update');
+
+      if (selected.length !== requestIds.length) {
+        const found = new Set(selected.map((request) => request.id));
+        const missing = requestIds.filter((id) => !found.has(id));
+        throw Object.assign(new Error(`Parts request(s) not found: ${missing.join(', ')}`), { status: 404 });
+      }
+
+      const invalid = selected.filter((request) => !['APPROVED', 'RECEIVED_PARTIAL'].includes(request.status));
+      if (invalid.length > 0) {
+        throw Object.assign(
+          new Error(`Only APPROVED or partially received requests can be picked up locally. Invalid request id(s): ${invalid.map((request) => `${request.id} (${request.status})`).join(', ')}`),
+          { status: 422 }
+        );
+      }
+
+      const [batch] = await tx.insert(partsRequestBatches).values({
+        vendorId: payload.vendorId ?? null,
+        vendorName: payload.vendorName,
+        orderMethod: 'LOCAL_PICKUP',
+        status: 'RECEIVED',
+        createdBy: actor,
+        notes: payload.notes || null,
+        orderDate: new Date(),
+      }).returning();
+
+      const [receipt] = await tx.insert(partsRequestReceipts).values({
+        batchId: batch.id,
+        vendorId: payload.vendorId ?? null,
+        receivedBy: actor,
+        notes: payload.notes || 'Local pickup recorded from consolidated needs',
+      }).returning();
+
+      const statusNotifications: Array<{ request: any; fromStatus: string; toStatus: string; reason: string }> = [];
+
+      for (const request of selected) {
+        const requestedPickupQty = Number(payload.quantities[String(request.id)] ?? 0);
+        const remainingQty = Math.max(0, Number(request.quantity || 0) - Number(request.qtyReceived || 0));
+        const pickupQty = Math.min(requestedPickupQty, remainingQty);
+        if (pickupQty <= 0) continue;
+
+        const [orderLine] = await tx.insert(partsRequestOrderLines).values({
+          batchId: batch.id,
+          vendorId: payload.vendorId ?? null,
+          partNumber: request.partNumber,
+          partName: request.partName,
+          agPartNumber: request.agPartNumber,
+          qtyOrdered: pickupQty,
+          qtyReceived: pickupQty,
+          unitCost: request.estimatedCost && request.quantity ? Number(request.estimatedCost) / Number(request.quantity) : null,
+          status: 'RECEIVED',
+        }).returning();
+
+        await tx.insert(partsRequestOrderAllocations).values({
+          orderLineId: orderLine.id,
+          partsRequestId: request.id,
+          qtyAllocated: pickupQty,
+          qtyReceivedApplied: pickupQty,
+          departmentId: request.departmentId,
+          status: 'RECEIVED',
+        });
+
+        await tx.insert(partsRequestReceiptLines).values({
+          receiptId: receipt.id,
+          orderLineId: orderLine.id,
+          partsRequestId: request.id,
+          qtyReceived: pickupQty,
+          allocatedDepartmentId: request.departmentId,
+          allocationNotes: payload.notes || null,
+        });
+
+        if (request.agPartNumber) {
+          const { ensureInventoryItemForReceipt } = await import('../services/ensureInventoryItemForReceipt');
+          const invItem = await ensureInventoryItemForReceipt(tx, {
+            agPartNumber: request.agPartNumber,
+            fallbackName: request.partName ?? request.partNumber ?? null,
+            createdBy: actor,
+          });
+
+          const ledgerSourceModule = 'receiving:local-pickup';
+          const ledgerSourceRecordId = `${receipt.id}:${orderLine.id}`;
+          const [existingLedger] = await tx
+            .select({ id: inventoryTransactionLedgerTable.id })
+            .from(inventoryTransactionLedgerTable)
+            .where(and(
+              eq(inventoryTransactionLedgerTable.sourceModule, ledgerSourceModule),
+              eq(inventoryTransactionLedgerTable.sourceRecordId, ledgerSourceRecordId),
+            ))
+            .limit(1);
+
+          if (!existingLedger) {
+            const balanceRows = await tx
+              .select({ quantityOnHand: inventoryBalancesTable.quantityOnHand })
+              .from(inventoryBalancesTable)
+              .where(eq(inventoryBalancesTable.agPartNumber, invItem.agPartNumber));
+            const quantityBefore = balanceRows.reduce((sum, balance) => sum + Number(balance.quantityOnHand ?? 0), 0);
+            const quantityAfter = quantityBefore + pickupQty;
+
+            await recordInventoryLedgerEntry({
+              transactionType: 'RECEIVE',
+              inventoryItemId: invItem.id,
+              agPartNumber: invItem.agPartNumber,
+              unitOfMeasure: invItem.purchaseUnit ?? invItem.usageUnit ?? 'EA',
+              quantityBefore,
+              quantityDelta: pickupQty,
+              quantityAfter,
+              performedByDisplayName: actor,
+              reasonCode: 'LOCAL_PICKUP',
+              notes: payload.notes ?? null,
+              sourceModule: ledgerSourceModule,
+              sourceRecordId: ledgerSourceRecordId,
+              metadata: {
+                receiptId: receipt.id,
+                orderLineId: orderLine.id,
+                batchId: batch.id,
+                partsRequestId: request.id,
+                vendorName: payload.vendorName,
+              },
+            }, tx);
+          }
+        }
+
+        const newQtyOrdered = Number(request.qtyOrdered || 0) + pickupQty;
+        const newQtyReceived = Number(request.qtyReceived || 0) + pickupQty;
+        const newStatus = newQtyReceived >= Number(request.quantity || 0) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+        const reason = `Local pickup received ${pickupQty}; ${Math.max(0, Number(request.quantity || 0) - newQtyReceived)} backordered.`;
+
+        const [updatedRequest] = await tx.update(partsRequests).set({
+          batchId: batch.id,
+          vendorId: payload.vendorId ?? request.vendorId ?? null,
+          orderMethod: 'LOCAL_PICKUP',
+          qtyOrdered: newQtyOrdered,
+          qtyReceived: newQtyReceived,
+          status: newStatus,
+          orderDate: request.orderDate || new Date(),
+          actualDelivery: new Date().toISOString().split('T')[0],
+          updatedAt: new Date(),
+        }).where(eq(partsRequests.id, request.id)).returning();
+
+        await tx.insert(partsRequestStatusHistory).values({
+          partsRequestId: request.id,
+          fromStatus: request.status,
+          toStatus: newStatus,
+          changedBy: actor,
+          reason,
+        });
+
+        if (updatedRequest) {
+          statusNotifications.push({
+            request: updatedRequest,
+            fromStatus: request.status,
+            toStatus: newStatus,
+            reason,
+          });
+        }
+      }
+
+      if (statusNotifications.length === 0) {
+        throw Object.assign(new Error('No remaining quantity was available to pick up for the selected request(s).'), { status: 422 });
+      }
+
+      return { batch, receipt, statusNotifications };
+    });
+
+    for (const notification of result.statusNotifications) {
+      await notifyPartsRequestParticipants({
+        ...notification,
+        changedBy: actor,
+      });
+    }
+
+    res.status(201).json({ batch: result.batch, receipt: result.receipt });
+  } catch (error: any) {
+    console.error('Local pickup parts request error:', error);
+    const status = error?.status || 500;
+    res.status(status).json({
+      error: status === 500 ? 'Failed to record local pickup' : error.message,
+      message: error?.message,
+    });
+  }
+});
+
 // Get all order batches with their order lines
 router.get('/parts-requests/batches', async (req: Request, res: Response) => {
   try {
+    if (!(await requireConsolidatedNeedsAccess(req, res))) return;
     const { partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequests } = await import('../../schema');
     const { db } = await import('../../db');
     const { eq, desc } = await import('drizzle-orm');
@@ -1803,9 +3121,19 @@ router.get('/parts-requests/pending-receipts', async (req: Request, res: Respons
 // Receive parts against ORDER LINES (not requests directly)
 router.post('/parts-requests/receive', requirePermission('inventory.manage_requests'), async (req: Request, res: Response) => {
   try {
-    const { partsRequests, partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequestReceipts, partsRequestReceiptLines, partsRequestStatusHistory } = await import('../../schema');
-    const { db } = await import('../../db');
-    const { eq, sql: sqlTag } = await import('drizzle-orm');
+    const {
+      partsRequests,
+      partsRequestBatches,
+      partsRequestOrderLines,
+      partsRequestOrderAllocations,
+      partsRequestReceipts,
+      partsRequestReceiptLines,
+      partsRequestStatusHistory,
+      inventoryItems: inventoryItemsTable,
+      inventoryBalances: inventoryBalancesTable,
+      inventoryTransactionLedger: inventoryTransactionLedgerTable,
+    } = await import('../../schema');
+    const { recordInventoryLedgerEntry } = await import('../services/inventoryTransactionLedgerService');
 
     const { batchId, receivedBy, notes, lines } = req.body as {
       batchId: number;
@@ -1821,93 +3149,209 @@ router.post('/parts-requests/receive', requirePermission('inventory.manage_reque
       return res.status(400).json({ error: 'No receipt lines provided' });
     }
 
-    const [receipt] = await db.insert(partsRequestReceipts).values({
-      batchId: batchId || null,
-      vendorId: null,
-      receivedBy,
-      notes: notes || null,
-    }).returning();
+    // Task #229 — wrap the entire receipt (parent receipt row, line updates,
+    // allocation propagation, batch status, request status history, AND the
+    // ITL `RECEIVE` writes) in a single db.transaction so the ledger and the
+    // parts-request state cannot diverge. ITL failure rolls back everything.
+    const receiveResult = await db.transaction(async (tx) => {
+      const [createdReceipt] = await tx.insert(partsRequestReceipts).values({
+        batchId: batchId || null,
+        vendorId: null,
+        receivedBy,
+        notes: notes || null,
+      }).returning();
 
-    let allFullyReceived = true;
-    let anyReceived = false;
+      let allFullyReceived = true;
+      let anyReceived = false;
+      const statusNotifications: Array<{ request: any; fromStatus: string; toStatus: string; reason: string }> = [];
 
-    for (const line of lines) {
-      if (line.qtyReceived <= 0) continue;
-      anyReceived = true;
+      for (const line of lines) {
+        if (line.qtyReceived <= 0) continue;
+        anyReceived = true;
 
-      const [orderLine] = await db.select().from(partsRequestOrderLines).where(eq(partsRequestOrderLines.id, line.orderLineId));
-      if (!orderLine) continue;
+        const [orderLine] = await tx.select().from(partsRequestOrderLines).where(eq(partsRequestOrderLines.id, line.orderLineId));
+        if (!orderLine) continue;
 
-      const newOrderLineReceived = orderLine.qtyReceived + line.qtyReceived;
-      const orderLineStatus = newOrderLineReceived >= orderLine.qtyOrdered ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
+        const newOrderLineReceived = orderLine.qtyReceived + line.qtyReceived;
+        const orderLineStatus = newOrderLineReceived >= orderLine.qtyOrdered ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
 
-      await db.update(partsRequestOrderLines).set({
-        qtyReceived: newOrderLineReceived,
-        status: orderLineStatus,
-        updatedAt: new Date(),
-      }).where(eq(partsRequestOrderLines.id, line.orderLineId));
-
-      await db.insert(partsRequestReceiptLines).values({
-        receiptId: receipt.id,
-        orderLineId: line.orderLineId,
-        qtyReceived: line.qtyReceived,
-      });
-
-      if (newOrderLineReceived < orderLine.qtyOrdered) {
-        allFullyReceived = false;
-      }
-
-      const allocations = await db.select().from(partsRequestOrderAllocations).where(eq(partsRequestOrderAllocations.orderLineId, line.orderLineId));
-
-      let remainingToApply = line.qtyReceived;
-      for (const alloc of allocations) {
-        if (remainingToApply <= 0) break;
-        const canApply = Math.min(remainingToApply, alloc.qtyAllocated - alloc.qtyReceivedApplied);
-        if (canApply <= 0) continue;
-
-        await db.update(partsRequestOrderAllocations).set({
-          qtyReceivedApplied: alloc.qtyReceivedApplied + canApply,
-          status: (alloc.qtyReceivedApplied + canApply) >= alloc.qtyAllocated ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
+        await tx.update(partsRequestOrderLines).set({
+          qtyReceived: newOrderLineReceived,
+          status: orderLineStatus,
           updatedAt: new Date(),
-        }).where(eq(partsRequestOrderAllocations.id, alloc.id));
+        }).where(eq(partsRequestOrderLines.id, line.orderLineId));
 
-        const [request] = await db.select().from(partsRequests).where(eq(partsRequests.id, alloc.partsRequestId));
-        if (request) {
-          const newTotalReceived = (request.qtyReceived || 0) + canApply;
-          const requestStatus = newTotalReceived >= (request.qtyOrdered || request.quantity) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+        const [receiptLine] = await tx.insert(partsRequestReceiptLines).values({
+          receiptId: createdReceipt.id,
+          orderLineId: line.orderLineId,
+          qtyReceived: line.qtyReceived,
+        }).returning();
 
-          await db.update(partsRequests).set({
-            qtyReceived: newTotalReceived,
-            status: requestStatus,
-            actualDelivery: new Date().toISOString().split('T')[0],
-            updatedAt: new Date(),
-          }).where(eq(partsRequests.id, alloc.partsRequestId));
-
-          await db.insert(partsRequestStatusHistory).values({
-            partsRequestId: alloc.partsRequestId,
-            fromStatus: request.status,
-            toStatus: requestStatus,
-            changedBy: receivedBy,
-            reason: `Received ${canApply} units via order line #${line.orderLineId}`,
-          });
+        if (newOrderLineReceived < orderLine.qtyOrdered) {
+          allFullyReceived = false;
         }
 
-        remainingToApply -= canApply;
+        // ── Inventory Transaction Ledger write (Task #229 / #248) ──────────
+        // The ITL inventory_item_id FK is NOT NULL. Previously, when a part
+        // had no matching inventory_items row we silently skipped the ledger
+        // write — that's the bug behind Task #248 (Rock West receipt missing
+        // from the Transactions list). Now: when an agPartNumber is present
+        // but no inventory_items row exists, auto-create a minimal placeholder
+        // inside the same transaction, then write the ledger row. Truly
+        // ad-hoc lines (no agPartNumber) still skip with a warning because
+        // there's no part identity to track.
+        if (orderLine.agPartNumber) {
+          const { ensureInventoryItemForReceipt } = await import(
+            '../services/ensureInventoryItemForReceipt'
+          );
+          const invItem = await ensureInventoryItemForReceipt(tx, {
+            agPartNumber: orderLine.agPartNumber,
+            fallbackName: orderLine.partName ?? orderLine.partNumber ?? null,
+            createdBy: receivedBy ?? null,
+          });
+
+          {
+            const ledgerSourceModule = 'receiving:parts-request';
+            // Stable composite source key: anchored to the parent receipt id +
+            // the business order-line id (not the surrogate receipt-line PK).
+            // Within one receipt call, an order line can only be received once,
+            // so this collapses to exactly one ITL row per line per receipt.
+            const ledgerSourceRecordId = `${createdReceipt.id}:${line.orderLineId}`;
+            const [existingLedger] = await tx
+              .select({ id: inventoryTransactionLedgerTable.id })
+              .from(inventoryTransactionLedgerTable)
+              .where(
+                and(
+                  eq(inventoryTransactionLedgerTable.sourceModule, ledgerSourceModule),
+                  eq(inventoryTransactionLedgerTable.sourceRecordId, ledgerSourceRecordId),
+                ),
+              )
+              .limit(1);
+
+            if (!existingLedger) {
+              const balanceRows = await tx
+                .select({ quantityOnHand: inventoryBalancesTable.quantityOnHand })
+                .from(inventoryBalancesTable)
+                .where(eq(inventoryBalancesTable.agPartNumber, invItem.agPartNumber));
+              const quantityBefore = balanceRows.reduce(
+                (sum, b) => sum + Number(b.quantityOnHand ?? 0),
+                0,
+              );
+              const quantityAfter = quantityBefore + line.qtyReceived;
+
+              await recordInventoryLedgerEntry({
+                transactionType: 'RECEIVE',
+                inventoryItemId: invItem.id,
+                agPartNumber: invItem.agPartNumber,
+                unitOfMeasure: invItem.purchaseUnit ?? invItem.usageUnit ?? 'EA',
+                quantityBefore,
+                quantityDelta: line.qtyReceived,
+                quantityAfter,
+                performedByDisplayName: receivedBy || 'system:parts-request-receive',
+                reasonCode: 'PARTS_REQUEST_RECEIPT',
+                notes: notes ?? null,
+                sourceModule: ledgerSourceModule,
+                sourceRecordId: ledgerSourceRecordId,
+                metadata: {
+                  receiptId: createdReceipt.id,
+                  orderLineId: line.orderLineId,
+                  batchId: batchId ?? null,
+                  partNumber: orderLine.partNumber,
+                  partName: orderLine.partName,
+                },
+              }, tx);
+            }
+          }
+        } else {
+          console.warn(
+            `[parts-requests/receive] Skipping ITL write — order line ${line.orderLineId} has no agPartNumber (ad-hoc request)`,
+          );
+        }
+
+        const allocations = await tx.select().from(partsRequestOrderAllocations).where(eq(partsRequestOrderAllocations.orderLineId, line.orderLineId));
+
+        let remainingToApply = line.qtyReceived;
+        for (const alloc of allocations) {
+          if (remainingToApply <= 0) break;
+          const canApply = Math.min(remainingToApply, alloc.qtyAllocated - alloc.qtyReceivedApplied);
+          if (canApply <= 0) continue;
+
+          await tx.update(partsRequestOrderAllocations).set({
+            qtyReceivedApplied: alloc.qtyReceivedApplied + canApply,
+            status: (alloc.qtyReceivedApplied + canApply) >= alloc.qtyAllocated ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
+            updatedAt: new Date(),
+          }).where(eq(partsRequestOrderAllocations.id, alloc.id));
+
+          const [request] = await tx.select().from(partsRequests).where(eq(partsRequests.id, alloc.partsRequestId));
+          if (request) {
+            const newTotalReceived = (request.qtyReceived || 0) + canApply;
+            const requestStatus = newTotalReceived >= (request.qtyOrdered || request.quantity) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+
+            const [updatedRequest] = await tx.update(partsRequests).set({
+              qtyReceived: newTotalReceived,
+              status: requestStatus,
+              actualDelivery: new Date().toISOString().split('T')[0],
+              updatedAt: new Date(),
+            }).where(eq(partsRequests.id, alloc.partsRequestId)).returning();
+
+            const reason = `Received ${canApply} units via order line #${line.orderLineId}`;
+            await tx.insert(partsRequestStatusHistory).values({
+              partsRequestId: alloc.partsRequestId,
+              fromStatus: request.status,
+              toStatus: requestStatus,
+              changedBy: receivedBy,
+              reason,
+            });
+
+            if (updatedRequest) {
+              statusNotifications.push({
+                request: updatedRequest,
+                fromStatus: request.status,
+                toStatus: requestStatus,
+                reason,
+              });
+            }
+          }
+
+          remainingToApply -= canApply;
+        }
       }
+
+      if (batchId && anyReceived) {
+        const batchStatus = allFullyReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
+        await tx.update(partsRequestBatches).set({
+          status: batchStatus,
+          updatedAt: new Date(),
+        }).where(eq(partsRequestBatches.id, batchId));
+      }
+
+      return { receipt: createdReceipt, statusNotifications };
+    });
+
+    for (const notification of receiveResult.statusNotifications) {
+      await notifyPartsRequestParticipants({
+        ...notification,
+        changedBy: receivedBy,
+      });
     }
 
-    if (batchId && anyReceived) {
-      const batchStatus = allFullyReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
-      await db.update(partsRequestBatches).set({
-        status: batchStatus,
-        updatedAt: new Date(),
-      }).where(eq(partsRequestBatches.id, batchId));
-    }
-
-    res.status(201).json(receipt);
-  } catch (error) {
+    res.status(201).json(receiveResult.receipt);
+  } catch (error: any) {
     console.error('Receive parts error:', error);
-    res.status(500).json({ error: 'Failed to receive parts' });
+    // Surface inventory-ledger validation/FK failures as a structured 422 so
+    // the caller can distinguish ledger invariant failures from generic 500s.
+    const msg = String(error?.message ?? '');
+    if (
+      error?.code === 'INVENTORY_LEDGER_VALIDATION' ||
+      /inventory[_ ]?ledger|inventory_transaction_ledger|recordInventoryLedgerEntry/i.test(msg)
+    ) {
+      return res.status(422).json({
+        error: 'Inventory ledger write failed',
+        code: 'INVENTORY_LEDGER_WRITE_FAILED',
+        message: msg,
+      });
+    }
+    res.status(500).json({ error: 'Failed to receive parts', message: msg });
   }
 });
 
@@ -1919,7 +3363,7 @@ router.post('/parts-requests/:id/cancel', async (req: Request, res: Response) =>
     const { eq } = await import('drizzle-orm');
 
     const requestId = parseInt(req.params.id);
-    const { cancelledBy, reason } = req.body as { cancelledBy: string; reason?: string };
+    const { cancelledBy: cancelledByInput, reason } = req.body as { cancelledBy?: string; reason?: string };
 
     const [existing] = await db.select().from(partsRequests).where(eq(partsRequests.id, requestId));
     if (!existing) return res.status(404).json({ error: 'Request not found' });
@@ -1932,14 +3376,15 @@ router.post('/parts-requests/:id/cancel', async (req: Request, res: Response) =>
     }
 
     const newStatus = canCancelDirectly ? 'CANCELED' : 'CANCEL_REQUESTED';
+    const cancelledBy = cancelledByInput || req.user?.username || existing.requestedBy;
 
-    await db.update(partsRequests).set({
+    const [updatedRequest] = await db.update(partsRequests).set({
       status: newStatus,
       cancelReason: reason || null,
       cancelRequestedAt: new Date(),
       cancelRequestedBy: cancelledBy,
       updatedAt: new Date(),
-    }).where(eq(partsRequests.id, requestId));
+    }).where(eq(partsRequests.id, requestId)).returning();
 
     await db.insert(partsRequestStatusHistory).values({
       partsRequestId: requestId,
@@ -1948,6 +3393,16 @@ router.post('/parts-requests/:id/cancel', async (req: Request, res: Response) =>
       changedBy: cancelledBy,
       reason: reason || 'Cancelled by requester',
     });
+
+    if (updatedRequest) {
+      await notifyPartsRequestParticipants({
+        request: updatedRequest,
+        fromStatus: existing.status,
+        toStatus: newStatus,
+        changedBy: cancelledBy,
+        reason: reason || 'Cancelled by requester',
+      });
+    }
 
     res.json({ success: true, newStatus });
   } catch (error) {
@@ -1978,13 +3433,13 @@ router.post('/parts-requests/:id/reject', requirePermission('inventory.manage_re
 
     const newStatus = existing.status === 'CANCEL_REQUESTED' ? 'CANCELED' : 'REJECTED';
 
-    await db.update(partsRequests).set({
+    const [updatedRequest] = await db.update(partsRequests).set({
       status: newStatus,
       rejectionReason: reason,
       rejectedBy,
       rejectedAt: new Date(),
       updatedAt: new Date(),
-    }).where(eq(partsRequests.id, requestId));
+    }).where(eq(partsRequests.id, requestId)).returning();
 
     await db.insert(partsRequestStatusHistory).values({
       partsRequestId: requestId,
@@ -1993,6 +3448,16 @@ router.post('/parts-requests/:id/reject', requirePermission('inventory.manage_re
       changedBy: rejectedBy,
       reason,
     });
+
+    if (updatedRequest) {
+      await notifyPartsRequestParticipants({
+        request: updatedRequest,
+        fromStatus: existing.status,
+        toStatus: newStatus,
+        changedBy: rejectedBy,
+        reason,
+      });
+    }
 
     res.json({ success: true, newStatus });
   } catch (error) {
@@ -2009,6 +3474,9 @@ router.get('/parts-requests/:id/history', async (req: Request, res: Response) =>
     const { eq, desc } = await import('drizzle-orm');
 
     const requestId = parseInt(req.params.id);
+    if (!(await canAccessPartsRequest(req, requestId))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const history = await db
       .select()
       .from(partsRequestStatusHistory)
@@ -2674,12 +4142,64 @@ router.get('/restock-signals', async (req: Request, res: Response) => {
 router.get('/inventory/balances', async (req: Request, res: Response) => {
   try {
     const balances = await storage.getAllInventoryBalances();
+    const items = await storage.getAllInventoryItems();
+    const itemMap = new Map(items.map((item) => [item.agPartNumber, item]));
+    const nonServiceBalances = balances.filter((balance) => !isServiceInventoryItem(itemMap.get(balance.agPartNumber)));
+
+    const ncrInventorySerialRows = await db
+      .select({
+        agPartNumber: p2SerializedItems.partNumber,
+        id: p2SerializedItems.id,
+        serialNumber: p2SerializedItems.serialNumber,
+        barcode: p2SerializedItems.barcode,
+        travelerBarcode: p2SerializedItems.travelerBarcode,
+        travelerId: travelers.id,
+        travelerNumber: travelers.travelerNumber,
+        dispositionId: p2NonconformingDispositions.id,
+        dispositionType: p2NonconformingDispositions.dispositionType,
+      })
+      .from(p2NonconformingDispositions)
+      .innerJoin(
+        p2SerializedItems,
+        eq(p2NonconformingDispositions.serializedItemId, p2SerializedItems.id)
+      )
+      .leftJoin(
+        travelers,
+        eq(travelers.serialNumber, p2SerializedItems.serialNumber)
+      )
+      .where(eq(p2NonconformingDispositions.dispositionType, 'Use as Is'))
+      .orderBy(p2SerializedItems.partNumber, p2SerializedItems.serialNumber, desc(travelers.createdAt));
+
+    const serializedItemsByPart = new Map<string, EnrichedInventoryBalance['serializedItems']>();
+    const seenSerials = new Set<string>();
+
+    for (const row of ncrInventorySerialRows) {
+      const key = `${row.agPartNumber}:${row.id}`;
+      if (seenSerials.has(key)) continue;
+      seenSerials.add(key);
+
+      const options = serializedItemsByPart.get(row.agPartNumber) || [];
+      options.push({
+        id: row.id,
+        serialNumber: row.serialNumber,
+        barcode: row.barcode,
+        travelerBarcode: row.travelerBarcode,
+        travelerId: row.travelerId,
+        travelerNumber: row.travelerNumber,
+        dispositionId: row.dispositionId,
+        dispositionType: row.dispositionType,
+      });
+      serializedItemsByPart.set(row.agPartNumber, options);
+    }
     
     // Enrich balances with department metadata
-    const enrichedBalances: EnrichedInventoryBalance[] = balances.map((balance) => {
+    const enrichedBalances: EnrichedInventoryBalance[] = nonServiceBalances.map((balance) => {
       const deptInfo = DEPARTMENT_LOCATION_MAP[balance.locationId];
+      const item = itemMap.get(balance.agPartNumber);
       return {
         ...balance,
+        partName: item?.name,
+        serializedItems: serializedItemsByPart.get(balance.agPartNumber) || [],
         departmentMeta: deptInfo ? {
           departmentId: deptInfo.departmentId,
           departmentName: deptInfo.departmentName,
@@ -3611,16 +5131,8 @@ router.get('/sds/:filename', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
-    // Build absolute path and ensure it's within SDS directory
-    const filePath = path.resolve(SDS_UPLOAD_DIR, filename);
-    if (!filePath.startsWith(path.resolve(SDS_UPLOAD_DIR))) {
-      return res.status(400).json({ error: 'Invalid file path' });
-    }
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
+    const filePath = await resolveInventoryDocumentPath(SDS_UPLOAD_DIR, LEGACY_SDS_UPLOAD_DIR, filename);
+    if (!filePath) {
       return res.status(404).json({ error: 'SDS file not found' });
     }
     
@@ -3648,16 +5160,8 @@ router.get('/tds/:filename', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
-    // Build absolute path and ensure it's within TDS directory
-    const filePath = path.resolve(TDS_UPLOAD_DIR, filename);
-    if (!filePath.startsWith(path.resolve(TDS_UPLOAD_DIR))) {
-      return res.status(400).json({ error: 'Invalid file path' });
-    }
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
+    const filePath = await resolveInventoryDocumentPath(TDS_UPLOAD_DIR, LEGACY_TDS_UPLOAD_DIR, filename);
+    if (!filePath) {
       return res.status(404).json({ error: 'TDS file not found' });
     }
     
@@ -3685,16 +5189,8 @@ router.get('/other-docs/:filename', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
-    // Build absolute path and ensure it's within Other Docs directory
-    const filePath = path.resolve(OTHER_DOCS_UPLOAD_DIR, filename);
-    if (!filePath.startsWith(path.resolve(OTHER_DOCS_UPLOAD_DIR))) {
-      return res.status(400).json({ error: 'Invalid file path' });
-    }
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
+    const filePath = await resolveInventoryDocumentPath(OTHER_DOCS_UPLOAD_DIR, LEGACY_OTHER_DOCS_UPLOAD_DIR, filename);
+    if (!filePath) {
       return res.status(404).json({ error: 'Other Docs file not found' });
     }
     

@@ -235,6 +235,8 @@ export default function InvoiceDetailPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedAttachmentMediaIds, setSelectedAttachmentMediaIds] = useState<string[]>([]);
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
+  const [voidDialogOpen, setVoidDialogOpen] = useState(false);
+  const [voidReason, setVoidReason] = useState('');
 
   const { data: invoice, isLoading } = useQuery<any>({
     queryKey: ['/api/ar-invoices', id],
@@ -305,6 +307,25 @@ export default function InvoiceDetailPage() {
     },
   });
 
+  const voidInvoiceMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/ar-invoices/${id}/void`, {
+        method: 'POST',
+        body: { voidReason: voidReason.trim() },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) =>
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
+      });
+      setVoidDialogOpen(false);
+      setVoidReason('');
+      toast({ title: 'Invoice voided' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Void failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const loadInvoiceRecipients = async () => {
     if (!id) return;
     setIsLoadingRecipients(true);
@@ -338,6 +359,11 @@ export default function InvoiceDetailPage() {
   const handleManageAttachments = () => {
     setSendDialogOpen(false);
     setActiveTab('attachments');
+  };
+
+  const handleOpenVoidDialog = () => {
+    setVoidReason('');
+    setVoidDialogOpen(true);
   };
 
   const openAttachment = (mediaId: string) => {
@@ -570,6 +596,7 @@ export default function InvoiceDetailPage() {
   const payments = invoice.payments || [];
   const isP1Invoice = invoice.invoiceSource === 'P1';
   const sourcePoLabel = invoice.poOverride || invoice.poNumber || packingSlipInfo?.poNumber || invoice.poId;
+  const canVoidInvoice = ['DRAFT', 'REVIEW', 'POSTED', 'SENT'].includes(invoice.status);
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -638,6 +665,16 @@ export default function InvoiceDetailPage() {
             <Button variant="outline" onClick={handleOpenPaymentDialog}>
               <DollarSign className="mr-2 h-4 w-4" />
               Record Payment
+            </Button>
+          )}
+          {canVoidInvoice && (
+            <Button
+              variant="outline"
+              onClick={handleOpenVoidDialog}
+              className="border-red-200 text-red-700 hover:bg-red-50"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Void
             </Button>
           )}
         </div>
@@ -1177,6 +1214,43 @@ export default function InvoiceDetailPage() {
             >
               {sendInvoiceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Send Invoice
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={voidDialogOpen} onOpenChange={setVoidDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Void Invoice {invoice.invoiceNumber}</DialogTitle>
+            <DialogDescription>
+              This marks the invoice void. If accounting has already been posted, a reversal journal entry will be created.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="void-reason">Void Reason</Label>
+            <Textarea
+              id="void-reason"
+              value={voidReason}
+              onChange={(event) => setVoidReason(event.target.value)}
+              placeholder="Example: Sent prematurely; lot is ready but has not shipped."
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setVoidDialogOpen(false)}
+              disabled={voidInvoiceMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => voidInvoiceMutation.mutate()}
+              disabled={!voidReason.trim() || voidInvoiceMutation.isPending}
+            >
+              {voidInvoiceMutation.isPending ? 'Voiding...' : 'Void Invoice'}
             </Button>
           </DialogFooter>
         </DialogContent>

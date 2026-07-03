@@ -2056,23 +2056,24 @@ router.post('/:id/void', requirePermission('finance.void_invoice'), async (req: 
       return res.status(409).json({ error: `Cannot void invoice with status ${invoice.status}` });
     }
 
-    const needsReversal = ['POSTED', 'SENT'].includes(invoice.status);
+    const [originalEntry] = await db
+      .select()
+      .from(journalEntries)
+      .where(
+        and(
+          eq(journalEntries.transactionType, 'AR_INVOICE'),
+          eq(journalEntries.referenceType, 'ar_invoice'),
+          eq(journalEntries.referenceUuid, id),
+        ),
+      )
+      .limit(1);
+    if (invoice.status === 'POSTED' && !originalEntry) {
+      return res.status(409).json({ error: 'Cannot void posted invoice: original AR invoice journal entry was not found' });
+    }
+
+    const needsReversal = !!originalEntry;
 
     if (needsReversal) {
-      const [originalEntry] = await db
-        .select()
-        .from(journalEntries)
-        .where(
-          and(
-            eq(journalEntries.transactionType, 'AR_INVOICE'),
-            eq(journalEntries.referenceType, 'ar_invoice'),
-            eq(journalEntries.referenceUuid, id),
-          ),
-        )
-        .limit(1);
-      if (!originalEntry) {
-        return res.status(409).json({ error: 'Cannot void posted invoice: original AR invoice journal entry was not found' });
-      }
       const [existingReversal] = await db
         .select()
         .from(journalEntries)

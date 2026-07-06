@@ -154,6 +154,7 @@ type ProjectOption = {
 type RDProjectOption = {
   id: string;
   projectName: string;
+  name?: string | null;
   status?: string;
 };
 
@@ -473,10 +474,48 @@ function readRDProjectOptions(): RDProjectOption[] {
     const raw = window.localStorage.getItem(RD_PROJECTS_STORAGE_KEY);
     if (!raw) return [];
     const projects = JSON.parse(raw) as RDProjectOption[];
-    return projects.filter((project) => project.id && project.projectName);
+    return projects
+      .map((project) => ({
+        ...project,
+        projectName: project.projectName || project.name || '',
+      }))
+      .filter((project) => project.id && project.projectName);
   } catch {
     return [];
   }
+}
+
+function projectMatchKey(value?: string | null) {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function rdProjectAliasKey(value?: string | null) {
+  return projectMatchKey(value)
+    .replace(/&/g, ' and ')
+    .replace(/\br\s*and\s*d\b/g, ' ')
+    .replace(/\br\s*&\s*d\b/g, ' ')
+    .replace(/\bproject\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function draftMatchesSelectedProject(draft: BomDraft, selectedProject: ProjectSelectOption) {
+  if (draft.projectType === selectedProject.projectType && draft.projectId === selectedProject.id) return true;
+  if (selectedProject.projectType !== 'R_AND_D') return false;
+  if (draft.projectType && draft.projectType !== 'R_AND_D') return false;
+
+  const selectedName = projectMatchKey(selectedProject.projectName);
+  const selectedLabel = projectMatchKey(selectedProject.project);
+  const selectedAlias = rdProjectAliasKey(selectedProject.projectName);
+  return [draft.projectName, draft.project, draft.name].some((value) => {
+    const draftValue = projectMatchKey(value);
+    const draftAlias = rdProjectAliasKey(value);
+    return draftValue && (
+      draftValue === selectedName ||
+      draftValue === selectedLabel ||
+      (!!draftAlias && draftAlias === selectedAlias)
+    );
+  });
 }
 
 function normalizeDraft(draft: BomDraft): BomDraft {
@@ -1675,6 +1714,7 @@ export default function DraftBOMBuilderPage() {
       projectCode: selectedProject.projectCode,
       projectName: selectedProject.projectName,
       projectType: selectedProject.projectType,
+      updatedAt: new Date().toISOString(),
     };
   }
 
@@ -1682,12 +1722,15 @@ export default function DraftBOMBuilderPage() {
     const selectedProject = combinedProjectOptions.find((project) => project.value === value);
     if (!selectedProject) return;
 
-    const savedProjectDraft = savedDrafts.find(
-      (item) => item.projectType === selectedProject.projectType && item.projectId === selectedProject.id,
-    );
+    const savedProjectDraft = savedDrafts.find((item) => draftMatchesSelectedProject(item, selectedProject));
 
     if (savedProjectDraft) {
-      loadDraft(savedProjectDraft.id);
+      const linkedDraft = normalizeDraft(applyProjectToDraft(savedProjectDraft, selectedProject));
+      const nextDrafts = savedDraftListWith(savedDrafts, linkedDraft);
+      saveDrafts(nextDrafts);
+      setSavedDrafts(nextDrafts);
+      setSelectedDraftId(linkedDraft.id);
+      applyDraftSelection(linkedDraft);
       return;
     }
 

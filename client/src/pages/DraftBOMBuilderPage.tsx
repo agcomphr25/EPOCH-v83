@@ -2700,7 +2700,6 @@ export default function DraftBOMBuilderPage() {
     const selectedProject = combinedProjectOptions.find((project) => project.value === value);
     if (!selectedProject) return;
 
-    const savedProjectDraft = savedDrafts.find((item) => draftMatchesSelectedProject(item, selectedProject));
     const savedProjectDraft = selectBestDraftForProject(savedDrafts, selectedProject);
 
     if (savedProjectDraft) {
@@ -5984,4 +5983,5 @@ function StatusBadge({ status }: { status: BomStatus }) {
       {status}
     </Badge>
   );
+}
 }

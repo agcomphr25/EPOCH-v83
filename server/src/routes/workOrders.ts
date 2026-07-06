@@ -227,7 +227,7 @@ const WAD_APPROVAL_TASK_SECTION_NAME = 'WAD Approvals';
 
 /**
  * Sync per-role WAD approval assignments to the project's preproduction
- * checklist so the assignee sees the pending signature on their My Tasks /
+ * checklist so the assignee sees the document signature on their My Tasks /
  * Pre-production Checklist dashboard.
  *
  * Stable lookup: tasks in the "WAD Approvals" section whose `link` matches

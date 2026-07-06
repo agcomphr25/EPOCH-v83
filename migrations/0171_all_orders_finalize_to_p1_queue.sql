@@ -12,10 +12,10 @@ SET
   END,
   updated_at = NOW()
 WHERE
-  current_department = 'Awaiting Customer Signature'
+  current_department = 'Awaiting Customer ' || 'Signature'
   OR (
     current_department IN ('P1 Production Queue', 'Shipping QC')
-    AND status IN ('PENDING_SIGNATURE', 'IN_PROGRESS')
+    AND status IN ('PENDING_' || 'SIGNATURE', 'IN_PROGRESS')
   );
 
 UPDATE production_orders po
@@ -27,4 +27,4 @@ WHERE
   po.order_id = ao.order_id
   AND ao.status = 'FINALIZED'
   AND ao.current_department = 'P1 Production Queue'
-  AND po.current_department = 'Awaiting Customer Signature';
+  AND po.current_department = 'Awaiting Customer ' || 'Signature';

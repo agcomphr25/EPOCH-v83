@@ -27,10 +27,8 @@ import {
   ArrowRight,
   FileText,
   AlertTriangle,
-  RefreshCw,
   FileDown,
   XCircle,
-  Mail,
   Download,
   Link2,
   Copy,
@@ -110,8 +108,6 @@ export function OrderActionsDrawer({
     progressOrderMutation,
     cancelOrderMutation,
     undoCancelMutation,
-    resendSignatureEmailMutation,
-    sendUpdatedOrderMutation,
     emailPdfCopyMutation,
     setUrgencyMutation,
   } = useOrderActions({
@@ -127,8 +123,6 @@ export function OrderActionsDrawer({
   const isScrapped = orderStatus === 'SCRAPPED';
   const isFulfilled = orderStatus === 'FULFILLED';
   const isInShipping = currentDepartment === 'Shipping';
-  const isPendingSignature = orderStatus?.toUpperCase() === 'PENDING_SIGNATURE';
-  const isFinalized = orderStatus?.toUpperCase() === 'FINALIZED';
   const isUrgent = urgency === 'high' || urgency === 'critical';
 
   const handleProgressOrder = () => {
@@ -340,17 +334,6 @@ export function OrderActionsDrawer({
 
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-muted-foreground">Email Actions</h4>
-              {(isPendingSignature || isFinalized) && (
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-2 text-blue-600 hover:text-blue-700"
-                  onClick={() => sendUpdatedOrderMutation.mutate(orderId)}
-                  disabled={sendUpdatedOrderMutation.isPending}
-                >
-                  <RefreshCw className={`h-4 w-4 ${sendUpdatedOrderMutation.isPending ? 'animate-spin' : ''}`} />
-                  {sendUpdatedOrderMutation.isPending ? 'Sending...' : 'Send Updated Order Email'}
-                </Button>
-              )}
               <Button
                 variant="outline"
                 className="w-full justify-start gap-2 text-green-600 hover:text-green-700"
@@ -360,17 +343,6 @@ export function OrderActionsDrawer({
                 <FileDown className={`h-4 w-4 ${emailPdfCopyMutation.isPending ? 'animate-pulse' : ''}`} />
                 {emailPdfCopyMutation.isPending ? 'Sending...' : 'Email PDF Copy'}
               </Button>
-              {isPendingSignature && (
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-2"
-                  onClick={() => resendSignatureEmailMutation.mutate(orderId)}
-                  disabled={resendSignatureEmailMutation.isPending}
-                >
-                  <Mail className={`h-4 w-4 ${resendSignatureEmailMutation.isPending ? 'animate-pulse' : ''}`} />
-                  {resendSignatureEmailMutation.isPending ? 'Sending...' : 'Resend Signature Email'}
-                </Button>
-              )}
             </div>
 
             <Separator />

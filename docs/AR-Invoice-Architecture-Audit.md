@@ -74,7 +74,7 @@ The system already has extensive financial infrastructure (payments, credit memo
 - `signature_signers` — sequential signer management with `sign_order`, `signature_data` (Base64)
 - `signature_activity_log` — full audit trail
 
-**Components:** `SignatureSigningInterface.tsx` (react-signature-canvas modal), `PDFSignatureCapture.tsx`, `SignatureWorkflow.tsx`, `PendingSignatureTasks.tsx`  
+**Components:** `SignatureSigningInterface.tsx` (react-signature-canvas modal), `PDFSignatureCapture.tsx`, `SignatureWorkflow.tsx`, `DocumentSignatureTasks.tsx`
 **Backend:** `server/src/routes/signatureWorkflow.ts` — uses `pdf-lib` to embed signatures into PDFs  
 **Security:** Public signature links with token-based access for external signers
 

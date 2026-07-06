@@ -33,7 +33,7 @@ interface AuthorizationCheck {
 
 type SignatureMode = 'draw' | 'type';
 
-export default function PendingEmployerSignaturesPage() {
+export default function EmployerSignaturesPage() {
   const { toast } = useToast();
   const [signingDoc, setSigningDoc] = useState<PendingDocument | null>(null);
   const [signatureMode, setSignatureMode] = useState<SignatureMode>('draw');
@@ -217,7 +217,7 @@ export default function PendingEmployerSignaturesPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <PenTool className="h-6 w-6" />
-            Pending Employer Signatures
+            Employer Signatures
           </h1>
           <p className="text-muted-foreground">
             Documents awaiting your signature as {authCheck.displayName}
@@ -229,7 +229,7 @@ export default function PendingEmployerSignaturesPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Documents Awaiting Signature
+            Documents Requiring Signature
           </CardTitle>
           <CardDescription>
             These documents have been signed by employees and require your employer signature.

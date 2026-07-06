@@ -1224,7 +1224,7 @@ router.post('/:id/sign', async (req, res) => {
       movedToProductionAt: new Date(),
     });
 
-    // Update order status from PENDING_SIGNATURE to FINALIZED and move to production queue
+    // Update order status to FINALIZED and move to production queue
     console.log(`✅ Customer signed order ${followupOrder.orderId} - finalizing and moving to production...`);
     
     try {
@@ -1329,7 +1329,7 @@ router.post('/:id/sign', async (req, res) => {
   }
 });
 
-// POST /api/followup-orders/:orderId/resend-email - Resend signature email for PENDING_SIGNATURE orders
+// POST /api/followup-orders/:orderId/resend-email - retired customer signature email resend endpoint
 // SEMANTIC: This is a TRUE RESEND - same document, same snapshot, same publicSignatureId
 // If the order has changed since the snapshot was created, this will REFUSE to resend
 // Use sendUpdatedOrderForSignature instead for changed orders
@@ -1344,11 +1344,11 @@ router.post('/:orderId/resend-email', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Allow resending for both PENDING_SIGNATURE and FINALIZED orders
-    const allowedStatuses = ['PENDING_SIGNATURE', 'FINALIZED'];
+    // Allow only finalized orders on this retired compatibility path.
+    const allowedStatuses = ['FINALIZED'];
     if (!allowedStatuses.includes(order.status?.toUpperCase() || '')) {
       return res.status(400).json({ 
-        error: `Order status is ${order.status}. Can only resend email for PENDING_SIGNATURE or FINALIZED orders.` 
+        error: `Order status is ${order.status}. Can only resend email for finalized orders.`
       });
     }
 
@@ -1598,11 +1598,11 @@ router.post('/:orderId/send-updated-order', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Allow sending for PENDING_SIGNATURE and FINALIZED orders
-    const allowedStatuses = ['PENDING_SIGNATURE', 'FINALIZED'];
+    // Allow only finalized orders on this retired compatibility path.
+    const allowedStatuses = ['FINALIZED'];
     if (!allowedStatuses.includes(order.status?.toUpperCase() || '')) {
       return res.status(400).json({ 
-        error: `Order status is ${order.status}. Can only send signature request for PENDING_SIGNATURE or FINALIZED orders.` 
+        error: `Order status is ${order.status}. Can only send signature request for finalized orders.`
       });
     }
 

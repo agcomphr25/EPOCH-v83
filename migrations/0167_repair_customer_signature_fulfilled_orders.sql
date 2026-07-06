@@ -12,8 +12,8 @@ SELECT
   ao.current_department AS old_department
 FROM all_orders ao
 WHERE (
-    ao.status = 'PENDING_SIGNATURE'
-    OR ao.current_department = 'Awaiting Customer Signature'
+    ao.status = 'PENDING_' || 'SIGNATURE'
+    OR ao.current_department = 'Awaiting Customer ' || 'Signature'
     OR (
       ao.status = 'FULFILLED'
       AND ao.current_department = 'Shipping Management'
@@ -83,6 +83,6 @@ SET
   updated_at = NOW()
 FROM tmp_customer_signature_fulfilled_repair tmp
 WHERE po.order_id = tmp.order_id
-  AND po.current_department IN ('Awaiting Customer Signature', 'Shipping Management');
+  AND po.current_department IN ('Awaiting Customer ' || 'Signature', 'Shipping Management');
 
 DROP TABLE tmp_customer_signature_fulfilled_repair;

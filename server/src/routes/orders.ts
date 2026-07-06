@@ -1565,13 +1565,13 @@ router.post('/pending-payment', async (req: Request, res: Response) => {
   }
 });
 
-// Create draft order (legacy method - now creates PENDING_SIGNATURE orders)
+// Create draft order (legacy method - now creates finalized production orders)
 router.post('/draft', requirePermission('orders.create'), async (req: Request, res: Response) => {
   try {
     const orderData = insertAllOrderSchema.parse(req.body);
 
-    // Create as PENDING_SIGNATURE or FINALIZED based on status
-    const finalStatus = orderData.status === 'FINALIZED' ? 'FINALIZED' : 'PENDING_SIGNATURE';
+    // Create directly as FINALIZED so new orders enter the production queue.
+    const finalStatus = 'FINALIZED';
     
     console.log(`🔄 Creating order ${orderData.orderId} with status: ${finalStatus}`);
     
@@ -2045,7 +2045,7 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
     const orderId = req.params.id;
     
     // Skip static routes that should be handled by other handlers defined later
-    const staticRoutes = ['heat-map', 'stats', 'all', 'generate-id', 'last-id', 'reference', 'awaiting-signature'];
+    const staticRoutes = ['heat-map', 'stats', 'all', 'generate-id', 'last-id', 'reference'];
     if (staticRoutes.some(route => orderId === route || orderId.startsWith(route + '/'))) {
       return next('route');
     }
@@ -5235,74 +5235,6 @@ router.post('/:orderId/email-pdf-copy', authenticateToken, async (req: Request, 
       error: 'Failed to send PDF copy',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
-  }
-});
-
-// GET /api/orders/awaiting-signature - All orders in Awaiting Customer Signature department
-router.get('/awaiting-signature', async (req: Request, res: Response) => {
-  try {
-    const { search, sort = 'due_date', dir = 'asc' } = req.query as Record<string, string>;
-
-    const allowedSorts: Record<string, string> = {
-      due_date: 'ao.due_date',
-      order_date: 'ao.order_date',
-      order_id: 'ao.order_id',
-      customer: 'c.name',
-      days_waiting: 'ao.created_at',
-    };
-    const sortCol = allowedSorts[sort] || 'ao.due_date';
-    const sortDir = dir === 'desc' ? 'DESC' : 'ASC';
-
-    let searchClause = '';
-    const params: any[] = [];
-
-    if (search && search.trim()) {
-      params.push(`%${search.trim().toLowerCase()}%`);
-      searchClause = `AND (LOWER(ao.order_id) LIKE $${params.length} OR LOWER(c.name) LIKE $${params.length} OR LOWER(ao.model_id) LIKE $${params.length})`;
-    }
-
-    const query = `
-      SELECT
-        ao.order_id AS "orderId",
-        ao.order_date AS "orderDate",
-        ao.due_date AS "dueDate",
-        ao.status,
-        ao.model_id AS "modelId",
-        ao.handedness,
-        ao.notes,
-        ao.urgency,
-        ao.customer_id AS "customerId",
-        ao.created_at AS "createdAt",
-        ao.signature_data IS NOT NULL AND ao.signature_data != '' AS "hasSigned",
-        ao.signed_at AS "signedAt",
-        ao.is_replacement AS "isReplacement",
-        c.name AS "customerName",
-        c.email AS "customerEmail",
-        NOW() - ao.created_at AS "waitingDuration",
-        EXTRACT(EPOCH FROM (NOW() - ao.created_at)) / 86400 AS "daysWaiting"
-      FROM all_orders ao
-      LEFT JOIN customers c ON c.id::text = ao.customer_id
-      WHERE ao.current_department = 'Awaiting Customer Signature'
-        AND ao.status != 'CANCELLED'
-        ${searchClause}
-      ORDER BY ${sortCol} ${sortDir}
-    `;
-
-    const rows = await pool.query(query, params);
-
-    const orders = (Array.isArray(rows) ? rows : (rows as any).rows || rows).map((r: any) => ({
-      ...r,
-      daysWaiting: Math.floor(Number(r.daysWaiting) || 0),
-    }));
-
-    const total = orders.length;
-    const overdue = orders.filter((o: any) => new Date(o.dueDate) < new Date()).length;
-    const signed = orders.filter((o: any) => o.hasSigned).length;
-
-    res.json({ orders, total, overdue, signed });
-  } catch (error) {
-    console.error('Error fetching awaiting-signature orders:', error);
-    res.status(500).json({ error: 'Failed to fetch awaiting-signature orders' });
   }
 });
 

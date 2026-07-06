@@ -49,7 +49,7 @@ import {
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfDay } from 'date-fns';
 import { Link } from 'wouter';
-import PendingSignatureTasks from './PendingSignatureTasks';
+import DocumentSignatureTasks from './DocumentSignatureTasks';
 import P2InvoicePreviewButton from './p2/P2InvoicePreviewButton';
 
 interface AssignedTask {
@@ -335,7 +335,7 @@ export default function MyTasksControlCenter({
                 </div>
               </div>
 
-              <PendingSignatureTasks
+              <DocumentSignatureTasks
                 employeeId={employeeId}
                 employeeName={userName || ''}
                 compact={true}
@@ -443,7 +443,7 @@ export default function MyTasksControlCenter({
           <Progress value={completionPercentage} className="h-3" />
         </div>
 
-        <PendingSignatureTasks
+        <DocumentSignatureTasks
           employeeId={employeeId}
           employeeName={userName || ''}
           compact={true}

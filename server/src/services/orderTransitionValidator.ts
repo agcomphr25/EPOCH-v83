@@ -47,7 +47,6 @@ export class TransitionValidationError extends Error {
  */
 export const STATUS_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
   // New orders start here (website import, manual entry)
-  PENDING_SIGNATURE: ['FINALIZED', 'CANCELLED'],
   // Finalized order enters production
   FINALIZED:         ['IN_PROGRESS', 'CANCELLED'],
   // Active production paths

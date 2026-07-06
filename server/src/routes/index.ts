@@ -5437,6 +5437,37 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         ...legacyProductionRows.map((row: any) => row.poId).filter(Boolean),
         ...legacyProjectProductionRows.map((row: any) => row.poId).filter(Boolean),
       ])];
+      const poFamilyRows = poIds.length > 0
+        ? await optionalP2Rows(
+          'PO revision family display',
+          dbPool.query(
+            `SELECT
+               po.id AS "poId",
+               COALESCE(root.id, po.id) AS "displayPoId",
+               COALESCE(root.po_number, po.po_number) AS "displayPoNumber",
+               COALESCE(current_po.id, po.id) AS "currentRevisionPoId",
+               COALESCE(current_po.po_number, po.po_number) AS "currentRevisionPoNumber"
+             FROM p2_purchase_orders po
+             LEFT JOIN p2_purchase_orders root ON root.id = po.parent_po_id
+             LEFT JOIN LATERAL (
+               SELECT family.id, family.po_number
+               FROM p2_purchase_orders family
+               WHERE COALESCE(family.parent_po_id, family.id) = COALESCE(po.parent_po_id, po.id)
+               ORDER BY family.is_current_revision DESC, family.revision_number DESC, family.id DESC
+               LIMIT 1
+             ) current_po ON true
+             WHERE po.id = ANY($1::int[])`,
+            [poIds]
+          )
+        )
+        : [];
+      const poFamilyByPoId = new Map<number, any>(
+        poFamilyRows.map((row: any) => [Number(row.poId), row])
+      );
+      const getProductionDisplayPoNumber = (poId: number | null, rawPoNumber: string | null | undefined) => {
+        if (!poId) return rawPoNumber;
+        return poFamilyByPoId.get(Number(poId))?.displayPoNumber || rawPoNumber;
+      };
       const projectRows = poIds.length > 0
         ? await optionalP2Rows(
             'project link',
@@ -5671,7 +5702,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           serialNumber: item.serialNumber,
           partNumber: item.partNumber,
           partName: item.partName,
-          poNumber: item.poNumber,
+          poNumber: getProductionDisplayPoNumber(Number(poId), item.poNumber),
+          rawPoNumber: item.poNumber,
           customerName: item.customerName,
           status: item.status,
           currentDepartment: dept,
@@ -5737,7 +5769,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           serialNumber: row.orderId,
           partNumber: row.partNumber || row.orderId,
           partName: row.partName || row.department || '',
-          poNumber: row.poNumber,
+          poNumber: getProductionDisplayPoNumber(Number(poId), row.poNumber),
+          rawPoNumber: row.poNumber,
           customerName: row.customerName || 'Unknown',
           status: displayStatus,
           currentDepartment: dept,
@@ -5797,7 +5830,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           serialNumber: row.activeTravelerNumber || row.workOrderNumber,
           partNumber: row.partNumber || row.workOrderNumber,
           partName: row.description || 'Legacy project work order',
-          poNumber: row.poNumber,
+          poNumber: getProductionDisplayPoNumber(Number(poId), row.poNumber),
+          rawPoNumber: row.poNumber,
           customerName: row.customerName || 'Unknown',
           status: isComplete ? 'COMPLETED' : 'ACTIVE',
           currentDepartment: dept,

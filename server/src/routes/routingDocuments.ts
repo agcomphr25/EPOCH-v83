@@ -320,7 +320,7 @@ router.get('/routing-links/:partRoutingId', async (req: Request, res: Response) 
     const enrichedLinks = await Promise.all(links.map(async (link: any) => {
       let document = null;
       try {
-        if (link.document_type === 'work_instruction' || link.document_type === 'procedure' || link.document_type === 'traveler_template') {
+        if (link.document_type !== 'spec_sheet') {
           const docResult = await db.execute(sql`SELECT * FROM routing_documents WHERE id = ${link.document_id} LIMIT 1`);
           const docRows = (docResult as any)?.rows || docResult || [];
           document = docRows[0] || null;
@@ -1078,10 +1078,13 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
 // AI Generate new document from templates
 router.post('/ai-generate', async (req: Request, res: Response) => {
   try {
-    const { templateId, partNumber, partName, customFields, referenceDocumentIds } = req.body;
+    const { templateId, partNumber, partName, documentType, customFields, referenceDocumentIds } = req.body;
+    const finalDocumentType = typeof documentType === 'string' && documentType.trim()
+      ? documentType.trim()
+      : 'work_instruction';
     
     if (!partNumber) {
-      return res.status(400).json({ error: 'Part number is required' });
+      return res.status(400).json({ error: 'Reference, part, or equipment ID is required' });
     }
     
     // Validate and get reference documents
@@ -1128,13 +1131,14 @@ router.post('/ai-generate', async (req: Request, res: Response) => {
       templateContent = `Template: ${template.template_name}\nStructure: ${JSON.stringify(template.structure)}\nSections: ${JSON.stringify(template.sections)}\nFields: ${JSON.stringify(fields)}`;
     }
     
-    const systemPrompt = `You are an expert at creating composite manufacturing work instructions, spec sheets, and travelers for composite layup, mold creation, curing, bonding, and fabrication processes. Based on the provided reference documents and template, generate a new document structure with all necessary fields.
+    const systemPrompt = `You are an expert at creating controlled manufacturing forms and instruction documents, including work instructions, assembly instructions, operator instructions, maintenance schedules, maintenance instructions, inspection forms, quality checklists, training forms, procedures, spec sheets, and travelers. Based on the requested document type, the provided reference documents, and the selected template, generate a practical document structure with all necessary sections and fields.
 
-You deeply understand composite manufacturing terminology: ply layup, fiber orientation, prepreg handling/out-time, vacuum bagging, autoclave/oven cure cycles, mold prep, surface prep, bonding, trimming, and NDI/NDT inspection. Use standard departments: Layup, Assemble/Disassembly, Trim, Paint, Quality Control, CNC, Finish, Bonding, Prep, Mold Prep, Oven/Cure.
+When the source material is composite manufacturing related, preserve exact composite terminology such as ply layup, fiber orientation, prepreg handling/out-time, vacuum bagging, autoclave/oven cure cycles, mold prep, surface prep, bonding, trimming, and NDI/NDT inspection. Use exact reference values where provided. For maintenance and operator forms, include frequencies, ownership, safety checks, acceptance criteria, signoffs, and escalation notes when supported by the source material.
 
 Return a JSON object with:
 {
   "title": "Generated document title",
+  "documentType": "requested document type",
   "sections": [{"name": "string", "content": "string", "fields": [...]}],
   "fields": [{"fieldName": "string", "fieldLabel": "string", "fieldType": "string", "isRequired": boolean, "isUniquePerSerial": boolean, "defaultValue": "string", "unit": "string or null"}],
   "routingSteps": [...],
@@ -1144,8 +1148,9 @@ Return a JSON object with:
 }`;
 
     const userPrompt = `Generate a document for:
-Part Number: ${partNumber || 'Not specified'}
-Part Name: ${partName || 'Not specified'}
+Document Type: ${finalDocumentType}
+Reference / Part / Equipment ID: ${partNumber || 'Not specified'}
+Subject / Part Name: ${partName || 'Not specified'}
 Custom Requirements: ${JSON.stringify(customFields || {})}
 
 ${referenceContent ? `Reference Documents:\n${referenceContent}` : ''}
@@ -1167,7 +1172,7 @@ ${templateContent ? `\nTemplate:\n${templateContent}` : ''}`;
     const [newDocument] = await db.insert(routingDocuments).values({
       title: generatedContent.title || `Generated Document for ${partNumber}`,
       partNumber,
-      documentType: 'work_instruction',
+      documentType: finalDocumentType,
       sourceType: 'generated',
       aiExtractedContent: generatedContent,
       aiExtractedFields: generatedContent.fields || [],

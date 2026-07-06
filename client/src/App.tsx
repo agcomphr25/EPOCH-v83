@@ -1170,6 +1170,7 @@ function App() {
 
                   {/* Forms and Reports Routes */}
                   <Route path="/forms" component={AdminFormsPage} />
+                  <Route path="/forms/document-builder" component={RoutingDocumentManagement} />
                   <Route path="/form/:id" component={FormPage} />
                   <Route path="/reports" component={ReportPage} />
                   <Route path="/reports/po-production-orders" component={POProductionOrdersReport} />

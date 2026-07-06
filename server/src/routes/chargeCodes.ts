@@ -127,6 +127,11 @@ function normalizeEmployeeIds(value: unknown): number[] | null {
   return Array.from(new Set(ids)).sort((a, b) => a - b);
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  const err = error as { code?: string; message?: string; constraint?: string };
+  return err?.code === '23505' || /duplicate key|unique constraint/i.test(err?.message ?? '');
+}
+
 function normalizeChargeCodePolicy<T extends Record<string, any>>(data: T): T {
   const next = { ...data };
   const productionLine = typeof next.productionLine === 'string' ? next.productionLine.trim().toUpperCase() : next.productionLine;
@@ -339,7 +344,13 @@ router.patch('/requests/:requestId/assign', authenticateToken, requireRole('ADMI
   }
 
   const existing = await pool.query(
-    `SELECT id, status, wad_id AS "wadId", department, operation
+    `SELECT
+       id,
+       status,
+       wad_id AS "wadId",
+       department,
+       operation,
+       assigned_charge_code_id AS "assignedChargeCodeId"
        FROM wad_charge_code_requests
       WHERE id = $1::uuid
       LIMIT 1`,
@@ -350,6 +361,11 @@ router.patch('/requests/:requestId/assign', authenticateToken, requireRole('ADMI
     return;
   }
   if (existing[0].status !== 'PENDING') {
+    if (existing[0].status === 'ASSIGNED' && Number(existing[0].assignedChargeCodeId) === chargeCodeId) {
+      const rows = await listChargeCodeRequests({});
+      res.json(rows.find((request: any) => request.id === requestId) ?? existing[0]);
+      return;
+    }
     res.status(400).json({ error: 'Only pending requests can be assigned' });
     return;
   }
@@ -406,7 +422,11 @@ router.patch('/requests/:requestId/assign', authenticateToken, requireRole('ADMI
     userAgent: req.headers['user-agent'] ?? null,
     payload: { requestId, chargeCodeId, chargeCode: chargeCode.code },
   });
-  await completeGlennChargeCodeTask(requestId, chargeCode.code, actorName);
+  try {
+    await completeGlennChargeCodeTask(requestId, chargeCode.code, actorName);
+  } catch (taskErr: any) {
+    console.warn('[chargeCodes] WAD charge code assigned, but task completion failed:', taskErr?.message ?? taskErr);
+  }
 
   const rows = await listChargeCodeRequests({});
   res.json(rows.find((request: any) => request.id === requestId));
@@ -563,7 +583,32 @@ router.post('/', authenticateToken, requireRole('ADMIN'), h(async (req, res) => 
     res.status(400).json({ error: 'Invalid charge code data', details: parsed.error.flatten() });
     return;
   }
-  const created = await storage.createChargeCode(normalizeChargeCodePolicy(parsed.data));
+  const normalizedData = normalizeChargeCodePolicy(parsed.data);
+  const existingByCode = await storage.getChargeCodeByCode(String(normalizedData.code ?? '').trim());
+  if (existingByCode) {
+    res.status(409).json({
+      error: `Charge code "${existingByCode.code}" already exists`,
+      existingChargeCode: existingByCode,
+    });
+    return;
+  }
+
+  let created;
+  try {
+    created = await storage.createChargeCode(normalizedData);
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      const existing = await storage.getChargeCodeByCode(String(normalizedData.code ?? '').trim());
+      res.status(409).json({
+        error: existing
+          ? `Charge code "${existing.code}" already exists`
+          : 'Charge code already exists',
+        existingChargeCode: existing ?? null,
+      });
+      return;
+    }
+    throw err;
+  }
 
   // DCAA audit trail — unified hash-chained ledger (Task #85).
   const { actorId, actorName, actorRole } = extractActor(req);

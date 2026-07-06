@@ -2,12 +2,14 @@ import { Router, Request, Response } from 'express';
 import { insertTaskItemSchema } from '@shared/schema';
 
 import { storage } from '../../storage';
+import { upsertGlennChargeCodeTasksForPendingRequests } from '../services/wadChargeCodeTaskService';
 
 const router = Router();
 
 // Task Tracker Management
 router.get('/', async (req: Request, res: Response) => {
   try {
+    await upsertGlennChargeCodeTasksForPendingRequests();
     const tasks = await storage.getAllTaskItems();
     res.json(tasks);
   } catch (error) {

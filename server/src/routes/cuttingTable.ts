@@ -2435,7 +2435,15 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               COALESCE(p2.customer_name, 'P2 Order') as "customer",
               'P2' as source,
               COALESCE(inv.is_packet, false) as "isPacket",
-              bom.id as "matchedBomId"
+              bom.id as "matchedBomId",
+              po.quantity as "originalQuantity",
+              COALESCE(p2_units.serialized_count, 0) as "serializedQuantity",
+              COALESCE(committed_packets.committed_count, 0) as "committedQuantity",
+              GREATEST(
+                COALESCE(NULLIF(p2_units.serialized_count, 0), po.quantity)
+                  - COALESCE(committed_packets.committed_count, 0),
+                0
+              ) as "openQuantity"
             FROM p2_production_orders po
             LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
             LEFT JOIN inventory_items inv ON (
@@ -2455,6 +2463,45 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                 LOWER(po.part_name) LIKE '%' || LOWER(bom.packet_type) || '%'
               )
             )
+            LEFT JOIN LATERAL (
+              SELECT COUNT(*)::int as serialized_count
+              FROM p2_serialized_items si
+              WHERE si.po_item_id = po.p2_po_item_id
+                AND UPPER(COALESCE(si.status, 'ACTIVE')) NOT IN ('SCRAPPED', 'CANCELLED')
+            ) p2_units ON true
+            LEFT JOIN LATERAL (
+              SELECT COUNT(DISTINCT si.id)::int as committed_count
+              FROM p2_serialized_items si
+              JOIN cutting_built_packets cbp ON (
+                cbp.allocated_to_order IS NOT NULL
+                AND TRIM(cbp.allocated_to_order) <> ''
+                AND LOWER(TRIM(cbp.allocated_to_order)) IN (
+                  LOWER(TRIM(si.id::text)),
+                  LOWER(TRIM(si.barcode)),
+                  LOWER(TRIM(si.serial_number)),
+                  LOWER(TRIM(COALESCE(si.traveler_barcode, '')))
+                )
+              )
+              WHERE si.po_item_id = po.p2_po_item_id
+                AND UPPER(COALESCE(si.status, 'ACTIVE')) NOT IN ('SCRAPPED', 'CANCELLED')
+                AND (
+                  (bom.product_category_id IS NOT NULL AND cbp.product_category_id = bom.product_category_id)
+                  OR (
+                    cbp.product_category_id IS NOT NULL
+                    AND EXISTS (
+                      SELECT 1
+                      FROM cutting_product_categories cpc
+                      WHERE cpc.id = cbp.product_category_id
+                        AND (
+                          LOWER(cpc.category_name) = LOWER(COALESCE(inv.name, ''))
+                          OR LOWER(cpc.category_name) = LOWER(COALESCE(po.part_name, ''))
+                          OR LOWER(cpc.category_name) = LOWER(COALESCE(bom.packet_type, ''))
+                          OR LOWER(cpc.category_name) = LOWER(COALESCE(bom.part_number, ''))
+                        )
+                    )
+                  )
+                )
+            ) committed_packets ON true
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
               AND (
                 inv.is_packet = true
@@ -2462,7 +2509,12 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                 OR LOWER(po.part_name) LIKE '%packet%'
                 OR LOWER(po.sku) LIKE '%packet%'
                 OR po.sku IN ('P706', 'P707')
-              )`;
+              )
+              AND GREATEST(
+                COALESCE(NULLIF(p2_units.serialized_count, 0), po.quantity)
+                  - COALESCE(committed_packets.committed_count, 0),
+                0
+              ) > 0`;
       
       const p2Result = showAll === 'true'
         ? await pool.query(p2Query + `
@@ -2553,7 +2605,10 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           dueDate: item.dueDate,
           customer: item.customer,
           priority: 60,
-          packetsNeeded: item.quantity || 1,
+          packetsNeeded: item.openQuantity || item.quantity || 1,
+          originalQuantity: item.originalQuantity || item.quantity || 1,
+          serializedQuantity: item.serializedQuantity || 0,
+          committedQuantity: item.committedQuantity || 0,
           usesInventory: false,
           requiresNewCut: true,
           bomId: matchingBom?.id,

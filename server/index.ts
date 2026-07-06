@@ -1574,6 +1574,19 @@ async function initializeBackgroundServices() {
           ON CONFLICT (code) DO NOTHING
         `);
 
+        await pool.query(`
+          ALTER TABLE charge_codes
+            ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL
+        `);
+        await pool.query(`
+          ALTER TABLE charge_codes
+            ADD COLUMN IF NOT EXISTS charge_phase TEXT
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS charge_codes_project_id_idx
+            ON charge_codes(project_id)
+        `);
+
         // Step 2: Add charge_code_id column to timekeeping.indirect_codes (nullable initially)
         await pool.query(`
           ALTER TABLE timekeeping.indirect_codes

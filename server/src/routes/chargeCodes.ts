@@ -14,6 +14,30 @@ const router: IRouter = Router();
 
 let chargeCodeAssignmentTableReady: Promise<void> | null = null;
 let chargeCodeRequestTableReady: Promise<void> | null = null;
+let chargeCodeTraceabilityColumnsReady: Promise<void> | null = null;
+
+function ensureChargeCodeTraceabilityColumns(): Promise<void> {
+  if (!chargeCodeTraceabilityColumnsReady) {
+    chargeCodeTraceabilityColumnsReady = (async () => {
+      await pool.query(`
+        ALTER TABLE charge_codes
+          ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL
+      `);
+      await pool.query(`
+        ALTER TABLE charge_codes
+          ADD COLUMN IF NOT EXISTS charge_phase TEXT
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS charge_codes_project_id_idx
+          ON charge_codes(project_id)
+      `);
+    })().catch((error) => {
+      chargeCodeTraceabilityColumnsReady = null;
+      throw error;
+    });
+  }
+  return chargeCodeTraceabilityColumnsReady;
+}
 
 function ensureChargeCodeAssignmentTable(): Promise<void> {
   if (!chargeCodeAssignmentTableReady) {
@@ -216,6 +240,7 @@ async function listChargeCodeRequests(filters: { status?: string; wadId?: string
 
 // GET /api/charge-codes — list all charge codes; supports ?active=true filter
 router.get('/', authenticateToken, h(async (req, res) => {
+  await ensureChargeCodeTraceabilityColumns();
   const activeOnly = req.query.active === 'true';
   const codes = await storage.listChargeCodes(activeOnly);
   res.json(codes);
@@ -388,6 +413,7 @@ router.patch('/requests/:requestId/assign', authenticateToken, requireRole('ADMI
 }));
 
 router.get('/:id/assignments', authenticateToken, h(async (req, res) => {
+  await ensureChargeCodeTraceabilityColumns();
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: 'Invalid charge code id' });
@@ -531,6 +557,7 @@ router.put('/:id/assignments', authenticateToken, requireRole('ADMIN'), h(async 
 }));
 
 router.post('/', authenticateToken, requireRole('ADMIN'), h(async (req, res) => {
+  await ensureChargeCodeTraceabilityColumns();
   const parsed = insertChargeCodeSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid charge code data', details: parsed.error.flatten() });
@@ -574,6 +601,7 @@ router.post('/', authenticateToken, requireRole('ADMIN'), h(async (req, res) => 
 
 // PATCH /api/charge-codes/:id — admin update / deactivate
 router.patch('/:id', authenticateToken, requireRole('ADMIN'), h(async (req, res) => {
+  await ensureChargeCodeTraceabilityColumns();
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: 'Invalid charge code id' });

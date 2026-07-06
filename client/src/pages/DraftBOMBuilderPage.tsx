@@ -765,24 +765,40 @@ function draftMatchesSelectedProject(draft: BomDraft, selectedProject: ProjectSe
   });
 }
 
-function normalizeDraft(draft: BomDraft): BomDraft {
-  const lines = (draft.lines ?? []).map(normalizeBomLine);
-  const partsRequestLines = (draft.partsRequestLines ?? draft.lines ?? []).map(normalizeBomLine);
+function safeArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeDraft(draft: Partial<BomDraft> | null | undefined): BomDraft {
+  const safeDraft = draft ?? {};
+  const rawLines = safeArray(safeDraft.lines);
+  const rawPartsRequestLines = Array.isArray(safeDraft.partsRequestLines) ? safeDraft.partsRequestLines : rawLines;
+  const lines = rawLines.map(normalizeBomLine);
+  const partsRequestLines = rawPartsRequestLines.map(normalizeBomLine);
+  const fallbackDraft = createPrivateerDraft();
 
   return {
-    ...draft,
-    projectId: draft.projectId ?? null,
-    projectCode: draft.projectCode ?? null,
-    projectName: draft.projectName ?? draft.project ?? null,
-    projectType: draft.projectType ?? null,
+    ...fallbackDraft,
+    ...safeDraft,
+    id: safeDraft.id || crypto.randomUUID(),
+    name: safeDraft.name || 'Untitled draft',
+    revision: safeDraft.revision || 'Draft A',
+    owner: safeDraft.owner ?? '',
+    project: safeDraft.project ?? '',
+    notes: safeDraft.notes ?? '',
+    updatedAt: safeDraft.updatedAt ?? new Date().toISOString(),
+    projectId: safeDraft.projectId ?? null,
+    projectCode: safeDraft.projectCode ?? null,
+    projectName: safeDraft.projectName ?? safeDraft.project ?? null,
+    projectType: safeDraft.projectType ?? null,
     lines,
     partsRequestLines,
     savedDraftBoms: mergeDraftBoms([
-      ...(draft.savedDraftBoms ?? []),
+      ...safeArray(safeDraft.savedDraftBoms),
       ...lines.flatMap((line) => line.childDraftBoms ?? []),
       ...partsRequestLines.flatMap((line) => line.childDraftBoms ?? []),
     ]),
-    laborEstimateLines: (draft.laborEstimateLines?.length ? draft.laborEstimateLines : [newLaborEstimateLine()]).map((line) => ({
+    laborEstimateLines: (safeArray(safeDraft.laborEstimateLines).length ? safeArray(safeDraft.laborEstimateLines) : [newLaborEstimateLine()]).map((line) => ({
       ...line,
       department: line.department || defaultDepartment,
       employeeRole: line.employeeRole ?? '',
@@ -790,7 +806,7 @@ function normalizeDraft(draft: BomDraft): BomDraft {
       hoursPerPart: line.hoursPerPart ?? '',
       quantityPerPo: line.quantityPerPo ?? 1,
     })),
-    nrcRows: (draft.nrcRows ?? []).map((row) => {
+    nrcRows: safeArray(safeDraft.nrcRows).map((row) => {
       const normalized = {
         ...newNrcRow(),
         ...row,
@@ -813,18 +829,18 @@ function normalizeDraft(draft: BomDraft): BomDraft {
       normalized.totalCost = nrcRowTotal(normalized);
       return normalized;
     }),
-    customLaborDepartments: draft.customLaborDepartments ?? [],
-    poVisibleColumns: sanitizePoColumns(draft.poVisibleColumns),
-    partsRequestVisibleColumns: draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
-    directLaborVisibleColumns: draft.directLaborVisibleColumns ?? defaultDirectLaborColumns,
-    assemblyVisibleColumns: draft.assemblyVisibleColumns ?? defaultSourcingColumns,
-    customColumns: sanitizeCustomColumns([...(draft.customColumns ?? []), ...(draft.customPoColumns ?? [])]),
-    customPoColumns: sanitizeCustomColumns(draft.customPoColumns ?? []),
-    workspaceTabs: normalizeWorkspaceTabs(draft.workspaceTabs),
-    visibility: draft.visibility === 'private' ? 'private' : 'public',
-    allowPublicEdit: draft.allowPublicEdit === true,
-    canEdit: draft.canEdit,
-    canManageAccess: draft.canManageAccess,
+    customLaborDepartments: safeArray(safeDraft.customLaborDepartments),
+    poVisibleColumns: sanitizePoColumns(safeDraft.poVisibleColumns),
+    partsRequestVisibleColumns: safeDraft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
+    directLaborVisibleColumns: safeDraft.directLaborVisibleColumns ?? defaultDirectLaborColumns,
+    assemblyVisibleColumns: safeDraft.assemblyVisibleColumns ?? defaultSourcingColumns,
+    customColumns: sanitizeCustomColumns([...safeArray(safeDraft.customColumns), ...safeArray(safeDraft.customPoColumns)]),
+    customPoColumns: sanitizeCustomColumns(safeArray(safeDraft.customPoColumns)),
+    workspaceTabs: normalizeWorkspaceTabs(safeDraft.workspaceTabs),
+    visibility: safeDraft.visibility === 'private' ? 'private' : 'public',
+    allowPublicEdit: safeDraft.allowPublicEdit === true,
+    canEdit: safeDraft.canEdit,
+    canManageAccess: safeDraft.canManageAccess,
   };
 }
 
@@ -1524,7 +1540,8 @@ function loadDrafts(): BomDraft[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [createPrivateerDraft()];
-    const drafts = (JSON.parse(raw) as BomDraft[]).map(normalizeDraft);
+    const parsed = JSON.parse(raw);
+    const drafts = (Array.isArray(parsed) ? parsed : []).map(normalizeDraft);
     const privateer = drafts.find((item) => item.id === PRIVATEER_DRAFT_ID);
     if (privateer) return [privateer, ...drafts.filter((item) => item.id !== PRIVATEER_DRAFT_ID)];
     return [createPrivateerDraft(), ...drafts];
@@ -1928,7 +1945,7 @@ export default function DraftBOMBuilderPage() {
 
   useEffect(() => {
     if (!sharedDraftsFetched || hasLoadedSharedDrafts) return;
-    const sourceDrafts = sharedDrafts.length > 0 ? sharedDrafts : loadDrafts();
+    const sourceDrafts = Array.isArray(sharedDrafts) && sharedDrafts.length > 0 ? sharedDrafts : loadDrafts();
     const normalizedDrafts = sourceDrafts.map(normalizeDraft);
     const nextDrafts = normalizedDrafts.length > 0 ? normalizedDrafts : [createPrivateerDraft()];
     const selectedDraft = nextDrafts.find((item) => item.id === selectedDraftId) ?? nextDrafts[0];
@@ -3268,7 +3285,7 @@ export default function DraftBOMBuilderPage() {
                             <div className="truncate font-medium text-slate-950">{item.name}</div>
                             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
                               <span>{item.revision || 'Draft'}</span>
-                              <span>{item.lines.length} line{item.lines.length === 1 ? '' : 's'}</span>
+                              <span>{(item.lines ?? []).length} line{(item.lines ?? []).length === 1 ? '' : 's'}</span>
                               <span>{draftSavedBomCount(item)} BOM{draftSavedBomCount(item) === 1 ? '' : 's'}</span>
                             </div>
                           </div>

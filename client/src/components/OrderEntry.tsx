@@ -176,13 +176,20 @@ const TIKKA_BARREL_OPTIONS = [
 
 const LEFT_HANDED_SHORT_AND_LONG_ACTIONS = [
   'BAT- ADL',
+  'ADL- BAT',
   'BAT Igniter',
   'BAT Model HR',
   'BAT Vesper',
+  'Def Deviant/Hunter/Def Ejection',
+  'Def Deviant/Target/ Def Ejection',
+  'Def/Anti X',
   'Defiance Ruckus-Target',
   'Defiance Ruckus-Hunter',
+  'Defiance Ruckus/Target/Def Ejection',
+  'Defiance Ruckus/Hunter/Def Ejection',
   'Defiance Tenacity',
   'Defiance Ti',
+  'Anti/Tenacity/Hunter/Def Port',
   'Rem 700',
   'Remington 700',
   'Bighorn Origin',
@@ -190,6 +197,7 @@ const LEFT_HANDED_SHORT_AND_LONG_ACTIONS = [
   'Bighorn SR3',
   'Terminus',
   'Stiller',
+  'Stiller Predator/Tac',
   'Lonepeak',
   'Lone Peak',
   'Kelbly Obsidian',
@@ -211,17 +219,23 @@ const LEFT_HANDED_SHORT_ONLY_ACTIONS = [
   'Gunwerks GRB',
   'Kauger',
   'Rem X Zermatt',
+  'Zermatt Rem X',
 ];
 
 const LEFT_HANDED_MEDIUM_ACTIONS = [
   'Bighorn',
   'Big Horn',
+  'Bighorn Med Action',
   'Stiller',
+  'Stiller Predator/Tac',
   'XM',
   'XM Plus',
   'XM+',
+  'Def XM/Snowy Mtn Med',
+  'Def XM+',
   'Lonepeak',
   'Lone Peak',
+  'Lone Peak Med',
   'Tikka',
 ];
 

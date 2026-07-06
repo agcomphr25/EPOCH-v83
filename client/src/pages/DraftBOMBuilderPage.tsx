@@ -516,7 +516,8 @@ function inventoryDescription(item: InventoryItemOption) {
 }
 
 function linePartNumber(line: BomLine) {
-  return line.agPartNumber || line.supplierItemId || customImportField(line, importedPartNumberHeaders) || `DRAFT-${line.id.slice(0, 8).toUpperCase()}`;
+  const lineId = typeof line.id === 'string' && line.id ? line.id : crypto.randomUUID();
+  return line.agPartNumber || line.supplierItemId || customImportField(line, importedPartNumberHeaders) || `DRAFT-${lineId.slice(0, 8).toUpperCase()}`;
 }
 
 const importedPartNumberHeaders = ['agpartnumber', 'agpart', 'partnumber', 'partno', 'partnum', 'part', 'itemnumber', 'sku'];
@@ -538,7 +539,7 @@ const importedDescriptionHeaders = [
 function customImportField(line: BomLine, keys: string[]) {
   const customFields = line.customFields ?? {};
   for (const [label, value] of Object.entries(customFields)) {
-    if (keys.includes(normalizeCsvHeader(label)) && value.trim()) return value.trim();
+    if (typeof value === 'string' && keys.includes(normalizeCsvHeader(label)) && value.trim()) return value.trim();
   }
   return '';
 }
@@ -552,17 +553,28 @@ function lineDescription(line: BomLine) {
   return customDescription || description || line.inventoryItemName || partNumber;
 }
 
-function normalizeBomLine(line: BomLine): BomLine {
+function normalizeBomLine(line: Partial<BomLine> | null | undefined): BomLine {
+  const baseLine = newLine();
+  const safeLine = line && typeof line === 'object' ? line : {};
+  const id = typeof safeLine.id === 'string' && safeLine.id.trim() ? safeLine.id : baseLine.id;
+  const status = statuses.includes(safeLine.status as BomStatus) ? safeLine.status as BomStatus : baseLine.status;
+
   return {
-    ...line,
-    isDraftPart: line.isDraftPart ?? !line.inventoryItemId,
-    isManufactured: line.isManufactured ?? false,
-    firstDepartment: line.firstDepartment ?? defaultDepartment,
-    childDraftBoms: line.childDraftBoms ?? [],
-    customFields: line.customFields ?? {},
-    importedSource: line.importedSource,
-    actualCost: line.actualCost ?? '',
-    service: line.service ?? false,
+    ...baseLine,
+    ...safeLine,
+    id,
+    status,
+    include: safeLine.include ?? baseLine.include,
+    qtyNeeded: safeLine.qtyNeeded ?? baseLine.qtyNeeded,
+    unitCost: safeLine.unitCost ?? baseLine.unitCost,
+    isDraftPart: safeLine.isDraftPart ?? !safeLine.inventoryItemId,
+    isManufactured: safeLine.isManufactured ?? false,
+    firstDepartment: safeLine.firstDepartment ?? defaultDepartment,
+    childDraftBoms: Array.isArray(safeLine.childDraftBoms) ? safeLine.childDraftBoms : [],
+    customFields: safeLine.customFields && typeof safeLine.customFields === 'object' ? safeLine.customFields : {},
+    importedSource: safeLine.importedSource,
+    actualCost: safeLine.actualCost ?? '',
+    service: safeLine.service ?? false,
   };
 }
 
@@ -765,28 +777,35 @@ function draftMatchesSelectedProject(draft: BomDraft, selectedProject: ProjectSe
   });
 }
 
-function safeArray<T>(value: T[] | null | undefined): T[] {
-  return Array.isArray(value) ? value : [];
+function draftArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value.filter((item): item is T => item != null && typeof item === 'object') : [];
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
 function normalizeDraft(draft: Partial<BomDraft> | null | undefined): BomDraft {
-  const safeDraft = draft ?? {};
-  const rawLines = safeArray(safeDraft.lines);
-  const rawPartsRequestLines = Array.isArray(safeDraft.partsRequestLines) ? safeDraft.partsRequestLines : rawLines;
+  const safeDraft = draft && typeof draft === 'object' ? draft : {};
+  const rawLines = draftArray<Partial<BomLine>>(safeDraft.lines);
+  const rawPartsRequestLines = draftArray<Partial<BomLine>>(safeDraft.partsRequestLines);
+  const laborEstimateSource = draftArray<DraftLaborEstimateLine>(safeDraft.laborEstimateLines);
+  const customColumnsSource = stringArray(safeDraft.customColumns);
+  const customPoColumnsSource = stringArray(safeDraft.customPoColumns);
   const lines = rawLines.map(normalizeBomLine);
-  const partsRequestLines = rawPartsRequestLines.map(normalizeBomLine);
+  const partsRequestLines = (rawPartsRequestLines.length ? rawPartsRequestLines : rawLines).map(normalizeBomLine);
   const fallbackDraft = createPrivateerDraft();
 
   return {
     ...fallbackDraft,
     ...safeDraft,
-    id: safeDraft.id || crypto.randomUUID(),
-    name: safeDraft.name || 'Untitled draft',
-    revision: safeDraft.revision || 'Draft A',
-    owner: safeDraft.owner ?? '',
-    project: safeDraft.project ?? '',
-    notes: safeDraft.notes ?? '',
-    updatedAt: safeDraft.updatedAt ?? new Date().toISOString(),
+    id: typeof safeDraft.id === 'string' && safeDraft.id.trim() ? safeDraft.id : crypto.randomUUID(),
+    name: typeof safeDraft.name === 'string' && safeDraft.name.trim() ? safeDraft.name : 'Untitled draft',
+    revision: typeof safeDraft.revision === 'string' && safeDraft.revision.trim() ? safeDraft.revision : 'Draft A',
+    owner: typeof safeDraft.owner === 'string' ? safeDraft.owner : '',
+    project: typeof safeDraft.project === 'string' ? safeDraft.project : '',
+    notes: typeof safeDraft.notes === 'string' ? safeDraft.notes : '',
+    updatedAt: typeof safeDraft.updatedAt === 'string' ? safeDraft.updatedAt : new Date().toISOString(),
     projectId: safeDraft.projectId ?? null,
     projectCode: safeDraft.projectCode ?? null,
     projectName: safeDraft.projectName ?? safeDraft.project ?? null,
@@ -794,11 +813,11 @@ function normalizeDraft(draft: Partial<BomDraft> | null | undefined): BomDraft {
     lines,
     partsRequestLines,
     savedDraftBoms: mergeDraftBoms([
-      ...safeArray(safeDraft.savedDraftBoms),
+      ...draftArray<DraftPartBom>(safeDraft.savedDraftBoms),
       ...lines.flatMap((line) => line.childDraftBoms ?? []),
       ...partsRequestLines.flatMap((line) => line.childDraftBoms ?? []),
     ]),
-    laborEstimateLines: (safeArray(safeDraft.laborEstimateLines).length ? safeArray(safeDraft.laborEstimateLines) : [newLaborEstimateLine()]).map((line) => ({
+    laborEstimateLines: (laborEstimateSource.length ? laborEstimateSource : [newLaborEstimateLine()]).map((line) => ({
       ...line,
       department: line.department || defaultDepartment,
       employeeRole: line.employeeRole ?? '',
@@ -806,7 +825,7 @@ function normalizeDraft(draft: Partial<BomDraft> | null | undefined): BomDraft {
       hoursPerPart: line.hoursPerPart ?? '',
       quantityPerPo: line.quantityPerPo ?? 1,
     })),
-    nrcRows: safeArray(safeDraft.nrcRows).map((row) => {
+    nrcRows: draftArray<NrcCostRow>(safeDraft.nrcRows).map((row) => {
       const normalized = {
         ...newNrcRow(),
         ...row,
@@ -829,13 +848,13 @@ function normalizeDraft(draft: Partial<BomDraft> | null | undefined): BomDraft {
       normalized.totalCost = nrcRowTotal(normalized);
       return normalized;
     }),
-    customLaborDepartments: safeArray(safeDraft.customLaborDepartments),
+    customLaborDepartments: stringArray(safeDraft.customLaborDepartments),
     poVisibleColumns: sanitizePoColumns(safeDraft.poVisibleColumns),
     partsRequestVisibleColumns: safeDraft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
     directLaborVisibleColumns: safeDraft.directLaborVisibleColumns ?? defaultDirectLaborColumns,
     assemblyVisibleColumns: safeDraft.assemblyVisibleColumns ?? defaultSourcingColumns,
-    customColumns: sanitizeCustomColumns([...safeArray(safeDraft.customColumns), ...safeArray(safeDraft.customPoColumns)]),
-    customPoColumns: sanitizeCustomColumns(safeArray(safeDraft.customPoColumns)),
+    customColumns: sanitizeCustomColumns([...customColumnsSource, ...customPoColumnsSource]),
+    customPoColumns: sanitizeCustomColumns(customPoColumnsSource),
     workspaceTabs: normalizeWorkspaceTabs(safeDraft.workspaceTabs),
     visibility: safeDraft.visibility === 'private' ? 'private' : 'public',
     allowPublicEdit: safeDraft.allowPublicEdit === true,
@@ -1489,7 +1508,7 @@ function laborDepartmentValue(label: string) {
 }
 
 function normalizeWorkspaceTabs(tabs?: readonly WorkspaceTabId[] | null): WorkspaceTabId[] {
-  const sourceTabs = tabs?.length ? [...tabs] : [...defaultWorkspaceTabs];
+  const sourceTabs = tabs?.length ? tabs.filter((tabId): tabId is WorkspaceTabId => typeof tabId === 'string') : [...defaultWorkspaceTabs];
   const normalized: WorkspaceTabId[] = [];
   const customLabels = new Set<string>();
 
@@ -1524,16 +1543,17 @@ function normalizeWorkspaceTabs(tabs?: readonly WorkspaceTabId[] | null): Worksp
   return normalized;
 }
 
-function uniqueColumnNames(columns: string[]) {
+function uniqueColumnNames(columns: unknown[]) {
   return columns.reduce<string[]>((result, column) => {
+    if (typeof column !== 'string') return result;
     const label = column.trim();
     if (!label || result.includes(label)) return result;
     return [...result, label];
   }, []);
 }
 
-function sanitizeCustomColumns(columns: string[]) {
-  return uniqueColumnNames(columns);
+function sanitizeCustomColumns(columns: unknown[]) {
+  return uniqueColumnNames(columns).filter((column) => !isStatusDuplicateColumn(column));
 }
 
 function loadDrafts(): BomDraft[] {
@@ -1741,8 +1761,8 @@ function createBlankDraftForTemporaryProject(projectName: string): BomDraft {
   };
 }
 
-function formatDraftUpdatedAt(value: string) {
-  const time = new Date(value);
+function formatDraftUpdatedAt(value?: string | null) {
+  const time = new Date(value ?? '');
   if (Number.isNaN(time.getTime())) return 'Unknown';
   return time.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -1945,7 +1965,8 @@ export default function DraftBOMBuilderPage() {
 
   useEffect(() => {
     if (!sharedDraftsFetched || hasLoadedSharedDrafts) return;
-    const sourceDrafts = Array.isArray(sharedDrafts) && sharedDrafts.length > 0 ? sharedDrafts : loadDrafts();
+    const sharedDraftList = Array.isArray(sharedDrafts) ? sharedDrafts : [];
+    const sourceDrafts = sharedDraftList.length > 0 ? sharedDraftList : loadDrafts();
     const normalizedDrafts = sourceDrafts.map(normalizeDraft);
     const nextDrafts = normalizedDrafts.length > 0 ? normalizedDrafts : [createPrivateerDraft()];
     const selectedDraft = nextDrafts.find((item) => item.id === selectedDraftId) ?? nextDrafts[0];

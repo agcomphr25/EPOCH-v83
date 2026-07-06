@@ -2439,11 +2439,16 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.quantity as "originalQuantity",
               COALESCE(p2_units.serialized_count, 0) as "serializedQuantity",
               COALESCE(committed_packets.committed_count, 0) as "committedQuantity",
-              GREATEST(
-                COALESCE(NULLIF(p2_units.serialized_count, 0), po.quantity)
-                  - COALESCE(committed_packets.committed_count, 0),
-                0
-              ) as "openQuantity"
+              CASE
+                WHEN COALESCE(committed_packets.committed_count, 0) > 0
+                  AND COALESCE(NULLIF(p2_units.serialized_count, 0), po.quantity) > COALESCE(committed_packets.committed_count, 0)
+                THEN GREATEST(
+                  COALESCE(NULLIF(p2_units.serialized_count, 0), po.quantity)
+                    - COALESCE(committed_packets.committed_count, 0),
+                  0
+                )
+                ELSE po.quantity
+              END as "openQuantity"
             FROM p2_production_orders po
             LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
             LEFT JOIN inventory_items inv ON (
@@ -2509,12 +2514,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                 OR LOWER(po.part_name) LIKE '%packet%'
                 OR LOWER(po.sku) LIKE '%packet%'
                 OR po.sku IN ('P706', 'P707')
-              )
-              AND GREATEST(
-                COALESCE(NULLIF(p2_units.serialized_count, 0), po.quantity)
-                  - COALESCE(committed_packets.committed_count, 0),
-                0
-              ) > 0`;
+              )`;
       
       const p2Result = showAll === 'true'
         ? await pool.query(p2Query + `

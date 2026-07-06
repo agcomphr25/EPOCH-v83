@@ -13945,7 +13945,23 @@ export const insertRoutingDocumentSchema = createInsertSchema(routingDocuments)
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
     title: z.string().min(1, 'Title is required'),
-    documentType: z.enum(['work_instruction', 'procedure', 'specification', 'reference', 'traveler_template']).default('work_instruction'),
+    documentType: z.enum([
+      'work_instruction',
+      'assembly_instruction',
+      'operator_instruction',
+      'maintenance_schedule',
+      'maintenance_instruction',
+      'inspection_form',
+      'quality_checklist',
+      'training_form',
+      'procedure',
+      'quality_procedure',
+      'spec_sheet',
+      'specification',
+      'reference',
+      'traveler_template',
+      'other',
+    ]).default('work_instruction'),
     sourceType: z.enum(['uploaded', 'generated', 'imported']).default('uploaded'),
   });
 
@@ -13960,7 +13976,23 @@ export const insertDocumentTemplateSchema = createInsertSchema(documentTemplates
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
     templateName: z.string().min(1, 'Template name is required'),
-    templateType: z.enum(['work_instruction', 'spec_sheet', 'traveler', 'mixed']),
+    templateType: z.enum([
+      'work_instruction',
+      'assembly_instruction',
+      'operator_instruction',
+      'maintenance_schedule',
+      'maintenance_instruction',
+      'inspection_form',
+      'quality_checklist',
+      'training_form',
+      'procedure',
+      'quality_procedure',
+      'spec_sheet',
+      'traveler_template',
+      'traveler',
+      'mixed',
+      'other',
+    ]),
   });
 
 export const insertTemplateFieldSchema = createInsertSchema(templateFields)
@@ -13976,7 +14008,21 @@ export const insertRoutingDocumentLinkSchema = createInsertSchema(routingDocumen
   .omit({ id: true, createdAt: true })
   .extend({
     partRoutingId: z.string().uuid('Invalid routing ID'),
-    documentType: z.enum(['work_instruction', 'spec_sheet', 'traveler_template']),
+    documentType: z.enum([
+      'work_instruction',
+      'assembly_instruction',
+      'operator_instruction',
+      'maintenance_schedule',
+      'maintenance_instruction',
+      'inspection_form',
+      'quality_checklist',
+      'training_form',
+      'procedure',
+      'quality_procedure',
+      'spec_sheet',
+      'traveler_template',
+      'other',
+    ]),
     documentId: z.string().uuid('Invalid document ID'),
   });
 
@@ -13989,7 +14035,22 @@ export const insertCertificationTaskLinkSchema = createInsertSchema(certificatio
 export const insertDocumentDistributionLogSchema = createInsertSchema(documentDistributionLogs)
   .omit({ id: true, printedAt: true })
   .extend({
-    documentType: z.enum(['work_instruction', 'spec_sheet', 'traveler']),
+    documentType: z.enum([
+      'work_instruction',
+      'assembly_instruction',
+      'operator_instruction',
+      'maintenance_schedule',
+      'maintenance_instruction',
+      'inspection_form',
+      'quality_checklist',
+      'training_form',
+      'procedure',
+      'quality_procedure',
+      'spec_sheet',
+      'traveler_template',
+      'traveler',
+      'other',
+    ]),
     documentId: z.string().uuid('Invalid document ID'),
     distributionMethod: z.enum(['print', 'email', 'digital']).default('print'),
   });

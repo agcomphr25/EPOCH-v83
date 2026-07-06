@@ -74,6 +74,47 @@ interface SpecSheet {
   createdAt: string;
 }
 
+const FORM_DOCUMENT_TYPES = [
+  { value: 'work_instruction', label: 'Work Instruction' },
+  { value: 'assembly_instruction', label: 'Assembly Instruction' },
+  { value: 'operator_instruction', label: 'Operator Instruction' },
+  { value: 'maintenance_schedule', label: 'Maintenance Schedule' },
+  { value: 'maintenance_instruction', label: 'Maintenance Instruction' },
+  { value: 'inspection_form', label: 'Inspection Form' },
+  { value: 'quality_checklist', label: 'Quality Checklist' },
+  { value: 'training_form', label: 'Training Form' },
+  { value: 'procedure', label: 'Procedure' },
+  { value: 'quality_procedure', label: 'Quality Procedure' },
+  { value: 'spec_sheet', label: 'Spec Sheet' },
+  { value: 'specification', label: 'Specification' },
+  { value: 'traveler_template', label: 'Traveler Template' },
+  { value: 'reference', label: 'Reference' },
+  { value: 'other', label: 'Other' },
+];
+
+const TEMPLATE_TYPES = [
+  { value: 'work_instruction', label: 'Work Instruction' },
+  { value: 'assembly_instruction', label: 'Assembly Instruction' },
+  { value: 'operator_instruction', label: 'Operator Instruction' },
+  { value: 'maintenance_schedule', label: 'Maintenance Schedule' },
+  { value: 'maintenance_instruction', label: 'Maintenance Instruction' },
+  { value: 'inspection_form', label: 'Inspection Form' },
+  { value: 'quality_checklist', label: 'Quality Checklist' },
+  { value: 'training_form', label: 'Training Form' },
+  { value: 'procedure', label: 'Procedure' },
+  { value: 'quality_procedure', label: 'Quality Procedure' },
+  { value: 'spec_sheet', label: 'Spec Sheet' },
+  { value: 'traveler_template', label: 'Traveler Template' },
+  { value: 'mixed', label: 'Mixed' },
+  { value: 'other', label: 'Other' },
+];
+
+function typeLabel(value: string | null | undefined) {
+  if (!value) return 'Document';
+  return [...FORM_DOCUMENT_TYPES, ...TEMPLATE_TYPES].find((t) => t.value === value)?.label
+    ?? value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function RoutingDocumentManagement() {
   const [activeTab, setActiveTab] = useState('documents');
   const [showUploadDialog, setShowUploadDialog] = useState(false);
@@ -99,6 +140,7 @@ export default function RoutingDocumentManagement() {
   const [generateForm, setGenerateForm] = useState({
     partNumber: '',
     partName: '',
+    documentType: 'work_instruction',
     templateId: '',
   });
   const [learnForm, setLearnForm] = useState({
@@ -260,7 +302,7 @@ export default function RoutingDocumentManagement() {
       });
     },
     onSuccess: () => {
-      toast({ title: 'AI Analysis Complete', description: 'Document has been analyzed and fields extracted' });
+      toast({ title: 'AI Analysis Complete', description: 'Form fields, instructions, and requirements have been extracted' });
       queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
       setShowParseDialog(false);
       setParseContent('');
@@ -271,7 +313,7 @@ export default function RoutingDocumentManagement() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: async (data: { partNumber: string; partName: string; templateId?: string; referenceDocumentIds?: string[] }) => {
+    mutationFn: async (data: { partNumber: string; partName: string; documentType: string; templateId?: string; referenceDocumentIds?: string[] }) => {
       return apiRequest('/api/routing-documents/ai-generate', {
         method: 'POST',
         body: data,
@@ -279,10 +321,10 @@ export default function RoutingDocumentManagement() {
       });
     },
     onSuccess: () => {
-      toast({ title: 'Document Generated', description: 'New document has been created from AI analysis' });
+      toast({ title: 'Form Generated', description: 'New form or instruction document has been created from AI analysis' });
       queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
       setShowGenerateDialog(false);
-      setGenerateForm({ partNumber: '', partName: '', templateId: '' });
+      setGenerateForm({ partNumber: '', partName: '', documentType: 'work_instruction', templateId: '' });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message || 'Failed to generate document', variant: 'destructive' });
@@ -303,7 +345,7 @@ export default function RoutingDocumentManagement() {
       });
     },
     onSuccess: () => {
-      toast({ title: 'Reference Document Imported', description: 'Document has been linked from the media library' });
+      toast({ title: 'Reference Imported', description: 'Reference has been linked from the media library' });
       queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
       setShowMediaLibraryPicker(false);
     },
@@ -601,12 +643,13 @@ export default function RoutingDocumentManagement() {
 
   const handleGenerate = () => {
     if (!generateForm.partNumber) {
-      toast({ title: 'Error', description: 'Please enter a part number', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Please enter a reference, part, or equipment ID', variant: 'destructive' });
       return;
     }
     generateMutation.mutate({
       partNumber: generateForm.partNumber,
       partName: generateForm.partName,
+      documentType: generateForm.documentType,
       templateId: generateForm.templateId || undefined,
       referenceDocumentIds: selectedDocuments.length > 0 ? selectedDocuments : undefined,
     });
@@ -632,6 +675,13 @@ export default function RoutingDocumentManagement() {
   const getDocTypeIcon = (type: string) => {
     switch (type) {
       case 'work_instruction': return <ClipboardList className="h-4 w-4" />;
+      case 'assembly_instruction': return <ClipboardList className="h-4 w-4" />;
+      case 'operator_instruction': return <ClipboardList className="h-4 w-4" />;
+      case 'maintenance_schedule': return <ClipboardList className="h-4 w-4" />;
+      case 'maintenance_instruction': return <ClipboardList className="h-4 w-4" />;
+      case 'inspection_form': return <CheckCircle className="h-4 w-4" />;
+      case 'quality_checklist': return <CheckCircle className="h-4 w-4" />;
+      case 'training_form': return <BookOpen className="h-4 w-4" />;
       case 'spec_sheet': return <FileSpreadsheet className="h-4 w-4" />;
       case 'traveler_template': return <BookOpen className="h-4 w-4" />;
       default: return <FileText className="h-4 w-4" />;
@@ -642,9 +692,9 @@ export default function RoutingDocumentManagement() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Routing Document Management</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Form & Document Builder</h1>
           <p className="text-muted-foreground">
-            Work instructions, spec sheets, and AI-powered document generation for part routing
+            Create work instructions, assembly instructions, operator instructions, maintenance schedules, and reusable controlled form templates
           </p>
         </div>
         <div className="flex gap-2">
@@ -658,11 +708,11 @@ export default function RoutingDocumentManagement() {
           </Button>
           <Button variant="outline" onClick={() => setShowGenerateDialog(true)}>
             <Sparkles className="h-4 w-4 mr-2" />
-            AI Generate
+            Generate Form
           </Button>
           <Button onClick={() => setShowUploadDialog(true)}>
             <Upload className="h-4 w-4 mr-2" />
-            Upload Document
+            Add Document
           </Button>
         </div>
       </div>
@@ -724,8 +774,8 @@ export default function RoutingDocumentManagement() {
         <TabsContent value="documents" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Routing Documents</CardTitle>
-              <CardDescription>Work instructions, procedures, and traveler templates</CardDescription>
+              <CardTitle>Forms & Documents</CardTitle>
+              <CardDescription>Work instructions, assembly instructions, operator instructions, maintenance schedules, procedures, and reusable form templates</CardDescription>
             </CardHeader>
             <CardContent>
               {loadingDocs ? (
@@ -762,7 +812,7 @@ export default function RoutingDocumentManagement() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{doc.documentType.replace('_', ' ')}</Badge>
+                          <Badge variant="outline">{typeLabel(doc.documentType)}</Badge>
                         </TableCell>
                         <TableCell>{doc.partNumber || '-'}</TableCell>
                         <TableCell>{doc.departmentName || '-'}</TableCell>
@@ -908,7 +958,7 @@ export default function RoutingDocumentManagement() {
                       <CardContent>
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline">{template.templateType.replace('_', ' ')}</Badge>
+                            <Badge variant="outline">{typeLabel(template.templateType)}</Badge>
                             <Badge variant="secondary">Learned from {template.learnedFromCount} docs</Badge>
                           </div>
                           <div className="text-sm text-muted-foreground">
@@ -1024,8 +1074,8 @@ export default function RoutingDocumentManagement() {
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Upload Document</DialogTitle>
-            <DialogDescription>Upload a work instruction, spec sheet, or traveler template</DialogDescription>
+            <DialogTitle>Add Form or Document</DialogTitle>
+            <DialogDescription>Upload or register a work instruction, assembly instruction, operator instruction, maintenance schedule, or reusable form template</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -1054,11 +1104,9 @@ export default function RoutingDocumentManagement() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="work_instruction">Work Instruction</SelectItem>
-                  <SelectItem value="procedure">Procedure</SelectItem>
-                  <SelectItem value="specification">Specification</SelectItem>
-                  <SelectItem value="traveler_template">Traveler Template</SelectItem>
-                  <SelectItem value="reference">Reference</SelectItem>
+                  {FORM_DOCUMENT_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1086,7 +1134,7 @@ export default function RoutingDocumentManagement() {
                 checked={uploadForm.isTemplate}
                 onCheckedChange={(checked) => setUploadForm({ ...uploadForm, isTemplate: !!checked })}
               />
-              <Label htmlFor="isTemplate">Save as template for future use</Label>
+              <Label htmlFor="isTemplate">Save as template for future forms</Label>
             </div>
           </div>
           <DialogFooter>
@@ -1108,16 +1156,16 @@ export default function RoutingDocumentManagement() {
       }}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>AI Document Analysis</DialogTitle>
+            <DialogTitle>AI Form Analysis</DialogTitle>
             <DialogDescription>
-              Upload a PDF or paste document content for AI to extract routing steps, data fields, and requirements
+              Upload a PDF or paste content for AI to extract sections, data fields, instructions, checks, schedules, and requirements
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 overflow-y-auto flex-1 pr-2">
             {selectedDocument && (
               <div className="p-3 bg-muted rounded-lg">
                 <div className="font-medium">{selectedDocument.title}</div>
-                <div className="text-sm text-muted-foreground">{selectedDocument.documentType.replace('_', ' ')}</div>
+                <div className="text-sm text-muted-foreground">{typeLabel(selectedDocument.documentType)}</div>
               </div>
             )}
             <div className="p-4 border-2 border-dashed rounded-lg text-center">
@@ -1192,27 +1240,43 @@ export default function RoutingDocumentManagement() {
       <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>AI Generate Document</DialogTitle>
+            <DialogTitle>Generate Form or Document</DialogTitle>
             <DialogDescription>
-              Generate a new document using AI based on templates and reference documents
+              Generate a new form or instruction document using a template and selected reference documents
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Part Number *</Label>
+              <Label>Reference / Part / Equipment ID *</Label>
               <Input
                 value={generateForm.partNumber}
                 onChange={(e) => setGenerateForm({ ...generateForm, partNumber: e.target.value })}
-                placeholder="e.g., AG-001"
+                placeholder="e.g., AG-001, CNC-03, Paint Booth PM"
               />
             </div>
             <div>
-              <Label>Part Name</Label>
+              <Label>Subject / Part Name</Label>
               <Input
                 value={generateForm.partName}
                 onChange={(e) => setGenerateForm({ ...generateForm, partName: e.target.value })}
-                placeholder="e.g., Carbon Fiber Stock"
+                placeholder="e.g., Carbon Fiber Stock, Weekly CNC Maintenance"
               />
+            </div>
+            <div>
+              <Label>Form / Document Type</Label>
+              <Select
+                value={generateForm.documentType}
+                onValueChange={(value) => setGenerateForm({ ...generateForm, documentType: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FORM_DOCUMENT_TYPES.filter((type) => type.value !== 'reference').map((type) => (
+                    <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Use Template (Optional)</Label>
@@ -1250,9 +1314,9 @@ export default function RoutingDocumentManagement() {
       <Dialog open={showLearnDialog} onOpenChange={setShowLearnDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Learn Template from Documents</DialogTitle>
+            <DialogTitle>Learn Template from Forms</DialogTitle>
             <DialogDescription>
-              AI will analyze the selected documents and create a reusable template
+              AI will analyze the selected documents and create a reusable form template
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1282,10 +1346,9 @@ export default function RoutingDocumentManagement() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="work_instruction">Work Instruction</SelectItem>
-                  <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
-                  <SelectItem value="traveler">Traveler</SelectItem>
-                  <SelectItem value="mixed">Mixed</SelectItem>
+                  {TEMPLATE_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1328,7 +1391,7 @@ export default function RoutingDocumentManagement() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-muted-foreground">Document Type</Label>
-                  <Badge variant="outline">{selectedDocument.documentType.replace('_', ' ')}</Badge>
+                  <Badge variant="outline">{typeLabel(selectedDocument.documentType)}</Badge>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-muted-foreground">Part Number</Label>
@@ -1643,11 +1706,9 @@ export default function RoutingDocumentManagement() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="work_instruction">Work Instruction</SelectItem>
-                  <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
-                  <SelectItem value="traveler_template">Traveler Template</SelectItem>
-                  <SelectItem value="quality_procedure">Quality Procedure</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  {FORM_DOCUMENT_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1723,12 +1784,9 @@ export default function RoutingDocumentManagement() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="work_instruction">Work Instruction</SelectItem>
-                  <SelectItem value="spec_sheet">Spec Sheet</SelectItem>
-                  <SelectItem value="traveler_template">Traveler Template</SelectItem>
-                  <SelectItem value="quality_procedure">Quality Procedure</SelectItem>
-                  <SelectItem value="mixed">Mixed</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  {TEMPLATE_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1770,7 +1828,7 @@ export default function RoutingDocumentManagement() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <Badge variant="outline">{selectedTemplate?.templateType?.replace('_', ' ')}</Badge>
+              <Badge variant="outline">{typeLabel(selectedTemplate?.templateType)}</Badge>
               <Badge variant="secondary">Learned from {selectedTemplate?.learnedFromCount || 0} docs</Badge>
             </div>
             {selectedTemplate?.sections && selectedTemplate.sections.length > 0 && (

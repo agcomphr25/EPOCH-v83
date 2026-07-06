@@ -733,6 +733,13 @@ export default function Navigation() {
         'Unified document repository with advanced tagging and organization',
     },
     {
+      path: '/forms/document-builder',
+      label: 'Form & Document Builder',
+      icon: ClipboardList,
+      description:
+        'Create work instructions, assembly instructions, operator instructions, maintenance schedules, and reusable form templates',
+    },
+    {
       path: '/signature-workflow',
       label: 'Signature Routing',
       icon: FileSignature,

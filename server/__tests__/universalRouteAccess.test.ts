@@ -19,6 +19,7 @@ describe('hasRouteAccess — universal routes bypass explicit permission entries
       '/help',
       '/pdf-signature-tool',
       '/routing-document-management',
+      '/forms/document-builder',
       '/tickets',
       '/quick-notes',
       '/training',

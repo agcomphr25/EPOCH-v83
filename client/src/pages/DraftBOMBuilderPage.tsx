@@ -291,6 +291,7 @@ const VENDOR_PO_HANDOFF_KEY = 'epoch:draft-bom-vendor-po-handoff';
 const DRAFT_TAB_HANDOFF_KEY = 'epoch:draft-builder-tab-handoff';
 const PRIVATEER_DRAFT_ID = 'privateer';
 const NEW_DRAFT_VALUE = '__new_draft__';
+const UNASSIGNED_PROJECT_VALUE = '__unassigned_project__';
 const LEGACY_R_AND_D_PROJECT_VALUE = '__r_and_d__';
 const P2_PROJECT_VALUE_PREFIX = 'p2:';
 const RD_PROJECT_VALUE_PREFIX = 'rd:';
@@ -1792,10 +1793,11 @@ export default function DraftBOMBuilderPage() {
         ? `${RD_PROJECT_VALUE_PREFIX}${draft.projectId}`
         : draft.projectType === 'R_AND_D'
           ? LEGACY_R_AND_D_PROJECT_VALUE
-          : '';
+          : UNASSIGNED_PROJECT_VALUE;
   const canEditActiveDraft = draft.canEdit !== false;
   const canManageActiveDraftAccess = draft.canManageAccess !== false;
   const effectiveEditMode = isEditMode && canEditActiveDraft;
+  const canChangeActiveProject = canEditActiveDraft ? isEditMode : !draft.projectType;
 
   const draftPoLines = draft.lines;
   const partsRequestLines = draft.partsRequestLines ?? [];
@@ -2586,7 +2588,58 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
+  async function clearPartsRequestTab() {
+    if (!canEditActiveDraft) {
+      toast({
+        title: 'View-only draft',
+        description: 'The creator has not allowed shared editing for this draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(`Clear the Parts/request tab for "${draft.name} - ${draft.revision}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const clearedDraft = normalizeDraft({
+      ...draft,
+      updatedAt: new Date().toISOString(),
+      partsRequestLines: [newLine()],
+    });
+
+    setPartsRequestDescription('');
+    setActiveWorkspaceTab('parts-request');
+    setDraft(clearedDraft);
+
+    const shouldPersist = !!selectedDraftId && savedDrafts.some((item) => item.id === draft.id);
+    if (shouldPersist) {
+      const nextDrafts = savedDrafts.map((item) => (item.id === draft.id ? clearedDraft : item));
+      saveDrafts(nextDrafts);
+      setSavedDrafts(nextDrafts);
+      try {
+        const savedDraft = normalizeDraft(await saveSharedDraft(clearedDraft));
+        queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+          savedDraftListWith(current.map(normalizeDraft), savedDraft),
+        );
+      } catch (error) {
+        console.error('Failed to save cleared Parts/request tab:', error);
+        toast({
+          title: 'Parts/request cleared locally',
+          description: 'The shared draft save failed, so this browser kept the cleared tab locally.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    toast({
+      title: 'Parts/request cleared',
+      description: shouldPersist ? 'The Parts/request tab was cleared and saved.' : 'The Parts/request tab was cleared in this workspace.',
+    });
+  }
+
   function updateDraftProject(value: string) {
+    if (value === UNASSIGNED_PROJECT_VALUE) return;
     const selectedProject = combinedProjectOptions.find((project) => project.value === value);
     if (!selectedProject) return;
 
@@ -2599,6 +2652,62 @@ export default function DraftBOMBuilderPage() {
 
     setSelectedDraftId('');
     applyDraftSelection(createBlankDraftForProject(selectedProject));
+  }
+
+  async function deleteDraftFolder(group: DraftProjectGroup) {
+    const protectedDraft = group.drafts.find((item) => item.id === PRIVATEER_DRAFT_ID);
+    if (protectedDraft) {
+      toast({
+        title: 'Privateer folder is locked',
+        description: 'The built-in Privateer seed draft stays available as a reference.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const lockedDraft = group.drafts.find((item) => item.canManageAccess === false);
+    if (lockedDraft) {
+      toast({
+        title: 'Creator access required',
+        description: `Only the creator can delete "${lockedDraft.name}" or its project folder.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete draft folder "${group.label}" and ${group.drafts.length} saved draft${group.drafts.length === 1 ? '' : 's'}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    const draftIds = new Set(group.drafts.map((item) => item.id));
+
+    try {
+      for (const item of group.drafts) {
+        await deleteSharedDraft(item.id);
+      }
+
+      const remainingDrafts = savedDrafts.filter((item) => !draftIds.has(item.id));
+      const fallbackDraft = remainingDrafts[0] ?? createPrivateerDraft();
+
+      queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+        current.filter((item) => !draftIds.has(item.id)),
+      );
+      saveDrafts(remainingDrafts);
+      setSavedDrafts(remainingDrafts);
+
+      if (draftIds.has(draft.id)) {
+        applyDraftSelection(fallbackDraft);
+      }
+
+      toast({
+        title: 'Draft folder deleted',
+        description: `${group.label} and ${group.drafts.length} saved draft${group.drafts.length === 1 ? '' : 's'} were removed.`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The draft folder could not be deleted.';
+      toast({ title: 'Folder delete failed', description: message, variant: 'destructive' });
+    }
   }
 
   function startBlankDraft() {
@@ -3135,10 +3244,22 @@ export default function DraftBOMBuilderPage() {
                           <Badge variant="outline">{group.drafts.length} draft{group.drafts.length === 1 ? '' : 's'}</Badge>
                         </div>
                       </div>
-                      <Button type="button" variant="outline" size="sm" onClick={() => openDraftFromLibrary(group.drafts[0])}>
-                        <FolderOpen className="mr-2 h-4 w-4" />
-                        Open latest
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => openDraftFromLibrary(group.drafts[0])}>
+                          <FolderOpen className="mr-2 h-4 w-4" />
+                          Open latest
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteDraftFolder(group)}
+                          className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                          title="Delete draft folder"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3 p-4">
@@ -3220,11 +3341,16 @@ export default function DraftBOMBuilderPage() {
           <div className="flex flex-wrap gap-2">
             <div className="flex min-w-[280px] flex-col gap-1.5">
               <Label htmlFor="active-project">Project</Label>
-              <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!effectiveEditMode}>
+              <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!canChangeActiveProject}>
                 <SelectTrigger id="active-project" className="bg-white">
                   <SelectValue placeholder="Select an R&D or P2 project" />
                 </SelectTrigger>
                 <SelectContent>
+                  {!draft.projectType ? (
+                    <SelectItem value={UNASSIGNED_PROJECT_VALUE} disabled>
+                      Unassigned draft
+                    </SelectItem>
+                  ) : null}
                   {draft.projectType === 'R_AND_D' && !draft.projectId ? (
                     <SelectItem value={LEGACY_R_AND_D_PROJECT_VALUE}>R&D</SelectItem>
                   ) : null}
@@ -3342,11 +3468,16 @@ export default function DraftBOMBuilderPage() {
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="draft-project">Project</Label>
-                    <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!effectiveEditMode}>
+                    <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!canChangeActiveProject}>
                       <SelectTrigger id="draft-project">
                         <SelectValue placeholder={draft.project || 'Select an R&D or P2 project'} />
                       </SelectTrigger>
                       <SelectContent>
+                        {!draft.projectType ? (
+                          <SelectItem value={UNASSIGNED_PROJECT_VALUE} disabled>
+                            Unassigned draft
+                          </SelectItem>
+                        ) : null}
                         {draft.projectType === 'R_AND_D' && !draft.projectId ? (
                           <SelectItem value={LEGACY_R_AND_D_PROJECT_VALUE}>R&D</SelectItem>
                         ) : null}
@@ -3543,6 +3674,16 @@ export default function DraftBOMBuilderPage() {
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
                     Clear and start over
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={clearPartsRequestTab}
+                    disabled={!effectiveEditMode}
+                    className="border-red-300 bg-white text-red-700 hover:bg-red-100 hover:text-red-800"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear Parts/request tab
                   </Button>
                   <Button
                     type="button"

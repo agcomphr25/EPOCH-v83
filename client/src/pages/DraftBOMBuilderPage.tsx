@@ -1424,24 +1424,23 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
 
       const inventoryMatch = linkInventoryMatches ? findInventoryMatch(importedPartNumber, inventoryItems) : null;
       if (inventoryMatch) linkedCount += 1;
-      const fallbackStatus = inventoryMatch ? 'Needs Review' : 'Needs Quote';
       const spreadsheetLabel = `Imported spreadsheet row ${rowIndex + 1}`;
 
       return {
         ...newLine(),
-        action: inventoryMatch ? 'Order / Quote' : 'Review imported line',
-        category: inventoryMatch ? 'Hardware/Misc.' : 'Imported Spreadsheet',
-        description: inventoryMatch ? inventoryDescription(inventoryMatch) : spreadsheetLabel,
-        agPartNumber: inventoryMatch?.agPartNumber || '',
-        supplier: inventoryMatch?.source || inventoryMatch?.supplier || '',
-        supplierItemId: inventoryMatch?.supplierPartNumber || '',
-        manufacturer: inventoryMatch?.manufacturer || '',
-        unit: inventoryMatch?.usageUnit || inventoryMatch?.unit || '',
-        unitCost: Number.isFinite(Number(inventoryMatch?.costPer)) ? Number(inventoryMatch?.costPer) : '',
+        action: 'Review imported line',
+        category: 'Imported Spreadsheet',
+        description: spreadsheetLabel,
+        agPartNumber: '',
+        supplier: '',
+        supplierItemId: '',
+        manufacturer: '',
+        unit: '',
+        unitCost: '',
         actualCost: '',
-        qtyNeeded: inventoryMatch ? 1 : '',
+        qtyNeeded: '',
         service: false,
-        status: fallbackStatus,
+        status: 'Needs Review',
         targetNeedDate: '',
         note: inventoryMatch
           ? `CSV import linked to inventory item #${inventoryMatch.id}`
@@ -2369,7 +2368,7 @@ export default function DraftBOMBuilderPage() {
     }
 
     setCustomColumns((current) => sanitizeCustomColumns([...current, ...result.customColumns]));
-    const sourceColumnMode = !linkInventoryMatches && result.customColumns.length > 0;
+    const sourceColumnMode = result.customColumns.length > 0;
     if (sourceColumnMode) setVisiblePartsRequestColumns([]);
     setDraft((current) => ({
       ...current,

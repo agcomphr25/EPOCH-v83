@@ -253,6 +253,23 @@ export default function RoutingDocumentManagement() {
       const base64Content = btoa(
         new Uint8Array(fileBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
       );
+
+      const isPdfUpload = data.file.type === 'application/pdf' || data.file.name.toLowerCase().endsWith('.pdf');
+      if (data.isTemplate && isPdfUpload) {
+        return apiRequest('/api/routing-documents/upload-template-to-register', {
+          method: 'POST',
+          body: {
+            fileContent: base64Content,
+            fileName: data.file.name,
+            mimeType: data.file.type,
+            title: data.title || data.file.name,
+            partNumber: data.partNumber,
+            departmentName: data.departmentName,
+            documentType: data.documentType,
+          },
+          timeout: 120000,
+        });
+      }
       
       // Upload with content extraction and optional auto-analysis
       return apiRequest('/api/routing-documents/upload-with-extraction', {
@@ -274,8 +291,12 @@ export default function RoutingDocumentManagement() {
     onSuccess: (response: any, variables) => {
       const hasAiAnalysis = response?.aiAnalysis && Object.keys(response.aiAnalysis).length > 0;
       const extractedLength = response?.extractedLength || 0;
+      const controlledNumber = response?.controlledDocument?.documentNumber ?? response?.controlledDocument?.document_number;
       
       let message = variables.file ? 'Document uploaded successfully' : 'Document created successfully';
+      if (controlledNumber) {
+        message = `Reusable template registered as ${controlledNumber}`;
+      }
       if (extractedLength > 0) {
         message += `. Extracted ${extractedLength} characters`;
       }
@@ -285,6 +306,11 @@ export default function RoutingDocumentManagement() {
       
       toast({ title: 'Success', description: message });
       queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/templates/list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
+      if (controlledNumber) {
+        setActiveTab('templates');
+      }
       setShowUploadDialog(false);
       setUploadForm({ title: '', partNumber: '', departmentName: '', documentType: 'work_instruction', isTemplate: false, file: null });
     },
@@ -555,6 +581,12 @@ export default function RoutingDocumentManagement() {
     // Either file or title is required
     if (!uploadForm.file && !uploadForm.title.trim()) {
       toast({ title: 'Error', description: 'Please enter a title or select a file', variant: 'destructive' });
+      return;
+    }
+
+    const uploadIsPdf = uploadForm.file?.type === 'application/pdf' || uploadForm.file?.name.toLowerCase().endsWith('.pdf');
+    if (uploadForm.isTemplate && uploadForm.file && !uploadIsPdf) {
+      toast({ title: 'PDF Required', description: 'Reusable controlled templates must be uploaded as PDF files', variant: 'destructive' });
       return;
     }
     
@@ -1134,7 +1166,7 @@ export default function RoutingDocumentManagement() {
                 checked={uploadForm.isTemplate}
                 onCheckedChange={(checked) => setUploadForm({ ...uploadForm, isTemplate: !!checked })}
               />
-              <Label htmlFor="isTemplate">Save as template for future forms</Label>
+              <Label htmlFor="isTemplate">Create reusable template and register in Master Document List</Label>
             </div>
           </div>
           <DialogFooter>

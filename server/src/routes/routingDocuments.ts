@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
 import { 
+  controlledDocuments,
+  documentVersionHistory,
   routingDocuments, 
   specSheets, 
   documentTemplates, 
@@ -24,6 +26,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 async function resolveFileToBuffer(fileUrl: string): Promise<Buffer | null> {
+  if (fileUrl.startsWith('/assets/documents/')) {
+    const filename = fileUrl.replace('/assets/documents/', '');
+    const localPath = path.join(process.cwd(), 'server/src/assets/documents', filename);
+    if (fs.existsSync(localPath)) {
+      console.log(`[FileResolve] Reading controlled document asset: ${localPath}`);
+      return fs.readFileSync(localPath);
+    }
+    return null;
+  }
   if (fileUrl.startsWith('/api/media/file/')) {
     const filename = fileUrl.replace('/api/media/file/', '');
     const localPath = path.join(process.cwd(), 'uploads', 'media-library', filename);
@@ -99,6 +110,82 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
 }
 
 const router = Router();
+
+const CONTROLLED_TEMPLATE_PREFIX = 'FDT';
+
+function sanitizeFileName(fileName: string): string {
+  const ext = path.extname(fileName) || '.pdf';
+  const base = path.basename(fileName, ext)
+    .replace(/[^a-z0-9-_ ]/gi, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .slice(0, 80) || 'uploaded-document';
+  return `${base}-${Date.now()}${ext.toLowerCase()}`;
+}
+
+function normalizeTemplateField(field: any, index: number) {
+  const label = String(field?.fieldLabel || field?.label || field?.fieldName || `Field ${index + 1}`).trim();
+  const rawName = String(field?.fieldName || label)
+    .trim()
+    .replace(/[^a-z0-9]+/gi, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+  const allowedTypes = new Set(['text', 'number', 'date', 'signature', 'barcode', 'checkbox']);
+
+  return {
+    fieldName: rawName || `field_${index + 1}`,
+    fieldLabel: label,
+    fieldType: allowedTypes.has(field?.fieldType) ? field.fieldType : 'text',
+    isRequired: Boolean(field?.isRequired),
+    isUniquePerSerial: Boolean(field?.isUniquePerSerial),
+    defaultValue: field?.defaultValue ?? null,
+    sectionName: field?.sectionName || field?.department || null,
+    sortOrder: Number.isFinite(Number(field?.sortOrder)) ? Number(field.sortOrder) : index,
+    aiSuggested: true,
+  };
+}
+
+function fallbackTemplateFields(documentType: string) {
+  const baseFields = [
+    { fieldName: 'completed_by', fieldLabel: 'Completed By', fieldType: 'signature', isRequired: true, sectionName: 'Completion', sortOrder: 0 },
+    { fieldName: 'completed_at', fieldLabel: 'Completed Date', fieldType: 'date', isRequired: true, sectionName: 'Completion', sortOrder: 1 },
+    { fieldName: 'revision', fieldLabel: 'Revision', fieldType: 'text', isRequired: false, sectionName: 'Document Control', sortOrder: 2 },
+    { fieldName: 'notes', fieldLabel: 'Notes', fieldType: 'text', isRequired: false, sectionName: 'Notes', sortOrder: 3 },
+  ];
+
+  if (documentType.includes('inspection') || documentType.includes('quality')) {
+    baseFields.splice(2, 0, { fieldName: 'inspection_result', fieldLabel: 'Inspection Result', fieldType: 'text', isRequired: true, sectionName: 'Quality', sortOrder: 2 });
+  }
+
+  return baseFields.map(normalizeTemplateField);
+}
+
+async function generateControlledTemplateNumber() {
+  const year = new Date().getFullYear();
+  const prefix = `${CONTROLLED_TEMPLATE_PREFIX}-${year}-`;
+  const result = await db.execute(sql`
+    SELECT document_number
+    FROM controlled_documents
+    WHERE document_number LIKE ${`${prefix}%`}
+    ORDER BY document_number DESC
+    LIMIT 1
+  `);
+  const rows = ((result as any)?.rows || result || []) as any[];
+  const lastSequence = rows
+    .map((row) => Number(String(row.document_number || '').replace(prefix, '')))
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => b - a)[0] || 0;
+
+  return `${prefix}${String(lastSequence + 1).padStart(3, '0')}`;
+}
+
+async function saveControlledDocumentFile(fileName: string, fileBuffer: Buffer) {
+  const uploadDir = path.join(process.cwd(), 'server/src/assets/documents');
+  fs.mkdirSync(uploadDir, { recursive: true });
+  const storedFileName = sanitizeFileName(fileName);
+  fs.writeFileSync(path.join(uploadDir, storedFileName), fileBuffer);
+  return `/assets/documents/${storedFileName}`;
+}
 
 // Helper to format UUID bytes to string if needed
 function formatUuid(value: any): string {
@@ -697,6 +784,11 @@ router.post('/extract-text', async (req: Request, res: Response) => {
     // Decode base64 file content
     const fileBuffer = Buffer.from(fileContent, 'base64');
     let extractedText = '';
+    let fileUrl: string | null = null;
+
+    if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+      fileUrl = await saveControlledDocumentFile(fileName, fileBuffer);
+    }
     
     // Extract text based on file type
     if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
@@ -836,6 +928,7 @@ router.post('/upload-with-extraction', async (req: Request, res: Response) => {
       departmentName: departmentName || null,
       documentType: documentType || 'work_instruction',
       sourceType: 'uploaded',
+      fileUrl,
       fileName: fileName,
       fileType: mimeType || 'application/octet-stream',
       fileSize: fileBuffer.length,
@@ -879,6 +972,7 @@ router.post('/upload-with-extraction', async (req: Request, res: Response) => {
     
     res.status(201).json({
       document,
+      fileUrl,
       extractedText: extractedText.substring(0, 1000) + (extractedText.length > 1000 ? '...' : ''),
       extractedLength: extractedText.length,
       aiAnalysis: aiResult,
@@ -886,6 +980,152 @@ router.post('/upload-with-extraction', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error uploading document with extraction:', error);
     res.status(500).json({ error: 'Failed to upload document' });
+  }
+});
+
+// Upload a PDF, turn it into a reusable fillable template, and register it in the Master Document Register
+router.post('/upload-template-to-register', async (req: Request, res: Response) => {
+  try {
+    const { fileContent, fileName, mimeType, title, partNumber, departmentName, documentType } = req.body;
+    const user = (req as any).user;
+
+    if (!fileContent || !fileName) {
+      return res.status(400).json({ error: 'File content and fileName are required' });
+    }
+
+    const isPdf = mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      return res.status(400).json({ error: 'Reusable controlled templates must be uploaded as PDF files' });
+    }
+
+    const fileBuffer = Buffer.from(fileContent, 'base64');
+    const finalTitle = String(title || fileName.replace(/\.[^/.]+$/, '')).trim();
+    const finalDocumentType = String(documentType || 'form_template').trim();
+    const finalDepartment = String(departmentName || 'Quality').trim();
+    const fileUrl = await saveControlledDocumentFile(fileName, fileBuffer);
+    const extractedText = await extractPdfText(fileBuffer);
+
+    let aiResult: any = null;
+    if (extractedText.trim()) {
+      try {
+        const systemPrompt = COMPOSITE_ANALYSIS_PROMPT + COMPOSITE_ANALYSIS_JSON_SCHEMA;
+        const response = await getOpenAI().chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Create a reusable fillable template from this controlled form or document. Extract only fields, sections, checks, signatures, and requirements that are visible in the source text.\n\nDocument Title: ${finalTitle}\n\nDOCUMENT TEXT:\n${extractedText.substring(0, 50000)}` }
+          ],
+          response_format: { type: 'json_object' },
+          max_completion_tokens: 4096,
+        });
+        aiResult = JSON.parse(response.choices[0]?.message?.content || '{}');
+      } catch (aiError) {
+        console.error('[Registered Template Upload] AI analysis failed, creating fallback template:', aiError);
+      }
+    }
+
+    const parsedFields = Array.isArray(aiResult?.dataFields) ? aiResult.dataFields : [];
+    const normalizedFields = parsedFields.length > 0
+      ? parsedFields.map(normalizeTemplateField)
+      : fallbackTemplateFields(finalDocumentType);
+    const templateSections = Array.isArray(aiResult?.routingSteps)
+      ? aiResult.routingSteps.map((step: any, index: number) => ({
+          name: step.department || step.operation || `Section ${index + 1}`,
+          description: step.description || step.operation || '',
+          order: Number(step.stepNumber) || index + 1,
+        }))
+      : Array.from(new Set(normalizedFields.map((field) => field.sectionName).filter(Boolean))).map((name, index) => ({
+          name,
+          description: '',
+          order: index + 1,
+        }));
+    const documentNumber = await generateControlledTemplateNumber();
+    const createdBy = user?.username || 'system';
+    const expirationDate = new Date();
+    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+
+    const [routingDocument] = await db.insert(routingDocuments).values({
+      title: finalTitle,
+      partNumber: partNumber || null,
+      departmentName: finalDepartment,
+      documentType: finalDocumentType,
+      sourceType: 'uploaded',
+      fileUrl,
+      fileName,
+      fileType: mimeType || 'application/pdf',
+      fileSize: fileBuffer.length,
+      extractedText: extractedText || null,
+      aiExtractedContent: aiResult || null,
+      aiExtractedFields: normalizedFields,
+      aiProcessedAt: aiResult ? new Date() : null,
+      description: `Reusable controlled template ${documentNumber}`,
+      isTemplate: true,
+      createdBy,
+    }).returning();
+
+    const [template] = await db.insert(documentTemplates).values({
+      templateName: finalTitle,
+      templateType: finalDocumentType,
+      description: `Controlled template ${documentNumber} created from ${fileName}`,
+      sourceDocumentIds: [routingDocument.id],
+      learnedFromCount: 1,
+      structure: {
+        source: 'pdf_upload',
+        controlledDocumentNumber: documentNumber,
+        sourceFileName: fileName,
+      },
+      sections: templateSections,
+      defaultFields: normalizedFields,
+      aiGeneratedPrompt: aiResult ? 'Generate a fillable form using the extracted controlled-template fields and source document structure.' : null,
+      createdBy,
+    }).returning();
+
+    for (const field of normalizedFields) {
+      await db.insert(templateFields).values({
+        ...field,
+        templateId: template.id,
+      });
+    }
+
+    const [controlledDocument] = await db.insert(controlledDocuments).values({
+      documentNumber,
+      documentName: finalTitle,
+      documentType: finalDocumentType,
+      department: finalDepartment,
+      category: 'Form & Document Builder Template',
+      description: `Reusable fillable template created from uploaded PDF ${fileName}`,
+      currentVersion: '1.0',
+      status: 'pending',
+      retentionLength: 'controlled',
+      documentOwner: createdBy,
+      filePath: fileUrl,
+      createdBy,
+      expirationDate: expirationDate.toISOString().split('T')[0],
+    }).returning();
+
+    await db.insert(documentVersionHistory).values({
+      documentId: controlledDocument.id,
+      versionNumber: '1.0',
+      changeDescription: 'Initial controlled template imported from Form & Document Builder',
+      changeType: 'major',
+      filePath: fileUrl,
+      status: 'pending',
+      createdBy,
+      expirationDate: expirationDate.toISOString().split('T')[0],
+    });
+
+    res.status(201).json({
+      document: routingDocument,
+      template,
+      controlledDocument,
+      fields: normalizedFields,
+      extractedLength: extractedText.length,
+      aiAnalysis: aiResult,
+      message: `Template registered as ${documentNumber}`,
+    });
+  } catch (error) {
+    console.error('Error uploading registered template:', error);
+    res.status(500).json({ error: 'Failed to upload and register reusable template' });
   }
 });
 

@@ -13,6 +13,7 @@ import {
   PackageCheck,
   Pencil,
   Plus,
+  Trash2,
   UserCheck,
 } from 'lucide-react';
 
@@ -147,6 +148,7 @@ interface RDProject {
   signoffRequired: boolean;
   signoffUserId: string;
   draftTabIds: string[];
+  deletedDraftTabIds?: string[];
   description: string;
 }
 
@@ -500,6 +502,7 @@ function getDraftTabs(records: DraftBomRecord[]): DraftBuilderTab[] {
 }
 
 function isDraftLinkedToProject(project: RDProject, draft: DraftBomRecord) {
+  if (project.deletedDraftTabIds?.includes(draft.id)) return false;
   const projectName = normalizedProjectKey(project.projectName);
   const draftProjectValues = [
     draft.projectName,
@@ -531,7 +534,10 @@ function getDraftTabsForProject(
   const linkedIds = new Set(linkedRecords.map((draft) => draft.id));
   const linkedRecordTabs = linkedRecords.map(draftRecordToTab);
   const manuallyAttachedTabs = allTabs.filter(
-    (tab) => project.draftTabIds.includes(tab.id) && !linkedIds.has(tab.id)
+    (tab) =>
+      project.draftTabIds.includes(tab.id) &&
+      !project.deletedDraftTabIds?.includes(tab.id) &&
+      !linkedIds.has(tab.id)
   );
   return [...linkedRecordTabs, ...manuallyAttachedTabs];
 }
@@ -881,6 +887,9 @@ export default function RDProjectsPage() {
       signoffRequired: form.signoffRequired,
       signoffUserId: form.signoffRequired ? form.signoffUserId : '',
       draftTabIds: [...form.draftTabIds],
+      deletedDraftTabIds: (editingProject?.deletedDraftTabIds ?? []).filter(
+        (id) => !form.draftTabIds.includes(id)
+      ),
       status: editingProject?.status ?? 'draft',
     };
     persistProject(project);
@@ -894,6 +903,43 @@ export default function RDProjectsPage() {
     const project = projects.find((item) => item.id === projectId);
     if (!project) return;
     persistProject({ ...project, status: active ? 'active' : 'draft' });
+  };
+
+  const deleteDraftTabFromProject = (project: RDProject, tabId: string) => {
+    const confirmed = window.confirm(
+      'Delete this file from the R&D project? The Draft Builder record itself will stay available.'
+    );
+    if (!confirmed) return;
+
+    const nextProject: RDProject = {
+      ...project,
+      draftTabIds: project.draftTabIds.filter((id) => id !== tabId),
+      deletedDraftTabIds: Array.from(
+        new Set([...(project.deletedDraftTabIds ?? []), tabId])
+      ),
+    };
+    persistProject(nextProject);
+
+    const linkedDraft = draftRecords.find((draft) => draft.id === tabId);
+    if (!linkedDraft) return;
+
+    const unlinkedDraft = unlinkDraftRecordFromProject(linkedDraft, project);
+    if (unlinkedDraft === linkedDraft) return;
+
+    setLocalDraftRecords((current) =>
+      mergeDraftRecords(current, [unlinkedDraft])
+    );
+    queryClient.setQueryData<DraftBomRecord[]>(
+      ['/api/draft-bom-drafts'],
+      (current = []) => mergeDraftRecords(current, [unlinkedDraft])
+    );
+    saveSharedDraftRecord(unlinkedDraft)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['/api/draft-bom-drafts'] });
+      })
+      .catch((error) => {
+        console.error('Failed to unlink deleted Draft Builder tab:', error);
+      });
   };
 
   const toggleDraftTab = (tabId: string, checked?: boolean) => {
@@ -1232,6 +1278,20 @@ export default function RDProjectsPage() {
                                     <Badge variant="outline">
                                       {tab.partCount} parts
                                     </Badge>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      aria-label={`Delete ${tab.name} from project`}
+                                      onClick={() =>
+                                        deleteDraftTabFromProject(
+                                          selectedProject,
+                                          tab.id
+                                        )
+                                      }
+                                    >
+                                      <Trash2 className="h-4 w-4 text-red-600" />
+                                    </Button>
                                   </div>
                                 </div>
                               ))}
@@ -1263,13 +1323,32 @@ export default function RDProjectsPage() {
                           selectedDraftTabs.map((tab) => (
                             <Card key={tab.id}>
                               <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-base">
-                                  <Boxes className="h-4 w-4 text-cyan-700" />
-                                  {tab.name}
-                                </CardTitle>
-                                <CardDescription>
-                                  {tab.partCount} parts, updated {tab.updatedAt}
-                                </CardDescription>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                      <Boxes className="h-4 w-4 text-cyan-700" />
+                                      {tab.name}
+                                    </CardTitle>
+                                    <CardDescription>
+                                      {tab.partCount} parts, updated{' '}
+                                      {tab.updatedAt}
+                                    </CardDescription>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`Delete ${tab.name} from project`}
+                                    onClick={() =>
+                                      deleteDraftTabFromProject(
+                                        selectedProject,
+                                        tab.id
+                                      )
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                </div>
                               </CardHeader>
                             </Card>
                           ))

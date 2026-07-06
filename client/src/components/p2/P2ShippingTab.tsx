@@ -50,6 +50,12 @@ type SerializedUnit = {
   partName: string;
   poNumber: string;
   poId: number;
+  rawPoNumber?: string;
+  rawPoId?: number;
+  displayPoNumber?: string;
+  displayPoId?: number;
+  currentRevisionPoNumber?: string;
+  currentRevisionPoId?: number;
   poItemId: number;
   customerName: string;
   customerId: string;
@@ -136,7 +142,12 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   });
 
   const shippingUnits = selectedPOIds.length > 0
-    ? shippingUnitsRaw.filter((u) => selectedPOIds.includes(u.poId))
+    ? shippingUnitsRaw.filter((u) =>
+      selectedPOIds.includes(u.poId) ||
+      (u.rawPoId !== undefined && selectedPOIds.includes(u.rawPoId)) ||
+      (u.displayPoId !== undefined && selectedPOIds.includes(u.displayPoId)) ||
+      (u.currentRevisionPoId !== undefined && selectedPOIds.includes(u.currentRevisionPoId))
+    )
     : shippingUnitsRaw;
 
   type ExistingShipmentRow = {
@@ -164,7 +175,10 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   const poIdToNumber = useMemo(() => {
     const map: Record<number, string> = {};
     for (const u of shippingUnits) {
-      if (u.poId && u.poNumber) map[u.poId] = u.poNumber;
+      const displayNumber = u.displayPoNumber || u.poNumber;
+      for (const poId of [u.poId, u.rawPoId, u.displayPoId, u.currentRevisionPoId]) {
+        if (poId && displayNumber) map[poId] = displayNumber;
+      }
     }
     return map;
   }, [shippingUnits]);
@@ -216,11 +230,11 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   const poGroups = useMemo(() => {
     const groups: Record<string, POGroup> = {};
     for (const unit of shippingUnits) {
-      const key = unit.poNumber;
+      const key = unit.displayPoNumber || unit.poNumber;
       if (!groups[key]) {
         groups[key] = {
-          poNumber: unit.poNumber,
-          poId: unit.poId,
+          poNumber: key,
+          poId: unit.displayPoId || unit.currentRevisionPoId || unit.poId,
           customerName: unit.customerName,
           units: [],
           totalUnits: 0,
@@ -259,7 +273,9 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           (u) =>
             u.barcode.toLowerCase().includes(term) ||
             u.serialNumber.toLowerCase().includes(term) ||
-            u.partNumber.toLowerCase().includes(term)
+            u.partNumber.toLowerCase().includes(term) ||
+            (u.rawPoNumber ?? '').toLowerCase().includes(term) ||
+            (u.currentRevisionPoNumber ?? '').toLowerCase().includes(term)
         )
     );
   }, [poGroups, searchTerm]);
@@ -285,14 +301,17 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   // Auto-select and open modal when navigated here from the dashboard with a ?po= param
   useEffect(() => {
     if (!initialPO || autoTriggered.current || shippingUnits.length === 0) return;
+    const matchesInitialPO = (u: SerializedUnit) =>
+      [u.poNumber, u.rawPoNumber, u.displayPoNumber, u.currentRevisionPoNumber].some((po) => po === initialPO);
     const readyForPO = shippingUnits.filter(
-      (u) => u.poNumber === initialPO &&
+      (u) => matchesInitialPO(u) &&
              u.status === 'COMPLETED' &&
              !!(u.finalizedAt && u.sku && u.drawingName)
     );
     if (readyForPO.length === 0) return;
+    const displayPO = readyForPO[0]?.displayPoNumber || readyForPO[0]?.poNumber || initialPO;
     autoTriggered.current = true;
-    setExpandedPO(initialPO);
+    setExpandedPO(displayPO);
 
     // If specific unit IDs were passed via ?units=, pre-select only those; otherwise select all ready units
     const preselectedIds = initialUnits ? new Set(initialUnits.split(',').map((s) => s.trim()).filter(Boolean)) : null;
@@ -305,9 +324,9 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
       return;
     }
 
-    setSelectedSerials((prev) => ({ ...prev, [initialPO]: new Set(unitsToShip.map((u) => u.id)) }));
+    setSelectedSerials((prev) => ({ ...prev, [displayPO]: new Set(unitsToShip.map((u) => u.id)) }));
     setSummaryModalSerials(unitsToShip);
-    setSummaryModalPO(initialPO);
+    setSummaryModalPO(displayPO);
   }, [initialPO, initialUnits, shippingUnits]);
 
   const finalizeMutation = useMutation({

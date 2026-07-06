@@ -8,6 +8,14 @@ const router = Router();
 
 const FINALIZATION_DEPARTMENTS = ['Final QC', 'Shipping QC', 'Shipping', 'COMPLETED'];
 
+type P2PoFamilyDisplay = {
+  po_id: number;
+  display_po_id: number;
+  display_po_number: string;
+  current_po_id: number;
+  current_po_number: string;
+};
+
 router.get('/', async (req, res) => {
   try {
     const poItemIdRaw = req.query.poItemId;
@@ -75,7 +83,43 @@ router.get('/shipping-queue', async (req, res) => {
     // Exclude any serial already in a lot — prevents re-shipment
     const unshipped = units.filter((u) => !shippedIds.has(u.id));
 
-    res.json(unshipped);
+    const poIds = Array.from(new Set(unshipped.map((u) => u.poId).filter(Boolean)));
+    const familyRows = poIds.length > 0
+      ? await pool.query<P2PoFamilyDisplay>(
+        `SELECT
+           po.id AS po_id,
+           COALESCE(root.id, po.id) AS display_po_id,
+           COALESCE(root.po_number, po.po_number) AS display_po_number,
+           COALESCE(current_po.id, po.id) AS current_po_id,
+           COALESCE(current_po.po_number, po.po_number) AS current_po_number
+         FROM p2_purchase_orders po
+         LEFT JOIN p2_purchase_orders root ON root.id = po.parent_po_id
+         LEFT JOIN LATERAL (
+           SELECT family.id, family.po_number
+             FROM p2_purchase_orders family
+            WHERE COALESCE(family.parent_po_id, family.id) = COALESCE(po.parent_po_id, po.id)
+            ORDER BY family.is_current_revision DESC, family.revision_number DESC, family.id DESC
+            LIMIT 1
+         ) current_po ON true
+         WHERE po.id = ANY($1::int[])`,
+        [poIds],
+      )
+      : [];
+    const familyByPoId = new Map(familyRows.map((row) => [Number(row.po_id), row]));
+
+    res.json(unshipped.map((unit) => {
+      const family = familyByPoId.get(Number(unit.poId));
+      return {
+        ...unit,
+        rawPoNumber: unit.poNumber,
+        rawPoId: unit.poId,
+        displayPoNumber: family?.display_po_number ?? unit.poNumber,
+        displayPoId: family?.display_po_id ?? unit.poId,
+        currentRevisionPoNumber: family?.current_po_number ?? unit.poNumber,
+        currentRevisionPoId: family?.current_po_id ?? unit.poId,
+        poNumber: family?.display_po_number ?? unit.poNumber,
+      };
+    }));
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Failed to fetch shipping queue' });
   }

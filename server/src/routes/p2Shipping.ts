@@ -899,6 +899,30 @@ router.post('/billing-allocations', authenticateToken, requirePermission('shippi
 
 type BillingBucketOverride = NonNullable<z.infer<typeof createLotSchema>['billingBucketOverrides']>[number];
 
+type P2PoFamilyRow = {
+  id: number;
+  po_number: string;
+  family_po_id: number;
+};
+
+async function assertSerialsSharePoFamily(serials: any[]): Promise<void> {
+  const poIds = Array.from(new Set(serials.map((serial) => Number(serial.poId)).filter(Number.isFinite)));
+  if (poIds.length <= 1) return;
+
+  const rows = await pool.query<P2PoFamilyRow>(
+    `SELECT id, po_number, COALESCE(parent_po_id, id) AS family_po_id
+       FROM p2_purchase_orders
+      WHERE id = ANY($1::int[])`,
+    [poIds],
+  );
+  const familyIds = Array.from(new Set(rows.map((row) => Number(row.family_po_id))));
+  if (familyIds.length > 1 || rows.length !== poIds.length) {
+    throw new Error(`All serials must belong to the same PO project. Found: ${
+      Array.from(new Set(serials.map((serial) => serial.poNumber))).join(', ')
+    }`);
+  }
+}
+
 async function assignSerialsToPoItemBuckets(
   serials: any[],
   actor: string,
@@ -1041,11 +1065,12 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       });
     }
 
-    const poNumbers = Array.from(new Set(serials.map((s) => s.poNumber)));
-    if (poNumbers.length > 1) {
+    try {
+      await assertSerialsSharePoFamily(serials);
+    } catch (familyErr: any) {
       return res.status(400).json({
-        error: 'All serials must belong to the same PO',
-        found: poNumbers,
+        error: familyErr?.message || 'All serials must belong to the same PO project',
+        found: Array.from(new Set(serials.map((s) => s.poNumber))),
       });
     }
 

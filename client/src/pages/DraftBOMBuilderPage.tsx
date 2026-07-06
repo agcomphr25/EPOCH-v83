@@ -2660,62 +2660,6 @@ export default function DraftBOMBuilderPage() {
     applyDraftSelection(createBlankDraftForProject(selectedProject));
   }
 
-  async function deleteDraftFolder(group: DraftProjectGroup) {
-    const protectedDraft = group.drafts.find((item) => item.id === PRIVATEER_DRAFT_ID);
-    if (protectedDraft) {
-      toast({
-        title: 'Privateer folder is locked',
-        description: 'The built-in Privateer seed draft stays available as a reference.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const lockedDraft = group.drafts.find((item) => item.canManageAccess === false);
-    if (lockedDraft) {
-      toast({
-        title: 'Creator access required',
-        description: `Only the creator can delete "${lockedDraft.name}" or its project folder.`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Delete draft folder "${group.label}" and ${group.drafts.length} saved draft${group.drafts.length === 1 ? '' : 's'}? This cannot be undone.`,
-    );
-    if (!confirmed) return;
-
-    const draftIds = new Set(group.drafts.map((item) => item.id));
-
-    try {
-      for (const item of group.drafts) {
-        await deleteSharedDraft(item.id);
-      }
-
-      const remainingDrafts = savedDrafts.filter((item) => !draftIds.has(item.id));
-      const fallbackDraft = remainingDrafts[0] ?? createPrivateerDraft();
-
-      queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
-        current.filter((item) => !draftIds.has(item.id)),
-      );
-      saveDrafts(remainingDrafts);
-      setSavedDrafts(remainingDrafts);
-
-      if (draftIds.has(draft.id)) {
-        applyDraftSelection(fallbackDraft);
-      }
-
-      toast({
-        title: 'Draft folder deleted',
-        description: `${group.label} and ${group.drafts.length} saved draft${group.drafts.length === 1 ? '' : 's'} were removed.`,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'The draft folder could not be deleted.';
-      toast({ title: 'Folder delete failed', description: message, variant: 'destructive' });
-    }
-  }
-
   function startBlankDraft() {
     const blankDraft: BomDraft = {
       id: crypto.randomUUID(),
@@ -3250,22 +3194,10 @@ export default function DraftBOMBuilderPage() {
                           <Badge variant="outline">{group.drafts.length} draft{group.drafts.length === 1 ? '' : 's'}</Badge>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => openDraftFromLibrary(group.drafts[0])}>
-                          <FolderOpen className="mr-2 h-4 w-4" />
-                          Open latest
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => deleteDraftFolder(group)}
-                          className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
-                          title="Delete draft folder"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <Button type="button" variant="outline" size="sm" onClick={() => openDraftFromLibrary(group.drafts[0])}>
+                        <FolderOpen className="mr-2 h-4 w-4" />
+                        Open latest
+                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3 p-4">

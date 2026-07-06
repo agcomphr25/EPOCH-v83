@@ -312,11 +312,26 @@ function ChargeCodeForm({
 
   const createMutation = useMutation({
     mutationFn: async (data: object) => {
-      const created: ChargeCode = await apiRequest('/api/charge-codes', {
-        method: 'POST',
-        body: data,
-      });
-      if (assignmentScope === 'SELECTED_EMPLOYEES') {
+      let created: ChargeCode | undefined;
+      let usedExistingChargeCode = false;
+      try {
+        created = await apiRequest('/api/charge-codes', {
+          method: 'POST',
+          body: data,
+        });
+      } catch (err: any) {
+        const existingChargeCode = err?.responseData?.existingChargeCode as ChargeCode | undefined;
+        if (requestToAssign?.id && existingChargeCode?.id) {
+          created = existingChargeCode;
+          usedExistingChargeCode = true;
+        } else {
+          throw err;
+        }
+      }
+      if (!created) {
+        throw new Error('Charge code was not created.');
+      }
+      if (!usedExistingChargeCode && assignmentScope === 'SELECTED_EMPLOYEES') {
         await saveAssignments(created.id);
       }
       if (requestToAssign?.id) {

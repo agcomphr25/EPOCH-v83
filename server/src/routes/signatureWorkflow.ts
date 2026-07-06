@@ -80,13 +80,13 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/signature-workflow/pending/:employeeId - Get pending signatures for an employee (for My Tasks)
+// GET /api/signature-workflow/pending/:employeeId - Get current document signature tasks for an employee
 router.get('/pending/:employeeId', async (req: Request, res: Response) => {
   try {
     const { employeeId } = req.params;
     
     // Find all signature signers where this employee is the current signer
-    const pendingSignatures = await db
+    const currentSignatureTasks = await db
       .select({
         signer: signatureSigners,
         request: signatureRequests,
@@ -106,7 +106,7 @@ router.get('/pending/:employeeId', async (req: Request, res: Response) => {
       .orderBy(desc(signatureRequests.createdAt));
     
     // Format for My Tasks display
-    const tasks = pendingSignatures.map(({ signer, request }) => ({
+    const tasks = currentSignatureTasks.map(({ signer, request }) => ({
       id: signer.id,
       type: 'signature_request',
       title: `Sign: ${request.title}`,
@@ -122,8 +122,8 @@ router.get('/pending/:employeeId', async (req: Request, res: Response) => {
     
     res.json(tasks);
   } catch (error: any) {
-    console.error('Error fetching pending signatures:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch pending signatures' });
+    console.error('Error fetching document signature tasks:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch document signature tasks' });
   }
 });
 

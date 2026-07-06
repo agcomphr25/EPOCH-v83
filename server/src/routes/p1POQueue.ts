@@ -754,11 +754,11 @@ router.post('/progress', async (req: Request, res: Response) => {
               created_at, updated_at
             ) VALUES (
               $1, $2, $3, $4, $5, $6, 'stock', $7, $8, $9,
-              NOW(), $10, 'LAID_UP', 'Barcode', NOW(), NOW()
+              NOW(), $10, 'IN_PROGRESS', 'Barcode', NOW(), NOW()
             )
             ON CONFLICT (order_id) DO UPDATE
             SET current_department = 'Barcode',
-                production_status = 'LAID_UP',
+                production_status = 'IN_PROGRESS',
                 updated_at = NOW()
           `;
           await pool.query(insertProdQuery, [

@@ -2,15 +2,170 @@ import { Router } from 'express';
 import { authenticateToken } from '../../middleware/auth';
 import { requireFinanceAccess } from '../../middleware/routeAuthorization';
 import { pool } from '../../db';
+import { storage } from '../../storage';
 
 const router = Router();
 
 router.use(authenticateToken);
 router.use(requireFinanceAccess);
 
+function toDateOnly(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    return value.includes('T') ? value.split('T')[0] : value;
+  }
+  if (value instanceof Date) {
+    return value.toISOString().split('T')[0];
+  }
+  try {
+    return new Date(value as any).toISOString().split('T')[0];
+  } catch {
+    return null;
+  }
+}
+
+function getPreviousFullMonthKey(now = new Date()): string {
+  const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${previousMonth.getFullYear()}-${String(previousMonth.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthRange(monthKey: string) {
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) {
+    throw Object.assign(new Error('Invalid month key format (expected YYYY-MM)'), { status: 400 });
+  }
+
+  const [yearText, monthText] = monthKey.split('-');
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  const start = new Date(year, monthIndex, 1);
+  const end = new Date(year, monthIndex + 1, 0);
+
+  return {
+    startDate: toDateOnly(start)!,
+    endDate: toDateOnly(end)!,
+  };
+}
+
+function getRecentMonthKeys(monthKey: string, count = 6): string[] {
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) {
+    throw Object.assign(new Error('Invalid month key format (expected YYYY-MM)'), { status: 400 });
+  }
+
+  const [yearText, monthText] = monthKey.split('-');
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+
+  return Array.from({ length: count }, (_, index) => {
+    const month = new Date(year, monthIndex - (count - 1 - index), 1);
+    return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+  });
+}
+
+function getMonthKeyFromDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthShortLabel(monthKey: string): string {
+  const [yearText, monthText] = monthKey.split('-');
+  const date = new Date(Number(yearText), Number(monthText) - 1, 1);
+  return date.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+}
+
+function calculateOtdForMonthFromOrders(monthKey: string, orders: any[]) {
+  const { startDate, endDate } = getMonthRange(monthKey);
+  const considered = orders
+    .map((order: any) => {
+      const completionDate = toDateOnly(order.shippedDate) || toDateOnly(order.shippingCompletedAt) || toDateOnly(order.updatedAt);
+      const dueDate = toDateOnly(order.dueDate);
+      return { order, completionDate, dueDate };
+    })
+    .filter(({ order, completionDate, dueDate }) => {
+      const status = String(order.status || '').toUpperCase();
+      if (status !== 'SHIPPED' && status !== 'FULFILLED') return false;
+      if (!completionDate || !dueDate) return false;
+      if (completionDate < startDate || completionDate > endDate) return false;
+      return true;
+    });
+
+  const onTimeCount = considered.filter(({ completionDate, dueDate }) => completionDate! <= dueDate!).length;
+  const totalCount = considered.length;
+  const lateCount = totalCount - onTimeCount;
+  const otdPercent = totalCount > 0 ? Math.round((onTimeCount / totalCount) * 1000) / 10 : null;
+
+  return {
+    monthKey,
+    startDate,
+    endDate,
+    otdPercent,
+    totalCount,
+    onTimeCount,
+    lateCount,
+    source: '/otd-report',
+  };
+}
+
+async function calculateOtdForMonth(monthKey = getPreviousFullMonthKey()) {
+  const orders = await storage.getFulfilledShippedOrdersWithPaymentStatus(10000);
+  return calculateOtdForMonthFromOrders(monthKey, orders);
+}
+
+function calculateCustomerSatisfactionScore(rows: any[]) {
+  let totalScores = 0;
+  let scoredResponseCount = 0;
+  let completedResponses = 0;
+  let promoters = 0;
+  let detractors = 0;
+
+  rows.forEach((response) => {
+    if (response.is_complete) completedResponses += 1;
+
+    const answers = response.responses;
+    if (answers && typeof answers === 'object') {
+      let responseScore = 0;
+      Object.values(answers).forEach((value) => {
+        if (typeof value === 'number' && value >= 1 && value <= 10) {
+          responseScore += value;
+        }
+      });
+      if (responseScore > 0) {
+        totalScores += responseScore;
+        scoredResponseCount += 1;
+      }
+    }
+
+    const nps = Number(response.nps_score);
+    if (Number.isFinite(nps)) {
+      if (nps >= 9) promoters += 1;
+      if (nps <= 6) detractors += 1;
+    }
+  });
+
+  const totalResponses = rows.length;
+  return {
+    avgScore: scoredResponseCount > 0 ? Math.round((totalScores / scoredResponseCount) * 100) / 100 : null,
+    responseCount: scoredResponseCount,
+    totalResponses,
+    completedResponses,
+    netPromoterScore: totalResponses > 0 ? Math.round(((promoters - detractors) / totalResponses) * 10000) / 100 : null,
+    scale: 50,
+  };
+}
+
 // GET /api/financial-review/summary — aggregated live dashboard data
 router.get('/summary', async (req, res) => {
   try {
+    const monthKey = typeof req.query.monthKey === 'string' ? req.query.monthKey : getPreviousFullMonthKey();
+    const monthKeys = getRecentMonthKeys(monthKey);
+    const now = new Date();
+    const currentMonthKey = getMonthKeyFromDate(now);
+    const paymentTrendMonthKeys = getRecentMonthKeys(monthKey);
+    const { startDate: trendStartDate } = getMonthRange(monthKeys[0]);
+    const { endDate: trendEndDate } = getMonthRange(monthKeys[monthKeys.length - 1]);
+    const trendEnd = new Date(`${trendEndDate}T00:00:00`);
+    trendEnd.setDate(trendEnd.getDate() + 1);
+    const trendEndExclusive = toDateOnly(trendEnd)!;
+    const emptyTrend = () => monthKeys.map((key) => ({ month: key, label: monthShortLabel(key), value: null as number | null }));
+    const emptyPaymentTrend = () => paymentTrendMonthKeys.map((key) => ({ month: key, label: monthShortLabel(key), value: null as number | null }));
     const dataErrors: string[] = []; // collects any query failures for client visibility
 
     // Revenue (last 6 months) — payments.payment_amount (CC payments)
@@ -40,39 +195,172 @@ router.get('/summary', async (req, res) => {
       currentMonthArRevenue = Number(arRevRows[0]?.current_month_ar) || 0;
     } catch (err: any) { const msg = `AR revenue query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
-    // OTD — all_orders.shipped_date vs due_date (consistent with OTD widget)
-    let otdRows: any[] = [];
+    let otdSummary: Awaited<ReturnType<typeof calculateOtdForMonth>> | null = null;
+    let otdTrend = emptyTrend();
     try {
-      otdRows = await pool.query(`
-        SELECT
-          COUNT(*) FILTER (WHERE shipped_date <= due_date OR due_date IS NULL) AS on_time,
-          COUNT(*) AS total
-        FROM all_orders
-        WHERE shipped_date IS NOT NULL
-          AND created_at >= NOW() - INTERVAL '3 months'
-          AND status NOT IN ('cancelled', 'draft')
-      `) as any[];
+      const otdOrders = await storage.getFulfilledShippedOrdersWithPaymentStatus(10000);
+      otdSummary = calculateOtdForMonthFromOrders(monthKey, otdOrders);
+      otdTrend = monthKeys.map((key) => ({
+        month: key,
+        label: monthShortLabel(key),
+        value: calculateOtdForMonthFromOrders(key, otdOrders).otdPercent,
+      }));
     } catch (err: any) { const msg = `OTD query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // NCR
     let ncrRows: any[] = [];
+    let ncrTrend = emptyTrend();
     try {
       ncrRows = await pool.query(`
         SELECT COUNT(*) AS ncr_count FROM nonconformance_records
         WHERE created_at >= NOW() - INTERVAL '3 months'
       `) as any[];
+      const ncrTrendRows = await pool.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+          COUNT(*) AS value
+        FROM nonconformance_records
+        WHERE created_at >= $1::date
+          AND created_at < $2::date
+        GROUP BY 1
+      `, [trendStartDate, trendEndExclusive]) as any[];
+      const ncrByMonth = new Map(ncrTrendRows.map((row: any) => [row.month, Number(row.value) || 0]));
+      ncrTrend = monthKeys.map((key) => ({
+        month: key,
+        label: monthShortLabel(key),
+        value: ncrByMonth.get(key) ?? 0,
+      }));
     } catch (err: any) { const msg = `NCR query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
-    // Customer satisfaction — 12-month + 30-day (overall_satisfaction column)
-    let csRows: any[] = [];
+    // Customer satisfaction — same score calculation used by /customer-satisfaction analytics
+    let customerSatisfaction = {
+      avgScore: null as number | null,
+      responseCount: 0,
+      totalResponses: 0,
+      completedResponses: 0,
+      netPromoterScore: null as number | null,
+      scale: 50,
+    };
+    let customerSatisfactionTrend = emptyTrend();
     try {
-      csRows = await pool.query(`
-        SELECT ROUND(AVG(overall_satisfaction)::numeric, 1) AS avg_score, COUNT(*) AS count
+      const csRows = await pool.query(`
+        SELECT responses, nps_score, is_complete
         FROM customer_satisfaction_responses
-        WHERE created_at >= NOW() - INTERVAL '12 months'
-          AND is_complete = true
       `) as any[];
+      customerSatisfaction = calculateCustomerSatisfactionScore(csRows);
+      const csTrendRows = await pool.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+          responses,
+          nps_score,
+          is_complete
+        FROM customer_satisfaction_responses
+        WHERE created_at >= $1::date
+          AND created_at < $2::date
+      `, [trendStartDate, trendEndExclusive]) as any[];
+      customerSatisfactionTrend = monthKeys.map((key) => {
+        const rowsForMonth = csTrendRows.filter((row: any) => row.month === key);
+        return {
+          month: key,
+          label: monthShortLabel(key),
+          value: calculateCustomerSatisfactionScore(rowsForMonth).avgScore,
+        };
+      });
     } catch (err: any) { const msg = `CS 12mo query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
+
+    let revenueTrend = emptyTrend();
+    try {
+      const revenueTrendRows = await pool.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', invoice_date), 'YYYY-MM') AS month,
+          COALESCE(SUM(total_amount), 0) AS value
+        FROM ar_invoices
+        WHERE invoice_date >= $1::date
+          AND invoice_date < $2::date
+          AND status NOT IN ('VOID', 'void')
+        GROUP BY 1
+      `, [trendStartDate, trendEndExclusive]) as any[];
+      const revenueByMonth = new Map(revenueTrendRows.map((row: any) => [row.month, Number(row.value) || 0]));
+      revenueTrend = monthKeys.map((key) => ({
+        month: key,
+        label: monthShortLabel(key),
+        value: revenueByMonth.get(key) ?? 0,
+      }));
+    } catch (err: any) { const msg = `revenue trend query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
+
+    let paymentAnalytics = {
+      currentMonthKey,
+      reviewMonthKey: monthKey,
+      reviewMonthAmount: 0,
+      mtdAmount: 0,
+      transactionCount: 0,
+      fullMonthEstimate: 0,
+      elapsedDays: now.getDate(),
+      daysInMonth: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
+      source: '/payment-analytics',
+    };
+    let creditCardTrend = emptyPaymentTrend();
+    try {
+      const { startDate: paymentTrendStartDate } = getMonthRange(paymentTrendMonthKeys[0]);
+      const { endDate: paymentTrendEndDate } = getMonthRange(paymentTrendMonthKeys[paymentTrendMonthKeys.length - 1]);
+      const paymentTrendEnd = new Date(`${paymentTrendEndDate}T00:00:00`);
+      paymentTrendEnd.setDate(paymentTrendEnd.getDate() + 1);
+      const paymentTrendEndExclusive = toDateOnly(paymentTrendEnd)!;
+      const { startDate: currentPaymentStartDate } = getMonthRange(currentMonthKey);
+
+      const paymentRows = await pool.query(`
+        SELECT
+          COALESCE(SUM(p.payment_amount), 0) AS mtd_amount,
+          COUNT(*) AS transaction_count
+        FROM payments p
+        LEFT JOIN credit_card_transactions cct ON cct.payment_id = p.id
+        WHERE p.payment_date >= $1::date
+          AND p.payment_date <= NOW()
+          AND p.payment_type IN ('credit_card', 'aaaa', 'agr')
+          AND (
+            p.payment_type != 'credit_card'
+            OR cct.status = 'completed'
+          )
+      `, [currentPaymentStartDate]) as any[];
+      const paymentMtdAmount = Number(paymentRows[0]?.mtd_amount) || 0;
+      const elapsedDays = now.getDate();
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+      paymentAnalytics = {
+        currentMonthKey,
+        reviewMonthKey: monthKey,
+        reviewMonthAmount: 0,
+        mtdAmount: Math.round(paymentMtdAmount * 100) / 100,
+        transactionCount: Number(paymentRows[0]?.transaction_count) || 0,
+        fullMonthEstimate: elapsedDays > 0 ? Math.round(((paymentMtdAmount / elapsedDays) * daysInMonth) * 100) / 100 : 0,
+        elapsedDays,
+        daysInMonth,
+        source: '/payment-analytics',
+      };
+
+      const paymentTrendRows = await pool.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', p.payment_date), 'YYYY-MM') AS month,
+          COALESCE(SUM(p.payment_amount), 0) AS value
+        FROM payments p
+        LEFT JOIN credit_card_transactions cct ON cct.payment_id = p.id
+        WHERE p.payment_date >= $1::date
+          AND p.payment_date < $2::date
+          AND p.payment_type IN ('credit_card', 'aaaa', 'agr')
+          AND (
+            p.payment_type != 'credit_card'
+            OR cct.status = 'completed'
+          )
+        GROUP BY 1
+      `, [paymentTrendStartDate, paymentTrendEndExclusive]) as any[];
+      const paymentByMonth = new Map(paymentTrendRows.map((row: any) => [row.month, Number(row.value) || 0]));
+      paymentAnalytics.reviewMonthAmount = Math.round((paymentByMonth.get(monthKey) ?? 0) * 100) / 100;
+      creditCardTrend = paymentTrendMonthKeys.map((key) => ({
+        month: key,
+        label: monthShortLabel(key),
+        value: paymentByMonth.get(key) ?? 0,
+      }));
+    } catch (err: any) { const msg = `payment analytics query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // AR aging using balance (total_amount - payments allocated) per existing AR aging endpoint pattern
     let arAging = { current: 0, days30: 0, days60: 0, days90plus: 0, totalOutstanding: 0 };
@@ -103,16 +391,21 @@ router.get('/summary', async (req, res) => {
       };
     } catch (err: any) { const msg = `AR aging query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
-    // Customer satisfaction — 30-day window
-    let cs30: any = {};
+    let customerSatisfaction30Day = {
+      avgScore: null as number | null,
+      responseCount: 0,
+      totalResponses: 0,
+      completedResponses: 0,
+      netPromoterScore: null as number | null,
+      scale: 50,
+    };
     try {
       const cs30Rows = await pool.query(`
-        SELECT ROUND(AVG(overall_satisfaction)::numeric, 1) AS avg_score, COUNT(*) AS count
+        SELECT responses, nps_score, is_complete
         FROM customer_satisfaction_responses
         WHERE created_at >= NOW() - INTERVAL '30 days'
-          AND is_complete = true
       `) as any[];
-      cs30 = cs30Rows[0] || {};
+      customerSatisfaction30Day = calculateCustomerSatisfactionScore(cs30Rows);
     } catch (err: any) { const msg = `CS 30d query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // Customer return rate — refund_requests in last 12 months
@@ -169,10 +462,7 @@ router.get('/summary', async (req, res) => {
     const fetchedAt = new Date().toISOString();
 
     const rev = revRows[0] || {};
-    const otd = otdRows[0] || { on_time: 0, total: 0 };
     const ncr = ncrRows[0] || { ncr_count: 0 };
-    const cs = csRows[0] || {};
-
     const recentRev = Number(rev.recent_rev) || 0;
     const priorRev = Number(rev.prior_rev) || 0;
     const revenueGrowthPct = priorRev > 0
@@ -189,20 +479,38 @@ router.get('/summary', async (req, res) => {
         growthPct: revenueGrowthPct,
         lastUpdated: fetchedAt,
       },
-      otdPercent: otd.total > 0 ? Math.round((Number(otd.on_time) / Number(otd.total)) * 100) : null,
+      paymentAnalytics: { ...paymentAnalytics, lastUpdated: fetchedAt },
+      reviewPeriod: otdSummary ? {
+        monthKey: otdSummary.monthKey,
+        startDate: otdSummary.startDate,
+        endDate: otdSummary.endDate,
+      } : { monthKey },
+      otdPercent: otdSummary?.otdPercent ?? null,
+      otd: otdSummary,
       otdLastUpdated: fetchedAt,
       ncrCount: Number(ncr.ncr_count) || 0,
       ncrLastUpdated: fetchedAt,
       customerSatisfaction: {
-        avgScore: cs.avg_score ? Number(cs.avg_score) : null,
-        responseCount: Number(cs.count) || 0,
-        avg30Day: cs30.avg_score ? Number(cs30.avg_score) : null,
-        responseCount30Day: Number(cs30.count) || 0,
+        avgScore: customerSatisfaction.avgScore,
+        responseCount: customerSatisfaction.responseCount,
+        totalResponses: customerSatisfaction.totalResponses,
+        completedResponses: customerSatisfaction.completedResponses,
+        netPromoterScore: customerSatisfaction.netPromoterScore,
+        scale: customerSatisfaction.scale,
+        avg30Day: customerSatisfaction30Day.avgScore,
+        responseCount30Day: customerSatisfaction30Day.responseCount,
         lastUpdated: fetchedAt,
       },
       arAging: { ...arAging, lastUpdated: fetchedAt },
       pipeline: { ...pipelineTotals, lastUpdated: fetchedAt },
       returnRate: { ...returnRate, lastUpdated: fetchedAt },
+      trends: {
+        otd: otdTrend,
+        ncr: ncrTrend,
+        customerSatisfaction: customerSatisfactionTrend,
+        revenue: revenueTrend,
+        creditCards: creditCardTrend,
+      },
       dataErrors: dataErrors.length > 0 ? dataErrors : undefined,
     });
   } catch (err: any) {
@@ -266,16 +574,8 @@ router.get('/live/revenue', async (req, res) => {
 // GET /api/financial-review/live/kpis — OTD %, NCR count, revenue growth
 router.get('/live/kpis', async (req, res) => {
   try {
-    // OTD: orders shipped on or before due date (last 3 months)
-    const otdRows = await pool.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE shipped_date <= due_date OR due_date IS NULL) AS on_time,
-        COUNT(*) AS total
-      FROM all_orders
-      WHERE shipped_date IS NOT NULL
-        AND created_at >= NOW() - INTERVAL '3 months'
-        AND status NOT IN ('cancelled', 'draft')
-    `) as any[];
+    const monthKey = typeof req.query.monthKey === 'string' ? req.query.monthKey : getPreviousFullMonthKey();
+    const otd = await calculateOtdForMonth(monthKey);
 
     // NCR count (last 3 months)
     const ncrRows = await pool.query(`
@@ -294,13 +594,8 @@ router.get('/live/kpis', async (req, res) => {
       WHERE payment_date >= NOW() - INTERVAL '6 months'
     `) as any[];
 
-    const otd = otdRows[0] || { on_time: 0, total: 0 };
     const ncr = ncrRows[0] || { ncr_count: 0 };
     const rev = revRows[0] || { recent: 0, prior: 0 };
-
-    const otdPct = otd.total > 0
-      ? Math.round((Number(otd.on_time) / Number(otd.total)) * 100)
-      : null;
 
     const recentRev = Number(rev.recent) || 0;
     const priorRev = Number(rev.prior) || 0;
@@ -309,7 +604,8 @@ router.get('/live/kpis', async (req, res) => {
       : null;
 
     res.json({
-      otdPercent: otdPct,
+      otdPercent: otd.otdPercent,
+      otd,
       ncrCount: Number(ncr.ncr_count) || 0,
       revenueGrowthPct,
       recentRevenue: recentRev,
@@ -321,22 +617,28 @@ router.get('/live/kpis', async (req, res) => {
   }
 });
 
+// GET /api/financial-review/live/otd?monthKey=YYYY-MM — OTD summary matching /otd-report calculation
+router.get('/live/otd', async (req, res) => {
+  try {
+    const monthKey = typeof req.query.monthKey === 'string' ? req.query.monthKey : getPreviousFullMonthKey();
+    res.json(await calculateOtdForMonth(monthKey));
+  } catch (err: any) {
+    console.error('financial-review live/otd error:', err);
+    res.status(err?.status || 500).json({ error: err.message });
+  }
+});
+
 // GET /api/financial-review/live/customer-score — avg satisfaction score
 router.get('/live/customer-score', async (req, res) => {
   try {
     const rows = await pool.query(`
       SELECT
-        ROUND(AVG(overall_satisfaction)::numeric, 1) AS avg_score,
-        COUNT(*) AS response_count
+        responses,
+        nps_score,
+        is_complete
       FROM customer_satisfaction_responses
-      WHERE created_at >= NOW() - INTERVAL '12 months'
-        AND is_complete = true
     `) as any[];
-    const r = rows[0] || {};
-    res.json({
-      avgScore: r.avg_score ? Number(r.avg_score) : null,
-      responseCount: Number(r.response_count) || 0,
-    });
+    res.json(calculateCustomerSatisfactionScore(rows));
   } catch (err: any) {
     console.error('financial-review live/customer-score error:', err);
     res.status(500).json({ error: err.message });

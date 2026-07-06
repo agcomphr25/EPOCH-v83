@@ -4,6 +4,12 @@ import { CheckCircle, AlertCircle, TrendingUp, TrendingDown, Minus } from 'lucid
 
 interface KpiData {
   otdPercent: number | null;
+  otd?: {
+    monthKey: string;
+    totalCount: number;
+    onTimeCount: number;
+    lateCount: number;
+  };
   ncrCount: number;
   revenueGrowthPct: number | null;
   recentRevenue: number;
@@ -19,9 +25,15 @@ function GrowthIcon({ pct }: { pct: number | null }) {
   return <Minus className="h-5 w-5 text-gray-400" />;
 }
 
-export default function KPIsSlide() {
+export default function KPIsSlide({ monthKey }: { monthKey?: string }) {
   const { data: kpis, isLoading } = useQuery<KpiData>({
-    queryKey: ['/api/financial-review/live/kpis'],
+    queryKey: ['/api/financial-review/live/kpis', monthKey],
+    queryFn: async () => {
+      const suffix = monthKey ? `?monthKey=${encodeURIComponent(monthKey)}` : '';
+      const res = await fetch(`/api/financial-review/live/kpis${suffix}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load KPI data');
+      return res.json();
+    },
   });
 
   const { data: shipments = [] } = useQuery<ShipmentRow[]>({
@@ -102,7 +114,6 @@ export default function KPIsSlide() {
           </table>
         </div>
       )}
-      <div className="text-xs text-gray-400 mt-2 text-right">Live from EPOCH</div>
     </div>
   );
 }

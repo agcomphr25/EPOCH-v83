@@ -22,11 +22,17 @@ import {
   evaluateShippingCertPackageGate,
 } from '../services/certPackageService';
 import { recordAuditEvent } from '../services/auditLedgerService';
+import { formatP2DocumentPoNumber } from '../utils/p2DocumentPoNumber';
 import multer from 'multer';
 import {
   getFileStorageProvider,
   getFileStorageProviderForObjectPath,
 } from '../services/fileStorageProvider';
+import {
+  recordP2InvoiceNumberAudit,
+  reserveP2InvoiceNumber,
+  syncP2InvoiceSequenceFromManualNumber,
+} from '../services/p2InvoiceNumberService';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -124,12 +130,72 @@ function mapP2PackingSlipRow(row: any) {
   };
 }
 
+async function getLinkedP2InvoiceNumberForPackingSlip(
+  packingSlipId: string,
+  lotId?: string | null,
+): Promise<string | null> {
+  const rows = await pool.query<{ invoice_number: string }>(
+    `SELECT invoice_number
+       FROM ar_invoices
+      WHERE status <> 'VOID'
+        AND (
+          packing_slip_id = $1
+          OR (
+            $2::uuid IS NOT NULL
+            AND lot_id = $2::uuid
+            AND packing_slip_id IS NULL
+          )
+        )
+      ORDER BY
+        CASE WHEN packing_slip_id = $1 THEN 0 ELSE 1 END,
+        created_at DESC
+      LIMIT 1`,
+    [packingSlipId, lotId ?? null]
+  );
+
+  return rows.rows[0]?.invoice_number ?? null;
+}
+
+async function syncP2PackingSlipNumberToLinkedInvoice(slip: any) {
+  if (!slip?.id) return slip;
+
+  const linkedInvoiceNumber = await getLinkedP2InvoiceNumberForPackingSlip(
+    slip.id,
+    slip.lotNumberId ?? slip.lot_number_id ?? null,
+  );
+  if (!linkedInvoiceNumber) return slip;
+
+  const currentPackingSlipNumber = slip.packingSlipNumber ?? slip.packing_slip_number ?? null;
+  const currentInvoiceNumber = slip.invoiceNumber ?? slip.invoice_number ?? null;
+  if (currentPackingSlipNumber === linkedInvoiceNumber && currentInvoiceNumber === linkedInvoiceNumber) {
+    return slip;
+  }
+
+  const result = await pool.query(
+    `UPDATE p2_packing_slips
+        SET packing_slip_number = $1,
+            invoice_number = $1,
+            external_pdf_url = NULL,
+            updated_at = NOW()
+      WHERE id = $2
+      RETURNING *`,
+    [linkedInvoiceNumber, slip.id]
+  );
+
+  return mapP2PackingSlipRow(result.rows[0]) ?? {
+    ...slip,
+    packingSlipNumber: linkedInvoiceNumber,
+    invoiceNumber: linkedInvoiceNumber,
+    externalPdfUrl: null,
+  };
+}
+
 async function selectP2PackingSlipFallback(id: string) {
   const result = await pool.query(
     `
       SELECT
         id, packing_slip_number, lot_number_id, lot_number, customer_id,
-        customer_name, customer_address, po_number, ship_date, shipment_number,
+        customer_name, customer_address, po_number, invoice_number, ship_date, shipment_number,
         carrier, tracking_number, line_items, total_quantity, packed_by,
         packed_by_signature, verified_by, verified_by_signature, status, notes,
         external_pdf_url, replaces_packing_slip_id, replacement_reason,
@@ -141,7 +207,8 @@ async function selectP2PackingSlipFallback(id: string) {
     [id]
   );
 
-  return mapP2PackingSlipRow(result.rows[0]);
+  const slip = mapP2PackingSlipRow(result.rows[0]);
+  return syncP2PackingSlipNumberToLinkedInvoice(slip);
 }
 
 async function selectP2ReplacementSlipsFallback(replacesPackingSlipId: string) {
@@ -149,7 +216,7 @@ async function selectP2ReplacementSlipsFallback(replacesPackingSlipId: string) {
     `
       SELECT
         id, packing_slip_number, lot_number_id, lot_number, customer_id,
-        customer_name, customer_address, po_number, ship_date, shipment_number,
+        customer_name, customer_address, po_number, invoice_number, ship_date, shipment_number,
         carrier, tracking_number, line_items, total_quantity, packed_by,
         packed_by_signature, verified_by, verified_by_signature, status, notes,
         external_pdf_url, replaces_packing_slip_id, replacement_reason,
@@ -161,19 +228,21 @@ async function selectP2ReplacementSlipsFallback(replacesPackingSlipId: string) {
     [replacesPackingSlipId]
   );
 
-  return result.rows.map(mapP2PackingSlipRow).filter(Boolean);
+  const slips = result.rows.map(mapP2PackingSlipRow).filter(Boolean);
+  return Promise.all(slips.map(syncP2PackingSlipNumberToLinkedInvoice));
 }
 
 async function selectP2PackingSlipById(id: string) {
   try {
     await ensureP2PackingSlipInvoiceNumberSchema();
+    await ensureP2BillingAllocationSchema();
 
     const [slip] = await db
       .select()
       .from(p2PackingSlips)
       .where(eq(p2PackingSlips.id, id));
 
-    return slip ?? null;
+    return syncP2PackingSlipNumberToLinkedInvoice(slip ?? null);
   } catch (err) {
     console.warn('[P2Shipping] Falling back to compatibility packing slip lookup:', { id, err });
     return selectP2PackingSlipFallback(id);
@@ -341,10 +410,13 @@ async function buildP2PackingSlipPdfData(slip: any): Promise<PackingSlipData> {
     serialNumbers: Array.isArray(item.serialNumbers) ? item.serialNumbers : [],
     lotNumber: item.lotNumber || slip.lotNumber || undefined,
   }));
+  const invoiceNumber = await getLinkedP2InvoiceNumberForPackingSlip(slip.id, slip.lotNumberId)
+    || slip.invoiceNumber
+    || slip.packingSlipNumber;
 
   return {
     packingSlipNumber: slip.packingSlipNumber,
-    invoiceNumber: slip.invoiceNumber || slip.packingSlipNumber,
+    invoiceNumber,
     poNumber: slip.poNumber || undefined,
     lotNumber: slip.lotNumber || undefined,
     date: (slip.shipDate || slip.createdAt)
@@ -594,6 +666,21 @@ async function generateSequentialId(
 const createLotSchema = z.object({
   serialIds: z.array(z.string().uuid()).min(1, 'At least one serial required'),
   createdBy: z.string().min(1).default('system'),
+  billingAssignments: z.array(z.object({
+    serializedItemId: z.string().uuid(),
+    allocationId: z.string().uuid(),
+  })).optional(),
+  billingBucketOverrides: z.array(z.object({
+    poId: z.coerce.number().int().positive().optional(),
+    poNumber: z.string().trim().optional(),
+    poItemId: z.coerce.number().int().positive(),
+    bucketLabel: z.string().trim().min(1, 'Bucket label is required'),
+    description: z.string().trim().optional(),
+    customerPoLine: z.string().trim().optional(),
+    quantityAuthorized: z.coerce.number().int().positive().optional(),
+    unitPrice: z.coerce.number().min(0).optional(),
+    serialIds: z.array(z.string().uuid()).optional(),
+  })).optional(),
 });
 
 const voidShipmentSchema = z.object({
@@ -644,9 +731,527 @@ async function ensureP2VoidShipmentSchema(client: Pick<typeof pgPool, 'query'>):
   await client.query(`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS void_reason TEXT`);
 }
 
+let p2BillingAllocationSchemaReady: Promise<void> | null = null;
+
+function ensureP2BillingAllocationSchema(): Promise<void> {
+  if (!p2BillingAllocationSchemaReady) {
+    p2BillingAllocationSchemaReady = pool.query(`
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+      CREATE TABLE IF NOT EXISTS p2_billing_allocations (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        po_id integer NOT NULL REFERENCES p2_purchase_orders(id),
+        po_item_id integer REFERENCES p2_purchase_order_items(id),
+        po_number text NOT NULL,
+        part_number text NOT NULL,
+        bucket_label text NOT NULL,
+        description text,
+        customer_po_line text,
+        quantity_authorized integer NOT NULL,
+        unit_price numeric(12,2) NOT NULL,
+        notes text,
+        active boolean NOT NULL DEFAULT true,
+        created_by text,
+        created_at timestamp NOT NULL DEFAULT now(),
+        updated_at timestamp NOT NULL DEFAULT now()
+      );
+
+      ALTER TABLE p2_billing_allocations
+        ADD COLUMN IF NOT EXISTS po_id integer,
+        ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS po_number text,
+        ADD COLUMN IF NOT EXISTS part_number text,
+        ADD COLUMN IF NOT EXISTS bucket_label text,
+        ADD COLUMN IF NOT EXISTS description text,
+        ADD COLUMN IF NOT EXISTS customer_po_line text,
+        ADD COLUMN IF NOT EXISTS quantity_authorized integer,
+        ADD COLUMN IF NOT EXISTS unit_price numeric(12,2),
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS created_by text,
+        ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now();
+
+      ALTER TABLE p2_billing_allocations
+        ALTER COLUMN active SET DEFAULT true,
+        ALTER COLUMN quantity_authorized SET DEFAULT 0,
+        ALTER COLUMN unit_price SET DEFAULT 0,
+        ALTER COLUMN created_at SET DEFAULT now(),
+        ALTER COLUMN updated_at SET DEFAULT now();
+
+      UPDATE p2_billing_allocations
+         SET active = true
+       WHERE active IS NULL;
+
+      UPDATE p2_billing_allocations
+         SET quantity_authorized = 0
+       WHERE quantity_authorized IS NULL;
+
+      UPDATE p2_billing_allocations
+         SET unit_price = 0
+       WHERE unit_price IS NULL;
+
+      CREATE INDEX IF NOT EXISTS p2_billing_allocations_po_idx
+        ON p2_billing_allocations(po_id)
+        WHERE active = true;
+
+      CREATE TABLE IF NOT EXISTS p2_serial_billing_assignments (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        allocation_id uuid NOT NULL REFERENCES p2_billing_allocations(id),
+        serialized_item_id uuid NOT NULL REFERENCES p2_serialized_items(id),
+        po_id integer NOT NULL REFERENCES p2_purchase_orders(id),
+        po_item_id integer REFERENCES p2_purchase_order_items(id),
+        lot_id uuid REFERENCES p2_lot_numbers(id),
+        packing_slip_id uuid REFERENCES p2_packing_slips(id),
+        invoice_id uuid REFERENCES ar_invoices(id),
+        assigned_at timestamp NOT NULL DEFAULT now(),
+        assigned_by text,
+        assignment_source text NOT NULL DEFAULT 'shipment',
+        locked_at timestamp,
+        locked_by text,
+        lock_reason text,
+        notes text,
+        updated_at timestamp NOT NULL DEFAULT now(),
+        UNIQUE(serialized_item_id)
+      );
+
+      ALTER TABLE p2_serial_billing_assignments
+        ADD COLUMN IF NOT EXISTS allocation_id uuid,
+        ADD COLUMN IF NOT EXISTS serialized_item_id uuid,
+        ADD COLUMN IF NOT EXISTS po_id integer,
+        ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS lot_id uuid REFERENCES p2_lot_numbers(id),
+        ADD COLUMN IF NOT EXISTS packing_slip_id uuid REFERENCES p2_packing_slips(id),
+        ADD COLUMN IF NOT EXISTS invoice_id uuid REFERENCES ar_invoices(id),
+        ADD COLUMN IF NOT EXISTS assigned_at timestamp NOT NULL DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS assigned_by text,
+        ADD COLUMN IF NOT EXISTS assignment_source text NOT NULL DEFAULT 'shipment',
+        ADD COLUMN IF NOT EXISTS locked_at timestamp,
+        ADD COLUMN IF NOT EXISTS locked_by text,
+        ADD COLUMN IF NOT EXISTS lock_reason text,
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now();
+
+      ALTER TABLE p2_serial_billing_assignments
+        ALTER COLUMN assigned_at SET DEFAULT now(),
+        ALTER COLUMN assignment_source SET DEFAULT 'shipment',
+        ALTER COLUMN updated_at SET DEFAULT now();
+
+      UPDATE p2_serial_billing_assignments
+         SET assignment_source = 'shipment'
+       WHERE assignment_source IS NULL;
+
+      CREATE INDEX IF NOT EXISTS p2_serial_billing_assignments_allocation_idx
+        ON p2_serial_billing_assignments(allocation_id);
+
+      CREATE TABLE IF NOT EXISTS p2_billing_allocation_audit (
+        id serial PRIMARY KEY,
+        entity_type text NOT NULL,
+        entity_id text NOT NULL,
+        action text NOT NULL,
+        old_value jsonb,
+        new_value jsonb,
+        changed_by text,
+        reason text,
+        created_at timestamp NOT NULL DEFAULT now()
+      );
+
+      ALTER TABLE p2_billing_allocation_audit
+        ADD COLUMN IF NOT EXISTS entity_type text NOT NULL DEFAULT 'billing_allocation',
+        ADD COLUMN IF NOT EXISTS entity_id text NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS action text NOT NULL DEFAULT 'UNKNOWN',
+        ADD COLUMN IF NOT EXISTS old_value jsonb,
+        ADD COLUMN IF NOT EXISTS new_value jsonb,
+        ADD COLUMN IF NOT EXISTS changed_by text,
+        ADD COLUMN IF NOT EXISTS reason text,
+        ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
+    `).then(() => undefined).catch((err) => {
+      p2BillingAllocationSchemaReady = null;
+      throw err;
+    });
+  }
+
+  return p2BillingAllocationSchemaReady;
+}
+
+let p2LotNumberShipmentSchemaReady: Promise<void> | null = null;
+
+function ensureP2LotNumberShipmentSchema(): Promise<void> {
+  if (!p2LotNumberShipmentSchemaReady) {
+    p2LotNumberShipmentSchemaReady = pool.query(`
+      ALTER TABLE p2_lot_numbers
+        ADD COLUMN IF NOT EXISTS lot_type text DEFAULT 'PRODUCTION',
+        ADD COLUMN IF NOT EXISTS part_number text,
+        ADD COLUMN IF NOT EXISTS part_name text,
+        ADD COLUMN IF NOT EXISTS customer_id text,
+        ADD COLUMN IF NOT EXISTS customer_name text,
+        ADD COLUMN IF NOT EXISTS po_number text,
+        ADD COLUMN IF NOT EXISTS po_id integer REFERENCES p2_purchase_orders(id),
+        ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS quantity integer DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS serialized_item_ids jsonb,
+        ADD COLUMN IF NOT EXISTS barcodes jsonb,
+        ADD COLUMN IF NOT EXISTS manufacturing_date timestamp,
+        ADD COLUMN IF NOT EXISTS expiration_date timestamp,
+        ADD COLUMN IF NOT EXISTS status text DEFAULT 'OPEN',
+        ADD COLUMN IF NOT EXISTS closed_at timestamp,
+        ADD COLUMN IF NOT EXISTS closed_by text,
+        ADD COLUMN IF NOT EXISTS shipped_at timestamp,
+        ADD COLUMN IF NOT EXISTS shipped_by text,
+        ADD COLUMN IF NOT EXISTS packing_slip_id uuid,
+        ADD COLUMN IF NOT EXISTS certificate_id uuid,
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS tracking_number text,
+        ADD COLUMN IF NOT EXISTS carrier text,
+        ADD COLUMN IF NOT EXISTS bill_of_lading_url text,
+        ADD COLUMN IF NOT EXISTS lot_validation_report_url text,
+        ADD COLUMN IF NOT EXISTS packing_slip_upload_url text,
+        ADD COLUMN IF NOT EXISTS certificate_upload_url text,
+        ADD COLUMN IF NOT EXISTS created_by text,
+        ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();
+
+      ALTER TABLE p2_lot_numbers
+        ALTER COLUMN lot_type SET DEFAULT 'PRODUCTION',
+        ALTER COLUMN quantity SET DEFAULT 1,
+        ALTER COLUMN status SET DEFAULT 'OPEN',
+        ALTER COLUMN created_at SET DEFAULT now(),
+        ALTER COLUMN updated_at SET DEFAULT now();
+
+      ALTER TABLE p2_lot_numbers
+        ALTER COLUMN serialized_item_ids TYPE jsonb
+        USING CASE
+          WHEN serialized_item_ids IS NULL THEN '[]'::jsonb
+          WHEN jsonb_typeof(serialized_item_ids::jsonb) = 'array' THEN serialized_item_ids::jsonb
+          ELSE jsonb_build_array(serialized_item_ids::jsonb)
+        END;
+
+      ALTER TABLE p2_lot_numbers
+        ALTER COLUMN barcodes TYPE jsonb
+        USING CASE
+          WHEN barcodes IS NULL THEN '[]'::jsonb
+          WHEN jsonb_typeof(barcodes::jsonb) = 'array' THEN barcodes::jsonb
+          ELSE jsonb_build_array(barcodes::jsonb)
+        END;
+    `).then(() => undefined).catch((err) => {
+      p2LotNumberShipmentSchemaReady = null;
+      throw err;
+    });
+  }
+
+  return p2LotNumberShipmentSchemaReady;
+}
+
+router.get('/billing-allocations', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
+  try {
+    await ensureP2BillingAllocationSchema();
+    const poId = Number(req.query.poId);
+    if (!Number.isFinite(poId)) {
+      return res.status(400).json({ error: 'poId is required' });
+    }
+
+    const poItemsResult = await pool.query(`
+      SELECT id, part_number, part_name, quantity, unit_price
+        FROM p2_purchase_order_items
+       WHERE po_id = $1
+       ORDER BY id
+    `, [poId]);
+
+    const allocationsResult = await pool.query(`
+      SELECT
+        a.id,
+        a.po_id,
+        a.po_item_id,
+        a.po_number,
+        a.part_number,
+        a.bucket_label,
+        a.description,
+        a.customer_po_line,
+        a.quantity_authorized,
+        a.unit_price,
+        a.notes,
+        COALESCE(COUNT(sba.id), 0)::int AS assigned_quantity
+      FROM p2_billing_allocations a
+      LEFT JOIN p2_serial_billing_assignments sba
+        ON sba.allocation_id = a.id
+      WHERE a.po_id = $1
+        AND a.active = true
+      GROUP BY a.id
+      ORDER BY a.created_at, a.bucket_label
+    `, [poId]);
+
+    return res.json({ poItems: poItemsResult.rows, allocations: allocationsResult.rows });
+  } catch (err: any) {
+    console.error('P2 billing allocations fetch error:', err);
+    return res.status(500).json({ error: 'Failed to fetch P2 billing allocations' });
+  }
+});
+
+const createBillingAllocationSchema = z.object({
+  poId: z.coerce.number().int().positive(),
+  poItemId: z.coerce.number().int().positive(),
+  bucketLabel: z.string().trim().min(1, 'Bucket/CLIN label is required'),
+  description: z.string().trim().optional().default(''),
+  customerPoLine: z.string().trim().optional().default(''),
+  quantityAuthorized: z.coerce.number().int().positive('Quantity must be greater than zero'),
+  unitPrice: z.coerce.number().min(0, 'Unit price must be zero or greater'),
+  notes: z.string().trim().optional().default(''),
+});
+
+router.post('/billing-allocations', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
+  try {
+    await ensureP2BillingAllocationSchema();
+    const input = createBillingAllocationSchema.parse(req.body);
+    const actor = (req as any).user?.username || 'shipping';
+
+    const poResult = await pool.query<{ id: number; po_number: string }>(
+      `SELECT id, po_number FROM p2_purchase_orders WHERE id = $1`,
+      [input.poId],
+    );
+    const poRows = poResult.rows;
+    if (poRows.length === 0) return res.status(404).json({ error: 'P2 PO not found' });
+
+    const itemResult = await pool.query<{ id: number; part_number: string }>(
+      `SELECT id, part_number FROM p2_purchase_order_items WHERE id = $1 AND po_id = $2`,
+      [input.poItemId, input.poId],
+    );
+    const itemRows = itemResult.rows;
+    if (itemRows.length === 0) return res.status(404).json({ error: 'P2 PO item not found for this PO' });
+
+    const insertResult = await pool.query(`
+      INSERT INTO p2_billing_allocations (
+        po_id, po_item_id, po_number, part_number, bucket_label, description,
+        customer_po_line, quantity_authorized, unit_price, notes, created_by
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      RETURNING *
+    `, [
+      input.poId,
+      input.poItemId,
+      poRows[0].po_number,
+      itemRows[0].part_number,
+      input.bucketLabel,
+      input.description || null,
+      input.customerPoLine || null,
+      input.quantityAuthorized,
+      input.unitPrice.toFixed(2),
+      input.notes || null,
+      actor,
+    ]);
+    const createdAllocation = insertResult.rows[0];
+
+    await pool.query(`
+      INSERT INTO p2_billing_allocation_audit (entity_type, entity_id, action, new_value, changed_by, reason)
+      VALUES ('billing_allocation', $1, 'CREATE', $2::jsonb, $3, 'Manual bucket setup from customer PO')
+    `, [createdAllocation.id, JSON.stringify(createdAllocation), actor]);
+
+    return res.status(201).json(createdAllocation);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.errors[0].message });
+    }
+    console.error('P2 billing allocation create error:', err);
+    return res.status(500).json({ error: 'Failed to create P2 billing allocation' });
+  }
+});
+
+type BillingBucketOverride = NonNullable<z.infer<typeof createLotSchema>['billingBucketOverrides']>[number];
+
+async function assignSerialBillingBucket(params: {
+  allocationId: string;
+  serializedItemId: string;
+  poId: number;
+  poItemId: number | null;
+  actor: string;
+  assignmentSource: string;
+}): Promise<void> {
+  const updated = await pool.query(
+    `UPDATE p2_serial_billing_assignments
+        SET allocation_id = $1,
+            po_id = $3,
+            po_item_id = $4,
+            assigned_at = now(),
+            assigned_by = $5,
+            assignment_source = $6,
+            updated_at = now()
+      WHERE serialized_item_id = $2
+        AND locked_at IS NULL
+      RETURNING id`,
+    [
+      params.allocationId,
+      params.serializedItemId,
+      params.poId,
+      params.poItemId,
+      params.actor,
+      params.assignmentSource,
+    ],
+  );
+
+  if (updated.rowCount > 0) return;
+
+  const existing = await pool.query<{ id: string }>(
+    `SELECT id
+       FROM p2_serial_billing_assignments
+      WHERE serialized_item_id = $1
+      LIMIT 1`,
+    [params.serializedItemId],
+  );
+  if (existing.rows.length > 0) return;
+
+  await pool.query(
+    `INSERT INTO p2_serial_billing_assignments (
+       allocation_id, serialized_item_id, po_id, po_item_id, assigned_by, assignment_source
+     )
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [
+      params.allocationId,
+      params.serializedItemId,
+      params.poId,
+      params.poItemId,
+      params.actor,
+      params.assignmentSource,
+    ],
+  );
+}
+
+async function assignSerialsToPoItemBuckets(
+  serials: any[],
+  actor: string,
+  bucketOverrides: BillingBucketOverride[] = [],
+): Promise<void> {
+  const serialById = new Map(serials.map((serial) => [serial.id, serial]));
+  const assignedByOverride = new Set<string>();
+  const bucketGroups: { poItemId: number; group: any[]; override?: BillingBucketOverride }[] = [];
+
+  for (const override of bucketOverrides) {
+    const overrideSerialIds = override.serialIds?.filter((serialId) => serialById.has(serialId)) ?? [];
+    if (overrideSerialIds.length === 0) continue;
+
+    const group = overrideSerialIds.map((serialId) => serialById.get(serialId)!);
+    bucketGroups.push({ poItemId: override.poItemId, group, override });
+    for (const serialId of overrideSerialIds) assignedByOverride.add(serialId);
+  }
+
+  const serialsByPoItemId = new Map<number, any[]>();
+  for (const serial of serials) {
+    if (assignedByOverride.has(serial.id)) continue;
+
+    const poItemId = Number(serial.poItemId);
+    if (!Number.isInteger(poItemId) || poItemId <= 0) {
+      throw new Error(`Serial ${serial.serialNumber} is missing a PO item line`);
+    }
+    serialsByPoItemId.set(poItemId, [...(serialsByPoItemId.get(poItemId) ?? []), serial]);
+  }
+
+  const overrideByPoItemId = new Map(bucketOverrides.map((override) => [override.poItemId, override]));
+
+  for (const [poItemId, group] of serialsByPoItemId.entries()) {
+    bucketGroups.push({ poItemId, group, override: overrideByPoItemId.get(poItemId) });
+  }
+
+  for (const { poItemId, group, override } of bucketGroups) {
+    const first = group[0];
+    const targetPoId = override?.poId ?? first.poId;
+    const poItemResult = await pool.query<{
+      id: number;
+      po_id: number;
+      po_number: string;
+      part_number: string;
+      part_name: string | null;
+      quantity: number | null;
+      unit_price: string | number | null;
+    }>(
+      `SELECT i.id, i.po_id, po.po_number, i.part_number, i.part_name, i.quantity, i.unit_price
+         FROM p2_purchase_order_items i
+         JOIN p2_purchase_orders po ON po.id = i.po_id
+        WHERE i.id = $1 AND i.po_id = $2`,
+      [poItemId, targetPoId],
+    );
+    const poItem = poItemResult.rows[0];
+    if (!poItem) throw new Error(`PO item ${poItemId} was not found for PO ${override?.poNumber || first.poNumber}`);
+
+    const authorizedQuantity = Math.max(
+      Number(override?.quantityAuthorized) || 0,
+      Number(poItem.quantity) || 0,
+      group.length,
+    );
+    const unitPrice = Number(override?.unitPrice ?? poItem.unit_price) || 0;
+    const bucketLabel = override?.bucketLabel || `PO Item #${poItem.id}`;
+    const description = override?.description || poItem.part_name || first.partName || null;
+    const customerPoLine = override?.customerPoLine || String(poItem.id);
+    const allocationPoNumber = override?.poNumber || poItem.po_number || first.poNumber;
+
+    const existingAllocationResult = await pool.query<{ id: string }>(
+      `SELECT id
+         FROM p2_billing_allocations
+        WHERE po_id = $1
+          AND po_item_id = $2
+          AND bucket_label = $3
+          AND active = true
+        ORDER BY created_at
+        LIMIT 1`,
+      [poItem.po_id, poItem.id, bucketLabel],
+    );
+
+    let allocationId = existingAllocationResult.rows[0]?.id;
+    if (allocationId) {
+      await pool.query(
+        `UPDATE p2_billing_allocations
+            SET bucket_label = $1,
+                description = COALESCE(description, $2),
+                customer_po_line = COALESCE(customer_po_line, $6),
+                quantity_authorized = GREATEST(quantity_authorized, $3),
+                unit_price = $4,
+                updated_at = now()
+          WHERE id = $5`,
+        [bucketLabel, description, authorizedQuantity, unitPrice.toFixed(2), allocationId, customerPoLine],
+      );
+    } else {
+      const createdAllocationResult = await pool.query<{ id: string }>(
+        `INSERT INTO p2_billing_allocations (
+           po_id, po_item_id, po_number, part_number, bucket_label, description,
+           customer_po_line, quantity_authorized, unit_price, notes, created_by
+         )
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         RETURNING id`,
+        [
+          poItem.po_id,
+          poItem.id,
+          allocationPoNumber,
+          poItem.part_number || first.partNumber,
+          bucketLabel,
+          description,
+          customerPoLine,
+          authorizedQuantity,
+          unitPrice.toFixed(2),
+          override
+            ? 'Pending revised PO bucket created during shipment creation'
+            : 'Auto-created from PO item line during shipment creation',
+          actor,
+        ],
+      );
+      allocationId = createdAllocationResult.rows[0].id;
+    }
+
+    for (const serial of group) {
+      await assignSerialBillingBucket({
+        allocationId,
+        serializedItemId: serial.id,
+        poId: poItem.po_id,
+        poItemId: poItem.id,
+        actor,
+        assignmentSource: 'po_item_shipment_create',
+      });
+    }
+  }
+}
+
 router.post('/lots', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
+    await ensureP2LotNumberShipmentSchema();
+    await ensureP2BillingAllocationSchema();
     const input = createLotSchema.parse(req.body);
+    const actor = (req as any).user?.username || input.createdBy || 'shipping';
 
     const serials = await db
       .select()
@@ -674,8 +1279,134 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       });
     }
 
+    const selectedSerialIdSet = new Set(input.serialIds);
+    const incomingAssignments = input.billingAssignments ?? [];
+    const incomingAssignmentBySerialId = new Map(
+      incomingAssignments.map((assignment) => [assignment.serializedItemId, assignment.allocationId]),
+    );
+    if (incomingAssignments.length === 0) {
+      await assignSerialsToPoItemBuckets(serials, actor, input.billingBucketOverrides ?? []);
+    }
+
+    if (incomingAssignments.length > 0) {
+      const missingIncoming = input.serialIds.filter((serialId) => !incomingAssignmentBySerialId.has(serialId));
+      const outsideShipment = incomingAssignments.filter((assignment) => !selectedSerialIdSet.has(assignment.serializedItemId));
+      if (missingIncoming.length > 0 || outsideShipment.length > 0) {
+        return res.status(400).json({
+          error: 'Every selected serial must have exactly one billing bucket assignment',
+          missingSerialIds: missingIncoming,
+          extraSerialIds: outsideShipment.map((assignment) => assignment.serializedItemId),
+        });
+      }
+
+      const allocationIds = Array.from(new Set(incomingAssignments.map((assignment) => assignment.allocationId)));
+      const allocationResult = await pool.query<{
+        id: string;
+        po_id: number;
+        po_item_id: number | null;
+        part_number: string;
+        bucket_label: string;
+        quantity_authorized: number;
+        assigned_quantity: number;
+      }>(`
+        SELECT
+          a.id,
+          a.po_id,
+          a.po_item_id,
+          a.part_number,
+          a.bucket_label,
+          a.quantity_authorized,
+          COALESCE(COUNT(sba.id) FILTER (WHERE NOT (sba.serialized_item_id = ANY($2::uuid[]))), 0)::int AS assigned_quantity
+        FROM p2_billing_allocations a
+        LEFT JOIN p2_serial_billing_assignments sba ON sba.allocation_id = a.id
+        WHERE a.id = ANY($1::uuid[])
+          AND a.active = true
+        GROUP BY a.id
+      `, [allocationIds, input.serialIds]);
+
+      const allocationRows = allocationResult.rows;
+      if (allocationRows.length !== allocationIds.length) {
+        return res.status(400).json({ error: 'One or more billing buckets were not found or are inactive' });
+      }
+
+      const allocationById = new Map(allocationRows.map((allocation) => [allocation.id, allocation]));
+      const selectedSerialById = new Map(serials.map((serial) => [serial.id, serial]));
+      const requestedCountByAllocation = new Map<string, number>();
+      for (const assignment of incomingAssignments) {
+        const serial = selectedSerialById.get(assignment.serializedItemId);
+        const allocation = allocationById.get(assignment.allocationId);
+        if (!serial || !allocation) continue;
+        if (allocation.po_id !== serial.poId) {
+          return res.status(400).json({ error: `Billing bucket ${allocation.id} does not belong to PO ${serial.poNumber}` });
+        }
+        if (allocation.po_item_id && allocation.po_item_id !== serial.poItemId) {
+          return res.status(400).json({ error: `Billing bucket ${allocation.bucket_label || allocation.id} does not match serial ${serial.serialNumber}` });
+        }
+        if (allocation.part_number !== serial.partNumber) {
+          return res.status(400).json({ error: `Billing bucket ${allocation.id} part number does not match serial ${serial.serialNumber}` });
+        }
+        requestedCountByAllocation.set(
+          assignment.allocationId,
+          (requestedCountByAllocation.get(assignment.allocationId) ?? 0) + 1,
+        );
+      }
+
+      for (const allocation of allocationRows) {
+        const requested = requestedCountByAllocation.get(allocation.id) ?? 0;
+        if (allocation.assigned_quantity + requested > Number(allocation.quantity_authorized)) {
+          return res.status(409).json({
+            error: `Billing bucket quantity exceeded for ${allocation.id}`,
+            quantityAuthorized: allocation.quantity_authorized,
+            alreadyAssigned: allocation.assigned_quantity,
+            requested,
+          });
+        }
+      }
+
+      for (const assignment of incomingAssignments) {
+        const serial = selectedSerialById.get(assignment.serializedItemId)!;
+        await assignSerialBillingBucket({
+          allocationId: assignment.allocationId,
+          serializedItemId: assignment.serializedItemId,
+          poId: serial.poId,
+          poItemId: serial.poItemId,
+          actor,
+          assignmentSource: 'shipment_create',
+        });
+
+        await pool.query(`
+          INSERT INTO p2_billing_allocation_audit (entity_type, entity_id, action, new_value, changed_by, reason)
+          VALUES ('serial_billing_assignment', $1, 'ASSIGN_FOR_SHIPMENT', $2::jsonb, $3, 'Assigned during P2 shipment creation')
+        `, [
+          assignment.serializedItemId,
+          JSON.stringify({
+            serializedItemId: assignment.serializedItemId,
+            allocationId: assignment.allocationId,
+            poId: serial.poId,
+            poItemId: serial.poItemId,
+          }),
+          actor,
+        ]);
+      }
+    }
+
+    const assignmentResult = await pool.query<{ serialized_item_id: string }>(`
+      SELECT serialized_item_id
+      FROM p2_serial_billing_assignments
+      WHERE serialized_item_id = ANY($1::uuid[])
+    `, [input.serialIds]);
+    const assignmentRows = assignmentResult.rows;
+    const assignedSerialIds = new Set(assignmentRows.map((row) => row.serialized_item_id));
+    const missingAssignments = input.serialIds.filter((serialId) => !assignedSerialIds.has(serialId));
+    if (missingAssignments.length > 0) {
+      return res.status(400).json({
+        error: 'Billing bucket assignment is required before shipment can be created',
+        missingSerialIds: missingAssignments,
+      });
+    }
+
     // Guard: serial reuse — reject if any serial already exists in another lot
-    const existingLots = await pool.query<{
+    const existingLotsResult = await pool.query<{
       id: string;
       lot_number: string;
       serialized_item_ids: string[] | null;
@@ -683,10 +1414,11 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
     }>(
       `SELECT id, lot_number, serialized_item_ids, packing_slip_id
          FROM p2_lot_numbers
-        WHERE serialized_item_ids ?| $1::text[]
+        WHERE COALESCE(serialized_item_ids, '[]'::jsonb) ?| $1::text[]
           AND COALESCE(status, '') <> 'VOID'`,
       [input.serialIds]
     );
+    const existingLots = existingLotsResult.rows;
     if (existingLots.length > 0) {
       const requestedSerialIds = new Set(input.serialIds);
       const recoverableLot = existingLots.find((lot) => {
@@ -713,38 +1445,78 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
     }
 
     const first = serials[0];
+    const poItemIds = Array.from(new Set(serials.map((serial) => serial.poItemId)));
+    const fullShipmentOverride = (input.billingBucketOverrides ?? []).find((override) => {
+      const overrideSerialIds = new Set(override.serialIds ?? []);
+      return (
+        overrideSerialIds.size === input.serialIds.length &&
+        input.serialIds.every((serialId) => overrideSerialIds.has(serialId))
+      );
+    });
+    const lotPoItemId = fullShipmentOverride?.poItemId ?? (poItemIds.length === 1 ? poItemIds[0] : null);
+    const lotPoId = fullShipmentOverride?.poId ?? first.poId;
+    const lotPoNumber = fullShipmentOverride?.poNumber || first.poNumber;
+    const lotBucketSerial = lotPoItemId
+      ? serials.find((serial) => serial.poItemId === lotPoItemId) ?? first
+      : first;
     const lotNumber = await generateSequentialId('LOT', 'p2_lot_numbers', 'lot_number');
 
     const manufacturingDate =
       (serials.map((s) => s.completedAt).filter(Boolean).sort().pop() as Date | null) ||
       new Date();
 
-    const [lot] = await db
-      .insert(p2LotNumbers)
-      .values({
+    const lotResult = await pgPool.query<typeof p2LotNumbers.$inferSelect>(
+      `INSERT INTO p2_lot_numbers (
+         lot_number, lot_type, part_number, part_name, customer_id, customer_name,
+         po_number, po_id, po_item_id, quantity, serialized_item_ids, barcodes,
+         manufacturing_date, status, created_by, created_at, updated_at
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15,now(),now())
+       RETURNING *`,
+      [
         lotNumber,
-        lotType: 'SHIPPING',
-        partNumber: first.partNumber,
-        partName: first.partName,
-        customerId: first.customerId,
-        customerName: first.customerName,
-        poNumber: first.poNumber, // kept for display/legacy
-        poId: first.poId,         // hard FK — serial already carries the integer po_id
-        quantity: serials.length,
-        serializedItemIds: input.serialIds,
-        barcodes: serials.map((s) => s.barcode),
+        'SHIPPING',
+        lotBucketSerial.partNumber,
+        lotBucketSerial.partName,
+        first.customerId,
+        first.customerName,
+        lotPoNumber,
+        lotPoId,
+        lotPoItemId,
+        serials.length,
+        JSON.stringify(input.serialIds),
+        JSON.stringify(serials.map((s) => s.barcode).filter(Boolean)),
         manufacturingDate,
-        status: 'OPEN',
-        createdBy: input.createdBy,
-      })
-      .returning();
+        'OPEN',
+        input.createdBy || actor || 'shipping',
+      ],
+    );
+    const lot = lotResult.rows[0];
+    if (!lot) throw new Error('Shipping lot insert returned no row');
+
+    await pool.query(`
+      UPDATE p2_serial_billing_assignments
+         SET lot_id = $1,
+             updated_at = now()
+       WHERE serialized_item_id = ANY($2::uuid[])
+         AND locked_at IS NULL
+    `, [lot.id, input.serialIds]);
 
     return res.status(201).json(lot);
   } catch (err: any) {
     if (err instanceof z.ZodError)
       return res.status(400).json({ error: err.errors[0].message });
+    if (typeof err?.message === 'string' && /PO item|PO line|Serial .*missing/i.test(err.message)) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('Create lot error:', err);
-    return res.status(500).json({ error: 'Failed to create lot' });
+    return res.status(500).json({
+      error: 'Failed to create lot',
+      message: err?.message || 'Unknown create-lot error',
+      code: err?.code,
+      detail: err?.detail,
+      hint: err?.hint,
+    });
   }
 });
 
@@ -757,6 +1529,8 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
   try {
     const rows = await pool.query<{
       po_id: number;
+      source_po_ids: number[] | null;
+      source_po_numbers: string[] | null;
       lot_id: string;
       lot_number: string;
       slip_id: string;
@@ -773,42 +1547,71 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
     }>(`
       SELECT
         l.po_id,
+        COALESCE(source.source_po_ids, ARRAY[]::int[]) AS source_po_ids,
+        COALESCE(source.source_po_numbers, ARRAY[]::text[]) AS source_po_numbers,
         l.id           AS lot_id,
         l.lot_number,
         ps.id          AS slip_id,
         ps.packing_slip_number AS slip_number,
-        cc.id          AS cert_id,
-        cc.certificate_number  AS cert_number,
+        cc.id AS cert_id,
+        cc.certificate_number AS cert_number,
         inv.id AS invoice_id,
         inv.invoice_number,
         inv.status AS invoice_status,
         inv.total_amount AS invoice_total_amount,
-        je.id AS journal_entry_id,
-        je.status AS journal_entry_status,
-        COALESCE(jlc.line_count, 0)::int AS journal_line_count
+        inv.journal_entry_id,
+        inv.journal_entry_status,
+        COALESCE(inv.journal_line_count, 0)::int AS journal_line_count
       FROM p2_lot_numbers l
       JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
-      LEFT JOIN p2_certificates_of_conformance cc ON cc.id = l.certificate_id
       LEFT JOIN LATERAL (
-        SELECT id, invoice_number, status, total_amount
-        FROM ar_invoices
-        WHERE packing_slip_id = ps.id OR lot_id = l.id
-        ORDER BY created_at DESC
+        SELECT coc.id, coc.certificate_number
+        FROM p2_certificates_of_conformance coc
+        WHERE coc.id = l.certificate_id
+           OR coc.lot_number_id = l.id
+           OR coc.lot_number = l.lot_number
+        ORDER BY
+          CASE WHEN coc.id = l.certificate_id THEN 0 ELSE 1 END,
+          coc.created_at DESC
         LIMIT 1
-      ) inv ON true
+      ) cc ON TRUE
       LEFT JOIN LATERAL (
-        SELECT id, status
-        FROM journal_entries
-        WHERE reference_uuid = inv.id
-          AND transaction_type = 'AR_INVOICE'
-        ORDER BY created_at DESC
+        SELECT
+          ar.id,
+          ar.invoice_number,
+          ar.status,
+          ar.total_amount,
+          je.id AS journal_entry_id,
+          je.status AS journal_entry_status,
+          (
+            SELECT COUNT(*)
+            FROM journal_lines jl
+            WHERE jl.journal_entry_id = je.id
+          ) AS journal_line_count
+        FROM ar_invoices ar
+        LEFT JOIN journal_entries je ON je.reference_uuid = ar.id
+        WHERE (ar.lot_id = l.id AND ar.status <> 'VOID' AND ar.packing_slip_id IS NULL)
+          OR ar.packing_slip_id = ps.id
+          OR (
+            l.packing_slip_id IS NOT NULL
+            AND ar.packing_slip_id = l.packing_slip_id
+          )
+        ORDER BY ar.created_at DESC
         LIMIT 1
-      ) je ON true
+      ) inv ON TRUE
       LEFT JOIN LATERAL (
-        SELECT COUNT(*)::int AS line_count
-        FROM journal_lines
-        WHERE journal_entry_id = je.id
-      ) jlc ON true
+        SELECT
+          ARRAY_AGG(DISTINCT si.po_id) FILTER (WHERE si.po_id IS NOT NULL) AS source_po_ids,
+          ARRAY_AGG(DISTINCT si.po_number) FILTER (WHERE si.po_number IS NOT NULL) AS source_po_numbers
+        FROM jsonb_array_elements_text(
+          CASE
+            WHEN jsonb_typeof(COALESCE(l.serialized_item_ids, '[]'::jsonb)) = 'array'
+              THEN COALESCE(l.serialized_item_ids, '[]'::jsonb)
+            ELSE '[]'::jsonb
+          END
+        ) serial(serial_id)
+        JOIN p2_serialized_items si ON si.id = serial.serial_id::uuid
+      ) source ON true
       WHERE l.po_id IS NOT NULL
         AND l.packing_slip_id IS NOT NULL
         AND COALESCE(l.status, '') <> 'VOID'
@@ -864,14 +1667,33 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       .where(eq(p2LotNumbers.id, input.lotId));
     if (!lot) return res.status(404).json({ error: 'Lot not found' });
 
-    // Guard: one packing slip per lot.
-    // This guard checks whether the lot already has a packing slip assigned via
-    // p2_lot_numbers.packing_slip_id. Replacement slips are always created for
-    // NEW lots (the replacement items are repacked as a new lot with new serials),
-    // so this guard does not conflict with replacements — each lot can only ever
-    // have one packing slip regardless of whether the slip is a replacement.
-    if (lot.packingSlipId) {
+    // Guard: one current packing slip per lot. A same-lot replacement is allowed
+    // only when it explicitly replaces the current slip and no active invoice remains.
+    const replacingCurrentSlip = !!(
+      lot.packingSlipId &&
+      input.replacesPackingSlipId &&
+      input.replacesPackingSlipId === lot.packingSlipId
+    );
+
+    if (lot.packingSlipId && !replacingCurrentSlip) {
       return res.status(409).json({ error: 'Packing slip already exists for this lot' });
+    }
+
+    if (replacingCurrentSlip) {
+      const blockingInvoices = await pool.query<{ invoice_number: string; status: string }>(
+        `SELECT invoice_number, status
+           FROM ar_invoices
+          WHERE lot_id = $1::uuid
+             OR packing_slip_id = $2::uuid`,
+        [lot.id, lot.packingSlipId]
+      );
+      const activeInvoices = blockingInvoices.rows.filter((invoice) => invoice.status !== 'VOID');
+      if (activeInvoices.length > 0) {
+        return res.status(409).json({
+          error: 'Current packing slip still has an active invoice. Void the invoice before creating a replacement packing slip.',
+          invoices: activeInvoices,
+        });
+      }
     }
 
     const [existingSlipForLot] = await db
@@ -879,7 +1701,7 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       .from(p2PackingSlips)
       .where(eq(p2PackingSlips.lotNumberId, lot.id));
 
-    if (existingSlipForLot) {
+    if (existingSlipForLot && !replacingCurrentSlip) {
       await db
         .update(p2LotNumbers)
         .set({ packingSlipId: existingSlipForLot.id })
@@ -904,18 +1726,47 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       .from(p2SerializedItems)
       .where(inArray(p2SerializedItems.id, serialIds));
 
+    const assignmentRows = serialIds.length > 0
+      ? await pool.query<{
+          serialized_item_id: string;
+          allocation_id: string;
+          po_item_id: number | null;
+          bucket_label: string;
+          customer_po_line: string | null;
+          unit_price: string;
+        }>(`
+          SELECT
+            sba.serialized_item_id,
+            sba.allocation_id,
+            a.po_item_id,
+            a.bucket_label,
+            a.customer_po_line,
+            a.unit_price
+          FROM p2_serial_billing_assignments sba
+          JOIN p2_billing_allocations a ON a.id = sba.allocation_id
+          WHERE sba.serialized_item_id = ANY($1::uuid[])
+        `, [serialIds])
+      : [];
+    const assignmentBySerialId = new Map(assignmentRows.map((row) => [row.serialized_item_id, row]));
+
     const byPart: Record<string, typeof serials> = {};
     for (const s of serials) {
-      const key = s.poItemId ? String(s.poItemId) : s.partNumber;
+      const assignment = assignmentBySerialId.get(s.id);
+      const key = assignment?.allocation_id || `po-item:${s.poItemId || s.partNumber}`;
       if (!byPart[key]) byPart[key] = [];
       byPart[key].push(s);
     }
 
     const lineItems = Object.values(byPart).map((group) => {
       const assignedSku = assignedSkuFromSerials(group) || group[0].sku || null;
+      const firstAssignment = assignmentBySerialId.get(group[0].id);
 
       return {
-        poItemId: group[0].poItemId,
+        poItemId: firstAssignment?.po_item_id || group[0].poItemId,
+        billingAllocationId: firstAssignment?.allocation_id || null,
+        billingBucketLabel: firstAssignment?.bucket_label || null,
+        customerPoLine: firstAssignment?.customer_po_line || null,
+        unitPrice: firstAssignment?.unit_price || null,
         sku: assignedSku,
         partNumber: assignedSku || group[0].partNumber,
         partName: group[0].drawingName || group[0].partName,
@@ -932,8 +1783,11 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
 
     const customerAddress = customer ? buildCustomerAddress(customer) : '';
 
-    const { storage } = await import('../../storage');
-    const invoiceNumber = await storage.getNextInvoiceNumber(lot.customerId || '', lot.customerName || '');
+    const reservation = await reserveP2InvoiceNumber({
+      customerId: lot.customerId || '',
+      customerName: lot.customerName || '',
+    });
+    const invoiceNumber = reservation.invoiceNumber;
     const packingSlipNumber = invoiceNumber;
 
     let [slip] = await db
@@ -946,7 +1800,7 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
         customerAddress,
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         lineItems,
         totalQuantity: serials.length,
         status: 'DRAFT',
@@ -956,6 +1810,32 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
         isNoChargeReplacement: input.isNoChargeReplacement ?? false,
       })
       .returning();
+
+    try {
+      await recordP2InvoiceNumberAudit({
+        packingSlipId: slip.id,
+        customerId: lot.customerId || '',
+        oldPackingSlipNumber: null,
+        newPackingSlipNumber: invoiceNumber,
+        oldInvoiceNumber: null,
+        newInvoiceNumber: invoiceNumber,
+        action: 'RESERVE_FOR_PACKING_SLIP',
+        reason: 'Reserved during P2 packing slip creation',
+        changedBy: input.createdBy || 'system',
+        metadata: {
+          prefix: reservation.prefix,
+          year: reservation.year,
+          sequenceNumber: reservation.sequenceNumber,
+          lotId: lot.id,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('[P2Shipping] P2 invoice number audit failed during packing slip creation:', {
+        packingSlipId: slip.id,
+        invoiceNumber,
+        auditErr,
+      });
+    }
 
     try {
       const snapshot = await persistP2PackingSlipPdfSnapshot(slip);
@@ -983,6 +1863,36 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       .update(p2LotNumbers)
       .set({ packingSlipId: slip.id })
       .where(eq(p2LotNumbers.id, lot.id));
+
+    if (replacingCurrentSlip) {
+      await pool.query(`
+        UPDATE p2_serial_billing_assignments
+           SET packing_slip_id = $1,
+               invoice_id = NULL,
+               locked_at = NULL,
+               locked_by = NULL,
+               lock_reason = NULL,
+               updated_at = now()
+         WHERE serialized_item_id = ANY($2::uuid[])
+           AND (
+             locked_at IS NULL
+             OR invoice_id IN (
+               SELECT id
+                 FROM ar_invoices
+                WHERE status = 'VOID'
+                  AND (lot_id = $3::uuid OR packing_slip_id = $4::uuid)
+             )
+           )
+      `, [slip.id, serialIds, lot.id, input.replacesPackingSlipId]);
+    } else {
+      await pool.query(`
+        UPDATE p2_serial_billing_assignments
+           SET packing_slip_id = $1,
+               updated_at = now()
+         WHERE serialized_item_id = ANY($2::uuid[])
+           AND locked_at IS NULL
+      `, [slip.id, serialIds]);
+    }
 
     return res.status(201).json(slip);
   } catch (err: any) {
@@ -1035,7 +1945,18 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
       lineItems = Array.isArray(slip.lineItems) ? slip.lineItems : [];
     }
 
-    return res.json({ ...slip, lineItems, originalPackingSlip, replacementSlips });
+    return res.json({
+      ...slip,
+      poNumber: formatP2DocumentPoNumber(slip.poNumber),
+      lineItems,
+      originalPackingSlip: originalPackingSlip
+        ? { ...originalPackingSlip, poNumber: formatP2DocumentPoNumber(originalPackingSlip.poNumber) }
+        : null,
+      replacementSlips: replacementSlips.map((replacement) => ({
+        ...replacement,
+        poNumber: formatP2DocumentPoNumber(replacement.poNumber),
+      })),
+    });
   } catch (err: any) {
     console.error('Get packing slip error:', err);
     return res.status(500).json({ error: 'Failed to fetch packing slip' });
@@ -1068,11 +1989,14 @@ router.patch(
       const slipRows = await pool.query<{
         id: string;
         packing_slip_number: string;
+        invoice_number: string | null;
         ship_date: string | null;
         lot_number: string | null;
         lot_number_id: string | null;
+        customer_id: string;
+        customer_name: string;
       }>(
-        `SELECT id, packing_slip_number, ship_date, lot_number, lot_number_id FROM p2_packing_slips WHERE id = $1`,
+        `SELECT id, packing_slip_number, invoice_number, ship_date, lot_number, lot_number_id, customer_id, customer_name FROM p2_packing_slips WHERE id = $1`,
         [slipId]
       );
       if (slipRows.length === 0) {
@@ -1083,21 +2007,51 @@ router.patch(
       const setClauses: string[] = ['updated_at = NOW()'];
       const params: any[] = [];
       const auditEntries: { fieldName: string; oldValue: string | null; newValue: string | null }[] = [];
+      let invoiceNumberChanged = false;
+      let clearPdfSnapshot = false;
 
       if (input.packingSlipNumber !== undefined && input.packingSlipNumber !== slip.packing_slip_number) {
-        // Check uniqueness
+        const linkedInvoiceRows = await pool.query<{ id: string; invoice_number: string }>(
+          `SELECT id, invoice_number FROM ar_invoices WHERE packing_slip_id = $1 LIMIT 1`,
+          [slipId]
+        );
+        if (linkedInvoiceRows.length > 0) {
+          return res.status(409).json({
+            error: `Cannot change the invoice number after invoice ${linkedInvoiceRows[0].invoice_number} has been created. Edit or void the invoice instead.`,
+          });
+        }
+
+        // Check uniqueness across both visible packing-slip and AR invoice numbers.
         const dupRows = await pool.query<{ id: string }>(
-          `SELECT id FROM p2_packing_slips WHERE packing_slip_number = $1 AND id != $2`,
+          `SELECT id FROM p2_packing_slips
+            WHERE (packing_slip_number = $1 OR invoice_number = $1)
+              AND id != $2`,
           [input.packingSlipNumber, slipId]
         );
         if (dupRows.length > 0) {
           return res.status(409).json({ error: 'A packing slip with that number already exists' });
         }
+        const dupInvoiceRows = await pool.query<{ id: string }>(
+          `SELECT id FROM ar_invoices WHERE invoice_number = $1 LIMIT 1`,
+          [input.packingSlipNumber]
+        );
+        if (dupInvoiceRows.length > 0) {
+          return res.status(409).json({ error: 'An invoice with that number already exists' });
+        }
+
         params.push(input.packingSlipNumber);
         setClauses.push(`packing_slip_number = $${params.length}`);
+        setClauses.push(`invoice_number = $${params.length}`);
+        invoiceNumberChanged = true;
+        clearPdfSnapshot = true;
         auditEntries.push({
           fieldName: 'packing_slip_number',
           oldValue: slip.packing_slip_number,
+          newValue: input.packingSlipNumber,
+        });
+        auditEntries.push({
+          fieldName: 'invoice_number',
+          oldValue: slip.invoice_number,
           newValue: input.packingSlipNumber,
         });
       }
@@ -1108,6 +2062,7 @@ router.patch(
         if (oldVal !== newVal) {
           params.push(newVal);
           setClauses.push(`ship_date = $${params.length}`);
+          clearPdfSnapshot = true;
           auditEntries.push({
             fieldName: 'ship_date',
             oldValue: oldVal,
@@ -1130,6 +2085,7 @@ router.patch(
         }
         params.push(input.lotNumber);
         setClauses.push(`lot_number = $${params.length}`);
+        clearPdfSnapshot = true;
         auditEntries.push({
           fieldName: 'lot_number',
           oldValue: slip.lot_number,
@@ -1145,6 +2101,10 @@ router.patch(
           [slipId]
         );
         return res.json(currentRows[0]);
+      }
+
+      if (clearPdfSnapshot) {
+        setClauses.push(`external_pdf_url = NULL`);
       }
 
       // Execute update + audit log in a single transaction using one client connection
@@ -1172,6 +2132,32 @@ router.patch(
         }
 
         await client.query('COMMIT');
+        if (invoiceNumberChanged && input.packingSlipNumber !== undefined) {
+          try {
+            await syncP2InvoiceSequenceFromManualNumber({
+              customerId: slip.customer_id,
+              customerName: slip.customer_name,
+              invoiceNumber: input.packingSlipNumber,
+            });
+            await recordP2InvoiceNumberAudit({
+              packingSlipId: slipId,
+              customerId: slip.customer_id,
+              oldPackingSlipNumber: slip.packing_slip_number,
+              newPackingSlipNumber: input.packingSlipNumber,
+              oldInvoiceNumber: slip.invoice_number,
+              newInvoiceNumber: input.packingSlipNumber,
+              action: 'MANUAL_EDIT',
+              reason: input.reason,
+              changedBy: actor,
+            });
+          } catch (numberAuditErr) {
+            console.warn('[P2Shipping] P2 invoice number sequence/audit sync failed after manual edit:', {
+              packingSlipId: slipId,
+              invoiceNumber: input.packingSlipNumber,
+              numberAuditErr,
+            });
+          }
+        }
         return res.json(updated);
       } catch (txErr) {
         await client.query('ROLLBACK').catch(() => {});
@@ -1315,7 +2301,9 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
 
     const slipData: PackingSlipData = {
       packingSlipNumber: slip.packingSlipNumber,
-      invoiceNumber: slip.invoiceNumber || slip.packingSlipNumber,
+      invoiceNumber: await getLinkedP2InvoiceNumberForPackingSlip(slip.id, slip.lotNumberId)
+        || slip.invoiceNumber
+        || slip.packingSlipNumber,
       poNumber: slip.poNumber || undefined,
       lotNumber: slip.lotNumber || undefined,
       date: (slip.shipDate || slip.createdAt)
@@ -1560,9 +2548,10 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
          FROM p2_certificates_of_conformance
         WHERE id = COALESCE($1::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
            OR lot_number_id = $2::uuid
+           OR lot_number = $3
         ORDER BY created_at DESC
         LIMIT 1`,
-      [lot.certificateId, lot.id]
+      [lot.certificateId, lot.id, lot.lotNumber]
     );
     if (existingCertRows.length > 0) {
       const existingCert = existingCertRows[0];
@@ -1580,6 +2569,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
         id: existingCert.id,
         certificateNumber: existingCert.certificate_number,
         alreadyExists: true,
+        reused: true,
       });
     }
 
@@ -1628,7 +2618,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
         customerAddress,
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         partNumber: assignedSku || lot.partNumber,
         partName: lot.partName,
         quantity: serials.length,
@@ -1654,7 +2644,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
       .set({ certificateId: cert.id })
       .where(eq(p2LotNumbers.id, lot.id));
 
-    return res.status(201).json(cert);
+    return res.status(201).json({ ...cert, poNumber: formatP2DocumentPoNumber(cert.poNumber) });
   } catch (err: any) {
     if (err instanceof z.ZodError)
       return res.status(400).json({ error: err.errors[0].message });
@@ -1688,6 +2678,7 @@ router.get('/certificates/:id', async (req: Request, res: Response) => {
     const assignedSku = await getAssignedSkuForLot(cert.lotNumberId);
     return res.json({
       ...cert,
+      poNumber: formatP2DocumentPoNumber(cert.poNumber),
       partNumber: assignedSku || cert.partNumber,
       specialProcesses: getSpecialProcesses(cert.processRecords),
       qaMgrTitle: getQaMgrTitle(cert.traceabilityData),
@@ -1786,7 +2777,7 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
 
     const infoRows: [string, string][] = [
       ['Customer:', cert.customerName],
-      ['Purchase Order #:', cert.poNumber || '—'],
+      ['Purchase Order #:', formatP2DocumentPoNumber(cert.poNumber) || '—'],
       [assignedSku ? 'SKU:' : 'Part Number:', displayPartNumber],
       ['Part Description:', cert.partName || '—'],
       ['Special Processes:', specialProcesses],
@@ -2073,6 +3064,31 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
       );
       if (certRows.length) certificate = certRows[0];
     }
+    if (!certificate) {
+      const certRows = await pool.query(
+        `SELECT id, certificate_number, lot_number, customer_id, customer_name,
+                po_number, part_number, part_name, quantity, serial_numbers,
+                manufacturing_date, ship_date, status, approved_by, approved_at,
+                issued_at, created_at
+         FROM p2_certificates_of_conformance
+         WHERE lot_number_id = $1 OR lot_number = $2
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [lot.id, lot.lot_number]
+      );
+      if (certRows.length) {
+        certificate = certRows[0];
+        await pool.query(
+          `UPDATE p2_lot_numbers
+             SET certificate_id = $1,
+                 updated_at = NOW()
+           WHERE id = $2
+             AND certificate_id IS DISTINCT FROM $1`,
+          [certificate.id, lot.id]
+        );
+        lot.certificate_id = certificate.id;
+      }
+    }
 
     // Fetch serialized items in this lot
     let serializedItems: any[] = [];
@@ -2098,23 +3114,10 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
          inv.total_amount,
          inv.status,
          inv.packing_slip_id,
-         je.id AS journal_entry_id,
-         je.status AS journal_entry_status,
-         COALESCE(jlc.line_count, 0)::int AS journal_line_count
+         NULL::integer AS journal_entry_id,
+         NULL::text AS journal_entry_status,
+         0::int AS journal_line_count
        FROM ar_invoices inv
-       LEFT JOIN LATERAL (
-         SELECT id, status
-         FROM journal_entries
-         WHERE reference_uuid = inv.id
-           AND transaction_type = 'AR_INVOICE'
-         ORDER BY created_at DESC
-         LIMIT 1
-       ) je ON true
-       LEFT JOIN LATERAL (
-         SELECT COUNT(*)::int AS line_count
-         FROM journal_lines
-         WHERE journal_entry_id = je.id
-       ) jlc ON true
        WHERE inv.lot_id = $1 OR ($2::uuid IS NOT NULL AND inv.packing_slip_id = $2::uuid)
        ORDER BY inv.created_at DESC
        LIMIT 1`,

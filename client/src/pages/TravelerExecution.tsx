@@ -183,6 +183,7 @@ interface Traveler {
   quantity: number;
   status: string;
   partRoutingId: string | null;
+  wadRevisionId: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -191,6 +192,12 @@ interface TravelerWithDetails {
   traveler: Traveler;
   steps: TravelerStep[];
   events: TravelerEvent[];
+}
+
+interface WadRevisionBanner {
+  id: string;
+  revisionCode: string;
+  status: string;
 }
 
 const firstTraceValue = (...values: Array<string | undefined | null>) =>
@@ -389,7 +396,7 @@ export default function TravelerExecution() {
   // Labor context query — fetched per-step for NOT_STARTED steps (Task #1235)
   interface LaborContext {
     chargeCode: string | null;
-    chargeCodeResolvedFrom: 'wad_default' | 'traveler_default' | 'wad_department' | 'department_match' | null;
+    chargeCodeResolvedFrom: 'wad_default' | 'traveler_default' | 'wad_department' | 'department_match' | 'wad_wizard' | null;
     chargeCodeError: string | null;
     isOverrun: boolean;
     nearlyExhausted: boolean;
@@ -517,6 +524,15 @@ export default function TravelerExecution() {
   });
 
   const { traveler, steps = [], events = [] } = travelerData || {};
+  const { data: wadRevisionBanner } = useQuery<WadRevisionBanner | null>({
+    queryKey: ['/api/wad-revisions', traveler?.wadRevisionId],
+    queryFn: async () => {
+      if (!traveler?.wadRevisionId) return null;
+      return apiRequest(`/api/wad-revisions/${traveler.wadRevisionId}`);
+    },
+    enabled: !!traveler?.wadRevisionId,
+  });
+
   const legacyRocBackfillEditScope = useMemo(() => {
     const stepIds = new Set<string>();
     const taskIds = new Set<string>();
@@ -1504,6 +1520,15 @@ export default function TravelerExecution() {
         </div>
       </div>
 
+      {traveler.wadRevisionId && (
+        <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <ShieldCheck className="h-4 w-4 shrink-0" />
+          <span>
+            This traveler was created under WAD {wadRevisionBanner?.revisionCode ?? 'revision on record'}.
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-1 space-y-4">
           <Card>
@@ -2195,7 +2220,7 @@ export default function TravelerExecution() {
                               Charge code:{' '}
                               <span className="font-mono font-semibold text-foreground">{laborContext.chargeCode}</span>
                               <span className="ml-1 text-[10px] text-muted-foreground">
-                                ({laborContext.chargeCodeResolvedFrom === 'wad_default' ? 'WAD default' : laborContext.chargeCodeResolvedFrom === 'traveler_default' ? 'traveler default' : laborContext.chargeCodeResolvedFrom === 'wad_department' ? 'WAD dept' : 'dept match'})
+                                ({laborContext.chargeCodeResolvedFrom === 'wad_default' ? 'WAD default' : laborContext.chargeCodeResolvedFrom === 'traveler_default' ? 'traveler default' : laborContext.chargeCodeResolvedFrom === 'wad_department' ? 'WAD dept' : laborContext.chargeCodeResolvedFrom === 'wad_wizard' ? 'WAD Step 4' : 'dept match'})
                               </span>
                             </span>
                           ) : (

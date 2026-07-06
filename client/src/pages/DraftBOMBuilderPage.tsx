@@ -1,22 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import {
+  ArrowUpDown,
   Calculator,
   Check,
+  Clock,
+  Eye,
   FileSpreadsheet,
+  FilePlus,
   Filter,
+  FolderOpen,
   Layers,
+  Lock,
   PackagePlus,
   Plus,
   Save,
+  Search,
+  Send,
   SlidersHorizontal,
   Trash2,
   Upload,
+  Users,
+  X,
 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
@@ -38,6 +49,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { privateerDraftBomLines, type PrivateerDraftBomLine } from '@/data/privateerDraftBom';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { nrcRowTotal, type ChargeTiming, type NrcCategory, type NrcCostRow } from '@/lib/estimatingCostModel';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 
@@ -47,6 +59,7 @@ type BomLine = PrivateerDraftBomLine & {
   customFields?: Record<string, string>;
   inventoryItemId?: number | null;
   inventoryItemName?: string | null;
+  importedSource?: 'spreadsheet';
   isDraftPart?: boolean;
   isManufactured?: boolean;
   firstDepartment?: string;
@@ -85,8 +98,12 @@ type DraftPartBom = {
   updatedAt: string;
   rootPart: DraftBomPart;
   parts: DraftBomPart[];
+  robustBomId?: string | null;
+  robustBomRevisionId?: string | null;
+  robustBomStatus?: 'draft' | 'active' | null;
+  robustBomAcceptedAt?: string | null;
 };
-type BuiltInWorkspaceTabId = 'po-draft' | 'parts-request' | 'direct-labor' | 'bom-wizard' | 'assembly-tree';
+type BuiltInWorkspaceTabId = 'po-draft' | 'parts-request' | 'direct-labor' | 'nrc' | 'bom-wizard' | 'assembly-tree';
 type CustomWorkspaceTabId = `custom:${string}`;
 type WorkspaceTabId = BuiltInWorkspaceTabId | CustomWorkspaceTabId;
 type DraftLaborEstimateLine = {
@@ -117,6 +134,11 @@ type PartsRequestColumnId =
   | 'service'
   | 'agPartNumber'
   | 'status';
+type PartsRequestTableColumnId = 'include' | 'description' | PartsRequestColumnId | `custom:${string}`;
+type PartsRequestSortState = {
+  columnId: PartsRequestTableColumnId;
+  direction: 'asc' | 'desc';
+} | null;
 type DirectLaborColumnId = 'employeeRole' | 'hourlyRate' | 'hoursPerPart' | 'quantityPerPo' | 'extLabor' | 'remove';
 type SourcingColumnId = 'supplier' | 'supplierItemId' | 'agPartNumber' | 'description' | 'qtyNeeded' | 'unitCost' | 'extCost' | 'action' | 'status';
 
@@ -133,7 +155,10 @@ type BomDraft = {
   notes: string;
   updatedAt: string;
   lines: BomLine[];
+  partsRequestLines?: BomLine[];
+  savedDraftBoms?: DraftPartBom[];
   laborEstimateLines?: DraftLaborEstimateLine[];
+  nrcRows?: NrcCostRow[];
   customLaborDepartments?: string[];
   poVisibleColumns?: PoColumnId[];
   partsRequestVisibleColumns?: PartsRequestColumnId[];
@@ -142,6 +167,14 @@ type BomDraft = {
   customColumns?: string[];
   customPoColumns?: string[];
   workspaceTabs?: WorkspaceTabId[];
+  visibility?: 'public' | 'private';
+  allowPublicEdit?: boolean;
+  canEdit?: boolean;
+  canManageAccess?: boolean;
+  createdAt?: string;
+  createdByUserId?: number | null;
+  createdByDisplayName?: string | null;
+  updatedByDisplayName?: string | null;
 };
 
 type ProjectOption = {
@@ -192,14 +225,43 @@ type InventoryItemOption = {
   isPacket?: boolean | null;
   manufacturedCategory?: string | null;
 };
+type DraftFinalizedInventoryItem = InventoryItemOption & {
+  id: number;
+  agPartNumber: string;
+  name: string;
+};
+type RobustBomAcceptResult = {
+  bom?: { id?: string | null } | null;
+  revision?: { id?: string | null } | null;
+  status?: 'draft' | 'active';
+  lineCount?: number;
+  p2PoBom?: { id?: string | null } | null;
+  p2PoBomItemCount?: number;
+  linkedP2PoIds?: number[];
+};
+
+type InventoryDepartmentOption = {
+  id: number;
+  name: string;
+};
+
+type DepartmentOption = {
+  value: string;
+  label: string;
+};
 
 type AssemblyStockState = 'on-hand' | 'low-stock' | 'blocked';
+type AssemblyManufactureState = 'ready' | 'waiting' | 'needs-plan';
 type AssemblyTreeNode = {
   id: string;
   partNumber: string;
   description: string;
+  bomLabel?: string;
+  isManufactured: boolean;
   quantityRequired: number;
   orderStatus: BomStatus;
+  displayStatus: BomStatus;
+  manufactureState: AssemblyManufactureState;
   inventoryItem: InventoryItemOption | null;
   stockState: AssemblyStockState;
   availableQuantity: number;
@@ -208,8 +270,15 @@ type AssemblyTreeNode = {
 };
 type AssemblyLineEntry = {
   line: BomLine;
+  bom: DraftPartBom;
   part: DraftBomPart;
   childComponents: DraftBomComponent[];
+};
+type DraftProjectGroup = {
+  key: string;
+  label: string;
+  projectType: string;
+  drafts: BomDraft[];
 };
 
 type CsvImportResult = {
@@ -221,18 +290,21 @@ type CsvImportResult = {
 const STORAGE_KEY = 'epoch:draft-boms';
 const RD_PROJECTS_STORAGE_KEY = 'epoch.rdProjects.v1';
 const VENDOR_PO_HANDOFF_KEY = 'epoch:draft-bom-vendor-po-handoff';
+const DRAFT_TAB_HANDOFF_KEY = 'epoch:draft-builder-tab-handoff';
 const PRIVATEER_DRAFT_ID = 'privateer';
 const NEW_DRAFT_VALUE = '__new_draft__';
+const UNASSIGNED_PROJECT_VALUE = '__unassigned_project__';
 const LEGACY_R_AND_D_PROJECT_VALUE = '__r_and_d__';
 const P2_PROJECT_VALUE_PREFIX = 'p2:';
 const RD_PROJECT_VALUE_PREFIX = 'rd:';
 
 const statuses: BomStatus[] = ['Needs Review', 'Needs Quote', 'RFQ Sent', 'On Order', 'On Hand', 'ETA / Inbound', 'Hold'];
-const defaultWorkspaceTabs: BuiltInWorkspaceTabId[] = ['po-draft', 'parts-request', 'direct-labor', 'bom-wizard', 'assembly-tree'];
+const defaultWorkspaceTabs: BuiltInWorkspaceTabId[] = ['po-draft', 'parts-request', 'direct-labor', 'nrc', 'bom-wizard', 'assembly-tree'];
 const workspaceTabLabels: Record<BuiltInWorkspaceTabId, string> = {
   'po-draft': 'PO draft',
   'parts-request': 'Parts/request',
   'direct-labor': 'Draft Direct Labor Estimate',
+  nrc: 'NRC',
   'bom-wizard': 'BOM wizard',
   'assembly-tree': 'Assembly tree',
 };
@@ -304,6 +376,46 @@ const departmentOptions = [
   { value: 'paint', label: 'Paint' },
   { value: 'final_qc', label: 'Final QC' },
 ];
+const fallbackBomDepartmentOptions: DepartmentOption[] = [
+  { value: 'Production Queue', label: 'Production Queue' },
+  { value: 'Layup', label: 'Layup' },
+  { value: 'Barcode', label: 'Barcode' },
+  { value: 'CNC', label: 'CNC' },
+  { value: 'Gunsmith', label: 'Gunsmith' },
+  { value: 'Paint', label: 'Paint' },
+  { value: 'Finish', label: 'Finish' },
+  { value: 'Finish QC', label: 'Finish QC' },
+  { value: 'Shipping QC', label: 'Shipping QC' },
+  { value: 'Shipping', label: 'Shipping' },
+  { value: 'Cutting Table', label: 'Cutting Table' },
+  { value: 'Office', label: 'Office' },
+  { value: 'Assembly', label: 'Assembly' },
+];
+const legacyDepartmentLabels: Record<string, string> = {
+  cutting_table: 'Cutting Table',
+  core_department: 'Core Department',
+  layup: 'Layup',
+  assembly: 'Assembly',
+  disassembly: 'Disassembly',
+  cnc: 'CNC',
+  finish: 'Finish',
+  paint: 'Paint',
+  final_qc: 'Final QC',
+};
+
+function bomDepartmentLabel(value: string | undefined, options: DepartmentOption[]) {
+  if (!value) return '';
+  return options.find((department) => department.value === value)?.label ?? legacyDepartmentLabels[value] ?? value;
+}
+
+function bomDepartmentOptionsWithCurrent(options: DepartmentOption[], value: string | undefined) {
+  if (!value || options.some((department) => department.value === value)) return options;
+  return [...options, { value, label: bomDepartmentLabel(value, options) }];
+}
+
+function defaultBomDepartment(options: DepartmentOption[]) {
+  return options.find((department) => department.value === 'Layup')?.value ?? options[0]?.value ?? 'Layup';
+}
 const employeeRoleOptions = [
   'Operator',
   'Technician',
@@ -322,6 +434,30 @@ function newLaborEstimateLine(): DraftLaborEstimateLine {
     hourlyRate: '',
     hoursPerPart: '',
     quantityPerPo: 1,
+  };
+}
+
+function newNrcRow(): NrcCostRow {
+  return {
+    id: crypto.randomUUID(),
+    category: 'TOOLING',
+    description: '',
+    quantity: 1,
+    unitCost: 0,
+    totalCost: 0,
+    amortized: false,
+    amortizationQty: null,
+    chargeTiming: 'ONE_TIME',
+    includeInCustomerPrice: true,
+    internalOnly: false,
+    notes: '',
+    assetName: '',
+    usefulLifeMonths: null,
+    amortizationBasis: '',
+    installationCost: 0,
+    trainingCost: 0,
+    sourceType: 'MANUAL',
+    sourceLabel: 'Draft Builder',
   };
 }
 
@@ -360,6 +496,17 @@ function isInventoryManufactured(item?: InventoryItemOption | null) {
   return item.itemType === 'MANUFACTURED' || item.type === 'Manufactured' || item.isPacket === true || !!item.manufacturedCategory;
 }
 
+function lineSourceLabel(line: BomLine) {
+  if (!line.inventoryItemId) return 'User draft';
+  if (line.isManufactured) return 'User / manufactured';
+  return line.supplier || 'Purchased inventory';
+}
+
+function linePartTypeLabel(line: BomLine) {
+  if (!line.inventoryItemId) return 'Draft part';
+  return line.isManufactured ? 'Manufactured inventory' : 'Purchased inventory';
+}
+
 function inventoryPartNumber(item: InventoryItemOption) {
   return item.agPartNumber || item.manufacturerPartNumber || item.supplierPartNumber || `INV-${item.id}`;
 }
@@ -369,11 +516,54 @@ function inventoryDescription(item: InventoryItemOption) {
 }
 
 function linePartNumber(line: BomLine) {
-  return line.agPartNumber || line.supplierItemId || `DRAFT-${line.id.slice(0, 8).toUpperCase()}`;
+  return line.agPartNumber || line.supplierItemId || customImportField(line, importedPartNumberHeaders) || `DRAFT-${line.id.slice(0, 8).toUpperCase()}`;
+}
+
+const importedPartNumberHeaders = ['agpartnumber', 'agpart', 'partnumber', 'partno', 'partnum', 'part', 'itemnumber', 'sku'];
+const importedDescriptionHeaders = [
+  'description',
+  'desc',
+  'partdescription',
+  'partsdescription',
+  'partdesc',
+  'partsdesc',
+  'itemdescription',
+  'itemdesc',
+  'materialdescription',
+  'productdescription',
+  'name',
+  'item',
+];
+
+function customImportField(line: BomLine, keys: string[]) {
+  const customFields = line.customFields ?? {};
+  for (const [label, value] of Object.entries(customFields)) {
+    if (keys.includes(normalizeCsvHeader(label)) && value.trim()) return value.trim();
+  }
+  return '';
 }
 
 function lineDescription(line: BomLine) {
-  return line.description || line.inventoryItemName || linePartNumber(line);
+  const partNumber = linePartNumber(line);
+  const description = line.description?.trim() ?? '';
+  const customDescription = customImportField(line, importedDescriptionHeaders);
+  if (line.importedSource === 'spreadsheet' && customDescription) return customDescription;
+  if (description && description !== 'Imported spreadsheet line' && description !== partNumber) return description;
+  return customDescription || description || line.inventoryItemName || partNumber;
+}
+
+function normalizeBomLine(line: BomLine): BomLine {
+  return {
+    ...line,
+    isDraftPart: line.isDraftPart ?? !line.inventoryItemId,
+    isManufactured: line.isManufactured ?? false,
+    firstDepartment: line.firstDepartment ?? defaultDepartment,
+    childDraftBoms: line.childDraftBoms ?? [],
+    customFields: line.customFields ?? {},
+    importedSource: line.importedSource,
+    actualCost: line.actualCost ?? '',
+    service: line.service ?? false,
+  };
 }
 
 function draftLineToPart(line: BomLine): DraftBomPart {
@@ -388,6 +578,55 @@ function draftLineToPart(line: BomLine): DraftBomPart {
     bomItems: [],
     hasBOM: false,
   };
+}
+
+function draftLineNeedsInventoryItem(line: BomLine) {
+  return line.isDraftPart !== false && !line.inventoryItemId;
+}
+
+async function createInventoryItemFromDraftLine(
+  line: BomLine,
+  draft: BomDraft,
+): Promise<DraftFinalizedInventoryItem> {
+  return await apiRequest('/api/inventory/items/from-draft-builder', {
+    method: 'POST',
+    body: {
+      name: lineDescription(line),
+      description: lineDescription(line),
+      supplier: line.supplier || null,
+      supplierPartNumber: line.supplierItemId || null,
+      manufacturer: line.manufacturer || null,
+      costPer: asNumber(line.actualCost) || asNumber(line.unitCost) || null,
+      usageUnit: line.unit || 'EA',
+      department: line.firstDepartment || line.department || defaultDepartment,
+      isManufactured: line.isManufactured === true,
+      manufacturedCategory: line.isManufactured === true ? 'COMPONENT' : null,
+      project: draft.projectName || draft.project || null,
+      draftName: `${draft.name} ${draft.revision}`.trim(),
+      draftLineId: line.id,
+    },
+  }) as DraftFinalizedInventoryItem;
+}
+
+async function saveDraftBomToRobustBom(
+  bom: DraftPartBom,
+  draft: BomDraft,
+  activate: boolean,
+): Promise<RobustBomAcceptResult> {
+  return await apiRequest('/api/robust-boms/from-draft-builder', {
+    method: 'POST',
+    body: {
+      draftId: draft.id,
+      draftName: draft.name,
+      revision: draft.revision,
+      projectId: draft.projectId,
+      projectCode: draft.projectCode,
+      projectName: draft.projectName || draft.project,
+      activate,
+      rootPart: bom.rootPart,
+      bom,
+    },
+  }) as RobustBomAcceptResult;
 }
 
 function inventoryItemToPart(item: InventoryItemOption): DraftBomPart {
@@ -433,6 +672,15 @@ function createDraftPartBom(rootPart: DraftBomPart, existingCount = 0): DraftPar
 }
 
 function createPrivateerDraft(): BomDraft {
+  const privateerLines = privateerDraftBomLines.map((line) =>
+    normalizeBomLine({
+      ...line,
+      isDraftPart: true,
+      isManufactured: false,
+      firstDepartment: defaultDepartment,
+      childDraftBoms: [],
+    } as BomLine),
+  );
   return {
     id: PRIVATEER_DRAFT_ID,
     name: 'Privateer',
@@ -445,14 +693,11 @@ function createPrivateerDraft(): BomDraft {
     projectType: null,
     notes: 'First draft sourcing BOM modeled after the Google Sheet layout.',
     updatedAt: new Date().toISOString(),
-    lines: privateerDraftBomLines.map((line) => ({
-      ...line,
-      isDraftPart: true,
-      isManufactured: false,
-      firstDepartment: defaultDepartment,
-      childDraftBoms: [],
-    })),
+    lines: privateerLines,
+    partsRequestLines: privateerLines.map((line) => ({ ...line })),
+    savedDraftBoms: [],
     laborEstimateLines: [newLaborEstimateLine()],
+    nrcRows: [],
     customLaborDepartments: [],
     poVisibleColumns: defaultPoColumns,
     partsRequestVisibleColumns: defaultPartsRequestColumns,
@@ -461,6 +706,8 @@ function createPrivateerDraft(): BomDraft {
     customColumns: [],
     customPoColumns: [],
     workspaceTabs: defaultWorkspaceTabs,
+    visibility: 'public',
+    allowPublicEdit: false,
   };
 }
 
@@ -519,19 +766,22 @@ function draftMatchesSelectedProject(draft: BomDraft, selectedProject: ProjectSe
 }
 
 function normalizeDraft(draft: BomDraft): BomDraft {
+  const lines = (draft.lines ?? []).map(normalizeBomLine);
+  const partsRequestLines = (draft.partsRequestLines ?? draft.lines ?? []).map(normalizeBomLine);
+
   return {
     ...draft,
     projectId: draft.projectId ?? null,
     projectCode: draft.projectCode ?? null,
     projectName: draft.projectName ?? draft.project ?? null,
     projectType: draft.projectType ?? null,
-    lines: (draft.lines ?? []).map((line) => ({
-      ...line,
-      isDraftPart: line.isDraftPart ?? !line.inventoryItemId,
-      isManufactured: line.isManufactured ?? false,
-      firstDepartment: line.firstDepartment ?? defaultDepartment,
-      childDraftBoms: line.childDraftBoms ?? [],
-    })),
+    lines,
+    partsRequestLines,
+    savedDraftBoms: mergeDraftBoms([
+      ...(draft.savedDraftBoms ?? []),
+      ...lines.flatMap((line) => line.childDraftBoms ?? []),
+      ...partsRequestLines.flatMap((line) => line.childDraftBoms ?? []),
+    ]),
     laborEstimateLines: (draft.laborEstimateLines?.length ? draft.laborEstimateLines : [newLaborEstimateLine()]).map((line) => ({
       ...line,
       department: line.department || defaultDepartment,
@@ -540,6 +790,29 @@ function normalizeDraft(draft: BomDraft): BomDraft {
       hoursPerPart: line.hoursPerPart ?? '',
       quantityPerPo: line.quantityPerPo ?? 1,
     })),
+    nrcRows: (draft.nrcRows ?? []).map((row) => {
+      const normalized = {
+        ...newNrcRow(),
+        ...row,
+        id: row.id || crypto.randomUUID(),
+        category: (row.category || 'OTHER') as NrcCategory,
+        quantity: Number(row.quantity || 0),
+        unitCost: Number(row.unitCost || 0),
+        totalCost: Number(row.totalCost ?? Number(row.quantity || 0) * Number(row.unitCost || 0)),
+        amortized: !!row.amortized,
+        amortizationQty: row.amortizationQty != null ? Number(row.amortizationQty) : null,
+        chargeTiming: (row.chargeTiming || 'ONE_TIME') as ChargeTiming,
+        includeInCustomerPrice: row.includeInCustomerPrice !== false,
+        internalOnly: !!row.internalOnly,
+        usefulLifeMonths: row.usefulLifeMonths != null ? Number(row.usefulLifeMonths) : null,
+        installationCost: Number(row.installationCost || 0),
+        trainingCost: Number(row.trainingCost || 0),
+        sourceType: row.sourceType ?? 'MANUAL',
+        sourceLabel: row.sourceLabel ?? 'Draft Builder',
+      };
+      normalized.totalCost = nrcRowTotal(normalized);
+      return normalized;
+    }),
     customLaborDepartments: draft.customLaborDepartments ?? [],
     poVisibleColumns: sanitizePoColumns(draft.poVisibleColumns),
     partsRequestVisibleColumns: draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
@@ -548,6 +821,63 @@ function normalizeDraft(draft: BomDraft): BomDraft {
     customColumns: sanitizeCustomColumns([...(draft.customColumns ?? []), ...(draft.customPoColumns ?? [])]),
     customPoColumns: sanitizeCustomColumns(draft.customPoColumns ?? []),
     workspaceTabs: normalizeWorkspaceTabs(draft.workspaceTabs),
+    visibility: draft.visibility === 'private' ? 'private' : 'public',
+    allowPublicEdit: draft.allowPublicEdit === true,
+    canEdit: draft.canEdit,
+    canManageAccess: draft.canManageAccess,
+  };
+}
+
+function mergeDraftBoms(boms: DraftPartBom[]) {
+  const seen = new Set<string>();
+  return boms.filter((bom) => {
+    if (seen.has(bom.id)) return false;
+    seen.add(bom.id);
+    return true;
+  });
+}
+
+function finalizedPartForLine<T extends DraftBomPart | DraftBomComponent>(
+  part: T,
+  createdByLineId: Map<string, DraftFinalizedInventoryItem>,
+): T {
+  const sourceLineId = part.sourceLineId ?? null;
+  const createdItem = sourceLineId ? createdByLineId.get(sourceLineId) : undefined;
+  if (!createdItem) return part;
+  return {
+    ...part,
+    source: 'inventory-item' as const,
+    inventoryItemId: createdItem.id,
+    partNumber: createdItem.agPartNumber,
+    description: createdItem.name || part.description,
+  } as T;
+}
+
+function applyFinalizedInventoryToDraftBom(
+  bom: DraftPartBom,
+  createdByLineId: Map<string, DraftFinalizedInventoryItem>,
+): DraftPartBom {
+  return {
+    ...bom,
+    rootPart: finalizedPartForLine(bom.rootPart, createdByLineId),
+    parts: bom.parts.map((part) => ({
+      ...finalizedPartForLine(part, createdByLineId),
+      bomItems: part.bomItems.map((component) => finalizedPartForLine(component, createdByLineId)),
+    })),
+  };
+}
+
+function markDraftBomAccepted(
+  bom: DraftPartBom,
+  result: RobustBomAcceptResult,
+  status: 'draft' | 'active',
+): DraftPartBom {
+  return {
+    ...bom,
+    robustBomId: result.bom?.id ?? bom.robustBomId ?? null,
+    robustBomRevisionId: result.revision?.id ?? bom.robustBomRevisionId ?? null,
+    robustBomStatus: result.status ?? status,
+    robustBomAcceptedAt: new Date().toISOString(),
   };
 }
 
@@ -563,12 +893,26 @@ function workspaceTabLabel(tabId: WorkspaceTabId) {
   return workspaceTabLabels[tabId as BuiltInWorkspaceTabId];
 }
 
+function customWorkspaceTabKey(label: string) {
+  return label.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function customWorkspaceTabId(label: string): WorkspaceTabId | null {
+  const normalizedLabel = label.trim().replace(/\s+/g, ' ');
+  return normalizedLabel ? (`custom:${normalizedLabel}` as WorkspaceTabId) : null;
+}
+
 function money(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 }
 
-function asNumber(value: number | '') {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+function asNumber(value: number | string | '') {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function parseCsvRows(csvText: string) {
@@ -619,10 +963,6 @@ function normalizeCsvHeader(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-function isStatusDuplicateColumn(column: string) {
-  return ['status', 'orderstatus'].includes(normalizeCsvHeader(column));
-}
-
 const knownImportHeaders = new Set([
   'action',
   'actual',
@@ -631,24 +971,33 @@ const knownImportHeaders = new Set([
   'agpartnumber',
   'category',
   'cost',
+  'desc',
   'description',
   'estimatedcost',
   'filter',
   'inventoryitemid',
   'isservice',
   'item',
+  'itemdesc',
   'itemdescription',
   'itemnumber',
   'manufacturer',
+  'materialdescription',
   'mfg',
   'name',
   'note',
   'notes',
   'orderstatus',
   'part',
+  'partdesc',
   'partdescription',
+  'partno',
+  'partnum',
   'partnumber',
+  'partsdesc',
+  'partsdescription',
   'price',
+  'productdescription',
   'qnty',
   'qty',
   'qtyneeded',
@@ -712,24 +1061,24 @@ function buildImportColumns(rawHeaders: string[]): ImportColumn[] {
   });
 }
 
+function rowLooksLikeImportHeaders(rows: string[][], normalizedFirstRow: string[]) {
+  if (rows.length < 2) return false;
+  const firstRow = rows[0].map((cell) => cell.trim()).filter(Boolean);
+  if (firstRow.length < 2) return false;
+
+  const knownHeaderCount = normalizedFirstRow.filter((header) => knownImportHeaders.has(header)).length;
+  if (knownHeaderCount >= 1) return true;
+
+  const textLikeCount = firstRow.filter((cell) => /[a-z]/i.test(cell) && Number.isNaN(Number(cell.replace(/[$,]/g, '')))).length;
+  return textLikeCount >= Math.ceil(firstRow.length / 2);
+}
+
 function csvField(row: Record<string, string>, keys: string[]) {
   for (const key of keys) {
     const value = row[key];
     if (value) return value;
   }
   return '';
-}
-
-function parseCsvNumber(value: string): number | '' {
-  const normalized = value.replace(/[$,]/g, '').trim();
-  if (!normalized) return '';
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : '';
-}
-
-function parseImportStatus(value: string, fallback: BomStatus): BomStatus {
-  const match = statuses.find((status) => status.toLowerCase() === value.trim().toLowerCase());
-  return match ?? fallback;
 }
 
 function findInventoryMatch(partNumber: string, inventoryItems: InventoryItemOption[]) {
@@ -744,7 +1093,6 @@ function findInventoryMatch(partNumber: string, inventoryItems: InventoryItemOpt
     ) ?? null
   );
 }
-
 function inventoryStockQuantity(item?: InventoryItemOption | null) {
   if (!item) return 0;
   const quantity = Number(item.available ?? item.onHand ?? item.quantityInStock ?? 0);
@@ -809,6 +1157,48 @@ function assemblyOrderStatus(
   return findPartsRequestLineForAssemblyPart(part, lines)?.status ?? 'Needs Quote';
 }
 
+function assemblyLineIdentity(line: BomLine) {
+  return [
+    line.inventoryItemId ? `inventory:${line.inventoryItemId}` : '',
+    normalizedAssemblyPartKey(linePartNumber(line)),
+    normalizedAssemblyPartKey(lineDescription(line)),
+  ]
+    .filter(Boolean)
+    .join('|');
+}
+
+function mergeAssemblySourceLines(...lineGroups: BomLine[][]) {
+  const merged = new Map<string, BomLine>();
+  for (const line of lineGroups.flat()) {
+    const key = assemblyLineIdentity(line) || line.id;
+    const existing = merged.get(key);
+    merged.set(key, existing ? { ...existing, ...line, include: existing.include || line.include } : line);
+  }
+  return [...merged.values()];
+}
+
+function isOnHandStatus(status: BomStatus) {
+  return status === 'On Hand';
+}
+
+function isOrderedStatus(status: BomStatus) {
+  return status === 'RFQ Sent' || status === 'On Order' || status === 'ETA / Inbound';
+}
+
+function manufactureStateFor(orderStatus: BomStatus, children: AssemblyTreeNode[]): AssemblyManufactureState {
+  if (children.length === 0) {
+    return isOnHandStatus(orderStatus) ? 'ready' : 'waiting';
+  }
+  const childStates = children.map((child) => child.manufactureState);
+  if (childStates.every((state) => state === 'ready')) return 'ready';
+  if (childStates.every((state) => state === 'needs-plan')) return 'needs-plan';
+  return 'waiting';
+}
+
+function assemblyDisplayStatus(orderStatus: BomStatus, children: AssemblyTreeNode[], manufactureState: AssemblyManufactureState): BomStatus {
+  return children.length > 0 && manufactureState === 'ready' ? 'On Hand' : orderStatus;
+}
+
 function assemblyPartKey(partNumber: string) {
   return normalizedAssemblyPartKey(partNumber);
 }
@@ -821,62 +1211,152 @@ function componentAssemblyKey(component: DraftBomComponent) {
   return assemblyPartKey(component.partNumber);
 }
 
+function draftBomRootPart(bom: DraftPartBom) {
+  return bom.parts[0] ?? bom.rootPart;
+}
+
+function draftBomChildComponents(bom: DraftPartBom) {
+  const rootPart = draftBomRootPart(bom);
+  return rootPart.bomItems?.length ? rootPart.bomItems : bom.rootPart.bomItems ?? [];
+}
+
+function addDraftBomPartEntries(partLookup: Map<string, DraftBomPart>, bom: DraftPartBom) {
+  bom.parts.forEach((part) => {
+    const key = assemblyPartKey(part.partNumber);
+    if (!key || !part.bomItems?.length || partLookup.has(key)) return;
+    partLookup.set(key, part);
+  });
+}
+
+function bomMatchesAssemblyPart(
+  bom: DraftPartBom,
+  part: Pick<DraftBomPart | DraftBomComponent, 'sourceLineId' | 'inventoryItemId' | 'partNumber' | 'description'>,
+) {
+  const rootPart = bom.rootPart;
+  if (part.sourceLineId && rootPart.sourceLineId === part.sourceLineId) return true;
+  if (part.inventoryItemId && rootPart.inventoryItemId === part.inventoryItemId) return true;
+  const partNumber = normalizedAssemblyPartKey(part.partNumber);
+  const description = normalizedAssemblyPartKey(part.description);
+  return (
+    (partNumber && normalizedAssemblyPartKey(rootPart.partNumber) === partNumber) ||
+    (description && normalizedAssemblyPartKey(rootPart.description) === description)
+  );
+}
+
+function draftBomsForAssemblyPart(
+  boms: DraftPartBom[],
+  part: Pick<DraftBomPart | DraftBomComponent, 'sourceLineId' | 'inventoryItemId' | 'partNumber' | 'description'>,
+) {
+  return boms.filter((bom) => bomMatchesAssemblyPart(bom, part));
+}
+
 function buildAssemblyTreeNode(
   part: DraftBomPart | DraftBomComponent,
   inventoryItems: InventoryItemOption[],
   partsRequestLines: BomLine[],
   requiredQuantity: number,
   children: DraftBomComponent[] = [],
-  entryLookup = new Map<string, AssemblyLineEntry>(),
+  entryLookup = new Map<string, AssemblyLineEntry[]>(),
+  partLookup = new Map<string, DraftBomPart>(),
   visited: Set<string> = new Set(),
+  sourceEntry?: AssemblyLineEntry,
 ): AssemblyTreeNode {
   const inventoryItem = resolveInventoryForPart(inventoryItems, part.inventoryItemId, part.partNumber);
   const nodeQuantity = requiredQuantity || 1;
   const key = assemblyPartKey(part.partNumber);
-  const entry = entryLookup.get(key);
+  const entries = entryLookup.get(key) ?? [];
+  const entry = sourceEntry ?? entries[0];
   const nextVisited = key ? new Set([...visited, key]) : visited;
-  const childComponents = entry ? (visited.has(key) ? [] : entry.childComponents) : children;
+  const childComponents = visited.has(key) ? [] : (children.length > 0 ? children : entry?.childComponents ?? []);
+  const nodeChildren = childComponents.flatMap((component) => {
+    const configuredPart = partLookup.get(componentAssemblyKey(component));
+    if (configuredPart) {
+      const childQuantity = nodeQuantity * (component.quantity || 1);
+      return buildAssemblyTreeNode(
+        configuredPart,
+        inventoryItems,
+        partsRequestLines,
+        childQuantity,
+        configuredPart.bomItems ?? [],
+        entryLookup,
+        partLookup,
+        nextVisited,
+      );
+    }
+
+    const componentEntries = entryLookup.get(componentAssemblyKey(component)) ?? [];
+    const childQuantity = nodeQuantity * (component.quantity || 1);
+    if (componentEntries.length > 0 && !visited.has(componentAssemblyKey(component))) {
+      return componentEntries.map((componentEntry) =>
+        buildAssemblyTreeNode(
+          componentEntry.part,
+          inventoryItems,
+          partsRequestLines,
+          childQuantity,
+          componentEntry.childComponents,
+          entryLookup,
+          partLookup,
+          nextVisited,
+          componentEntry,
+        ),
+      );
+    }
+    return [
+      buildAssemblyTreeNode(
+        component,
+        inventoryItems,
+        partsRequestLines,
+        childQuantity,
+        [],
+        entryLookup,
+        partLookup,
+        nextVisited,
+      ),
+    ];
+  });
+  const orderStatus = assemblyOrderStatus(part, partsRequestLines);
+  const manufactureState = childComponents.length === 0 && !isOnHandStatus(orderStatus) && !isOrderedStatus(orderStatus)
+    ? 'needs-plan'
+    : manufactureStateFor(orderStatus, nodeChildren);
 
   return {
-    id: `${part.id}-${part.partNumber}-${nodeQuantity}`,
+    id: `${entry?.bom.id ?? part.id}-${part.partNumber}-${nodeQuantity}`,
     partNumber: entry ? linePartNumber(entry.line) : part.partNumber,
     description: entry ? lineDescription(entry.line) : part.description,
+    bomLabel: entry ? `${entry.bom.name} ${entry.bom.revision}` : undefined,
+    isManufactured: 'isManufactured' in part ? part.isManufactured : true,
     quantityRequired: nodeQuantity,
-    orderStatus: assemblyOrderStatus(part, partsRequestLines),
+    orderStatus,
+    displayStatus: assemblyDisplayStatus(orderStatus, nodeChildren, manufactureState),
+    manufactureState,
     inventoryItem,
     stockState: assemblyStockState(inventoryItem, nodeQuantity),
     availableQuantity: inventoryStockQuantity(inventoryItem),
     reorderPoint: inventoryReorderPoint(inventoryItem),
-    children: childComponents.map((component) => {
-      const componentEntry = entryLookup.get(componentAssemblyKey(component));
-      const childQuantity = nodeQuantity * (component.quantity || 1);
-      return buildAssemblyTreeNode(
-        componentEntry?.part ?? component,
-        inventoryItems,
-        partsRequestLines,
-        childQuantity,
-        componentEntry?.childComponents ?? [],
-        entryLookup,
-        nextVisited,
-      );
-    }),
+    children: nodeChildren,
   };
 }
 
-function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption[]) {
-  const entries = lines.map<AssemblyLineEntry>((line) => {
-    const rootPart = draftLineToPart(line);
-    const primaryBom = line.childDraftBoms?.[0];
-    const childComponents = primaryBom?.rootPart.bomItems?.length
-      ? primaryBom.rootPart.bomItems
-      : primaryBom?.parts[0]?.bomItems ?? [];
-    return {
+function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption[], savedDraftBoms: DraftPartBom[]) {
+  const partLookup = new Map<string, DraftBomPart>();
+  savedDraftBoms.forEach((bom) => addDraftBomPartEntries(partLookup, bom));
+
+  const entries = savedDraftBoms.flatMap<AssemblyLineEntry>((bom) => {
+    const line = findPartsRequestLineForAssemblyPart(bom.rootPart, lines);
+    if (!line) return [];
+    return [{
       line,
-      part: primaryBom?.rootPart ?? rootPart,
-      childComponents,
-    };
+      bom,
+      part: { ...bom.rootPart, id: `${bom.rootPart.id}-${bom.id}`, bomItems: draftBomRootPart(bom).bomItems ?? [] },
+      childComponents: draftBomChildComponents(bom),
+    }];
   });
-  const entryLookup = new Map(entries.map((entry) => [lineAssemblyKey(entry.line), entry]));
+  const entryLookup = entries.reduce((lookup, entry) => {
+    const key = lineAssemblyKey(entry.line);
+    const existing = lookup.get(key) ?? [];
+    lookup.set(key, [...existing, entry]);
+    return lookup;
+  }, new Map<string, AssemblyLineEntry[]>());
   const childKeys = new Set(
     entries.flatMap((entry) => entry.childComponents.map(componentAssemblyKey)).filter(Boolean),
   );
@@ -891,6 +1371,9 @@ function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption
       asNumber(entry.line.qtyNeeded) || 1,
       entry.childComponents,
       entryLookup,
+      partLookup,
+      new Set(),
+      entry,
     ),
   );
 }
@@ -914,71 +1397,62 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
   if (rows.length === 0) return { lines: [], linkedCount: 0, customColumns: [] };
 
   const normalizedFirstRow = rows[0].map(normalizeCsvHeader);
-  const knownHeaderCount = normalizedFirstRow.filter((header) => knownImportHeaders.has(header)).length;
-  const hasHeaders = knownHeaderCount >= 1;
+  const hasHeaders = rowLooksLikeImportHeaders(rows, normalizedFirstRow);
   const maxColumnCount = Math.max(...rows.map((row) => row.length));
   const headerLabels = hasHeaders
     ? rows[0]
     : Array.from({ length: maxColumnCount }, (_, index) => fallbackImportHeaderLabels[index] ?? `Imported Column ${index + 1}`);
   const columns = buildImportColumns(headerLabels);
-  const customColumns = columns.filter((column) => !column.isKnown).map((column) => column.label);
+  const customColumns = columns.map((column) => column.label);
   const dataRows = hasHeaders ? rows.slice(1) : rows;
   let linkedCount = 0;
 
   const lines = dataRows
-    .map((cells) => {
+    .map((cells, rowIndex) => {
       const row = columns.reduce<Record<string, string>>((acc, column, index) => {
         acc[column.key] = cells[index]?.trim() ?? '';
         return acc;
       }, {});
       const importedCustomFields = columns.reduce<Record<string, string>>((acc, column, index) => {
         const value = cells[index]?.trim() ?? '';
-        if (!column.isKnown && value) acc[column.label] = value;
+        if (value) acc[column.label] = value;
         return acc;
       }, {});
-      const importedPartNumber = csvField(row, ['agpartnumber', 'agpart', 'partnumber', 'part', 'itemnumber', 'sku']);
-      const description = csvField(row, ['description', 'partdescription', 'name', 'item', 'itemdescription']) || importedPartNumber;
-      if (!description && !importedPartNumber && Object.keys(importedCustomFields).length === 0) return null;
+      const importedPartNumber = csvField(row, importedPartNumberHeaders);
+      const sourceDescription = csvField(row, importedDescriptionHeaders) || importedPartNumber;
+      if (!sourceDescription && !importedPartNumber && Object.keys(importedCustomFields).length === 0) return null;
 
       const inventoryMatch = linkInventoryMatches ? findInventoryMatch(importedPartNumber, inventoryItems) : null;
       if (inventoryMatch) linkedCount += 1;
-      const estimatedCost = parseCsvNumber(csvField(row, ['unitcost', 'estimatedcost', 'cost', 'price']));
-      const actualCost = parseCsvNumber(csvField(row, ['actualcost', 'actual']));
-      const quantity = parseCsvNumber(csvField(row, ['qtyneeded', 'quantity', 'qty', 'qnty']));
-      const serviceValue = csvField(row, ['service', 'isservice']).toLowerCase();
-      const note = csvField(row, ['note', 'notes']);
       const fallbackStatus = inventoryMatch ? 'Needs Review' : 'Needs Quote';
+      const spreadsheetLabel = `Imported spreadsheet row ${rowIndex + 1}`;
 
       return {
         ...newLine(),
-        action: csvField(row, ['action']) || 'Order / Quote',
-        category: csvField(row, ['category', 'filter']) || 'Hardware/Misc.',
-        description: inventoryMatch ? inventoryDescription(inventoryMatch) : description || 'Imported spreadsheet line',
-        agPartNumber: inventoryMatch?.agPartNumber || (linkInventoryMatches ? '' : importedPartNumber),
-        supplier: csvField(row, ['supplier', 'vendor', 'source']) || inventoryMatch?.source || inventoryMatch?.supplier || '',
-        supplierItemId:
-          csvField(row, ['supplierpartnumber', 'supplierpart', 'supplieritem', 'supplieritemid']) ||
-          inventoryMatch?.supplierPartNumber ||
-          '',
-        manufacturer: csvField(row, ['manufacturer', 'mfg']) || inventoryMatch?.manufacturer || '',
-        unit: csvField(row, ['unit', 'uom']) || inventoryMatch?.usageUnit || inventoryMatch?.unit || 'EA',
-        unitCost: estimatedCost || (Number.isFinite(Number(inventoryMatch?.costPer)) ? Number(inventoryMatch?.costPer) : ''),
-        actualCost,
-        qtyNeeded: quantity || 1,
-        service: ['true', 'yes', 'y', '1', 'service'].includes(serviceValue),
-        status: parseImportStatus(csvField(row, ['status', 'orderstatus']), fallbackStatus),
-        targetNeedDate: csvField(row, ['targetneeddate']),
-        note: note || (inventoryMatch
+        action: inventoryMatch ? 'Order / Quote' : 'Review imported line',
+        category: inventoryMatch ? 'Hardware/Misc.' : 'Imported Spreadsheet',
+        description: inventoryMatch ? inventoryDescription(inventoryMatch) : spreadsheetLabel,
+        agPartNumber: inventoryMatch?.agPartNumber || '',
+        supplier: inventoryMatch?.source || inventoryMatch?.supplier || '',
+        supplierItemId: inventoryMatch?.supplierPartNumber || '',
+        manufacturer: inventoryMatch?.manufacturer || '',
+        unit: inventoryMatch?.usageUnit || inventoryMatch?.unit || '',
+        unitCost: Number.isFinite(Number(inventoryMatch?.costPer)) ? Number(inventoryMatch?.costPer) : '',
+        actualCost: '',
+        qtyNeeded: inventoryMatch ? 1 : '',
+        service: false,
+        status: fallbackStatus,
+        targetNeedDate: '',
+        note: inventoryMatch
           ? `CSV import linked to inventory item #${inventoryMatch.id}`
-          : importedPartNumber
-            ? `CSV import draft part ${importedPartNumber}`
-            : 'CSV import draft part'),
+          : 'Spreadsheet import; source values are preserved in imported columns.',
         inventoryItemId: inventoryMatch?.id ?? null,
         inventoryItemName: inventoryMatch?.name || inventoryMatch?.description || null,
         isDraftPart: !inventoryMatch,
         isManufactured: isInventoryManufactured(inventoryMatch),
         firstDepartment: defaultDepartment,
         childDraftBoms: [],
+        importedSource: 'spreadsheet',
         customFields: importedCustomFields,
       } satisfies BomLine;
     })
@@ -999,14 +1473,40 @@ function laborDepartmentValue(label: string) {
     .replace(/^_+|_+$/g, '');
 }
 
-function normalizeWorkspaceTabs(tabs?: WorkspaceTabId[]) {
-  const sourceTabs = tabs?.length ? tabs : defaultWorkspaceTabs;
-  if (sourceTabs.includes('direct-labor')) return sourceTabs;
+function normalizeWorkspaceTabs(tabs?: readonly WorkspaceTabId[] | null): WorkspaceTabId[] {
+  const sourceTabs = tabs?.length ? [...tabs] : [...defaultWorkspaceTabs];
+  const normalized: WorkspaceTabId[] = [];
+  const customLabels = new Set<string>();
 
-  const nextTabs = [...sourceTabs];
-  const partsRequestIndex = nextTabs.indexOf('parts-request');
-  nextTabs.splice(partsRequestIndex >= 0 ? partsRequestIndex + 1 : nextTabs.length, 0, 'direct-labor');
-  return nextTabs;
+  const appendTab = (tabId: WorkspaceTabId) => {
+    if ((defaultWorkspaceTabs as readonly string[]).includes(tabId)) {
+      if (!normalized.includes(tabId as BuiltInWorkspaceTabId)) normalized.push(tabId as BuiltInWorkspaceTabId);
+      return;
+    }
+
+    if (!tabId.startsWith('custom:')) return;
+    const customTabId = customWorkspaceTabId(workspaceTabLabel(tabId));
+    if (!customTabId) return;
+    const labelKey = customWorkspaceTabKey(workspaceTabLabel(customTabId));
+    if (customLabels.has(labelKey)) return;
+    customLabels.add(labelKey);
+    normalized.push(customTabId);
+  };
+
+  sourceTabs.forEach(appendTab);
+
+  for (const tabId of defaultWorkspaceTabs) {
+    if (normalized.includes(tabId)) continue;
+    const defaultIndex = defaultWorkspaceTabs.indexOf(tabId);
+    const previousVisibleDefault = defaultWorkspaceTabs
+      .slice(0, defaultIndex)
+      .reverse()
+      .find((candidate) => normalized.includes(candidate));
+    const insertIndex = previousVisibleDefault ? normalized.indexOf(previousVisibleDefault) + 1 : normalized.length;
+    normalized.splice(insertIndex, 0, tabId);
+  }
+
+  return normalized;
 }
 
 function uniqueColumnNames(columns: string[]) {
@@ -1018,7 +1518,7 @@ function uniqueColumnNames(columns: string[]) {
 }
 
 function sanitizeCustomColumns(columns: string[]) {
-  return uniqueColumnNames(columns).filter((column) => !isStatusDuplicateColumn(column));
+  return uniqueColumnNames(columns);
 }
 
 function loadDrafts(): BomDraft[] {
@@ -1038,25 +1538,224 @@ function saveDrafts(drafts: BomDraft[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts));
 }
 
+async function saveSharedDraft(draft: BomDraft) {
+  return await apiRequest(`/api/draft-bom-drafts/${encodeURIComponent(draft.id)}`, {
+    method: 'PUT',
+    body: draft,
+  }) as BomDraft;
+}
+
+async function deleteSharedDraft(id: string) {
+  try {
+    await apiRequest(`/api/draft-bom-drafts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  } catch (error) {
+    if ((error as any)?.status !== 404) throw error;
+  }
+}
+
 function savedDraftListWith(drafts: BomDraft[], draft: BomDraft) {
   const withoutCurrent = drafts.filter((item) => item.id !== draft.id);
-  return [draft, ...withoutCurrent].slice(0, 12);
+  return [draft, ...withoutCurrent];
+}
+
+function projectMatchValue(value?: string | number | null) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function draftMatchesProject(draft: BomDraft, selectedProject: ProjectSelectOption) {
+  if (draft.projectType === selectedProject.projectType && draft.projectId === selectedProject.id) {
+    return true;
+  }
+
+  const typeMatches = !draft.projectType || draft.projectType === selectedProject.projectType;
+  if (!typeMatches) return false;
+
+  const draftValues = [
+    draft.projectId,
+    draft.projectCode,
+    draft.projectName,
+    draft.project,
+  ].map(projectMatchValue).filter(Boolean);
+  const selectedValues = [
+    selectedProject.id,
+    selectedProject.projectCode,
+    selectedProject.projectName,
+    selectedProject.project,
+    selectedProject.label,
+  ].map(projectMatchValue).filter(Boolean);
+
+  return draftValues.some((value) => selectedValues.includes(value));
+}
+
+function draftSavedBomCount(draft: BomDraft) {
+  return (draft.savedDraftBoms ?? []).length
+    + draft.lines.flatMap((line) => line.childDraftBoms ?? []).length
+    + (draft.partsRequestLines ?? []).flatMap((line) => line.childDraftBoms ?? []).length;
+}
+
+function draftUpdatedTime(draft: BomDraft) {
+  const time = new Date(draft.updatedAt).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function draftProjectLabel(draft: BomDraft) {
+  return draft.projectName || draft.project || draft.projectCode || 'Unlinked project';
+}
+
+function draftProjectKey(draft: BomDraft) {
+  return [
+    draft.projectType || 'UNLINKED',
+    draft.projectId || '',
+    projectMatchValue(draft.projectCode),
+    projectMatchValue(draftProjectLabel(draft)),
+  ].join(':');
+}
+
+function draftProjectTypeLabel(draft: BomDraft) {
+  if (draft.projectType === 'P2_PROJECT') return 'P2 Project';
+  if (draft.projectType === 'R_AND_D') return 'R&D Project';
+  return 'Unlinked draft project';
+}
+
+function groupDraftsByProject(drafts: BomDraft[]): DraftProjectGroup[] {
+  const groups = new Map<string, DraftProjectGroup>();
+
+  drafts.forEach((draft) => {
+    const key = draftProjectKey(draft);
+    const group = groups.get(key) ?? {
+      key,
+      label: draftProjectLabel(draft),
+      projectType: draftProjectTypeLabel(draft),
+      drafts: [],
+    };
+    group.drafts.push(draft);
+    groups.set(key, group);
+  });
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      drafts: group.drafts.slice().sort((a, b) => draftUpdatedTime(b) - draftUpdatedTime(a)),
+    }))
+    .sort((a, b) => {
+      const timeDelta = draftUpdatedTime(b.drafts[0]) - draftUpdatedTime(a.drafts[0]);
+      if (timeDelta !== 0) return timeDelta;
+      return a.label.localeCompare(b.label);
+    });
+}
+
+function projectDraftMatchScore(draft: BomDraft, selectedProject: ProjectSelectOption) {
+  const structuredMatch = draft.projectType === selectedProject.projectType && draft.projectId === selectedProject.id ? 4 : 0;
+  const savedBomScore = draftSavedBomCount(draft) > 0 ? 3 : 0;
+  const specificProjectScore = draft.projectType && draft.projectId ? 2 : 0;
+  const builtInSeedPenalty = draft.id === PRIVATEER_DRAFT_ID ? -1 : 0;
+  return structuredMatch + savedBomScore + specificProjectScore + builtInSeedPenalty;
+}
+
+function selectBestDraftForProject(drafts: BomDraft[], selectedProject: ProjectSelectOption) {
+  return drafts
+    .filter((item) => draftMatchesProject(item, selectedProject))
+    .sort((a, b) => {
+      const scoreDelta = projectDraftMatchScore(b, selectedProject) - projectDraftMatchScore(a, selectedProject);
+      if (scoreDelta !== 0) return scoreDelta;
+      return draftUpdatedTime(b) - draftUpdatedTime(a);
+    })[0] ?? null;
+}
+
+function createBlankDraftForProject(selectedProject: ProjectSelectOption): BomDraft {
+  return {
+    id: crypto.randomUUID(),
+    name: selectedProject.projectName,
+    revision: 'Draft A',
+    owner: '',
+    project: selectedProject.project,
+    projectId: selectedProject.id,
+    projectCode: selectedProject.projectCode,
+    projectName: selectedProject.projectName,
+    projectType: selectedProject.projectType,
+    notes: '',
+    updatedAt: new Date().toISOString(),
+    lines: [newLine()],
+    partsRequestLines: [newLine()],
+    laborEstimateLines: [newLaborEstimateLine()],
+    customLaborDepartments: [],
+    poVisibleColumns: defaultPoColumns,
+    partsRequestVisibleColumns: defaultPartsRequestColumns,
+    directLaborVisibleColumns: defaultDirectLaborColumns,
+    assemblyVisibleColumns: defaultSourcingColumns,
+    customColumns: [],
+    customPoColumns: [],
+    workspaceTabs: defaultWorkspaceTabs,
+    visibility: 'public',
+    allowPublicEdit: false,
+  };
+}
+
+function createBlankDraftForTemporaryProject(projectName: string): BomDraft {
+  const cleanProjectName = projectName.trim();
+  return {
+    id: crypto.randomUUID(),
+    name: cleanProjectName || 'New Draft BOM',
+    revision: 'Draft A',
+    owner: '',
+    project: cleanProjectName,
+    projectId: null,
+    projectCode: null,
+    projectName: cleanProjectName || null,
+    projectType: null,
+    notes: cleanProjectName
+      ? 'Temporary project draft. Link it to a formal project when the project record exists.'
+      : '',
+    updatedAt: new Date().toISOString(),
+    lines: [newLine()],
+    partsRequestLines: [newLine()],
+    laborEstimateLines: [newLaborEstimateLine()],
+    customLaborDepartments: [],
+    poVisibleColumns: defaultPoColumns,
+    partsRequestVisibleColumns: defaultPartsRequestColumns,
+    directLaborVisibleColumns: defaultDirectLaborColumns,
+    assemblyVisibleColumns: defaultSourcingColumns,
+    customColumns: [],
+    customPoColumns: [],
+    workspaceTabs: defaultWorkspaceTabs,
+    visibility: 'public',
+    allowPublicEdit: false,
+  };
+}
+
+function formatDraftUpdatedAt(value: string) {
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) return 'Unknown';
+  return time.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function draftVisibilityLabel(draft: BomDraft) {
+  if (draft.visibility === 'private') return 'Private';
+  return draft.allowPublicEdit ? 'Public edit' : 'Public view';
 }
 
 export default function DraftBOMBuilderPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [savedDrafts, setSavedDrafts] = useState<BomDraft[]>(() => loadDrafts());
   const [selectedDraftId, setSelectedDraftId] = useState<string>(PRIVATEER_DRAFT_ID);
   const [draft, setDraft] = useState<BomDraft>(() => loadDrafts()[0] ?? createPrivateerDraft());
   const [rdProjects, setRdProjects] = useState<RDProjectOption[]>(() => readRDProjectOptions());
+  const [isLibraryView, setIsLibraryView] = useState(true);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isCreateDraftOpen, setIsCreateDraftOpen] = useState(false);
+  const [newDraftProjectMode, setNewDraftProjectMode] = useState<'existing' | 'temporary'>('existing');
+  const [newDraftProjectValue, setNewDraftProjectValue] = useState('');
+  const [newDraftProjectName, setNewDraftProjectName] = useState('');
+  const [newDraftName, setNewDraftName] = useState('');
   const [isEditMode, setIsEditMode] = useState(true);
   const [visibleWorkspaceTabs, setVisibleWorkspaceTabs] = useState<WorkspaceTabId[]>(() => draft.workspaceTabs ?? defaultWorkspaceTabs);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTabId>('po-draft');
   const [poDescription, setPoDescription] = useState('');
   const [partsRequestDescription, setPartsRequestDescription] = useState('');
-  const [sortPartsByVendor, setSortPartsByVendor] = useState(false);
   const [visiblePoColumns, setVisiblePoColumns] = useState<PoColumnId[]>(() => draft.poVisibleColumns ?? defaultPoColumns);
   const [visiblePartsRequestColumns, setVisiblePartsRequestColumns] = useState<PartsRequestColumnId[]>(
     () => draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
@@ -1072,15 +1771,34 @@ export default function DraftBOMBuilderPage() {
   const [newWorkspaceTabName, setNewWorkspaceTabName] = useState('');
   const [newLaborDepartmentName, setNewLaborDepartmentName] = useState('');
   const [wizardSeedLineId, setWizardSeedLineId] = useState<string | null>(null);
+  const [isFinalizingParts, setIsFinalizingParts] = useState(false);
+  const [hasLoadedSharedDrafts, setHasLoadedSharedDrafts] = useState(false);
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
     queryKey: ['/api/projects'],
+  });
+
+  const { data: sharedDrafts = [], isFetched: sharedDraftsFetched } = useQuery<BomDraft[]>({
+    queryKey: ['/api/draft-bom-drafts'],
+    queryFn: () => apiRequest('/api/draft-bom-drafts'),
   });
 
   const { data: inventoryItems = [] } = useQuery<InventoryItemOption[]>({
     queryKey: ['/api/inventory'],
     queryFn: () => apiRequest('/api/inventory'),
   });
+
+  const { data: inventoryDepartments = [] } = useQuery<InventoryDepartmentOption[]>({
+    queryKey: ['/api/inventory/departments'],
+  });
+
+  const bomDepartmentOptions = useMemo<DepartmentOption[]>(() => {
+    if (inventoryDepartments.length === 0) return fallbackBomDepartmentOptions;
+    return inventoryDepartments.map((department) => ({
+      value: department.name,
+      label: department.name,
+    }));
+  }, [inventoryDepartments]);
 
   const projectOptions = useMemo(() => {
     return [...projects].sort((a, b) => projectLabel(a).localeCompare(projectLabel(b)));
@@ -1109,6 +1827,7 @@ export default function DraftBOMBuilderPage() {
     }));
     return [...rdOptions, ...p2Options];
   }, [projectOptions, rdProjectOptions]);
+  const draftProjectGroups = useMemo(() => groupDraftsByProject(savedDrafts), [savedDrafts]);
   const selectedProjectValue =
     draft.projectType === 'P2_PROJECT' && draft.projectId
       ? `${P2_PROJECT_VALUE_PREFIX}${draft.projectId}`
@@ -1116,9 +1835,15 @@ export default function DraftBOMBuilderPage() {
         ? `${RD_PROJECT_VALUE_PREFIX}${draft.projectId}`
         : draft.projectType === 'R_AND_D'
           ? LEGACY_R_AND_D_PROJECT_VALUE
-          : '';
+          : UNASSIGNED_PROJECT_VALUE;
+  const canEditActiveDraft = draft.canEdit !== false;
+  const canManageActiveDraftAccess = draft.canManageAccess !== false;
+  const effectiveEditMode = isEditMode && canEditActiveDraft;
+  const canChangeActiveProject = canEditActiveDraft ? isEditMode : !draft.projectType;
 
-  const selectedLines = useMemo(() => draft.lines.filter((line) => line.include), [draft.lines]);
+  const draftPoLines = draft.lines;
+  const partsRequestLines = draft.partsRequestLines ?? [];
+  const selectedLines = useMemo(() => partsRequestLines.filter((line) => line.include), [partsRequestLines]);
   const laborDepartments = useMemo(() => {
     const customDepartments = draft.customLaborDepartments ?? [];
     return [
@@ -1130,8 +1855,8 @@ export default function DraftBOMBuilderPage() {
     ];
   }, [draft.customLaborDepartments]);
   const orderableLines = useMemo(
-    () => draft.lines.filter((line) => line.action !== 'Do Not Order' && !line.finalized),
-    [draft.lines],
+    () => partsRequestLines.filter((line) => line.action !== 'Do Not Order' && !line.finalized),
+    [partsRequestLines],
   );
   const activeInventoryItems = useMemo(
     () => inventoryItems.filter((item) => item.isActive !== false),
@@ -1179,18 +1904,13 @@ export default function DraftBOMBuilderPage() {
       })
       .slice(0, 6);
   }, [activeInventoryItems, partsRequestDescription]);
-  const partsRequestLines = useMemo(() => {
-    const lines = [...draft.lines];
-    if (!sortPartsByVendor) return lines;
-    return lines.sort((a, b) => {
-      const vendorCompare = (a.supplier || '').localeCompare(b.supplier || '');
-      if (vendorCompare !== 0) return vendorCompare;
-      return (a.description || '').localeCompare(b.description || '');
-    });
-  }, [draft.lines, sortPartsByVendor]);
+  const assemblySourceLines = useMemo(
+    () => mergeAssemblySourceLines(draftPoLines, partsRequestLines),
+    [draftPoLines, partsRequestLines],
+  );
   const assemblyTree = useMemo(
-    () => buildAssemblyTree(partsRequestLines, activeInventoryItems),
-    [activeInventoryItems, partsRequestLines],
+    () => buildAssemblyTree(assemblySourceLines, activeInventoryItems, draft.savedDraftBoms ?? []),
+    [activeInventoryItems, assemblySourceLines, draft.savedDraftBoms],
   );
   const partsRequestSelectedCount = partsRequestLines.filter((line) => line.include).length;
   const allPartsRequestVisibleSelected = partsRequestLines.length > 0 && partsRequestSelectedCount === partsRequestLines.length;
@@ -1206,6 +1926,19 @@ export default function DraftBOMBuilderPage() {
       window.removeEventListener('storage', refreshRDProjects);
     };
   }, []);
+
+  useEffect(() => {
+    if (!sharedDraftsFetched || hasLoadedSharedDrafts) return;
+    const sourceDrafts = sharedDrafts.length > 0 ? sharedDrafts : loadDrafts();
+    const normalizedDrafts = sourceDrafts.map(normalizeDraft);
+    const nextDrafts = normalizedDrafts.length > 0 ? normalizedDrafts : [createPrivateerDraft()];
+    const selectedDraft = nextDrafts.find((item) => item.id === selectedDraftId) ?? nextDrafts[0];
+
+    setSavedDrafts(nextDrafts);
+    saveDrafts(nextDrafts);
+    applyDraftSelection(selectedDraft);
+    setHasLoadedSharedDrafts(true);
+  }, [hasLoadedSharedDrafts, selectedDraftId, sharedDrafts, sharedDraftsFetched]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1227,12 +1960,28 @@ export default function DraftBOMBuilderPage() {
       return nextDrafts;
     });
 
+    if (hasLoadedSharedDrafts && canEditActiveDraft) {
+      void saveSharedDraft(nextDraft)
+        .then((savedDraft) => {
+          const normalizedSavedDraft = normalizeDraft(savedDraft);
+          queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+            savedDraftListWith(current.map(normalizeDraft), normalizedSavedDraft),
+          );
+        })
+        .catch((error) => {
+          console.error('Failed to save shared Draft Builder draft:', error);
+        });
+    }
+
     if (selectedDraftId !== nextDraft.id) {
       setSelectedDraftId(nextDraft.id);
     }
   }, [
     customColumns,
+    canEditActiveDraft,
     draft,
+    hasLoadedSharedDrafts,
+    queryClient,
     selectedDraftId,
     visibleAssemblyColumns,
     visibleDirectLaborColumns,
@@ -1255,18 +2004,24 @@ export default function DraftBOMBuilderPage() {
       (sum, line) => sum + asNumber(line.hoursPerPart) * asNumber(line.quantityPerPo),
       0,
     );
+    const nrcTotal = (draft.nrcRows ?? []).reduce((sum, row) => sum + nrcRowTotal(row), 0);
+    const customerFacingNrcTotal = (draft.nrcRows ?? [])
+      .filter((row) => row.includeInCustomerPrice && !row.internalOnly)
+      .reduce((sum, row) => sum + nrcRowTotal(row), 0);
 
     return {
       materialTotal,
       laborTotal,
       laborHours,
+      nrcTotal,
+      customerFacingNrcTotal,
       selectedTotal,
       onHandTotal,
       needsQuote,
       rfqSent,
       lineCount: draft.lines.length,
     };
-  }, [draft.laborEstimateLines, draft.lines, selectedLines]);
+  }, [draft.laborEstimateLines, draft.lines, draft.nrcRows, selectedLines]);
 
   const filterTotals = useMemo(() => {
     const grouped = new Map<string, { count: number; total: number }>();
@@ -1286,10 +2041,24 @@ export default function DraftBOMBuilderPage() {
     }));
   }
 
-  function deleteLine(id: string) {
+  function updatePartsRequestLine(id: string, patch: Partial<BomLine>) {
+    setDraft((current) => ({
+      ...current,
+      partsRequestLines: (current.partsRequestLines ?? []).map((line) => (line.id === id ? { ...line, ...patch } : line)),
+    }));
+  }
+
+  function deleteDraftPoLine(id: string) {
     setDraft((current) => ({
       ...current,
       lines: current.lines.filter((line) => line.id !== id),
+    }));
+  }
+
+  function deletePartsRequestLine(id: string) {
+    setDraft((current) => ({
+      ...current,
+      partsRequestLines: (current.partsRequestLines ?? []).filter((line) => line.id !== id),
     }));
   }
 
@@ -1327,6 +2096,39 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
+  function updateNrcRow(id: string, patch: Partial<NrcCostRow>) {
+    setDraft((current) => ({
+      ...current,
+      nrcRows: (current.nrcRows ?? []).map((row) => {
+        if (row.id !== id) return row;
+        const nextRow = { ...row, ...patch };
+        return { ...nextRow, totalCost: nrcRowTotal(nextRow) };
+      }),
+    }));
+  }
+
+  function updateNrcNumberRow(
+    id: string,
+    field: 'quantity' | 'unitCost' | 'amortizationQty' | 'usefulLifeMonths' | 'installationCost' | 'trainingCost',
+    value: string,
+  ) {
+    updateNrcRow(id, { [field]: value === '' ? null : Number(value) } as Partial<NrcCostRow>);
+  }
+
+  function addNrcRow() {
+    setDraft((current) => ({
+      ...current,
+      nrcRows: [...(current.nrcRows ?? []), newNrcRow()],
+    }));
+  }
+
+  function removeNrcRow(id: string) {
+    setDraft((current) => ({
+      ...current,
+      nrcRows: (current.nrcRows ?? []).filter((row) => row.id !== id),
+    }));
+  }
+
   function addLaborDepartment() {
     const label = newLaborDepartmentName.trim();
     const value = laborDepartmentValue(label);
@@ -1349,7 +2151,7 @@ export default function DraftBOMBuilderPage() {
   function selectOrderable() {
     setDraft((current) => ({
       ...current,
-      lines: current.lines.map((line) => ({
+      partsRequestLines: (current.partsRequestLines ?? []).map((line) => ({
         ...line,
         include: line.action !== 'Do Not Order' && line.status !== 'On Hand' && !line.finalized,
       })),
@@ -1360,14 +2162,14 @@ export default function DraftBOMBuilderPage() {
     const visibleLineIds = new Set(lineIds);
     setDraft((current) => ({
       ...current,
-      lines: current.lines.map((line) => (visibleLineIds.has(line.id) ? { ...line, include } : line)),
+      partsRequestLines: (current.partsRequestLines ?? []).map((line) => (visibleLineIds.has(line.id) ? { ...line, include } : line)),
     }));
   }
 
   function startDraftBomForLine(lineId: string) {
     setWizardSeedLineId(lineId);
     if (!visibleWorkspaceTabs.includes('bom-wizard')) {
-      setVisibleWorkspaceTabs((current) => (current.includes('bom-wizard') ? current : [...current, 'bom-wizard']));
+      setVisibleWorkspaceTabs((current) => normalizeWorkspaceTabs(current.includes('bom-wizard') ? current : [...current, 'bom-wizard']));
     }
     setActiveWorkspaceTab('bom-wizard');
   }
@@ -1375,43 +2177,58 @@ export default function DraftBOMBuilderPage() {
   function saveWizardBom(part: DraftBomPart, bom: DraftPartBom) {
     setDraft((current) => {
       const rootLineId = part.sourceLineId ?? part.id;
-      const sourceLine = current.lines.find((line) => line.id === rootLineId) ?? null;
+      const sourceLine =
+        current.lines.find((line) => line.id === rootLineId) ??
+        (current.partsRequestLines ?? []).find((line) => line.id === rootLineId) ??
+        null;
+      const shouldCreateRootLine = !sourceLine && !part.sourceLineId;
       const rootLine =
         sourceLine ??
-        ({
-          ...newLine(),
-          id: rootLineId,
-          include: true,
-          action: 'Hold',
-          category: 'Hardware/Misc.',
-          agPartNumber: part.partNumber,
-          description: part.description,
-          qtyNeeded: part.quantity || 1,
-          status: part.source === 'inventory-item' ? 'Needs Review' : 'Needs Quote',
-          note: part.source === 'inventory-item' ? `Draft BOM built from inventory item #${part.inventoryItemId}` : 'Draft BOM built from new part',
-          inventoryItemId: part.inventoryItemId ?? null,
-          inventoryItemName: part.source === 'inventory-item' ? part.description : null,
-          isDraftPart: part.source !== 'inventory-item',
-          isManufactured: true,
-          firstDepartment: defaultDepartment,
-          childDraftBoms: [],
-        } as BomLine);
+        (shouldCreateRootLine
+          ? ({
+              ...newLine(),
+              id: rootLineId,
+              include: true,
+              action: 'Hold',
+              category: 'Hardware/Misc.',
+              agPartNumber: part.partNumber,
+              description: part.description,
+              qtyNeeded: part.quantity || 1,
+              status: part.source === 'inventory-item' ? 'Needs Review' : 'Needs Quote',
+              note: part.source === 'inventory-item' ? `Draft BOM built from inventory item #${part.inventoryItemId}` : 'Draft BOM built from new part',
+              inventoryItemId: part.inventoryItemId ?? null,
+              inventoryItemName: part.source === 'inventory-item' ? part.description : null,
+              isDraftPart: part.source !== 'inventory-item',
+              isManufactured: true,
+              firstDepartment: defaultDepartment,
+              childDraftBoms: [],
+            } as BomLine)
+          : null);
 
-      const linkedPart = { ...part, sourceLineId: rootLine.id };
+      const linkedPart = { ...part, sourceLineId: rootLine?.id ?? part.sourceLineId ?? null };
       const linkedBom: DraftPartBom = {
         ...bom,
         rootPart: linkedPart,
         parts: bom.parts.map((queuedPart, index) =>
-          index === 0 ? { ...queuedPart, sourceLineId: rootLine.id } : queuedPart,
+          index === 0 ? { ...queuedPart, sourceLineId: rootLine?.id ?? queuedPart.sourceLineId ?? null } : queuedPart,
         ),
         updatedAt: new Date().toISOString(),
       };
 
-      const nextLines = sourceLine ? current.lines : [rootLine, ...current.lines];
-      return {
-        ...current,
-        lines: nextLines.map((line) => {
-          if (line.id !== rootLine.id) return line;
+      const nextLines = current.lines.map((line) => {
+        if (!rootLine || line.id !== rootLine.id) return line;
+        const childDraftBoms = line.childDraftBoms ?? [];
+        const withoutCurrentBom = childDraftBoms.filter((item) => item.id !== linkedBom.id);
+        return {
+          ...line,
+          isManufactured: true,
+          firstDepartment: line.firstDepartment ?? defaultDepartment,
+          childDraftBoms: [linkedBom, ...withoutCurrentBom],
+        };
+      });
+      const nextPartsRequestLines = (rootLine && !sourceLine ? [rootLine, ...(current.partsRequestLines ?? [])] : (current.partsRequestLines ?? []))
+        .map((line) => {
+          if (!rootLine || line.id !== rootLine.id) return line;
           const childDraftBoms = line.childDraftBoms ?? [];
           const withoutCurrentBom = childDraftBoms.filter((item) => item.id !== linkedBom.id);
           return {
@@ -1420,7 +2237,16 @@ export default function DraftBOMBuilderPage() {
             firstDepartment: line.firstDepartment ?? defaultDepartment,
             childDraftBoms: [linkedBom, ...withoutCurrentBom],
           };
-        }),
+        });
+      const nextSavedDraftBoms = mergeDraftBoms([
+        linkedBom,
+        ...(current.savedDraftBoms ?? []).filter((item) => item.id !== linkedBom.id),
+      ]);
+      return {
+        ...current,
+        savedDraftBoms: nextSavedDraftBoms,
+        lines: nextLines,
+        partsRequestLines: nextPartsRequestLines,
       };
     });
 
@@ -1429,6 +2255,21 @@ export default function DraftBOMBuilderPage() {
       title: 'Draft BOM saved',
       description: `${bom.name} ${bom.revision} is linked to ${part.partNumber}.`,
     });
+  }
+
+  function deleteWizardBom(bomId: string) {
+    setDraft((current) => ({
+      ...current,
+      savedDraftBoms: (current.savedDraftBoms ?? []).filter((bom) => bom.id !== bomId),
+      lines: current.lines.map((line) => ({
+        ...line,
+        childDraftBoms: (line.childDraftBoms ?? []).filter((bom) => bom.id !== bomId),
+      })),
+      partsRequestLines: (current.partsRequestLines ?? []).map((line) => ({
+        ...line,
+        childDraftBoms: (line.childDraftBoms ?? []).filter((bom) => bom.id !== bomId),
+      })),
+    }));
   }
 
   function createLineFromPoDescription(item?: InventoryItemOption) {
@@ -1506,7 +2347,7 @@ export default function DraftBOMBuilderPage() {
       customFields: {},
     };
 
-    setDraft((current) => ({ ...current, lines: [nextLine, ...current.lines] }));
+    setDraft((current) => ({ ...current, partsRequestLines: [nextLine, ...(current.partsRequestLines ?? [])] }));
     setPartsRequestDescription('');
     toast({
       title: item ? 'Inventory item added' : 'Draft part created',
@@ -1521,18 +2362,21 @@ export default function DraftBOMBuilderPage() {
     if (result.lines.length === 0) {
       toast({
         title: 'No rows imported',
-        description: 'Check that the file has part, description, quantity, supplier, or cost columns.',
+        description: 'Check that the file has a header row and at least one row with import values.',
         variant: 'destructive',
       });
       return;
     }
 
     setCustomColumns((current) => sanitizeCustomColumns([...current, ...result.customColumns]));
+    const sourceColumnMode = !linkInventoryMatches && result.customColumns.length > 0;
+    if (sourceColumnMode) setVisiblePartsRequestColumns([]);
     setDraft((current) => ({
       ...current,
-      lines: [...result.lines, ...current.lines],
+      partsRequestLines: [...result.lines, ...(current.partsRequestLines ?? [])],
       customColumns: sanitizeCustomColumns([...(current.customColumns ?? []), ...result.customColumns]),
       customPoColumns: sanitizeCustomColumns([...(current.customPoColumns ?? []), ...result.customColumns]),
+      partsRequestVisibleColumns: sourceColumnMode ? [] : current.partsRequestVisibleColumns,
       updatedAt: new Date().toISOString(),
     }));
     toast({
@@ -1585,7 +2429,39 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
-  function saveDraft() {
+  function updatePartsRequestLineCustomField(lineId: string, columnName: string, value: string) {
+    updatePartsRequestLine(lineId, {
+      customFields: {
+        ...(partsRequestLines.find((line) => line.id === lineId)?.customFields ?? {}),
+        [columnName]: value,
+      },
+    });
+  }
+
+  function updateAssemblySourceLineCustomField(lineId: string, columnName: string, value: string) {
+    const draftPoLine = draftPoLines.find((line) => line.id === lineId);
+    if (draftPoLine) {
+      updateLine(lineId, {
+        customFields: {
+          ...(draftPoLine.customFields ?? {}),
+          [columnName]: value,
+        },
+      });
+      return;
+    }
+    updatePartsRequestLineCustomField(lineId, columnName, value);
+  }
+
+  async function saveDraft() {
+    if (!canEditActiveDraft) {
+      toast({
+        title: 'View-only draft',
+        description: 'The creator has not allowed shared editing for this draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const nextDraft = normalizeDraft({
       ...draft,
       poVisibleColumns: visiblePoColumns,
@@ -1594,7 +2470,7 @@ export default function DraftBOMBuilderPage() {
       assemblyVisibleColumns: visibleAssemblyColumns,
       customColumns,
       customPoColumns: customColumns,
-      workspaceTabs: visibleWorkspaceTabs,
+      workspaceTabs: normalizeWorkspaceTabs(visibleWorkspaceTabs),
       updatedAt: new Date().toISOString(),
     });
     const nextDrafts = savedDraftListWith(savedDrafts, nextDraft);
@@ -1602,6 +2478,20 @@ export default function DraftBOMBuilderPage() {
     setSavedDrafts(nextDrafts);
     setSelectedDraftId(nextDraft.id);
     setDraft(nextDraft);
+    try {
+      const savedDraft = normalizeDraft(await saveSharedDraft(nextDraft));
+      queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+        savedDraftListWith(current.map(normalizeDraft), savedDraft),
+      );
+    } catch (error) {
+      console.error('Failed to save shared Draft Builder draft:', error);
+      toast({
+        title: 'Draft saved locally',
+        description: 'The shared draft save failed, so this browser kept the latest local copy.',
+        variant: 'destructive',
+      });
+      return;
+    }
     toast({ title: 'Draft saved', description: `${nextDraft.name} is available in saved BOM drafts.` });
   }
 
@@ -1614,8 +2504,9 @@ export default function DraftBOMBuilderPage() {
     setVisibleDirectLaborColumns(normalizedDraft.directLaborVisibleColumns ?? defaultDirectLaborColumns);
     setVisibleAssemblyColumns(normalizedDraft.assemblyVisibleColumns ?? defaultSourcingColumns);
     setCustomColumns(normalizedDraft.customColumns ?? normalizedDraft.customPoColumns ?? []);
-    setVisibleWorkspaceTabs(normalizedDraft.workspaceTabs ?? defaultWorkspaceTabs);
-    setActiveWorkspaceTab((normalizedDraft.workspaceTabs ?? defaultWorkspaceTabs)[0] ?? 'po-draft');
+    const normalizedTabs = normalizeWorkspaceTabs(normalizedDraft.workspaceTabs);
+    setVisibleWorkspaceTabs(normalizedTabs);
+    setActiveWorkspaceTab(normalizedTabs[0] ?? 'po-draft');
   }
 
   function loadDraft(id: string) {
@@ -1629,7 +2520,16 @@ export default function DraftBOMBuilderPage() {
     applyDraftSelection(match);
   }
 
-  function deleteCurrentDraft() {
+  async function deleteCurrentDraft() {
+    if (!canManageActiveDraftAccess) {
+      toast({
+        title: 'Creator access required',
+        description: 'Only the creator can delete or manage access for this draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!selectedDraftId) {
       toast({
         title: 'Save the draft first',
@@ -1664,14 +2564,32 @@ export default function DraftBOMBuilderPage() {
     const remainingDrafts = savedDrafts.filter((item) => item.id !== draft.id);
     const fallbackDraft = remainingDrafts[0] ?? createPrivateerDraft();
 
-    saveDrafts(remainingDrafts);
-    setSavedDrafts(remainingDrafts);
-    applyDraftSelection(fallbackDraft);
-    setIsDetailsOpen(false);
-    toast({ title: 'Draft deleted', description: `${draft.name} was removed from saved draft BOMs.` });
+    try {
+      await deleteSharedDraft(draft.id);
+      queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+        current.filter((item) => item.id !== draft.id),
+      );
+      saveDrafts(remainingDrafts);
+      setSavedDrafts(remainingDrafts);
+      applyDraftSelection(fallbackDraft);
+      setIsDetailsOpen(false);
+      toast({ title: 'Draft deleted', description: `${draft.name} was removed from saved draft BOMs.` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The shared draft could not be deleted.';
+      toast({ title: 'Delete failed', description: message, variant: 'destructive' });
+    }
   }
 
-  function clearCurrentDraft() {
+  async function clearCurrentDraft() {
+    if (!canEditActiveDraft) {
+      toast({
+        title: 'View-only draft',
+        description: 'The creator has not allowed shared editing for this draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const confirmed = window.confirm(`Clear "${draft.name} - ${draft.revision}" and start over? This cannot be undone.`);
     if (!confirmed) return;
 
@@ -1679,7 +2597,10 @@ export default function DraftBOMBuilderPage() {
       ...draft,
       updatedAt: new Date().toISOString(),
       lines: [newLine()],
+      partsRequestLines: [newLine()],
+      savedDraftBoms: [],
       laborEstimateLines: [newLaborEstimateLine()],
+      nrcRows: [],
       customLaborDepartments: [],
       poVisibleColumns: defaultPoColumns,
       partsRequestVisibleColumns: defaultPartsRequestColumns,
@@ -1695,6 +2616,14 @@ export default function DraftBOMBuilderPage() {
       const nextDrafts = savedDrafts.map((item) => (item.id === draft.id ? clearedDraft : item));
       saveDrafts(nextDrafts);
       setSavedDrafts(nextDrafts);
+      try {
+        const savedDraft = normalizeDraft(await saveSharedDraft(clearedDraft));
+        queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+          savedDraftListWith(current.map(normalizeDraft), savedDraft),
+        );
+      } catch (error) {
+        console.error('Failed to save cleared shared Draft Builder draft:', error);
+      }
     }
 
     applyDraftSelection(clearedDraft);
@@ -1716,13 +2645,63 @@ export default function DraftBOMBuilderPage() {
       projectType: selectedProject.projectType,
       updatedAt: new Date().toISOString(),
     };
+  async function clearPartsRequestTab() {
+    if (!canEditActiveDraft) {
+      toast({
+        title: 'View-only draft',
+        description: 'The creator has not allowed shared editing for this draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(`Clear the Parts/request tab for "${draft.name} - ${draft.revision}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const clearedDraft = normalizeDraft({
+      ...draft,
+      updatedAt: new Date().toISOString(),
+      partsRequestLines: [newLine()],
+    });
+
+    setPartsRequestDescription('');
+    setActiveWorkspaceTab('parts-request');
+    setDraft(clearedDraft);
+
+    const shouldPersist = !!selectedDraftId && savedDrafts.some((item) => item.id === draft.id);
+    if (shouldPersist) {
+      const nextDrafts = savedDrafts.map((item) => (item.id === draft.id ? clearedDraft : item));
+      saveDrafts(nextDrafts);
+      setSavedDrafts(nextDrafts);
+      try {
+        const savedDraft = normalizeDraft(await saveSharedDraft(clearedDraft));
+        queryClient.setQueryData<BomDraft[]>(['/api/draft-bom-drafts'], (current = []) =>
+          savedDraftListWith(current.map(normalizeDraft), savedDraft),
+        );
+      } catch (error) {
+        console.error('Failed to save cleared Parts/request tab:', error);
+        toast({
+          title: 'Parts/request cleared locally',
+          description: 'The shared draft save failed, so this browser kept the cleared tab locally.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    toast({
+      title: 'Parts/request cleared',
+      description: shouldPersist ? 'The Parts/request tab was cleared and saved.' : 'The Parts/request tab was cleared in this workspace.',
+    });
   }
 
   function updateDraftProject(value: string) {
+    if (value === UNASSIGNED_PROJECT_VALUE) return;
     const selectedProject = combinedProjectOptions.find((project) => project.value === value);
     if (!selectedProject) return;
 
     const savedProjectDraft = savedDrafts.find((item) => draftMatchesSelectedProject(item, selectedProject));
+    const savedProjectDraft = selectBestDraftForProject(savedDrafts, selectedProject);
 
     if (savedProjectDraft) {
       const linkedDraft = normalizeDraft(applyProjectToDraft(savedProjectDraft, selectedProject));
@@ -1735,7 +2714,7 @@ export default function DraftBOMBuilderPage() {
     }
 
     setSelectedDraftId('');
-    setDraft((current) => applyProjectToDraft(current, selectedProject));
+    applyDraftSelection(createBlankDraftForProject(selectedProject));
   }
 
   function startBlankDraft() {
@@ -1752,7 +2731,10 @@ export default function DraftBOMBuilderPage() {
       notes: '',
       updatedAt: new Date().toISOString(),
       lines: [newLine()],
+      partsRequestLines: [newLine()],
+      savedDraftBoms: [],
       laborEstimateLines: [newLaborEstimateLine()],
+      nrcRows: [],
       customLaborDepartments: [],
       poVisibleColumns: defaultPoColumns,
       partsRequestVisibleColumns: defaultPartsRequestColumns,
@@ -1773,7 +2755,16 @@ export default function DraftBOMBuilderPage() {
     setActiveWorkspaceTab('po-draft');
   }
 
-  function markSelectedFinalized() {
+  async function markSelectedFinalized() {
+    if (!canEditActiveDraft) {
+      toast({
+        title: 'View-only draft',
+        description: 'The creator has not allowed shared editing for this draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!draft.project) {
       toast({
         title: 'Select a project first',
@@ -1783,20 +2774,105 @@ export default function DraftBOMBuilderPage() {
       return;
     }
 
-    setDraft((current) => ({
-      ...current,
-      lines: current.lines.map((line) =>
-        line.include ? { ...line, finalized: true, include: false, action: 'Do Not Order' } : line,
-      ),
-    }));
-    toast({
-      title: 'Inventory finalization staged',
-      description: 'Selected lines are marked final and ready for inventory-item creation when backend submission is wired.',
-    });
+    const selectedDraftLines = partsRequestLines.filter((line) => line.include);
+    const linesToCreate = selectedDraftLines.filter(draftLineNeedsInventoryItem);
+    const createdByLineId = new Map<string, DraftFinalizedInventoryItem>();
+    const selectedLineIds = new Set(selectedDraftLines.map((line) => line.id));
+    const acceptedDraftBoms = new Map<string, DraftPartBom>();
+    let draftBomAcceptError: string | null = null;
+
+    setIsFinalizingParts(true);
+    try {
+      for (const line of linesToCreate) {
+        const createdItem = await createInventoryItemFromDraftLine(line, draft);
+        createdByLineId.set(line.id, createdItem);
+      }
+
+      const finalizedSavedDraftBoms = (draft.savedDraftBoms ?? []).map((bom) =>
+        applyFinalizedInventoryToDraftBom(bom, createdByLineId),
+      );
+      const bomsToAccept = finalizedSavedDraftBoms.filter((bom) =>
+        bom.rootPart.sourceLineId ? selectedLineIds.has(bom.rootPart.sourceLineId) : false,
+      );
+
+      for (const bomToAccept of bomsToAccept) {
+        try {
+          const result = await saveDraftBomToRobustBom(bomToAccept, draft, false);
+          acceptedDraftBoms.set(bomToAccept.id, markDraftBomAccepted(bomToAccept, result, 'draft'));
+        } catch (error) {
+          draftBomAcceptError = error instanceof Error ? error.message : 'Unable to save a draft BOM to Robust BOM.';
+        }
+      }
+
+      setDraft((current) => ({
+        ...current,
+        savedDraftBoms: (current.savedDraftBoms ?? []).map((bom) =>
+          acceptedDraftBoms.get(bom.id) ?? applyFinalizedInventoryToDraftBom(bom, createdByLineId),
+        ),
+        lines: current.lines.map((line) => ({
+          ...line,
+          childDraftBoms: (line.childDraftBoms ?? []).map((bom) =>
+            acceptedDraftBoms.get(bom.id) ?? applyFinalizedInventoryToDraftBom(bom, createdByLineId),
+          ),
+        })),
+        partsRequestLines: (current.partsRequestLines ?? []).map((line) => {
+          const childDraftBoms = (line.childDraftBoms ?? []).map((bom) =>
+            acceptedDraftBoms.get(bom.id) ?? applyFinalizedInventoryToDraftBom(bom, createdByLineId),
+          );
+          if (!line.include) return { ...line, childDraftBoms };
+          const createdItem = createdByLineId.get(line.id);
+          if (draftLineNeedsInventoryItem(line) && !createdItem) return { ...line, childDraftBoms };
+          return {
+            ...line,
+            childDraftBoms,
+            finalized: true,
+            include: false,
+            action: 'Do Not Order',
+            agPartNumber: createdItem?.agPartNumber ?? line.agPartNumber,
+            inventoryItemId: createdItem?.id ?? line.inventoryItemId ?? null,
+            inventoryItemName: createdItem?.name ?? line.inventoryItemName ?? lineDescription(line),
+            isDraftPart: false,
+            note: createdItem
+              ? `Finalized to inventory item #${createdItem.id} (${createdItem.agPartNumber})`
+              : line.note,
+          };
+        }),
+      }));
+
+      if (createdByLineId.size > 0) {
+        await queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      }
+
+      toast({
+        title: 'Inventory finalization complete',
+        description: [
+          createdByLineId.size > 0
+            ? `${selectedDraftLines.length} line(s) finalized, ${createdByLineId.size} new inventory item(s) created with AG part numbers.`
+            : `${selectedDraftLines.length} line(s) finalized.`,
+          acceptedDraftBoms.size > 0 ? `${acceptedDraftBoms.size} draft BOM(s) saved to Robust BOM.` : '',
+        ].filter(Boolean).join(' '),
+      });
+      if (draftBomAcceptError) {
+        toast({
+          title: 'Draft BOM needs inventory matches',
+          description: draftBomAcceptError,
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create inventory items from the selected draft lines.';
+      toast({
+        title: 'Inventory finalization failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsFinalizingParts(false);
+    }
   }
 
   function createVendorPoHandoff() {
-    const selectedRequestLines = draft.lines.filter((line) => line.include);
+    const selectedRequestLines = partsRequestLines.filter((line) => line.include);
     if (selectedRequestLines.length === 0) {
       toast({
         title: 'Select parts first',
@@ -1853,22 +2929,100 @@ export default function DraftBOMBuilderPage() {
     setLocation('/vendor-pos?draftBomHandoff=1');
   }
 
-  function showHandoffToast(target: 'RFQ package' | 'PO draft' | 'parts request' | 'inventory items' | 'assembly tree') {
+  function showHandoffToast(target: 'RFQ package' | 'PO draft' | 'parts request' | 'inventory items' | 'assembly tree', lineCount = selectedLines.length) {
     toast({
-      title: `${selectedLines.length} line(s) ready`,
+      title: `${lineCount} line(s) ready`,
       description: `The ${target} handoff is staged in the UI and ready for backend wiring.`,
     });
   }
 
+  async function pushActiveTabTo(target: 'rom' | 'p2-project' | 'rd-project') {
+    const payload = {
+      source: 'draft-builder',
+      draftId: draft.id,
+      draftName: draft.name,
+      revision: draft.revision,
+      project: draft.project,
+      projectId: draft.projectId,
+      projectCode: draft.projectCode,
+      projectName: draft.projectName,
+      projectType: draft.projectType,
+      tabId: activeWorkspaceTab,
+      tabLabel: workspaceTabLabel(activeWorkspaceTab),
+      createdAt: new Date().toISOString(),
+      draft,
+    };
+    window.localStorage.setItem(DRAFT_TAB_HANDOFF_KEY, JSON.stringify(payload));
+
+    if (target === 'rom') {
+      toast({ title: 'Tab pushed to ROM Builder', description: `${workspaceTabLabel(activeWorkspaceTab)} is ready for ROM import.` });
+      setLocation(`/rfq-builder?draftBuilderHandoff=1&draftId=${encodeURIComponent(draft.id)}&tab=${encodeURIComponent(activeWorkspaceTab)}`);
+      return;
+    }
+
+    if (target === 'p2-project') {
+      if (draft.projectType !== 'P2_PROJECT' || !draft.projectId) {
+        toast({
+          title: 'Link a P2 project first',
+          description: 'Select a P2 project before pushing this tab to a P2 project folder.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const bomsToPromote = draft.savedDraftBoms ?? [];
+      const promotedDraftBoms = new Map<string, DraftPartBom>();
+      try {
+        for (const bomToPromote of bomsToPromote) {
+          const result = await saveDraftBomToRobustBom(bomToPromote, draft, true);
+          promotedDraftBoms.set(bomToPromote.id, markDraftBomAccepted(bomToPromote, result, 'active'));
+        }
+        if (promotedDraftBoms.size > 0) {
+          setDraft((current) => ({
+            ...current,
+            savedDraftBoms: (current.savedDraftBoms ?? []).map((bom) => promotedDraftBoms.get(bom.id) ?? bom),
+            lines: current.lines.map((line) => ({
+              ...line,
+              childDraftBoms: (line.childDraftBoms ?? []).map((bom) => promotedDraftBoms.get(bom.id) ?? bom),
+            })),
+            partsRequestLines: (current.partsRequestLines ?? []).map((line) => ({
+              ...line,
+              childDraftBoms: (line.childDraftBoms ?? []).map((bom) => promotedDraftBoms.get(bom.id) ?? bom),
+            })),
+          }));
+        }
+        toast({
+          title: 'BOM pushed to P2 project',
+          description: promotedDraftBoms.size > 0
+            ? `${promotedDraftBoms.size} Robust BOM draft(s) promoted and bridged into the P2 BOM Wizard.`
+            : `${workspaceTabLabel(activeWorkspaceTab)} is ready in the project context.`,
+        });
+        setLocation(`/projects/${draft.projectId}?draftBuilderHandoff=1&tab=bom-routing`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to save the draft BOMs to Robust BOM.';
+        toast({
+          title: 'P2 BOM push failed',
+          description: message,
+          variant: 'destructive',
+        });
+      }
+      return;
+    }
+
+    toast({ title: 'Tab pushed to R&D projects', description: `${workspaceTabLabel(activeWorkspaceTab)} is ready for R&D project attachment.` });
+    setLocation(`/rd-projects?draftBuilderHandoff=1&draftId=${encodeURIComponent(draft.id)}&tab=${encodeURIComponent(activeWorkspaceTab)}`);
+  }
+
   function setWorkspaceTabVisible(tabId: WorkspaceTabId, visible: boolean) {
     setVisibleWorkspaceTabs((current) => {
+      const normalizedCurrent = normalizeWorkspaceTabs(current);
       if (visible) {
-        const next = current.includes(tabId) ? current : [...current, tabId];
+        const next = normalizeWorkspaceTabs(normalizedCurrent.includes(tabId) ? normalizedCurrent : [...normalizedCurrent, tabId]);
         setActiveWorkspaceTab(tabId);
         return next;
       }
 
-      const next = current.filter((item) => item !== tabId);
+      const next = normalizedCurrent.filter((item) => item !== tabId);
       if (activeWorkspaceTab === tabId && next.length > 0) {
         setActiveWorkspaceTab(next[0] ?? 'po-draft');
       }
@@ -1877,12 +3031,283 @@ export default function DraftBOMBuilderPage() {
   }
 
   function createWorkspaceTab() {
-    const label = newWorkspaceTabName.trim();
-    if (!label) return;
-    const tabId = `custom:${label}` as WorkspaceTabId;
-    setVisibleWorkspaceTabs((current) => (current.includes(tabId) ? current : [...current, tabId]));
+    const tabId = customWorkspaceTabId(newWorkspaceTabName);
+    if (!tabId) return;
+    setVisibleWorkspaceTabs((current) => normalizeWorkspaceTabs([...current, tabId]));
     setActiveWorkspaceTab(tabId);
     setNewWorkspaceTabName('');
+  }
+
+  function openDraftFromLibrary(nextDraft: BomDraft) {
+    applyDraftSelection(nextDraft);
+    setIsLibraryView(false);
+  }
+
+  function openCreateDraftPrompt() {
+    setNewDraftProjectMode(combinedProjectOptions.length > 0 ? 'existing' : 'temporary');
+    setNewDraftProjectValue(combinedProjectOptions[0]?.value ?? '');
+    setNewDraftProjectName('');
+    setNewDraftName('');
+    setIsCreateDraftOpen(true);
+  }
+
+  function createDraftFromPrompt() {
+    let nextDraft: BomDraft;
+
+    if (newDraftProjectMode === 'existing') {
+      const selectedProject = combinedProjectOptions.find((project) => project.value === newDraftProjectValue);
+      if (!selectedProject) {
+        toast({
+          title: 'Select a project',
+          description: 'Choose an existing project or create a temporary project draft.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      nextDraft = createBlankDraftForProject(selectedProject);
+    } else {
+      const projectName = newDraftProjectName.trim();
+      if (!projectName) {
+        toast({
+          title: 'Project name required',
+          description: 'Name the temporary project before creating the draft.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      nextDraft = createBlankDraftForTemporaryProject(projectName);
+    }
+
+    const cleanDraftName = newDraftName.trim();
+    if (cleanDraftName) {
+      nextDraft = { ...nextDraft, name: cleanDraftName };
+    }
+
+    applyDraftSelection(nextDraft);
+    setSelectedDraftId('');
+    setIsLibraryView(false);
+    setIsCreateDraftOpen(false);
+  }
+
+  const createDraftSheet = (
+    <Sheet open={isCreateDraftOpen} onOpenChange={setIsCreateDraftOpen}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-[520px]">
+        <SheetHeader>
+          <SheetTitle>Create draft BOM</SheetTitle>
+          <SheetDescription>
+            Start from an existing project or create a temporary project draft that can be linked later.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="mt-6 space-y-5">
+          <div className="grid gap-2">
+            <Label>Project source</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant={newDraftProjectMode === 'existing' ? 'default' : 'outline'}
+                className="justify-start"
+                onClick={() => setNewDraftProjectMode('existing')}
+                disabled={combinedProjectOptions.length === 0}
+              >
+                <FolderOpen className="mr-2 h-4 w-4" />
+                Existing project
+              </Button>
+              <Button
+                type="button"
+                variant={newDraftProjectMode === 'temporary' ? 'default' : 'outline'}
+                className="justify-start"
+                onClick={() => setNewDraftProjectMode('temporary')}
+              >
+                <FilePlus className="mr-2 h-4 w-4" />
+                New temporary project
+              </Button>
+            </div>
+          </div>
+
+          {newDraftProjectMode === 'existing' ? (
+            <div className="grid gap-1.5">
+              <Label htmlFor="new-draft-project">Project</Label>
+              <Select value={newDraftProjectValue} onValueChange={setNewDraftProjectValue}>
+                <SelectTrigger id="new-draft-project">
+                  <SelectValue placeholder="Select a project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__new_rd_projects_header__" disabled>
+                    R&D Projects
+                  </SelectItem>
+                  {rdProjectOptions.length === 0 ? (
+                    <SelectItem value="__new_no_rd_projects__" disabled>
+                      No R&D projects
+                    </SelectItem>
+                  ) : (
+                    rdProjectOptions.map((project) => (
+                      <SelectItem key={`new-rd-${project.id}`} value={`${RD_PROJECT_VALUE_PREFIX}${project.id}`}>
+                        {project.projectName}
+                      </SelectItem>
+                    ))
+                  )}
+                  <SelectItem value="__new_p2_projects_header__" disabled>
+                    P2 Projects
+                  </SelectItem>
+                  {projectsLoading ? (
+                    <SelectItem value="__new_projects_loading__" disabled>
+                      Loading P2 projects...
+                    </SelectItem>
+                  ) : projectOptions.length === 0 ? (
+                    <SelectItem value="__new_no_p2_projects__" disabled>
+                      No P2 projects
+                    </SelectItem>
+                  ) : (
+                    projectOptions.map((project) => (
+                      <SelectItem key={`new-p2-${project.id}`} value={`${P2_PROJECT_VALUE_PREFIX}${project.id}`}>
+                        {projectLabel(project)}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="grid gap-1.5">
+              <Label htmlFor="new-draft-project-name">Temporary project name</Label>
+              <Input
+                id="new-draft-project-name"
+                value={newDraftProjectName}
+                onChange={(event) => setNewDraftProjectName(event.target.value)}
+                placeholder="Project name"
+              />
+            </div>
+          )}
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="new-draft-name">Draft name</Label>
+            <Input
+              id="new-draft-name"
+              value={newDraftName}
+              onChange={(event) => setNewDraftName(event.target.value)}
+              placeholder="Defaults to the project name"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsCreateDraftOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={createDraftFromPrompt}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create draft
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+
+  if (isLibraryView) {
+    return (
+      <main className="min-h-screen bg-slate-50">
+        <div className="mx-auto max-w-[1800px] space-y-5 p-4 lg:p-6">
+          <section className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="h-7 w-7 text-teal-700" aria-hidden="true" />
+                <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Draft Builder</h1>
+                <Badge variant="outline" className="border-teal-300 bg-teal-50 text-teal-800">
+                  Shared drafts
+                </Badge>
+              </div>
+              <p className="mt-1 text-sm text-slate-600">
+                Open a draft by project, or create a new draft for an existing or temporary project.
+              </p>
+            </div>
+            <Button type="button" onClick={openCreateDraftPrompt}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create draft
+            </Button>
+          </section>
+
+          {draftProjectGroups.length === 0 ? (
+            <section className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
+              <FilePlus className="mx-auto h-10 w-10 text-slate-400" aria-hidden="true" />
+              <h2 className="mt-4 text-lg font-semibold text-slate-950">No draft BOMs yet</h2>
+              <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
+                Create the first shared draft BOM so other users with Draft Builder access can view it.
+              </p>
+              <Button type="button" className="mt-5" onClick={openCreateDraftPrompt}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create draft
+              </Button>
+            </section>
+          ) : (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {draftProjectGroups.map((group) => (
+                <Card key={group.key} className="overflow-hidden rounded-lg">
+                  <CardHeader className="border-b border-slate-100 bg-white">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <CardTitle className="truncate text-base">{group.label}</CardTitle>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Badge variant="secondary">{group.projectType}</Badge>
+                          <Badge variant="outline">{group.drafts.length} draft{group.drafts.length === 1 ? '' : 's'}</Badge>
+                        </div>
+                      </div>
+                      <Button type="button" variant="outline" size="sm" onClick={() => openDraftFromLibrary(group.drafts[0])}>
+                        <FolderOpen className="mr-2 h-4 w-4" />
+                        Open latest
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3 p-4">
+                    {group.drafts.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="block w-full rounded-md border border-slate-200 bg-white p-3 text-left transition hover:border-teal-300 hover:bg-teal-50"
+                        onClick={() => openDraftFromLibrary(item)}
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-slate-950">{item.name}</div>
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                              <span>{item.revision || 'Draft'}</span>
+                              <span>{item.lines.length} line{item.lines.length === 1 ? '' : 's'}</span>
+                              <span>{draftSavedBomCount(item)} BOM{draftSavedBomCount(item) === 1 ? '' : 's'}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                            <span className="inline-flex items-center gap-1">
+                              {item.visibility === 'private' ? <Lock className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                              {draftVisibilityLabel(item)}
+                            </span>
+                            {item.createdByDisplayName ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                Created by {item.createdByDisplayName}
+                              </span>
+                            ) : null}
+                            {item.updatedByDisplayName ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                Updated by {item.updatedByDisplayName}
+                              </span>
+                            ) : null}
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {formatDraftUpdatedAt(item.updatedAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+        {createDraftSheet}
+      </main>
+    );
   }
 
   return (
@@ -1896,20 +3321,31 @@ export default function DraftBOMBuilderPage() {
               <Badge variant="outline" className="border-orange-300 bg-orange-50 text-orange-800">
                 Spreadsheet style
               </Badge>
+              <Badge variant={draft.visibility === 'private' ? 'secondary' : 'outline'}>
+                {draftVisibilityLabel(draft)}
+              </Badge>
             </div>
             <p className="mt-1 text-sm text-slate-600">
               Draft reusable BOMs, select sourcing lines, and prepare RFQ or order picklists from one working grid.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Created by {draft.createdByDisplayName || 'unknown'}{canEditActiveDraft ? '' : ' - view only'}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <div className="flex min-w-[280px] flex-col gap-1.5">
               <Label htmlFor="active-project">Project</Label>
-              <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!isEditMode}>
+              <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!canChangeActiveProject}>
                 <SelectTrigger id="active-project" className="bg-white">
                   <SelectValue placeholder="Select an R&D or P2 project" />
                 </SelectTrigger>
                 <SelectContent>
+                  {!draft.projectType ? (
+                    <SelectItem value={UNASSIGNED_PROJECT_VALUE} disabled>
+                      Unassigned draft
+                    </SelectItem>
+                  ) : null}
                   {draft.projectType === 'R_AND_D' && !draft.projectId ? (
                     <SelectItem value={LEGACY_R_AND_D_PROJECT_VALUE}>R&D</SelectItem>
                   ) : null}
@@ -1952,9 +3388,10 @@ export default function DraftBOMBuilderPage() {
               <div className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm">
                 <Switch
                   id="draft-edit-mode"
-                  checked={isEditMode}
+                  checked={effectiveEditMode}
                   onCheckedChange={setIsEditMode}
                   aria-label="Toggle draft editing"
+                  disabled={!canEditActiveDraft}
                 />
                 <Label htmlFor="draft-edit-mode" className="cursor-pointer">
                   Editing
@@ -1964,25 +3401,30 @@ export default function DraftBOMBuilderPage() {
                 <SlidersHorizontal className="mr-2 h-4 w-4" />
                 BOM details
               </Button>
-              <Button type="button" variant="outline" onClick={startBlankDraft} disabled={!isEditMode}>
+              <Button type="button" variant="outline" onClick={() => setIsLibraryView(true)}>
+                <FolderOpen className="mr-2 h-4 w-4" />
+                Draft library
+              </Button>
+              <Button type="button" variant="outline" onClick={openCreateDraftPrompt} disabled={!effectiveEditMode}>
                 <Plus className="mr-2 h-4 w-4" />
                 New draft
               </Button>
-              <Button variant="outline" onClick={selectOrderable}>
+              <Button variant="outline" onClick={selectOrderable} disabled={!effectiveEditMode}>
                 <Filter className="mr-2 h-4 w-4" />
                 Select orderable
               </Button>
-              <Button variant="outline" onClick={saveDraft} disabled={!isEditMode}>
+              <Button variant="outline" onClick={saveDraft} disabled={!effectiveEditMode}>
                 <Save className="mr-2 h-4 w-4" />
                 Save draft
               </Button>
-              <Button onClick={markSelectedFinalized} disabled={!isEditMode || selectedLines.length === 0}>
+              <Button onClick={markSelectedFinalized} disabled={!effectiveEditMode || selectedLines.length === 0 || isFinalizingParts}>
                 <Check className="mr-2 h-4 w-4" />
-                Finalize to inventory
+                {isFinalizingParts ? 'Finalizing...' : 'Finalize to inventory'}
               </Button>
             </div>
           </div>
         </section>
+        {createDraftSheet}
 
         <Sheet open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
           <SheetContent className="w-full overflow-y-auto sm:max-w-[480px]">
@@ -2006,7 +3448,7 @@ export default function DraftBOMBuilderPage() {
                     id="draft-name"
                     value={draft.name}
                     onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-                    disabled={!isEditMode}
+                    disabled={!effectiveEditMode}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -2016,16 +3458,21 @@ export default function DraftBOMBuilderPage() {
                       id="draft-revision"
                       value={draft.revision}
                       onChange={(event) => setDraft((current) => ({ ...current, revision: event.target.value }))}
-                      disabled={!isEditMode}
+                      disabled={!effectiveEditMode}
                     />
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="draft-project">Project</Label>
-                    <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!isEditMode}>
+                    <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!canChangeActiveProject}>
                       <SelectTrigger id="draft-project">
                         <SelectValue placeholder={draft.project || 'Select an R&D or P2 project'} />
                       </SelectTrigger>
                       <SelectContent>
+                        {!draft.projectType ? (
+                          <SelectItem value={UNASSIGNED_PROJECT_VALUE} disabled>
+                            Unassigned draft
+                          </SelectItem>
+                        ) : null}
                         {draft.projectType === 'R_AND_D' && !draft.projectId ? (
                           <SelectItem value={LEGACY_R_AND_D_PROJECT_VALUE}>R&D</SelectItem>
                         ) : null}
@@ -2072,8 +3519,57 @@ export default function DraftBOMBuilderPage() {
                     value={draft.owner}
                     onChange={(event) => setDraft((current) => ({ ...current, owner: event.target.value }))}
                     placeholder="Inventory, Engineering, PM..."
-                    disabled={!isEditMode}
+                    disabled={!effectiveEditMode}
                   />
+                </div>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <Label>Draft access</Label>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Created by {draft.createdByDisplayName || 'unknown'}. Public drafts are visible to users with Draft Builder access.
+                      </p>
+                    </div>
+                    <Badge variant={draft.visibility === 'private' ? 'secondary' : 'outline'}>
+                      {draftVisibilityLabel(draft)}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 grid gap-3">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="draft-visibility">Visibility</Label>
+                      <Select
+                        value={draft.visibility ?? 'public'}
+                        onValueChange={(value) =>
+                          setDraft((current) => ({
+                            ...current,
+                            visibility: value as 'public' | 'private',
+                            allowPublicEdit: value === 'private' ? false : current.allowPublicEdit,
+                          }))
+                        }
+                        disabled={!canManageActiveDraftAccess}
+                      >
+                        <SelectTrigger id="draft-visibility">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="public">Public - visible to Draft Builder users</SelectItem>
+                          <SelectItem value="private">Private - creator only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+                      <span>
+                        <span className="block font-medium text-slate-800">Allow public edits</span>
+                        <span className="block text-xs text-slate-500">Off means other users can view but not edit.</span>
+                      </span>
+                      <Switch
+                        checked={draft.allowPublicEdit === true}
+                        onCheckedChange={(checked) => setDraft((current) => ({ ...current, allowPublicEdit: checked === true }))}
+                        disabled={!canManageActiveDraftAccess || draft.visibility === 'private'}
+                        aria-label="Allow other users to edit this public draft"
+                      />
+                    </label>
+                  </div>
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="draft-notes">Notes</Label>
@@ -2082,7 +3578,7 @@ export default function DraftBOMBuilderPage() {
                     value={draft.notes}
                     onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
                     rows={3}
-                    disabled={!isEditMode}
+                    disabled={!effectiveEditMode}
                   />
                 </div>
               </div>
@@ -2097,6 +3593,7 @@ export default function DraftBOMBuilderPage() {
                 <SummaryMetric label="Total Material / Tooling" value={money(totals.materialTotal)} />
                 <SummaryMetric label="Direct Labor Estimate" value={money(totals.laborTotal)} />
                 <SummaryMetric label="Direct Labor Hours" value={totals.laborHours.toLocaleString(undefined, { maximumFractionDigits: 2 })} />
+                <SummaryMetric label="NRC Estimate" value={money(totals.nrcTotal)} />
                 <SummaryMetric label="Selected for RFQ / Order" value={money(totals.selectedTotal)} />
                 <SummaryMetric label="On Hand Value" value={money(totals.onHandTotal)} />
                 <SummaryMetric label="Needs Quote Count" value={String(totals.needsQuote)} />
@@ -2115,7 +3612,7 @@ export default function DraftBOMBuilderPage() {
                   value={newColumnName}
                   onChange={(event) => setNewColumnName(event.target.value)}
                   placeholder="New column name"
-                  disabled={!isEditMode}
+                  disabled={!effectiveEditMode}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault();
@@ -2123,7 +3620,7 @@ export default function DraftBOMBuilderPage() {
                     }
                   }}
                 />
-                <Button type="button" variant="outline" onClick={addCustomColumn} disabled={!isEditMode || !newColumnName.trim()}>
+                <Button type="button" variant="outline" onClick={addCustomColumn} disabled={!effectiveEditMode || !newColumnName.trim()}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add column
                 </Button>
@@ -2167,11 +3664,21 @@ export default function DraftBOMBuilderPage() {
                     type="button"
                     variant="outline"
                     onClick={clearCurrentDraft}
-                    disabled={!isEditMode}
+                    disabled={!effectiveEditMode}
                     className="border-red-300 bg-white text-red-700 hover:bg-red-100 hover:text-red-800"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
                     Clear and start over
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={clearPartsRequestTab}
+                    disabled={!effectiveEditMode}
+                    className="border-red-300 bg-white text-red-700 hover:bg-red-100 hover:text-red-800"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear Parts/request tab
                   </Button>
                   <Button
                     type="button"
@@ -2206,6 +3713,18 @@ export default function DraftBOMBuilderPage() {
               </TabsList>
 
               <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => pushActiveTabTo('rom')}>
+                  <Send className="mr-2 h-4 w-4" />
+                  Push tab to ROM
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => pushActiveTabTo('p2-project')}>
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  Push tab to P2
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => pushActiveTabTo('rd-project')}>
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  Push tab to R&D
+                </Button>
                 {activeWorkspaceTab === 'parts-request' ? (
                   <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm">
                     <Checkbox
@@ -2319,7 +3838,7 @@ export default function DraftBOMBuilderPage() {
             {visibleWorkspaceTabs.includes('po-draft') ? (
               <TabsContent value="po-draft" className="mt-4">
                 <PoDraftWorkspace
-                  lines={selectedLines}
+                  lines={draftPoLines}
                   description={poDescription}
                   matches={poDescriptionMatches}
                   visibleColumns={visiblePoColumns}
@@ -2328,10 +3847,10 @@ export default function DraftBOMBuilderPage() {
                   onCreateLine={createLineFromPoDescription}
                   onToggleColumn={togglePoColumn}
                   onUpdateCustomField={updateLineCustomField}
-                  onGeneratePoDraft={() => showHandoffToast('PO draft')}
+                  onGeneratePoDraft={() => showHandoffToast('PO draft', draftPoLines.length)}
                   onCreateDraftBom={startDraftBomForLine}
-                  onDeleteLine={deleteLine}
-                  isEditMode={isEditMode}
+                  onDeleteLine={deleteDraftPoLine}
+                  isEditMode={effectiveEditMode}
                 />
               </TabsContent>
             ) : null}
@@ -2344,18 +3863,17 @@ export default function DraftBOMBuilderPage() {
                   customColumns={customColumns}
                   description={partsRequestDescription}
                   matches={partsRequestMatches}
-                  sortByVendor={sortPartsByVendor}
                   onDescriptionChange={setPartsRequestDescription}
                   onCreateLine={createLineFromPartsRequestDescription}
-                  onSortByVendorChange={setSortPartsByVendor}
-                  onUpdateLine={updateLine}
-                  onUpdateCustomField={updateLineCustomField}
-                  onUpdateNumberLine={(id, field, value) => updateLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
+                  onUpdateLine={updatePartsRequestLine}
+                  onUpdateCustomField={updatePartsRequestLineCustomField}
+                  onUpdateNumberLine={(id, field, value) => updatePartsRequestLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
                   onImportCsv={importPartsRequestCsv}
                   onCreateVendorPoDraft={createVendorPoHandoff}
                   onFinalizeSelected={markSelectedFinalized}
-                  onDeleteLine={deleteLine}
-                  isEditMode={isEditMode}
+                  onDeleteLine={deletePartsRequestLine}
+                  isEditMode={effectiveEditMode}
+                  isFinalizingParts={isFinalizingParts}
                 />
               </TabsContent>
             ) : null}
@@ -2375,7 +3893,22 @@ export default function DraftBOMBuilderPage() {
                   onRemoveLine={removeLaborEstimateLine}
                   onUpdateLine={updateLaborEstimateLine}
                   onUpdateNumberLine={updateLaborEstimateNumberLine}
-                  isEditMode={isEditMode}
+                  isEditMode={effectiveEditMode}
+                />
+              </TabsContent>
+            ) : null}
+
+            {visibleWorkspaceTabs.includes('nrc') ? (
+              <TabsContent value="nrc" className="mt-4">
+                <NrcEstimateWorkspace
+                  rows={draft.nrcRows ?? []}
+                  totalCost={totals.nrcTotal}
+                  customerFacingTotal={totals.customerFacingNrcTotal}
+                  onAddRow={addNrcRow}
+                  onRemoveRow={removeNrcRow}
+                  onUpdateRow={updateNrcRow}
+                  onUpdateNumberRow={updateNrcNumberRow}
+                  isEditMode={effectiveEditMode}
                 />
               </TabsContent>
             ) : null}
@@ -2383,19 +3916,22 @@ export default function DraftBOMBuilderPage() {
             {visibleWorkspaceTabs.includes('bom-wizard') ? (
               <TabsContent value="bom-wizard" className="mt-4">
                 <DraftBomWizardWorkspace
-                  draftLines={draft.lines}
+                  draftLines={assemblySourceLines}
+                  savedDraftBoms={draft.savedDraftBoms ?? []}
                   inventoryItems={activeInventoryItems}
+                  departmentOptions={bomDepartmentOptions}
                   seedLineId={wizardSeedLineId}
                   onSeedLineConsumed={() => setWizardSeedLineId(null)}
                   onSaveWizardBom={saveWizardBom}
-                  isEditMode={isEditMode}
+                  onDeleteWizardBom={deleteWizardBom}
+                  isEditMode={effectiveEditMode}
                 />
               </TabsContent>
             ) : null}
 
             {visibleWorkspaceTabs.includes('assembly-tree') ? (
               <TabsContent value="assembly-tree" className="mt-4">
-                <AssemblyTreeWorkspace tree={assemblyTree} lineCount={partsRequestLines.length} />
+                <AssemblyTreeWorkspace tree={assemblyTree} />
               </TabsContent>
             ) : null}
 
@@ -2411,10 +3947,10 @@ export default function DraftBOMBuilderPage() {
                       </p>
                     </div>
                     <CustomColumnLineTable
-                      lines={draft.lines}
+                      lines={assemblySourceLines}
                       customColumns={customColumns}
-                      onUpdateCustomField={updateLineCustomField}
-                      isEditMode={isEditMode}
+                      onUpdateCustomField={updateAssemblySourceLineCustomField}
+                      isEditMode={effectiveEditMode}
                     />
                   </section>
                 </TabsContent>
@@ -2641,7 +4177,7 @@ function PoDraftWorkspace({
                     ))}
                     <TableCell>
                       <Badge variant={line.inventoryItemId ? 'outline' : 'secondary'}>
-                        {line.inventoryItemId ? 'Inventory' : 'Draft part'}
+                        {linePartTypeLabel(line)}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -2684,8 +4220,36 @@ function poColumnValue(line: BomLine, columnId: PoColumnId) {
   if (columnId === 'unitCost') return line.unitCost === '' ? '-' : money(asNumber(line.unitCost));
   if (columnId === 'extCost') return money(asNumber(line.unitCost) * asNumber(line.qtyNeeded));
   if (columnId === 'action') return line.action;
-  if (columnId === 'source') return line.inventoryItemId ? `Inventory #${line.inventoryItemId}` : 'Draft part';
+  if (columnId === 'source') return lineSourceLabel(line);
   return '-';
+}
+
+function partsRequestColumnLabel(columnId: PartsRequestTableColumnId) {
+  if (columnId === 'include') return 'Include';
+  if (columnId === 'description') return 'Part description';
+  if (columnId.startsWith('custom:')) return columnId.slice('custom:'.length);
+  return partsRequestColumnLabels[columnId as PartsRequestColumnId];
+}
+
+function partsRequestColumnValue(line: BomLine, columnId: PartsRequestTableColumnId): string | number {
+  if (columnId === 'include') return line.include ? 'yes' : 'no';
+  if (columnId === 'description') return line.description || '';
+  if (columnId === 'supplier') return line.supplier || '';
+  if (columnId === 'supplierItemId') return line.supplierItemId || '';
+  if (columnId === 'manufacturer') return line.manufacturer || '';
+  if (columnId === 'unitCost') return line.unitCost === '' ? '' : asNumber(line.unitCost);
+  if (columnId === 'actualCost') return line.actualCost === '' ? '' : asNumber(line.actualCost);
+  if (columnId === 'qtyNeeded') return line.qtyNeeded === '' ? '' : asNumber(line.qtyNeeded);
+  if (columnId === 'service') return line.service ? 'yes' : 'no';
+  if (columnId === 'agPartNumber') return line.agPartNumber || '';
+  if (columnId === 'status') return line.status || '';
+  if (columnId.startsWith('custom:')) return line.customFields?.[columnId.slice('custom:'.length)] ?? '';
+  return '';
+}
+
+function comparePartsRequestValues(a: string | number, b: string | number) {
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
 }
 
 function PartsRequestWorkspace({
@@ -2694,10 +4258,8 @@ function PartsRequestWorkspace({
   customColumns,
   description,
   matches,
-  sortByVendor,
   onDescriptionChange,
   onCreateLine,
-  onSortByVendorChange,
   onUpdateLine,
   onUpdateCustomField,
   onUpdateNumberLine,
@@ -2706,30 +4268,104 @@ function PartsRequestWorkspace({
   onFinalizeSelected,
   onDeleteLine,
   isEditMode,
+  isFinalizingParts,
 }: {
   lines: BomLine[];
   visibleColumns: PartsRequestColumnId[];
   customColumns: string[];
   description: string;
   matches: InventoryItemOption[];
-  sortByVendor: boolean;
   onDescriptionChange: (value: string) => void;
   onCreateLine: (item?: InventoryItemOption) => void;
-  onSortByVendorChange: (value: boolean) => void;
   onUpdateLine: (id: string, patch: Partial<BomLine>) => void;
   onUpdateCustomField: (lineId: string, columnName: string, value: string) => void;
   onUpdateNumberLine: (id: string, field: 'unitCost' | 'actualCost' | 'qtyNeeded', value: string) => void;
   onImportCsv: (file: File, linkInventoryMatches: boolean) => Promise<void>;
   onCreateVendorPoDraft: () => void;
-  onFinalizeSelected: () => void;
+  onFinalizeSelected: () => Promise<void>;
   onDeleteLine: (lineId: string) => void;
   isEditMode: boolean;
+  isFinalizingParts: boolean;
 }) {
   const typedDescription = description.trim();
   const selectedCount = lines.filter((line) => line.include).length;
   const totalColumns = 3 + visibleColumns.length + customColumns.length;
   const [linkInventoryMatches, setLinkInventoryMatches] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [sortState, setSortState] = useState<PartsRequestSortState>(null);
+  const tableColumns = useMemo<PartsRequestTableColumnId[]>(
+    () => [
+      'include',
+      'description',
+      ...visibleColumns,
+      ...customColumns.map((columnName) => `custom:${columnName}` as PartsRequestTableColumnId),
+    ],
+    [customColumns, visibleColumns],
+  );
+  const activeFilterCount = Object.values(columnFilters).filter((value) => value.trim()).length + (searchQuery.trim() ? 1 : 0);
+  const displayedLines = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const filters = Object.entries(columnFilters)
+      .map(([columnId, value]) => [columnId as PartsRequestTableColumnId, value.trim().toLowerCase()] as const)
+      .filter(([, value]) => value);
+    const filtered = lines.filter((line) => {
+      if (query && !tableColumns.some((columnId) => String(partsRequestColumnValue(line, columnId)).toLowerCase().includes(query))) {
+        return false;
+      }
+      return filters.every(([columnId, value]) => String(partsRequestColumnValue(line, columnId)).toLowerCase().includes(value));
+    });
+
+    if (!sortState) return filtered;
+    return [...filtered].sort((a, b) => {
+      const comparison = comparePartsRequestValues(
+        partsRequestColumnValue(a, sortState.columnId),
+        partsRequestColumnValue(b, sortState.columnId),
+      );
+      if (comparison !== 0) return sortState.direction === 'asc' ? comparison : -comparison;
+      return (a.description || '').localeCompare(b.description || '', undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [columnFilters, lines, searchQuery, sortState, tableColumns]);
+
+  function updateColumnFilter(columnId: PartsRequestTableColumnId, value: string) {
+    setColumnFilters((current) => {
+      const next = { ...current };
+      if (value.trim()) {
+        next[columnId] = value;
+      } else {
+        delete next[columnId];
+      }
+      return next;
+    });
+  }
+
+  function toggleSort(columnId: PartsRequestTableColumnId) {
+    setSortState((current) => {
+      if (!current || current.columnId !== columnId) return { columnId, direction: 'asc' };
+      if (current.direction === 'asc') return { columnId, direction: 'desc' };
+      return null;
+    });
+  }
+
+  function sortableHeader(columnId: PartsRequestTableColumnId, className?: string) {
+    const isActive = sortState?.columnId === columnId;
+    return (
+      <TableHead key={columnId} className={className}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn('h-8 px-1 font-semibold', className?.includes('text-right') && 'ml-auto')}
+          onClick={() => toggleSort(columnId)}
+        >
+          {partsRequestColumnLabel(columnId)}
+          <ArrowUpDown className={cn('ml-1 h-3.5 w-3.5', isActive ? 'text-blue-600' : 'text-slate-400')} />
+          {isActive ? <span className="ml-1 text-xs text-blue-700">{sortState.direction === 'asc' ? 'Asc' : 'Desc'}</span> : null}
+        </Button>
+      </TableHead>
+    );
+  }
 
   async function handleCsvFileChange(fileList: FileList | null) {
     const file = fileList?.[0];
@@ -2839,45 +4475,73 @@ function PartsRequestWorkspace({
             </label>
             <Button
               type="button"
-              variant={sortByVendor ? 'default' : 'outline'}
-              onClick={() => onSortByVendorChange(!sortByVendor)}
+              variant="outline"
+              onClick={() => {
+                setSearchQuery('');
+                setColumnFilters({});
+                setSortState(null);
+              }}
+              disabled={activeFilterCount === 0 && !sortState}
             >
-              <Filter className="mr-2 h-4 w-4" />
-              Sort by vendor
+              <X className="mr-2 h-4 w-4" />
+              Clear table
             </Button>
             <Button type="button" variant="outline" onClick={onCreateVendorPoDraft} disabled={selectedCount === 0}>
               <PackagePlus className="mr-2 h-4 w-4" />
               Create Vendor PO draft
             </Button>
-            <Button type="button" onClick={onFinalizeSelected} disabled={!isEditMode || selectedCount === 0}>
+            <Button type="button" onClick={onFinalizeSelected} disabled={!isEditMode || selectedCount === 0 || isFinalizingParts}>
               <Check className="mr-2 h-4 w-4" />
-              Finalize checked
+              {isFinalizingParts ? 'Finalizing...' : 'Finalize checked'}
             </Button>
           </div>
         </div>
       </div>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
+        <div className="space-y-3 border-b border-slate-200 p-3">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="relative md:w-[360px]">
+              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Input
+                className="pl-9"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search parts/request"
+              />
+            </div>
+            <div className="text-sm text-slate-500">
+              {displayedLines.length} of {lines.length} line{lines.length === 1 ? '' : 's'}
+            </div>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {tableColumns.map((columnId) => (
+              <div key={columnId} className="space-y-1">
+                <Label className="text-xs text-slate-500">{partsRequestColumnLabel(columnId)}</Label>
+                <Input
+                  className="h-8"
+                  value={columnFilters[columnId] ?? ''}
+                  onChange={(event) => updateColumnFilter(columnId, event.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+        <Table className="min-w-[1200px]" containerClassName="min-h-[260px] max-h-[min(70vh,720px)] overflow-auto">
+          <TableHeader className="sticky top-0 z-10 bg-white shadow-sm">
               <TableRow>
-                <TableHead className="w-[112px]">Include</TableHead>
-                <TableHead className="min-w-[300px]">Part description</TableHead>
-                {visibleColumns.includes('supplier') ? <TableHead className="w-[160px]">Vendor / Supplier</TableHead> : null}
-                {visibleColumns.includes('supplierItemId') ? <TableHead className="w-[170px]">Supplier Part #</TableHead> : null}
-                {visibleColumns.includes('manufacturer') ? <TableHead className="w-[160px]">Manufacturer</TableHead> : null}
-                {visibleColumns.includes('unitCost') ? <TableHead className="w-[130px] text-right">Estimated Cost</TableHead> : null}
-                {visibleColumns.includes('actualCost') ? <TableHead className="w-[120px] text-right">Actual Cost</TableHead> : null}
-                {visibleColumns.includes('qtyNeeded') ? <TableHead className="w-[100px] text-right">Quantity</TableHead> : null}
-                {visibleColumns.includes('service') ? <TableHead className="w-[90px]">Service</TableHead> : null}
-                {visibleColumns.includes('agPartNumber') ? <TableHead className="w-[130px]">AG Part #</TableHead> : null}
-                {visibleColumns.includes('status') ? <TableHead className="w-[150px]">Status</TableHead> : null}
-                {customColumns.map((columnName) => (
-                  <TableHead key={columnName} className="min-w-[160px]">
-                    {columnName}
-                  </TableHead>
-                ))}
+                {sortableHeader('include', 'w-[112px]')}
+                {sortableHeader('description', 'min-w-[300px]')}
+                {visibleColumns.includes('supplier') ? sortableHeader('supplier', 'w-[160px]') : null}
+                {visibleColumns.includes('supplierItemId') ? sortableHeader('supplierItemId', 'w-[170px]') : null}
+                {visibleColumns.includes('manufacturer') ? sortableHeader('manufacturer', 'w-[160px]') : null}
+                {visibleColumns.includes('unitCost') ? sortableHeader('unitCost', 'w-[130px] text-right') : null}
+                {visibleColumns.includes('actualCost') ? sortableHeader('actualCost', 'w-[120px] text-right') : null}
+                {visibleColumns.includes('qtyNeeded') ? sortableHeader('qtyNeeded', 'w-[100px] text-right') : null}
+                {visibleColumns.includes('service') ? sortableHeader('service', 'w-[90px]') : null}
+                {visibleColumns.includes('agPartNumber') ? sortableHeader('agPartNumber', 'w-[130px]') : null}
+                {visibleColumns.includes('status') ? sortableHeader('status', 'w-[150px]') : null}
+                {customColumns.map((columnName) => sortableHeader(`custom:${columnName}` as PartsRequestTableColumnId, 'min-w-[160px]'))}
                 <TableHead className="w-[72px] text-right">Delete</TableHead>
               </TableRow>
             </TableHeader>
@@ -2888,8 +4552,14 @@ function PartsRequestWorkspace({
                     Add a part description to begin the parts/request draft.
                   </TableCell>
                 </TableRow>
+              ) : displayedLines.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={totalColumns} className="h-24 text-center text-slate-500">
+                    No parts/request lines match the current table controls.
+                  </TableCell>
+                </TableRow>
               ) : (
-                lines.map((line) => (
+                displayedLines.map((line) => (
                   <TableRow key={line.id} className={cn(line.finalized && 'bg-emerald-50/60')}>
                     <TableCell>
                       <Checkbox
@@ -2987,7 +4657,6 @@ function PartsRequestWorkspace({
               )}
             </TableBody>
           </Table>
-        </div>
         <Separator />
         <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-slate-500">
           <span>{selectedCount} checked line{selectedCount === 1 ? '' : 's'} ready for Vendor PO/RFQ or inventory finalization.</span>
@@ -3188,19 +4857,211 @@ function DirectLaborEstimateWorkspace({
   );
 }
 
+const nrcCategoryOptions: { value: NrcCategory; label: string }[] = [
+  { value: 'TOOLING', label: 'Tooling' },
+  { value: 'NRE_LABOR', label: 'NRE Labor' },
+  { value: 'CAPITAL_ASSET', label: 'Capital Asset' },
+  { value: 'INSTALLATION', label: 'Installation' },
+  { value: 'TRAINING', label: 'Training' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+const chargeTimingOptions: { value: ChargeTiming; label: string }[] = [
+  { value: 'ONE_TIME', label: 'One Time' },
+  { value: 'FIRST_PO_ONLY', label: 'First PO Only' },
+  { value: 'FIRST_ARTICLE_ONLY', label: 'First Article Only' },
+  { value: 'EVERY_ORDER', label: 'Every Order' },
+];
+
+function NrcEstimateWorkspace({
+  rows,
+  totalCost,
+  customerFacingTotal,
+  onAddRow,
+  onRemoveRow,
+  onUpdateRow,
+  onUpdateNumberRow,
+  isEditMode,
+}: {
+  rows: NrcCostRow[];
+  totalCost: number;
+  customerFacingTotal: number;
+  onAddRow: () => void;
+  onRemoveRow: (id: string) => void;
+  onUpdateRow: (id: string, patch: Partial<NrcCostRow>) => void;
+  onUpdateNumberRow: (
+    id: string,
+    field: 'quantity' | 'unitCost' | 'amortizationQty' | 'usefulLifeMonths' | 'installationCost' | 'trainingCost',
+    value: string,
+  ) => void;
+  isEditMode: boolean;
+}) {
+  const amortizationWarnings = rows.filter((row) => row.amortized && !Number(row.amortizationQty || 0)).length;
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="font-semibold text-slate-950">NRC Estimate</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Capture tooling, NRE labor, capital assets, installation, training, and other non-recurring costs with the draft.
+          </p>
+        </div>
+        <Button type="button" onClick={onAddRow} disabled={!isEditMode}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add NRC
+        </Button>
+      </div>
+
+      <div className="grid gap-3 border-b border-slate-200 p-4 sm:grid-cols-3">
+        <SummaryMetric label="Total NRC" value={money(totalCost)} />
+        <SummaryMetric label="Customer Price NRC" value={money(customerFacingTotal)} />
+        <SummaryMetric label="Amortization Warnings" value={String(amortizationWarnings)} />
+      </div>
+
+      <div className="overflow-x-auto p-4">
+        <Table className="min-w-[1800px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Source</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Qty</TableHead>
+              <TableHead>Unit Cost</TableHead>
+              <TableHead>Total</TableHead>
+              <TableHead>Amortized</TableHead>
+              <TableHead>Amort Qty</TableHead>
+              <TableHead>Timing</TableHead>
+              <TableHead>Customer Price</TableHead>
+              <TableHead>Internal Only</TableHead>
+              <TableHead>Capital Asset Details</TableHead>
+              <TableHead>Notes</TableHead>
+              <TableHead className="text-right">Remove</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={14} className="py-8 text-center text-sm text-slate-500">
+                  No NRC rows yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map((row) => (
+                <TableRow key={row.id} className="align-top">
+                  <TableCell>
+                    <Badge variant={row.sourceType === 'DRAFT' ? 'default' : 'outline'}>
+                      {row.sourceType === 'DRAFT' ? 'Draft sourced' : 'Manual'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Select value={row.category} onValueChange={(value) => onUpdateRow(row.id ?? '', { category: value as NrcCategory })} disabled={!isEditMode}>
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {nrcCategoryOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Input className="w-[220px]" value={row.description} onChange={(event) => onUpdateRow(row.id ?? '', { description: event.target.value })} disabled={!isEditMode} />
+                  </TableCell>
+                  <TableCell>
+                    <Input className="w-[90px]" type="number" min={0} value={row.quantity} onChange={(event) => onUpdateNumberRow(row.id ?? '', 'quantity', event.target.value)} disabled={!isEditMode} />
+                  </TableCell>
+                  <TableCell>
+                    <Input className="w-[120px]" type="number" min={0} step="0.01" value={row.unitCost} onChange={(event) => onUpdateNumberRow(row.id ?? '', 'unitCost', event.target.value)} disabled={!isEditMode} />
+                  </TableCell>
+                  <TableCell className="tabular-nums">{money(nrcRowTotal(row))}</TableCell>
+                  <TableCell>
+                    <Checkbox checked={row.amortized} onCheckedChange={(checked) => onUpdateRow(row.id ?? '', { amortized: checked === true })} disabled={!isEditMode} aria-label="Amortized NRC" />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className={cn('w-[110px]', row.amortized && !Number(row.amortizationQty || 0) ? 'border-amber-400' : '')}
+                      type="number"
+                      min={0}
+                      value={row.amortizationQty ?? ''}
+                      onChange={(event) => onUpdateNumberRow(row.id ?? '', 'amortizationQty', event.target.value)}
+                      disabled={!isEditMode || !row.amortized}
+                    />
+                    {row.amortized && !Number(row.amortizationQty || 0) ? <p className="mt-1 text-xs text-amber-700">Required</p> : null}
+                  </TableCell>
+                  <TableCell>
+                    <Select value={row.chargeTiming} onValueChange={(value) => onUpdateRow(row.id ?? '', { chargeTiming: value as ChargeTiming })} disabled={!isEditMode}>
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {chargeTimingOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Checkbox checked={row.includeInCustomerPrice} onCheckedChange={(checked) => onUpdateRow(row.id ?? '', { includeInCustomerPrice: checked === true })} disabled={!isEditMode} aria-label="Include NRC in customer price" />
+                  </TableCell>
+                  <TableCell>
+                    <Checkbox checked={row.internalOnly} onCheckedChange={(checked) => onUpdateRow(row.id ?? '', { internalOnly: checked === true })} disabled={!isEditMode} aria-label="Internal-only NRC" />
+                  </TableCell>
+                  <TableCell>
+                    {row.category === 'CAPITAL_ASSET' ? (
+                      <div className="grid w-[420px] grid-cols-2 gap-2">
+                        <Input value={row.assetName ?? ''} onChange={(event) => onUpdateRow(row.id ?? '', { assetName: event.target.value })} placeholder="Asset name" disabled={!isEditMode} />
+                        <Input type="number" min={0} value={row.usefulLifeMonths ?? ''} onChange={(event) => onUpdateNumberRow(row.id ?? '', 'usefulLifeMonths', event.target.value)} placeholder="Useful life months" disabled={!isEditMode} />
+                        <Input value={row.amortizationBasis ?? ''} onChange={(event) => onUpdateRow(row.id ?? '', { amortizationBasis: event.target.value })} placeholder="Amortization basis" disabled={!isEditMode} />
+                        <Input type="number" min={0} step="0.01" value={row.installationCost ?? 0} onChange={(event) => onUpdateNumberRow(row.id ?? '', 'installationCost', event.target.value)} placeholder="Installation cost" disabled={!isEditMode} />
+                        <Input type="number" min={0} step="0.01" value={row.trainingCost ?? 0} onChange={(event) => onUpdateNumberRow(row.id ?? '', 'trainingCost', event.target.value)} placeholder="Training cost" disabled={!isEditMode} />
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-500">Only shown for capital assets</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Input className="w-[220px]" value={row.notes ?? ''} onChange={(event) => onUpdateRow(row.id ?? '', { notes: event.target.value })} disabled={!isEditMode} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button type="button" variant="ghost" size="icon" onClick={() => onRemoveRow(row.id ?? '')} disabled={!isEditMode}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  );
+}
+
 function DraftBomWizardWorkspace({
   draftLines,
+  savedDraftBoms,
   inventoryItems,
+  departmentOptions,
   seedLineId,
   onSeedLineConsumed,
   onSaveWizardBom,
+  onDeleteWizardBom,
   isEditMode,
 }: {
   draftLines: BomLine[];
+  savedDraftBoms: DraftPartBom[];
   inventoryItems: InventoryItemOption[];
+  departmentOptions: DepartmentOption[];
   seedLineId: string | null;
   onSeedLineConsumed: () => void;
   onSaveWizardBom: (part: DraftBomPart, bom: DraftPartBom) => void;
+  onDeleteWizardBom: (bomId: string) => void;
   isEditMode: boolean;
 }) {
   const [sourceMode, setSourceMode] = useState<DraftBomSource>('draft-part');
@@ -3219,7 +5080,8 @@ function DraftBomWizardWorkspace({
   const [componentDescription, setComponentDescription] = useState('');
   const [componentQuantity, setComponentQuantity] = useState('1');
   const [componentManufactured, setComponentManufactured] = useState(false);
-  const [componentDepartment, setComponentDepartment] = useState(defaultDepartment);
+  const currentDefaultDepartment = defaultBomDepartment(departmentOptions);
+  const [componentDepartment, setComponentDepartment] = useState(currentDefaultDepartment);
 
   const draftPartLines = useMemo(
     () => draftLines.filter((line) => line.isDraftPart !== false || line.inventoryItemId || line.description || line.agPartNumber),
@@ -3236,6 +5098,10 @@ function DraftBomWizardWorkspace({
   const currentPart = activeBom?.parts[currentPartIndex] ?? null;
   const queuedManufacturedParts = activeBom?.parts.filter((part, index) => index > currentPartIndex && !part.hasBOM) ?? [];
 
+  function findLineForBom(bom: DraftPartBom) {
+    return findPartsRequestLineForAssemblyPart(bom.rootPart, draftLines);
+  }
+
   useEffect(() => {
     if (!seedLineId) return;
     const line = draftLines.find((item) => item.id === seedLineId);
@@ -3245,10 +5111,10 @@ function DraftBomWizardWorkspace({
     }
     setSourceMode('draft-part');
     setSelectedLineId(line.id);
-    setActiveBom(createDraftPartBom(draftLineToPart(line), line.childDraftBoms?.length ?? 0));
+    setActiveBom(createDraftPartBom(draftLineToPart(line), draftBomsForAssemblyPart(savedDraftBoms, draftLineToPart(line)).length));
     setCurrentPartIndex(0);
     onSeedLineConsumed();
-  }, [draftLines, onSeedLineConsumed, seedLineId]);
+  }, [draftLines, onSeedLineConsumed, savedDraftBoms, seedLineId]);
 
   function startNewBom() {
     let rootPart: DraftBomPart | null = null;
@@ -3256,11 +5122,13 @@ function DraftBomWizardWorkspace({
 
     if (sourceMode === 'draft-part' && selectedLine) {
       rootPart = draftLineToPart(selectedLine);
-      existingCount = selectedLine.childDraftBoms?.length ?? 0;
+      existingCount = draftBomsForAssemblyPart(savedDraftBoms, rootPart).length;
     } else if (sourceMode === 'inventory-item' && selectedInventoryItem) {
       rootPart = inventoryItemToPart(selectedInventoryItem);
+      existingCount = draftBomsForAssemblyPart(savedDraftBoms, rootPart).length;
     } else if (sourceMode === 'new-part') {
       rootPart = newWizardPart(newPartNumber, newPartDescription);
+      existingCount = draftBomsForAssemblyPart(savedDraftBoms, rootPart).length;
     }
 
     if (!rootPart) return;
@@ -3268,9 +5136,10 @@ function DraftBomWizardWorkspace({
     setCurrentPartIndex(0);
   }
 
-  function loadExistingBom(line: BomLine, bom: DraftPartBom) {
-    setSourceMode('draft-part');
-    setSelectedLineId(line.id);
+  function loadExistingBom(bom: DraftPartBom) {
+    const line = findLineForBom(bom);
+    setSourceMode(line ? 'draft-part' : bom.rootPart.source);
+    setSelectedLineId(line?.id ?? '');
     setActiveBom(bom);
     setCurrentPartIndex(0);
   }
@@ -3283,7 +5152,7 @@ function DraftBomWizardWorkspace({
     setComponentDescription('');
     setComponentQuantity('1');
     setComponentManufactured(false);
-    setComponentDepartment(defaultDepartment);
+    setComponentDepartment(currentDefaultDepartment);
   }
 
   function syncComponentFromDraftLine(lineId: string) {
@@ -3293,7 +5162,7 @@ function DraftBomWizardWorkspace({
     setComponentPartNumber(linePartNumber(line));
     setComponentDescription(lineDescription(line));
     setComponentManufactured(line.isManufactured === true);
-    setComponentDepartment(line.firstDepartment ?? defaultDepartment);
+    setComponentDepartment(line.firstDepartment ?? currentDefaultDepartment);
   }
 
   function syncComponentFromInventory(itemId: string) {
@@ -3303,7 +5172,7 @@ function DraftBomWizardWorkspace({
     setComponentPartNumber(inventoryPartNumber(item));
     setComponentDescription(inventoryDescription(item));
     setComponentManufactured(isInventoryManufactured(item));
-    setComponentDepartment(defaultDepartment);
+    setComponentDepartment(currentDefaultDepartment);
   }
 
   function addComponent() {
@@ -3318,7 +5187,7 @@ function DraftBomWizardWorkspace({
       description: componentDescription.trim() || componentPartNumber.trim(),
       quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
       isManufactured: componentManufactured,
-      firstDepartment: componentDepartment || defaultDepartment,
+      firstDepartment: componentDepartment || currentDefaultDepartment,
     };
 
     setActiveBom((current) => {
@@ -3509,23 +5378,52 @@ function DraftBomWizardWorkspace({
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Existing draft BOMs</h3>
           <div className="mt-3 space-y-2">
-            {draftLines.flatMap((line) =>
-              (line.childDraftBoms ?? []).map((bom) => (
-                <button
+            {savedDraftBoms.map((bom) => {
+              const linkedLine = findLineForBom(bom);
+              return (
+                <div
                   key={bom.id}
-                  type="button"
-                  className="block w-full rounded-md border border-slate-200 p-3 text-left text-sm hover:border-teal-300 hover:bg-teal-50"
-                  onClick={() => loadExistingBom(line, bom)}
-                  disabled={!isEditMode}
+                  className="flex gap-2 rounded-md border border-slate-200 p-3 text-sm hover:border-teal-300 hover:bg-teal-50"
                 >
-                  <span className="block font-medium text-slate-950">{bom.name} {bom.revision}</span>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    {linePartNumber(line)} - {bom.parts.length} configured part{bom.parts.length === 1 ? '' : 's'}
-                  </span>
-                </button>
-              )),
-            )}
-            {draftLines.every((line) => !line.childDraftBoms?.length) ? (
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => loadExistingBom(bom)}
+                    disabled={!isEditMode}
+                  >
+                    <span className="flex flex-wrap items-center gap-2 font-medium text-slate-950">
+                      {bom.name} {bom.revision}
+                      {bom.robustBomStatus ? (
+                        <Badge variant={bom.robustBomStatus === 'active' ? 'default' : 'secondary'} className="text-[10px] uppercase">
+                          Robust BOM {bom.robustBomStatus}
+                        </Badge>
+                      ) : null}
+                    </span>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      {linkedLine ? linePartNumber(linkedLine) : `${bom.rootPart.partNumber} (part removed)`} - {bom.parts.length} configured part{bom.parts.length === 1 ? '' : 's'}
+                    </span>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={() => {
+                      onDeleteWizardBom(bom.id);
+                      if (activeBom?.id === bom.id) {
+                        setActiveBom(null);
+                        setCurrentPartIndex(0);
+                      }
+                    }}
+                    disabled={!isEditMode}
+                    aria-label={`Delete ${bom.name}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              );
+            })}
+            {savedDraftBoms.length === 0 ? (
               <p className="text-sm text-slate-500">No child draft BOMs have been saved yet.</p>
             ) : null}
           </div>
@@ -3639,7 +5537,7 @@ function DraftBomWizardWorkspace({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {departmentOptions.map((department) => (
+                    {bomDepartmentOptionsWithCurrent(departmentOptions, componentDepartment).map((department) => (
                       <SelectItem key={department.value} value={department.value}>
                         {department.label}
                       </SelectItem>
@@ -3714,7 +5612,7 @@ function DraftBomWizardWorkspace({
                         </TableCell>
                         <TableCell className="min-w-[160px]">
                           <Select
-                            value={component.firstDepartment || defaultDepartment}
+                            value={component.firstDepartment || currentDefaultDepartment}
                             onValueChange={(value) => updateComponent(component.id, { firstDepartment: value })}
                             disabled={!isEditMode}
                           >
@@ -3722,7 +5620,7 @@ function DraftBomWizardWorkspace({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {departmentOptions.map((department) => (
+                              {bomDepartmentOptionsWithCurrent(departmentOptions, component.firstDepartment).map((department) => (
                                 <SelectItem key={department.value} value={department.value}>
                                   {department.label}
                                 </SelectItem>
@@ -3767,16 +5665,17 @@ function DraftBomWizardWorkspace({
   );
 }
 
-function AssemblyTreeWorkspace({ tree, lineCount }: { tree: AssemblyTreeNode[]; lineCount: number }) {
+function AssemblyTreeWorkspace({ tree }: { tree: AssemblyTreeNode[] }) {
   const totals = tree.reduce(
     (acc, node) => {
       const nodes = flattenAssemblyTree(node);
-      acc.needsQuote += nodes.filter((item) => item.orderStatus === 'Needs Quote' || item.orderStatus === 'Needs Review').length;
-      acc.active += nodes.filter((item) => item.orderStatus === 'RFQ Sent' || item.orderStatus === 'On Order' || item.orderStatus === 'ETA / Inbound').length;
-      acc.onHand += nodes.filter((item) => item.orderStatus === 'On Hand').length;
+      acc.ready += nodes.filter((item) => item.manufactureState === 'ready').length;
+      acc.ordered += nodes.filter((item) => isOrderedStatus(item.displayStatus)).length;
+      acc.onHand += nodes.filter((item) => item.displayStatus === 'On Hand').length;
+      acc.needsPlan += nodes.filter((item) => item.manufactureState === 'needs-plan').length;
       return acc;
     },
-    { needsQuote: 0, active: 0, onHand: 0 },
+    { ready: 0, ordered: 0, onHand: 0, needsPlan: 0 },
   );
 
   return (
@@ -3785,19 +5684,20 @@ function AssemblyTreeWorkspace({ tree, lineCount }: { tree: AssemblyTreeNode[]; 
         <div>
           <h2 className="font-semibold text-slate-950">Assembly Tree</h2>
           <p className="text-sm text-slate-600">
-            {lineCount} parts/request line{lineCount === 1 ? '' : 's'} mapped with BOM wizard children and order status.
+            {tree.length} created BOM{tree.length === 1 ? '' : 's'} broken down by on-hand and ordered parts.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-sm">
-          <AssemblyOrderStatusCount label="Needs quote" value={totals.needsQuote} tone="quote" />
-          <AssemblyOrderStatusCount label="Active" value={totals.active} tone="active" />
+        <div className="grid grid-cols-4 gap-2 text-sm">
+          <AssemblyOrderStatusCount label="Ready" value={totals.ready} tone="ready" />
           <AssemblyOrderStatusCount label="On hand" value={totals.onHand} tone="on-hand" />
+          <AssemblyOrderStatusCount label="Ordered" value={totals.ordered} tone="active" />
+          <AssemblyOrderStatusCount label="Need plan" value={totals.needsPlan} tone="quote" />
         </div>
       </div>
 
       {tree.length === 0 ? (
         <div className="p-8 text-center text-sm text-slate-500">
-          Add parts/request lines to build an assembly tree.
+          Create a BOM in the BOM wizard to see what can be manufactured.
         </div>
       ) : (
         <Accordion type="multiple" className="divide-y divide-slate-200">
@@ -3811,11 +5711,15 @@ function AssemblyTreeWorkspace({ tree, lineCount }: { tree: AssemblyTreeNode[]; 
 }
 
 function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; depth: number }) {
+  const canExpand = node.children.length > 0 || node.isManufactured;
   const rowContent = (
-    <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto] md:items-center">
+    <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto_auto] md:items-center">
       <div className="min-w-0" style={{ paddingLeft: `${depth * 16}px` }}>
         <div className="truncate font-semibold text-slate-950">{node.description}</div>
         <div className="truncate text-sm font-normal text-slate-600">{node.partNumber}</div>
+        {node.bomLabel ? (
+          <div className="truncate text-xs font-normal text-teal-700">{node.bomLabel}</div>
+        ) : null}
       </div>
       <div className="text-sm font-normal tabular-nums text-slate-600">
         Req {node.quantityRequired.toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -3823,11 +5727,12 @@ function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; de
       <div className="text-sm font-normal tabular-nums text-slate-600">
         On hand {node.availableQuantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}
       </div>
-      <StatusBadge status={node.orderStatus} />
+      <ManufactureStateBadge state={node.manufactureState} />
+      <StatusBadge status={node.displayStatus} />
     </div>
   );
 
-  if (node.children.length === 0) {
+  if (!canExpand) {
     return (
       <div className="px-4 py-3">
         {rowContent}
@@ -3841,11 +5746,17 @@ function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; de
         {rowContent}
       </AccordionTrigger>
       <AccordionContent className="px-4 pb-4">
-        <Accordion type="multiple" className="rounded-md border border-slate-200">
-          {node.children.map((child) => (
-            <AssemblyTreeAccordionNode key={child.id} node={child} depth={depth + 1} />
-          ))}
-        </Accordion>
+        {node.children.length > 0 ? (
+          <Accordion type="multiple" className="rounded-md border border-slate-200">
+            {node.children.map((child) => (
+              <AssemblyTreeAccordionNode key={child.id} node={child} depth={depth + 1} />
+            ))}
+          </Accordion>
+        ) : (
+          <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            No BOM breakdown has been created for this manufactured part yet.
+          </div>
+        )}
       </AccordionContent>
     </AccordionItem>
   );
@@ -3855,9 +5766,30 @@ function flattenAssemblyTree(node: AssemblyTreeNode): AssemblyTreeNode[] {
   return [node, ...node.children.flatMap(flattenAssemblyTree)];
 }
 
-function AssemblyOrderStatusCount({ label, value, tone }: { label: string; value: number; tone: 'quote' | 'active' | 'on-hand' }) {
+function ManufactureStateBadge({ state }: { state: AssemblyManufactureState }) {
+  const label =
+    state === 'ready'
+      ? 'Can manufacture'
+      : state === 'needs-plan'
+        ? 'Needs plan'
+        : 'Waiting';
   const className =
-    tone === 'on-hand'
+    state === 'ready'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-50'
+      : state === 'needs-plan'
+        ? 'border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-50'
+        : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-50';
+
+  return (
+    <Badge variant="outline" className={cn('justify-center whitespace-nowrap', className)}>
+      {label}
+    </Badge>
+  );
+}
+
+function AssemblyOrderStatusCount({ label, value, tone }: { label: string; value: number; tone: 'quote' | 'active' | 'on-hand' | 'ready' }) {
+  const className =
+    tone === 'ready' || tone === 'on-hand'
       ? 'border-emerald-200 bg-emerald-50'
       : tone === 'active'
         ? 'border-sky-200 bg-sky-50'

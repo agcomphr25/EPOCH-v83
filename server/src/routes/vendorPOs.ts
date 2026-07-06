@@ -5,6 +5,8 @@ import {
   insertVendorPOSettingsSchema,
   insertOptionalSettingSchema,
   insertPOOptionalSettingSchema,
+  partsRequests,
+  partsRequestStatusHistory,
   procurementComplianceEffectiveDates,
   auditEvents,
 } from '@shared/schema';
@@ -13,7 +15,7 @@ import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
 import { sendCommunication } from '../../communication/send';
 import { db, queryRows } from '../../db';
-import { and, desc, eq, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   appendUniqueEmail,
   DEFAULT_VENDOR_PO_RETURN_EMAIL,
@@ -28,8 +30,125 @@ import {
 import { recordAuditEvent } from '../services/auditLedgerService';
 import { sendApiError } from '../../utils/apiErrors';
 import { generateVendorPoPdf } from '../../utils/pdf/vendorPoPdf';
+import { syncLinkedPartsRequestsReceivedForVendorPo } from '../services/partsRequestVendorPoSyncService';
 
 const router = Router();
+
+const DEFAULT_VENDOR_PO_ISSUE_MESSAGE =
+  'AG Composites has issued a new Purchase Order to your company. Please see the attached purchase order PDF for details.';
+
+const DEFAULT_VENDOR_PO_RESEND_MESSAGE =
+  'AG Composites is resending this Purchase Order. Please see the attached purchase order PDF for details.';
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function normalizeVendorPoEmailMessage(raw: unknown, fallback: string): { text: string; html: string } {
+  const rawText = typeof raw === 'string' ? raw.trim() : '';
+  const text = (rawText || fallback).slice(0, 4000);
+  const html = text
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
+  return { text, html };
+}
+
+function parseLinkedPartsRequestIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return Array.from(new Set(
+    raw
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0)
+  ));
+}
+
+function parsePartsRequestQuantities(raw: unknown): Map<number, number> {
+  const quantities = new Map<number, number>();
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return quantities;
+
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const requestId = Number(key);
+    const quantity = Number(value);
+    if (Number.isInteger(requestId) && requestId > 0 && Number.isFinite(quantity) && quantity > 0) {
+      quantities.set(requestId, Math.ceil(quantity));
+    }
+  }
+
+  return quantities;
+}
+
+async function linkPartsRequestsToVendorPO(params: {
+  requestIds: number[];
+  quantitiesByRequestId: Map<number, number>;
+  vendorPoId: number;
+  vendorId: number;
+  vendorPoStatus: string | null | undefined;
+  orderedQuantityFallback: number;
+  changedBy: string;
+}) {
+  const { requestIds, quantitiesByRequestId, vendorPoId, vendorId, vendorPoStatus, orderedQuantityFallback, changedBy } = params;
+  if (requestIds.length === 0) return;
+
+  const linkedRequests = await db
+    .select()
+    .from(partsRequests)
+    .where(inArray(partsRequests.id, requestIds));
+
+  let fallbackRemaining = Math.max(0, Math.ceil(orderedQuantityFallback || 0));
+
+  for (const request of linkedRequests) {
+    if (!request.isActive || (request.vendorId != null && request.vendorId !== vendorId)) {
+      continue;
+    }
+
+    const isIssuedPo = ['Sent', 'Partially Received', 'Fully Received'].includes(vendorPoStatus || '');
+    const remainingRequested = Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || 0));
+    const explicitQty = quantitiesByRequestId.get(request.id);
+    const allocatedQty = explicitQty ?? (remainingRequested > 0 ? remainingRequested : 0);
+    const qtyFromFallback = explicitQty == null && fallbackRemaining > 0
+      ? Math.min(remainingRequested || fallbackRemaining, fallbackRemaining)
+      : allocatedQty;
+    const qtyToApply = isIssuedPo ? Math.max(0, Math.ceil(qtyFromFallback)) : 0;
+    if (isIssuedPo && explicitQty == null && fallbackRemaining > 0) {
+      fallbackRemaining = Math.max(0, fallbackRemaining - qtyToApply);
+    }
+
+    const nextQtyOrdered = Number(request.qtyOrdered || 0) + qtyToApply;
+    const canMoveToOrdered = isIssuedPo && ['PENDING', 'APPROVED', 'ORDERED_PARTIAL', 'ORDERED'].includes(request.status);
+    const nextStatus = canMoveToOrdered
+      ? (nextQtyOrdered >= Number(request.quantity || 0) ? 'ORDERED' : 'ORDERED_PARTIAL')
+      : request.status;
+
+    await db
+      .update(partsRequests)
+      .set({
+        vendorPoId,
+        vendorId,
+        orderMethod: request.orderMethod || 'PO',
+        qtyOrdered: isIssuedPo ? nextQtyOrdered : request.qtyOrdered,
+        status: nextStatus,
+        orderDate: isIssuedPo ? (request.orderDate || new Date()) : request.orderDate,
+        updatedAt: new Date(),
+      })
+      .where(eq(partsRequests.id, request.id));
+
+    await db.insert(partsRequestStatusHistory).values({
+      partsRequestId: request.id,
+      fromStatus: request.status,
+      toStatus: nextStatus,
+      changedBy,
+      reason: isIssuedPo
+        ? `Linked to issued vendor PO #${vendorPoId}${qtyToApply > 0 ? ` - ${qtyToApply} ordered` : ''}`
+        : `Linked to vendor PO #${vendorPoId}; request remains ${request.status} until the PO is issued.`,
+    });
+  }
+}
 
 // Temporary operational override: purchasing leadership is transitioning, so
 // vendor PO issuance must not be blocked by procurement/compliance gates.
@@ -169,68 +288,6 @@ async function markLinkedPartsRequestsOrdered(vendorPoId: number, actor: string)
       updated.map((row) => row.id),
       actor,
       `Linked Vendor PO #${vendorPoId} was issued.`,
-    ]
-  );
-}
-
-async function markLinkedPartsRequestsReceivedForPo(vendorPoId: number, actor: string) {
-  const updated = await queryRows<{ id: number; previous_status: string; next_status: string }>(
-    `
-    WITH po_totals AS (
-      SELECT
-        pr.id,
-        pr.status AS previous_status,
-        pr.quantity,
-        COALESCE(SUM(vpi.received_quantity), 0)::float AS received_qty
-      FROM parts_requests pr
-      JOIN vendor_po_items vpi
-        ON vpi.vendor_po_id = pr.vendor_po_id
-       AND (
-         (pr.ag_part_number IS NOT NULL AND vpi.ag_part_number = pr.ag_part_number)
-         OR (pr.ag_part_number IS NULL AND vpi.description = pr.part_name)
-       )
-      WHERE pr.vendor_po_id = $1
-        AND pr.status IN ('ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL')
-      GROUP BY pr.id, pr.status, pr.quantity
-    ),
-    next_values AS (
-      SELECT
-        id,
-        previous_status,
-        LEAST(quantity, FLOOR(received_qty)::int) AS qty_received,
-        CASE
-          WHEN received_qty >= quantity THEN 'RECEIVED'
-          WHEN received_qty > 0 THEN 'RECEIVED_PARTIAL'
-          ELSE previous_status
-        END AS next_status
-      FROM po_totals
-      WHERE received_qty > 0
-    )
-    UPDATE parts_requests pr
-       SET qty_received = next_values.qty_received,
-           status = next_values.next_status,
-           actual_delivery = CASE WHEN next_values.next_status = 'RECEIVED' THEN CURRENT_DATE ELSE pr.actual_delivery END,
-           updated_at = NOW()
-      FROM next_values
-     WHERE pr.id = next_values.id
-       AND pr.status <> next_values.next_status
-    RETURNING pr.id, next_values.previous_status, next_values.next_status
-    `,
-    [vendorPoId]
-  );
-
-  if (updated.length === 0) return;
-
-  await queryRows(
-    `
-    INSERT INTO parts_request_status_history (parts_request_id, from_status, to_status, changed_by, reason)
-    SELECT id, previous_status, next_status, $2, $3
-      FROM jsonb_to_recordset($1::jsonb) AS x(id int, previous_status text, next_status text)
-    `,
-    [
-      JSON.stringify(updated),
-      actor,
-      `Linked Vendor PO #${vendorPoId} receipt updated the parts request automatically.`,
     ]
   );
 }
@@ -1679,8 +1736,19 @@ router.post('/:id/items', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
 
+    const vendorPOForLink = await storage.getVendorPO(vendorPoId);
+    if (!vendorPOForLink) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    const linkedPartsRequestIds = parseLinkedPartsRequestIds(req.body?.partsRequestIds);
+    const linkedPartsRequestQuantities = parsePartsRequestQuantities(req.body?.partsRequestQuantities);
+    const sanitizedBody = { ...(req.body ?? {}) };
+    delete sanitizedBody.partsRequestIds;
+    delete sanitizedBody.partsRequestQuantities;
+
     const data = insertVendorPOItemSchema.parse({
-      ...req.body,
+      ...sanitizedBody,
       vendorPoId,
     });
 
@@ -1688,9 +1756,22 @@ router.post('/:id/items', async (req: Request, res: Response) => {
     await requireP2ComplianceBeforeProjectAllocation(vendorPoId, data);
 
     const item = await storage.createVendorPOItem(data);
+    await linkPartsRequestsToVendorPO({
+      requestIds: linkedPartsRequestIds,
+      quantitiesByRequestId: linkedPartsRequestQuantities,
+      vendorPoId,
+      vendorId: vendorPOForLink.vendorId,
+      vendorPoStatus: vendorPOForLink.status,
+      orderedQuantityFallback: Number(data.purchaseQty ?? data.quantity ?? 0),
+      changedBy: (req as any).user?.username ?? (req as any).user?.email ?? 'system',
+    });
     await recordVendorPoAudit(req, vendorPoId, 'VENDOR_PO_ITEM_CREATED', {
       after: item,
-      meta: { itemId: item?.id ?? null, lineNumber: item?.lineNumber ?? null },
+      meta: {
+        itemId: item?.id ?? null,
+        lineNumber: item?.lineNumber ?? null,
+        linkedPartsRequestIds,
+      },
     });
     res.status(201).json(item);
   } catch (error) {
@@ -1875,7 +1956,7 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
     const receivedItem = await storage.getVendorPOItemById(itemId);
     if (receivedItem?.vendorPoId) {
       const actor = String((req as any).user?.username ?? createdBy ?? 'unknown');
-      await markLinkedPartsRequestsReceivedForPo(receivedItem.vendorPoId, actor);
+      await syncLinkedPartsRequestsReceivedForVendorPo(receivedItem.vendorPoId, actor);
       await recordVendorPoAudit(req, receivedItem.vendorPoId, 'VENDOR_PO_ITEM_RECEIVED', {
         after: receivedItem,
         reason: normalizeAuditReason(notes) || null,
@@ -2516,7 +2597,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
 
-    const { skipEmail, reason, recipients: additionalRecipients } = req.body ?? {};
+    const { skipEmail, reason, recipients: additionalRecipients, message: emailMessage } = req.body ?? {};
     const skip = Boolean(skipEmail);
 
     // Get the PO first for vendor lookup and pre-flight checks
@@ -2897,6 +2978,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       standardCc
     );
 
+    const normalizedIssueMessage = normalizeVendorPoEmailMessage(emailMessage, DEFAULT_VENDOR_PO_ISSUE_MESSAGE);
     const issueContext = {
       vendor_name: vendor.name,
       vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
@@ -2904,6 +2986,8 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       requested_delivery_date: issuedPO.expectedDeliveryDate
         ? new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()
         : '',
+      vendor_message_html: normalizedIssueMessage.html,
+      vendor_message_text: normalizedIssueMessage.text,
     };
 
     const emailResult = await sendCommunication({
@@ -2945,7 +3029,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
     await recordVendorPoAudit(req, id, 'VENDOR_PO_EMAIL_SENT', {
       after: issuedPO,
-      meta: { poNumber, to: issueToEmail, cc: issueCcList, templateKey: 'vendor_po_issue' },
+      meta: { poNumber, to: issueToEmail, cc: issueCcList, templateKey: 'vendor_po_issue', customMessage: issueContext.vendor_message_text },
     });
 
     console.log(`[VendorPOIssuedEmailSent] PO ${poNumber} issued by ${performedBy} — email sent to ${issueToEmail}, cc: ${issueCcList.join(', ')}`);
@@ -3183,7 +3267,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       });
     }
 
-    const { recipients: additionalRecipients } = req.body ?? {};
+    const { recipients: additionalRecipients, message: emailMessage } = req.body ?? {};
 
     const poNumber = vendorPO.poNumber;
 
@@ -3198,6 +3282,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       standardResendCc
     );
 
+    const normalizedResendMessage = normalizeVendorPoEmailMessage(emailMessage, DEFAULT_VENDOR_PO_RESEND_MESSAGE);
     const resendContext = {
       vendor_name: vendor.name,
       vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
@@ -3205,6 +3290,8 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       requested_delivery_date: vendorPO.expectedDeliveryDate
         ? new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()
         : '',
+      vendor_message_html: normalizedResendMessage.html,
+      vendor_message_text: normalizedResendMessage.text,
     };
 
     const emailResult = await sendCommunication({
@@ -3232,7 +3319,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
     console.log(`[VendorPOResent] PO ${poNumber} resent by user ${(req as any).user?.username ?? 'unknown'} — email sent to ${resendToEmail}, cc: ${resendCcList.join(', ')}`);
     await recordVendorPoAudit(req, id, 'VENDOR_PO_RESENT', {
       after: vendorPO,
-      meta: { poNumber, to: resendToEmail, cc: resendCcList, templateKey: 'vendor_po_resend' },
+      meta: { poNumber, to: resendToEmail, cc: resendCcList, templateKey: 'vendor_po_resend', customMessage: resendContext.vendor_message_text },
     });
 
     res.json({

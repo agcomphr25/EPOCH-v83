@@ -14,6 +14,7 @@ import {
   ChevronsUpDown,
   Search,
   Users,
+  CheckCircle,
 } from 'lucide-react';
 import { insertChargeCodeSchema, type ChargeCode } from '@shared/schema';
 
@@ -118,6 +119,22 @@ type ChargeCodeAssignments = {
   assignedEmployees: EmployeeOption[];
 };
 
+type ChargeCodeRequest = {
+  id: string;
+  wadId: string | null;
+  workOrderNumber?: string | null;
+  department: string;
+  operation: string;
+  laborCategory?: string | null;
+  classification: string;
+  budgetedHours?: string | null;
+  requestedByDisplayName: string;
+  requestedAt: string;
+  status: 'PENDING' | 'ASSIGNED' | string;
+  assignedChargeCodeId?: number | null;
+  assignedChargeCode?: string | null;
+};
+
 const PRODUCTION_LINE_OPTIONS = [
   { value: 'P1', label: 'P1 - Production Line 1' },
   { value: 'P2', label: 'P2 - Production Line 2' },
@@ -127,27 +144,58 @@ const PRODUCTION_LINE_OPTIONS = [
   { value: 'R_AND_D', label: 'R&D' },
 ];
 
+function chargeCodeRequestSlug(value?: string | null): string {
+  const slug = (value ?? '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'WAD';
+}
+
 function defaultValues(
   code?: ChargeCode,
-  mode: 'create' | 'edit' | 'copy' = 'create'
+  mode: 'create' | 'edit' | 'copy' = 'create',
+  request?: ChargeCodeRequest | null
 ): ChargeCodeFormValues {
   const isCopy = mode === 'copy';
+  const requestType =
+    request?.classification === 'INDIRECT'
+      ? 'OVERHEAD'
+      : request?.classification === 'UNALLOWABLE'
+        ? 'G_AND_A'
+        : 'DIRECT';
+  const requestHandling =
+    request?.classification === 'INDIRECT'
+      ? 'OVERHEAD'
+      : request?.classification === 'UNALLOWABLE'
+        ? 'UNALLOWABLE'
+        : 'DIRECT_CONTRACT';
+  const suggestedRequestCode = request
+    ? [
+        'P2',
+        chargeCodeRequestSlug(request.department),
+        chargeCodeRequestSlug(request.operation),
+      ].join('-').slice(0, 64)
+    : '';
   return {
-    code: code?.code ?? '',
+    code: code?.code ?? suggestedRequestCode,
     description: isCopy
       ? `${code?.description?.trim() || code?.code || 'Charge code'} - Copy`
-      : (code?.description ?? ''),
-    type: (code?.type as ChargeCodeType) ?? 'DIRECT',
+      : (code?.description
+        ?? (request
+          ? `${request.workOrderNumber ?? 'WAD'} ${request.department} ${request.operation} labor charge code`
+          : '')),
+    type: (code?.type as ChargeCodeType) ?? requestType,
     costHandling:
       (code?.costHandling as ChargeCodeFormValues['costHandling']) ??
-      'DIRECT_CONTRACT',
-    department: code?.department ?? '',
-    productionLine: (code as any)?.productionLine ?? 'P1',
-    activityCategory: (code as any)?.activityCategory ?? '',
-    costObjectivePolicy: (code as any)?.costObjectivePolicy ?? 'NONE',
+      requestHandling,
+    department: code?.department ?? request?.department ?? '',
+    productionLine: (code as any)?.productionLine ?? (request ? 'P2' : 'P1'),
+    activityCategory: (code as any)?.activityCategory ?? request?.laborCategory ?? request?.operation ?? '',
+    costObjectivePolicy: (code as any)?.costObjectivePolicy ?? (request ? 'PROJECT_REQUIRED' : 'NONE'),
     inventoryWipPolicy: (code as any)?.inventoryWipPolicy ?? '',
-    allowProject: (code as any)?.allowProject ?? false,
-    requireProject: (code as any)?.requireProject ?? false,
+    allowProject: (code as any)?.allowProject ?? !!request,
+    requireProject: (code as any)?.requireProject ?? !!request,
     allowClin: (code as any)?.allowClin ?? false,
     requireClin: (code as any)?.requireClin ?? false,
     contractReference: code?.contractReference ?? '',
@@ -162,11 +210,13 @@ function defaultValues(
 function ChargeCodeForm({
   editTarget,
   copySource,
+  requestToAssign,
   existingChargeCodes,
   onClose,
 }: {
   editTarget: ChargeCode | null;
   copySource: ChargeCode | null;
+  requestToAssign?: ChargeCodeRequest | null;
   existingChargeCodes: ChargeCode[];
   onClose: () => void;
 }) {
@@ -209,7 +259,8 @@ function ChargeCodeForm({
     resolver: zodResolver(chargeCodeFormSchema),
     defaultValues: defaultValues(
       editTarget ?? copySource ?? undefined,
-      isEdit ? 'edit' : isCopy ? 'copy' : 'create'
+      isEdit ? 'edit' : isCopy ? 'copy' : 'create',
+      requestToAssign
     ),
   });
 
@@ -235,17 +286,29 @@ function ChargeCodeForm({
       if (assignmentScope === 'SELECTED_EMPLOYEES') {
         await saveAssignments(created.id);
       }
+      if (requestToAssign?.id) {
+        await apiRequest(`/api/charge-codes/requests/${requestToAssign.id}/assign`, {
+          method: 'PATCH',
+          body: { chargeCodeId: created.id },
+        });
+      }
       return created;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/charge-codes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/charge-codes/requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/task-items'] });
       queryClient.invalidateQueries({
         queryKey: ['/api/timekeeping/charge-codes'],
       });
       queryClient.invalidateQueries({
         queryKey: ['/api/timekeeping/kiosk/charge-codes'],
       });
-      toast({ title: 'Charge code created successfully' });
+      toast({
+        title: requestToAssign?.id
+          ? 'Charge code created and assigned to WAD'
+          : 'Charge code created successfully',
+      });
       onClose();
     },
     onError: (err: Error) => {
@@ -392,6 +455,11 @@ function ChargeCodeForm({
         className="flex max-h-[calc(90vh-5rem)] flex-col"
       >
         <div className="space-y-4 overflow-y-auto px-1 pb-4">
+          {requestToAssign && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              Creating for {requestToAssign.workOrderNumber ?? 'WAD'} - {requestToAssign.operation}. Saving will assign the new code to this WAD request.
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <FormField
               control={form.control}
@@ -947,16 +1015,24 @@ function resolvePoolContext(
 }
 
 export default function ChargeCodeManagerPage() {
+  const { toast } = useToast();
   const [showInactive, setShowInactive] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ChargeCode | null>(null);
   const [copySource, setCopySource] = useState<ChargeCode | null>(null);
+  const [requestToAssign, setRequestToAssign] = useState<ChargeCodeRequest | null>(null);
+  const [handledRequestId, setHandledRequestId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [requestAssignments, setRequestAssignments] = useState<Record<string, string>>({});
 
   const { data: chargeCodes, isLoading } = useQuery<ChargeCode[]>({
     queryKey: ['/api/charge-codes'],
+  });
+  const { data: chargeCodeRequests = [] } = useQuery<ChargeCodeRequest[]>({
+    queryKey: ['/api/charge-codes/requests'],
+    queryFn: () => apiRequest('/api/charge-codes/requests?status=PENDING'),
   });
   const { data: pools = [] } = useQuery<IndirectCostPool[]>({
     queryKey: ['/api/burden-rates/pools'],
@@ -964,6 +1040,36 @@ export default function ChargeCodeManagerPage() {
   const { data: bases = [] } = useQuery<AllocationBase[]>({
     queryKey: ['/api/burden-rates/bases'],
   });
+
+  const chargeCodeRequestIdFromLink = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('wadChargeCodeRequestId');
+  }, []);
+
+  const shouldAutofillFromLink = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('autofill') === '1';
+  }, []);
+
+  useEffect(() => {
+    if (!chargeCodeRequestIdFromLink || handledRequestId === chargeCodeRequestIdFromLink) return;
+    const linkedRequest = chargeCodeRequests.find((request) => request.id === chargeCodeRequestIdFromLink);
+    if (!linkedRequest) return;
+
+    setHandledRequestId(chargeCodeRequestIdFromLink);
+    window.setTimeout(() => {
+      document
+        .getElementById(`charge-code-request-${chargeCodeRequestIdFromLink}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+
+    if (shouldAutofillFromLink) {
+      setEditTarget(null);
+      setCopySource(null);
+      setRequestToAssign(linkedRequest);
+      setDialogOpen(true);
+    }
+  }, [chargeCodeRequests, chargeCodeRequestIdFromLink, handledRequestId, shouldAutofillFromLink]);
 
   function handleSort(column: SortColumn) {
     if (sortColumn === column) {
@@ -1039,18 +1145,28 @@ export default function ChargeCodeManagerPage() {
   function openCreate() {
     setEditTarget(null);
     setCopySource(null);
+    setRequestToAssign(null);
     setDialogOpen(true);
   }
 
   function openEdit(code: ChargeCode) {
     setEditTarget(code);
     setCopySource(null);
+    setRequestToAssign(null);
     setDialogOpen(true);
   }
 
   function openCopy(code: ChargeCode) {
     setEditTarget(null);
     setCopySource(code);
+    setRequestToAssign(null);
+    setDialogOpen(true);
+  }
+
+  function openCreateForRequest(request: ChargeCodeRequest) {
+    setEditTarget(null);
+    setCopySource(null);
+    setRequestToAssign(request);
     setDialogOpen(true);
   }
 
@@ -1058,6 +1174,43 @@ export default function ChargeCodeManagerPage() {
     setDialogOpen(false);
     setEditTarget(null);
     setCopySource(null);
+    setRequestToAssign(null);
+  }
+
+  const assignRequestMutation = useMutation({
+    mutationFn: ({ requestId, chargeCodeId }: { requestId: string; chargeCodeId: number }) =>
+      apiRequest(`/api/charge-codes/requests/${requestId}/assign`, {
+        method: 'PATCH',
+        body: { chargeCodeId },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/charge-codes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/charge-codes/requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/task-items'] });
+      toast({ title: 'Charge code request assigned' });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Failed to assign request',
+        description: err.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const activeChargeCodes = (chargeCodes ?? []).filter((code) => code.active);
+
+  function assignRequest(request: ChargeCodeRequest) {
+    const selected = Number(requestAssignments[request.id]);
+    if (!Number.isInteger(selected) || selected <= 0) {
+      toast({
+        title: 'Select a charge code',
+        description: 'Choose the charge code that should satisfy this WAD request.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    assignRequestMutation.mutate({ requestId: request.id, chargeCodeId: selected });
   }
 
   const typeLabel: Record<string, string> = {
@@ -1119,6 +1272,87 @@ export default function ChargeCodeManagerPage() {
           </Label>
         </div>
       </div>
+
+      {chargeCodeRequests.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Charge Code Requests</h2>
+            <Badge variant="secondary">{chargeCodeRequests.length}</Badge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {chargeCodeRequests.map((request) => (
+              <div
+                key={request.id}
+                id={`charge-code-request-${request.id}`}
+                className={`rounded-md border p-4 space-y-3 ${
+                  request.id === chargeCodeRequestIdFromLink
+                    ? 'border-blue-500 bg-blue-50'
+                    : ''
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {request.workOrderNumber ?? 'WAD'} - {request.operation}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {request.department} - {request.classification}
+                      {request.budgetedHours ? ` - ${request.budgetedHours} hrs` : ''}
+                    </p>
+                  </div>
+                  <Badge variant="outline">Pending</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Requested by {request.requestedByDisplayName}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Select
+                    value={requestAssignments[request.id] ?? ''}
+                    onValueChange={(value) =>
+                      setRequestAssignments((prev) => ({ ...prev, [request.id]: value }))
+                    }
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Assign charge code" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeChargeCodes.map((code) => (
+                        <SelectItem key={code.id} value={String(code.id)}>
+                          {code.code} - {code.description ?? code.department ?? 'No description'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => assignRequest(request)}
+                    disabled={assignRequestMutation.isPending}
+                    className="sm:w-auto"
+                  >
+                    {assignRequestMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                    )}
+                    Assign
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openCreateForRequest(request)}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create & Assign
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-md border">
         <Table>
@@ -1301,13 +1535,16 @@ export default function ChargeCodeManagerPage() {
                 ? `Edit: ${editTarget.code}`
                 : copySource
                   ? `Copy: ${copySource.code}`
-                  : 'Add Charge Code'}
+                  : requestToAssign
+                    ? 'Create WAD Charge Code'
+                    : 'Add Charge Code'}
             </DialogTitle>
           </DialogHeader>
           {dialogOpen && (
             <ChargeCodeForm
               editTarget={editTarget}
               copySource={copySource}
+              requestToAssign={requestToAssign}
               existingChargeCodes={chargeCodes ?? []}
               onClose={closeDialog}
             />

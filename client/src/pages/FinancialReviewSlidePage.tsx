@@ -32,7 +32,7 @@ function monthLabel(monthKey: string): string {
 
 interface Slide {
   title: string;
-  render: (props: { session: any; onSave: (f: any) => void; saving: boolean; monthLabel: string }) => JSX.Element;
+  render: (props: { session: any; onSave: (f: any) => void; saving: boolean; monthLabel: string; monthKey: string }) => JSX.Element;
 }
 
 const SLIDES: Slide[] = [
@@ -58,11 +58,11 @@ const SLIDES: Slide[] = [
   },
   {
     title: 'Credit Card Sales',
-    render: () => <CreditCardSalesSlide />,
+    render: ({ monthKey }) => <CreditCardSalesSlide monthKey={monthKey} />,
   },
   {
     title: 'Revenue Trend',
-    render: () => <RevenueTrendSlide />,
+    render: ({ monthKey }) => <RevenueTrendSlide monthKey={monthKey} />,
   },
   {
     title: 'Combined Financial Highlights',
@@ -84,7 +84,7 @@ const SLIDES: Slide[] = [
   },
   {
     title: 'Quality Objectives — KPIs',
-    render: () => <KPIsSlide />,
+    render: ({ monthKey }) => <KPIsSlide monthKey={monthKey} />,
   },
   {
     title: 'Quality Objectives (cont.)',
@@ -144,7 +144,10 @@ export default function FinancialReviewSlidePage() {
 
   const saveMutation = useMutation({
     mutationFn: (fields: any) =>
-      apiRequest('PUT', `/api/financial-review/${monthKey}`, { ...session, ...fields }),
+      apiRequest(`/api/financial-review/${monthKey}`, {
+        method: 'PUT',
+        body: { ...session, ...fields },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/financial-review', monthKey] });
       queryClient.invalidateQueries({ queryKey: ['/api/financial-review'] });
@@ -213,6 +216,7 @@ export default function FinancialReviewSlidePage() {
                 onSave: handleSave,
                 saving: saveMutation.isPending,
                 monthLabel: ml,
+                monthKey: monthKey ?? '',
               })
             )}
           </div>

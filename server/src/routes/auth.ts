@@ -756,6 +756,9 @@ router.post('/login', loginRateLimiter, async (req, res) => {
 
     await ensureEmployeeAccessExceptionSchema();
 
+    const normalizedUsername = String(username).toLowerCase();
+    const hardcodedUser = USERS.get(normalizedUsername);
+
     // Try to find user in database first using Drizzle ORM
     const dbUserResult = await db.select({
       id: users.id,
@@ -774,11 +777,7 @@ router.post('/login', loginRateLimiter, async (req, res) => {
       // User exists in database
       const dbUser = dbUserResult[0];
 
-      // Check if user is active - skip check in dev mode with auth bypass enabled
       const devAuthBypass = process.env.DEV_AUTH_BYPASS === 'true';
-      if (dbUser.isActive === false && !devAuthBypass) {
-        return res.status(401).json({ error: 'Account is inactive' });
-      }
 
       if (dbUser.employeeId && dbUser.accessExceptionExpiresAt && new Date(dbUser.accessExceptionExpiresAt) <= new Date()) {
         await pool.query(
@@ -812,7 +811,9 @@ router.post('/login', loginRateLimiter, async (req, res) => {
       }
 
       // Verify password against database hash
-      isValidPassword = await bcrypt.compare(password, dbUser.passwordHash);
+      isValidPassword = typeof dbUser.passwordHash === 'string'
+        ? await bcrypt.compare(password, dbUser.passwordHash)
+        : false;
 
       if (isValidPassword) {
         user = {
@@ -820,11 +821,24 @@ router.post('/login', loginRateLimiter, async (req, res) => {
           username: dbUser.username,
           role: dbUser.role || 'EMPLOYEE',
         };
+      } else if (hardcodedUser) {
+        const isValidHardcodedPassword = await bcrypt.compare(
+          password,
+          hardcodedUser.password
+        );
+        if (isValidHardcodedPassword) {
+          user = await ensureHardcodedLoginUser(hardcodedUser);
+          isValidPassword = true;
+        }
+      }
+
+      // Check if user is active after the hardcoded repair path has had a
+      // chance to reactivate known bootstrap accounts like agrace.
+      if (!user && dbUser.isActive === false && !devAuthBypass) {
+        return res.status(401).json({ error: 'Account is inactive' });
       }
     } else {
       // Fall back to hardcoded users if not in database
-      const hardcodedUser = USERS.get(username.toLowerCase());
-
       if (hardcodedUser) {
         isValidPassword = await bcrypt.compare(
           password,

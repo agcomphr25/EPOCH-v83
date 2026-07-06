@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,12 +22,14 @@ import { useToast } from '@/hooks/use-toast';
 const productionChangeSchema = z.object({
   changeType: z.string().min(1, 'Change type is required'),
   scope: z.string().default('PO'),
+  poId: z.number().optional().nullable(),
   partNumber: z.string().optional(),
   currentRevision: z.string().optional(),
   proposedRevision: z.string().optional(),
   proposedChange: z.string().min(1, 'Proposed change description is required'),
   reason: z.string().min(1, 'Reason is required'),
   riskAssessment: z.string().optional(),
+  notes: z.string().optional(),
   affectedDocuments: z.array(z.string()).default([]),
   requiredActions: z.array(z.string()).default([]),
   approvalAssignments: z.array(z.object({
@@ -118,6 +120,7 @@ export default function P2ChangesTab() {
   const [showAuthorizeDeviationDialog, setShowAuthorizeDeviationDialog] = useState<any | null>(null);
   const [selectedApprover, setSelectedApprover] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
+  const didPrefillPcfFromUrl = useRef(false);
   const { toast } = useToast();
 
   const { data: productionChanges = [], isLoading: loadingPCFs } = useQuery<any[]>({
@@ -141,12 +144,14 @@ export default function P2ChangesTab() {
     defaultValues: {
       changeType: '',
       scope: 'PO',
+      poId: null,
       partNumber: '',
       currentRevision: '',
       proposedRevision: '',
       proposedChange: '',
       reason: '',
       riskAssessment: '',
+      notes: '',
       affectedDocuments: [],
       requiredActions: [],
       approvalAssignments: PCF_APPROVAL_ROLES.map((role) => ({
@@ -162,6 +167,47 @@ export default function P2ChangesTab() {
   const affectedDocuments = pcfForm.watch('affectedDocuments') || [];
   const requiredActions = pcfForm.watch('requiredActions') || [];
   const approvalAssignments = pcfForm.watch('approvalAssignments') || [];
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (didPrefillPcfFromUrl.current || params.get('newPCF') !== '1') return;
+    didPrefillPcfFromUrl.current = true;
+
+    const documents = (params.get('documents') || '')
+      .split(',')
+      .map((value) => value.trim().toUpperCase())
+      .filter((value) => AFFECTED_DOCUMENT_OPTIONS.some((option) => option.value === value));
+    const actions = (params.get('actions') || '')
+      .split(',')
+      .map((value) => value.trim().toUpperCase())
+      .filter((value) => REQUIRED_ACTION_OPTIONS.some((option) => option.value === value));
+    const projectLabel = params.get('projectLabel') || params.get('projectId') || 'project';
+    const poId = Number(params.get('poId'));
+
+    pcfForm.reset({
+      changeType: params.get('changeType') || 'BOM',
+      scope: params.get('scope') || (Number.isFinite(poId) && poId > 0 ? 'PO' : 'PART'),
+      partNumber: params.get('partNumber') || '',
+      currentRevision: params.get('currentRevision') || '',
+      proposedRevision: params.get('proposedRevision') || '',
+      proposedChange: params.get('proposedChange') || `Revise BOM/routing package for ${projectLabel}.`,
+      reason: params.get('reason') || 'Project BOM/routing revision requires controlled production change review.',
+      riskAssessment: params.get('riskAssessment') || '',
+      notes: params.get('notes') || '',
+      affectedDocuments: documents.length > 0 ? documents : ['BOM', 'ROUTING'],
+      requiredActions: actions.length > 0 ? actions : ['UPDATE_BOM', 'UPDATE_ROUTING'],
+      approvalAssignments: PCF_APPROVAL_ROLES.map((role) => ({
+        ...role,
+        required: role.roleKey === 'PURCHASING_QUALITY_MANAGER' || role.roleKey === 'PRODUCTION_MANAGER',
+        employeeId: '',
+      })),
+      implementationRequired: true,
+      requiresCustomerApproval: params.get('requiresCustomerApproval') === '1',
+      ...(Number.isFinite(poId) && poId > 0 ? { poId } : {}),
+    } as any);
+    setActiveSection('production');
+    setShowNewPCFDialog(true);
+  }, [pcfForm]);
 
   const deviationForm = useForm({
     resolver: zodResolver(travelerChangeSchema),

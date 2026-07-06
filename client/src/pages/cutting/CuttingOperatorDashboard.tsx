@@ -110,6 +110,8 @@ type BuiltPacket = {
   sku: string | null;
   queueId: string | null;
   quantityOrdered: number | null;
+  batchQuantity?: number;
+  isBatchEntry?: boolean;
   fabricSources: BuiltPacketFabricSource[];
 };
 
@@ -170,6 +172,10 @@ type ManufacturingQueueItem = {
   printableBarcodeCount?: number;
   productionProtected?: boolean;
   productionProtectionReason?: string | null;
+  materialType?: string | null;
+  source?: string | null;
+  orderId?: string | null;
+  packetName?: string | null;
 };
 
 type PacketBOM = {
@@ -238,6 +244,127 @@ function buildMfgBarcode(queueId: string | null, sku: string | null, packetNumbe
   return `MFG-${queueId}-${sku}-${packetNumber}`;
 }
 
+type P1PacketRecipeComponent = {
+  label: string;
+  partsPerPacket: number;
+  programName: string;
+  yieldPerRun: number;
+  squareMetersPerRun: number;
+};
+
+type P1PacketRecipe = {
+  name: string;
+  matchers: string[];
+  materialTypes: string[];
+  components: P1PacketRecipeComponent[];
+};
+
+type P1PacketRunPlan = {
+  packetName: string;
+  packetsNeeded: number;
+  totalRuns: number;
+  totalSquareMeters: number;
+  requirements: Array<P1PacketRecipeComponent & {
+    totalParts: number;
+    runsNeeded: number;
+    squareMetersNeeded: number;
+  }>;
+};
+
+const STOCK_PROGRAM_SQUARE_METERS_PER_RUN = 3;
+
+const P1_PACKET_RECIPES: P1PacketRecipe[] = [
+  {
+    name: 'Carbon Fiber Stock Packet',
+    matchers: ['carbon fiber packet', 'carbon fiber stock packet', 'carbon fiber stock', 'carbon_fiber'],
+    materialTypes: ['carbon_fiber'],
+    components: [
+      { label: 'Shells', partsPerPacket: 2, programName: 'Shells', yieldPerRun: 26, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Wrist Reinforcements', partsPerPacket: 10, programName: 'Wrists reinforcement', yieldPerRun: 500, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'BSRs', partsPerPacket: 6, programName: 'BSRs', yieldPerRun: 946, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Buttstock Reinforcements', partsPerPacket: 2, programName: 'Buttstock reinforcements', yieldPerRun: 70, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Forends', partsPerPacket: 2, programName: 'Forends', yieldPerRun: 68, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Half Gridle', partsPerPacket: 1, programName: 'Half Gridle', yieldPerRun: 440, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Seam', partsPerPacket: 1, programName: 'Seams', yieldPerRun: 39, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+      { label: 'Pillar Seam', partsPerPacket: 1, programName: 'Pillar Seams', yieldPerRun: 156, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+    ],
+  },
+  {
+    name: 'Cheek Riser',
+    matchers: ['cheek riser', 'cheek risers', 'cheekriser', 'cheek_riser'],
+    materialTypes: ['cheek_riser'],
+    components: [
+      { label: 'Cheek Risers', partsPerPacket: 1, programName: 'Cheekrisers', yieldPerRun: 110, squareMetersPerRun: STOCK_PROGRAM_SQUARE_METERS_PER_RUN },
+    ],
+  },
+];
+
+function normalizePacketText(value: string | null | undefined): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isP2QueueItem(item: ManufacturingQueueItem): boolean {
+  const source = normalizePacketText(item.source);
+  const materialType = normalizePacketText(item.materialType);
+  return source === 'p2 sync'
+    || source === 'p2_sync'
+    || materialType.startsWith('p2 ')
+    || (item.poNumbers || []).some(po => Boolean(po.p2PoId || po.p2PoItemId));
+}
+
+function findP1PacketRecipe(item: ManufacturingQueueItem): P1PacketRecipe | null {
+  if (isP2QueueItem(item)) return null;
+
+  const haystack = [
+    item.displayName,
+    item.packetName,
+    item.partName,
+    item.partNumber,
+    item.materialType,
+  ].map(normalizePacketText);
+
+  return P1_PACKET_RECIPES.find(recipe => {
+    const materialMatch = recipe.materialTypes.some(materialType =>
+      haystack.includes(normalizePacketText(materialType))
+    );
+    const nameMatch = recipe.matchers.some(matcher => {
+      const normalizedMatcher = normalizePacketText(matcher);
+      return haystack.some(value => value && (value === normalizedMatcher || value.includes(normalizedMatcher) || normalizedMatcher.includes(value)));
+    });
+    return materialMatch || nameMatch;
+  }) || null;
+}
+
+function getP1PacketRunPlan(item: ManufacturingQueueItem): P1PacketRunPlan | null {
+  const recipe = findP1PacketRecipe(item);
+  if (!recipe) return null;
+
+  const packetsNeeded = Math.max(0, (item.quantityOrdered || 0) - (item.quantityCompleted || 0));
+  if (packetsNeeded <= 0) return null;
+
+  const requirements = recipe.components.map(component => {
+    const totalParts = component.partsPerPacket * packetsNeeded;
+    return {
+      ...component,
+      totalParts,
+      runsNeeded: Math.ceil(totalParts / component.yieldPerRun),
+      squareMetersNeeded: Math.ceil(totalParts / component.yieldPerRun) * component.squareMetersPerRun,
+    };
+  });
+
+  return {
+    packetName: recipe.name,
+    packetsNeeded,
+    totalRuns: requirements.reduce((sum, requirement) => sum + requirement.runsNeeded, 0),
+    totalSquareMeters: requirements.reduce((sum, requirement) => sum + requirement.squareMetersNeeded, 0),
+    requirements,
+  };
+}
+
 function getPrintableBarcodeCount(item: ManufacturingQueueItem): number {
   if (typeof item.printableBarcodeCount === 'number') {
     return Math.max(0, item.printableBarcodeCount);
@@ -250,7 +377,8 @@ function isQueueProductionProtected(item: ManufacturingQueueItem): boolean {
 }
 
 function isPacketBarcodePrintable(item: ManufacturingQueueItem): boolean {
-  return (item.status === 'PENDING' || item.status === 'IN_PROGRESS') && !isQueueProductionProtected(item) && getPrintableBarcodeCount(item) > 0;
+  const status = String(item.status || '').toUpperCase();
+  return isP2QueueItem(item) && (status === 'PENDING' || status === 'IN_PROGRESS' || status === 'LOCKED') && getPrintableBarcodeCount(item) > 0;
 }
 
 function useIsAdmin() {
@@ -479,6 +607,7 @@ export default function CuttingOperatorDashboard() {
       let userNotes: string | null = null;
       let orderId: string | null = null;
       let materialType: string | null = item.materialType || null;
+      let source: string | null = item.source || null;
       let poNumbers: GroupedPO[] = Array.isArray(item.poNumbers) ? item.poNumbers : [];
       if (item.notes) {
         try {
@@ -488,6 +617,7 @@ export default function CuttingOperatorDashboard() {
           userNotes = parsedNotes.userNotes || null;
           orderId = parsedNotes.orderId || null;
           if (!materialType) materialType = parsedNotes.materialType || null;
+          if (!source) source = parsedNotes.source || null;
           if (poNumbers.length === 0 && Array.isArray(parsedNotes.poNumbers)) {
             poNumbers = parsedNotes.poNumbers as GroupedPO[];
           }
@@ -500,6 +630,7 @@ export default function CuttingOperatorDashboard() {
         'carbon_fiber': 'carbon fiber packet',
         'fiberglass': 'fiberglass packet',
         'mesa': 'mesa packet',
+        'cheek_riser': 'cheek riser',
         'p2_disruptor': 'disruptor',
         'p2_disruptor_packet': 'disruptor packet',
         'p2_antenna': 'antenna cover',
@@ -542,6 +673,10 @@ export default function CuttingOperatorDashboard() {
         bomMatchReason: item.bomMatchReason || (bomId || matchingBOM?.id ? 'client_fallback' : null),
         bomMatchConfidence: item.bomMatchConfidence || (bomId ? 'strong' : matchingBOM?.id ? 'fallback' : 'none'),
         poNumbers,
+        materialType,
+        source,
+        orderId,
+        packetName,
       };
     });
   }, [mfgQueueItemsRaw, packetBOMs]);
@@ -901,11 +1036,15 @@ export default function CuttingOperatorDashboard() {
       clearTimeout(packetScanTimerRef.current);
       packetScanTimerRef.current = null;
     }
-    if (packetScanBarcode && packetScanBarcode.length > 5 && packetScanBarcode.startsWith('MFG-') && /^MFG-\d+-[^-]+/.test(packetScanBarcode)) {
+    const normalizedPacketScan = packetScanBarcode.trim();
+    const isPacketScanBarcode =
+      /^MFG-\d+-.+/.test(normalizedPacketScan) ||
+      /^PKT-.+-\d+-\d+-\d+(?:-\d+)?$/.test(normalizedPacketScan);
+    if (isPacketScanBarcode) {
       packetScanTimerRef.current = setTimeout(() => {
-        if (packetScanBarcode !== lastSubmittedPacketRef.current) {
-          lastSubmittedPacketRef.current = packetScanBarcode;
-          handlePacketScan(packetScanBarcode);
+        if (normalizedPacketScan !== lastSubmittedPacketRef.current) {
+          lastSubmittedPacketRef.current = normalizedPacketScan;
+          handlePacketScan(normalizedPacketScan);
         }
       }, 400);
     }
@@ -1445,7 +1584,7 @@ export default function CuttingOperatorDashboard() {
                   id="packet-scan-barcode"
                   value={packetScanBarcode}
                   onChange={(val) => setPacketScanBarcode(val)}
-                  placeholder="Scan packet barcode (MFG-...)"
+                  placeholder="Scan packet barcode (MFG... or PKT...)"
                   data-testid="input-packet-scan"
                 />
                 <Button
@@ -2266,6 +2405,8 @@ export default function CuttingOperatorDashboard() {
                   <TableBody>
                     {filteredMfgQueueItems.map((item) => {
                     const isProductionProtected = isQueueProductionProtected(item);
+                    const p1RunPlan = getP1PacketRunPlan(item);
+                    const isP2Packet = isP2QueueItem(item);
 
                     return (
                     <TableRow 
@@ -2278,7 +2419,7 @@ export default function CuttingOperatorDashboard() {
                       data-testid={`row-mfg-item-${item.id}`}
                     >
                       <TableCell>
-                        {isPacketBarcodePrintable(item) && !isProductionProtected ? (
+                        {isPacketBarcodePrintable(item) ? (
                           <input
                             type="checkbox"
                             checked={selectedPrintIds.includes(item.id)}
@@ -2287,7 +2428,9 @@ export default function CuttingOperatorDashboard() {
                             data-testid={`checkbox-print-${item.id}`}
                           />
                         ) : (
-                          <span className="text-xs text-muted-foreground">-</span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {p1RunPlan ? 'P1' : '-'}
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell className="max-w-[420px]">
@@ -2296,6 +2439,9 @@ export default function CuttingOperatorDashboard() {
                             <span className="truncate font-medium" title={item.displayName || item.partName || ""}>
                               {item.displayName || item.partName || '-'}
                             </span>
+                            <Badge variant={isP2Packet ? "default" : "secondary"} className="h-5 shrink-0 text-[10px]">
+                              {isP2Packet ? 'P2 trace' : 'P1 cut/make'}
+                            </Badge>
                             <GroupedPOsBadge
                               poNumbers={item.poNumbers}
                               className="h-6 shrink-0 bg-muted px-1.5 text-[11px] text-muted-foreground hover:bg-muted"
@@ -2313,6 +2459,22 @@ export default function CuttingOperatorDashboard() {
                             </span>
                           </div>
                           <CuttingQueueProductionLockNotice item={item} compact />
+                          {p1RunPlan && (
+                            <div className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium">{p1RunPlan.packetsNeeded} packets</span>
+                                <span>{p1RunPlan.totalRuns} total program runs</span>
+                                <span>{p1RunPlan.totalSquareMeters} m² total</span>
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {p1RunPlan.requirements.map(requirement => (
+                                  <Badge key={requirement.programName} variant="outline" className="bg-background text-[10px]">
+                                    {requirement.programName}: {requirement.runsNeeded}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
@@ -2328,10 +2490,17 @@ export default function CuttingOperatorDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className="font-mono">{item.estimatedCuts}</Badge>
+                        {p1RunPlan ? (
+                          <div className="space-y-1">
+                            <Badge variant="outline" className="font-mono">{p1RunPlan.totalRuns} runs</Badge>
+                            <div className="text-[11px] text-muted-foreground">{p1RunPlan.totalSquareMeters} m²</div>
+                          </div>
+                        ) : (
+                          <Badge variant="outline" className="font-mono">{item.estimatedCuts}</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {isPacketBarcodePrintable(item) && !isProductionProtected ? (
+                        {isPacketBarcodePrintable(item) ? (
                           <Input
                             type="number"
                             min={1}
@@ -2349,7 +2518,9 @@ export default function CuttingOperatorDashboard() {
                             data-testid={`input-print-qty-${item.id}`}
                           />
                         ) : (
-                          <span className="text-xs text-muted-foreground">None</span>
+                          <span className="text-xs text-muted-foreground">
+                            {p1RunPlan ? 'No barcode' : 'None'}
+                          </span>
                         )}
                       </TableCell>
                       <TableCell>{getStatusBadge(item.status)}</TableCell>
@@ -2500,11 +2671,13 @@ export default function CuttingOperatorDashboard() {
                       <div>
                         {(() => {
                           const mfgParsed = parseMfgBarcode(packet.barcode);
-                          const mfgBarcode = mfgParsed.isMfgFormat
+                          const mfgBarcode = packet.isBatchEntry
+                            ? packet.barcode
+                            : mfgParsed.isMfgFormat
                             ? mfgParsed.raw
                             : buildMfgBarcode(packet.queueId, packet.sku, packet.printedPacketNumber ?? packet.displayPacketNumber ?? packet.packetNumber);
                           const segments = mfgBarcode ? parseMfgBarcode(mfgBarcode) : null;
-                          const isInternalBarcode = !mfgParsed.isMfgFormat;
+                          const isInternalBarcode = !packet.isBatchEntry && !mfgParsed.isMfgFormat;
 
                           const totalPackets = packet.quantityOrdered
                             ?? builtPackets.filter((p) => p.queueId && p.queueId === packet.queueId).length;
@@ -2521,6 +2694,7 @@ export default function CuttingOperatorDashboard() {
                                   variant={
                                     packet.status === 'AVAILABLE' ? 'secondary'
                                     : packet.status === 'CONSUMED' ? 'destructive'
+                                    : packet.status === 'BATCH' ? 'outline'
                                     : 'default'
                                   }
                                   className={cn(
@@ -2548,7 +2722,11 @@ export default function CuttingOperatorDashboard() {
                                 </div>
                               )}
                               <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                                {totalPackets > 0 && (
+                                {packet.isBatchEntry ? (
+                                  <span className="text-xs font-medium text-foreground">
+                                    Batch {packet.batchQuantity ?? packet.quantityOrdered ?? 0} packets
+                                  </span>
+                                ) : totalPackets > 0 && (
                                   <span className="text-xs font-medium text-foreground">
                                     Packet {packet.displayPacketNumber ?? packet.packetNumber} of {totalPackets}
                                   </span>
@@ -2572,12 +2750,15 @@ export default function CuttingOperatorDashboard() {
                       </div>
                     </div>
                     <div className="text-xs text-muted-foreground shrink-0">
-                      {packet.fabricSources.length} fabric {packet.fabricSources.length === 1 ? 'source' : 'sources'}
+                      {packet.isBatchEntry
+                        ? `${packet.batchQuantity ?? packet.quantityOrdered ?? 0} packet batch`
+                        : `${packet.fabricSources.length} fabric ${packet.fabricSources.length === 1 ? 'source' : 'sources'}`}
                     </div>
                   </button>
 
                   {expandedPacketId === packet.id && (
                     <div className="border-t bg-muted/20 px-4 py-3">
+                      {!packet.isBatchEntry && (
                       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
                         <div className="flex-1 space-y-1">
                           <Label className="text-xs">Scan Material Into Packet</Label>
@@ -2609,8 +2790,13 @@ export default function CuttingOperatorDashboard() {
                           Add Material
                         </Button>
                       </div>
+                      )}
                       {packet.fabricSources.length === 0 ? (
-                        <p className="text-sm text-muted-foreground italic">No fabric source records for this packet.</p>
+                        <p className="text-sm text-muted-foreground italic">
+                          {packet.isBatchEntry
+                            ? 'P1 stock packet batch added to inventory. Individual packet records are not created for this batch.'
+                            : 'No fabric source records for this packet.'}
+                        </p>
                       ) : (
                         <div className="space-y-2">
                           {packet.fabricSources.map((source) => (
@@ -2796,10 +2982,19 @@ export default function CuttingOperatorDashboard() {
 
       <Dialog open={isCuttingWorkflowOpen} onOpenChange={setIsCuttingWorkflowOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {(() => {
+            const selectedP1RunPlan = selectedMfgItem ? getP1PacketRunPlan(selectedMfgItem) : null;
+            return (
+              <>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Scissors className="h-5 w-5" />
               Cutting Workflow: {selectedMfgItem?.displayName || selectedMfgItem?.partNumber || selectedMfgItem?.partName}
+              {selectedMfgItem && (
+                <Badge variant={isP2QueueItem(selectedMfgItem) ? "default" : "secondary"} className="ml-1">
+                  {isP2QueueItem(selectedMfgItem) ? 'P2 trace packet' : 'P1 cut/make packet'}
+                </Badge>
+              )}
             </DialogTitle>
             <DialogDescription>
               Step {workflowStep === 'fabric' ? '1 of 4: Retrieve Fabric' : workflowStep === 'cutting' ? '2 of 4: Cutting Programs' : workflowStep === 'complete' ? '3 of 4: Complete & Print Labels' : '4 of 4: Fabric Disposition'}
@@ -2836,11 +3031,13 @@ export default function CuttingOperatorDashboard() {
                     <p className="font-bold text-lg">{(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)}</p>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground text-xs">Cuts Needed</Label>
+                    <Label className="text-muted-foreground text-xs">{selectedP1RunPlan ? 'Program Runs' : 'Cuts Needed'}</Label>
                     <p className="font-bold text-lg">{
-                      matchingBOM
-                        ? Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM.yieldPerCut || 4))
-                        : (selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / 4))
+                      selectedP1RunPlan
+                        ? selectedP1RunPlan.totalRuns
+                        : matchingBOM
+                          ? Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM.yieldPerCut || 4))
+                          : (selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / 4))
                     }</p>
                   </div>
                   <div>
@@ -2848,6 +3045,37 @@ export default function CuttingOperatorDashboard() {
                     <p className="font-bold text-lg">{matchingBOM?.squareMetersPerCut || 0.5} m²</p>
                   </div>
                 </div>
+                {selectedP1RunPlan && (
+                  <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-medium text-amber-950 dark:text-amber-100">{selectedP1RunPlan.packetName}</p>
+                        <p className="text-xs text-amber-800 dark:text-amber-200">
+                          {selectedP1RunPlan.packetsNeeded} packets to make; no P1 packet barcodes required.
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="bg-background font-mono">
+                        {selectedP1RunPlan.totalRuns} total runs
+                      </Badge>
+                      <Badge variant="outline" className="bg-background font-mono">
+                        {selectedP1RunPlan.totalSquareMeters} m² total
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {selectedP1RunPlan.requirements.map(requirement => (
+                        <div key={requirement.programName} className="rounded-md border bg-background px-3 py-2 text-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">{requirement.programName}</span>
+                            <Badge>{requirement.runsNeeded} run{requirement.runsNeeded === 1 ? '' : 's'}</Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {requirement.totalParts} {requirement.label.toLowerCase()} needed at {requirement.yieldPerRun}/run; {requirement.squareMetersPerRun} m²/run
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4">
@@ -3033,15 +3261,34 @@ export default function CuttingOperatorDashboard() {
                   <Scissors className="h-4 w-4" />
                   Cutting Programs
                 </h4>
-                <p className="text-sm text-muted-foreground">
-                  Execute the following cutting program for {(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)} packets
-                </p>
-                <div className="mt-3 p-3 bg-background rounded border">
-                  <p className="font-mono text-sm">Program: {selectedMfgItem?.partNumber || 'STANDARD'}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
+                {selectedP1RunPlan ? (
+                  <div className="mt-3 space-y-2">
+                    {selectedP1RunPlan.requirements.map(requirement => (
+                      <div key={requirement.programName} className="rounded border bg-background p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="font-mono text-sm">{requirement.programName}</p>
+                          <Badge>{requirement.runsNeeded} run{requirement.runsNeeded === 1 ? '' : 's'}</Badge>
+                          <Badge variant="outline">{requirement.squareMetersNeeded} m²</Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Make {requirement.totalParts} {requirement.label.toLowerCase()} for {selectedP1RunPlan.packetsNeeded} packets ({requirement.partsPerPacket}/packet; yield {requirement.yieldPerRun}/run; {requirement.squareMetersPerRun} m²/run).
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Execute the following cutting program for {(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)} packets
+                    </p>
+                    <div className="mt-3 p-3 bg-background rounded border">
+                      <p className="font-mono text-sm">Program: {selectedMfgItem?.partNumber || 'STANDARD'}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
                     Cuts Required: {selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM?.yieldPerCut || 4))}
                   </p>
-                </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {matchingBOM && matchingBOM.cuts && matchingBOM.cuts.length > 0 ? (
@@ -3303,6 +3550,9 @@ export default function CuttingOperatorDashboard() {
               )}
             </div>
           </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

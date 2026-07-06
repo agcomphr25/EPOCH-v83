@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -76,6 +76,7 @@ interface Traveler {
   partNumber: string;
   partName: string | null;
   workOrderId: string | null;
+  lotNumber: string | null;
   serialNumber: string | null;
   status: string;
   quantity: number;
@@ -102,6 +103,7 @@ export default function P2ControlCenter() {
   const tabFromUrl = urlParams.get('tab');
   const poFromUrl = urlParams.get('po') || undefined;
   const poIdFromUrl = urlParams.get('poId') ? Number(urlParams.get('poId')) : null;
+  const editPoIdFromUrl = urlParams.get('editPoId') ? Number(urlParams.get('editPoId')) : null;
   const unitsFromUrl = urlParams.get('units') || undefined;
   // Project context: passed from PM/WAD project workflow cards
   const wadProjectId = urlParams.get('projectId') || '';
@@ -122,6 +124,7 @@ export default function P2ControlCenter() {
   const [showBOMWizard, setShowBOMWizard] = useState(false);
   const [selectedPOForBOM, setSelectedPOForBOM] = useState<number | null>(null);
   const [selectedPOIds, setSelectedPOIds] = useState<number[]>([]);
+  const [editingPOId, setEditingPOId] = useState<number | null>(editPoIdFromUrl);
 
   const { data: stats } = useQuery<P2Stats>({
     queryKey: ['/api/p2/control-center/stats'],
@@ -177,7 +180,14 @@ export default function P2ControlCenter() {
     refetchInterval: 30000,
   });
 
-  const openPOs = allPOStatuses.filter((po) => po.status !== 'completed');
+  const openPOs = useMemo(
+    () => allPOStatuses.filter((po) => po.status !== 'completed'),
+    [allPOStatuses]
+  );
+  const poFilterOptions = useMemo(
+    () => activeTab === 'shipping' ? allPOStatuses : openPOs,
+    [activeTab, allPOStatuses, openPOs]
+  );
 
   useEffect(() => {
     if (selectedPOIds.length === 0) return;
@@ -205,6 +215,10 @@ export default function P2ControlCenter() {
     : poFromUrl
       ? [poFromUrl]
     : [];
+  const selectedProjectId = selectedPOIds.length === 1
+    ? allPOStatuses.find((po) => po.id === selectedPOIds[0])?.projectId || undefined
+    : undefined;
+  const programProjectId = selectedProjectId || wadProjectId || undefined;
 
   const togglePOFilter = (poId: number) => {
     setSelectedPOIds((prev) =>
@@ -216,8 +230,24 @@ export default function P2ControlCenter() {
     setSelectedPOIds([]);
   };
 
+  useEffect(() => {
+    if (!editPoIdFromUrl || !Number.isFinite(editPoIdFromUrl)) return;
+    setEditingPOId(editPoIdFromUrl);
+    setShowBOMWizard(false);
+    setSelectedPOForBOM(null);
+    setShowPOWizard(true);
+  }, [editPoIdFromUrl]);
+
   const handlePOCreated = (poId: number) => {
     setShowPOWizard(false);
+    if (editingPOId) {
+      setEditingPOId(null);
+      setSelectedPOIds([poId]);
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      setActiveTab('setup');
+      return;
+    }
     setSelectedPOForBOM(poId);
     setShowBOMWizard(true);
   };
@@ -266,8 +296,12 @@ export default function P2ControlCenter() {
     return (
       <div className="container mx-auto p-6">
         <P2POCreationWizard 
+          existingPoId={editingPOId}
           onComplete={handlePOCreated}
-          onCancel={() => setShowPOWizard(false)}
+          onCancel={() => {
+            setShowPOWizard(false);
+            setEditingPOId(null);
+          }}
         />
       </div>
     );
@@ -595,7 +629,7 @@ export default function P2ControlCenter() {
       )}
 
       {/* PO Filter Bar */}
-      {openPOs.length > 1 && (
+      {poFilterOptions.length > 1 && (
         <div className="space-y-2">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
@@ -636,7 +670,7 @@ export default function P2ControlCenter() {
                   <div className="h-px bg-border my-1" />
 
                   {/* Individual PO options */}
-                  {openPOs.map((po) => {
+                  {poFilterOptions.map((po) => {
                     const isChecked = selectedPOIds.includes(po.id);
                     return (
                       <div
@@ -675,7 +709,7 @@ export default function P2ControlCenter() {
           {selectedPOIds.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-muted-foreground">Showing:</span>
-              {openPOs.filter((po) => selectedPOIds.includes(po.id)).map((po) => (
+              {poFilterOptions.filter((po) => selectedPOIds.includes(po.id)).map((po) => (
                 <Badge
                   key={po.id}
                   variant="secondary"
@@ -765,8 +799,7 @@ export default function P2ControlCenter() {
               setShowBOMWizard(true);
             }} 
             onViewPO={(poId) => {
-              setSelectedPOForBOM(poId);
-              setActiveTab('schedule');
+              navigate(`/p2/purchase-orders/${poId}/preview`);
             }}
             selectedPOIds={selectedPOIds}
           />
@@ -829,15 +862,15 @@ export default function P2ControlCenter() {
         </TabsContent>
 
         <TabsContent value="program">
-          <ProgramManufacturingOrchestration mode="overview" projectId={wadProjectId || undefined} />
+          <ProgramManufacturingOrchestration mode="overview" projectId={programProjectId} />
         </TabsContent>
 
         <TabsContent value="assembly-tree">
-          <ProgramManufacturingOrchestration mode="tree" projectId={wadProjectId || undefined} />
+          <ProgramManufacturingOrchestration mode="tree" projectId={programProjectId} />
         </TabsContent>
 
         <TabsContent value="swimlane">
-          <ProgramManufacturingOrchestration mode="swimlane" projectId={wadProjectId || undefined} />
+          <ProgramManufacturingOrchestration mode="swimlane" projectId={programProjectId} />
         </TabsContent>
 
         <TabsContent value="shipping" className="space-y-4">
@@ -855,7 +888,7 @@ export default function P2ControlCenter() {
         </TabsContent>
 
         <TabsContent value="travelers">
-          <P2TravelersTab />
+          <P2TravelersTab selectedPONumbers={selectedPONumbers} />
         </TabsContent>
 
         <TabsContent value="changes">
@@ -924,7 +957,7 @@ function POsNeedingBOMs({ onSelectPO }: { onSelectPO: (poId: number) => void }) 
   );
 }
 
-function P2TravelersTab() {
+function P2TravelersTab({ selectedPONumbers = [] }: { selectedPONumbers?: string[] }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -976,7 +1009,20 @@ function P2TravelersTab() {
     },
   });
 
-  const filteredTravelers = travelers.filter(t => {
+  const travelersForSelectedPOs = selectedPONumbers.length > 0
+    ? travelers.filter((traveler) => {
+        const sourceFields = [
+          traveler.lotNumber,
+          traveler.workOrderId,
+          traveler.travelerNumber,
+        ].filter((value): value is string => !!value);
+        return selectedPONumbers.some((poNumber) =>
+          sourceFields.some((value) => value.toLowerCase().includes(poNumber.toLowerCase()))
+        );
+      })
+    : travelers;
+
+  const filteredTravelers = travelersForSelectedPOs.filter(t => {
     if (statusFilter === 'all') return true;
     return t.status === statusFilter;
   });
@@ -1016,10 +1062,10 @@ function P2TravelersTab() {
   };
 
   const travelerStats = {
-    draft: travelers.filter(t => t.status === 'DRAFT').length,
-    inProgress: travelers.filter(t => t.status === 'IN_PROGRESS').length,
-    completed: travelers.filter(t => t.status === 'COMPLETED').length,
-    blocked: travelers.filter(t => t.status === 'BLOCKED').length,
+    draft: travelersForSelectedPOs.filter(t => t.status === 'DRAFT').length,
+    inProgress: travelersForSelectedPOs.filter(t => t.status === 'IN_PROGRESS').length,
+    completed: travelersForSelectedPOs.filter(t => t.status === 'COMPLETED').length,
+    blocked: travelersForSelectedPOs.filter(t => t.status === 'BLOCKED').length,
   };
 
   return (
@@ -1116,9 +1162,11 @@ function P2TravelersTab() {
               <p className="text-muted-foreground mb-4">
                 {statusFilter !== 'all' 
                   ? `No travelers with status "${statusFilter.replace('_', ' ')}" found.`
+                  : selectedPONumbers.length > 0
+                  ? 'No travelers found for the selected PO filter.'
                   : 'Generate a traveler from a part routing to get started.'}
               </p>
-              {statusFilter === 'all' && (
+              {statusFilter === 'all' && selectedPONumbers.length === 0 && (
                 <Button onClick={() => setShowCreateDialog(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Generate First Traveler

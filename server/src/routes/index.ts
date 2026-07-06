@@ -148,6 +148,10 @@ import digitalSignaturesRoutes from './digitalSignatures';
 import traceabilityRoutes from './traceability';
 import cycleCountsRoutes from './cycleCounts';
 import { auditService } from '../services/auditService';
+import {
+  deriveP1ProductionStatus,
+  isClosedP1PurchaseOrderStatus,
+} from '../utils/p1ProductionStatus';
 import mediaRoutes from './media';
 import voiceNotesRoutes from './voiceNotes';
 import epochCopilotRoutes from './epochCopilot';
@@ -197,6 +201,7 @@ import { qrResolverRouter, qrAdminRouter } from './qrCodes';
 import onboardingRoutes from './onboarding';
 import assetManagementRoutes from './assetManagement';
 import workOrdersRoutes from './workOrders';
+import wadRevisionsRoutes from './wadRevisions';
 import productionControlTemplatesRoutes from './productionControlTemplates';
 import productLabelsRoutes from './productLabels';
 import executiveRundownRoutes from './executiveRundown';
@@ -209,6 +214,7 @@ import signOrderSettingsRoutes from './signOrderSettings';
 import arInvoicesRoutes from './arInvoices';
 import arPaymentsRoutes from './arPayments';
 import arPaymentAttachmentsRoutes from './arPaymentAttachments';
+import apBillsRoutes from './apBills';
 import permissionsRoutes from './permissions';
 import offlineReplayRoutes from './offlineReplay';
 import controlTowerRoutes from './controlTower';
@@ -224,6 +230,8 @@ import {
 import cncDashboardRoutes from './cncDashboard';
 import receivingRoutes from './receiving';
 import estimatingRoutes from './estimating';
+import draftBomDraftsRoutes from './draftBomDrafts';
+import rdProjectsRoutes from './rdProjects';
 import rfqRiskSessionsRoutes from './rfqRiskSessions';
 import auditsRoutes from './audits';
 import commandCenterRoutes from './commandCenter';
@@ -1246,6 +1254,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Work Orders — Consolidated: maintenance events + production WADs (EPOCH v9 spine)
   app.use('/api/work-orders', workOrdersRoutes);
+  app.use('/api', wadRevisionsRoutes);
 
   // Production Control Templates — WAD Step 6 Template Library
   app.use('/api/production-control-templates', productionControlTemplatesRoutes);
@@ -1555,6 +1564,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/ar-invoices', arInvoicesRoutes);
   app.use('/api/ar-payments', arPaymentsRoutes);
   app.use('/api/ar-payment-attachments', arPaymentAttachmentsRoutes);
+  app.use('/api/ap-bills', apBillsRoutes);
   app.use('/api/permissions', permissionsRoutes);
 
   app.use('/api/control-tower', controlTowerRoutes);
@@ -2831,7 +2841,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { pool } = await import('../../db');
       const rows = await pool.query(`
         SELECT id, po_id as "poId", part_number as "partNumber", part_name as "partName", 
-               quantity, unit_price as "unitPrice", total_price as "totalPrice",
+               quantity, due_date as "dueDate", unit_price as "unitPrice", total_price as "totalPrice",
                specifications, notes, created_at as "createdAt", updated_at as "updatedAt"
         FROM p2_purchase_order_items 
         ORDER BY created_at DESC
@@ -2923,7 +2933,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             partNumber: item.partNumber,
             partName: item.description || item.partName || item.partNumber,
             quantity: item.quantity,
+            dueDate: item.dueDate || null,
             unitPrice: item.unitPrice || 0,
+            specifications: item.description || item.specifications || null,
+            notes: item.notes || null,
           });
         }
       }
@@ -2950,56 +2963,238 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // SECURITY: softAuth enforces authentication in production
   app.put('/api/p2-purchase-orders-bypass/:id', softAuth, async (req, res) => {
     try {
-      console.log('🔧 P2 PURCHASE ORDER UPDATE BYPASS ROUTE CALLED');
+      console.log('P2 PURCHASE ORDER UPDATE BYPASS ROUTE CALLED');
       const { storage } = await import('../../storage');
       const { id } = req.params;
-      const poData = req.body;
-      if (poData.contractReviewRole && !['primary', 'secondary'].includes(poData.contractReviewRole)) {
+      const poId = parseInt(id, 10);
+      const body = req.body || {};
+
+      if (body.contractReviewRole && !['primary', 'secondary'].includes(body.contractReviewRole)) {
         return res.status(400).json({
           error: 'contractReviewRole must be primary or secondary',
         });
       }
-      
-      const existingPO = await storage.getP2PurchaseOrder(parseInt(id));
+
+      const existingPO = await storage.getP2PurchaseOrder(poId);
       if (!existingPO) {
         return res.status(404).json({ error: 'PO not found' });
       }
-      
+
+      // STATE GUARD: Superseded revisions are permanent audit history - read-only
+      if (existingPO.isCurrentRevision === false) {
+        return res.status(403).json({
+          error: 'This PO has been superseded by a newer revision and cannot be modified',
+          isCurrentRevision: false,
+        });
+      }
+
       // STATE GUARD: Check if PO is locked - prevent edits to locked POs
-      if (existingPO.lockedAt) {
+      if (existingPO.lockedAt && body.isRevisionUpdate !== true) {
         return res.status(403).json({
           error: 'This PO has been locked and cannot be modified',
           lockedAt: existingPO.lockedAt,
-          lockedBy: existingPO.lockedBy
+          lockedBy: existingPO.lockedBy,
         });
       }
-      
+
       // STATE GUARD: Cannot modify CLOSED or CANCELED POs
       if (existingPO.status === 'CLOSED' || existingPO.status === 'CANCELED') {
         return res.status(400).json({
           error: `Cannot modify a ${existingPO.status} PO`,
-          currentStatus: existingPO.status
+          currentStatus: existingPO.status,
         });
       }
-      
+
       // STATE GUARD: Cannot move to CLOSED unless BOM is configured
-      if (poData.status === 'CLOSED' && !existingPO.bomConfigured) {
+      if (body.status === 'CLOSED' && !existingPO.bomConfigured) {
         return res.status(400).json({
           error: 'Cannot close PO - BOM has not been configured',
-          guard: 'BOM_REQUIRED'
+          guard: 'BOM_REQUIRED',
         });
       }
-      
-      const po = await storage.updateP2PurchaseOrder(parseInt(id), poData);
-      console.log('🔧 Updated P2 purchase order:', po.id);
+
+      const customerId = body.customerId || existingPO.customerId;
+      const customer = customerId ? await storage.getP2CustomerByCustomerId(customerId) : null;
+      const poData = {
+        poNumber: body.customerPONumber || body.poNumber || existingPO.poNumber,
+        customerId: customer?.customerId || customerId,
+        customerName: customer?.customerName || body.customerName || existingPO.customerName,
+        poDate: body.poDate || existingPO.poDate || new Date().toISOString().split('T')[0],
+        expectedDelivery: body.dueDate || body.expectedDelivery || existingPO.expectedDelivery || null,
+        status: body.status || existingPO.status || 'OPEN',
+        notes: body.notes ?? body.toleranceNotes ?? existingPO.notes ?? null,
+        toleranceAuthorizerId: body.toleranceAuthorizerId || null,
+        toleranceAuthorizerName: body.toleranceAuthorizerName || null,
+        toleranceNotes: body.toleranceNotes ?? body.notes ?? null,
+        assignedToId: body.assignedToId && body.assignedToId !== 'none' ? parseInt(String(body.assignedToId)) : null,
+        assignedToName: body.assignedToName || null,
+        productionLeadId: body.productionLeadId && body.productionLeadId !== 'none' ? parseInt(String(body.productionLeadId)) : null,
+        productionLeadName: body.productionLeadName || null,
+        sourceQuoteId: body.sourceQuoteId || existingPO.sourceQuoteId || null,
+        contractReviewRole: body.contractReviewRole === 'primary' ? 'primary' : 'secondary',
+        projectId: body.projectId || null,
+        projectName: body.projectName || null,
+      };
+
+      const po = await storage.updateP2PurchaseOrder(poId, poData);
+
+      if (Array.isArray(body.lineItems)) {
+        const existingItems = await storage.getP2PurchaseOrderItems(poId);
+        const existingById = new Map(existingItems.map((item: any) => [Number(item.id), item]));
+        const seenItemIds = new Set<number>();
+
+        for (const item of body.lineItems) {
+          const itemId = Number(item.id);
+          const itemData = {
+            poId,
+            inventoryItemId: item.inventoryItemId || null,
+            partNumber: item.partNumber,
+            partName: item.description || item.partName || item.partNumber,
+            quantity: Number(item.quantity) || 1,
+            dueDate: item.dueDate || null,
+            unitPrice: Number(item.unitPrice) || 0,
+            specifications: item.description || item.specifications || null,
+            notes: item.notes || null,
+          };
+
+          if (itemId && existingById.has(itemId)) {
+            seenItemIds.add(itemId);
+            await storage.updateP2PurchaseOrderItem(itemId, itemData);
+          } else {
+            const created = await storage.createP2PurchaseOrderItem(itemData);
+            seenItemIds.add(created.id);
+          }
+        }
+
+        for (const existingItem of existingItems) {
+          if (!seenItemIds.has(Number(existingItem.id))) {
+            try {
+              await storage.deleteP2PurchaseOrderItem(existingItem.id);
+            } catch (deleteError) {
+              console.warn('Skipped deleting revised PO item with downstream references:', existingItem.id, deleteError);
+            }
+          }
+        }
+      }
+
+      if (body.isRevisionUpdate === true) {
+        const revisionProjectId = body.projectId || existingPO.projectId || null;
+        const revisionLineItems = Array.isArray(body.lineItems) ? body.lineItems : [];
+        if (revisionProjectId && revisionLineItems.length > 0) {
+          const { pool: dbPool } = await import('../../db');
+          const firstLine = revisionLineItems[0] || {};
+          const revisedPartNumber = String(firstLine.partNumber || firstLine.sku || '').trim() || existingPO.poNumber;
+          const revisedDescription = String(firstLine.description || firstLine.partName || revisedPartNumber).trim();
+          const revisedQuantity = revisionLineItems.reduce(
+            (sum: number, item: any) => sum + (Number(item.quantity) || 0),
+            0
+          ) || 1;
+          const revisedDueDate = body.dueDate || body.expectedDelivery || null;
+          const revisedPartNumbers = Array.from(new Set(
+            revisionLineItems
+              .map((item: any) => String(item.partNumber || item.sku || '').trim())
+              .filter(Boolean)
+          ));
+
+          const canonicalRows = await dbPool.query(
+            `SELECT
+               wo.id::text AS id,
+               wo.work_order_number AS "workOrderNumber",
+               wo.status,
+               COUNT(t.id)::int AS "travelerCount"
+             FROM production_work_orders wo
+             LEFT JOIN travelers t ON t.production_work_order_id = wo.id
+             WHERE wo.project_id = $1::uuid
+             GROUP BY wo.id
+             ORDER BY
+               (COUNT(t.id) > 0) DESC,
+               (COALESCE(UPPER(wo.status), '') NOT IN ('CANCELLED', 'CANCELED', 'COMPLETE', 'COMPLETED', 'CLOSED')) DESC,
+               wo.updated_at DESC NULLS LAST,
+               wo.created_at DESC NULLS LAST
+             LIMIT 1`,
+            [revisionProjectId]
+          );
+          const canonicalWad = canonicalRows.rows[0];
+
+          if (canonicalWad?.id) {
+            await dbPool.query(
+              `UPDATE production_work_orders
+               SET part_number = $2,
+                   description = $3,
+                   quantity = $4,
+                   due_date = $5::date,
+                   wizard_data = jsonb_set(
+                     COALESCE(wizard_data, '{}'::jsonb),
+                     '{poRevisionSync}',
+                     jsonb_build_object(
+                       'poId', $6::int,
+                       'poNumber', $7::text,
+                       'syncedAt', NOW()
+                     ),
+                     true
+                   ),
+                   updated_at = NOW()
+               WHERE id = $1::uuid`,
+              [
+                canonicalWad.id,
+                revisedPartNumber,
+                revisedDescription,
+                revisedQuantity,
+                revisedDueDate,
+                poId,
+                po.poNumber,
+              ]
+            );
+
+            if (revisedPartNumbers.length > 0) {
+              const duplicateRows = await dbPool.query(
+                `UPDATE production_work_orders wo
+                 SET status = 'CANCELLED',
+                     wizard_data = jsonb_set(
+                       COALESCE(wizard_data, '{}'::jsonb),
+                       '{cancelledByPoRevisionSync}',
+                       jsonb_build_object(
+                         'canonicalWorkOrderId', $1::text,
+                         'poId', $3::int,
+                         'syncedAt', NOW()
+                       ),
+                       true
+                     ),
+                     updated_at = NOW()
+                 WHERE wo.project_id = $2::uuid
+                   AND wo.id <> $1::uuid
+                   AND TRIM(wo.part_number) = ANY($4::text[])
+                   AND COALESCE(UPPER(wo.status), '') NOT IN ('CANCELLED', 'CANCELED', 'COMPLETE', 'COMPLETED', 'CLOSED')
+                   AND NOT EXISTS (
+                     SELECT 1 FROM travelers t WHERE t.production_work_order_id = wo.id
+                   )
+                 RETURNING wo.id::text AS id`,
+                [canonicalWad.id, revisionProjectId, poId, revisedPartNumbers]
+              );
+              const duplicateWadIds = duplicateRows.rows.map((row: any) => String(row.id)).filter(Boolean);
+              if (duplicateWadIds.length > 0) {
+                await dbPool.query(
+                  `UPDATE manufacturing_queue
+                   SET source_id = $1,
+                       updated_at = NOW()
+                   WHERE source_type = 'production_work_order'
+                     AND source_id = ANY($2::text[])`,
+                  [canonicalWad.id, duplicateWadIds]
+                );
+              }
+            }
+          }
+        }
+      }
+
+      console.log('Updated P2 purchase order:', po.id);
       res.json(po);
     } catch (_error) {
-      console.error('🔧 P2 purchase order update bypass _error:', _error);
-      res
-        .status(500)
-        .json({
-          _error: 'Failed to update P2 purchase order via bypass route',
-        });
+      console.error('P2 purchase order update bypass error:', _error);
+      res.status(500).json({
+        _error: 'Failed to update P2 purchase order via bypass route',
+        message: _error instanceof Error ? _error.message : 'Unknown error',
+      });
     }
   });
 
@@ -3041,6 +3236,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { storage } = await import('../../storage');
       const { pool } = await import('../../db');
       const { id } = req.params;
+
+      // STATE GUARD: Superseded revisions are permanent audit history — cannot be unlocked
+      const poToUnlock = await storage.getP2PurchaseOrder(parseInt(id));
+      if (poToUnlock && poToUnlock.isCurrentRevision === false) {
+        return res.status(403).json({
+          error: 'This PO has been superseded by a newer revision and cannot be unlocked',
+          isCurrentRevision: false,
+        });
+      }
       
       // Use raw SQL to avoid Drizzle null handling issues
       await pool.query(
@@ -3057,6 +3261,349 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  // Create a formal revision of a locked P2 PO
+  // Validates source is locked & not cancelled, creates new PO row with revision tracking,
+  // marks previous PO as not-current, copies wizard-submitted line items, returns new PO.
+  app.post('/api/p2-purchase-orders-bypass/:id/revise', softAuth, async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      const { storage } = await import('../../storage');
+      const sourceId = parseInt(req.params.id);
+
+      // 1. Load source PO — all further logic uses its fields as defaults
+      const sourcePO = await storage.getP2PurchaseOrder(sourceId);
+      if (!sourcePO) {
+        return res.status(404).json({ error: 'P2 Purchase Order not found' });
+      }
+      if (!sourcePO.lockedAt) {
+        return res.status(400).json({ error: 'Only locked POs can be revised. Lock the PO first.' });
+      }
+      if (sourcePO.status === 'CANCELED' || sourcePO.status === 'CANCELLED') {
+        return res.status(400).json({ error: 'Cannot revise a cancelled PO' });
+      }
+      if (sourcePO.isCurrentRevision === false) {
+        return res.status(400).json({ error: 'Cannot revise a superseded PO — revise the current revision instead.' });
+      }
+
+      const {
+        customerId, customerPONumber, dueDate,
+        toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems,
+        assignedToId, assignedToName, productionLeadId, productionLeadName,
+        customerName: bodyCustomerName, poDate: bodyPoDate,
+        sourceQuoteId, projectId, projectName, contractReviewRole,
+      } = req.body;
+
+      const poNumber = customerPONumber || req.body.poNumber || sourcePO.poNumber;
+      const resolvedExpectedDelivery = dueDate || req.body.expectedDelivery || sourcePO.expectedDelivery || null;
+
+      // Resolve customer — fall back to source PO when wizard didn't change it
+      const resolvedCustomerId = customerId || sourcePO.customerId;
+      const resolvedCustomerName = bodyCustomerName || sourcePO.customerName;
+
+      // 2. Chain back to root of revision family
+      const rootParentId = sourcePO.parentPoId || sourcePO.id;
+
+      // 3. Obtain a single dedicated client so BEGIN/COMMIT are on the same connection
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Lock all family rows first (FOR UPDATE on non-aggregate is valid),
+        // then compute max revision number from the now-locked set.
+        await client.query(
+          `SELECT id FROM p2_purchase_orders WHERE id = $1 OR parent_po_id = $1 FOR UPDATE`,
+          [rootParentId]
+        );
+        const familyResult = await client.query(
+          `SELECT COALESCE(MAX(revision_number), 0) AS max_rev
+           FROM p2_purchase_orders
+           WHERE id = $1 OR parent_po_id = $1`,
+          [rootParentId]
+        );
+        const nextRevisionNumber = parseInt(familyResult.rows[0]?.max_rev || '0') + 1;
+
+        // New PO number: strip any existing -RX suffix then append next letter (A=1, B=2, …)
+        const basePONumber = poNumber.replace(/-R[A-Z]+$/, '');
+        const revisionLetter = String.fromCharCode(64 + nextRevisionNumber);
+        const newPONumber = `${basePONumber}-R${revisionLetter}`;
+
+        // Mark all family POs as superseded
+        await client.query(
+          `UPDATE p2_purchase_orders
+           SET is_current_revision = false, updated_at = NOW()
+           WHERE id = $1 OR parent_po_id = $1`,
+          [rootParentId]
+        );
+
+        // 4. Insert new revision: start from source PO fields, overlay wizard edits
+        const resolvedNotes = notes !== undefined ? notes : sourcePO.notes;
+        const resolvedToleranceAuthorizerId = toleranceAuthorizerId !== undefined ? (toleranceAuthorizerId || null) : (sourcePO.toleranceAuthorizerId || null);
+        const resolvedToleranceAuthorizerName = toleranceAuthorizerName !== undefined ? (toleranceAuthorizerName || null) : (sourcePO.toleranceAuthorizerName || null);
+        const resolvedToleranceNotes = toleranceNotes !== undefined ? (toleranceNotes || null) : (sourcePO.toleranceNotes || null);
+        const resolvedSourceQuoteId = sourceQuoteId !== undefined ? (sourceQuoteId || null) : (sourcePO.sourceQuoteId || null);
+        const resolvedContractReviewRole = contractReviewRole === 'primary' ? 'primary' : (contractReviewRole === 'secondary' ? 'secondary' : (sourcePO.contractReviewRole || 'secondary'));
+        const resolvedAssignedToId = assignedToId !== undefined
+          ? (assignedToId && assignedToId !== 'none' ? parseInt(String(assignedToId)) : null)
+          : (sourcePO.assignedToId || null);
+        const resolvedAssignedToName = assignedToName !== undefined ? (assignedToName || null) : (sourcePO.assignedToName || null);
+        const resolvedProductionLeadId = productionLeadId !== undefined
+          ? (productionLeadId && productionLeadId !== 'none' ? parseInt(String(productionLeadId)) : null)
+          : (sourcePO.productionLeadId || null);
+        const resolvedProductionLeadName = productionLeadName !== undefined ? (productionLeadName || null) : (sourcePO.productionLeadName || null);
+        const resolvedProjectId = projectId !== undefined ? (projectId || null) : (sourcePO.projectId || null);
+        const resolvedProjectName = projectName !== undefined ? (projectName || null) : (sourcePO.projectName || null);
+
+        const insertResult = await client.query(`
+          INSERT INTO p2_purchase_orders (
+            po_number, customer_id, customer_name, po_date, expected_delivery,
+            status, notes, attachments,
+            tolerance_authorizer_id, tolerance_authorizer_name, tolerance_notes,
+            bom_configured, source_quote_id, contract_review_role,
+            created_by_id, created_by_name,
+            assigned_to_id, assigned_to_name,
+            bom_owner_id, bom_owner_name,
+            scheduled_by_id, scheduled_by_name,
+            production_lead_id, production_lead_name,
+            project_id, project_name,
+            revision_number, parent_po_id, is_current_revision, revised_at,
+            security_classification, cui_category, itar_category,
+            export_control_jurisdiction, customer_file_access_rule
+          ) VALUES (
+            $1, $2, $3, $4, $5,
+            'OPEN', $6, '[]'::jsonb,
+            $7, $8, $9,
+            false, $10, $11,
+            $12, $13,
+            $14, $15,
+            $16, $17,
+            $18, $19,
+            $20, $21,
+            $22, $23,
+            $24, $25, true, NOW(),
+            $26, $27, $28,
+            $29, $30
+          )
+          RETURNING id, po_number AS "poNumber"
+        `, [
+          newPONumber,
+          resolvedCustomerId,
+          resolvedCustomerName,
+          bodyPoDate || sourcePO.poDate || new Date().toISOString().split('T')[0],
+          resolvedExpectedDelivery,
+          resolvedNotes,
+          resolvedToleranceAuthorizerId,
+          resolvedToleranceAuthorizerName,
+          resolvedToleranceNotes,
+          resolvedSourceQuoteId,
+          resolvedContractReviewRole,
+          sourcePO.createdById || null,
+          sourcePO.createdByName || null,
+          resolvedAssignedToId,
+          resolvedAssignedToName,
+          sourcePO.bomOwnerId || null,
+          sourcePO.bomOwnerName || null,
+          sourcePO.scheduledById || null,
+          sourcePO.scheduledByName || null,
+          resolvedProductionLeadId,
+          resolvedProductionLeadName,
+          resolvedProjectId,
+          resolvedProjectName,
+          nextRevisionNumber,
+          rootParentId,
+          sourcePO.securityClassification || 'internal',
+          sourcePO.cuiCategory || null,
+          sourcePO.itarCategory || null,
+          sourcePO.exportControlJurisdiction || null,
+          sourcePO.customerFileAccessRule || 'authenticated',
+        ]);
+
+        const newPO = insertResult.rows[0];
+
+        // 5. Determine line items: use wizard payload if provided, otherwise copy source items.
+        // Preserve the source item id when possible so existing P2 production rows
+        // move to the new revision instead of looking "missing" and being generated again.
+        let itemsToInsert: Array<{
+          sourceItemId: number | null;
+          partNumber: string;
+          partName: string;
+          quantity: number;
+          unitPrice: number;
+          inventoryItemId: number | null;
+        }> = [];
+        const sourceItemsResult = await client.query(
+          `SELECT id, part_number, part_name, quantity, due_date, unit_price, inventory_item_id
+           FROM p2_purchase_order_items WHERE po_id = $1
+           ORDER BY id`,
+          [sourceId]
+        );
+        const sourceItems = sourceItemsResult.rows;
+        if (lineItems && Array.isArray(lineItems) && lineItems.length > 0) {
+          const unusedSourceIndexes = new Set(sourceItems.map((_: any, index: number) => index));
+          const takeSourceMatch = (item: any, index: number) => {
+            const explicitId = Number(item.sourceItemId ?? item.source_item_id ?? item.id);
+            if (Number.isInteger(explicitId) && sourceItems.some((source: any) => Number(source.id) === explicitId)) {
+              const matchedIndex = sourceItems.findIndex((source: any) => Number(source.id) === explicitId);
+              unusedSourceIndexes.delete(matchedIndex);
+              return explicitId;
+            }
+
+            const partNumber = String(item.partNumber || item.sku || '').trim().toLowerCase();
+            const matchingIndex = sourceItems.findIndex((source: any, sourceIndex: number) =>
+              unusedSourceIndexes.has(sourceIndex) &&
+              String(source.part_number || '').trim().toLowerCase() === partNumber
+            );
+            if (matchingIndex >= 0) {
+              unusedSourceIndexes.delete(matchingIndex);
+              return Number(sourceItems[matchingIndex].id);
+            }
+
+            if (unusedSourceIndexes.has(index)) {
+              unusedSourceIndexes.delete(index);
+              return Number(sourceItems[index].id);
+            }
+
+            return null;
+          };
+
+          itemsToInsert = lineItems.map((item: any, index: number) => ({
+            sourceItemId: takeSourceMatch(item, index),
+            partNumber: item.partNumber,
+            partName: item.description || item.partName || item.partNumber,
+            quantity: item.quantity,
+            dueDate: item.dueDate || null,
+            unitPrice: item.unitPrice || 0,
+            inventoryItemId: item.inventoryItemId || null,
+          }));
+        } else {
+          // Fall back to copying source PO's items exactly
+          itemsToInsert = sourceItems.map((row: any) => ({
+            sourceItemId: Number(row.id),
+            partNumber: row.part_number,
+            partName: row.part_name,
+            quantity: row.quantity,
+            dueDate: row.due_date || null,
+            unitPrice: parseFloat(row.unit_price) || 0,
+            inventoryItemId: row.inventory_item_id || null,
+          }));
+        }
+
+        // Insert line items within the same transaction using the dedicated client
+        const itemIdMap = new Map<number, number>();
+        for (const item of itemsToInsert) {
+          const totalPrice = item.quantity * item.unitPrice;
+          const insertedItem = await client.query(
+            `INSERT INTO p2_purchase_order_items (po_id, part_number, part_name, quantity, due_date, unit_price, total_price, inventory_item_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             RETURNING id`,
+            [newPO.id, item.partNumber, item.partName, item.quantity, item.dueDate || null, item.unitPrice, totalPrice, item.inventoryItemId]
+          );
+          const newItemId = Number(insertedItem.rows[0]?.id);
+          if (item.sourceItemId && Number.isInteger(newItemId)) {
+            itemIdMap.set(item.sourceItemId, newItemId);
+          }
+        }
+
+        for (const [oldItemId, newItemId] of itemIdMap.entries()) {
+          await client.query(
+            `UPDATE p2_production_orders
+                SET p2_po_id = $1,
+                    p2_po_item_id = $2,
+                    updated_at = NOW()
+              WHERE p2_po_id = $3
+                AND p2_po_item_id = $4`,
+            [newPO.id, newItemId, sourcePO.id, oldItemId]
+          );
+
+          await client.query(
+            `UPDATE p2_serialized_items
+                SET po_id = $1,
+                    po_item_id = $2,
+                    po_number = $3,
+                    updated_at = NOW()
+              WHERE po_id = $4
+                AND po_item_id = $5`,
+            [newPO.id, newItemId, newPONumber, sourcePO.id, oldItemId]
+          );
+
+          await client.query(
+            `UPDATE manufacturing_queue
+                SET p2_po_id = $1,
+                    p2_po_item_id = $2,
+                    updated_at = NOW()
+              WHERE p2_po_id = $3
+                AND p2_po_item_id = $4`,
+            [newPO.id, newItemId, sourcePO.id, oldItemId]
+          );
+        }
+
+        if (resolvedProjectId) {
+          await client.query(
+            `UPDATE projects
+                SET po_id = $1,
+                    updated_at = NOW()
+              WHERE id = $2::uuid
+                AND (po_id = $3 OR po_id IS NULL)`,
+            [newPO.id, resolvedProjectId, sourcePO.id]
+          );
+
+          await client.query(
+            `UPDATE project_steps
+                SET linked_p2_order_id = $1,
+                    updated_at = NOW()
+              WHERE project_id = $2::uuid
+                AND step_type = 'p2_order'
+                AND (linked_p2_order_id = $3 OR linked_p2_order_id IS NULL)`,
+            [newPO.id, resolvedProjectId, sourcePO.id]
+          );
+        }
+
+        await client.query('COMMIT');
+
+        const finalPO = await storage.getP2PurchaseOrder(newPO.id);
+        console.log(`✏️ Created P2 PO revision: ${newPONumber} (Rev ${nextRevisionNumber}) from PO #${sourceId}`);
+        res.status(201).json(finalPO);
+      } catch (txErr: any) {
+        await client.query('ROLLBACK');
+        throw txErr;
+      } finally {
+        client.release();
+      }
+    } catch (error: any) {
+      console.error('P2 PO revise error:', error);
+      res.status(500).json({ error: 'Failed to create PO revision', message: error?.message });
+    }
+  });
+
+  // List all revisions in a PO's family (same root parentPoId)
+  app.get('/api/p2-purchase-orders-bypass/:id/revisions', softAuth, async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      const { storage } = await import('../../storage');
+      const poId = parseInt(req.params.id);
+
+      const po = await storage.getP2PurchaseOrder(poId);
+      if (!po) {
+        return res.status(404).json({ error: 'P2 Purchase Order not found' });
+      }
+
+      const rootParentId = po.parentPoId || po.id;
+      const result = await pool.query(`
+        SELECT id, po_number as "poNumber", revision_number as "revisionNumber",
+               parent_po_id as "parentPoId", is_current_revision as "isCurrentRevision",
+               status, locked_at as "lockedAt", revised_at as "revisedAt",
+               revised_by as "revisedBy", created_at as "createdAt"
+        FROM p2_purchase_orders
+        WHERE id = $1 OR parent_po_id = $1
+        ORDER BY revision_number ASC
+      `, [rootParentId]);
+
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error('P2 PO revisions error:', error);
+      res.status(500).json({ error: 'Failed to fetch PO revisions' });
+    }
+  });
+
   // SECURITY: softAuth enforces authentication in production
   app.delete('/api/p2-purchase-orders-bypass/:id', softAuth, async (req, res) => {
     try {
@@ -3064,8 +3611,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { storage } = await import('../../storage');
       const { id } = req.params;
       
-      // Check if PO is locked - prevent deleting locked POs
+      // Check if PO is locked or superseded - prevent deleting
       const existingPO = await storage.getP2PurchaseOrder(parseInt(id));
+      if (existingPO?.isCurrentRevision === false) {
+        return res.status(403).json({
+          error: 'This PO has been superseded by a newer revision and cannot be deleted',
+          isCurrentRevision: false,
+        });
+      }
       if (existingPO?.lockedAt) {
         return res.status(403).json({
           error: 'This PO has been locked and cannot be deleted',
@@ -3924,8 +4477,81 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       } catch (error) {
         console.warn('P2 Control Center optional serialized item lookup skipped:', error);
       }
+      const allPoIds = allPos
+        .map((po: any) => Number(po.id))
+        .filter(Number.isFinite);
+      const familyRootByPoId = new Map<number, number>();
+      const currentPoIdByFamilyRoot = new Map<number, { poId: number; revisionNumber: number }>();
+      for (const po of allPos as any[]) {
+        const poId = Number(po.id);
+        if (!Number.isFinite(poId)) continue;
+        const rootId = Number(po.parentPoId ?? po.parent_po_id ?? po.id);
+        const familyRootId = Number.isFinite(rootId) ? rootId : poId;
+        familyRootByPoId.set(poId, familyRootId);
+        if (po.isCurrentRevision === false) continue;
+        const revisionNumber = Number(po.revisionNumber ?? po.revision_number ?? 0) || 0;
+        const existing = currentPoIdByFamilyRoot.get(familyRootId);
+        if (!existing || revisionNumber >= existing.revisionNumber) {
+          currentPoIdByFamilyRoot.set(familyRootId, { poId, revisionNumber });
+        }
+      }
+      const displayPoIdForPoId = (poId: number) => {
+        const familyRootId = familyRootByPoId.get(poId) ?? poId;
+        return currentPoIdByFamilyRoot.get(familyRootId)?.poId ?? poId;
+      };
+      const familyPoIdsByDisplayPoId = new Map<number, number[]>();
+      for (const poId of allPoIds) {
+        const displayPoId = displayPoIdForPoId(poId);
+        const familyPoIds = familyPoIdsByDisplayPoId.get(displayPoId) ?? [];
+        familyPoIds.push(poId);
+        familyPoIdsByDisplayPoId.set(displayPoId, familyPoIds);
+      }
       p2StatusStage = 'loading legacy project production rows';
-      const legacyProductionRows: any[] = [];
+      const legacyProductionRows = allPoIds.length > 0
+        ? await optionalP2Rows(
+            'P2 production orders',
+            dbPool.query(
+              `SELECT
+                 p2_po_id AS "poId",
+                 COALESCE(SUM(quantity), 0)::int AS "totalQty",
+                 COALESCE(SUM(
+                   CASE
+                     WHEN COALESCE(UPPER(status), '') IN ('COMPLETE', 'COMPLETED', 'CLOSED') THEN quantity
+                     ELSE LEAST(COALESCE(quantity_manufactured, 0), quantity)
+                   END
+                 ), 0)::int AS "completedQty",
+                 COALESCE(SUM(
+                   CASE
+                     WHEN COALESCE(UPPER(status), '') NOT IN ('', 'PENDING', 'PLANNED', 'COMPLETE', 'COMPLETED', 'CLOSED', 'CANCELLED', 'CANCELED')
+                     THEN GREATEST(quantity - LEAST(COALESCE(quantity_manufactured, 0), quantity), 0)
+                     ELSE 0
+                   END
+                 ), 0)::int AS "inProductionQty"
+               FROM p2_production_orders
+               WHERE p2_po_id = ANY($1)
+                 AND COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED')
+               GROUP BY p2_po_id`,
+              [allPoIds]
+            )
+          )
+        : [];
+      const shippedVisibilityRows = allPoIds.length > 0
+        ? await optionalP2Rows(
+            'shipped lot visibility',
+            dbPool.query(
+              `SELECT po_id AS "poId"
+               FROM p2_lot_numbers
+               WHERE po_id = ANY($1)
+                 AND (
+                   COALESCE(UPPER(status), '') IN ('SHIPPED', 'CLOSED', 'COMPLETE', 'COMPLETED')
+                   OR shipped_at IS NOT NULL
+                   OR packing_slip_id IS NOT NULL
+                 )
+               GROUP BY po_id`,
+              [allPoIds]
+            )
+          )
+        : [];
       const legacyProjectProductionRows = await optionalP2Rows(
         'legacy project production',
         dbPool.query(
@@ -3947,6 +4573,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            )
            WHERE po.project_name IS NOT NULL
              AND TRIM(po.project_name) <> ''
+             AND po.is_current_revision IS NOT FALSE
          ),
          work_order_quantities AS (
            SELECT
@@ -4016,11 +4643,58 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         legacyProjectProductionRows.map((row: any) => [Number(row.poId), row])
       );
       const poIdsWithLegacyProjectProduction = new Set<number>(legacyProjectStatsByPoId.keys());
-      const pos = allPos.filter((po: any) =>
-        P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
-        poIdsWithSerializedUnits.has(Number(po.id)) ||
-        poIdsWithLegacyProjectProduction.has(Number(po.id))
+      const poIdsWithShippedHistory = new Set<number>(
+        shippedVisibilityRows.map((row: any) => Number(row.poId))
       );
+      const projectVisibilityRows = allPoIds.length > 0
+        ? await optionalP2Rows(
+            'project visibility link',
+            dbPool.query(
+              `WITH project_po_link AS (
+                 SELECT p.po_id AS linked_po_id
+                 FROM projects p
+                 WHERE p.po_id IS NOT NULL
+                 UNION
+                 SELECT ps.linked_p2_order_id AS linked_po_id
+                 FROM project_steps ps
+                 WHERE ps.step_type = 'p2_order'
+                   AND ps.linked_p2_order_id IS NOT NULL
+                 UNION
+                 SELECT po.id AS linked_po_id
+                 FROM p2_purchase_orders po
+                 JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+                   LOWER(TRIM(p.project_code)),
+                   LOWER(TRIM(p.project_name)),
+                   LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+                 )
+                 WHERE po.project_name IS NOT NULL
+                   AND TRIM(po.project_name) <> ''
+                   AND po.is_current_revision IS NOT FALSE
+               )
+               SELECT DISTINCT linked_po_id AS "poId"
+               FROM project_po_link
+               WHERE linked_po_id = ANY($1)`,
+              [allPoIds]
+            )
+          )
+        : [];
+      const poIdsWithProjectLink = new Set<number>(
+        projectVisibilityRows.map((row: any) => Number(row.poId))
+      );
+      const pos = allPos.filter((po: any) => {
+        const poId = Number(po.id);
+        if (displayPoIdForPoId(poId) !== poId) return false;
+        const hasProductionHistory = poIdsWithSerializedUnits.has(poId)
+          || legacyStatsByPoId.has(poId)
+          || poIdsWithLegacyProjectProduction.has(poId)
+          || poIdsWithShippedHistory.has(poId);
+        if (po.isCurrentRevision === false && !hasProductionHistory) return false;
+        return (
+          P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
+          hasProductionHistory ||
+          poIdsWithProjectLink.has(poId)
+        );
+      });
 
       // Look up projects linked to these POs. PM Control Center resolves the
       // same relationship through either projects.po_id or the p2_order step.
@@ -4064,6 +4738,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                )
                WHERE po.project_name IS NOT NULL
                  AND TRIM(po.project_name) <> ''
+                 AND po.is_current_revision IS NOT FALSE
              )
              SELECT DISTINCT ON (linked_po_id)
                linked_po_id AS "poId",
@@ -4111,6 +4786,40 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const wadSummaryByProject = new Map<string, any>(
         wadSummaryRows.map((row: any) => [String(row.projectId), row])
       );
+      const travelerProjectRows = projectIds.length > 0
+        ? await optionalP2Rows(
+            'traveler project truth',
+            dbPool.query(
+            `SELECT
+               project_id::text AS "projectId",
+               COALESCE(SUM(COALESCE(quantity, 1)), 0)::int AS "totalQty",
+               COALESCE(SUM(
+                 CASE
+                   WHEN COALESCE(UPPER(status), '') IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+                     OR completed_at IS NOT NULL
+                   THEN COALESCE(quantity, 1)
+                   ELSE 0
+                 END
+               ), 0)::int AS "completedQty",
+               COALESCE(SUM(
+                 CASE
+                   WHEN COALESCE(UPPER(status), '') IN ('ACTIVE', 'IN_PROGRESS', 'STARTED')
+                     AND completed_at IS NULL
+                   THEN COALESCE(quantity, 1)
+                   ELSE 0
+                 END
+               ), 0)::int AS "inProductionQty"
+             FROM travelers
+             WHERE project_id = ANY($1::uuid[])
+               AND COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED', 'VOID')
+             GROUP BY project_id`,
+            [projectIds]
+          )
+          )
+        : [];
+      const travelerStatsByProject = new Map<string, any>(
+        travelerProjectRows.map((row: any) => [String(row.projectId), row])
+      );
 
       // Sum ordered quantities from all PO line items, grouped by po_id.
       // This ensures PO lines that haven't had serialized items generated yet
@@ -4130,25 +4839,71 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const orderedQtyByPoId = new Map<number, number>(
         orderedQtyRows.map((r: any) => [Number(r.poId), Number(r.orderedQty) || 0])
       );
+      const shippedQtyRows = poIds.length > 0
+        ? await optionalP2Rows(
+            'shipped lot quantity',
+            dbPool.query(
+              `SELECT po_id AS "poId", COALESCE(SUM(quantity), 0)::int AS "shippedQty"
+               FROM p2_lot_numbers
+               WHERE po_id = ANY($1)
+                 AND (
+                   COALESCE(UPPER(status), '') IN ('SHIPPED', 'CLOSED', 'COMPLETE', 'COMPLETED')
+                   OR shipped_at IS NOT NULL
+                   OR packing_slip_id IS NOT NULL
+                 )
+               GROUP BY po_id`,
+              [poIds]
+            )
+          )
+        : [];
+      const shippedQtyByPoId = new Map<number, number>(
+        shippedQtyRows.map((r: any) => [Number(r.poId), Number(r.shippedQty) || 0])
+      );
       
       p2StatusStage = 'building P2 status response';
       const poStatuses = pos.map((po: any) => {
         const poId = Number(po.id);
-        const poItems = serializedItems.filter((s: any) => Number(s.poId ?? s.po_id) === poId);
-        const legacyP2Stats = legacyStatsByPoId.get(poId);
-        const legacyProjectStats = legacyProjectStatsByPoId.get(poId);
-        const legacyStats = legacyP2Stats || legacyProjectStats
-          ? {
-              totalQty: Number(legacyP2Stats?.totalQty ?? 0) + Number(legacyProjectStats?.totalQty ?? 0),
-              completedQty: Number(legacyP2Stats?.completedQty ?? 0) + Number(legacyProjectStats?.completedQty ?? 0),
-              inProductionQty: Number(legacyP2Stats?.inProductionQty ?? 0) + Number(legacyProjectStats?.inProductionQty ?? 0),
-            }
+        const familyPoIds = familyPoIdsByDisplayPoId.get(poId) ?? [poId];
+        const familyPoIdSet = new Set<number>(familyPoIds);
+        const poItems = serializedItems.filter((s: any) => familyPoIdSet.has(Number(s.poId ?? s.po_id)));
+        const linkedProject = projectByPoId.get(poId);
+        const travelerProjectStats = linkedProject?.projectId
+          ? travelerStatsByProject.get(String(linkedProject.projectId))
           : null;
+        const travelerCompletedItems = Number(travelerProjectStats?.completedQty ?? 0);
+        const travelerInProductionItems = Number(travelerProjectStats?.inProductionQty ?? 0);
+        const travelerTotalItems = Number(travelerProjectStats?.totalQty ?? 0);
+        const sumStats = (rows: Array<any | undefined>) => rows.some(Boolean)
+          ? {
+              totalQty: rows.reduce((sum, row) => sum + Number(row?.totalQty ?? 0), 0),
+              completedQty: rows.reduce((sum, row) => sum + Number(row?.completedQty ?? 0), 0),
+              inProductionQty: rows.reduce((sum, row) => sum + Number(row?.inProductionQty ?? 0), 0),
+            }
+            : null;
+        const legacyP2Stats = sumStats(familyPoIds.map((id) => legacyStatsByPoId.get(id)));
+        const legacyProjectStats = sumStats(familyPoIds.map((id) => legacyProjectStatsByPoId.get(id)));
+        const legacyStats = sumStats([legacyP2Stats, legacyProjectStats]);
         
         // Use actual column names: status (ACTIVE/COMPLETED/SCRAPPED/HOLD) and currentDepartment
-        const serializedCompletedItems = poItems.filter((s: any) => s.status === 'COMPLETED').length;
+        const serializedCompletedItems = poItems.filter((s: any) => {
+          const status = String(s.status || '').trim().toUpperCase();
+          const dept = String(s.currentDepartment || '').trim().toUpperCase();
+          return ['COMPLETED', 'COMPLETE', 'SHIPPED', 'CLOSED'].includes(status)
+            || ['SHIPPED', 'SHIPPING', 'CLOSED'].includes(dept)
+            || s.shippedAt
+            || s.packingSlipId;
+        }).length;
         const legacyCompletedItems = Number(legacyStats?.completedQty ?? 0);
-        const completedItems = Math.max(serializedCompletedItems, legacyCompletedItems);
+        const shippedLotCompletedItems = familyPoIds.reduce(
+          (sum, familyPoId) => sum + (shippedQtyByPoId.get(familyPoId) ?? 0),
+          0
+        );
+        const completedItems = Math.max(
+          serializedCompletedItems,
+          legacyCompletedItems,
+          shippedLotCompletedItems,
+          travelerCompletedItems
+        );
 
         const scheduledItems = poItems.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
@@ -4168,11 +4923,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           return dept !== 'Pending Layup' && dept !== 'Layup' && dept !== '';
         }).length;
         const legacyInProductionItems = Number(legacyStats?.inProductionQty ?? 0);
-        const rawInProductionItems = Math.max(serializedInProductionItems, legacyInProductionItems);
+        const rawInProductionItems = Math.max(
+          serializedInProductionItems,
+          legacyInProductionItems,
+          travelerInProductionItems
+        );
 
         // totalItems is the sum of ordered quantities across all line items so that
         // lines without serialized items generated yet are still reflected on the card.
-        const totalItems = orderedQtyByPoId.get(poId) ?? Number(legacyStats?.totalQty ?? poItems.length);
+        const currentPoOrderedQty = orderedQtyByPoId.get(poId) ?? 0;
+        const familyOrderedQty = familyPoIds.reduce(
+          (sum, familyPoId) => sum + (orderedQtyByPoId.get(familyPoId) ?? 0),
+          0
+        );
+        const totalItems = currentPoOrderedQty > 0
+          ? currentPoOrderedQty
+          : Math.max(familyOrderedQty, travelerTotalItems, poItems.length);
         const inProductionItems = Math.min(
           rawInProductionItems,
           Math.max(0, totalItems - completedItems)
@@ -4184,7 +4950,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         
         const rawStatus = normalizeP2Status(po.status) || 'OPEN';
 
-        const linkedProject = projectByPoId.get(poId);
         const wadContext = buildP2ProjectWadContext(
           linkedProject,
           linkedProject?.projectId ? wadSummaryByProject.get(String(linkedProject.projectId)) : null
@@ -4230,6 +4995,35 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         await storage.getP2SerializedItems({})
       );
 
+      const poFamilyResult = await dbPool.query(
+        `SELECT
+           id,
+           parent_po_id AS "parentPoId",
+           revision_number AS "revisionNumber",
+           is_current_revision AS "isCurrentRevision"
+         FROM p2_purchase_orders`
+      );
+      const poFamilyRows = p2ControlRows(poFamilyResult);
+      const familyRootByPoId = new Map<number, number>();
+      const currentPoIdByFamilyRoot = new Map<number, { poId: number; revisionNumber: number }>();
+      for (const po of poFamilyRows as any[]) {
+        const poId = Number(po.id);
+        if (!Number.isFinite(poId)) continue;
+        const rootId = Number(po.parentPoId ?? po.parent_po_id ?? po.id);
+        const familyRootId = Number.isFinite(rootId) ? rootId : poId;
+        familyRootByPoId.set(poId, familyRootId);
+        if (po.isCurrentRevision === false) continue;
+        const revisionNumber = Number(po.revisionNumber ?? po.revision_number ?? 0) || 0;
+        const existing = currentPoIdByFamilyRoot.get(familyRootId);
+        if (!existing || revisionNumber >= existing.revisionNumber) {
+          currentPoIdByFamilyRoot.set(familyRootId, { poId, revisionNumber });
+        }
+      }
+      const displayPoIdForPoId = (poId: number) => {
+        const familyRootId = familyRootByPoId.get(poId) ?? poId;
+        return currentPoIdByFamilyRoot.get(familyRootId)?.poId ?? poId;
+      };
+
       const poItemResult = await dbPool.query(
         `SELECT
            poi.id AS "poItemId",
@@ -4237,12 +5031,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            poi.part_number AS "partNumber",
            poi.part_name AS "partName",
            poi.quantity AS "orderedQuantity",
+           poi.created_at AS "createdAt",
            po.po_number AS "poNumber",
            po.expected_delivery AS "dueDate",
            po.status AS "poStatus"
          FROM p2_purchase_order_items poi
          JOIN p2_purchase_orders po ON po.id = poi.po_id
-         WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')`
+         WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')
+           AND po.is_current_revision IS NOT FALSE
+         ORDER BY poi.po_id, poi.created_at, poi.id`
       );
       const poItems = Array.isArray(poItemResult)
         ? poItemResult
@@ -4281,6 +5078,40 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         (Number(a.sequenceNumber) || 0) - (Number(b.sequenceNumber) || 0) ||
         String(a.id).localeCompare(String(b.id));
 
+      const consumesCurrentRevisionCapacity = (s: any) => {
+        if (s.status === 'COMPLETED' || s.status === 'SCRAPPED') return true;
+        if (s.status !== 'ACTIVE') return false;
+        const dept = String(s.currentDepartment || '').trim();
+        return dept !== '' && dept !== 'Pending Layup';
+      };
+
+      const poItemsByDisplayPoId = new Map<number, any[]>();
+      for (const poItem of poItems) {
+        const displayPoId = displayPoIdForPoId(Number(poItem.poId));
+        if (!poItemsByDisplayPoId.has(displayPoId)) {
+          poItemsByDisplayPoId.set(displayPoId, []);
+        }
+        poItemsByDisplayPoId.get(displayPoId)!.push(poItem);
+      }
+
+      const consumedCapacityByPoItemId = new Map<number, number>();
+      for (const [displayPoId, poLineItems] of poItemsByDisplayPoId.entries()) {
+        let consumedRevisionFamilyCount = (serializedItems as any[])
+          .filter((s: any) =>
+            displayPoIdForPoId(Number(s.poId)) === displayPoId &&
+            consumesCurrentRevisionCapacity(s)
+          )
+          .length;
+
+        for (const poItem of poLineItems) {
+          const poItemId = Number(poItem.poItemId);
+          const orderedQuantity = Number(poItem.orderedQuantity) || 0;
+          const consumedForLine = Math.min(orderedQuantity, consumedRevisionFamilyCount);
+          consumedCapacityByPoItemId.set(poItemId, consumedForLine);
+          consumedRevisionFamilyCount = Math.max(0, consumedRevisionFamilyCount - consumedForLine);
+        }
+      }
+
       const schedulingList: any[] = [];
       for (const poItem of poItems) {
         const items = (serializedByPoItemId.get(Number(poItem.poItemId)) ?? [])
@@ -4288,34 +5119,21 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         if (items.length === 0) continue;
 
         const orderedQuantity = Number(poItem.orderedQuantity) || 0;
-        const completedCount = items.filter((s: any) => s.status === 'COMPLETED').length;
-        const otherInProductionCount = items.filter((s: any) => {
-          if (s.status !== 'ACTIVE') return false;
-          const dept = String(s.currentDepartment || '').trim();
-          return dept !== '' && dept !== 'Pending Layup' && dept !== 'Layup';
-        }).length;
+        const completedCount = consumedCapacityByPoItemId.get(Number(poItem.poItemId)) ?? 0;
         const earlyStageCapacity = Math.max(
           0,
-          orderedQuantity - completedCount - otherInProductionCount
+          orderedQuantity - completedCount
         );
 
-        const scheduledItems = items.filter((s: any) =>
-          s.status === 'ACTIVE' && String(s.currentDepartment || '').trim() === 'Layup'
-        );
         const pendingItems = items.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
           const dept = String(s.currentDepartment || '').trim();
           return dept === '' || dept === 'Pending Layup';
         });
 
-        const scheduledToShow = scheduledItems.slice(0, earlyStageCapacity);
-        const pendingToShow = pendingItems.slice(
-          0,
-          Math.max(0, earlyStageCapacity - scheduledToShow.length)
-        );
+        const pendingToShow = pendingItems.slice(0, earlyStageCapacity);
 
-        for (const s of [...scheduledToShow, ...pendingToShow]) {
-          const isScheduled = String(s.currentDepartment || '').trim() === 'Layup';
+        for (const s of pendingToShow) {
           schedulingList.push({
             id: s.id,
             poId: poItem.poId,
@@ -4324,11 +5142,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             partNumber: poItem.partNumber || s.partNumber || 'Unknown',
             description: poItem.partName || s.partName || '',
             totalQuantity: 1,
-            scheduledQuantity: isScheduled ? 1 : 0,
-            remainingQuantity: isScheduled ? 0 : 1,
+            scheduledQuantity: 0,
+            remainingQuantity: 1,
             dueDate: poItem.dueDate,
             priority: 'normal',
-            status: isScheduled ? 'scheduled' : 'pending'
+            status: 'pending'
           });
         }
       }
@@ -4453,7 +5271,65 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         console.warn('P2 Production Queue optional serialized item lookup skipped:', error);
       }
       const visibleStatuses = new Set(['ACTIVE']);
-      const items = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
+      const activeSerializedItems = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
+      const poItemQuantityRows = await optionalP2Rows(
+        'PO item quantity',
+        dbPool.query(
+          `SELECT
+             poi.id AS "poItemId",
+             poi.quantity AS "orderedQuantity"
+           FROM p2_purchase_order_items poi
+           JOIN p2_purchase_orders po ON po.id = poi.po_id
+           WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')`
+        )
+      );
+      const orderedQuantityByPoItemId = new Map<number, number>(
+        poItemQuantityRows.map((row: any) => [
+          Number(row.poItemId),
+          Math.max(0, Number(row.orderedQuantity) || 0),
+        ])
+      );
+      const isPastLayupQueueStage = (item: any) => {
+        const dept = normalizeP2ControlDepartment(item.currentDepartment);
+        return dept !== '' && dept !== 'Pending Layup' && dept !== 'Layup';
+      };
+      const consumedPastLayupByPoItemId = new Map<number, number>();
+      for (const item of allItems || []) {
+        const poItemId = Number(item.poItemId ?? item.po_item_id);
+        if (!Number.isFinite(poItemId)) continue;
+
+        if (item.status === 'COMPLETED' || (item.status === 'ACTIVE' && isPastLayupQueueStage(item))) {
+          consumedPastLayupByPoItemId.set(
+            poItemId,
+            (consumedPastLayupByPoItemId.get(poItemId) ?? 0) + 1
+          );
+        }
+      }
+      const layupShownByPoItemId = new Map<number, number>();
+      const items = activeSerializedItems.filter((item: any) => {
+        const dept = normalizeP2ControlDepartment(item.currentDepartment);
+        if (dept === '' || dept === 'Pending Layup') {
+          return false;
+        }
+
+        const poItemId = Number(item.poItemId ?? item.po_item_id);
+        const orderedQuantity = orderedQuantityByPoItemId.get(poItemId);
+        if (!orderedQuantity || dept !== 'Layup') {
+          return true;
+        }
+
+        const remainingLayupCapacity = Math.max(
+          0,
+          orderedQuantity - (consumedPastLayupByPoItemId.get(poItemId) ?? 0)
+        );
+        const shownForLine = layupShownByPoItemId.get(poItemId) ?? 0;
+        if (shownForLine >= remainingLayupCapacity) {
+          return false;
+        }
+
+        layupShownByPoItemId.set(poItemId, shownForLine + 1);
+        return true;
+      });
       const legacyProductionRows: any[] = [];
       const legacyProjectProductionRows = await optionalP2Rows(
         'legacy project production',
@@ -4476,6 +5352,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            )
            WHERE po.project_name IS NOT NULL
              AND TRIM(po.project_name) <> ''
+             AND po.is_current_revision IS NOT FALSE
          )
          SELECT DISTINCT ON (wo.id)
            wo.id,
@@ -4598,6 +5475,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                )
                WHERE po.project_name IS NOT NULL
                  AND TRIM(po.project_name) <> ''
+                 AND po.is_current_revision IS NOT FALSE
              )
              SELECT DISTINCT ON (linked_po_id)
                linked_po_id AS "poId",
@@ -4944,7 +5822,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // Format response with department summaries
       const departments = departmentOrder
-        .filter(dept => departmentsSet.has(dept) || dept === 'Pending Layup' || dept === 'Layup')
         .map(dept => {
           const queueItems = departmentQueues[dept] || [];
           const inProgressCount = queueItems.filter(i => i.hasActiveTask).length;
@@ -4957,7 +5834,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             waiting: waitingCount,
             items: queueItems,
           };
-        });
+        })
+        .filter(dept => dept.totalItems > 0);
       
       res.json({
         departments,
@@ -5490,8 +6368,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { id } = req.params;
       const { storage } = await import('../../storage');
       const { db } = await import('../../db');
-      const { bomDefinitions, bomItems: bomItemsTable } = await import('../../schema');
-      const { eq, and } = await import('drizzle-orm');
+      const { bomDefinitions, bomItems: bomItemsTable, inventoryItems } = await import('../../schema');
+      const { eq, and, inArray } = await import('drizzle-orm');
       
       const po = await storage.getP2PurchaseOrder(parseInt(id), { includeItems: true });
       
@@ -5501,12 +6379,28 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // Get line items with BOM status
       const lineItems = await Promise.all((po.items || []).map(async (item: any) => {
+        const [linkedInventoryItem] = item.inventoryItemId
+          ? await db
+            .select({
+              id: inventoryItems.id,
+              agPartNumber: inventoryItems.agPartNumber,
+              name: inventoryItems.name,
+            })
+            .from(inventoryItems)
+            .where(eq(inventoryItems.id, item.inventoryItemId))
+            .limit(1)
+          : [];
+        const internalPartNumber = linkedInventoryItem?.agPartNumber || null;
+        const bomLookupKeys = [internalPartNumber, item.partNumber].filter(Boolean);
+
         // Check if a BOM exists for this part number
         const existingBOM = await db
           .select()
           .from(bomDefinitions)
           .where(and(
-            eq(bomDefinitions.sku, item.partNumber),
+            bomLookupKeys.length > 1
+              ? inArray(bomDefinitions.sku, bomLookupKeys)
+              : eq(bomDefinitions.sku, bomLookupKeys[0] || item.partNumber),
             eq(bomDefinitions.isActive, true)
           ))
           .limit(1);
@@ -5524,6 +6418,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         
         return {
           ...item,
+          internalPartNumber,
+          inventoryPartName: linkedInventoryItem?.name || null,
           hasBOM: existingBOM.length > 0,
           bomDefinitionId: existingBOM[0]?.id || null,
           bomItems: bomItemsList.map(bi => ({
@@ -5647,13 +6543,67 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { bomItems: bomItemsInput, poItemId, partNumber } = req.body;
       
       const { db } = await import('../../db');
-      const { bomDefinitions, bomItems: bomItemsTable, p2PurchaseOrders, p2PurchaseOrderItems } = await import('../../schema');
+      const { bomDefinitions, bomItems: bomItemsTable, inventoryItems, p2PurchaseOrders, p2PurchaseOrderItems } = await import('../../schema');
       const { eq, and, sql, inArray } = await import('drizzle-orm');
       
       console.log(`Saving BOM for part ${partId}, partNumber: ${partNumber}:`, bomItemsInput);
+
+      const poItemIdNum = parseInt(poItemId);
+      const [linkedPoItem] = poItemId && !isNaN(poItemIdNum) && !String(poItemId).startsWith('mfg-')
+        ? await db
+          .select()
+          .from(p2PurchaseOrderItems)
+          .where(eq(p2PurchaseOrderItems.id, poItemIdNum))
+          .limit(1)
+        : [];
+      const [linkedPoInventoryItem] = linkedPoItem?.inventoryItemId
+        ? await db
+          .select({
+            id: inventoryItems.id,
+            agPartNumber: inventoryItems.agPartNumber,
+            name: inventoryItems.name,
+          })
+          .from(inventoryItems)
+          .where(eq(inventoryItems.id, linkedPoItem.inventoryItemId))
+          .limit(1)
+        : [];
+
+      const canonicalPartNumber = String(linkedPoInventoryItem?.agPartNumber || partNumber || linkedPoItem?.partNumber || `P2-PART-${partId}`).trim();
+      const normalizedBomItems = await Promise.all((bomItemsInput || []).map(async (item: any) => {
+        const quantity = Number.parseFloat(String(item.quantity ?? ''));
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error(`Invalid BOM quantity for ${item.partNumber || 'component'}`);
+        }
+
+        const inventoryItemId = item.inventoryItemId ? Number.parseInt(String(item.inventoryItemId), 10) : null;
+        const [linkedInventoryItem] = inventoryItemId
+          ? await db
+            .select({
+              id: inventoryItems.id,
+              agPartNumber: inventoryItems.agPartNumber,
+              name: inventoryItems.name,
+            })
+            .from(inventoryItems)
+            .where(eq(inventoryItems.id, inventoryItemId))
+            .limit(1)
+          : [];
+
+        const componentPartNumber = String(linkedInventoryItem?.agPartNumber || item.partNumber || '').trim();
+        if (!componentPartNumber) {
+          throw new Error('BOM component part number is required');
+        }
+
+        return {
+          ...item,
+          quantity,
+          partNumber: componentPartNumber,
+          description: item.description || linkedInventoryItem?.name || '',
+          inventoryItemId: linkedInventoryItem?.id ?? inventoryItemId ?? null,
+        };
+      }));
       
       // Gather all manufactured child part numbers upfront for batch lookup
-      const manufacturedPartNumbers = (bomItemsInput || [])
+      const manufacturedPartNumbers = normalizedBomItems
         .filter((item: any) => item.isManufactured && item.partNumber)
         .map((item: any) => item.partNumber);
       
@@ -5673,11 +6623,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // First check if a BOM definition already exists for this part number
       let bomDef: any = null;
-      if (partNumber) {
+      if (canonicalPartNumber) {
         const existing = await db
           .select()
           .from(bomDefinitions)
-          .where(eq(bomDefinitions.sku, partNumber))
+          .where(eq(bomDefinitions.sku, canonicalPartNumber))
           .limit(1);
         
         if (existing.length > 0) {
@@ -5688,10 +6638,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       // Create new BOM definition if it doesn't exist
       if (!bomDef) {
         const [newBom] = await db.insert(bomDefinitions).values({
-          sku: partNumber || `P2-PART-${partId}`,
-          modelName: partNumber || `Part ${partId}`,
+          sku: canonicalPartNumber,
+          modelName: linkedPoInventoryItem?.name || canonicalPartNumber,
           revision: 'A',
-          description: `BOM for P2 part ${partNumber || partId}`,
+          description: `BOM for P2 part ${canonicalPartNumber}`,
           isActive: true
         }).returning();
         bomDef = newBom;
@@ -5707,7 +6657,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const insertedItems = [];
       const createdChildBomDefinitions = [];
       
-      for (const item of bomItemsInput || []) {
+      for (const item of normalizedBomItems) {
         let childBomDef = null;
         
         // If the item is manufactured, ensure it has a BOM definition
@@ -5768,7 +6718,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const [inserted] = await db.insert(bomItemsTable).values({
           bomId: bomDef.id,
           partName: item.partNumber,
-          quantity: item.quantity || 1,
+          quantity: item.quantity,
           firstDept: effectiveFirstDept,
           itemType: item.isManufactured ? 'manufactured' : 'material',
           notes: item.description || '',
@@ -5780,13 +6730,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // Update the PO's bomConfigured flag if we have a valid numeric poItemId
       // Skip this for manufactured child parts (IDs starting with 'mfg-')
-      const poItemIdNum = parseInt(poItemId);
-      if (poItemId && !isNaN(poItemIdNum) && !String(poItemId).startsWith('mfg-')) {
-        const [poItem] = await db
-          .select()
-          .from(p2PurchaseOrderItems)
-          .where(eq(p2PurchaseOrderItems.id, poItemIdNum))
-          .limit(1);
+      if (linkedPoItem) {
+        const poItem = linkedPoItem;
         
         if (poItem) {
           // Check if all items for this PO have BOMs
@@ -5797,11 +6742,21 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           
           let allHaveBOMs = true;
           for (const pi of allItems) {
+            const [piInventoryItem] = pi.inventoryItemId
+              ? await db
+                .select({
+                  agPartNumber: inventoryItems.agPartNumber,
+                })
+                .from(inventoryItems)
+                .where(eq(inventoryItems.id, pi.inventoryItemId))
+                .limit(1)
+              : [];
+            const piBomKey = piInventoryItem?.agPartNumber || pi.partNumber;
             const hasBOM = await db
               .select()
               .from(bomDefinitions)
               .where(and(
-                eq(bomDefinitions.sku, pi.partNumber),
+                eq(bomDefinitions.sku, piBomKey),
                 eq(bomDefinitions.isActive, true)
               ))
               .limit(1);
@@ -5818,9 +6773,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               .where(eq(p2PurchaseOrders.id, poItem.poId));
             
             // Create serialized items for scheduling when BOM is complete
-            const { p2SerializedItems, partRoutings: partRoutingsTable } = await import('../../schema');
-            const { v4: uuidv4 } = await import('uuid');
-            const { and: andOp, eq: eqOp, ilike: ilikeOp } = await import('drizzle-orm');
+            const { p2SerializedItems } = await import('../../schema');
+            const { eq: eqOp } = await import('drizzle-orm');
             
             // Get the PO for additional info
             const [po] = await db
@@ -5840,46 +6794,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               console.log(`Creating serialized items for PO ${po?.poNumber} with ${allItems.length} line items`);
               
               for (const lineItem of allItems) {
-                let itemRouting = await db.query.partRoutings.findFirst({
-                  where: andOp(eqOp(partRoutingsTable.partNumber, lineItem.partNumber), eqOp(partRoutingsTable.isActive, true)),
-                });
-                if (!itemRouting) {
-                  itemRouting = await db.query.partRoutings.findFirst({
-                    where: andOp(ilikeOp(partRoutingsTable.partNumber, lineItem.partNumber), eqOp(partRoutingsTable.isActive, true)),
-                  });
-                }
-                const baseMatch = lineItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
-                const familyKey = baseMatch ? baseMatch[1].trim() : lineItem.partNumber;
-
-                for (let i = 0; i < (lineItem.quantity || 1); i++) {
-                  const sequenceNum = i + 1;
-                  const seq4 = String(sequenceNum).padStart(4, '0');
-                  const barcode = `${po?.poNumber || 'P2'}-UNIT-${seq4}`;
-                  const serialNumber = barcode;
-                  
-                  await db.insert(p2SerializedItems).values({
-                    id: uuidv4(),
-                    poId: poItem.poId,
-                    poItemId: lineItem.id,
-                    poNumber: po?.poNumber || 'Unknown',
-                    partNumber: lineItem.partNumber,
-                    partName: lineItem.partName || lineItem.partNumber,
-                    customerId: po?.customerId || 'Unknown',
-                    customerName: po?.customerName || 'Unknown',
-                    sequenceNumber: sequenceNum,
-                    serialNumber,
-                    barcode,
-                    travelerBarcode: barcode,
-                    buildFamilyKey: familyKey,
-                    partRoutingId: itemRouting?.id || null,
-                    partRoutingRevision: itemRouting ? ((itemRouting as any).routingRevision || 1) : null,
-                    status: 'ACTIVE',
-                    currentDepartment: 'Pending Layup',
-                    currentStageIndex: 0,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                  });
-                }
+                await storage.addP2SerializedItemsForPoItem(lineItem.id, lineItem.quantity || 1);
               }
               
               console.log(`Created serialized items for PO ${po?.poNumber}`);
@@ -5894,7 +6809,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                 .where(eq(p2ProdTable.p2PoId, poItem.poId));
 
               const hasCuttingDemands = existingProdOrders.some(o => o.department === 'Cutting Table');
-              const bomHasPacketItems = (bomItemsInput || []).some((item: any) => item.isManufactured);
+              const bomHasPacketItems = normalizedBomItems.some((item: any) => item.isManufactured);
 
               if (existingProdOrders.length === 0) {
                 console.log(`🔄 Auto-generating production orders for PO ${po?.poNumber} (including cutting table packet demands)...`);
@@ -7817,7 +8732,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const updatedOrders = [];
       const skippedOrders = [];
       for (const orderId of orderIds) {
-        // Update production orders status to LAID_UP
+        // Update production orders status to IN_PROGRESS
         const productionOrder =
           await storage.getProductionOrderByOrderId(orderId);
         if (productionOrder) {
@@ -7841,12 +8756,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             const updated = await storage.updateProductionOrder(
               productionOrder.id,
               {
-                productionStatus: 'LAID_UP',
+                productionStatus: 'IN_PROGRESS',
                 laidUpAt: new Date(),
               }
             );
             updatedOrders.push(updated);
-            console.log(`✅ Production order ${orderId} moved to LAID_UP status`);
+            console.log(`✅ Production order ${orderId} moved to IN_PROGRESS status`);
           }
         }
 
@@ -8794,6 +9709,43 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   });
 
   // ============ PO ATTACHMENTS ============
+  const poAttachmentsDir = path.join(uploadsDir, 'po-attachments');
+
+  if (!fs.existsSync(poAttachmentsDir)) {
+    fs.mkdirSync(poAttachmentsDir, { recursive: true });
+  }
+
+  const poAttachmentUpload = multer({
+    storage: multer.diskStorage({
+      destination: (_req: any, _file: any, cb: any) => cb(null, poAttachmentsDir),
+      filename: (_req: any, file: any, cb: any) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const basename = path
+          .basename(file.originalname, ext)
+          .replace(/[^a-zA-Z0-9-_]/g, '_')
+          .slice(0, 90);
+        cb(null, `${Date.now()}_${crypto.randomBytes(8).toString('hex')}_${basename}${ext}`);
+      },
+    }),
+    fileFilter: (_req: any, file: any, cb: any) => {
+      if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+        return;
+      }
+      cb(new Error('Only PDF files are allowed'));
+    },
+    limits: {
+      fileSize: 25 * 1024 * 1024,
+    },
+  });
+
+  function isLocalPoAttachmentPath(filePath: string | null | undefined) {
+    if (!filePath) return false;
+    const resolvedFile = path.resolve(filePath);
+    const resolvedDir = path.resolve(poAttachmentsDir);
+    return resolvedFile.startsWith(resolvedDir + path.sep) || resolvedFile === resolvedDir;
+  }
+
   // Request presigned upload URL for PO attachment
   app.post('/api/pos/:id/attachments/request-upload-url', async (req, res) => {
     try {
@@ -8825,6 +9777,61 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { status, reason, message } = getStorageErrorResponse(error);
       console.error('Error generating PO attachment upload URL:', { status, reason, message });
       res.status(status).json({ error: 'Failed to generate upload URL', reason, details: message });
+    }
+  });
+
+  // Server-mediated fallback for environments where object URL signing/direct upload is unavailable.
+  app.post('/api/pos/:id/attachments/local-upload', poAttachmentUpload.single('file'), async (req: any, res) => {
+    try {
+      const poId = parseInt(req.params.id);
+      const user = req.user;
+      const file = req.file as Express.Multer.File | undefined;
+
+      if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const { storage } = await import('../../storage');
+      const purchaseOrder = await storage.getPurchaseOrder(poId);
+      if (!purchaseOrder) {
+        if (isLocalPoAttachmentPath(file.path) && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+
+      const { randomUUID } = await import('crypto');
+      const attachment = {
+        id: randomUUID(),
+        fileName: file.filename,
+        originalFileName: file.originalname,
+        filePath: file.path,
+        fileSize: file.size || 0,
+        mimeType: file.mimetype || 'application/pdf',
+        uploadedBy: user?.username || null,
+        uploadedAt: new Date().toISOString(),
+        notes: req.body?.notes || null,
+      };
+
+      const currentAttachments = (purchaseOrder as any).attachments || [];
+      await storage.updatePurchaseOrder(poId, {
+        attachments: [...currentAttachments, attachment],
+      } as any);
+
+      console.warn('[PO attachments] Saved through local fallback', {
+        poId,
+        attachmentId: attachment.id,
+        fileName: attachment.originalFileName,
+      });
+
+      res.status(201).json(attachment);
+    } catch (error: any) {
+      const file = req.file as Express.Multer.File | undefined;
+      if (file?.path && isLocalPoAttachmentPath(file.path) && fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+      console.error('Error uploading PO attachment through local fallback:', error);
+      res.status(500).json({ error: error.message || 'Failed to upload attachment' });
     }
   });
 
@@ -8937,9 +9944,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const normalizedPath = attachmentToDelete.filePath?.startsWith('objects/')
           ? `/${attachmentToDelete.filePath}`
           : attachmentToDelete.filePath;
-        if (normalizedPath) {
+        if (normalizedPath?.startsWith('/objects/')) {
           await getFileStorageProviderForObjectPath(normalizedPath).deleteObject(normalizedPath);
           console.log('📎 Deleted file from storage:', attachmentToDelete.filePath);
+        } else if (isLocalPoAttachmentPath(attachmentToDelete.filePath) && fs.existsSync(path.resolve(attachmentToDelete.filePath))) {
+          fs.unlinkSync(path.resolve(attachmentToDelete.filePath));
+          console.log('[PO attachments] Deleted local fallback file:', attachmentToDelete.filePath);
         }
       } catch (storageError) {
         console.warn('📎 Failed to delete file from storage (may not exist):', storageError);
@@ -8981,18 +9991,33 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         ? `/${attachment.filePath}`
         : attachment.filePath;
 
-      if (!normalizedPath || !normalizedPath.startsWith('/objects/')) {
-        return res.status(404).json({ error: 'File not found in cloud storage' });
+      if (!normalizedPath) {
+        return res.status(404).json({ error: 'File not found in storage' });
       }
 
-      if (forceDownload) {
-        res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalFileName}"`);
-      } else {
-        res.setHeader('Content-Disposition', `inline; filename="${attachment.originalFileName}"`);
+      if (normalizedPath.startsWith('/objects/')) {
+        res.setHeader(
+          'Content-Disposition',
+          `${forceDownload ? 'attachment' : 'inline'}; filename="${attachment.originalFileName}"`
+        );
+        res.setHeader('Content-Type', attachment.mimeType || 'application/pdf');
+        await getFileStorageProviderForObjectPath(normalizedPath).downloadObject(normalizedPath, res);
+        return;
       }
 
-      res.setHeader('Content-Type', attachment.mimeType || 'application/pdf');
-      await getFileStorageProviderForObjectPath(normalizedPath).downloadObject(normalizedPath, res);
+      if (isLocalPoAttachmentPath(normalizedPath) && fs.existsSync(path.resolve(normalizedPath))) {
+        res.setHeader(
+          'Content-Disposition',
+          `${forceDownload ? 'attachment' : 'inline'}; filename="${attachment.originalFileName}"`
+        );
+        res.setHeader('Content-Type', attachment.mimeType || 'application/pdf');
+        res.sendFile(path.resolve(normalizedPath));
+        return;
+      }
+
+      res.status(404).json({
+        error: 'File not available. It may have been stored locally and is not accessible in this environment.',
+      });
     } catch (error: any) {
       const { status, reason, message } = getStorageErrorResponse(error);
       console.error('Error downloading PO attachment:', { status, reason, message });
@@ -9101,10 +10126,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         storage.getProductionOrdersByPoId(poId),
       ]);
 
-      // Build per-item existing count map using poItemId
+      // Build per-item existing count map using active poItemId children.
+      // Cancelled rows are history and must not block a safe missing-line backfill.
       const existingByItemId = new Map<number, number>();
       for (const order of existingOrders) {
-        if (order.poItemId) {
+        if (order.poItemId && order.productionStatus !== 'CANCELLED') {
           existingByItemId.set(order.poItemId, (existingByItemId.get(order.poItemId) ?? 0) + 1);
         }
       }
@@ -9168,10 +10194,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         storage.getProductionOrdersByPoId(poId),
       ]);
 
-      // Build per-item existing count map (gap-fill: only generate what's missing)
+      // Build per-item existing count map from active production children.
+      // Cancelled rows remain audit history and do not satisfy the PO line quantity.
       const existingByItemId = new Map<number, number>();
       for (const order of existingOrders) {
-        if (order.poItemId) {
+        if (order.poItemId && order.productionStatus !== 'CANCELLED') {
           existingByItemId.set(order.poItemId, (existingByItemId.get(order.poItemId) ?? 0) + 1);
         }
       }
@@ -9268,7 +10295,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               const today = new Date();
               return expectedDue > today ? expectedDue : today;
             })(),
-            productionStatus: 'PENDING' as const,
+            productionStatus: deriveP1ProductionStatus({
+              currentDepartment: initialDepartment,
+            }),
             currentDepartment: initialDepartment,
             poId: poId,
             poItemId: item.id,
@@ -9404,7 +10433,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // Reactivate a cancelled production order (sets status back to PENDING)
+  // Reactivate a cancelled production order into the status implied by its department.
   app.post('/api/production-orders/:orderId/reactivate', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
@@ -9418,13 +10447,32 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(400).json({ _error: `Order ${orderId} is not cancelled (current status: ${order.productionStatus})` });
       }
 
-      const updated = await storage.updateProductionOrder(order.id, {
-        productionStatus: 'PENDING',
-        currentDepartment: order.currentDepartment || 'P1 Production Queue',
+      const reactivatedDepartment = order.currentDepartment || 'P1 Production Queue';
+      const reactivatedStatus = deriveP1ProductionStatus({
+        currentDepartment: reactivatedDepartment,
+        isFulfilled: (order as any).isFulfilled,
+        currentStatus: order.productionStatus,
+        preserveCancelled: false,
       });
 
-      console.log(`🔄 Reactivated production order ${orderId} → PENDING`);
-      res.json({ success: true, order: updated });
+      const updated = await storage.updateProductionOrder(order.id, {
+        productionStatus: reactivatedStatus,
+        currentDepartment: reactivatedDepartment,
+      });
+
+      let purchaseOrderReopened = false;
+      if (order.poId) {
+        const parentPO = await storage.getPurchaseOrder(order.poId);
+        const parentStatus = parentPO?.status;
+        if (isClosedP1PurchaseOrderStatus(parentStatus)) {
+          await storage.updatePurchaseOrder(order.poId, { status: 'OPEN' });
+          purchaseOrderReopened = true;
+          console.log(`🔄 Reopened ${parentStatus} PO ${order.poId} after reactivating production order ${orderId}`);
+        }
+      }
+
+      console.log(`🔄 Reactivated production order ${orderId} → ${reactivatedStatus}`);
+      res.json({ success: true, order: updated, purchaseOrderReopened });
     } catch (_error) {
       console.error('🔄 Reactivate production order error:', _error);
       res.status(500).json({ _error: 'Failed to reactivate production order' });
@@ -9687,6 +10735,47 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       let orderId = barcode;
 
       const { storage } = await import('../../storage');
+
+      if (/^OPB-[A-Za-z0-9]+-\d+-\d+$/i.test(barcode)) {
+        const { pool } = await import('../../db');
+        const batchResult = await pool.query(
+          `SELECT
+             b.id AS "id",
+             b.batch_code AS "batchCode",
+             b.barcode_value AS "barcodeValue",
+             b.batch_qty AS "batchQty",
+             b.qty_completed AS "qtyCompleted",
+             b.qty_scrapped AS "qtyScrapped",
+             b.status AS "status",
+             b.priority AS "priority",
+             pwo.work_order_number AS "workOrderNumber",
+             COALESCE(t.part_number, pwo.part_number) AS "partNumber",
+             COALESCE(t.part_name, pwo.description) AS "partName",
+             ts.step_number AS "stepNumber",
+             ts.department_name AS "stepDepartment"
+           FROM cnc_operation_batches b
+           JOIN production_work_orders pwo ON pwo.id = b.work_order_id
+           JOIN traveler_steps ts ON ts.id = b.traveler_step_id
+           JOIN travelers t ON t.id = ts.traveler_id
+           WHERE b.barcode_value = $1 OR b.batch_code = $1
+           LIMIT 1`,
+          [barcode],
+        );
+        const batchRows = Array.isArray(batchResult) ? batchResult : batchResult.rows ?? [];
+        if (batchRows[0]) {
+          return res.json({
+            type: 'cnc_operation_batch',
+            ...batchRows[0],
+            qtyRemaining: Math.max(
+              Number(batchRows[0].batchQty ?? 0) -
+              Number(batchRows[0].qtyCompleted ?? 0) -
+              Number(batchRows[0].qtyScrapped ?? 0),
+              0,
+            ),
+          });
+        }
+        return res.status(404).json({ error: 'CNC operation batch barcode not found' });
+      }
 
       // Try to find the order in various tables
       let order = null;
@@ -10669,7 +11758,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }
 
           // Departments that are initial queue placements — orders there can keep FINALIZED
-          const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue', 'Shipping QC'];
+          const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue'];
 
           // If the destination is a real production department (not an initial queue),
           // always force status to IN_PROGRESS regardless of what the caller sent.
@@ -10693,13 +11782,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           // Update the appropriate table based on order type
           let updatedOrder;
           if (isProductionOrder) {
+            const productionStatus = deriveP1ProductionStatus({
+              currentDepartment: department,
+              isFulfilled: (currentOrder as any).isFulfilled,
+              currentStatus: (currentOrder as any).productionStatus,
+            });
+            const productionUpdateData = {
+              ...updateData,
+              productionStatus,
+              updatedAt: now,
+            };
+            delete (productionUpdateData as any).status;
+
             // Update production order table
             updatedOrder = await storage.updateProductionOrder(
               (currentOrder as any).id,
-              {
-                ...updateData,
-                updatedAt: now,
-              }
+              productionUpdateData
             );
             console.log(`[PROGRESSION SUCCESS] ${orderId} → ${department}`);
           } else if (isFinalized) {
@@ -11470,6 +12568,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             updatedAt: currentTimestamp,
             departmentHistory,
           };
+          if (isProductionOrder) {
+            updateData.productionStatus = deriveP1ProductionStatus({
+              currentDepartment: toDepartment,
+              isFulfilled: (order as any).isFulfilled,
+              currentStatus: (order as any).productionStatus,
+            });
+          }
 
           // Set completion timestamp for previous department
           if (currentDept === 'Barcode') {
@@ -12801,13 +13906,18 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/governance', authenticateToken, requireExecutiveAccess, governanceRoutes);
 
   // CNC Dashboard routes - job queue, setup packages, tooling, QC
-  app.use('/api/cnc', authenticateToken, cncDashboardRoutes);
+  app.use('/api/cnc', (req, res, next) => {
+    if (req.path.startsWith('/operation-batches/station')) return next();
+    return authenticateToken(req, res, next);
+  }, cncDashboardRoutes);
 
   // Receiving Control Center routes
   app.use('/api/receipts', authenticateToken, receivingRoutes);
 
   // Estimating / RFQ Builder routes
   app.use('/api/estimating', authenticateToken, estimatingRoutes);
+  app.use('/api/draft-bom-drafts', authenticateToken, draftBomDraftsRoutes);
+  app.use('/api/rd-projects', authenticateToken, rdProjectsRoutes);
 
   // Conversational RFQ Risk Assessment routes
   app.use('/api/rfq-risk-sessions', authenticateToken, rfqRiskSessionsRoutes);

@@ -106,14 +106,19 @@ export type CompatibleQueryResult<T extends QueryResultRow = any> =
 function toCompatibleQueryResult<T extends QueryResultRow>(
   result: QueryResult<T>,
 ): CompatibleQueryResult<T> {
-  const rows = [...result.rows] as CompatibleQueryResult<T>;
+  const rawRows = Array.isArray((result as any)?.rows)
+    ? (result as any).rows
+    : Array.isArray(result)
+      ? result
+      : [];
+  const rows = [...rawRows] as CompatibleQueryResult<T>;
 
   Object.defineProperties(rows, {
     rows: { value: rows, enumerable: false },
-    rowCount: { value: result.rowCount, enumerable: false },
+    rowCount: { value: result.rowCount ?? rows.length, enumerable: false },
     command: { value: result.command, enumerable: false },
     oid: { value: result.oid, enumerable: false },
-    fields: { value: result.fields, enumerable: false },
+    fields: { value: result.fields ?? [], enumerable: false },
   });
 
   return rows;

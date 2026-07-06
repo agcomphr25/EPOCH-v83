@@ -174,6 +174,125 @@ const TIKKA_BARREL_OPTIONS = [
   'tikka_hca_heavy',
 ] as const;
 
+const LEFT_HANDED_SHORT_AND_LONG_ACTIONS = [
+  'BAT- ADL',
+  'ADL- BAT',
+  'BAT Igniter',
+  'BAT Model HR',
+  'BAT Vesper',
+  'Def Deviant/Hunter/Def Ejection',
+  'Def Deviant/Target/ Def Ejection',
+  'Def/Anti X',
+  'Defiance Ruckus-Target',
+  'Defiance Ruckus-Hunter',
+  'Defiance Ruckus/Target/Def Ejection',
+  'Defiance Ruckus/Hunter/Def Ejection',
+  'Defiance Tenacity',
+  'Defiance Ti',
+  'Anti/Tenacity/Hunter/Def Port',
+  'Rem 700',
+  'Remington 700',
+  'Bighorn Origin',
+  'Bighorn TL3',
+  'Bighorn SR3',
+  'Terminus',
+  'Stiller',
+  'Stiller Predator/Tac',
+  'Lonepeak',
+  'Lone Peak',
+  'Lone Peak Fuzion/Ti/Razor',
+  'Kelbly Obsidian',
+  'Kelbly Prometheus',
+  'Kelbly Atlas',
+  'Kelbly Atlas Tactical',
+  'Kelbly Nanook',
+  'Curtis Axiom',
+  'Curtis Helix',
+  'Curtis Valor',
+  'Curtis Scout',
+  'Impact',
+  'Defiance Classic',
+  'Defiance Anti',
+  'Defiance Anti X',
+];
+
+const LEFT_HANDED_SHORT_ONLY_ACTIONS = [
+  'Gunwerks GRB',
+  'Kauger',
+  'Rem X Zermatt',
+  'Zermatt Rem X',
+];
+
+const LEFT_HANDED_MEDIUM_ACTIONS = [
+  'Bighorn',
+  'Big Horn',
+  'Bighorn Med Action',
+  'Stiller',
+  'Stiller Predator/Tac',
+  'XM',
+  'XM Plus',
+  'XM+',
+  'Def XM/Snowy Mtn Med',
+  'Def XM+',
+  'Lonepeak',
+  'Lone Peak',
+  'Lone Peak Med',
+  'Tikka',
+];
+
+const LEFT_HANDED_ACTION_INLET_MATCHERS_BY_LENGTH: Record<
+  string,
+  string[]
+> = {
+  short: [
+    ...LEFT_HANDED_SHORT_AND_LONG_ACTIONS,
+    ...LEFT_HANDED_SHORT_ONLY_ACTIONS,
+  ],
+  medium: LEFT_HANDED_MEDIUM_ACTIONS,
+  long: LEFT_HANDED_SHORT_AND_LONG_ACTIONS,
+};
+
+const normalizeActionMatcherText = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9+]+/g, ' ').trim();
+
+const actionOptionMatchesAny = (
+  option: { value: string; label: string },
+  matchers: string[]
+) => {
+  const exactValue = option.value.toLowerCase().trim();
+  const normalizedValue = normalizeActionMatcherText(option.value);
+  const normalizedLabel = normalizeActionMatcherText(option.label);
+
+  return matchers.some((matcher) => {
+    const normalizedMatcher = normalizeActionMatcherText(matcher);
+    return (
+      exactValue === matcher ||
+      normalizedValue === normalizedMatcher ||
+      normalizedLabel === normalizedMatcher
+    );
+  });
+};
+
+const isActionInletAvailableForLeftHandedStock = (
+  option: { value: string; label: string },
+  actionLength?: string
+) => {
+  if (!actionLength) return true;
+
+  const allowedMatchers =
+    LEFT_HANDED_ACTION_INLET_MATCHERS_BY_LENGTH[actionLength];
+  if (!allowedMatchers) return true;
+
+  return actionOptionMatchesAny(option, allowedMatchers);
+};
+
+const getActionLengthLabel = (actionLength?: string) => {
+  if (actionLength === 'short') return 'Short';
+  if (actionLength === 'medium') return 'Medium';
+  if (actionLength === 'long') return 'Long';
+  return 'selected';
+};
+
 type ConsoleStyleMode = 'standard' | 'industrial' | 'retro';
 
 const consoleStyleOptions: { value: ConsoleStyleMode; label: string }[] = [
@@ -1498,6 +1617,45 @@ export default function OrderEntry() {
     features.action_length,
     features.handedness,
     features.action_inlet,
+    toast,
+  ]);
+
+  // Business rule: Left-handed stocks only show action inlets from the selected action length list
+  useEffect(() => {
+    if (
+      features.handedness !== 'left' ||
+      !features.action_length ||
+      !features.action_inlet
+    ) {
+      return;
+    }
+
+    const selectedActionInlet = actionInletOptions?.find(
+      (option) => option.value === features.action_inlet
+    );
+
+    if (
+      selectedActionInlet &&
+      !isActionInletAvailableForLeftHandedStock(
+        selectedActionInlet,
+        features.action_length
+      )
+    ) {
+      setFeatures((prev) => ({
+        ...prev,
+        action_inlet: undefined,
+      }));
+      toast({
+        title: 'Action Inlet Updated',
+        description: `That action inlet is not available for a left-handed ${getActionLengthLabel(features.action_length)} Action stock.`,
+        variant: 'default',
+      });
+    }
+  }, [
+    actionInletOptions,
+    features.action_inlet,
+    features.action_length,
+    features.handedness,
     toast,
   ]);
 
@@ -3335,8 +3493,6 @@ export default function OrderEntry() {
                         className={`text-xs px-2 py-0.5 ${
                           orderStatus === 'HOLDING' || orderStatus === 'DRAFT'
                             ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                            : orderStatus === 'PENDING_SIGNATURE'
-                            ? 'bg-orange-100 text-orange-800 border-orange-300'
                             : orderStatus === 'FINALIZED'
                             ? 'bg-blue-100 text-blue-800 border-blue-300'
                             : orderStatus === 'IN_PROGRESS'
@@ -4402,6 +4558,12 @@ export default function OrderEntry() {
                           }
                           return null;
                         })()}
+                        {features.handedness === 'left' &&
+                          features.action_length && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                              Left {getActionLengthLabel(features.action_length)} only
+                            </span>
+                          )}
                       </Label>
                       <Select
                         key={`action-inlet-${renderKey}-${features.action_inlet || 'empty'}`}
@@ -4495,6 +4657,17 @@ export default function OrderEntry() {
                                   isLongAction &&
                                   isLeftHanded &&
                                   isImpactOption
+                                ) {
+                                  return false;
+                                }
+
+                                if (
+                                  isLeftHanded &&
+                                  features.action_length &&
+                                  !isActionInletAvailableForLeftHandedStock(
+                                    option,
+                                    features.action_length
+                                  )
                                 ) {
                                   return false;
                                 }

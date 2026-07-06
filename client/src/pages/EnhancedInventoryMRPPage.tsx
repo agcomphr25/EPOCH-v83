@@ -43,10 +43,12 @@ import OutsideProcessingCard from '../components/inventory/OutsideProcessingCard
 import POSuggestionsCard from '../components/inventory/POSuggestionsCard';
 import VendorPOManager from '../components/inventory/VendorPOManager';
 import VendorPOSettings from '../components/inventory/VendorPOSettings';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function EnhancedInventoryMRPPage() {
   const searchParams = useSearch();
   const [, setLocation] = useLocation();
+  const { can } = usePermissions();
   const [isInventoryItemsModalOpen, setIsInventoryItemsModalOpen] = useState(false);
   const [isVendorPOModalOpen, setIsVendorPOModalOpen] = useState(false);
   const [isPOSettingsModalOpen, setIsPOSettingsModalOpen] = useState(false);
@@ -58,6 +60,13 @@ export default function EnhancedInventoryMRPPage() {
   const [isMrpShortagesModalOpen, setIsMrpShortagesModalOpen] = useState(false);
   const [isPOSuggestionsModalOpen, setIsPOSuggestionsModalOpen] = useState(false);
   const [initialPartNumber, setInitialPartNumber] = useState<string | null>(null);
+  const canSeeConsolidatedNeeds =
+    can('purchasing.view_requisitions') ||
+    can('purchasing.manage_pos') ||
+    can('purchasing.approve_po');
+  const returnTo = new URLSearchParams(searchParams).get('returnTo');
+  const inventoryItemsCloseTarget =
+    returnTo === 'consolidated-needs' ? '/inventory/consolidated-needs' : null;
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
@@ -89,6 +98,13 @@ export default function EnhancedInventoryMRPPage() {
       setIsMrpShortagesModalOpen(true);
     } else if (cardType === 'po-suggestions') {
       setIsPOSuggestionsModalOpen(true);
+    }
+  };
+
+  const handleInventoryItemsModalOpenChange = (open: boolean) => {
+    setIsInventoryItemsModalOpen(open);
+    if (!open && inventoryItemsCloseTarget) {
+      setLocation(inventoryItemsCloseTarget);
     }
   };
 
@@ -314,29 +330,31 @@ export default function EnhancedInventoryMRPPage() {
             </CardContent>
           </Card>
 
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-purple-500"
-            onClick={() => setLocation('/inventory/consolidated-needs')}
-            data-testid="card-consolidated-needs"
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <ClipboardList className="h-5 w-5 text-purple-600" />
-                Consolidated Parts Needs
-              </CardTitle>
-              <CardDescription>
-                View and manage all parts requests across departments
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-purple-600">
-                  Parts Needs
+          {canSeeConsolidatedNeeds && (
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-purple-500"
+              onClick={() => setLocation('/inventory/consolidated-needs')}
+              data-testid="card-consolidated-needs"
+            >
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <ClipboardList className="h-5 w-5 text-purple-600" />
+                  Consolidated Parts Needs
+                </CardTitle>
+                <CardDescription>
+                  View and manage all parts requests across departments
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-2xl font-bold text-purple-600">
+                    Parts Needs
+                  </div>
+                  <ClipboardList className="h-4 w-4 text-gray-400" />
                 </div>
-                <ClipboardList className="h-4 w-4 text-gray-400" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -429,7 +447,7 @@ export default function EnhancedInventoryMRPPage() {
 
       {/* ── Modals ─────────────────────────────────────────────────────────────── */}
 
-      <Dialog open={isInventoryItemsModalOpen} onOpenChange={setIsInventoryItemsModalOpen}>
+      <Dialog open={isInventoryItemsModalOpen} onOpenChange={handleInventoryItemsModalOpenChange}>
         <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
@@ -437,7 +455,9 @@ export default function EnhancedInventoryMRPPage() {
               Inventory Items Management
             </DialogTitle>
           </DialogHeader>
-          <InventoryItemsCard initialSearchTerm={initialPartNumber} />
+          {isInventoryItemsModalOpen && (
+            <InventoryItemsCard initialSearchTerm={initialPartNumber} />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -449,7 +469,7 @@ export default function EnhancedInventoryMRPPage() {
               Inventory Balances
             </DialogTitle>
           </DialogHeader>
-          <InventoryBalancesCard />
+          {isBalancesModalOpen && <InventoryBalancesCard />}
         </DialogContent>
       </Dialog>
 
@@ -461,7 +481,7 @@ export default function EnhancedInventoryMRPPage() {
               Inventory Transactions
             </DialogTitle>
           </DialogHeader>
-          <InventoryTransactionsCard />
+          {isTransactionsModalOpen && <InventoryTransactionsCard />}
         </DialogContent>
       </Dialog>
 
@@ -473,7 +493,7 @@ export default function EnhancedInventoryMRPPage() {
               Progressive Allocation
             </DialogTitle>
           </DialogHeader>
-          <ProgressiveAllocationCard />
+          {isProgressiveAllocModalOpen && <ProgressiveAllocationCard />}
         </DialogContent>
       </Dialog>
 
@@ -485,7 +505,7 @@ export default function EnhancedInventoryMRPPage() {
               MRP Calculation
             </DialogTitle>
           </DialogHeader>
-          <MRPCalculationCard />
+          {isMrpCalculationModalOpen && <MRPCalculationCard />}
         </DialogContent>
       </Dialog>
 
@@ -497,7 +517,7 @@ export default function EnhancedInventoryMRPPage() {
               Material Shortages
             </DialogTitle>
           </DialogHeader>
-          <MRPShortagesCard />
+          {isMrpShortagesModalOpen && <MRPShortagesCard />}
         </DialogContent>
       </Dialog>
 
@@ -509,7 +529,7 @@ export default function EnhancedInventoryMRPPage() {
               PO Suggestions
             </DialogTitle>
           </DialogHeader>
-          <POSuggestionsCard />
+          {isPOSuggestionsModalOpen && <POSuggestionsCard />}
         </DialogContent>
       </Dialog>
 
@@ -521,7 +541,7 @@ export default function EnhancedInventoryMRPPage() {
               Vendor Purchase Orders
             </DialogTitle>
           </DialogHeader>
-          <VendorPOManager />
+          {isVendorPOModalOpen && <VendorPOManager />}
         </DialogContent>
       </Dialog>
 
@@ -533,7 +553,7 @@ export default function EnhancedInventoryMRPPage() {
               PO Settings
             </DialogTitle>
           </DialogHeader>
-          <VendorPOSettings />
+          {isPOSettingsModalOpen && <VendorPOSettings />}
         </DialogContent>
       </Dialog>
 
@@ -545,7 +565,7 @@ export default function EnhancedInventoryMRPPage() {
               Outside Processing
             </DialogTitle>
           </DialogHeader>
-          <OutsideProcessingCard />
+          {isOutsideProcessingModalOpen && <OutsideProcessingCard />}
         </DialogContent>
       </Dialog>
     </div>

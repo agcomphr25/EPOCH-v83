@@ -227,6 +227,7 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/orders': ['ADMIN', 'OWNER'],
   '/gateway-reports': ['ADMIN', 'OWNER'],
   '/inventory/enhanced-mrp': ['ADMIN', 'INVENTORY_MANAGER'],
+  '/inventory/consolidated-needs': ['ADMIN', 'OWNER'],
   '/user-management': ['ADMIN', 'OWNER'],
   '/employee': ['ADMIN', 'OWNER'],
   // /time-clock-admin: ADMIN/OWNER via role; non-admins via capability
@@ -282,6 +283,7 @@ const ROUTE_CAPABILITY_ACCESS: Record<string, string> = {
   '/time-clock-admin': 'timekeeping.time_clock_admin.access',
   '/finance/bulk-payment': 'finance.manage_payments',
   '/finance/bulk-payment-history': 'finance.view',
+  '/inventory/consolidated-needs': 'purchasing.view_requisitions',
 };
 
 const API_TO_FRONTEND_ROUTE_MAPPING: Record<string, string[]> = {

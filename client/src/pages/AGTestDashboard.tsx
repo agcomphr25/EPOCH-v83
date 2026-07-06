@@ -314,8 +314,8 @@ export default function AGTestDashboard() {
 
         <Card
           className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20"
-          onClick={() => navigateTo('/inventory/consolidated-needs')}
-          data-testid="card-consolidated-parts-needs"
+          onClick={() => navigateTo('/inventory/parts-request')}
+          data-testid="card-parts-requests"
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -326,7 +326,7 @@ export default function AGTestDashboard() {
               <ExternalLink className="w-4 h-4 text-gray-400" />
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Review and manage consolidated parts requests
+              Review and manage parts requests
             </p>
           </CardContent>
         </Card>

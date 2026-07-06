@@ -106,6 +106,80 @@ function getUploadErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+type VendorDocumentEntry = {
+  url: string;
+  name: string;
+  size?: number;
+  uploadedAt?: string;
+};
+
+function getDocumentNameFromUrl(url: string) {
+  const fallback = 'Vendor Document.pdf';
+  const trimmed = url.trim();
+  if (!trimmed) return fallback;
+
+  try {
+    const parsed = new URL(trimmed, window.location.origin);
+    const fromPath = parsed.pathname.split('/').filter(Boolean).pop();
+    return fromPath ? decodeURIComponent(fromPath) : fallback;
+  } catch {
+    const fromPath = trimmed.split(/[?#]/)[0].split('/').filter(Boolean).pop();
+    return fromPath ? decodeURIComponent(fromPath) : fallback;
+  }
+}
+
+function parseVendorDocuments(rawValue: unknown): VendorDocumentEntry[] {
+  const raw = String(rawValue || '').trim();
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((doc) => {
+          if (typeof doc === 'string') {
+            return { url: doc, name: getDocumentNameFromUrl(doc) };
+          }
+          if (doc && typeof doc === 'object' && typeof doc.url === 'string') {
+            return {
+              url: doc.url,
+              name:
+                typeof doc.name === 'string' && doc.name.trim()
+                  ? doc.name.trim()
+                  : getDocumentNameFromUrl(doc.url),
+              size: typeof doc.size === 'number' ? doc.size : undefined,
+              uploadedAt:
+                typeof doc.uploadedAt === 'string' ? doc.uploadedAt : undefined,
+            };
+          }
+          return null;
+        })
+        .filter((doc): doc is VendorDocumentEntry => !!doc && !!doc.url.trim());
+    }
+  } catch {
+    // Legacy records store a single URL directly in mainDocumentUrl.
+  }
+
+  return [{ url: raw, name: getDocumentNameFromUrl(raw) }];
+}
+
+function serializeVendorDocuments(documents: VendorDocumentEntry[]) {
+  const cleaned = documents
+    .filter((doc) => doc.url.trim().length > 0)
+    .map((doc) => ({
+      url: doc.url.trim(),
+      name: doc.name.trim() || getDocumentNameFromUrl(doc.url),
+      ...(typeof doc.size === 'number' ? { size: doc.size } : {}),
+      ...(doc.uploadedAt ? { uploadedAt: doc.uploadedAt } : {}),
+    }));
+
+  return cleaned.length > 0 ? JSON.stringify(cleaned) : '';
+}
+
+function getPrimaryVendorDocument(rawValue: unknown) {
+  return parseVendorDocuments(rawValue)[0] ?? null;
+}
+
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   additionalEmail: z
@@ -128,6 +202,7 @@ const vendorFormSchema = insertVendorSchema.extend({
   termsAndConditions: z.string().optional(),
   paymentTerms: z.string().optional(),
   shippingInstructions: z.string().optional(),
+  defaultOrderMethod: z.enum(['PO', 'WEBSITE', 'EMAIL']).optional().nullable(),
 });
 
 const vendorContactFormSchema = insertVendorContactSchema
@@ -222,6 +297,7 @@ export default function VendorManagement() {
       termsAndConditions: '',
       paymentTerms: '',
       shippingInstructions: '',
+      defaultOrderMethod: 'PO',
     },
   });
 
@@ -615,6 +691,7 @@ export default function VendorManagement() {
         termsAndConditions: vendor.termsAndConditions || '',
         paymentTerms: vendor.paymentTerms || '',
         shippingInstructions: vendor.shippingInstructions || '',
+        defaultOrderMethod: (vendor.defaultOrderMethod as 'PO' | 'WEBSITE' | 'EMAIL' | null) || 'PO',
       });
       setVendorAddress({
         street: vendor.street || '',
@@ -660,14 +737,39 @@ export default function VendorManagement() {
     setMainDocFile(null);
   };
 
-  const handleMainDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const setVendorDocumentsValue = (documents: VendorDocumentEntry[]) => {
+    form.setValue('mainDocumentUrl', serializeVendorDocuments(documents), {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
 
-    if (file.type !== 'application/pdf') {
+  const appendVendorDocument = (document: VendorDocumentEntry) => {
+    const currentDocuments = parseVendorDocuments(form.getValues('mainDocumentUrl'));
+    setVendorDocumentsValue([
+      ...currentDocuments,
+      {
+        ...document,
+        uploadedAt: document.uploadedAt || new Date().toISOString(),
+      },
+    ]);
+  };
+
+  const removeVendorDocument = (index: number) => {
+    const currentDocuments = parseVendorDocuments(form.getValues('mainDocumentUrl'));
+    setVendorDocumentsValue(currentDocuments.filter((_, docIndex) => docIndex !== index));
+    setMainDocFile(null);
+  };
+
+  const handleMainDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const invalidFile = files.find((file) => file.type !== 'application/pdf');
+    if (invalidFile) {
       toast({
         title: 'Invalid file type',
-        description: 'Please upload a PDF file',
+        description: 'Please upload PDF files only',
         variant: 'destructive',
       });
       return;
@@ -675,18 +777,26 @@ export default function VendorManagement() {
 
     setUploadingMainDoc(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
 
-      const data = await apiRequest('/api/vendors/upload/document', {
-        method: 'POST',
-        body: formData,
-        timeout: 60000,
-      }) as { url: string };
+        const data = await apiRequest('/api/vendors/upload/document', {
+          method: 'POST',
+          body: formData,
+          timeout: 60000,
+        }) as { url: string; originalName?: string; filename?: string; size?: number };
 
-      form.setValue('mainDocumentUrl', data.url);
-      setMainDocFile(file);
-      toast({ title: 'Document uploaded successfully' });
+        appendVendorDocument({
+          url: data.url,
+          name: data.originalName || file.name || data.filename || getDocumentNameFromUrl(data.url),
+          size: data.size ?? file.size,
+        });
+        setMainDocFile(file);
+      }
+      toast({
+        title: files.length === 1 ? 'Document uploaded successfully' : 'Documents uploaded successfully',
+      });
     } catch (error) {
       toast({
         title: 'Upload failed',
@@ -697,11 +807,6 @@ export default function VendorManagement() {
       setUploadingMainDoc(false);
       e.target.value = '';
     }
-  };
-
-  const handleRemoveMainDoc = () => {
-    setMainDocFile(null);
-    form.setValue('mainDocumentUrl', '');
   };
 
   const getVendorPdfViewUrl = (url: string) => {
@@ -847,9 +952,12 @@ export default function VendorManagement() {
   };
 
   const handleSelectFromLibrary = (url: string, filename: string) => {
-    form.setValue('mainDocumentUrl', url);
+    appendVendorDocument({
+      url,
+      name: filename || getDocumentNameFromUrl(url),
+    });
     setMainDocFile(null); // Clear file since we're using library
-    toast({ title: `Selected: ${filename}` });
+    toast({ title: `Added: ${filename}` });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1098,6 +1206,7 @@ export default function VendorManagement() {
     approvalPdfUrl: data.approvalPdfUrl || undefined,
     startRenewalDate: data.startRenewalDate || undefined,
     approvalExpiration: data.approvalExpiration || undefined,
+    defaultOrderMethod: data.defaultOrderMethod || 'PO',
     ...extra,
   });
 
@@ -1135,6 +1244,17 @@ export default function VendorManagement() {
       <ChevronDown className="w-4 h-4" />
     );
   };
+
+  const watchedMainDocumentUrl = form.watch('mainDocumentUrl');
+  const currentVendorDocuments = parseVendorDocuments(watchedMainDocumentUrl);
+  const vendorDocumentRows = vendorDocuments.flatMap((vendor) =>
+    parseVendorDocuments(vendor.mainDocumentUrl).map((document, index) => ({
+      vendorId: vendor.id,
+      vendorName: vendor.name,
+      document,
+      index,
+    }))
+  );
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -1348,6 +1468,32 @@ export default function VendorManagement() {
 
                     <FormField
                       control={form.control}
+                      name="defaultOrderMethod"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Default Order Method</FormLabel>
+                          <Select
+                            value={field.value || 'PO'}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-default-order-method">
+                                <SelectValue placeholder="Select order method" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="PO">Purchase Order</SelectItem>
+                              <SelectItem value="WEBSITE">Website</SelectItem>
+                              <SelectItem value="EMAIL">Email</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
                       name="startRenewalDate"
                       render={({ field }) => (
                         <FormItem>
@@ -1369,7 +1515,7 @@ export default function VendorManagement() {
                       <p className="text-xs text-muted-foreground">
                         Upload a W-9, agreement, or other vendor document
                       </p>
-                      {editingVendor?.approved && !form.watch('mainDocumentUrl') && !mainDocFile && (
+                      {editingVendor?.approved && currentVendorDocuments.length === 0 && !mainDocFile && (
                         <Alert variant="destructive" className="border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-600">
                           <AlertTriangle className="h-4 w-4 !text-amber-600 dark:!text-amber-400" />
                           <AlertTitle className="text-amber-800 dark:text-amber-300">Document missing</AlertTitle>
@@ -1385,78 +1531,75 @@ export default function VendorManagement() {
                           </AlertDescription>
                         </Alert>
                       )}
-                      {!mainDocFile && !form.watch('mainDocumentUrl') ? (
-                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
-                          <div className="flex flex-col sm:flex-row gap-3 items-center justify-center">
-                            <div className="flex flex-col items-center">
-                              <Upload className="w-6 h-6 mb-1 text-gray-400" />
-                              <Label
-                                htmlFor="main-doc-upload"
-                                className="cursor-pointer text-sm text-black hover:text-black dark:text-white dark:hover:text-white"
-                              >
-                                Upload from Computer
-                              </Label>
-                              <Input
-                                id="main-doc-upload"
-                                type="file"
-                                accept="application/pdf"
-                                onChange={handleMainDocUpload}
-                                className="hidden"
-                                data-testid="input-main-doc-upload"
-                                disabled={uploadingMainDoc}
-                              />
-                            </div>
-                            <span className="text-gray-400">or</span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setIsMediaLibraryOpen(true)}
-                              data-testid="button-select-from-library"
+                      <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
+                        <div className="flex flex-col sm:flex-row gap-3 items-center justify-center">
+                          <div className="flex flex-col items-center">
+                            <Upload className="w-6 h-6 mb-1 text-gray-400" />
+                            <Label
+                              htmlFor="main-doc-upload"
+                              className="cursor-pointer text-sm text-black hover:text-black dark:text-white dark:hover:text-white"
                             >
-                              <FolderOpen className="w-4 h-4 mr-2" />
-                              Select from Library
-                            </Button>
+                              Upload from Computer
+                            </Label>
+                            <Input
+                              id="main-doc-upload"
+                              type="file"
+                              accept="application/pdf"
+                              multiple
+                              onChange={handleMainDocUpload}
+                              className="hidden"
+                              data-testid="input-main-doc-upload"
+                              disabled={uploadingMainDoc}
+                            />
                           </div>
+                          <span className="text-gray-400">or</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsMediaLibraryOpen(true)}
+                            data-testid="button-select-from-library"
+                          >
+                            <FolderOpen className="w-4 h-4 mr-2" />
+                            Select from Library
+                          </Button>
                         </div>
-                      ) : (
-                        <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <FileText className="w-5 h-5 text-black dark:text-white" />
-                              <span className="text-sm font-medium truncate max-w-[200px]">
-                                {mainDocFile?.name || (
-                                  form.watch('mainDocumentUrl')
-                                    ? (form.watch('mainDocumentUrl') ?? '').split('/').pop()
-                                    : 'Vendor Document.pdf'
-                                )}
-                              </span>
+                      </div>
+                      {currentVendorDocuments.length > 0 && (
+                        <div className="space-y-2">
+                          {currentVendorDocuments.map((document, index) => (
+                            <div
+                              key={`${document.url}-${index}`}
+                              className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-800"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <FileText className="w-5 h-5 shrink-0 text-black dark:text-white" />
+                                  <span className="truncate text-sm font-medium">
+                                    {document.name || getDocumentNameFromUrl(document.url)}
+                                  </span>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeVendorDocument(index)}
+                                  data-testid={`button-remove-main-doc-${index}`}
+                                  aria-label={`Remove ${document.name || 'vendor document'}`}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                              <button
+                                type="button"
+                                className="mt-2 inline-block text-xs text-black underline hover:text-black dark:text-white dark:hover:text-white"
+                                data-testid={`link-view-main-doc-${index}`}
+                                onClick={() => openVendorPdf(document.url, document.name || 'vendor document')}
+                              >
+                                View PDF
+                              </button>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleRemoveMainDoc}
-                              data-testid="button-remove-main-doc"
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </div>
-                          {form.watch('mainDocumentUrl') && (
-                            <button
-                              type="button"
-                              className="text-xs text-black hover:text-black dark:text-white dark:hover:text-white mt-2 inline-block underline"
-                              data-testid="link-view-main-doc"
-                              onClick={() =>
-                                openVendorPdf(
-                                  form.getValues('mainDocumentUrl'),
-                                  'vendor document'
-                                )
-                              }
-                            >
-                              View PDF
-                            </button>
-                          )}
+                          ))}
                         </div>
                       )}
                       {uploadingMainDoc && (
@@ -2356,49 +2499,52 @@ export default function VendorManagement() {
                   </td>
                 </tr>
               ) : (
-                vendorsData?.data.map((vendor) => (
-                  <tr
-                    key={vendor.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                    data-testid={`row-vendor-${vendor.id}`}
-                  >
-                    <td
-                      className="px-4 py-3 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100"
-                      data-testid={`text-vendor-name-${vendor.id}`}
+                vendorsData?.data.map((vendor) => {
+                  const vendorDocs = parseVendorDocuments(vendor.mainDocumentUrl);
+                  const primaryDoc = vendorDocs[0] ?? null;
+                  return (
+                    <tr
+                      key={vendor.id}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                      data-testid={`row-vendor-${vendor.id}`}
                     >
-                      <div className="flex items-center gap-2">
-                        {vendor.name}
-                        {vendor.mainDocumentUrl?.trim() && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-6 gap-1 px-2 py-0 text-xs"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openVendorPdf(vendor.mainDocumentUrl, 'vendor document');
-                            }}
-                            data-testid={`button-view-vendor-doc-${vendor.id}`}
-                            title="View uploaded vendor document"
-                          >
-                            <FileText className="w-3 h-3" />
-                            Document
-                          </Button>
-                        )}
-                        {vendor.approved && !vendor.mainDocumentUrl?.trim() && (
-                          <span
-                            tabIndex={0}
-                            role="img"
-                            aria-label="Missing document: this approved vendor has no main document on file"
-                            title="Missing document: this approved vendor has no main document on file"
-                            className="text-amber-500 flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded"
-                            data-testid={`icon-missing-doc-${vendor.id}`}
-                          >
-                            <AlertTriangle className="w-4 h-4" />
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                      <td
+                        className="px-4 py-3 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100"
+                        data-testid={`text-vendor-name-${vendor.id}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {vendor.name}
+                          {primaryDoc && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 gap-1 px-2 py-0 text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openVendorPdf(primaryDoc.url, primaryDoc.name || 'vendor document');
+                              }}
+                              data-testid={`button-view-vendor-doc-${vendor.id}`}
+                              title={primaryDoc.name}
+                            >
+                              <FileText className="w-3 h-3" />
+                              {vendorDocs.length === 1 ? 'Document' : `${vendorDocs.length} Docs`}
+                            </Button>
+                          )}
+                          {vendor.approved && vendorDocs.length === 0 && (
+                            <span
+                              tabIndex={0}
+                              role="img"
+                              aria-label="Missing document: this approved vendor has no main document on file"
+                              title="Missing document: this approved vendor has no main document on file"
+                              className="text-amber-500 flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded"
+                              data-testid={`icon-missing-doc-${vendor.id}`}
+                            >
+                              <AlertTriangle className="w-4 h-4" />
+                            </span>
+                          )}
+                        </div>
+                      </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                       {vendor.approvalLevel || '—'}
                     </td>
@@ -2453,8 +2599,9 @@ export default function VendorManagement() {
                         </Button>
                       </div>
                     </td>
-                  </tr>
-                ))
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -2468,7 +2615,7 @@ export default function VendorManagement() {
               <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                 Loading documents...
               </div>
-            ) : vendorDocuments.length === 0 ? (
+            ) : vendorDocumentRows.length === 0 ? (
               <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                 No vendor documents uploaded yet. Open a vendor record and upload a document to see it here.
               </div>
@@ -2488,42 +2635,39 @@ export default function VendorManagement() {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                  {vendorDocuments.map((vd) => {
-                    const filename = vd.mainDocumentUrl.split('/').pop() || 'document.pdf';
-                    return (
-                      <tr key={vd.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
-                          {vd.name}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="truncate max-w-xs">{filename}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1"
-                            data-testid={`button-open-vendor-doc-${vd.id}`}
-                            onClick={() =>
-                              openVendorPdf(vd.mainDocumentUrl, 'vendor document')
-                            }
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                            Open
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {vendorDocumentRows.map(({ vendorId, vendorName, document, index }) => (
+                    <tr key={`${vendorId}-${document.url}-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
+                        {vendorName}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="truncate max-w-xs">{document.name || getDocumentNameFromUrl(document.url)}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          data-testid={`button-open-vendor-doc-${vendorId}-${index}`}
+                          onClick={() =>
+                            openVendorPdf(document.url, document.name || 'vendor document')
+                          }
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Open
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             )}
           </div>
           <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            {vendorDocuments.length} vendor{vendorDocuments.length !== 1 ? 's' : ''} with documents
+            {vendorDocumentRows.length} document{vendorDocumentRows.length !== 1 ? 's' : ''} across {vendorDocuments.length} vendor{vendorDocuments.length !== 1 ? 's' : ''}
           </div>
         </TabsContent>
       </Tabs>

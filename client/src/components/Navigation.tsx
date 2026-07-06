@@ -10,7 +10,6 @@ import {
   Plus,
   Settings,
   Package,
-  FilePenLine,
   ClipboardList,
   BarChart,
   BarChart3,
@@ -509,6 +508,12 @@ export default function Navigation() {
       description: 'Identify orders in Shipping Management with a FINISHED status mismatch',
     },
     {
+      path: '/admin/p1-po-status-repair',
+      label: 'P1 PO Status Repair',
+      icon: Wrench,
+      description: 'Review and apply P1 purchase order status repairs from dry-run results',
+    },
+    {
       path: '/system-audits',
       label: 'System Audit Library',
       icon: FileSearch,
@@ -546,12 +551,6 @@ export default function Navigation() {
       label: 'ROM Builder',
       icon: FileSearch,
       description: 'View and manage ROM estimates',
-    },
-    {
-      path: '/rfq-builder',
-      label: 'Cost Builder',
-      icon: Calculator,
-      description: 'BOM-driven cost estimation with overhead rates and margins',
     },
     {
       path: '/estimating/bom-drafts',
@@ -750,12 +749,6 @@ export default function Navigation() {
       label: 'Calendar',
       icon: Calendar,
       description: 'Multi-user calendar system',
-    },
-    {
-      path: '/awaiting-signature',
-      label: 'Awaiting Signature',
-      icon: FilePenLine,
-      description: 'Orders pending customer signature',
     },
     {
       path: '/shipping-tracker',
@@ -983,13 +976,55 @@ export default function Navigation() {
       path: '/qms/parts-equipment',
       label: 'Parts and Equipment',
       icon: PackageCheck,
-      description: 'Quality-facing parts and equipment control register',
+      description: 'Unified register with tabs for equipment, measuring devices, AS9100 calibration/validation, customer property, serialized items, returns, and archive history',
     },
     {
       path: '/assets',
       label: 'Assets',
       icon: Boxes,
       description: 'Existing asset registry and equipment records',
+    },
+  ];
+  const qmsPartsEquipmentTabItems: NavItemDef[] = [
+    {
+      path: '/qms/parts-equipment?tab=equipment',
+      label: 'Equipment',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=measuring-devices',
+      label: 'Measuring Devices',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=as9100-calibration',
+      label: 'AS9100 Calibration',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=as9100-validation',
+      label: 'AS9100 Validation',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=customer-property',
+      label: 'Customer Property',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=serialized-items',
+      label: 'Serialized Items',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=returned-items',
+      label: 'Returned Items',
+      icon: PackageCheck,
+    },
+    {
+      path: '/qms/parts-equipment?tab=calibration-archive',
+      label: 'Calibration Archive',
+      icon: PackageCheck,
     },
   ];
 
@@ -1590,6 +1625,12 @@ export default function Navigation() {
       label: 'Production Tracking',
       icon: TrendingUp,
       description: 'Track production orders from POs',
+    },
+    {
+      path: '/production-tracking/customer-wip',
+      label: 'Customer WIP',
+      icon: Users,
+      description: 'View unfinished P1 work by customer, PO, and department',
     },
     {
       path: '/production-forecast',
@@ -2441,23 +2482,51 @@ export default function Navigation() {
                   <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[220px]">
                     {filteredQmsItems.map((item) => {
                       const Icon = item.icon;
-                      const isActive = location === item.path;
+                      const isPartsEquipment = item.path === '/qms/parts-equipment';
+                      const isActive = isPartsEquipment
+                        ? location.startsWith('/qms/parts-equipment')
+                        : location === item.path;
 
                       return (
-                        <button
-                          key={item.path}
-                          className={cn(
-                            'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100',
-                            isActive && 'bg-primary text-white hover:bg-primary'
+                        <div key={item.path}>
+                          <button
+                            className={cn(
+                              'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100',
+                              isActive && 'bg-primary text-white hover:bg-primary'
+                            )}
+                            onClick={() => {
+                              closeAllDropdowns();
+                              setLocation(item.path);
+                            }}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                          {isPartsEquipment && (
+                            <div className="border-l border-gray-200 ml-5 my-1">
+                              {qmsPartsEquipmentTabItems.map((tabItem) => {
+                                const TabIcon = tabItem.icon;
+                                const tabActive = location === tabItem.path;
+                                return (
+                                  <button
+                                    key={tabItem.path}
+                                    className={cn(
+                                      'w-full text-left pl-4 pr-3 py-1.5 text-xs flex items-center gap-2 text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                                      tabActive && 'bg-blue-50 text-blue-700'
+                                    )}
+                                    onClick={() => {
+                                      closeAllDropdowns();
+                                      setLocation(tabItem.path);
+                                    }}
+                                  >
+                                    <TabIcon className="h-3.5 w-3.5" />
+                                    {tabItem.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           )}
-                          onClick={() => {
-                            closeAllDropdowns();
-                            setLocation(item.path);
-                          }}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
+                        </div>
                       );
                     })}
                   </div>

@@ -27,6 +27,8 @@ import express, {
 } from 'express';
 import request from 'supertest';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import type {
   PurchaseOrder,
@@ -523,6 +525,49 @@ describe('GET /api/po-orders/oem-shipments', () => {
     expect(vi.mocked(pool.query).mock.calls[1][0]).not.toContain(
       'p1_fulfillment_attempts'
     );
+  });
+
+  it('links P1 OEM invoices back to shipments even when invoice numbers get a suffix', async () => {
+    const source = readFileSync(
+      join(process.cwd(), 'server/src/routes/poShippingQC.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain("inv.internal_notes ILIKE '%' || sr.id::text || '%'");
+    expect(source).toContain("inv.internal_notes ILIKE '%' || $1 || '%'");
+    expect(source).toContain("inv.internal_notes ILIKE '%' || sr.reference || '%'");
+    expect(source).toContain("inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'");
+    expect(source).toContain("inv.internal_notes ILIKE 'Source: P1 OEM shipment%'");
+    expect(source).toContain("line.dimension_tags->>'orderId' = si.order_id");
+  });
+
+  it('searches OEM shipments by shipment item PO, order, and stock details', async () => {
+    const source = readFileSync(
+      join(process.cwd(), 'server/src/routes/poShippingQC.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('FROM shipment_items search_si');
+    expect(source).toContain('search_si.order_id ILIKE');
+    expect(source).toContain('search_si.po_number ILIKE');
+    expect(source).toContain('search_poi.stock_model_name ILIKE');
+    expect(source).toContain('search_po.customer_name ILIKE');
+  });
+
+  it('regenerates OEM packing slips using the resolved PO number when shipment_items.po_number is blank', async () => {
+    const source = readFileSync(
+      join(process.cwd(), 'server/src/routes/poShippingQC.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('const requestedPoNumber =');
+    expect(source).toContain("item.po_number || requestedPoNumber || ''");
+    expect(source).toContain("COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number");
+    expect(source).toContain("AND COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) = $2");
+    expect(source).toContain('si.packing_slip_base64');
+    expect(source).toContain('siblingWithPackingSlip?.packing_slip_base64');
+    expect(source).toContain('No shipment items found for PO');
+    expect(source).toContain('details: regenErr.message');
   });
 });
 

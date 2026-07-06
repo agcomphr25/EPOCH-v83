@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -24,7 +25,8 @@ import {
   ClipboardCheck,
   Plus,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  GitBranch,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -61,11 +63,26 @@ interface EmployeeOption {
   isActive?: boolean | null;
 }
 
+export interface SourcePO {
+  id: number;
+  poNumber: string;
+  customerId: string;
+  expectedDelivery?: string | null;
+  toleranceAuthorizerId?: number | null;
+  notes?: string | null;
+  assignedToId?: number | null;
+  productionLeadId?: number | null;
+  projectId?: string | null;
+  revisionNumber?: number;
+}
+
 interface P2POCreationWizardProps {
   onComplete: (poId: number) => void;
   onCancel: () => void;
   initialProjectId?: string | null;
   initialCustomerId?: string | null;
+  sourcePO?: SourcePO | null;
+  existingPoId?: number | null;
 }
 
 const NO_PROJECT_VALUE = '__no_project__';
@@ -85,11 +102,11 @@ const detailsSchema = z.object({
   customerPONumber: z.string().min(1, 'Customer PO number is required'),
   dueDate: z.string().min(1, 'Due date is required'),
   toleranceAuthorizer: z.string().min(1, 'Tolerance authorizer is required for quality control'),
-  assignedTo: z.string().optional(), // Who is responsible for this PO
-  productionLead: z.string().optional(), // Production lead for this PO
+  assignedTo: z.string().optional(),
+  productionLead: z.string().optional(),
   notes: z.string().optional(),
   projectId: z.string().optional(),
-  projectName: z.string().optional(), // Optional project association
+  projectName: z.string().optional(),
 });
 
 interface LineItem {
@@ -98,6 +115,7 @@ interface LineItem {
   revision: string;
   description: string;
   quantity: number;
+  dueDate?: string | null;
   unitPrice: number;
   internalName: string;
   inventoryItemId?: number | null;
@@ -108,7 +126,11 @@ export default function P2POCreationWizard({
   onCancel,
   initialProjectId,
   initialCustomerId,
+  sourcePO,
+  existingPoId,
 }: P2POCreationWizardProps) {
+  const isReviseMode = !!sourcePO || !!existingPoId;
+  const activeSourcePoId = existingPoId ?? sourcePO?.id ?? null;
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [poDetails, setPODetails] = useState<z.infer<typeof detailsSchema> | null>(null);
@@ -123,6 +145,7 @@ export default function P2POCreationWizard({
     unitPrice: '',
     internalName: '',
   });
+  const [sourcePrefilled, setSourcePrefilled] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -144,6 +167,22 @@ export default function P2POCreationWizard({
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['/api/projects'],
+  });
+
+  const { data: loadedRevisionPO } = useQuery<any>({
+    queryKey: ['/api/p2-purchase-orders', existingPoId],
+    queryFn: () => fetch(`/api/p2-purchase-orders/${existingPoId}`, { credentials: 'include' }).then((r) => {
+      if (!r.ok) throw new Error('Failed to load revised PO');
+      return r.json();
+    }),
+    enabled: !!existingPoId,
+  });
+  const editableSourcePO = loadedRevisionPO || sourcePO || null;
+
+  // Fetch source PO items when in revise mode
+  const { data: sourcePOItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/p2-purchase-order-items', activeSourcePoId],
+    enabled: !!activeSourcePoId && !loadedRevisionPO?.lineItems,
   });
 
   const openProjects = projects.filter((project) =>
@@ -229,24 +268,79 @@ export default function P2POCreationWizard({
     setSelectedCustomer((current: any) => current || customer);
   }, [customerForm, initialCustomerId, p2Customers]);
 
+  // Pre-populate from sourcePO (revise mode) — wait for all data to load
+  useEffect(() => {
+    if (!editableSourcePO || sourcePrefilled || p2Customers.length === 0 || employees.length === 0) return;
+
+    // Customer
+    const customer = p2Customers.find((c: any) => c.customerId === editableSourcePO.customerId);
+    if (customer) {
+      customerForm.setValue('customerId', customer.id.toString());
+      setSelectedCustomer(customer);
+    }
+
+    // PO Details — strip any -RX revision suffix from PO number for the new revision
+    const basePONumber = existingPoId ? editableSourcePO.poNumber : editableSourcePO.poNumber.replace(/-R[A-Z]+$/, '');
+    detailsForm.setValue('customerPONumber', basePONumber);
+    if (editableSourcePO.expectedDelivery) {
+      detailsForm.setValue('dueDate', editableSourcePO.expectedDelivery.split('T')[0]);
+    }
+    if (editableSourcePO.toleranceAuthorizerId) {
+      detailsForm.setValue('toleranceAuthorizer', editableSourcePO.toleranceAuthorizerId.toString());
+    }
+    if (editableSourcePO.notes) {
+      detailsForm.setValue('notes', editableSourcePO.notes);
+    }
+    if (editableSourcePO.assignedToId) {
+      detailsForm.setValue('assignedTo', editableSourcePO.assignedToId.toString());
+    }
+    if (editableSourcePO.productionLeadId) {
+      detailsForm.setValue('productionLead', editableSourcePO.productionLeadId.toString());
+    }
+    if (editableSourcePO.projectId) {
+      detailsForm.setValue('projectId', editableSourcePO.projectId);
+    }
+
+    setSourcePrefilled(true);
+  }, [detailsForm, editableSourcePO, existingPoId, p2Customers, employees, sourcePrefilled]);
+
+  // Pre-populate line items from source PO items
+  useEffect(() => {
+    const sourceItems = loadedRevisionPO?.lineItems || loadedRevisionPO?.items || sourcePOItems;
+    if (!editableSourcePO || sourceItems.length === 0) return;
+    const items: LineItem[] = sourceItems.map((item: any) => {
+      const revMatch = String(item.partNumber || '').match(/ Rev (.+)$/);
+      const sku = String(item.partNumber || '').replace(/ Rev .+$/, '') || '';
+      const revision = revMatch?.[1] || 'A';
+      return {
+        id: String(item.id || Date.now() + Math.random()),
+        sku,
+        revision,
+        description: item.partName || item.description || '',
+        quantity: Number(item.quantity) || 1,
+        dueDate: item.dueDate?.slice(0, 10) || editableSourcePO.expectedDelivery?.slice(0, 10) || '',
+        unitPrice: parseFloat(item.unitPrice) || 0,
+        internalName: '',
+        inventoryItemId: item.inventoryItemId ?? null,
+      };
+    });
+    setLineItems(items);
+  }, [editableSourcePO, loadedRevisionPO, sourcePOItems]);
+
   const createPOMutation = useMutation({
     mutationFn: async (data: any) => {
-      // Create the PO
       const po = await apiRequest('/api/p2-purchase-orders-bypass', {
         method: 'POST',
         body: data,
       });
-      
-      // Lock the PO immediately after creation to prevent edits
       await apiRequest(`/api/p2-purchase-orders/${po.id}/lock`, {
         method: 'POST',
         body: { employeeId: data.toleranceAuthorizerId || null },
       });
-      
       return po;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
       toast({
         title: 'P2 Order Created & Locked',
@@ -258,6 +352,32 @@ export default function P2POCreationWizard({
       toast({
         title: 'Error',
         description: error.message || 'Failed to create P2 order',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const revisePOMutation = useMutation({
+    mutationFn: async (data: any) => {
+      if (!activeSourcePoId) throw new Error('No revised PO selected');
+      return apiRequest(`/api/p2-purchase-orders-bypass/${activeSourcePoId}`, {
+        method: 'PUT',
+        body: data,
+      });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
+      toast({
+        title: 'PO Revision Updated',
+        description: `Revision ${data.poNumber} has been updated.`,
+      });
+      onComplete(data.id);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update revision',
         variant: 'destructive',
       });
     },
@@ -297,6 +417,7 @@ export default function P2POCreationWizard({
       revision: newItem.revision || 'A',
       description: newItem.description || '',
       quantity: newItem.quantity || 1,
+      dueDate: newItem.dueDate || poDetails?.dueDate || '',
       unitPrice: newItem.unitPrice || 0,
       internalName: newItem.internalName || '',
       inventoryItemId: newItem.inventoryItemId ?? null,
@@ -317,6 +438,7 @@ export default function P2POCreationWizard({
           revision: product.revision || 'A',
           description: product.description,
           unitPrice: parseFloat(product.unitPrice),
+          dueDate: newItem.dueDate || poDetails?.dueDate || '',
           internalName: product.internalName || '',
           inventoryItemId: product.inventoryItemId ?? null,
         });
@@ -340,24 +462,19 @@ export default function P2POCreationWizard({
     setCurrentStep(3);
   };
 
-  const handleCreateOrder = () => {
-    // Find the selected tolerance authorizer employee
+  const buildOrderData = () => {
     const selectedAuthorizer = findEmployeeById(poDetails?.toleranceAuthorizer);
-
-    // Find assigned employee and production lead for ownership fields
     const assignedEmployee = findEmployeeById(poDetails?.assignedTo);
     const productionLeadEmployee = findEmployeeById(poDetails?.productionLead);
 
-    const orderData = {
+    return {
       customerId: selectedCustomer.customerId,
       customerPONumber: poDetails?.customerPONumber,
       dueDate: poDetails?.dueDate,
-      // Properly map tolerance authorizer fields
       toleranceAuthorizerId: selectedAuthorizer?.id || null,
       toleranceAuthorizerName: getEmployeeName(selectedAuthorizer),
       toleranceNotes: poDetails?.notes,
       notes: poDetails?.notes,
-      // Ownership fields for accountability
       assignedToId: assignedEmployee?.id || null,
       assignedToName: getEmployeeName(assignedEmployee),
       productionLeadId: productionLeadEmployee?.id || null,
@@ -365,15 +482,25 @@ export default function P2POCreationWizard({
       projectId: poDetails?.projectId && poDetails.projectId !== NO_PROJECT_VALUE ? poDetails.projectId : null,
       projectName: poDetails?.projectName || null,
       lineItems: lineItems.map((item) => ({
+        id: Number(item.id) || undefined,
         partNumber: `${item.sku}${item.revision ? ` Rev ${item.revision}` : ''}`,
         description: item.description,
         quantity: item.quantity,
+        dueDate: item.dueDate || null,
         unitPrice: item.unitPrice,
         inventoryItemId: item.inventoryItemId ?? null,
       })),
+      isRevisionUpdate: isReviseMode,
     };
+  };
 
-    createPOMutation.mutate(orderData);
+  const handleCreateOrder = () => {
+    const orderData = buildOrderData();
+    if (isReviseMode) {
+      revisePOMutation.mutate(orderData);
+    } else {
+      createPOMutation.mutate(orderData);
+    }
   };
 
   const goBack = () => {
@@ -382,12 +509,17 @@ export default function P2POCreationWizard({
     }
   };
 
+  const isPending = createPOMutation.isPending || revisePOMutation.isPending;
+
   return (
     <Card className="max-w-4xl mx-auto">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Create New P2 Order</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {isReviseMode && <GitBranch className="h-5 w-5 text-blue-600" />}
+              {isReviseMode ? 'Edit PO Revision' : 'Create New P2 Order'}
+            </CardTitle>
             <CardDescription>
               Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
             </CardDescription>
@@ -396,6 +528,19 @@ export default function P2POCreationWizard({
             Cancel
           </Button>
         </div>
+
+        {isReviseMode && (
+          <Alert className="mt-2 border-blue-200 bg-blue-50 dark:bg-blue-950/20">
+            <GitBranch className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-800 dark:text-blue-200">
+              Editing PO revision <strong>{editableSourcePO?.poNumber}</strong>
+              {editableSourcePO?.revisionNumber !== undefined && editableSourcePO.revisionNumber > 0
+                ? ` (Rev ${editableSourcePO.revisionNumber})`
+                : ' (Rev 0 — original)'}
+              . Changes update this revision and keep existing production work tied to it.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Step Indicator */}
         <div className="flex items-center justify-between mt-6">
@@ -448,7 +593,7 @@ export default function P2POCreationWizard({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Select Customer</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-customer">
                           <SelectValue placeholder="Choose a customer..." />
@@ -516,7 +661,7 @@ export default function P2POCreationWizard({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Tolerance Authorizer <span className="text-red-500">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-authorizer">
                           <SelectValue placeholder="Select authorizer for tolerance decisions..." />
@@ -546,7 +691,7 @@ export default function P2POCreationWizard({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Assigned To (Optional)</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger data-testid="select-assigned-to">
                               <SelectValue placeholder="Who is responsible..." />
@@ -573,7 +718,7 @@ export default function P2POCreationWizard({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Production Lead (Optional)</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger data-testid="select-production-lead">
                               <SelectValue placeholder="Production lead..." />
@@ -651,7 +796,7 @@ export default function P2POCreationWizard({
         {/* Step 3: Line Items */}
         {currentStep === 2 && (
           <div className="space-y-6">
-            <div className="grid grid-cols-6 gap-2 items-end">
+            <div className="grid grid-cols-1 gap-2 items-end md:grid-cols-[2fr_1.2fr_0.7fr_0.9fr_0.8fr_auto]">
               <div className="col-span-2">
                 <Label>P2 Product Item</Label>
                 <Select onValueChange={handleProductSelect} value="">
@@ -693,6 +838,15 @@ export default function P2POCreationWizard({
                 />
               </div>
               <div>
+                <Label>Line Date</Label>
+                <Input
+                  type="date"
+                  value={newItem.dueDate || poDetails?.dueDate || ''}
+                  onChange={(e) => setNewItem({ ...newItem, dueDate: e.target.value })}
+                  data-testid="input-line-due-date"
+                />
+              </div>
+              <div>
                 <Label>Unit Price</Label>
                 <Input
                   type="number"
@@ -724,6 +878,7 @@ export default function P2POCreationWizard({
                     <TableHead>SKU / Rev</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead>Line Date</TableHead>
                     <TableHead className="text-right">Unit Price</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead></TableHead>
@@ -735,6 +890,7 @@ export default function P2POCreationWizard({
                       <TableCell className="font-medium">{item.sku} Rev {item.revision}</TableCell>
                       <TableCell>{item.description}</TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
+                      <TableCell>{item.dueDate || poDetails?.dueDate || '-'}</TableCell>
                       <TableCell className="text-right">${item.unitPrice.toFixed(2)}</TableCell>
                       <TableCell className="text-right">
                         ${(item.quantity * item.unitPrice).toFixed(2)}
@@ -769,13 +925,20 @@ export default function P2POCreationWizard({
         {/* Step 4: Review */}
         {currentStep === 3 && (
           <div className="space-y-6">
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+            <div className={`border rounded-lg p-4 ${isReviseMode ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'}`}>
               <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                {isReviseMode
+                  ? <GitBranch className="h-5 w-5 text-blue-600 mt-0.5" />
+                  : <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                }
                 <div>
-                  <h4 className="font-medium text-amber-800 dark:text-amber-200">Ready to Create Order</h4>
-                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                    Once created, the order will be locked and you'll be prompted to set up BOMs for each part.
+                  <h4 className={`font-medium ${isReviseMode ? 'text-blue-800 dark:text-blue-200' : 'text-amber-800 dark:text-amber-200'}`}>
+                    {isReviseMode ? 'Ready to Update Revision' : 'Ready to Create Order'}
+                  </h4>
+                  <p className={`text-sm mt-1 ${isReviseMode ? 'text-blue-700 dark:text-blue-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                    {isReviseMode
+                      ? `This will update ${editableSourcePO?.poNumber}. Existing project work orders stay attached to this PO revision.`
+                      : "Once created, the order will be locked and you'll be prompted to set up BOMs for each part."}
                   </p>
                 </div>
               </div>
@@ -787,7 +950,7 @@ export default function P2POCreationWizard({
                   <CardTitle className="text-lg">Customer</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="font-medium">{selectedCustomer?.name}</p>
+                  <p className="font-medium">{selectedCustomer?.name || selectedCustomer?.customerName}</p>
                   <p className="text-sm text-muted-foreground">{selectedCustomer?.company}</p>
                 </CardContent>
               </Card>
@@ -799,6 +962,13 @@ export default function P2POCreationWizard({
                 <CardContent className="space-y-1">
                   <p><span className="text-muted-foreground">Customer PO:</span> {poDetails?.customerPONumber}</p>
                   <p><span className="text-muted-foreground">Due Date:</span> {poDetails?.dueDate}</p>
+                  {isReviseMode && (
+                    <p><span className="text-muted-foreground">New Revision:</span>{' '}
+                      <Badge variant="outline" className="border-blue-500 text-blue-700 text-xs">
+                        Rev {editableSourcePO?.revisionNumber ?? 0}
+                      </Badge>
+                    </p>
+                  )}
                   {poDetails?.toleranceAuthorizer && (
                     <p><span className="text-muted-foreground">Authorizer:</span> Set</p>
                   )}
@@ -817,6 +987,7 @@ export default function P2POCreationWizard({
                       <TableHead>SKU / Rev</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead className="text-right">Quantity</TableHead>
+                      <TableHead>Line Date</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -826,6 +997,7 @@ export default function P2POCreationWizard({
                         <TableCell className="font-medium">{item.sku} Rev {item.revision}</TableCell>
                         <TableCell>{item.description}</TableCell>
                         <TableCell className="text-right">{item.quantity}</TableCell>
+                        <TableCell>{item.dueDate || poDetails?.dueDate || '-'}</TableCell>
                         <TableCell className="text-right">
                           ${(item.quantity * item.unitPrice).toFixed(2)}
                         </TableCell>
@@ -850,11 +1022,14 @@ export default function P2POCreationWizard({
               </Button>
               <Button 
                 onClick={handleCreateOrder} 
-                disabled={createPOMutation.isPending}
+                disabled={isPending}
                 data-testid="button-create-order"
+                className={isReviseMode ? 'bg-blue-600 hover:bg-blue-700' : ''}
               >
-                {createPOMutation.isPending ? 'Creating...' : 'Create Order & Setup BOMs'}
-                <Check className="ml-2 h-4 w-4" />
+                {isPending
+                  ? (isReviseMode ? 'Updating Revision...' : 'Creating...')
+                  : (isReviseMode ? 'Update Revised PO' : 'Create Order & Setup BOMs')}
+                {isReviseMode ? <GitBranch className="ml-2 h-4 w-4" /> : <Check className="ml-2 h-4 w-4" />}
               </Button>
             </div>
           </div>

@@ -30,6 +30,8 @@ interface BarcodeDisplayProps {
   modelId?: string; // Stock model ID
   isHighPriority?: boolean; // High priority flag
   isLate?: boolean; // Late order flag
+  titleLabel?: string;
+  printHeaderLabel?: string;
 }
 
 export function BarcodeDisplay({
@@ -49,9 +51,12 @@ export function BarcodeDisplay({
   modelId,
   isHighPriority,
   isLate,
+  titleLabel = 'Order Barcode',
+  printHeaderLabel = 'P1 ORDER',
 }: BarcodeDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showAveryDialog, setShowAveryDialog] = useState(false);
+  const barcodeFormat = getBarcodeFormat(barcode);
 
   // Color coding logic
   const getBarcodeColor = () => {
@@ -88,12 +93,10 @@ export function BarcodeDisplay({
   useEffect(() => {
     if (canvasRef.current && barcode) {
       const config = getSizeConfig();
-      const format = getBarcodeFormat(barcode);
-
       try {
         JsBarcode(canvasRef.current, barcode, {
-          format: format,
-          width: format === 'CODE128' ? config.width * 0.8 : config.width,
+          format: barcodeFormat,
+          width: barcodeFormat === 'CODE128' ? config.width * 0.8 : config.width,
           height: config.height,
           displayValue: true,
           fontSize: config.fontSize,
@@ -114,7 +117,7 @@ export function BarcodeDisplay({
         console.error('Error generating barcode:', error);
       }
     }
-  }, [barcode, size]);
+  }, [barcode, size, barcodeFormat]);
 
   const handleDownload = () => {
     if (canvasRef.current) {
@@ -218,7 +221,7 @@ export function BarcodeDisplay({
                     (_, i) => `
                   <div class="avery-label">
                     <div class="label-content">
-                      <div class="order-header">P1 ORDER</div>
+                      <div class="order-header">${printHeaderLabel}</div>
                       <img src="${img}" alt="Barcode ${orderId}" class="barcode-img" />
                       <div class="order-details">
                         <div class="date-info">Printed: ${currentDate}</div>
@@ -263,7 +266,7 @@ export function BarcodeDisplay({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Order Barcode - {orderId}
+            {titleLabel} - {orderId}
           </CardTitle>
         </CardHeader>
       )}
@@ -275,7 +278,7 @@ export function BarcodeDisplay({
 
           <div className="text-center text-sm text-gray-600">
             <p className="font-mono">{barcode}</p>
-            <p className="mt-1">CODE39 Format</p>
+            <p className="mt-1">{barcodeFormat} Format</p>
           </div>
 
           <div className="flex gap-2">

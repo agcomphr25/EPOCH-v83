@@ -145,6 +145,7 @@ export default function CuttingInventoryAudit() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cutting-table/inventory-audit/packets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cutting-table/inventory-audit/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cutting-table/stock-levels"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cutting-table/weekly-cutting-queue"] });
       toast({ title: "Audit saved", description: "Actuals recorded and on-hand quantities updated." });
       setActuals({});

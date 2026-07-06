@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO } from 'date-fns';
+import TrendSparkline, { type TrendPoint } from './TrendSparkline';
 
 interface ShipmentRow { month: string; shipments: string; }
 
@@ -13,6 +13,11 @@ export default function ShipmentsSlide() {
   const chartData = data.map((r) => ({
     month: format(parseISO(`${r.month}-01`), 'MMM yy'),
     shipments: Number(r.shipments),
+  }));
+  const trend: TrendPoint[] = data.map((r) => ({
+    month: r.month,
+    label: format(parseISO(`${r.month}-01`), 'MMM yy'),
+    value: Number(r.shipments),
   }));
 
   const total = chartData.reduce((s, r) => s + r.shipments, 0);
@@ -40,23 +45,11 @@ export default function ShipmentsSlide() {
             )}
           </div>
           <div className="flex-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 13 }} />
-                <YAxis tick={{ fontSize: 13 }} />
-                <Tooltip />
-                <Bar dataKey="shipments" radius={[4, 4, 0, 0]}>
-                  {chartData.map((_, i) => (
-                    <Cell key={i} fill={i === chartData.length - 1 ? '#2563eb' : '#93c5fd'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <TrendSparkline data={trend} color="#16a34a" valueFormatter={(value) => value.toLocaleString()} />
           </div>
         </>
       )}
-      <div className="text-xs text-gray-400 mt-2 text-right">Live from EPOCH · All non-cancelled orders</div>
+      <div className="text-xs text-gray-400 mt-2 text-right">All non-cancelled orders</div>
     </div>
   );
 }

@@ -16,6 +16,11 @@ function logDuplicatePrevention(event: string, details: Record<string, any>) {
 
 const router = Router();
 
+function isActionLengthOptionalStockModel(stockModel: string | null | undefined): boolean {
+  const normalized = (stockModel || '').toLowerCase();
+  return normalized.includes('m1a') || normalized.includes('tikka');
+}
+
 // Helper function to automatically handle orders that need attention or movement
 async function autoMoveInvalidStockModelOrders(storage: any) {
   try {
@@ -46,14 +51,14 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
       }
       // Orders with missing stock model or missing action_length need attention
       // Flattop orders are excluded - they never need attention
-      // M1A models are excluded from action_length/action_inlet/barrel_inlet/bottom_metal checks
+      // M1A and Tikka models are excluded from action_length checks
       else if (
         !order.isFlattop &&
         (!stockModel ||
         stockModel === '' ||
         (!features.action_length &&
           features.action_length !== 0 &&
-          !(stockModel && stockModel.toLowerCase().includes('m1a'))))
+          !isActionLengthOptionalStockModel(stockModel)))
       ) {
         ordersNeedingAttention.push(order);
       }
@@ -318,6 +323,85 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
   }
 });
 
+// Reconcile the high-level P1 Production Queue department total with queue buckets
+router.get('/reconciliation', async (req: Request, res: Response) => {
+  try {
+    const summaryQuery = `
+      SELECT
+        COUNT(*) FILTER (
+          WHERE current_department = 'P1 Production Queue'
+            AND status <> 'SCRAPPED'
+            AND status <> 'CANCELLED'
+            AND scrap_date IS NULL
+        )::integer AS total_in_department,
+        COUNT(*) FILTER (
+          WHERE current_department = 'P1 Production Queue'
+            AND status <> 'SCRAPPED'
+            AND status <> 'CANCELLED'
+            AND scrap_date IS NULL
+            AND status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
+            AND (is_cancelled IS NULL OR is_cancelled = false)
+            AND model_id IS NOT NULL
+            AND model_id != ''
+            AND model_id != 'None'
+            AND LOWER(model_id) != 'no stock'
+            AND LOWER(model_id) != 'no_stock'
+            AND (
+              (features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null')
+              OR LOWER(model_id) LIKE '%m1a%'
+              OR LOWER(model_id) LIKE '%tikka%'
+              OR is_flattop = true
+            )
+        )::integer AS ready_orders,
+        COUNT(*) FILTER (
+          WHERE current_department = 'P1 Production Queue'
+            AND status <> 'SCRAPPED'
+            AND status <> 'CANCELLED'
+            AND scrap_date IS NULL
+            AND status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
+            AND (is_cancelled IS NULL OR is_cancelled = false)
+            AND features->>'po_item_id' IS NULL
+            AND (is_flattop IS NULL OR is_flattop = false)
+            AND (
+              (model_id IS NULL OR model_id = '' OR model_id = 'None') OR
+              (
+                (features->>'action_length' IS NULL OR features->>'action_length' = '' OR features->>'action_length' = 'null')
+                AND (
+                  model_id IS NULL
+                  OR (
+                    LOWER(model_id) NOT LIKE '%m1a%'
+                    AND LOWER(model_id) NOT LIKE '%tikka%'
+                  )
+                )
+              )
+            )
+        )::integer AS needs_attention
+      FROM all_orders
+    `;
+
+    const result = await pool.query(summaryQuery);
+    const row = Array.isArray(result) ? result[0] : result.rows?.[0];
+    const total = Number(row?.total_in_department || 0);
+    const ready = Number(row?.ready_orders || 0);
+    const needsAttention = Number(row?.needs_attention || 0);
+
+    res.json({
+      department: 'P1 Production Queue',
+      total,
+      ready,
+      needsAttention,
+      otherNotReady: Math.max(total - ready - needsAttention, 0),
+    });
+  } catch (error) {
+    console.error('❌ RECONCILIATION: Error fetching production queue reconciliation:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch production queue reconciliation',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // Get Production Queue with priority scores (for regular orders)
 router.get('/prioritized', async (req: Request, res: Response) => {
   try {
@@ -344,6 +428,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
             AND (
               features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null'
               OR LOWER(model_id) LIKE '%m1a%'
+              OR LOWER(model_id) LIKE '%tikka%'
               OR is_flattop = true
             )
           ) as passes_all_filters
@@ -400,6 +485,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND (
           (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
           OR LOWER(o.model_id) LIKE '%m1a%'
+          OR LOWER(o.model_id) LIKE '%tikka%'
           OR o.is_flattop = true
         )
       ORDER BY 
@@ -429,7 +515,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       let urgencyLevel: 'critical' | 'high' | 'medium' | 'normal';
       if (order.ismanualurgency && order.urgency) {
         // Map database urgency values to urgencyLevel
-        urgencyLevel = order.urgency === 'critical' ? 'critical' 
+        urgencyLevel = order.urgency === 'critical' ? 'critical'
                      : order.urgency === 'high' ? 'high'
                      : order.urgency === 'medium' ? 'medium'
                      : 'normal';
@@ -461,6 +547,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         customerId: order.customerid,
         customerName: order.customername,
         features: order.features,
+        isFlattop: order.isFlattop ?? order.isflattop ?? false,
         priorityScore: priorityResult.score, // COMPUTED, not from DB
         prioritySource: priorityResult.source,
         priorityReason: priorityResult.reason,
@@ -1218,14 +1305,21 @@ router.get('/attention', async (req: Request, res: Response) => {
         END
       )
       WHERE o.current_department = 'P1 Production Queue'
-        AND o.status IN ('FINALIZED', 'Active')
+        AND o.status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
+        AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
         AND o.features->>'po_item_id' IS NULL
         AND (o.is_flattop IS NULL OR o.is_flattop = false)
         AND (
           (o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None') OR
           (
             (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null')
-            AND (LOWER(o.model_id) NOT LIKE '%m1a%')
+            AND (
+              o.model_id IS NULL
+              OR (
+                LOWER(o.model_id) NOT LIKE '%m1a%'
+                AND LOWER(o.model_id) NOT LIKE '%tikka%'
+              )
+            )
           )
         )
       ORDER BY 

@@ -6,11 +6,14 @@ import {
   p2LotNumbers,
   p2PurchaseOrderItems,
   p2Customers,
+  p2SerializedItems,
 } from '../../schema';
-import { eq } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { buildRevenueDimensionTags } from './productionLineAccounting';
+import { assignReservedP2InvoiceNumberToPackingSlip } from './p2InvoiceNumberService';
 
 let p2PackingSlipInvoiceNumberSchemaReady: Promise<void> | null = null;
+let p2BillingAllocationSchemaReady: Promise<void> | null = null;
 
 function ensureP2PackingSlipInvoiceNumberSchema(): Promise<void> {
   if (!p2PackingSlipInvoiceNumberSchemaReady) {
@@ -25,15 +28,138 @@ function ensureP2PackingSlipInvoiceNumberSchema(): Promise<void> {
 
 interface LineItem {
   poItemId?: number;
+  billingAllocationId?: string | null;
+  billingBucketLabel?: string | null;
+  customerPoLine?: string | null;
   partNumber: string;
+  customerSku?: string | null;
+  sku?: string | null;
   partName?: string;
   quantity: number;
+  unitPrice?: number | string | null;
   serialNumbers?: string[];
+}
+
+function ensureP2BillingAllocationSchema(): Promise<void> {
+  if (!p2BillingAllocationSchemaReady) {
+    p2BillingAllocationSchemaReady = pool.query(`
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+      CREATE TABLE IF NOT EXISTS p2_billing_allocations (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        po_id integer NOT NULL REFERENCES p2_purchase_orders(id),
+        po_item_id integer REFERENCES p2_purchase_order_items(id),
+        po_number text NOT NULL,
+        part_number text NOT NULL,
+        bucket_label text NOT NULL,
+        description text,
+        customer_po_line text,
+        quantity_authorized integer NOT NULL,
+        unit_price numeric(12,2) NOT NULL,
+        notes text,
+        active boolean NOT NULL DEFAULT true,
+        created_by text,
+        created_at timestamp NOT NULL DEFAULT now(),
+        updated_at timestamp NOT NULL DEFAULT now()
+      );
+
+      ALTER TABLE p2_billing_allocations
+        ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS description text,
+        ADD COLUMN IF NOT EXISTS customer_po_line text,
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS created_by text,
+        ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now();
+
+      ALTER TABLE p2_billing_allocations
+        ALTER COLUMN active SET DEFAULT true,
+        ALTER COLUMN created_at SET DEFAULT now(),
+        ALTER COLUMN updated_at SET DEFAULT now();
+
+      UPDATE p2_billing_allocations
+         SET active = true
+       WHERE active IS NULL;
+
+      CREATE TABLE IF NOT EXISTS p2_serial_billing_assignments (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        allocation_id uuid NOT NULL REFERENCES p2_billing_allocations(id),
+        serialized_item_id uuid NOT NULL REFERENCES p2_serialized_items(id),
+        po_id integer NOT NULL REFERENCES p2_purchase_orders(id),
+        po_item_id integer REFERENCES p2_purchase_order_items(id),
+        lot_id uuid REFERENCES p2_lot_numbers(id),
+        packing_slip_id uuid REFERENCES p2_packing_slips(id),
+        invoice_id uuid REFERENCES ar_invoices(id),
+        assigned_at timestamp NOT NULL DEFAULT now(),
+        assigned_by text,
+        assignment_source text NOT NULL DEFAULT 'shipment',
+        locked_at timestamp,
+        locked_by text,
+        lock_reason text,
+        notes text,
+        updated_at timestamp NOT NULL DEFAULT now(),
+        UNIQUE(serialized_item_id)
+      );
+
+      ALTER TABLE p2_serial_billing_assignments
+        ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS lot_id uuid REFERENCES p2_lot_numbers(id),
+        ADD COLUMN IF NOT EXISTS packing_slip_id uuid REFERENCES p2_packing_slips(id),
+        ADD COLUMN IF NOT EXISTS invoice_id uuid REFERENCES ar_invoices(id),
+        ADD COLUMN IF NOT EXISTS assigned_at timestamp NOT NULL DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS assigned_by text,
+        ADD COLUMN IF NOT EXISTS assignment_source text NOT NULL DEFAULT 'shipment',
+        ADD COLUMN IF NOT EXISTS locked_at timestamp,
+        ADD COLUMN IF NOT EXISTS locked_by text,
+        ADD COLUMN IF NOT EXISTS lock_reason text,
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now();
+
+      ALTER TABLE p2_serial_billing_assignments
+        ALTER COLUMN assigned_at SET DEFAULT now(),
+        ALTER COLUMN assignment_source SET DEFAULT 'shipment',
+        ALTER COLUMN updated_at SET DEFAULT now();
+
+      UPDATE p2_serial_billing_assignments
+         SET assignment_source = 'shipment'
+       WHERE assignment_source IS NULL;
+
+      CREATE TABLE IF NOT EXISTS p2_billing_allocation_audit (
+        id serial PRIMARY KEY,
+        entity_type text NOT NULL,
+        entity_id text NOT NULL,
+        action text NOT NULL,
+        old_value jsonb,
+        new_value jsonb,
+        changed_by text,
+        reason text,
+        created_at timestamp NOT NULL DEFAULT now()
+      );
+
+      ALTER TABLE p2_billing_allocation_audit
+        ADD COLUMN IF NOT EXISTS entity_type text NOT NULL DEFAULT 'billing_allocation',
+        ADD COLUMN IF NOT EXISTS entity_id text NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS action text NOT NULL DEFAULT 'UNKNOWN',
+        ADD COLUMN IF NOT EXISTS old_value jsonb,
+        ADD COLUMN IF NOT EXISTS new_value jsonb,
+        ADD COLUMN IF NOT EXISTS changed_by text,
+        ADD COLUMN IF NOT EXISTS reason text,
+        ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
+    `).then(() => undefined);
+  }
+
+  return p2BillingAllocationSchemaReady;
 }
 
 export interface InvoicePreviewLine {
   poItemId: number | null;
   partNumber: string | null;
+  internalPartNumber: string | null;
+  billingAllocationId?: string | null;
+  billingBucketLabel?: string | null;
+  customerPoLine?: string | null;
+  serialNumbers?: string[];
   description: string;
   qty: number;
   unitPrice: number;
@@ -105,12 +231,60 @@ function addDays(dateValue: string, days: number): string {
   return dateOnly(date);
 }
 
+function assignedSkuFromSerials(serials: Array<{ sku?: string | null }>): string | null {
+  const skus = Array.from(
+    new Set(
+      serials
+        .map((serial) => serial.sku?.trim())
+        .filter((sku): sku is string => Boolean(sku)),
+    ),
+  );
+
+  return skus.length > 0 ? skus.join(', ') : null;
+}
+
+async function hydrateInvoiceLineItemCustomerParts(lineItems: LineItem[]): Promise<LineItem[]> {
+  const serialNumbers = Array.from(
+    new Set(
+      lineItems.flatMap((item) =>
+        Array.isArray(item.serialNumbers)
+          ? item.serialNumbers.filter((serial): serial is string => typeof serial === 'string' && serial.trim().length > 0)
+          : [],
+      ),
+    ),
+  );
+
+  if (serialNumbers.length === 0) return lineItems;
+
+  const serialRows = await db
+    .select({ serialNumber: p2SerializedItems.serialNumber, sku: p2SerializedItems.sku })
+    .from(p2SerializedItems)
+    .where(inArray(p2SerializedItems.serialNumber, serialNumbers));
+  const skuBySerialNumber = new Map(serialRows.map((row) => [row.serialNumber, row.sku]));
+
+  return lineItems.map((item) => {
+    const customerSku = assignedSkuFromSerials(
+      (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
+        .map((serialNumber) => ({ sku: skuBySerialNumber.get(serialNumber) })),
+    );
+
+    return customerSku && !item.customerSku
+      ? { ...item, customerSku }
+      : item;
+  });
+}
+
+function resolveCustomerFacingPartNumber(line: LineItem): string | null {
+  return line.customerSku?.trim() || line.sku?.trim() || line.partNumber || null;
+}
+
 export async function buildInvoicePreviewFromPackingSlip(
   packingSlipId: string,
   lotId: string,
   overrides: InvoicePreviewInput = {},
 ): Promise<InvoicePreview> {
   await ensureP2PackingSlipInvoiceNumberSchema();
+  await ensureP2BillingAllocationSchema();
 
   const [slip] = await db
     .select()
@@ -147,7 +321,8 @@ export async function buildInvoicePreviewFromPackingSlip(
     poItemsByPart.set(item.partNumber, existing);
   }
 
-  const lineItems: LineItem[] = Array.isArray(slip.lineItems) ? (slip.lineItems as LineItem[]) : [];
+  const rawLineItems: LineItem[] = Array.isArray(slip.lineItems) ? (slip.lineItems as LineItem[]) : [];
+  const lineItems = await hydrateInvoiceLineItemCustomerParts(rawLineItems);
   const isNoCharge = slip.isNoChargeReplacement === true;
 
   let pricingMismatch = false;
@@ -159,8 +334,12 @@ export async function buildInvoicePreviewFromPackingSlip(
     let unitPrice = 0;
     let resolvedPoItemId: number | null = linkedPoItem?.id ?? null;
     let pricingStatus: InvoicePreviewLine['pricingStatus'] = 'matched';
+    const bucketUnitPrice = line.billingAllocationId ? money(line.unitPrice) : null;
 
-    if (matches.length === 1) {
+    if (bucketUnitPrice !== null) {
+      unitPrice = bucketUnitPrice;
+      resolvedPoItemId = line.poItemId ?? resolvedPoItemId;
+    } else if (matches.length === 1) {
       unitPrice = matches[0].unitPrice ?? 0;
       resolvedPoItemId = matches[0].id;
     } else if (matches.length === 0) {
@@ -175,10 +354,19 @@ export async function buildInvoicePreviewFromPackingSlip(
 
     const qty = money(line.quantity);
     const effectiveUnitPrice = isNoCharge ? 0 : unitPrice;
+    const invoicePartNumber = resolveCustomerFacingPartNumber(line);
+    const internalPartNumber = invoicePartNumber === line.partNumber ? null : line.partNumber;
+    const bucketLabel = line.billingBucketLabel?.trim() || null;
+    const baseDescription = line.partName ? `${invoicePartNumber || line.partNumber} - ${line.partName}` : invoicePartNumber || line.partNumber;
     return {
       poItemId: resolvedPoItemId,
-      partNumber: line.partNumber ?? null,
-      description: line.partName ? `${line.partNumber} - ${line.partName}` : line.partNumber,
+      partNumber: invoicePartNumber,
+      internalPartNumber,
+      billingAllocationId: line.billingAllocationId || null,
+      billingBucketLabel: bucketLabel,
+      customerPoLine: line.customerPoLine || null,
+      serialNumbers: Array.isArray(line.serialNumbers) ? line.serialNumbers : [],
+      description: bucketLabel ? `${baseDescription} (${bucketLabel})` : baseDescription,
       qty,
       unitPrice: effectiveUnitPrice,
       lineTotal: effectiveUnitPrice * qty,
@@ -196,6 +384,11 @@ export async function buildInvoicePreviewFromPackingSlip(
           return {
             poItemId: typeof line.poItemId === 'number' ? line.poItemId : base?.poItemId ?? null,
             partNumber: (line.partNumber ?? base?.partNumber ?? null) || null,
+            internalPartNumber: base?.internalPartNumber ?? null,
+            billingAllocationId: base?.billingAllocationId ?? null,
+            billingBucketLabel: base?.billingBucketLabel ?? null,
+            customerPoLine: base?.customerPoLine ?? null,
+            serialNumbers: base?.serialNumbers ?? [],
             description: String(line.description ?? base?.description ?? '').trim(),
             qty,
             unitPrice,
@@ -210,8 +403,11 @@ export async function buildInvoicePreviewFromPackingSlip(
   pricingMismatch = lines.some((line) => line.pricingStatus === 'missing');
   pricingAmbiguous = lines.some((line) => line.pricingStatus === 'ambiguous');
 
-  const { storage } = await import('../../storage');
-  const invoiceNumber = slip.invoiceNumber || await storage.getNextInvoiceNumber(slip.customerId, slip.customerName);
+  const invoiceNumber = slip.invoiceNumber || await assignReservedP2InvoiceNumberToPackingSlip({
+    packingSlipId,
+    reason: 'Reserved during invoice preview from P2 packing slip',
+    changedBy: 'system:invoice-preview',
+  });
 
   const [customer] = await db
     .select({ paymentTerms: p2Customers.paymentTerms })
@@ -263,15 +459,20 @@ export async function createInvoiceFromPackingSlip(
   packingSlipId: string,
   lotId: string,
   overrides: InvoicePreviewInput = {},
-): Promise<void> {
+): Promise<{ id: string; invoiceNumber: string; status: string; existing: boolean }> {
   const existing = await db
-    .select({ id: arInvoices.id })
+    .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
     .from(arInvoices)
     .where(eq(arInvoices.packingSlipId, packingSlipId));
 
   if (existing.length > 0) {
     console.log(`[InvoiceService] Duplicate prevented (pre-check): invoice already exists for packing slip ${packingSlipId}`);
-    return;
+    return {
+      id: existing[0].id,
+      invoiceNumber: existing[0].invoiceNumber,
+      status: existing[0].status,
+      existing: true,
+    };
   }
 
   const preview = await buildInvoicePreviewFromPackingSlip(packingSlipId, lotId, overrides);
@@ -280,7 +481,24 @@ export async function createInvoiceFromPackingSlip(
   }
 
   try {
-    await db.transaction(async (tx) => {
+    const invoice = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('p2-packing-slip-invoice'), hashtext(${packingSlipId}))`);
+
+      const [existingInTransaction] = await tx
+        .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
+        .from(arInvoices)
+        .where(eq(arInvoices.packingSlipId, packingSlipId));
+
+      if (existingInTransaction) {
+        console.log(`[InvoiceService] Duplicate prevented (transaction): invoice already exists for packing slip ${packingSlipId}`);
+        return {
+          id: existingInTransaction.id,
+          invoiceNumber: existingInTransaction.invoiceNumber,
+          status: existingInTransaction.status,
+          existing: true,
+        };
+      }
+
       const [invoice] = await tx
         .insert(arInvoices)
         .values({
@@ -307,7 +525,7 @@ export async function createInvoiceFromPackingSlip(
           createdBy: 'system',
           customerVisibleNotes: preview.customerVisibleNotes,
         })
-        .returning({ id: arInvoices.id });
+        .returning({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status });
 
       if (preview.lines.length > 0) {
         await tx.insert(arInvoiceLines).values(
@@ -320,9 +538,51 @@ export async function createInvoiceFromPackingSlip(
             qty: String(line.qty),
             unitPrice: String(line.unitPrice),
             lineTotal: String(line.lineTotal),
-            dimensionTags: buildRevenueDimensionTags('P2'),
+            dimensionTags: {
+              ...buildRevenueDimensionTags('P2'),
+              ...(line.internalPartNumber ? { internalPartNumber: line.internalPartNumber } : {}),
+              ...(line.billingAllocationId ? { billingAllocationId: line.billingAllocationId } : {}),
+              ...(line.billingBucketLabel ? { billingBucketLabel: line.billingBucketLabel } : {}),
+              ...(line.customerPoLine ? { customerPoLine: line.customerPoLine } : {}),
+              ...(line.serialNumbers?.length ? { serialNumbers: line.serialNumbers } : {}),
+            },
           })),
         );
+      }
+
+      const serialNumbers = preview.lines.flatMap((line) => line.serialNumbers ?? []);
+      if (serialNumbers.length > 0) {
+        const serialNumberList = sql.join(serialNumbers.map((serialNumber) => sql`${serialNumber}`), sql`, `);
+        await tx.execute(sql`
+          UPDATE p2_serial_billing_assignments sba
+             SET invoice_id = ${invoice.id},
+                 locked_at = now(),
+                 locked_by = 'system:invoice-create',
+                 lock_reason = 'Locked when P2 invoice was created',
+                 updated_at = now()
+            FROM p2_serialized_items si
+           WHERE sba.serialized_item_id = si.id
+             AND si.serial_number IN (${serialNumberList})
+             AND sba.locked_at IS NULL
+        `);
+        await tx.execute(sql`
+          INSERT INTO p2_billing_allocation_audit (entity_type, entity_id, action, new_value, changed_by, reason)
+          SELECT
+            'serial_billing_assignment',
+            sba.serialized_item_id::text,
+            'LOCK_FOR_INVOICE',
+            jsonb_build_object(
+              'invoiceId', ${invoice.id}::text,
+              'invoiceNumber', ${preview.invoiceNumber}::text,
+              'allocationId', sba.allocation_id
+            ),
+            'system:invoice-create',
+            'Locked when P2 invoice was created'
+          FROM p2_serial_billing_assignments sba
+          JOIN p2_serialized_items si ON si.id = sba.serialized_item_id
+          WHERE si.serial_number IN (${serialNumberList})
+            AND sba.invoice_id = ${invoice.id}
+        `);
       }
 
       await tx
@@ -332,13 +592,34 @@ export async function createInvoiceFromPackingSlip(
           packingSlipNumber: preview.invoiceNumber,
         })
         .where(eq(p2PackingSlips.id, packingSlipId));
+
+      return {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        status: invoice.status,
+        existing: false,
+      };
     });
 
-    console.log(`[InvoiceService] Invoice ${preview.invoiceNumber} auto-created for packing slip ${packingSlipId}`);
+    if (!invoice.existing) {
+      console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} auto-created for packing slip ${packingSlipId}`);
+    }
+    return invoice;
   } catch (err: any) {
     if (err?.code === '23505') {
       console.log(`[InvoiceService] Duplicate prevented (constraint): invoice already exists for packing slip ${packingSlipId}`);
-      return;
+      const [existingAfterConflict] = await db
+        .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
+        .from(arInvoices)
+        .where(eq(arInvoices.packingSlipId, packingSlipId));
+      if (existingAfterConflict) {
+        return {
+          id: existingAfterConflict.id,
+          invoiceNumber: existingAfterConflict.invoiceNumber,
+          status: existingAfterConflict.status,
+          existing: true,
+        };
+      }
     }
     throw err;
   }

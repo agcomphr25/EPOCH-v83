@@ -49,7 +49,7 @@ import {
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfDay } from 'date-fns';
 import { Link } from 'wouter';
-import PendingSignatureTasks from './PendingSignatureTasks';
+import DocumentSignatureTasks from './DocumentSignatureTasks';
 import P2InvoicePreviewButton from './p2/P2InvoicePreviewButton';
 
 interface AssignedTask {
@@ -335,7 +335,7 @@ export default function MyTasksControlCenter({
                 </div>
               </div>
 
-              <PendingSignatureTasks
+              <DocumentSignatureTasks
                 employeeId={employeeId}
                 employeeName={userName || ''}
                 compact={true}
@@ -443,7 +443,7 @@ export default function MyTasksControlCenter({
           <Progress value={completionPercentage} className="h-3" />
         </div>
 
-        <PendingSignatureTasks
+        <DocumentSignatureTasks
           employeeId={employeeId}
           employeeName={userName || ''}
           compact={true}
@@ -686,7 +686,7 @@ function P2BillingTasks({
                 <p className="text-xs text-muted-foreground truncate">{task.description}</p>
                 {task.oldestCreatedAt && (
                   <p className="text-xs text-muted-foreground">
-                    Oldest packing slip: {format(new Date(task.oldestCreatedAt), 'MMM d, yyyy')}
+                    Oldest shipment record: {format(new Date(task.oldestCreatedAt), 'MMM d, yyyy')}
                   </p>
                 )}
               </div>
@@ -709,43 +709,44 @@ function P2BillingTasks({
 
             {!compact && items.length > 0 && (
               <div className="space-y-2">
-                {items.slice(0, 5).map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 rounded-md bg-white/70 border px-2 py-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">
-                        {item.packingSlipNumber}
-                        {item.poNumber ? ` - PO ${item.poNumber}` : ''}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {item.invoiceNumber
-                          ? `Invoice ${item.invoiceNumber} is ${item.invoiceStatus || 'not posted'}`
-                          : 'No invoice created yet'}
-                      </p>
+                {items.slice(0, 5).map((item) => {
+                  const displayNumber = item.invoiceNumber || 'Invoice not created';
+                  const statusText = item.invoiceNumber
+                    ? item.invoiceStatus === 'SENT'
+                      ? 'Invoice sent - waiting on posting'
+                      : `Invoice ${item.invoiceStatus || 'not posted'}`
+                    : 'No invoice created yet';
+                  return (
+                    <div key={item.id} className="flex items-center gap-2 rounded-md bg-white/70 border px-2 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">
+                          {displayNumber}
+                          {item.poNumber ? ` - PO ${item.poNumber}` : ''}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {statusText}
+                        </p>
+                      </div>
+                      {item.invoiceId ? (
+                        <Link href={`/finance/invoices/${item.invoiceId}`}>
+                          <Button variant="outline" size="sm">
+                            Open Invoice
+                          </Button>
+                        </Link>
+                      ) : (
+                        <P2InvoicePreviewButton
+                          packingSlipId={item.id}
+                          size="sm"
+                          label="Create Invoice"
+                          onCreated={() => queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] })}
+                        />
+                      )}
                     </div>
-                    <Link href={`/p2/packing-slip/${item.id}`}>
-                      <Button variant="ghost" size="sm">
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                    {item.invoiceId ? (
-                      <Link href={`/finance/invoices/${item.invoiceId}`}>
-                        <Button variant="outline" size="sm">
-                          Open Invoice
-                        </Button>
-                      </Link>
-                    ) : (
-                      <P2InvoicePreviewButton
-                        packingSlipId={item.id}
-                        size="sm"
-                        label="Create Invoice"
-                        onCreated={() => queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] })}
-                      />
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
                 {items.length > 5 && (
                   <p className="text-xs text-muted-foreground px-1">
-                    {items.length - 5} more packing slip{items.length - 5 === 1 ? '' : 's'} need review.
+                    {items.length - 5} more shipment record{items.length - 5 === 1 ? '' : 's'} need review.
                   </p>
                 )}
               </div>

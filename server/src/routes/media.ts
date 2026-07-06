@@ -15,6 +15,10 @@ import {
 
 const router = Router();
 
+function contentDisposition(disposition: 'inline' | 'attachment', filename: string) {
+  return `${disposition}; filename="${filename.replace(/["\r\n]/g, '_')}"`;
+}
+
 // Configure multer for temporary file uploads (will be moved to cloud storage)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -347,13 +351,10 @@ router.get('/file/:filename', async (req, res) => {
       if (record.storage_path.startsWith('/objects/') || record.storage_path.startsWith('objects/')) {
         const objectPath = record.storage_path.startsWith('/') ? record.storage_path : `/${record.storage_path}`;
         try {
-          if (record.mime_type) {
-            res.setHeader('Content-Type', record.mime_type);
-          }
-          if (record.filename) {
-            res.setHeader('Content-Disposition', `inline; filename="${record.filename}"`);
-          }
-          return await getFileStorageProviderForObjectPath(objectPath).downloadObject(objectPath, res);
+          return await getFileStorageProviderForObjectPath(objectPath).downloadObject(objectPath, res, {
+            contentType: record.mime_type,
+            contentDisposition: record.filename ? contentDisposition('inline', record.filename) : null,
+          });
         } catch (objError) {
           console.error('Cloud storage file not found:', objError);
         }
@@ -529,9 +530,10 @@ router.get('/:id/download', async (req, res) => {
     if (storagePath && (storagePath.startsWith('/objects/') || storagePath.startsWith('objects/'))) {
       const objectPath = storagePath.startsWith('/') ? storagePath : `/${storagePath}`;
       try {
-        if (media.mimeType) res.setHeader('Content-Type', media.mimeType);
-        res.setHeader('Content-Disposition', `inline; filename="${media.filename || 'file'}"`);
-        return await getFileStorageProviderForObjectPath(objectPath).downloadObject(objectPath, res);
+        return await getFileStorageProviderForObjectPath(objectPath).downloadObject(objectPath, res, {
+          contentType: media.mimeType,
+          contentDisposition: contentDisposition('inline', media.filename || 'file'),
+        });
       } catch (objError) {
         console.error('Cloud storage download failed:', objError);
       }

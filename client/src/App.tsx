@@ -81,6 +81,7 @@ const WADSummaryPage = React.lazy(() => import('./pages/WADSummaryPage'));
 const AssetsPage = React.lazy(() => import('./pages/AssetsPage'));
 const AssetDashboardPage = React.lazy(() => import('./pages/AssetDashboardPage'));
 const QMSPlaceholderPage = React.lazy(() => import('./pages/QMSPlaceholderPage'));
+const QMSPartsEquipmentPage = React.lazy(() => import('./pages/QMSPartsEquipmentPage'));
 const EmployeePortalPage = React.lazy(() => import('./pages/EmployeePortalPage'));
 const KioskPage = React.lazy(() => import('./pages/timekeeping/KioskPage'));
 const TimeClockAdminPage = React.lazy(() => import('./pages/timekeeping/TimeClockAdminPage'));
@@ -123,7 +124,7 @@ const OnboardingDashboard = React.lazy(() => import('./pages/OnboardingDashboard
 const OnboardingInvitePage = React.lazy(() => import('./pages/OnboardingInvitePage'));
 const OnboardingPathsPage = React.lazy(() => import('./pages/OnboardingPathsPage'));
 const OnboardingSettingsPage = React.lazy(() => import('./pages/OnboardingSettingsPage'));
-const PendingEmployerSignaturesPage = React.lazy(() => import('./pages/PendingEmployerSignaturesPage'));
+const EmployerSignaturesPage = React.lazy(() => import('./pages/EmployerSignaturesPage'));
 const OnboardingFormsPage = React.lazy(() => import('./pages/OnboardingFormsPage'));
 const OnboardingSessionWizard = React.lazy(() => import('./pages/OnboardingSessionWizard'));
 const EnhancedFormsPage = React.lazy(() => import('./pages/EnhancedFormsPage'));
@@ -157,6 +158,7 @@ const P2ReadyToShipDashboard = React.lazy(() => import('./pages/P2ReadyToShipDas
 const POProductsPage = React.lazy(() => import('./pages/POProductsPage'));
 const ProductLabelsPage = React.lazy(() => import('./pages/ProductLabelsPage'));
 const ProductionTracking = React.lazy(() => import('./pages/ProductionTracking'));
+const CustomerWIPPage = React.lazy(() => import('./pages/CustomerWIPPage'));
 const BarcodeScannerPage = React.lazy(() => import('./pages/BarcodeScannerPage'));
 const AllOrdersPage = React.lazy(() => import('./pages/AllOrdersPage'));
 const OrderReports = React.lazy(() => import('./pages/OrderReports'));
@@ -164,6 +166,7 @@ const ProductionOrderInspector = React.lazy(() => import('./pages/ProductionOrde
 const DomainTruthInspector = React.lazy(() => import('./pages/DomainTruthInspector'));
 const QueueIntegrityMonitor = React.lazy(() => import('./pages/admin/QueueIntegrityMonitor'));
 const ShippingStatusAuditPage = React.lazy(() => import('./pages/admin/ShippingStatusAuditPage'));
+const P1POStatusRepairPage = React.lazy(() => import('./pages/admin/P1POStatusRepairPage'));
 const ProductionControlTower = React.lazy(() => import('./pages/admin/ProductionControlTower'));
 const LocateOrder = React.lazy(() => import('./pages/LocateOrder'));
 const LinkGroupsReport = React.lazy(() => import('./pages/LinkGroupsReport'));
@@ -198,7 +201,6 @@ const BOMAdministration = React.lazy(() => import('./pages/BOMAdministration').t
 const RobustBOMAdministration = React.lazy(() => import('./pages/RobustBOMAdministration'));
 const AGBottomMetalReport = React.lazy(() => import('./pages/AGBottomMetalReport'));
 const ShippingTracker = React.lazy(() => import('./pages/ShippingTracker'));
-const AwaitingSignaturePage = React.lazy(() => import('./pages/AwaitingSignaturePage'));
 const EmployeeDashboard = React.lazy(() => import('./pages/EmployeeDashboard'));
 const EmployeeDetail = React.lazy(() => import('./pages/EmployeeDetail'));
 const EmployeePortal = React.lazy(() => import('./pages/EmployeePortal'));
@@ -240,6 +242,7 @@ const BulkBarcodeReprint = React.lazy(() => import('./pages/BulkBarcodeReprint')
 const CNCQueuePage = React.lazy(() => import('./pages/CNCQueuePage'));
 const CNCDashboardPage = React.lazy(() => import('./pages/CNCDashboardPage'));
 const CNCPartRoutingsPage = React.lazy(() => import('./pages/CNCPartRoutingsPage'));
+const CNCOperationBatchStation = React.lazy(() => import('./pages/CNCOperationBatchStation'));
 const FinishQCQueuePage = React.lazy(() => import('./pages/FinishQCQueuePage'));
 const FinishQueuePage = React.lazy(() => import('./pages/FinishQueuePage'));
 const FinishQCPage = React.lazy(() => import('./pages/FinishQCPage'));
@@ -395,6 +398,7 @@ function useIsEmbedMode() {
 function isFloorOperatorRoute(location: string) {
   return (
     location.startsWith('/kiosk') ||
+    location.startsWith('/cnc/batch-station') ||
     location.startsWith('/p2-traveler') ||
     location.startsWith('/travelers/')
   );
@@ -689,6 +693,7 @@ function App() {
                   <Route path="/admin/domain-truth" component={DomainTruthInspector} />
                   <Route path="/admin/queue-integrity" component={QueueIntegrityMonitor} />
                   <Route path="/admin/shipping-status-audit" component={ShippingStatusAuditPage} />
+                  <Route path="/admin/p1-po-status-repair" component={P1POStatusRepairPage} />
                   <Route path="/admin/control-tower" component={ProductionControlTower} />
                   <Route path="/admin/secure-vault" component={SecureVaultPage} />
                   <Route path="/admin/inventory-reconciliation" component={InventoryReconciliationPage} />
@@ -764,6 +769,10 @@ function App() {
                   <Route path="/product-labels" component={ProductLabelsPage} />
 
                   {/* Production and BOM Routes */}
+                  <Route
+                    path="/production-tracking/customer-wip"
+                    component={CustomerWIPPage}
+                  />
                   <Route
                     path="/production-tracking"
                     component={ProductionTracking}
@@ -846,6 +855,10 @@ function App() {
                     component={DepartmentPartsRequestPage}
                   />
                   <Route
+                    path="/inventory/department-parts-request"
+                    component={DepartmentPartsRequestPage}
+                  />
+                  <Route
                     path="/inventory/consolidated-needs"
                     component={ConsolidatedNeedsListPage}
                   />
@@ -876,6 +889,7 @@ function App() {
                   </Route>
                   <Route path="/assets" component={AssetsPage} />
                   <Route path="/asset-dashboard" component={AssetDashboardPage} />
+                  <Route path="/qms/parts-equipment" component={QMSPartsEquipmentPage} />
                   <Route path="/qms" component={QMSPlaceholderPage} />
                   <Route path="/qms/:section">
                     {(params) => <QMSPlaceholderPage params={params} />}
@@ -887,7 +901,7 @@ function App() {
                   <Route path="/onboarding/invite/:token" component={OnboardingInvitePage} />
                   <Route path="/onboarding/paths" component={OnboardingPathsPage} />
                   <Route path="/onboarding/settings" component={OnboardingSettingsPage} />
-                  <Route path="/onboarding/employer-signatures" component={PendingEmployerSignaturesPage} />
+                  <Route path="/onboarding/employer-signatures" component={EmployerSignaturesPage} />
                   {/* DEPRECATED: Form builder hidden - using fixed demographics instead */}
                   {/* <Route path="/onboarding/forms" component={OnboardingFormsPage} /> */}
                   <Route path="/onboarding/session/:id" component={OnboardingSessionWizard} />
@@ -1343,7 +1357,6 @@ function App() {
                   />
                   <Route path="/shipping-tracker" component={ShippingTracker} />
                   <Route path="/weekly-shipments" component={RedirectToShippingTracker} />
-                  <Route path="/awaiting-signature" component={AwaitingSignaturePage} />
                   <Route path="/gateway-reports" component={GatewayReports} />
                   <Route path="/metrics-sandbox" component={MetricsSandbox} />
                   <Route path="/metric-directory" component={MetricDirectory} />
@@ -1370,6 +1383,7 @@ function App() {
                     component={CNCQueuePage}
                   />
                   <Route path="/cnc-dashboard" component={CNCDashboardPage} />
+                  <Route path="/cnc/batch-station" component={CNCOperationBatchStation} />
                   <Route path="/cnc-part-routings" component={CNCPartRoutingsPage} />
                   <Route
                     path="/department-queue/finish"

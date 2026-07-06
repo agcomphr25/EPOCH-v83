@@ -632,6 +632,7 @@ import {
   type InsertTravelerComponentAssociation,
   p2LotNumbers,
   productionWorkOrders,
+  wadRevisions,
   type ProductionWorkOrder,
   type InsertProductionWorkOrder,
   // Labor → GL Posting Engine
@@ -771,6 +772,7 @@ import {
 import { DEFAULT_SESSIONS_LIMIT } from './src/constants/sessions';
 import { userHasScopedCapability as _userHasScopedCapability } from './src/services/permissionService';
 import { formatDates } from './utils/formatDates';
+import { deriveP1ProductionStatus } from './src/utils/p1ProductionStatus';
 import { ensureP2PurchaseOrderReadSchema } from './src/lib/p2PurchaseOrderReadiness';
 import {
   laborEntryDraftsTable,
@@ -883,6 +885,7 @@ const productionWorkOrderReadColumns = {
   status: productionWorkOrders.status,
   departmentBudgets: productionWorkOrders.departmentBudgets,
   totalBudgetHours: productionWorkOrders.totalBudgetHours,
+  materialBudgetAmount: productionWorkOrders.materialBudgetAmount,
   startDate: productionWorkOrders.startDate,
   dueDate: productionWorkOrders.dueDate,
   warningThreshold: productionWorkOrders.warningThreshold,
@@ -900,7 +903,7 @@ const productionWorkOrderReadColumns = {
 };
 
 function withDefaultMaterialBudgetAmount<T extends Record<string, unknown>>(row: T | undefined): (T & { materialBudgetAmount: string }) | undefined {
-  return row ? ({ ...row, materialBudgetAmount: '0' } as T & { materialBudgetAmount: string }) : undefined;
+  return row ? ({ ...row, materialBudgetAmount: row.materialBudgetAmount ?? '0' } as T & { materialBudgetAmount: string }) : undefined;
 }
 
 type P1OrderNoteParts = {
@@ -1277,7 +1280,7 @@ export interface IStorage {
   deleteFormSubmission(id: number): Promise<void>;
 
   // Inventory Items CRUD
-  getAllInventoryItems(): Promise<InventoryItem[]>;
+  getAllInventoryItems(options?: { includeInactive?: boolean }): Promise<InventoryItem[]>;
   getInventoryItem(id: number): Promise<InventoryItem | undefined>;
   getInventoryItemByAgPartNumber(
     agPartNumber: string
@@ -1330,7 +1333,7 @@ export interface IStorage {
   ): Promise<PartsRequest>;
   deletePartsRequest(id: number): Promise<void>;
   getPartsRequestsByDepartment(departmentId: number): Promise<PartsRequest[]>;
-  getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null): Promise<PartsRequest[]>;
+  getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null, requestedByNames?: string[]): Promise<PartsRequest[]>;
   getConsolidatedPartsNeeds(): Promise<PartsRequest[]>; // All PENDING/APPROVED requests for inventory manager
 
   // Departments CRUD
@@ -1771,6 +1774,7 @@ export interface IStorage {
 
   // Module 12: Purchase Orders CRUD
   getAllPurchaseOrders(): Promise<PurchaseOrder[]>;
+  reopenClosedP1PurchaseOrdersWithActiveProductionItems(): Promise<number>;
   getPurchaseOrder(
     id: number,
     options?: { includeItems?: boolean; includeOrderCount?: boolean }
@@ -1883,7 +1887,25 @@ export interface IStorage {
     options?: { includeItems?: boolean }
   ): Promise<(P2PurchaseOrder & { items?: P2PurchaseOrderItem[] }) | undefined>;
   createP2PurchaseOrder(data: InsertP2PurchaseOrder): Promise<P2PurchaseOrder>;
-  createP2PurchaseOrderRevision(poId: number, changeReason: string, revisedBy?: string): Promise<P2PurchaseOrder>;
+  createP2PurchaseOrderRevision(
+    poId: number,
+    changeReason: string,
+    revisedBy?: string,
+    overrides?: {
+      poNumber?: string;
+      expectedDelivery?: string;
+      lineItems?: Array<{
+        sourceItemId?: number;
+        inventoryItemId?: number | null;
+        partNumber: string;
+        partName: string;
+        quantity: number;
+        unitPrice?: number | null;
+        specifications?: string | null;
+        notes?: string | null;
+      }>;
+    }
+  ): Promise<P2PurchaseOrder>;
   updateP2PurchaseOrder(
     id: number,
     data: Partial<InsertP2PurchaseOrder>
@@ -6603,13 +6625,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Inventory Items CRUD
-  async getAllInventoryItems(): Promise<InventoryItem[]> {
+  async getAllInventoryItems(options: { includeInactive?: boolean } = {}): Promise<InventoryItem[]> {
     // Include items where isActive is true OR isActive is null (treat null as active)
-    return await db
-      .select()
-      .from(inventoryItems)
-      .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)))
-      .orderBy(inventoryItems.name);
+    try {
+      const query = db.select().from(inventoryItems);
+      if (options.includeInactive) {
+        return await query.orderBy(inventoryItems.name);
+      }
+      return await query
+        .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)))
+        .orderBy(inventoryItems.name);
+    } catch (error: any) {
+      const message = String(error?.message || error);
+      const code = error?.code || error?.cause?.code;
+      if (code !== '42703' && !/column .* does not exist/i.test(message)) {
+        throw error;
+      }
+
+      console.warn('[Inventory] Falling back to runtime inventory_items columns:', message);
+      const result = options.includeInactive
+        ? await db.execute(sql`
+            SELECT *
+            FROM inventory_items
+            ORDER BY name
+          `)
+        : await db.execute(sql`
+            SELECT *
+            FROM inventory_items
+            WHERE is_active = TRUE OR is_active IS NULL
+            ORDER BY name
+          `);
+
+      const rows = Array.isArray(result) ? result : ((result as any).rows || []);
+      return rows.map((row: Record<string, unknown>) => {
+        const item: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(row)) {
+          item[key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())] = value;
+        }
+        return item as InventoryItem;
+      });
+    }
   }
 
   async getInventoryItem(id: number): Promise<InventoryItem | undefined> {
@@ -7092,16 +7147,29 @@ export class DatabaseStorage implements IStorage {
       .select({
         request: partsRequests,
         invId: inventoryItems.id,
+        invAgPartNumber: inventoryItems.agPartNumber,
         invName: inventoryItems.name,
         invSource: inventoryItems.source,
         invVendorId: inventoryItems.vendorId,
+        invDefaultOrderMethod: inventoryItems.defaultOrderMethod,
+        invSupplierPartNumber: inventoryItems.supplierPartNumber,
         invUsageUnit: inventoryItems.usageUnit,
         projectCode: projects.projectCode,
         projectName: projects.projectName,
+        vendorPoNumber: vendorPOs.poNumber,
+        vendorPoExternalNumber: vendorPOs.externalPoNumber,
+        vendorPoStatus: vendorPOs.status,
       })
       .from(partsRequests)
-      .leftJoin(inventoryItems, eq(inventoryItems.agPartNumber, partsRequests.agPartNumber))
+      .leftJoin(
+        inventoryItems,
+        eq(
+          inventoryItems.agPartNumber,
+          sql`COALESCE(NULLIF(${partsRequests.agPartNumber}, ''), NULLIF(${partsRequests.partNumber}, ''))`
+        )
+      )
       .leftJoin(projects, eq(projects.id, partsRequests.projectId))
+      .leftJoin(vendorPOs, eq(vendorPOs.id, partsRequests.vendorPoId))
       .where(eq(partsRequests.isActive, true))
       .orderBy(desc(partsRequests.requestDate));
 
@@ -7109,16 +7177,25 @@ export class DatabaseStorage implements IStorage {
       ...r.request,
       inventoryItem: r.invId ? {
         id: r.invId,
-        agPartNumber: r.request.agPartNumber,
+        agPartNumber: r.invAgPartNumber ?? r.request.agPartNumber ?? r.request.partNumber,
         name: r.invName,
         source: r.invSource,
+        vendorName: r.invSource,
         vendorId: r.invVendorId,
+        defaultOrderMethod: r.invDefaultOrderMethod,
+        supplierPartNumber: r.invSupplierPartNumber,
         usageUnit: r.invUsageUnit,
       } : undefined,
       project: r.projectCode ? {
         id: r.request.projectId,
         projectCode: r.projectCode,
         projectName: r.projectName,
+      } : undefined,
+      vendorPO: r.request.vendorPoId ? {
+        id: r.request.vendorPoId,
+        poNumber: r.vendorPoNumber,
+        externalPoNumber: r.vendorPoExternalNumber,
+        status: r.vendorPoStatus,
       } : undefined,
     }));
   }
@@ -7192,7 +7269,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(partsRequests.requestDate));
   }
 
-  async getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null): Promise<PartsRequest[]> {
+  async getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null, requestedByNames: string[] = []): Promise<PartsRequest[]> {
     const participantFilters = [eq(partsRequests.requestedBy, username)];
     if (userId) {
       participantFilters.push(eq(partsRequests.requestedByUserId, userId));
@@ -7200,15 +7277,37 @@ export class DatabaseStorage implements IStorage {
     if (employeeId) {
       participantFilters.push(eq(partsRequests.requestedForEmployeeId, employeeId));
     }
+    for (const name of requestedByNames) {
+      const trimmed = name.trim();
+      if (trimmed && trimmed !== username) {
+        participantFilters.push(eq(partsRequests.requestedBy, trimmed));
+      }
+    }
 
-    return await db
-      .select()
+    const results = await db
+      .select({
+        request: partsRequests,
+        vendorPoNumber: vendorPOs.poNumber,
+        vendorPoExternalNumber: vendorPOs.externalPoNumber,
+        vendorPoStatus: vendorPOs.status,
+      })
       .from(partsRequests)
+      .leftJoin(vendorPOs, eq(vendorPOs.id, partsRequests.vendorPoId))
       .where(and(
         or(...participantFilters),
         eq(partsRequests.isActive, true)
       ))
       .orderBy(desc(partsRequests.requestDate));
+
+    return results.map((r) => ({
+      ...r.request,
+      vendorPO: r.request.vendorPoId ? {
+        id: r.request.vendorPoId,
+        poNumber: r.vendorPoNumber,
+        externalPoNumber: r.vendorPoExternalNumber,
+        status: r.vendorPoStatus,
+      } : undefined,
+    } as PartsRequest));
   }
 
   async getConsolidatedPartsNeeds(): Promise<any[]> {
@@ -7222,7 +7321,13 @@ export class DatabaseStorage implements IStorage {
         projectName: projects.projectName,
       })
       .from(partsRequests)
-      .leftJoin(inventoryItems, eq(partsRequests.agPartNumber, inventoryItems.agPartNumber))
+      .leftJoin(
+        inventoryItems,
+        eq(
+          inventoryItems.agPartNumber,
+          sql`COALESCE(NULLIF(${partsRequests.agPartNumber}, ''), NULLIF(${partsRequests.partNumber}, ''))`
+        )
+      )
       .leftJoin(departments, eq(partsRequests.departmentId, departments.id))
       .leftJoin(projects, eq(projects.id, partsRequests.projectId))
       .where(and(
@@ -7234,17 +7339,71 @@ export class DatabaseStorage implements IStorage {
         eq(partsRequests.isActive, true)
       ))
       .orderBy(desc(partsRequests.urgency), desc(partsRequests.requestDate));
+
+    const allVendors = await db
+      .select({
+        id: vendors.id,
+        name: vendors.name,
+        website: vendors.website,
+        defaultOrderMethod: vendors.defaultOrderMethod,
+      })
+      .from(vendors)
+      .where(eq(vendors.isActive, true));
+
+    const vendorById = new Map(allVendors.map((vendor) => [vendor.id, vendor]));
+    const normalizeVendorName = (value?: string | null) =>
+      (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const vendorByName = new Map(
+      allVendors
+        .map((vendor) => [normalizeVendorName(vendor.name), vendor] as const)
+        .filter(([key]) => key.length > 0)
+    );
+
+    const resolveVendorByName = (value?: string | null) => {
+      const sourceKey = normalizeVendorName(value);
+      if (!sourceKey) return null;
+      if (vendorByName.has(sourceKey)) return vendorByName.get(sourceKey)!;
+      for (const [vendorKey, vendor] of vendorByName) {
+        if (vendorKey.includes(sourceKey) || sourceKey.includes(vendorKey)) {
+          return vendor;
+        }
+      }
+      return null;
+    };
     
-    return results.map(r => ({
-      ...r.request,
-      inventoryItem: r.inventoryItem,
-      department: r.department,
-      project: r.projectCode ? {
-        id: r.request.projectId,
-        projectCode: r.projectCode,
-        projectName: r.projectName,
-      } : undefined,
-    }));
+    return results.map(r => {
+      const requestVendor = r.request.vendorId ? vendorById.get(r.request.vendorId) : null;
+      const itemVendor = r.inventoryItem?.vendorId ? vendorById.get(r.inventoryItem.vendorId) : null;
+      const sourceVendor = resolveVendorByName(r.inventoryItem?.source || r.request.supplier);
+      const resolvedVendor = requestVendor ?? itemVendor ?? sourceVendor;
+      const resolvedVendorId = r.request.vendorId ?? resolvedVendor?.id ?? r.inventoryItem?.vendorId ?? null;
+      const resolvedVendorName = resolvedVendor?.name ?? r.request.supplier ?? r.inventoryItem?.source ?? null;
+      const effectiveOrderMethod = r.request.orderMethod || r.inventoryItem?.defaultOrderMethod || resolvedVendor?.defaultOrderMethod || null;
+
+      return {
+        ...r.request,
+        orderMethod: effectiveOrderMethod,
+        vendorId: resolvedVendorId,
+        supplier: resolvedVendorName,
+        vendor: resolvedVendor ? {
+          id: resolvedVendor.id,
+          name: resolvedVendor.name,
+          website: resolvedVendor.website,
+          defaultOrderMethod: resolvedVendor.defaultOrderMethod,
+        } : undefined,
+        inventoryItem: r.inventoryItem ? {
+          ...r.inventoryItem,
+          vendorId: r.inventoryItem.vendorId ?? resolvedVendorId,
+          vendorName: resolvedVendorName,
+        } : undefined,
+        department: r.department,
+        project: r.projectCode ? {
+          id: r.request.projectId,
+          projectCode: r.projectCode,
+          projectName: r.projectName,
+        } : undefined,
+      };
+    });
   }
 
   // Departments CRUD
@@ -9243,6 +9402,7 @@ export class DatabaseStorage implements IStorage {
           v.approval_level as "approvalLevel", v.main_document_url as "mainDocumentUrl",
           v.terms_and_conditions as "termsAndConditions", v.payment_terms as "paymentTerms",
           v.shipping_instructions as "shippingInstructions",
+          v.default_order_method as "defaultOrderMethod",
           le.latest_total_score as "ytdTotalScore"
         FROM vendors v
         LEFT JOIN evaluation_rollup er ON er.vendor_id = v.id
@@ -9323,7 +9483,8 @@ export class DatabaseStorage implements IStorage {
         approval_expiration as "approvalExpiration",
         approval_level as "approvalLevel", main_document_url as "mainDocumentUrl",
         terms_and_conditions as "termsAndConditions", payment_terms as "paymentTerms",
-        shipping_instructions as "shippingInstructions"
+        shipping_instructions as "shippingInstructions",
+        default_order_method as "defaultOrderMethod"
       FROM vendors
       WHERE is_active = true
         AND (
@@ -9370,7 +9531,8 @@ export class DatabaseStorage implements IStorage {
         approval_expiration as "approvalExpiration",
         approval_level as "approvalLevel", main_document_url as "mainDocumentUrl",
         terms_and_conditions as "termsAndConditions", payment_terms as "paymentTerms",
-        shipping_instructions as "shippingInstructions"
+        shipping_instructions as "shippingInstructions",
+        default_order_method as "defaultOrderMethod"
       FROM vendors
       WHERE id = $1
       LIMIT 1
@@ -10336,6 +10498,46 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
+  private getVendorPOInventoryCost(poLineItem: any): number | null {
+    const purchaseUnitCost = Number(poLineItem?.purchaseUnitPrice);
+    if (Number.isFinite(purchaseUnitCost) && purchaseUnitCost > 0) {
+      return purchaseUnitCost;
+    }
+
+    const vendorUnitCost = Number(poLineItem?.unitPrice);
+    return Number.isFinite(vendorUnitCost) && vendorUnitCost > 0 ? vendorUnitCost : null;
+  }
+
+  private async syncInventoryItemCostFromVendorPOLine(poLineItem: any): Promise<void> {
+    const agPartNumber = poLineItem?.agPartNumber;
+    const nextCost = this.getVendorPOInventoryCost(poLineItem);
+    if (!agPartNumber || nextCost === null) return;
+
+    const [inventoryItem] = await db
+      .select({
+        id: inventoryItems.id,
+        costPer: inventoryItems.costPer,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, agPartNumber))
+      .limit(1);
+
+    if (!inventoryItem) return;
+
+    const currentCost = inventoryItem.costPer == null ? null : Number(inventoryItem.costPer);
+    if (currentCost !== null && Number.isFinite(currentCost) && Math.abs(currentCost - nextCost) < 0.0001) {
+      return;
+    }
+
+    await db
+      .update(inventoryItems)
+      .set({
+        costPer: nextCost,
+        updatedAt: new Date(),
+      })
+      .where(eq(inventoryItems.id, inventoryItem.id));
+  }
+
   async createVendorPOItem(data: any): Promise<any> {
     // If purchase unit data is provided, derive vendor unit values server-side
     let processedData = { ...data };
@@ -10388,6 +10590,8 @@ export class DatabaseStorage implements IStorage {
         throw err;
       }
     }
+
+    await this.syncInventoryItemCostFromVendorPOLine(item);
 
     // Reopen a fully-received (closed) PO when a new item is added
     if (data.vendorPoId) {
@@ -10455,6 +10659,10 @@ export class DatabaseStorage implements IStorage {
       .set({ ...processedData, updatedAt: new Date() })
       .where(eq(vendorPOItems.id, id))
       .returning();
+
+    if (item) {
+      await this.syncInventoryItemCostFromVendorPOLine(item);
+    }
     
     // Sync manufacturing queue if quantity changed
     const newQuantity = processedData.quantity !== undefined ? processedData.quantity : data.quantity;
@@ -12267,7 +12475,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Module 12: Purchase Orders CRUD
+  async reopenClosedP1PurchaseOrdersWithActiveProductionItems(): Promise<number> {
+    const result = await pool.query(`
+      UPDATE purchase_orders po
+         SET status = 'OPEN',
+             updated_at = NOW()
+       WHERE UPPER(COALESCE(po.status, '')) IN ('CLOSED', 'COMPLETE', 'COMPLETED')
+         AND EXISTS (
+           SELECT 1
+             FROM production_orders prod
+            WHERE prod.po_id = po.id
+              AND COALESCE(UPPER(prod.production_status), '') NOT IN ('SHIPPED', 'CANCELLED', 'CANCELED', 'SCRAPPED')
+         )
+    `);
+
+    const reopenedCount = result.rowCount ?? 0;
+    if (reopenedCount > 0) {
+      console.log(`📦 Reopened ${reopenedCount} P1 purchase order(s) with active production items`);
+    }
+    return reopenedCount;
+  }
+
   async getAllPurchaseOrders(): Promise<PurchaseOrder[]> {
+    await this.reopenClosedP1PurchaseOrdersWithActiveProductionItems();
+
     const rows = await db
       .select()
       .from(purchaseOrders)
@@ -12630,6 +12861,8 @@ export class DatabaseStorage implements IStorage {
           prod.order_id as "orderId",
           prod.current_department as "currentDepartment",
           prod.production_status as "productionStatus",
+          COALESCE(prod.is_fulfilled, false) as "isFulfilled",
+          prod.fulfilled_date as "fulfilledDate",
           pp.customer_product_number as "customerProductNumber"
         FROM purchase_orders po
         INNER JOIN purchase_order_items poi ON po.id = poi.po_id
@@ -12679,6 +12912,8 @@ export class DatabaseStorage implements IStorage {
           prod.order_id as "orderId",
           prod.current_department as "currentDepartment",
           prod.production_status as "productionStatus",
+          COALESCE(prod.is_fulfilled, false) as "isFulfilled",
+          prod.fulfilled_date as "fulfilledDate",
           pp.customer_product_number as "customerProductNumber"
         FROM production_orders prod
         INNER JOIN purchase_orders po ON prod.po_id = po.id
@@ -12745,6 +12980,8 @@ export class DatabaseStorage implements IStorage {
       orderId: string | null;
       currentDepartment: string | null;
       productionStatus: string | null;
+      isFulfilled: boolean;
+      fulfilledDate: Date | string | null;
       customerProductNumber: string | null;
     };
     const rows = (result.rows || []) as P1PORow[];
@@ -12818,7 +13055,7 @@ export class DatabaseStorage implements IStorage {
         // poi.stock_status can be stale (e.g. marked SHIPPED at the item level while individual
         // production orders are still LAID_UP in Shipping QC), which would incorrectly hide
         // those units from the queue (bug: PO002612 / RFPO-002612).
-        const isShipped = row.productionStatus === 'SHIPPED';
+        const isShipped = row.isFulfilled || row.productionStatus === 'SHIPPED';
         const isInShippingDept = row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping';
 
         poItem.productionOrders.push({
@@ -12826,8 +13063,8 @@ export class DatabaseStorage implements IStorage {
           unitNumber,
           currentDepartment: row.currentDepartment,
           productionStatus: row.productionStatus,
-          isFulfilled: isShipped,
-          fulfilledDate: null,
+          isFulfilled: row.isFulfilled || isShipped,
+          fulfilledDate: row.fulfilledDate ? String(row.fulfilledDate) : null,
           fulfilledBy: null,
           isReadyToShip: isInShippingDept && !isShipped,
         });
@@ -12894,9 +13131,12 @@ export class DatabaseStorage implements IStorage {
               const isShippedProdOrder = prodOrder.isFulfilled || prodOrder.productionStatus === 'SHIPPED';
               let effectiveDepartment = prodOrder.currentDepartment;
               let effectiveStatus = prodOrder.productionStatus;
-              if (isMetalAccessoryWithProdOrder) {
-                effectiveDepartment = isShippedProdOrder ? 'Shipped' : 'Shipping QC';
-                effectiveStatus = isShippedProdOrder ? 'SHIPPED' : 'IN_SHIPPING_QC';
+              if (isShippedProdOrder) {
+                effectiveDepartment = 'Shipped';
+                effectiveStatus = 'SHIPPED';
+              } else if (isMetalAccessoryWithProdOrder) {
+                effectiveDepartment = 'Shipping QC';
+                effectiveStatus = 'IN_SHIPPING_QC';
               }
               allItems.push({
                 orderId: prodOrder.orderId,
@@ -13179,6 +13419,7 @@ export class DatabaseStorage implements IStorage {
       'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
       'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment',
       'materialCanonical', 'sourceSnapshot',
+      'isFulfilled', 'fulfilledDate',
       'finishAcceptedAt', 'finishAcceptedBy',
       'status', 'assignedTechnician', 'finishCompletedAt',
     ]);
@@ -13901,10 +14142,14 @@ export class DatabaseStorage implements IStorage {
     try {
       // Departments that are initial queue placements — orders there may keep FINALIZED.
       // Any other department is a real production department and must be IN_PROGRESS.
-      const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue', 'Shipping QC'];
+      const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue'];
       const resolvedStatus = INITIAL_QUEUE_DEPARTMENTS.includes(department)
         ? status
         : 'IN_PROGRESS';
+      const resolvedProductionStatus = deriveP1ProductionStatus({
+        currentDepartment: department,
+        currentStatus: status,
+      });
 
       console.log(
         ` প্রক্র PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${resolvedStatus}`
@@ -13942,7 +14187,7 @@ export class DatabaseStorage implements IStorage {
         .update(productionOrders)
         .set({
           currentDepartment: department,
-          productionStatus: resolvedStatus,
+          productionStatus: resolvedProductionStatus,
           updatedAt: new Date(),
         })
         .where(eq(productionOrders.orderId, orderId))
@@ -13954,7 +14199,7 @@ export class DatabaseStorage implements IStorage {
         );
         return {
           success: true,
-          message: `Production order ${orderId} updated to ${resolvedStatus} status`,
+          message: `Production order ${orderId} updated to ${resolvedProductionStatus} status`,
         };
       }
 
@@ -14650,6 +14895,11 @@ export class DatabaseStorage implements IStorage {
           departmentHistory: updatedHistory,
           updatedAt: now,
         };
+        productionCompletionUpdates.productionStatus = deriveP1ProductionStatus({
+          currentDepartment: nextDept,
+          isFulfilled: (productionOrderRecord as any).isFulfilled,
+          currentStatus: productionOrderRecord.productionStatus,
+        });
         
         // Map completion timestamps for production orders (using schema column names)
         // Schema columns: barcodeCompletedAt, layupCompletedAt, cncCompletedAt, 
@@ -14661,7 +14911,6 @@ export class DatabaseStorage implements IStorage {
           case 'Layup/Plugging':
             productionCompletionUpdates.layupCompletedAt = now;
             productionCompletionUpdates.laidUpAt = now;
-            productionCompletionUpdates.productionStatus = 'LAID_UP';
             break;
           case 'CNC':
             productionCompletionUpdates.cncCompletedAt = now;
@@ -14683,7 +14932,6 @@ export class DatabaseStorage implements IStorage {
             break;
           case 'Shipping':
             productionCompletionUpdates.shippingCompletedAt = now;
-            productionCompletionUpdates.productionStatus = 'SHIPPED';
             productionCompletionUpdates.shippedAt = now;
             break;
         }
@@ -15544,7 +15792,21 @@ export class DatabaseStorage implements IStorage {
   async createP2PurchaseOrderRevision(
     poId: number,
     changeReason: string,
-    revisedBy?: string
+    revisedBy?: string,
+    overrides?: {
+      poNumber?: string;
+      expectedDelivery?: string;
+      lineItems?: Array<{
+        sourceItemId?: number;
+        inventoryItemId?: number | null;
+        partNumber: string;
+        partName: string;
+        quantity: number;
+        unitPrice?: number | null;
+        specifications?: string | null;
+        notes?: string | null;
+      }>;
+    }
   ): Promise<P2PurchaseOrder> {
     await ensureP2PurchaseOrderReadSchema();
 
@@ -15576,7 +15838,8 @@ export class DatabaseStorage implements IStorage {
       const nextRevisionNumber = (existingRevisions[0]?.revisionNumber || 0) + 1;
       const basePONumber = originalPO.poNumber.replace(/-R[A-Z]+$/, '');
       const revisionLetter = String.fromCharCode(64 + nextRevisionNumber);
-      const newPONumber = `${basePONumber}-R${revisionLetter}`;
+      const newPONumber = overrides?.poNumber?.trim() || `${basePONumber}-R${revisionLetter}`;
+      const revisedExpectedDelivery = overrides?.expectedDelivery?.trim() || originalPO.expectedDelivery;
 
       await tx
         .update(p2PurchaseOrders)
@@ -15590,7 +15853,7 @@ export class DatabaseStorage implements IStorage {
           customerId: originalPO.customerId,
           customerName: originalPO.customerName,
           poDate: originalPO.poDate,
-          expectedDelivery: originalPO.expectedDelivery,
+          expectedDelivery: revisedExpectedDelivery,
           status: 'OPEN',
           notes: originalPO.notes,
           attachments: originalPO.attachments || [],
@@ -15634,19 +15897,73 @@ export class DatabaseStorage implements IStorage {
         .from(p2PurchaseOrderItems)
         .where(eq(p2PurchaseOrderItems.poId, originalPO.id));
 
-      for (const item of originalItems) {
-        await tx.insert(p2PurchaseOrderItems).values({
+      const revisedItems = overrides?.lineItems?.length
+        ? overrides.lineItems
+        : originalItems.map((item) => ({
+            sourceItemId: item.id,
+            inventoryItemId: item.inventoryItemId,
+            partNumber: item.partNumber,
+            partName: item.partName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            specifications: item.specifications,
+            notes: item.notes,
+          }));
+
+      const itemIdMap = new Map<number, number>();
+      for (const item of revisedItems) {
+        const quantity = Number(item.quantity) || 1;
+        const unitPrice = Number(item.unitPrice) || 0;
+        const [copiedItem] = await tx.insert(p2PurchaseOrderItems).values({
           poId: newRevision.id,
-          inventoryItemId: item.inventoryItemId,
+          inventoryItemId: item.inventoryItemId ?? null,
           partNumber: item.partNumber,
           partName: item.partName,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-          specifications: item.specifications,
-          notes: item.notes,
-        });
+          quantity,
+          unitPrice,
+          totalPrice: quantity * unitPrice,
+          specifications: item.specifications ?? null,
+          notes: item.notes ?? null,
+        }).returning({ id: p2PurchaseOrderItems.id });
+
+        if (item.sourceItemId) {
+          itemIdMap.set(item.sourceItemId, copiedItem.id);
+        }
       }
+
+      for (const [oldItemId, newItemId] of itemIdMap.entries()) {
+        await tx
+          .update(p2ProductionOrders)
+          .set({ p2PoId: newRevision.id, p2PoItemId: newItemId, updatedAt: new Date() })
+          .where(and(
+            eq(p2ProductionOrders.p2PoId, originalPO.id),
+            eq(p2ProductionOrders.p2PoItemId, oldItemId)
+          ));
+
+        await tx
+          .update(p2SerializedItems)
+          .set({ poId: newRevision.id, poItemId: newItemId, updatedAt: new Date() })
+          .where(and(
+            eq(p2SerializedItems.poId, originalPO.id),
+            eq(p2SerializedItems.poItemId, oldItemId)
+          ));
+
+        await tx.execute(sql`
+          UPDATE manufacturing_queue
+             SET p2_po_id = ${newRevision.id},
+                 p2_po_item_id = ${newItemId},
+                 updated_at = NOW()
+           WHERE p2_po_id = ${originalPO.id}
+             AND p2_po_item_id = ${oldItemId}
+        `);
+      }
+
+      await tx.execute(sql`
+        UPDATE program_builds
+           SET p2_purchase_order_id = ${newRevision.id},
+               updated_at = NOW()
+         WHERE p2_purchase_order_id = ${originalPO.id}
+      `);
 
       return newRevision;
     });
@@ -16289,6 +16606,95 @@ export class DatabaseStorage implements IStorage {
     return productionOrders;
   }
 
+  private normalizeP2SerialPrefix(preferredPrefix?: string | null, fallbackName?: string | null): string {
+    const source = preferredPrefix || fallbackName || 'UNK';
+    const normalized = source.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase();
+    return normalized || 'UNK';
+  }
+
+  private async allocateP2CustomerYearSerialRange(
+    po: Pick<P2PurchaseOrder, 'customerId' | 'customerName'>,
+    count: number,
+    dbClient: DbOrTx
+  ): Promise<{ prefix: string; yearSuffix: string; startSequence: number; endSequence: number }> {
+    if (count <= 0) {
+      throw new Error('Serial range allocation count must be greater than zero');
+    }
+
+    const currentYear = new Date().getFullYear().toString();
+    const yearSuffix = currentYear.slice(-2);
+
+    const customerResult = await dbClient.execute(sql`
+      SELECT rfq_prefix, customer_name
+      FROM p2_customers
+      WHERE customer_id = ${po.customerId}::text
+      LIMIT 1
+    `);
+    const customer = (customerResult.rows?.[0] || {}) as { rfq_prefix?: string | null; customer_name?: string | null };
+    const prefix = this.normalizeP2SerialPrefix(customer.rfq_prefix, customer.customer_name || po.customerName);
+    const serialPattern = `^${prefix}${yearSuffix}[0-9]{5}$`;
+
+    const seqResult = await dbClient.execute(sql`
+      WITH locked_customer AS (
+        SELECT
+          COALESCE((serial_sequences->>${currentYear}::text)::int, 0) AS stored_sequence
+        FROM p2_customers
+        WHERE customer_id = ${po.customerId}::text
+        FOR UPDATE
+      ),
+      existing_serials AS (
+        SELECT COALESCE(
+          MAX((substring(upper(serial_number) from ${`^${prefix}${yearSuffix}([0-9]{5})$`}))::int),
+          0
+        ) AS max_sequence
+        FROM p2_serialized_items
+        WHERE customer_id = ${po.customerId}::text
+          AND upper(serial_number) ~ ${serialPattern}
+      ),
+      base_sequence AS (
+        SELECT GREATEST(
+          COALESCE((SELECT stored_sequence FROM locked_customer), 0),
+          COALESCE((SELECT max_sequence FROM existing_serials), 0)
+        ) AS value
+      )
+      UPDATE p2_customers
+      SET serial_sequences = COALESCE(serial_sequences, '{}'::jsonb) ||
+        jsonb_build_object(${currentYear}::text, (SELECT value FROM base_sequence) + ${count})
+      WHERE customer_id = ${po.customerId}::text
+      RETURNING ((SELECT value FROM base_sequence) + ${count}) AS end_sequence
+    `);
+
+    const endSequence = Number((seqResult.rows?.[0] as { end_sequence?: unknown } | undefined)?.end_sequence);
+    if (Number.isFinite(endSequence) && endSequence > 0) {
+      return {
+        prefix,
+        yearSuffix,
+        startSequence: endSequence - count + 1,
+        endSequence,
+      };
+    }
+
+    const fallbackResult = await dbClient.execute(sql`
+      SELECT COALESCE(
+        MAX((substring(upper(serial_number) from ${`^${prefix}${yearSuffix}([0-9]{5})$`}))::int),
+        0
+      ) AS max_sequence
+      FROM p2_serialized_items
+      WHERE customer_id = ${po.customerId}::text
+        AND upper(serial_number) ~ ${serialPattern}
+    `);
+    const fallbackMax = Number(
+      (fallbackResult.rows?.[0] as { max_sequence?: unknown } | undefined)?.max_sequence || 0
+    );
+    const fallbackEnd = fallbackMax + count;
+    return {
+      prefix,
+      yearSuffix,
+      startSequence: fallbackMax + 1,
+      endSequence: fallbackEnd,
+    };
+  }
+
   async addP2SerializedItemsForPoItem(
     poItemId: number,
     addCount: number,
@@ -16312,19 +16718,57 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`P2 PO ${poItem.poId} not found`);
     }
 
-    // Continue the per-PO barcode sequence (max+1 across ALL items on this PO)
-    const maxSeqResult = await dbClient
-      .select({ maxSeq: max(p2SerializedItems.sequenceNumber) })
-      .from(p2SerializedItems)
-      .where(eq(p2SerializedItems.poId, po.id));
-    const startSeq = (maxSeqResult[0]?.maxSeq ?? 0) + 1;
+    const { prefix, yearSuffix, startSequence } =
+      await this.allocateP2CustomerYearSerialRange(po, addCount, dbClient);
 
-    let itemRouting = await dbClient.query.partRoutings.findFirst({
-      where: and(eq(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
-    });
+    const [projectForPoItem] = await dbClient
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.poId, po.id), eq(projects.p2PoItemId, poItem.id)))
+      .limit(1);
+    const [projectForPo] = projectForPoItem
+      ? [projectForPoItem]
+      : await dbClient
+          .select({ id: projects.id })
+          .from(projects)
+          .where(eq(projects.poId, po.id))
+          .limit(1);
+    const projectId = projectForPo?.id ?? null;
+
+    let itemRouting = projectId
+      ? await dbClient.query.partRoutings.findFirst({
+          where: and(
+            eq(partRoutings.projectId, projectId),
+            eq(partRoutings.partNumber, poItem.partNumber),
+            eq(partRoutings.isActive, true)
+          ),
+        })
+      : null;
+    if (!itemRouting && projectId) {
+      itemRouting = await dbClient.query.partRoutings.findFirst({
+        where: and(
+          eq(partRoutings.projectId, projectId),
+          ilike(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
     if (!itemRouting) {
       itemRouting = await dbClient.query.partRoutings.findFirst({
-        where: and(ilike(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
+        where: and(
+          isNull(partRoutings.projectId),
+          eq(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
+    if (!itemRouting) {
+      itemRouting = await dbClient.query.partRoutings.findFirst({
+        where: and(
+          isNull(partRoutings.projectId),
+          ilike(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
       });
     }
     const baseMatch = poItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
@@ -16358,13 +16802,12 @@ export class DatabaseStorage implements IStorage {
     };
     const itemsToCreate: SerializedInsertShape[] = [];
     for (let i = 0; i < addCount; i++) {
-      const seq = startSeq + i;
-      const seq4 = seq.toString().padStart(4, '0');
-      const barcode = `${po.poNumber}-UNIT-${seq4}`;
+      const seq = startSequence + i;
+      const serialNumber = `${prefix}${yearSuffix}${String(seq).padStart(5, '0')}`;
       itemsToCreate.push({
-        serialNumber: barcode,
-        barcode,
-        travelerBarcode: barcode,
+        serialNumber,
+        barcode: serialNumber,
+        travelerBarcode: serialNumber,
         poId: po.id,
         poItemId: poItem.id,
         poNumber: po.poNumber,
@@ -16941,17 +17384,29 @@ export class DatabaseStorage implements IStorage {
       .where(like(p2ProductionChanges.changeNumber, `PCF-${year}-%`));
     const nextNum = (lastNumber ?? 0) + 1;
     const changeNumber = `PCF-${year}-${String(nextNum).padStart(3, '0')}`;
+    const changeData = this.normalizeP2ProductionChangeDates(data);
     
-    const [change] = await db.insert(p2ProductionChanges).values({ ...data, changeNumber }).returning();
+    const [change] = await db.insert(p2ProductionChanges).values({ ...changeData, changeNumber }).returning();
     return change;
   }
 
   async updateP2ProductionChange(id: string, data: Partial<InsertP2ProductionChange>): Promise<P2ProductionChange> {
+    const changeData = this.normalizeP2ProductionChangeDates(data);
     const [change] = await db.update(p2ProductionChanges)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...changeData, updatedAt: new Date() })
       .where(eq(p2ProductionChanges.id, id))
       .returning();
     return change;
+  }
+
+  private normalizeP2ProductionChangeDates<T extends Partial<InsertP2ProductionChange>>(data: T): T {
+    const normalized: any = { ...data };
+    for (const field of ['submittedAt', 'approvedAt', 'rejectedAt', 'implementedAt'] as const) {
+      if (typeof normalized[field] === 'string' && normalized[field].trim()) {
+        normalized[field] = new Date(normalized[field]);
+      }
+    }
+    return normalized;
   }
 
   // P2 Traveler Changes (Deviations) CRUD
@@ -17011,40 +17466,8 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`PO ${poItem.poId} not found`);
       }
 
-      // Get the customer's RFQ prefix for serial number generation
-      const currentYear = new Date().getFullYear().toString();
-      const yearSuffix = currentYear.slice(-2);
-      let prefix = '';
-
-      // Look up customer by customerId to get rfqPrefix
-      const customerResult = await tx.execute(sql`
-        SELECT rfq_prefix, customer_name, serial_sequences
-        FROM p2_customers
-        WHERE customer_id = ${po.customerId}::text
-        LIMIT 1
-      `);
-
-      if (customerResult.rows && customerResult.rows.length > 0) {
-        const customer = customerResult.rows[0] as any;
-        prefix = customer.rfq_prefix || customer.customer_name.substring(0, 3).toUpperCase();
-      } else {
-        prefix = (po.customerName || 'UNK').substring(0, 3).toUpperCase();
-      }
-
-      // Atomically increment serial sequence counter for this customer+year
-      const seqResult = await tx.execute(sql`
-        UPDATE p2_customers
-        SET serial_sequences = COALESCE(serial_sequences, '{}'::jsonb) ||
-          jsonb_build_object(
-            ${currentYear}::text,
-            COALESCE((serial_sequences->>${currentYear}::text)::int, 0) + ${poItem.quantity}
-          )
-        WHERE customer_id = ${po.customerId}::text
-        RETURNING (COALESCE((serial_sequences->>${currentYear}::text)::int, 0)) as end_sequence
-      `);
-
-      const endSequence = seqResult.rows?.[0] ? (seqResult.rows[0] as any).end_sequence : poItem.quantity;
-      const startSequence = endSequence - poItem.quantity + 1;
+      const { prefix, yearSuffix, startSequence } =
+        await this.allocateP2CustomerYearSerialRange(po, poItem.quantity, tx);
 
       const serializedItems: P2SerializedItem[] = [];
 
@@ -17057,6 +17480,7 @@ export class DatabaseStorage implements IStorage {
         const itemData: InsertP2SerializedItem = {
           serialNumber,
           barcode,
+          travelerBarcode: barcode,
           poId: po.id,
           poItemId: poItem.id,
           poNumber: po.poNumber,
@@ -19170,10 +19594,44 @@ export class DatabaseStorage implements IStorage {
 
   // Training enforcement helpers
 
+  private getP2PartNumberVariants(partNumber: string): string[] {
+    const variants = new Set<string>();
+    const add = (value?: string | null) => {
+      const trimmed = value?.trim();
+      if (trimmed) variants.add(trimmed);
+    };
+
+    add(partNumber);
+    add(partNumber.replace(/\s+/g, ' '));
+
+    for (const value of Array.from(variants)) {
+      const base = value.match(/^(.+?)(?:\s+|\s*-\s*)(?:rev|revision)\.?\s*[a-z0-9]+$/i)?.[1]?.trim();
+      add(base);
+    }
+
+    return Array.from(variants);
+  }
+
+  private getP2DepartmentKeys(department: string): string[] {
+    const normalize = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const keys = new Set<string>([normalize(department)]);
+    const [compact] = Array.from(keys);
+
+    if (compact === 'assembledisassembly') {
+      keys.add('assemblydisassembly');
+    }
+    if (compact === 'assemblydisassembly') {
+      keys.add('assembledisassembly');
+    }
+
+    return Array.from(keys);
+  }
+
   async getP2PartCertificationForStep(
     partNumber: string,
     department: string
   ): Promise<{ id: number; partNumber: string; departments: string[] } | undefined> {
+    const partVariants = this.getP2PartNumberVariants(partNumber);
     const rows = await db
       .select({
         id: p2PartCertifications.id,
@@ -19181,12 +19639,18 @@ export class DatabaseStorage implements IStorage {
         departments: p2PartCertifications.departments,
       })
       .from(p2PartCertifications)
-      .where(eq(p2PartCertifications.partNumber, partNumber));
+      .where(
+        or(
+          ...partVariants.map((variant) =>
+            sql`lower(trim(${p2PartCertifications.partNumber})) = lower(trim(${variant}))`
+          )
+        )
+      );
 
-    const deptLower = department.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const deptKeys = this.getP2DepartmentKeys(department);
     return rows.find((r) => {
       const depts = (r.departments as string[]) || [];
-      return depts.some((d) => d.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === deptLower);
+      return depts.some((d) => deptKeys.includes(d.toLowerCase().trim().replace(/[^a-z0-9]/g, '')));
     });
   }
 
@@ -19195,6 +19659,20 @@ export class DatabaseStorage implements IStorage {
     partNumber: string,
     department: string
   ): Promise<boolean> {
+    const [employee] = await db
+      .select({ name: employees.name })
+      .from(employees)
+      .where(eq(employees.id, employeeId))
+      .limit(1);
+    const partVariants = this.getP2PartNumberVariants(partNumber);
+    const employeeIdentityFilters: SQL<unknown>[] = [
+      eq(p2EmployeePartCertifications.employeeId, employeeId),
+    ];
+    if (employee?.name?.trim()) {
+      employeeIdentityFilters.push(
+        sql`lower(regexp_replace(trim(${p2EmployeePartCertifications.employeeName}), '[^a-z0-9]', '', 'g')) = lower(regexp_replace(trim(${employee.name}), '[^a-z0-9]', '', 'g'))`
+      );
+    }
     const rows = await db
       .select({
         id: p2EmployeePartCertifications.id,
@@ -19207,22 +19685,25 @@ export class DatabaseStorage implements IStorage {
       .from(p2EmployeePartCertifications)
       .where(
         and(
-          eq(p2EmployeePartCertifications.employeeId, employeeId),
-          eq(p2EmployeePartCertifications.partNumber, partNumber)
+          or(...employeeIdentityFilters),
+          or(
+            ...partVariants.map((variant) =>
+              sql`lower(trim(${p2EmployeePartCertifications.partNumber})) = lower(trim(${variant}))`
+            )
+          )
         )
       );
 
-    const deptLower = department.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const deptKeys = this.getP2DepartmentKeys(department);
     const match = rows.find(
-      (r) => r.department.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === deptLower
+      (r) => deptKeys.includes(r.department.toLowerCase().trim().replace(/[^a-z0-9]/g, ''))
     );
 
     if (!match) return false;
     return !!(
       match.drawingKnowledge &&
       match.specSheetUnderstanding &&
-      match.procedureCompletion &&
-      match.certifiedDate
+      match.procedureCompletion
     );
   }
 
@@ -19231,6 +19712,7 @@ export class DatabaseStorage implements IStorage {
     partNumber: string
   ): Promise<{ id: number; expiresAt: Date | null } | undefined> {
     const now = new Date();
+    const partVariants = this.getP2PartNumberVariants(partNumber);
     const rows = await db
       .select({
         id: travelerAuthorizations.id,
@@ -19240,7 +19722,11 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(travelerAuthorizations.employeeId, employeeId),
-          eq(travelerAuthorizations.partNumber, partNumber),
+          or(
+            ...partVariants.map((variant) =>
+              sql`lower(trim(${travelerAuthorizations.partNumber})) = lower(trim(${variant}))`
+            )
+          ),
           eq(travelerAuthorizations.isActive, true)
         )
       );
@@ -19254,12 +19740,17 @@ export class DatabaseStorage implements IStorage {
    * bypass the check) from "auth records exist but this employee doesn't have one" (block).
    */
   async anyAuthorizationsExistForPart(partNumber: string): Promise<boolean> {
+    const partVariants = this.getP2PartNumberVariants(partNumber);
     const rows = await db
       .select({ id: travelerAuthorizations.id })
       .from(travelerAuthorizations)
       .where(
         and(
-          eq(travelerAuthorizations.partNumber, partNumber),
+          or(
+            ...partVariants.map((variant) =>
+              sql`lower(trim(${travelerAuthorizations.partNumber})) = lower(trim(${variant}))`
+            )
+          ),
           eq(travelerAuthorizations.isActive, true)
         )
       )
@@ -20437,6 +20928,7 @@ export class DatabaseStorage implements IStorage {
         id: productionWorkOrders.id,
         workOrderNumber: productionWorkOrders.workOrderNumber,
         partNumber: productionWorkOrders.partNumber,
+        description: productionWorkOrders.description,
         quantity: productionWorkOrders.quantity,
       })
       .from(productionWorkOrders)
@@ -20467,6 +20959,16 @@ export class DatabaseStorage implements IStorage {
 
     traveler = await this.linkTravelerToProductionWorkOrder(traveler.id, wadId);
 
+    const [activeWadRevision] = await db
+      .select({
+        id: wadRevisions.id,
+        revisionCode: wadRevisions.revisionCode,
+      })
+      .from(wadRevisions)
+      .where(and(eq(wadRevisions.wadId, wadId), eq(wadRevisions.status, 'approved')))
+      .orderBy(desc(wadRevisions.approvedAt), desc(wadRevisions.createdAt))
+      .limit(1);
+
     // Patch traveler to inherit part number, description, and quantity from the WAD
     const [patched] = await db
       .update(travelers)
@@ -20474,6 +20976,7 @@ export class DatabaseStorage implements IStorage {
         partNumber: wad.partNumber,
         partName: wad.description ?? traveler.partName,
         quantity: wad.quantity,
+        wadRevisionId: activeWadRevision?.id ?? null,
         updatedAt: new Date(),
       })
       .where(eq(travelers.id, traveler.id))
@@ -24241,18 +24744,6 @@ export class DatabaseStorage implements IStorage {
       sortOrder: index + 1,
       isActive: true
     }));
-
-    // Ensure "Awaiting Customer Signature" is always available as an option
-    const awaitingSignature = 'Awaiting Customer Signature';
-    if (!departments.some((d: any) => d.name === awaitingSignature)) {
-      departments.push({
-        id: departments.length + 1,
-        name: awaitingSignature,
-        displayName: awaitingSignature,
-        sortOrder: departments.length + 1,
-        isActive: true
-      });
-    }
 
     return departments;
   }

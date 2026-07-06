@@ -60,6 +60,9 @@ import {
   CheckCircle,
   RefreshCw,
   BarChart3,
+  GitBranch,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiRequest } from '@/lib/queryClient';
@@ -115,6 +118,11 @@ interface P2PurchaseOrder
   projectName?: string | null;
   lockedAt?: string | null;
   lockedBy?: string | null;
+  // Revision tracking
+  revisionNumber?: number;
+  parentPoId?: number | null;
+  isCurrentRevision?: boolean;
+  revisedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -147,9 +155,10 @@ interface P2POManagerProps {
   onManageItems?: (poId: number, poNumber: string) => void;
   selectedPOIds?: number[];
   initialSearch?: string;
+  onRevise?: (po: P2PurchaseOrder) => void;
 }
 
-export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch = '' }: P2POManagerProps) {
+export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch = '', onRevise }: P2POManagerProps) {
   const [, navigate] = useLocation();
   const [selectedPO, setSelectedPO] = useState<P2PurchaseOrder | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -160,6 +169,7 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
   const [generatingPoId, setGeneratingPoId] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<'default' | 'project_asc' | 'project_desc'>('default');
   const [searchTerm, setSearchTerm] = useState(initialSearch);
+  const [expandedRevisions, setExpandedRevisions] = useState<Set<number>>(new Set());
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -652,6 +662,25 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
       reconciliation.schedule_mismatch && 'Schedule',
       reconciliation.quantity_mismatch && 'Quantity',
     ].filter(Boolean) as string[];
+  };
+
+  const getRevisionFamily = (po: P2PurchaseOrder): P2PurchaseOrder[] => {
+    const rootId = po.parentPoId || po.id;
+    return purchaseOrders
+      .filter((p) => p.id === rootId || p.parentPoId === rootId)
+      .sort((a, b) => (a.revisionNumber ?? 0) - (b.revisionNumber ?? 0));
+  };
+
+  const toggleRevisionHistory = (poId: number) => {
+    setExpandedRevisions((prev) => {
+      const next = new Set(prev);
+      if (next.has(poId)) {
+        next.delete(poId);
+      } else {
+        next.add(poId);
+      }
+      return next;
+    });
   };
 
   const baseFilteredPOs = selectedPOIds.length > 0
@@ -1173,15 +1202,30 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
             const quoteReconciliation = reconciliationByPoId.get(po.id);
             const mismatchFlags = getMismatchFlags(quoteReconciliation);
             const linkedProject = projectByPoId.get(po.id);
+            const isSuperseded = po.isCurrentRevision === false;
+            const hasRevisions = (po.revisionNumber ?? 0) > 0 || po.parentPoId;
+            const revisionFamily = hasRevisions ? getRevisionFamily(po) : [];
+            const showRevisionHistory = expandedRevisions.has(po.id);
 
             return (
-            <Card key={po.id}>
+            <Card key={po.id} className={isSuperseded ? 'opacity-60 border-dashed' : ''}>
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <FileText className="h-5 w-5" />
                       {po.poNumber}
+                      {(po.revisionNumber ?? 0) > 0 && (
+                        <Badge variant="outline" className="border-blue-400 text-blue-700 dark:text-blue-300 flex items-center gap-1 text-xs">
+                          <GitBranch className="h-3 w-3" />
+                          Rev {po.revisionNumber}
+                        </Badge>
+                      )}
+                      {isSuperseded && (
+                        <Badge variant="outline" className="border-slate-400 text-slate-500 dark:text-slate-400 text-xs">
+                          Superseded
+                        </Badge>
+                      )}
                     </CardTitle>
                     <CardDescription>
                       Customer: {po.customerName} • Created:{' '}
@@ -1441,6 +1485,19 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
                       <Lock className="h-4 w-4" />
                     </Button>
                   )}
+                  {po.lockedAt && !isSuperseded && po.status !== 'CANCELED' && onRevise && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onRevise(po)}
+                      data-testid={`button-revise-po-${po.id}`}
+                      title="Issue a formal revision of this locked PO"
+                      className="border-blue-400 text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100"
+                    >
+                      <GitBranch className="h-4 w-4 mr-1" />
+                      Revise PO
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -1462,6 +1519,53 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
+
+                {/* Revision history collapsible */}
+                {revisionFamily.length > 1 && (
+                  <div className="mt-3 border-t pt-3">
+                    <button
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => toggleRevisionHistory(po.id)}
+                      data-testid={`button-toggle-revisions-${po.id}`}
+                    >
+                      <GitBranch className="h-3.5 w-3.5" />
+                      Revision history ({revisionFamily.length} revisions)
+                      {showRevisionHistory ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </button>
+                    {showRevisionHistory && (
+                      <div className="mt-2 space-y-1">
+                        {revisionFamily.map((rev) => (
+                          <div
+                            key={rev.id}
+                            className={`flex items-center justify-between text-xs px-2 py-1 rounded ${
+                              rev.id === po.id
+                                ? 'bg-muted font-medium'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1.5">
+                              {rev.id === po.id && <span className="text-foreground">▶</span>}
+                              {rev.poNumber}
+                              {(rev.revisionNumber ?? 0) === 0 ? (
+                                <span className="text-muted-foreground">(original)</span>
+                              ) : (
+                                <span className="text-blue-600 dark:text-blue-400">Rev {rev.revisionNumber}</span>
+                              )}
+                              {rev.isCurrentRevision === false && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 border-slate-300 text-slate-400">
+                                  Superseded
+                                </Badge>
+                              )}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {format(new Date(rev.createdAt), 'MMM d, yyyy')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
             );

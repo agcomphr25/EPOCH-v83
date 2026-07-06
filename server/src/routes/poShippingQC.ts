@@ -16,6 +16,7 @@ import {
   reverseP1ShipmentRevenueDraftOrEntry,
 } from '../services/p1ShipmentRevenueService';
 import { buildRevenueDimensionTags } from '../services/productionLineAccounting';
+import { deriveP1ProductionStatus } from '../utils/p1ProductionStatus';
 
 const router = Router();
 
@@ -143,10 +144,31 @@ async function findP1PackingSlipInvoice(
            AND (
              inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
              OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
-           )
+         )
          )`
              : ''
          }
+         OR (
+           inv.po_override = $2
+           AND (
+             inv.internal_notes ILIKE '%' || $1 || '%'
+             OR inv.notes ILIKE '%' || $1 || '%'
+             OR EXISTS (
+               SELECT 1
+               FROM shipment_records sr
+               WHERE sr.id::text = $1
+                 AND NULLIF(sr.reference, '') IS NOT NULL
+                 AND (
+                   inv.internal_notes ILIKE '%' || sr.reference || '%'
+                   OR inv.notes ILIKE '%' || sr.reference || '%'
+                 )
+             )
+           )
+           AND (
+             inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+             OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+           )
+         )
          ${
            shipmentPoCount <= 1
              ? `OR (
@@ -197,7 +219,6 @@ async function findP1PackingSlipInvoiceForOrders(
            WHERE line.invoice_id = inv.id
              AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
              AND line.dimension_tags->>'poNumber' = $1
-             AND NULLIF(line.dimension_tags->>'shipmentRecordId', '') IS NULL
              AND (
                line.dimension_tags->>'orderId' = ANY($2::text[])
                OR EXISTS (
@@ -1439,7 +1460,27 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
         sr.customer_name ILIKE $${paramIndex} OR
         sr.master_tracking_number ILIKE $${paramIndex} OR
         sr.reference ILIKE $${paramIndex} OR
-        sr.invoice_number ILIKE $${paramIndex}
+        sr.invoice_number ILIKE $${paramIndex} OR
+        EXISTS (
+          SELECT 1
+          FROM shipment_items search_si
+          LEFT JOIN production_orders search_prod_ord ON search_si.order_id = search_prod_ord.order_id
+          LEFT JOIN purchase_order_items search_poi ON search_poi.id = search_si.po_item_id
+          LEFT JOIN purchase_orders search_po ON search_poi.po_id = search_po.id
+          WHERE search_si.shipment_id = sr.id
+            AND (
+              search_si.order_id ILIKE $${paramIndex} OR
+              search_si.po_number ILIKE $${paramIndex} OR
+              search_si.description ILIKE $${paramIndex} OR
+              search_prod_ord.po_number ILIKE $${paramIndex} OR
+              search_prod_ord.customer_name ILIKE $${paramIndex} OR
+              search_prod_ord.item_name ILIKE $${paramIndex} OR
+              search_poi.item_name ILIKE $${paramIndex} OR
+              search_poi.stock_model_name ILIKE $${paramIndex} OR
+              search_po.po_number ILIKE $${paramIndex} OR
+              search_po.customer_name ILIKE $${paramIndex}
+            )
+        )
       )`);
       params.push(`%${search}%`);
       paramIndex++;
@@ -1523,7 +1564,30 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
               'quantity', si.quantity,
               'description', COALESCE(NULLIF(si.description, ''), COALESCE(poi.stock_model_name, poi.item_name), prod_ord.item_name),
               'poNumber', COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number),
-              'hasPackingSlip', si.packing_slip_base64 IS NOT NULL,
+              'hasPackingSlip', EXISTS (
+                SELECT 1
+                FROM shipment_items slip_si
+                LEFT JOIN production_orders slip_prod_ord ON slip_si.order_id = slip_prod_ord.order_id
+                LEFT JOIN purchase_order_items slip_poi ON slip_poi.id = slip_si.po_item_id
+                LEFT JOIN purchase_orders slip_po ON slip_poi.po_id = slip_po.id
+                WHERE slip_si.shipment_id = sr.id
+                  AND COALESCE(NULLIF(slip_si.po_number, ''), slip_prod_ord.po_number, slip_po.po_number) =
+                    COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                  AND slip_si.packing_slip_base64 IS NOT NULL
+              ),
+              'packingSlipItemId', (
+                SELECT slip_si.id::text
+                FROM shipment_items slip_si
+                LEFT JOIN production_orders slip_prod_ord ON slip_si.order_id = slip_prod_ord.order_id
+                LEFT JOIN purchase_order_items slip_poi ON slip_poi.id = slip_si.po_item_id
+                LEFT JOIN purchase_orders slip_po ON slip_poi.po_id = slip_po.id
+                WHERE slip_si.shipment_id = sr.id
+                  AND COALESCE(NULLIF(slip_si.po_number, ''), slip_prod_ord.po_number, slip_po.po_number) =
+                    COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                  AND slip_si.packing_slip_base64 IS NOT NULL
+                ORDER BY (slip_si.id = si.id) DESC, slip_si.created_at DESC
+                LIMIT 1
+              ),
               'itemType', COALESCE(poi.item_type, 'stock_model'),
               'unitPrice', CASE WHEN $${paramIndex + 2}::boolean THEN poi.unit_price ELSE NULL END,
               'lineTotal', CASE WHEN $${paramIndex + 2}::boolean THEN COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1) ELSE NULL END,
@@ -1560,10 +1624,7 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                   AND line.dimension_tags->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
                   AND (
                     line.dimension_tags->>'shipmentRecordId' = sr.id::text
-                    OR (
-                      NULLIF(line.dimension_tags->>'shipmentRecordId', '') IS NULL
-                      AND line.dimension_tags->>'orderId' = si.order_id
-                    )
+                    OR line.dimension_tags->>'orderId' = si.order_id
                     OR EXISTS (
                       SELECT 1
                       FROM jsonb_array_elements_text(
@@ -1573,12 +1634,29 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                           ELSE '[]'::jsonb
                         END
                       ) AS order_id(value)
-                      WHERE NULLIF(line.dimension_tags->>'shipmentRecordId', '') IS NULL
-                        AND order_id.value = si.order_id
+                      WHERE order_id.value = si.order_id
                     )
                   )
               )
               ${fulfillmentAttemptInvoiceSql}
+              OR (
+                inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                AND (
+                  inv.internal_notes ILIKE '%' || sr.id::text || '%'
+                  OR inv.notes ILIKE '%' || sr.id::text || '%'
+                  OR (
+                    NULLIF(sr.reference, '') IS NOT NULL
+                    AND (
+                      inv.internal_notes ILIKE '%' || sr.reference || '%'
+                      OR inv.notes ILIKE '%' || sr.reference || '%'
+                    )
+                  )
+                )
+                AND (
+                  inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+                  OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+                )
+              )
               OR (
                 inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
                 AND inv.invoice_number = sr.invoice_number
@@ -1745,6 +1823,9 @@ router.get('/oem-shipments/:id/label', authenticateToken, async (req, res) => {
   }
 });
 
+const P1_OEM_PACKING_SLIP_ROUTE_VERSION =
+  'p1-oem-packing-slip-resolved-invoice-20260701';
+
 // GET /api/po-orders/oem-shipments/packing-slip/:itemId
 // Download packing slip for a specific shipment item
 router.get(
@@ -1753,20 +1834,29 @@ router.get(
   async (req, res) => {
     try {
       const { itemId } = req.params;
+      const requestedPoNumber =
+        typeof req.query.poNumber === 'string' ? req.query.poNumber.trim() : '';
+      res.setHeader(
+        'X-EPOCH-P1-Packing-Slip-Route',
+        P1_OEM_PACKING_SLIP_ROUTE_VERSION
+      );
       console.log(`📄 Downloading packing slip for shipment item ${itemId}...`);
 
       // Validate UUID format
       const uuidRegex =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(itemId)) {
-        return res.status(400).json({ _error: 'Invalid item ID format' });
+        return res.status(400).json({
+          _error: 'Invalid item ID format',
+          routeVersion: P1_OEM_PACKING_SLIP_ROUTE_VERSION,
+        });
       }
 
       const query = `
       SELECT 
         si.id,
         si.packing_slip_base64,
-        si.po_number,
+        COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number,
         si.order_id,
         si.quantity,
         si.description,
@@ -1780,7 +1870,9 @@ router.get(
         to_jsonb(si) -> 'serial_numbers' AS serial_numbers
       FROM shipment_items si
       JOIN shipment_records sr ON sr.id = si.shipment_id
+      LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
       LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+      LEFT JOIN purchase_orders po ON po.id = poi.po_id
       WHERE si.id = $1
     `;
 
@@ -1788,7 +1880,10 @@ router.get(
       const item = (result.rows || result)[0];
 
       if (!item) {
-        return res.status(404).json({ _error: 'Shipment item not found' });
+        return res.status(404).json({
+          _error: 'Shipment item not found',
+          routeVersion: P1_OEM_PACKING_SLIP_ROUTE_VERSION,
+        });
       }
 
       let packingSlipBase64: string = item.packing_slip_base64;
@@ -1823,7 +1918,7 @@ router.get(
             zip: (shipTo.postalCode as string) || 'N/A',
           };
 
-          const poNumberForSlip = item.po_number || '';
+          const poNumberForSlip = item.po_number || requestedPoNumber || '';
 
           // Fetch all items for this PO within the same shipment to compute aggregated fields
           const siblingQuery = `
@@ -1831,17 +1926,24 @@ router.get(
             si.id,
             si.order_id,
             si.quantity,
+            si.packing_slip_base64,
             sr.reference AS shipment_reference,
             poi.item_name AS poi_item_name,
             poi.stock_model_name AS poi_stock_model_name,
-            poi.stock_model_id AS poi_stock_model_id
+            poi.stock_model_id AS poi_stock_model_id,
+            COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number
           FROM shipment_items si
           JOIN shipment_records sr ON sr.id = si.shipment_id
+          LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
           LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+          LEFT JOIN purchase_orders po ON po.id = poi.po_id
           WHERE si.shipment_id = (
             SELECT shipment_id FROM shipment_items WHERE id = $1
           )
-          AND si.po_number = $2
+          AND (
+            COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) = $2
+            OR si.id = $1
+          )
         `;
           const siblingResult = await pool.query(siblingQuery, [
             itemId,
@@ -1850,6 +1952,27 @@ router.get(
           const siblingRows: any[] = (siblingResult.rows ||
             siblingResult) as any[];
 
+          if (siblingRows.length === 0) {
+            throw new Error(
+              `No shipment items found for PO ${poNumberForSlip || '(unknown PO)'} in this shipment`
+            );
+          }
+
+          let resolvedInvoiceNumber: string | null = item.shipment_invoice_number || null;
+          const siblingWithPackingSlip = siblingRows.find((r) => r.packing_slip_base64);
+          if (siblingWithPackingSlip?.packing_slip_base64) {
+            packingSlipBase64 = siblingWithPackingSlip.packing_slip_base64;
+            await pool.query(
+              `UPDATE shipment_items
+               SET packing_slip_base64 = $1
+               WHERE id = $2
+                 AND packing_slip_base64 IS NULL`,
+              [packingSlipBase64, itemId]
+            );
+            console.log(
+              `Reused sibling packing slip ${siblingWithPackingSlip.id} for itemId=${itemId}, PO=${poNumberForSlip}`
+            );
+          } else {
           // Aggregate quantity across all items in this PO group
           const totalQty = siblingRows.reduce(
             (sum, r) => sum + (r.quantity || 1),
@@ -1882,11 +2005,10 @@ router.get(
             : 0;
 
           // Resolve invoice number: reuse stored value, or generate + persist a new one
-          let invoiceNumber: string;
           if (shipmentPoCount <= 1 && item.shipment_invoice_number) {
-            invoiceNumber = item.shipment_invoice_number;
+            resolvedInvoiceNumber = item.shipment_invoice_number;
             console.log(
-              `♻️ Reusing stored invoice number ${invoiceNumber} for itemId=${itemId}`
+              `♻️ Reusing stored invoice number ${resolvedInvoiceNumber} for itemId=${itemId}`
             );
           } else {
             const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
@@ -1897,28 +2019,28 @@ router.get(
             });
 
             if (reusableInvoiceNumber) {
-              invoiceNumber = reusableInvoiceNumber;
+              resolvedInvoiceNumber = reusableInvoiceNumber;
               console.log(
-                `♻️ Reusing historical invoice number ${invoiceNumber} for itemId=${itemId}`
+                `♻️ Reusing historical invoice number ${resolvedInvoiceNumber} for itemId=${itemId}`
               );
             } else {
-              invoiceNumber = await slipStorage.getNextInvoiceNumber(
+              resolvedInvoiceNumber = await slipStorage.getNextInvoiceNumber(
                 '0',
                 customerName
               );
               console.log(
-                `🆕 Generated new invoice number ${invoiceNumber} for itemId=${itemId}`
+                `🆕 Generated new invoice number ${resolvedInvoiceNumber} for itemId=${itemId}`
               );
             }
             if (item.shipment_record_id && shipmentPoCount <= 1) {
               try {
                 const saveResult = await pool.query(
                   `UPDATE shipment_records SET invoice_number = $1 WHERE id = $2 AND invoice_number IS NULL RETURNING invoice_number`,
-                  [invoiceNumber, item.shipment_record_id]
+                  [resolvedInvoiceNumber, item.shipment_record_id]
                 );
                 if (saveResult.length > 0) {
                   console.log(
-                    `💾 Saved invoice number ${invoiceNumber} to shipment_record id=${item.shipment_record_id}`
+                    `💾 Saved invoice number ${resolvedInvoiceNumber} to shipment_record id=${item.shipment_record_id}`
                   );
                 } else {
                   const reRead = await pool.query(
@@ -1926,9 +2048,9 @@ router.get(
                     [item.shipment_record_id]
                   );
                   if (reRead[0]?.invoice_number) {
-                    invoiceNumber = reRead[0].invoice_number;
+                    resolvedInvoiceNumber = reRead[0].invoice_number;
                     console.log(
-                      `♻️ Concurrent write detected — using pre-existing invoice number ${invoiceNumber} for itemId=${itemId}`
+                      `♻️ Concurrent write detected — using pre-existing invoice number ${resolvedInvoiceNumber} for itemId=${itemId}`
                     );
                   }
                 }
@@ -1938,6 +2060,9 @@ router.get(
                 );
               }
             }
+          }
+          if (!resolvedInvoiceNumber) {
+            throw new Error(`Could not resolve invoice number for PO ${poNumberForSlip || '(unknown PO)'}`);
           }
 
           const slipItems = groupItemsByDescription(
@@ -1954,11 +2079,11 @@ router.get(
           );
 
           console.log(
-            `📋 Packing slip regen — customerName: "${customerName}", poNumber: "${poNumberForSlip}", invoice: "${invoiceNumber}", qty: ${totalQty}, stickerRange: "${stickerRange}", shipmentRef: "${shipmentRef}"`
+            `📋 Packing slip regen — customerName: "${customerName}", poNumber: "${poNumberForSlip}", invoice: "${resolvedInvoiceNumber}", qty: ${totalQty}, stickerRange: "${stickerRange}", shipmentRef: "${shipmentRef}"`
           );
 
           const slipData: PackingSlipData = {
-            packingSlipNumber: invoiceNumber,
+            packingSlipNumber: resolvedInvoiceNumber,
             poNumber: poNumberForSlip,
             date: new Date().toLocaleDateString('en-US', {
               month: 'short',
@@ -1995,10 +2120,11 @@ router.get(
           await recordP1FulfillmentArtifacts({
             orderIds: siblingRows.map((r) => r.order_id).filter(Boolean),
             poNumber: poNumberForSlip,
-            invoiceNumber,
+            invoiceNumber: resolvedInvoiceNumber,
             trackingNumber: item.tracking_number || '',
             shipmentRecordId: item.shipment_record_id || null,
           });
+          }
         } catch (regenErr: any) {
           console.error(
             `❌ Packing slip regeneration failed for item ${itemId}:`,
@@ -2006,13 +2132,16 @@ router.get(
           );
           return res.status(404).json({
             _error: 'Packing slip not available and could not be regenerated',
+            details: regenErr.message,
+            routeVersion: P1_OEM_PACKING_SLIP_ROUTE_VERSION,
           });
         }
       }
 
       // Decode base64 and send as PDF
       const slipBuffer = Buffer.from(packingSlipBase64, 'base64');
-      const filename = `packing-slip-PO${item.po_number}-${item.order_id}.pdf`;
+      const filenamePoNumber = item.po_number || requestedPoNumber || 'unknown';
+      const filename = `packing-slip-PO${filenamePoNumber}-${item.order_id}.pdf`;
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader(
@@ -2027,6 +2156,7 @@ router.get(
       res.status(500).json({
         _error: 'Failed to download packing slip',
         details: error.message,
+        routeVersion: P1_OEM_PACKING_SLIP_ROUTE_VERSION,
       });
     }
   }
@@ -2138,6 +2268,7 @@ router.post(
           id: draft.existingInvoice.id,
           invoiceNumber: draft.existingInvoice.invoice_number,
           status: draft.existingInvoice.status,
+          existing: true,
         });
       }
 
@@ -2167,6 +2298,25 @@ router.post(
       const pricingMismatch = draft.pricingMismatch;
 
       await client.query('BEGIN');
+      await client.query(
+        `SELECT pg_advisory_xact_lock(hashtext('p1-oem-packing-slip-invoice'), hashtext($1))`,
+        [`${id}:${poNumber}`]
+      );
+
+      const existingInTransaction = await findP1PackingSlipInvoice(id, poNumber);
+      if (existingInTransaction) {
+        await client.query('COMMIT');
+        console.log(
+          `[P1InvoiceService] Duplicate prevented: shipment ${id}, PO ${poNumber} already has invoice ${existingInTransaction.invoice_number}`
+        );
+        return res.status(200).json({
+          id: existingInTransaction.id,
+          invoiceNumber: existingInTransaction.invoice_number,
+          status: existingInTransaction.status,
+          existing: true,
+        });
+      }
+
       const invoiceResult = await client.query(
         `INSERT INTO ar_invoices (
          customer_id,
@@ -2278,6 +2428,7 @@ router.post(
         id: invoice.id,
         invoiceNumber: invoice.invoice_number,
         status: invoice.status,
+        existing: false,
       });
     } catch (error: any) {
       try {
@@ -2405,11 +2556,29 @@ router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
         .json({ _error: `Item ${orderId} already exists in this shipment` });
     }
 
+    const inheritedSlipRows = rowsOf<{ packing_slip_base64: string | null }>(
+      await pool.query(
+        `SELECT existing_si.packing_slip_base64
+         FROM shipment_items existing_si
+         LEFT JOIN production_orders existing_prod_ord ON existing_si.order_id = existing_prod_ord.order_id
+         LEFT JOIN purchase_order_items existing_poi ON existing_poi.id = existing_si.po_item_id
+         LEFT JOIN purchase_orders existing_po ON existing_poi.po_id = existing_po.id
+         WHERE existing_si.shipment_id = $1
+           AND COALESCE(NULLIF(existing_si.po_number, ''), existing_prod_ord.po_number, existing_po.po_number) = $2
+           AND existing_si.packing_slip_base64 IS NOT NULL
+         ORDER BY existing_si.created_at DESC
+         LIMIT 1`,
+        [id, poNumber]
+      )
+    );
+    const inheritedPackingSlipBase64 =
+      inheritedSlipRows[0]?.packing_slip_base64 || null;
+
     // Insert the new shipment item
     const insertQuery = `
-      INSERT INTO shipment_items (id, shipment_id, po_item_id, order_id, quantity, description, po_number)
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
-      RETURNING id, shipment_id, po_item_id, order_id, quantity
+      INSERT INTO shipment_items (id, shipment_id, po_item_id, order_id, quantity, description, po_number, packing_slip_base64)
+      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, shipment_id, po_item_id, order_id, quantity, packing_slip_base64 IS NOT NULL AS has_packing_slip
     `;
 
     const result = await pool.query(insertQuery, [
@@ -2419,6 +2588,7 @@ router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
       quantity,
       description,
       poNumber,
+      inheritedPackingSlipBase64,
     ]);
     const newItem = (result.rows || result)[0];
 
@@ -2610,7 +2780,7 @@ router.post(
       const updateResult = await pool.query(
         `
       UPDATE production_orders 
-      SET production_status = 'QC_PASSED',
+      SET production_status = 'IN_PROGRESS',
           current_department = 'Shipping QC',
           shipped_at = NULL,
           is_fulfilled = false,
@@ -2770,10 +2940,26 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
         continue;
       }
 
-      // Update production status to SHIPPED or back to previous status
+      const nextProductionStatus = deriveP1ProductionStatus({
+        currentDepartment: order.currentDepartment,
+        isFulfilled: shouldFulfill,
+        currentStatus: order.productionStatus,
+        preserveCancelled: true,
+      });
+      const nextDepartment =
+        shouldFulfill
+          ? 'Shipped'
+          : ['shipped', 'fulfilled'].includes(String(order.currentDepartment || '').trim().toLowerCase())
+            ? 'Shipping QC'
+            : order.currentDepartment;
+
+      // Update production status to SHIPPED or back to the status implied by its department.
       await storage.updateProductionOrder(order.id, {
-        productionStatus: shouldFulfill ? 'SHIPPED' : 'PENDING',
+        productionStatus: nextProductionStatus,
+        currentDepartment: nextDepartment,
         shippedAt: shouldFulfill ? shippedAt : null,
+        isFulfilled: shouldFulfill,
+        fulfilledDate: shouldFulfill ? shippedAt : null,
       });
 
       if (shouldFulfill && order.poId) shippedPoIds.add(order.poId);
@@ -2905,13 +3091,13 @@ router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
     let updateQuery = `
       UPDATE production_orders 
       SET 
-        production_status = 'QC_PASSED',
+        production_status = 'IN_PROGRESS',
         current_department = 'Shipping QC',
         shipped_at = NULL,
         is_fulfilled = false,
         fulfilled_date = NULL,
         updated_at = NOW()
-      WHERE (production_status = 'Shipped' OR is_fulfilled = true)
+      WHERE (UPPER(production_status) = 'SHIPPED' OR is_fulfilled = true)
     `;
 
     const params: any[] = [];
@@ -2924,13 +3110,13 @@ router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
       updateQuery = `
         UPDATE production_orders 
         SET 
-          production_status = 'QC_PASSED',
+          production_status = 'IN_PROGRESS',
           current_department = 'Shipping QC',
           shipped_at = NULL,
           is_fulfilled = false,
           fulfilled_date = NULL,
           updated_at = NOW()
-        WHERE (production_status = 'Shipped' OR is_fulfilled = true)
+        WHERE (UPPER(production_status) = 'SHIPPED' OR is_fulfilled = true)
         AND po_item_id IN (
           SELECT poi.id FROM purchase_order_items poi
           JOIN purchase_orders po ON poi.po_id = po.id
@@ -3148,7 +3334,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           if (!order) {
             throw new Error(`Order ${item.orderId} not found`);
           }
-          // P1 PO orders use productionStatus (PENDING, LAID_UP, SHIPPED) not currentDepartment
+          // P1 PO orders use productionStatus (PENDING, IN_PROGRESS, SHIPPED) not currentDepartment
           const isDevMode = process.env.NODE_ENV === 'development';
           if (order.productionStatus === 'SHIPPED' && !isDevMode) {
             throw new Error(`Order ${item.orderId} has already been shipped`);
@@ -3723,7 +3909,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         } else if (detail.order.id) {
           await storage.updateProductionOrder(detail.order.id, {
             productionStatus: 'SHIPPED',
+            currentDepartment: 'Shipped',
             shippedAt,
+            isFulfilled: true,
+            fulfilledDate: shippedAt,
           });
           console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
           const poId = detail.order?.poId ?? (detail.order as any)?.po_id;

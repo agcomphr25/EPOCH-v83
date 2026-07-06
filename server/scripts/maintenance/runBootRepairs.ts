@@ -3,6 +3,7 @@ import {
   runEarlyOneTimeRepairBackfills,
   runLaborAllocationBackfill,
   runPacketAllocationBootBackfill,
+  runP1ProductionStatusBootBackfill,
   runReturnToQcBootRepair,
 } from '../../bootstrap/oneTimeRepairs';
 
@@ -16,6 +17,8 @@ async function main() {
   }
 
   await runEarlyOneTimeRepairBackfills({ db, pool });
+  const p1StatusBackfill = await runP1ProductionStatusBootBackfill({ db, pool });
+  console.log(`P1 production status backfill updated ${p1StatusBackfill.updated} row(s).`);
   await runReturnToQcBootRepair();
   await runPacketAllocationBootBackfill({ db, pool });
 

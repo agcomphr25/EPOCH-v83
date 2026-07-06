@@ -31,7 +31,51 @@ describe('accountingEventMatrix', () => {
       'VENDOR_BILL_RECORDED',
       'INVENTORY_RECEIVED',
       'INVENTORY_ISSUED_TO_PRODUCTION',
+      'FIXED_ASSET_ACQUIRED',
+      'EQUIPMENT_LOAN_RECORDED',
       'OPENING_BALANCE_MIGRATION',
+    ]));
+  });
+
+  it('keeps the revenue stream split explicit for P1 prepaid, P1 PO, and P2 Net 30 accounting', () => {
+    const ids = accountingEventMatrix.map((row) => row.id);
+
+    expect(ids).toEqual(expect.arrayContaining([
+      'P1_CUSTOMER_PAYMENT_RECEIVED',
+      'P1_PREPAID_SHIPMENT_REVENUE_RECOGNIZED',
+      'P1_PO_NET30_INVOICE_POSTED',
+      'P2_NET30_INVOICE_POSTED',
+    ]));
+  });
+
+  it('points revenue stream classification work at the shared classifier', () => {
+    const p1Prepaid = accountingEventMatrix.find((row) => row.id === 'P1_PREPAID_SHIPMENT_REVENUE_RECOGNIZED');
+    const p1Po = accountingEventMatrix.find((row) => row.id === 'P1_PO_NET30_INVOICE_POSTED');
+    const p2 = accountingEventMatrix.find((row) => row.id === 'P2_NET30_INVOICE_POSTED');
+
+    expect(p1Prepaid?.evidence).toContain('server/src/services/revenueStreamClassifier.ts');
+    expect(p1Po?.evidence).toContain('server/src/services/revenueStreamClassifier.ts');
+    expect(p2?.evidence).toContain('server/src/services/revenueStreamClassifier.ts');
+  });
+
+  it('points AR invoice posting coverage at the shared posting service', () => {
+    const arInvoice = accountingEventMatrix.find((row) => row.id === 'AR_INVOICE_POSTED');
+    const p1Po = accountingEventMatrix.find((row) => row.id === 'P1_PO_NET30_INVOICE_POSTED');
+    const p2 = accountingEventMatrix.find((row) => row.id === 'P2_NET30_INVOICE_POSTED');
+
+    expect(arInvoice?.evidence).toContain('server/src/services/arInvoicePostingService.ts');
+    expect(p1Po?.evidence).toContain('server/src/services/accountingPostingService.ts');
+    expect(p2?.evidence).toContain('server/src/services/accountingPostingService.ts');
+  });
+
+  it('tracks capital equipment, equipment loans, loan payments, and depreciation as accounting events', () => {
+    const ids = accountingEventMatrix.map((row) => row.id);
+
+    expect(ids).toEqual(expect.arrayContaining([
+      'FIXED_ASSET_ACQUIRED',
+      'EQUIPMENT_LOAN_RECORDED',
+      'EQUIPMENT_LOAN_PAYMENT_MADE',
+      'FIXED_ASSET_DEPRECIATION_POSTED',
     ]));
   });
 });

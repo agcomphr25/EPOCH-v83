@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { compareReceiptLines } from '@/lib/receiptLineSort';
@@ -101,6 +101,15 @@ interface InventoryDepartment {
   sortOrder?: number;
   defaultReceivingLocation?: string | null;
   defaultReceivingFreezer?: number | null;
+}
+
+interface EmployeeOption {
+  id: number;
+  name?: string;
+  preferredName?: string | null;
+  employeeCode?: string | null;
+  department?: string | null;
+  isActive?: boolean;
 }
 
 interface VendorPO {
@@ -2364,14 +2373,19 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
   onUpdate: (r: Receipt) => void;
 }) {
   const units = receipt.units ?? [];
+  const NONE_SENTINEL = '__none__';
   const [settingDisposition, setSettingDisposition] = useState<{
     unitId: number;
     disposition: string;
     notes: string;
     rejectionOutcome: string;
     departmentId: string;
+    approverEmployeeId: string;
     supervisorConfirmed: boolean;
   } | null>(null);
+  const [approvalScope, setApprovalScope] = useState<'all' | 'per_item'>('all');
+  const [defaultApprovalDepartmentId, setDefaultApprovalDepartmentId] = useState(NONE_SENTINEL);
+  const [defaultApproverEmployeeId, setDefaultApproverEmployeeId] = useState('');
   const [dispositionError, setDispositionError] = useState<{ error: string; missingDocuments?: string[] } | null>(null);
 
   // Safety net: when Disposition opens, ensure any non-split lines have been promoted
@@ -2415,6 +2429,37 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
     queryKey: ['/api/inventory/departments'],
   });
 
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number } | null>({
+    queryKey: ['currentUser'],
+  });
+
+  const activeEmployees = useMemo(
+    () => employees.filter(emp => emp.isActive !== false),
+    [employees]
+  );
+
+  useEffect(() => {
+    if (defaultApproverEmployeeId || !currentUser?.employeeId || activeEmployees.length === 0) return;
+    const currentEmployee = activeEmployees.find(emp => emp.id === currentUser.employeeId);
+    if (currentEmployee) setDefaultApproverEmployeeId(String(currentEmployee.id));
+  }, [activeEmployees, currentUser?.employeeId, defaultApproverEmployeeId]);
+
+  const employeeLabel = (employee: EmployeeOption) => {
+    const displayName = employee.preferredName || employee.name || `Employee ${employee.id}`;
+    return employee.employeeCode ? `${displayName} (${employee.employeeCode})` : displayName;
+  };
+
+  const selectedDefaultDepartment = departments.find(d => String(d.id) === defaultApprovalDepartmentId);
+  const selectedDefaultApprover = activeEmployees.find(emp => String(emp.id) === defaultApproverEmployeeId);
+  const approvalDefaultsLabel = [
+    selectedDefaultDepartment?.name ?? 'Receiving',
+    selectedDefaultApprover ? employeeLabel(selectedDefaultApprover) : currentUser?.username ?? 'Current user',
+  ].join(' / ');
+
   // Fetch missing required docs for this receipt
   const { data: requiredDocsData } = useQuery({
     queryKey: ['/api/receipts', receipt.id, 'required-docs'],
@@ -2430,18 +2475,26 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
     mutationFn: async () => {
       const draft = settingDisposition!;
       const selectedDepartment = departments.find(d => String(d.id) === draft.departmentId);
+      const selectedApprover = activeEmployees.find(emp => String(emp.id) === draft.approverEmployeeId);
       const finalDisposition = draft.disposition === 'rejected'
         ? draft.rejectionOutcome
         : draft.disposition;
       const notes = [
         draft.notes.trim(),
-        selectedDepartment ? `Department: ${selectedDepartment.name}` : '',
-        draft.supervisorConfirmed ? 'Supervisor confirmation recorded by current user' : '',
+        `Approved department: ${selectedDepartment?.name ?? 'Receiving'}`,
+        selectedApprover ? `Approved employee: ${employeeLabel(selectedApprover)}` : `Approved employee: ${currentUser?.username ?? 'Current user'}`,
+        `Approval scope: ${approvalScope === 'all' ? 'All items' : 'Per item'}`,
+        draft.supervisorConfirmed ? 'Supervisor confirmation recorded' : '',
       ].filter(Boolean).join('\n');
       if (selectedDepartment && receipt.departmentId !== selectedDepartment.id) {
         await apiRequest(`/api/receipts/${receipt.id}`, {
           method: 'PATCH',
           body: JSON.stringify({ departmentId: selectedDepartment.id }),
+        });
+      } else if (!selectedDepartment && receipt.departmentId) {
+        await apiRequest(`/api/receipts/${receipt.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ departmentId: null }),
         });
       }
       return apiRequest(`/api/receipts/${receipt.id}/units/${draft.unitId}/disposition`, {
@@ -2510,6 +2563,73 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
       {units.length === 0 && (
         <div className="text-center text-xs text-gray-500 py-4">No units to disposition yet</div>
       )}
+      {units.length > 0 && (
+        <div className="border rounded-lg p-3 bg-slate-50 dark:bg-slate-900/20 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-medium">Approval Defaults</div>
+              <div className="text-xs text-gray-500">Applied when opening an item disposition.</div>
+            </div>
+            <Badge variant="outline" className="text-[10px] font-normal">
+              {approvalScope === 'all' ? 'All items' : 'Per item'}
+            </Badge>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div>
+              <Label className="text-xs">Approved Department</Label>
+              <Select
+                value={defaultApprovalDepartmentId}
+                onValueChange={setDefaultApprovalDepartmentId}
+              >
+                <SelectTrigger className="h-8 text-xs mt-1">
+                  <SelectValue placeholder="Receiving" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_SENTINEL}>Receiving</SelectItem>
+                  {departments.map(dept => (
+                    <SelectItem key={dept.id} value={String(dept.id)}>{dept.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Approved Employee</Label>
+              <Select
+                value={defaultApproverEmployeeId || NONE_SENTINEL}
+                onValueChange={v => setDefaultApproverEmployeeId(v === NONE_SENTINEL ? '' : v)}
+              >
+                <SelectTrigger className="h-8 text-xs mt-1">
+                  <SelectValue placeholder={currentUser?.username ?? 'Current user'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_SENTINEL}>{currentUser?.username ?? 'Current user'}</SelectItem>
+                  {activeEmployees.map(emp => (
+                    <SelectItem key={emp.id} value={String(emp.id)}>{employeeLabel(emp)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Apply To</Label>
+              <Select
+                value={approvalScope}
+                onValueChange={v => setApprovalScope(v as 'all' | 'per_item')}
+              >
+                <SelectTrigger className="h-8 text-xs mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All items</SelectItem>
+                  <SelectItem value="per_item">Per item</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="text-[11px] text-gray-500">
+            Current approval default: <span className="font-medium text-gray-700 dark:text-gray-300">{approvalDefaultsLabel}</span>
+          </div>
+        </div>
+      )}
       {units.map(unit => {
         const expStatus = getExpirationStatus(unit.expirationDate);
         return (
@@ -2545,7 +2665,8 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
                       disposition: d,
                       notes: '',
                       rejectionOutcome: 'rejected_returned',
-                      departmentId: receipt.departmentId ? String(receipt.departmentId) : '',
+                      departmentId: defaultApprovalDepartmentId === NONE_SENTINEL ? '' : defaultApprovalDepartmentId,
+                      approverEmployeeId: defaultApproverEmployeeId,
                       supervisorConfirmed: false,
                     });
                     setDispositionError(null);
@@ -2575,18 +2696,35 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
                 Setting disposition to: <span className="font-medium">{DISPOSITION_LABELS[settingDisposition.disposition]}</span>
               </div>
               <div>
-                <Label className="text-xs">Department / Supervisor Area</Label>
+                <Label className="text-xs">Approved Department</Label>
                 <Select
-                  value={settingDisposition.departmentId || '__none__'}
-                  onValueChange={v => setSettingDisposition(s => s ? { ...s, departmentId: v === '__none__' ? '' : v } : s)}
+                  value={settingDisposition.departmentId || NONE_SENTINEL}
+                  onValueChange={v => setSettingDisposition(s => s ? { ...s, departmentId: v === NONE_SENTINEL ? '' : v } : s)}
                 >
                   <SelectTrigger className="h-8 text-xs mt-1">
-                    <SelectValue placeholder="Receiving or department supervisor" />
+                    <SelectValue placeholder="Receiving" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">Receiving</SelectItem>
+                    <SelectItem value={NONE_SENTINEL}>Receiving</SelectItem>
                     {departments.map(dept => (
                       <SelectItem key={dept.id} value={String(dept.id)}>{dept.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Approved Employee</Label>
+                <Select
+                  value={settingDisposition.approverEmployeeId || NONE_SENTINEL}
+                  onValueChange={v => setSettingDisposition(s => s ? { ...s, approverEmployeeId: v === NONE_SENTINEL ? '' : v } : s)}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1">
+                    <SelectValue placeholder={currentUser?.username ?? 'Current user'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE_SENTINEL}>{currentUser?.username ?? 'Current user'}</SelectItem>
+                    {activeEmployees.map(emp => (
+                      <SelectItem key={emp.id} value={String(emp.id)}>{employeeLabel(emp)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

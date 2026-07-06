@@ -1,15 +1,15 @@
 import { Router, type Request, Response } from 'express';
 import { db } from '../../db';
+import { storage } from '../../storage';
 import { 
   p2LayupSchedules, 
   p2SerializedItems,
   p2PurchaseOrders,
   p2PurchaseOrderItems,
   p2ProductionOrders,
-  partRoutings,
   insertP2LayupScheduleSchema 
 } from '../../schema';
-import { eq, and, gte, lte, desc, inArray, ilike, max } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import JsBarcode from 'jsbarcode';
@@ -655,60 +655,7 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
       });
     }
 
-    // Find the highest sequence number already used across ALL items on this PO
-    // so that a second (or third) line continues the sequence instead of restarting at 1.
-    const maxSeqResult = await db
-      .select({ maxSeq: max(p2SerializedItems.sequenceNumber) })
-      .from(p2SerializedItems)
-      .where(eq(p2SerializedItems.poId, po.id));
-    const startSeq = (maxSeqResult[0]?.maxSeq ?? 0) + 1;
-
-    let itemRouting = await db.query.partRoutings.findFirst({
-      where: and(eq(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
-    });
-    if (!itemRouting) {
-      itemRouting = await db.query.partRoutings.findFirst({
-        where: and(ilike(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
-      });
-    }
-    const baseMatch = poItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
-    const familyKey = baseMatch ? baseMatch[1].trim() : poItem.partNumber;
-
-    const itemsToCreate = [];
-    for (let i = 0; i < poItem.quantity; i++) {
-      const seq = startSeq + i;
-      const seq4 = seq.toString().padStart(4, '0');
-      const barcode = `${po.poNumber}-UNIT-${seq4}`;
-      const serialNumber = barcode;
-
-      itemsToCreate.push({
-        serialNumber,
-        barcode,
-        travelerBarcode: barcode,
-        poId: po.id,
-        poItemId: poItem.id,
-        poNumber: po.poNumber,
-        partNumber: poItem.partNumber,
-        partName: poItem.partName,
-        customerId: po.customerId,
-        customerName: po.customerName,
-        sequenceNumber: seq,
-        currentDepartment: 'Pending Layup',
-        currentStageIndex: 0,
-        status: 'ACTIVE',
-        departmentHistory: [],
-        metadata: poItem.specifications ? { specifications: poItem.specifications } : null,
-        buildFamilyKey: familyKey,
-        partRoutingId: itemRouting?.id || null,
-        partRoutingRevision: itemRouting ? ((itemRouting as any).routingRevision || 1) : null,
-      });
-    }
-
-    // Insert all serialized items in batch
-    const createdItems = await db
-      .insert(p2SerializedItems)
-      .values(itemsToCreate)
-      .returning();
+    const createdItems = await storage.addP2SerializedItemsForPoItem(poItem.id, poItem.quantity);
 
     let productionOrderCount = 0;
     let cuttingOrderCount = 0;

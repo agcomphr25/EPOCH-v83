@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import {
   AlertTriangle,
@@ -11,18 +11,38 @@ import {
   FolderOpen,
   GitBranch,
   PackageCheck,
+  Pencil,
   Plus,
   UserCheck,
 } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,6 +50,8 @@ import { Textarea } from '@/components/ui/textarea';
 interface EmployeeOption {
   id: number;
   name: string;
+  employeeCode?: string;
+  isActive?: boolean;
   userRole?: string;
 }
 
@@ -44,14 +66,47 @@ interface DraftBuilderTab {
 }
 
 interface DraftBomLine {
+  id?: string;
   agPartNumber?: string;
   supplierItemId?: string;
   description?: string;
   itemDescription?: string;
+  inventoryItemId?: number | null;
+  inventoryItemName?: string | null;
   qtyNeeded?: number | string;
   quantity?: number | string;
   status?: string;
   action?: string;
+  isManufactured?: boolean;
+  childDraftBoms?: DraftPartBom[];
+}
+
+interface DraftBomComponent {
+  id: string;
+  sourceLineId?: string | null;
+  inventoryItemId?: number | null;
+  partNumber: string;
+  description: string;
+  quantity: number;
+  isManufactured?: boolean;
+}
+
+interface DraftBomPart {
+  id: string;
+  sourceLineId?: string | null;
+  inventoryItemId?: number | null;
+  partNumber: string;
+  description: string;
+  quantity: number;
+  bomItems?: DraftBomComponent[];
+}
+
+interface DraftPartBom {
+  id: string;
+  name: string;
+  revision?: string;
+  rootPart: DraftBomPart;
+  parts?: DraftBomPart[];
 }
 
 interface DraftBomRecord {
@@ -59,6 +114,7 @@ interface DraftBomRecord {
   name: string;
   revision?: string;
   projectId?: string | null;
+  projectCode?: string | null;
   projectType?: 'P2_PROJECT' | 'R_AND_D' | null;
   projectName?: string | null;
   project?: string | null;
@@ -98,9 +154,24 @@ const R_AND_D_PROJECT_STORAGE_KEY = 'epoch.rdProjects.v1';
 const DRAFT_BOM_STORAGE_KEY = 'epoch:draft-boms';
 
 const fallbackDraftTabs: DraftBuilderTab[] = [
-  { id: 'concept-bom', name: 'Concept BOM', partCount: 18, updatedAt: '2026-06-03' },
-  { id: 'prototype-build', name: 'Prototype Build', partCount: 26, updatedAt: '2026-06-05' },
-  { id: 'test-fixture', name: 'Test Fixture', partCount: 9, updatedAt: '2026-06-07' },
+  {
+    id: 'concept-bom',
+    name: 'Concept BOM',
+    partCount: 18,
+    updatedAt: '2026-06-03',
+  },
+  {
+    id: 'prototype-build',
+    name: 'Prototype Build',
+    partCount: 26,
+    updatedAt: '2026-06-05',
+  },
+  {
+    id: 'test-fixture',
+    name: 'Test Fixture',
+    partCount: 9,
+    updatedAt: '2026-06-07',
+  },
 ];
 
 const fallbackParts: RDPart[] = [
@@ -153,15 +224,29 @@ const fallbackAssemblyTree: AssemblyNode[] = [
         label: 'Upper Structure',
         status: 'manufacturing',
         children: [
-          { id: 'laminate-panel', label: 'High-temp laminate panel', status: 'ordered' },
-          { id: 'retention-hardware', label: 'Titanium retention hardware', status: 'on_hand' },
+          {
+            id: 'laminate-panel',
+            label: 'High-temp laminate panel',
+            status: 'ordered',
+          },
+          {
+            id: 'retention-hardware',
+            label: 'Titanium retention hardware',
+            status: 'on_hand',
+          },
         ],
       },
       {
         id: 'sensor-package',
         label: 'Sensor Package',
         status: 'short',
-        children: [{ id: 'sensor-bracket', label: 'Sensor bracket blank', status: 'short' }],
+        children: [
+          {
+            id: 'sensor-bracket',
+            label: 'Sensor bracket blank',
+            status: 'short',
+          },
+        ],
       },
     ],
   },
@@ -217,14 +302,155 @@ function normalizePartStatus(line: DraftBomLine): PartStatus {
   const action = (line.action ?? '').toLowerCase();
 
   if (status.includes('on hand')) return 'on_hand';
-  if (status.includes('order') || status.includes('eta') || action.includes('order')) return 'ordered';
-  if (status.includes('hold') || status.includes('review') || status.includes('quote')) return 'short';
+  if (
+    status.includes('order') ||
+    status.includes('eta') ||
+    action.includes('order')
+  )
+    return 'ordered';
+  if (
+    status.includes('hold') ||
+    status.includes('review') ||
+    status.includes('quote')
+  )
+    return 'short';
   return 'manufacturing';
+}
+
+function hasPlanningGap(nodes: AssemblyNode[]) {
+  return nodes.some(
+    (node) => node.status === 'short' || hasPlanningGap(node.children ?? [])
+  );
+}
+
+function draftLinePartNumber(line: DraftBomLine, index = 0) {
+  return (
+    line.agPartNumber ||
+    line.supplierItemId ||
+    `RD-DRAFT-${String(index + 1).padStart(3, '0')}`
+  );
+}
+
+function draftLineDescription(line: DraftBomLine) {
+  return (
+    line.description ||
+    line.itemDescription ||
+    line.inventoryItemName ||
+    'Draft BOM line'
+  );
+}
+
+function normalizedPartKey(value?: string | null) {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function normalizedProjectKey(value?: string | null) {
+  return (
+    value
+      ?.trim()
+      .toLowerCase()
+      .replace(/[\s_-]+/g, '') ?? ''
+  );
+}
+
+function mergeDraftRecords(
+  localRecords: DraftBomRecord[],
+  sharedRecords: DraftBomRecord[]
+) {
+  const byId = new Map<string, DraftBomRecord>();
+  for (const record of [...localRecords, ...sharedRecords]) {
+    if (record?.id) byId.set(record.id, record);
+  }
+  return [...byId.values()].sort((a, b) =>
+    (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
+  );
+}
+
+function mergeProjects(
+  sharedProjects: RDProject[],
+  localProjects: RDProject[]
+) {
+  const byId = new Map<string, RDProject>();
+  for (const project of [...sharedProjects, ...localProjects]) {
+    if (project?.id) byId.set(project.id, project);
+  }
+  return [...byId.values()];
+}
+
+async function saveSharedProject(project: RDProject) {
+  const response = await fetch(
+    `/api/rd-projects/${encodeURIComponent(project.id)}`,
+    {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(project),
+    }
+  );
+  if (!response.ok) {
+    throw new Error('Failed to save R&D project');
+  }
+  return response.json() as Promise<RDProject>;
+}
+
+async function saveSharedDraftRecord(draft: DraftBomRecord) {
+  const response = await fetch(
+    `/api/draft-bom-drafts/${encodeURIComponent(draft.id)}`,
+    {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(draft),
+    }
+  );
+  if (!response.ok) {
+    throw new Error('Failed to save Draft Builder draft');
+  }
+  return response.json() as Promise<DraftBomRecord>;
+}
+
+function findDraftLineForComponent(
+  component: DraftBomComponent | DraftBomPart,
+  lines: DraftBomLine[]
+) {
+  if (component.sourceLineId) {
+    const match = lines.find((line) => line.id === component.sourceLineId);
+    if (match) return match;
+  }
+
+  if (component.inventoryItemId) {
+    const match = lines.find(
+      (line) => line.inventoryItemId === component.inventoryItemId
+    );
+    if (match) return match;
+  }
+
+  const componentPart = normalizedPartKey(component.partNumber);
+  const componentDescription = normalizedPartKey(component.description);
+  return (
+    lines.find(
+      (line, index) =>
+        normalizedPartKey(draftLinePartNumber(line, index)) === componentPart
+    ) ??
+    lines.find(
+      (line) =>
+        componentPart && normalizedPartKey(line.agPartNumber) === componentPart
+    ) ??
+    lines.find(
+      (line) =>
+        componentDescription &&
+        normalizedPartKey(draftLineDescription(line)) === componentDescription
+    )
+  );
 }
 
 function partReadiness(parts: RDPart[]) {
   const required = parts.reduce((sum, part) => sum + part.required, 0);
-  const available = parts.reduce((sum, part) => sum + Math.min(part.required, part.onHand + part.manufactured), 0);
+  const available = parts.reduce(
+    (sum, part) =>
+      sum + Math.min(part.required, part.onHand + part.manufactured),
+    0
+  );
   return required === 0 ? 0 : Math.round((available / required) * 100);
 }
 
@@ -237,92 +463,215 @@ function draftRecordToTab(draft: DraftBomRecord): DraftBuilderTab {
   };
 }
 
+function linkDraftRecordToProject(
+  draft: DraftBomRecord,
+  project: RDProject
+): DraftBomRecord {
+  return {
+    ...draft,
+    projectId: project.id,
+    projectType: 'R_AND_D',
+    projectName: project.projectName,
+    project: project.projectName,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function unlinkDraftRecordFromProject(
+  draft: DraftBomRecord,
+  project: RDProject
+): DraftBomRecord {
+  if (draft.projectType !== 'R_AND_D' || draft.projectId !== project.id) {
+    return draft;
+  }
+  return {
+    ...draft,
+    projectId: null,
+    projectType: null,
+    projectName: null,
+    project: '',
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function getDraftTabs(records: DraftBomRecord[]): DraftBuilderTab[] {
   const tabs = records.map(draftRecordToTab);
   return tabs.length > 0 ? tabs : fallbackDraftTabs;
 }
 
 function isDraftLinkedToProject(project: RDProject, draft: DraftBomRecord) {
-  return project.draftTabIds.includes(draft.id)
-    || (draft.projectType === 'R_AND_D' && draft.projectId === project.id);
+  const projectName = normalizedProjectKey(project.projectName);
+  const draftProjectValues = [
+    draft.projectName,
+    draft.project,
+    draft.projectCode,
+  ].map(normalizedProjectKey);
+  return (
+    project.draftTabIds.includes(draft.id) ||
+    (draft.projectType === 'R_AND_D' && draft.projectId === project.id) ||
+    (!!projectName && draftProjectValues.includes(projectName))
+  );
 }
 
-function getDraftRecordsForProject(project: RDProject | null, records: DraftBomRecord[]) {
+function getDraftRecordsForProject(
+  project: RDProject | null,
+  records: DraftBomRecord[]
+) {
   if (!project) return [];
   return records.filter((draft) => isDraftLinkedToProject(project, draft));
 }
 
-function getDraftTabsForProject(project: RDProject | null, records: DraftBomRecord[], allTabs: DraftBuilderTab[]) {
+function getDraftTabsForProject(
+  project: RDProject | null,
+  records: DraftBomRecord[],
+  allTabs: DraftBuilderTab[]
+) {
   if (!project) return [];
   const linkedRecords = getDraftRecordsForProject(project, records);
   const linkedIds = new Set(linkedRecords.map((draft) => draft.id));
   const linkedRecordTabs = linkedRecords.map(draftRecordToTab);
-  const manuallyAttachedTabs = allTabs.filter((tab) => project.draftTabIds.includes(tab.id) && !linkedIds.has(tab.id));
+  const manuallyAttachedTabs = allTabs.filter(
+    (tab) => project.draftTabIds.includes(tab.id) && !linkedIds.has(tab.id)
+  );
   return [...linkedRecordTabs, ...manuallyAttachedTabs];
 }
 
-function getPartsForProject(project: RDProject | null, records: DraftBomRecord[]) {
+function getPartsForProject(
+  project: RDProject | null,
+  records: DraftBomRecord[]
+) {
   if (!project) return [];
   const attachedRecords = getDraftRecordsForProject(project, records);
   const lines = attachedRecords.flatMap((draft) => draft.lines ?? []);
 
-  if (lines.length === 0) return project.draftTabIds.length > 0 || attachedRecords.length > 0 ? [] : fallbackParts;
+  if (lines.length === 0)
+    return project.draftTabIds.length > 0 || attachedRecords.length > 0
+      ? []
+      : fallbackParts;
 
   return lines.slice(0, 80).map((line, index) => {
     const required = Math.max(1, asNumber(line.qtyNeeded ?? line.quantity));
     const status = normalizePartStatus(line);
     return {
-      partNumber: line.agPartNumber || line.supplierItemId || `RD-DRAFT-${String(index + 1).padStart(3, '0')}`,
-      description: line.description || line.itemDescription || 'Draft BOM line',
+      partNumber: draftLinePartNumber(line, index),
+      description: draftLineDescription(line),
       required,
       onHand: status === 'on_hand' ? required : 0,
       ordered: status === 'ordered' ? required : 0,
-      manufactured: status === 'manufacturing' ? Math.max(1, Math.floor(required / 2)) : 0,
+      manufactured:
+        status === 'manufacturing' ? Math.max(1, Math.floor(required / 2)) : 0,
       status,
     };
   });
 }
 
-function getAssemblyTreeForProject(project: RDProject | null, parts: RDPart[]) {
-  if (!project) return [];
-  if (parts.length === 0) return [];
-  if (parts === fallbackParts) return fallbackAssemblyTree;
+function getComponentChildren(
+  components: DraftBomComponent[],
+  lines: DraftBomLine[],
+  visited: Set<string>
+): AssemblyNode[] {
+  return components.map((component) => {
+    const matchingLine = findDraftLineForComponent(component, lines);
+    const childBoms = matchingLine?.childDraftBoms ?? [];
+    const nextVisited = new Set(visited);
+    const componentKey = component.id || component.partNumber;
+    nextVisited.add(componentKey);
+    const children = childBoms.flatMap((bom) =>
+      getBomComponentNodes(bom, lines, nextVisited)
+    );
+    const status = component.isManufactured
+      ? hasPlanningGap(children)
+        ? 'short'
+        : 'manufacturing'
+      : matchingLine
+        ? normalizePartStatus(matchingLine)
+        : 'short';
 
-  const grouped = parts.reduce<Record<PartStatus, RDPart[]>>(
-    (groups, part) => {
-      groups[part.status].push(part);
-      return groups;
-    },
-    { on_hand: [], ordered: [], manufacturing: [], short: [] },
-  );
-
-  const children = (Object.entries(grouped) as [PartStatus, RDPart[]][])
-    .filter(([, items]) => items.length > 0)
-    .map(([status, items]) => ({
-      id: status,
-      label: statusLabels[status],
+    return {
+      id: componentKey,
+      label: `${component.partNumber} - ${component.description}`,
       status,
-      children: items.slice(0, 12).map((item) => ({
-        id: item.partNumber,
-        label: `${item.partNumber} - ${item.description}`,
-        status: item.status,
-      })),
-    }));
-
-  return [
-    {
-      id: project.id,
-      label: project.projectName,
-      status: parts.some((part) => part.status === 'short') ? 'short' : 'manufacturing',
       children,
-    } satisfies AssemblyNode,
-  ];
+    };
+  });
 }
 
-function AssemblyTreeNode({ node, depth = 0 }: { node: AssemblyNode; depth?: number }) {
+function getBomComponentNodes(
+  bom: DraftPartBom,
+  lines: DraftBomLine[],
+  visited: Set<string>
+): AssemblyNode[] {
+  if (visited.has(bom.id)) return [];
+  const nextVisited = new Set([...visited, bom.id]);
+  const rootPart = bom.parts?.[0] ?? bom.rootPart;
+  const components = rootPart.bomItems ?? bom.rootPart.bomItems ?? [];
+  return getComponentChildren(components, lines, nextVisited);
+}
+
+function getDraftLineAssemblyNode(
+  line: DraftBomLine,
+  index: number,
+  allLines: DraftBomLine[]
+): AssemblyNode {
+  const partNumber = draftLinePartNumber(line, index);
+  const children = (line.childDraftBoms ?? []).flatMap((bom) =>
+    getBomComponentNodes(bom, allLines, new Set([line.id ?? partNumber]))
+  );
+  const status = line.isManufactured
+    ? hasPlanningGap(children)
+      ? 'short'
+      : 'manufacturing'
+    : normalizePartStatus(line);
+  return {
+    id: line.id ?? `${partNumber}-${index}`,
+    label: `${partNumber} - ${draftLineDescription(line)}`,
+    status,
+    children,
+  };
+}
+
+function getAssemblyTreeForProject(
+  project: RDProject | null,
+  records: DraftBomRecord[],
+  parts: RDPart[]
+) {
+  if (!project) return [];
+  const attachedRecords = getDraftRecordsForProject(project, records);
+  const attachedLines = attachedRecords.flatMap((draft) => draft.lines ?? []);
+  if (attachedRecords.length === 0)
+    return parts === fallbackParts ? fallbackAssemblyTree : [];
+  if (attachedLines.length === 0) return [];
+  if (parts === fallbackParts) return fallbackAssemblyTree;
+
+  return attachedRecords.map((draft) => {
+    const lines = draft.lines ?? [];
+    const children = lines.map((line, index) =>
+      getDraftLineAssemblyNode(line, index, lines)
+    );
+    return {
+      id: draft.id,
+      label: [draft.name, draft.revision].filter(Boolean).join(' - '),
+      status: children.some((node) => node.status === 'short')
+        ? 'short'
+        : 'manufacturing',
+      children,
+    } satisfies AssemblyNode;
+  });
+}
+
+function AssemblyTreeNode({
+  node,
+  depth = 0,
+}: {
+  node: AssemblyNode;
+  depth?: number;
+}) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 rounded-md border bg-white px-3 py-2" style={{ marginLeft: depth * 18 }}>
+      <div
+        className="flex items-center gap-2 rounded-md border bg-white px-3 py-2"
+        style={{ marginLeft: depth * 18 }}
+      >
         <GitBranch className="h-4 w-4 text-muted-foreground" />
         <span className="flex-1 text-sm font-medium">{node.label}</span>
         <Badge variant="outline" className={statusClasses[node.status]}>
@@ -338,35 +687,91 @@ function AssemblyTreeNode({ node, depth = 0 }: { node: AssemblyNode; depth?: num
 
 export default function RDProjectsPage() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const { data: employees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ['/api/employees'],
   });
+  const { data: sharedProjects = [] } = useQuery<RDProject[]>({
+    queryKey: ['/api/rd-projects'],
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch('/api/rd-projects', {
+        credentials: 'include',
+      });
+      if (!response.ok) return [];
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
+  const { data: sharedDraftRecords = [] } = useQuery<DraftBomRecord[]>({
+    queryKey: ['/api/draft-bom-drafts'],
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch('/api/draft-bom-drafts', {
+        credentials: 'include',
+      });
+      if (!response.ok) return [];
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyProject);
-  const [draftRecords, setDraftRecords] = useState<DraftBomRecord[]>(() => readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
-  const [projects, setProjects] = useState<RDProject[]>(() => readJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, []));
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [localDraftRecords, setLocalDraftRecords] = useState<DraftBomRecord[]>(
+    () => readJsonStorage(DRAFT_BOM_STORAGE_KEY, [])
+  );
+  const [localProjects, setLocalProjects] = useState<RDProject[]>(() =>
+    readJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, [])
+  );
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null
+  );
 
+  const projects = useMemo(
+    () => mergeProjects(sharedProjects, localProjects),
+    [sharedProjects, localProjects]
+  );
+  const draftRecords = useMemo(
+    () => mergeDraftRecords(localDraftRecords, sharedDraftRecords),
+    [localDraftRecords, sharedDraftRecords]
+  );
   const draftTabs = useMemo(() => getDraftTabs(draftRecords), [draftRecords]);
-  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) ??
+    projects[0] ??
+    null;
   const selectedDraftTabs = useMemo(
     () => getDraftTabsForProject(selectedProject, draftRecords, draftTabs),
-    [draftRecords, draftTabs, selectedProject],
+    [draftRecords, draftTabs, selectedProject]
   );
-  const selectedParts = useMemo(() => getPartsForProject(selectedProject, draftRecords), [draftRecords, selectedProject]);
+  const selectedParts = useMemo(
+    () => getPartsForProject(selectedProject, draftRecords),
+    [draftRecords, selectedProject]
+  );
   const selectedAssemblyTree = useMemo(
-    () => getAssemblyTreeForProject(selectedProject, selectedParts),
-    [selectedParts, selectedProject],
+    () =>
+      getAssemblyTreeForProject(selectedProject, draftRecords, selectedParts),
+    [draftRecords, selectedParts, selectedProject]
   );
-  const activeProjects = projects.filter((project) => project.status === 'active').length;
-  const draftProjects = projects.filter((project) => project.status === 'draft').length;
+  const activeProjects = projects.filter(
+    (project) => project.status === 'active'
+  ).length;
+  const draftProjects = projects.filter(
+    (project) => project.status === 'draft'
+  ).length;
+  const activeEmployees = useMemo(
+    () => employees.filter((employee) => employee.isActive !== false),
+    [employees]
+  );
 
   useEffect(() => {
-    writeJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, projects);
-  }, [projects]);
+    writeJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, localProjects);
+  }, [localProjects]);
 
   useEffect(() => {
-    const refreshDraftRecords = () => setDraftRecords(readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
+    const refreshDraftRecords = () =>
+      setLocalDraftRecords(readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
     window.addEventListener('storage', refreshDraftRecords);
     window.addEventListener('focus', refreshDraftRecords);
     return () => {
@@ -375,42 +780,139 @@ export default function RDProjectsPage() {
     };
   }, []);
 
+  const editingProject =
+    projects.find((project) => project.id === editingProjectId) ?? null;
+
   const resetForm = () => setForm(emptyProject);
 
-  const createProject = () => {
+  const closeProjectDialog = () => {
+    setIsDialogOpen(false);
+    setEditingProjectId(null);
+    resetForm();
+  };
+
+  const openCreateProjectDialog = () => {
+    setEditingProjectId(null);
+    resetForm();
+    setIsDialogOpen(true);
+  };
+
+  const openEditProjectDialog = (project: RDProject) => {
+    const ownerEmployee = activeEmployees.find(
+      (employee) => employee.name === project.owner
+    );
+    setEditingProjectId(project.id);
+    setForm({
+      projectName: project.projectName,
+      owner: ownerEmployee ? String(ownerEmployee.id) : project.owner,
+      description: project.description,
+      signoffRequired: project.signoffRequired,
+      signoffUserId: project.signoffUserId,
+      draftTabIds: [...project.draftTabIds],
+    });
+    setIsDialogOpen(true);
+  };
+
+  const persistProject = (project: RDProject) => {
+    setLocalProjects((current) => [
+      project,
+      ...current.filter((item) => item.id !== project.id),
+    ]);
+    saveSharedProject(project)
+      .then((saved) => {
+        setLocalProjects((current) =>
+          current.map((item) => (item.id === saved.id ? saved : item))
+        );
+        queryClient.invalidateQueries({ queryKey: ['/api/rd-projects'] });
+      })
+      .catch((error) => {
+        console.error('Failed to persist shared R&D project:', error);
+      });
+  };
+
+  const syncDraftLinksForProject = (project: RDProject) => {
+    const linkedIds = new Set(project.draftTabIds);
+    const updatedDrafts = draftRecords
+      .filter(
+        (draft) =>
+          linkedIds.has(draft.id) ||
+          (draft.projectType === 'R_AND_D' && draft.projectId === project.id)
+      )
+      .map((draft) =>
+        linkedIds.has(draft.id)
+          ? linkDraftRecordToProject(draft, project)
+          : unlinkDraftRecordFromProject(draft, project)
+      );
+
+    if (updatedDrafts.length === 0) return;
+
+    setLocalDraftRecords((current) =>
+      mergeDraftRecords(current, updatedDrafts)
+    );
+    queryClient.setQueryData<DraftBomRecord[]>(
+      ['/api/draft-bom-drafts'],
+      (current = []) => mergeDraftRecords(current, updatedDrafts)
+    );
+
+    Promise.all(updatedDrafts.map(saveSharedDraftRecord))
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['/api/draft-bom-drafts'] });
+      })
+      .catch((error) => {
+        console.error(
+          'Failed to link selected Draft Builder tabs to R&D project:',
+          error
+        );
+      });
+  };
+
+  const saveProject = () => {
+    const ownerEmployee = activeEmployees.find(
+      (employee) => String(employee.id) === form.owner
+    );
+    const ownerFallback = form.owner.trim() || editingProject?.owner || '';
+    const owner = ownerEmployee?.name ?? ownerFallback;
+    const isEditing = !!editingProject;
     const project: RDProject = {
-      id: `rd-${Date.now()}`,
+      id: editingProject?.id ?? `rd-${Date.now()}`,
       projectName: form.projectName.trim(),
-      owner: form.owner.trim(),
+      owner,
       description: form.description.trim(),
       signoffRequired: form.signoffRequired,
       signoffUserId: form.signoffRequired ? form.signoffUserId : '',
-      draftTabIds: form.draftTabIds,
-      status: 'draft',
+      draftTabIds: [...form.draftTabIds],
+      status: editingProject?.status ?? 'draft',
     };
-    setProjects((current) => [project, ...current]);
+    persistProject(project);
+    syncDraftLinksForProject(project);
     setSelectedProjectId(project.id);
-    resetForm();
-    setIsDialogOpen(false);
+    if (!isEditing) resetForm();
+    closeProjectDialog();
   };
 
   const toggleProjectStatus = (projectId: string, active: boolean) => {
-    setProjects((current) =>
-      current.map((project) =>
-        project.id === projectId
-          ? { ...project, status: active ? 'active' : 'draft' }
-          : project
-      )
-    );
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    persistProject({ ...project, status: active ? 'active' : 'draft' });
   };
 
-  const toggleDraftTab = (tabId: string, checked: boolean) => {
-    setForm((current) => ({
-      ...current,
-      draftTabIds: checked
-        ? [...current.draftTabIds, tabId]
-        : current.draftTabIds.filter((id) => id !== tabId),
-    }));
+  const toggleDraftTab = (tabId: string, checked?: boolean) => {
+    setForm((current) => {
+      const isSelected = current.draftTabIds.includes(tabId);
+      const nextChecked = checked ?? !isSelected;
+      let draftTabIds = current.draftTabIds;
+
+      if (nextChecked && !isSelected) {
+        draftTabIds = [...current.draftTabIds, tabId];
+      } else if (!nextChecked) {
+        draftTabIds = current.draftTabIds.filter((id) => id !== tabId);
+      }
+
+      return {
+        ...current,
+        draftTabIds,
+      };
+    });
   };
 
   return (
@@ -418,12 +920,18 @@ export default function RDProjectsPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Design and R&amp;D Projects</h1>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Design and R&amp;D Projects
+            </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Create research projects, attach draft BOM tabs, and track assembly readiness as parts are ordered or manufactured.
+              Create research projects, attach draft BOM tabs, and track
+              assembly readiness as parts are ordered or manufactured.
             </p>
           </div>
-          <Button className="gap-2 self-start" onClick={() => setIsDialogOpen(true)}>
+          <Button
+            className="gap-2 self-start"
+            onClick={openCreateProjectDialog}
+          >
             <Plus className="h-4 w-4" />
             New R &amp; D Project
           </Button>
@@ -457,12 +965,19 @@ export default function RDProjectsPage() {
                 <FlaskConical className="h-8 w-8 text-cyan-700" />
               </div>
               <div>
-                <p className="text-lg font-semibold">No R &amp; D projects yet</p>
+                <p className="text-lg font-semibold">
+                  No R &amp; D projects yet
+                </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Start one as a draft, attach Draft Builder tabs, then activate it when work begins.
+                  Start one as a draft, attach Draft Builder tabs, then activate
+                  it when work begins.
                 </p>
               </div>
-              <Button variant="outline" className="gap-2" onClick={() => setIsDialogOpen(true)}>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={openCreateProjectDialog}
+              >
                 <FilePlus2 className="h-4 w-4" />
                 Create Project
               </Button>
@@ -474,14 +989,20 @@ export default function RDProjectsPage() {
               {projects.map((project) => {
                 const projectParts = getPartsForProject(project, draftRecords);
                 const readiness = partReadiness(projectParts);
-                const attachedTabCount = getDraftTabsForProject(project, draftRecords, draftTabs).length;
+                const attachedTabCount = getDraftTabsForProject(
+                  project,
+                  draftRecords,
+                  draftTabs
+                ).length;
                 const isSelected = selectedProject?.id === project.id;
 
                 return (
                   <Card
                     key={project.id}
                     className={`cursor-pointer transition hover:shadow-lg ${
-                      isSelected ? 'border-primary shadow-sm ring-1 ring-primary/20' : ''
+                      isSelected
+                        ? 'border-primary shadow-sm ring-1 ring-primary/20'
+                        : ''
                     }`}
                     onClick={() => setSelectedProjectId(project.id)}
                     data-testid={`card-rd-project-${project.id}`}
@@ -493,13 +1014,21 @@ export default function RDProjectsPage() {
                             <FolderOpen className="h-6 w-6 text-amber-500" />
                           </div>
                           <div className="min-w-0">
-                            <CardTitle className="truncate text-lg">{project.projectName}</CardTitle>
+                            <CardTitle className="truncate text-lg">
+                              {project.projectName}
+                            </CardTitle>
                             <CardDescription className="mt-1 truncate">
                               Owner: {project.owner || 'Unassigned'}
                             </CardDescription>
                           </div>
                         </div>
-                        <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
+                        <Badge
+                          variant={
+                            project.status === 'active'
+                              ? 'default'
+                              : 'secondary'
+                          }
+                        >
                           {project.status === 'active' ? 'Active' : 'Draft'}
                         </Badge>
                       </div>
@@ -507,7 +1036,9 @@ export default function RDProjectsPage() {
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div className="rounded-md border bg-white px-3 py-2">
-                          <p className="text-xs text-muted-foreground">Draft tabs</p>
+                          <p className="text-xs text-muted-foreground">
+                            Draft tabs
+                          </p>
                           <p className="font-semibold">{attachedTabCount}</p>
                         </div>
                         <div className="rounded-md border bg-white px-3 py-2">
@@ -518,14 +1049,20 @@ export default function RDProjectsPage() {
 
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Readiness</span>
+                          <span className="text-muted-foreground">
+                            Readiness
+                          </span>
                           <span className="font-medium">{readiness}%</span>
                         </div>
                         <Progress value={readiness} className="h-2" />
                       </div>
 
                       <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>{project.signoffRequired ? 'Signoff required' : 'No signoff required'}</span>
+                        <span>
+                          {project.signoffRequired
+                            ? 'Signoff required'
+                            : 'No signoff required'}
+                        </span>
                         <ChevronRight className="h-5 w-5" />
                       </div>
                     </CardContent>
@@ -539,30 +1076,54 @@ export default function RDProjectsPage() {
                 <CardHeader className="space-y-4">
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
-                      <CardTitle className="text-2xl">{selectedProject.projectName}</CardTitle>
+                      <CardTitle className="text-2xl">
+                        {selectedProject.projectName}
+                      </CardTitle>
                       <CardDescription className="mt-1">
                         Owner: {selectedProject.owner || 'Unassigned'}
                       </CardDescription>
                     </div>
-                    <div className="flex items-center gap-3 rounded-md border bg-white px-3 py-2">
-                      <Label htmlFor="project-active-switch" className="text-sm font-medium">
-                        Draft
-                      </Label>
-                      <Switch
-                        id="project-active-switch"
-                        checked={selectedProject.status === 'active'}
-                        onCheckedChange={(checked) => toggleProjectStatus(selectedProject.id, checked)}
-                      />
-                      <Label htmlFor="project-active-switch" className="text-sm font-medium">
-                        Active
-                      </Label>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => openEditProjectDialog(selectedProject)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </Button>
+                      <div className="flex items-center gap-3 rounded-md border bg-white px-3 py-2">
+                        <Label
+                          htmlFor="project-active-switch"
+                          className="text-sm font-medium"
+                        >
+                          Draft
+                        </Label>
+                        <Switch
+                          id="project-active-switch"
+                          checked={selectedProject.status === 'active'}
+                          onCheckedChange={(checked) =>
+                            toggleProjectStatus(selectedProject.id, checked)
+                          }
+                        />
+                        <Label
+                          htmlFor="project-active-switch"
+                          className="text-sm font-medium"
+                        >
+                          Active
+                        </Label>
+                      </div>
                     </div>
                   </div>
                   {selectedProject.signoffRequired && (
                     <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                       <UserCheck className="h-4 w-4" />
                       Activation signoff assigned to{' '}
-                      {employees.find((employee) => String(employee.id) === selectedProject.signoffUserId)?.name ?? 'selected approver'}
+                      {employees.find(
+                        (employee) =>
+                          String(employee.id) === selectedProject.signoffUserId
+                      )?.name ?? 'selected approver'}
                     </div>
                   )}
                 </CardHeader>
@@ -571,7 +1132,9 @@ export default function RDProjectsPage() {
                     <TabsList className="grid w-full grid-cols-4">
                       <TabsTrigger value="overview">Overview</TabsTrigger>
                       <TabsTrigger value="draft-tabs">Draft Tabs</TabsTrigger>
-                      <TabsTrigger value="assembly-tree">Assembly Tree</TabsTrigger>
+                      <TabsTrigger value="assembly-tree">
+                        Assembly Tree
+                      </TabsTrigger>
                       <TabsTrigger value="parts">Parts</TabsTrigger>
                     </TabsList>
 
@@ -579,18 +1142,30 @@ export default function RDProjectsPage() {
                       <div className="grid gap-4 md:grid-cols-2">
                         <Card>
                           <CardHeader>
-                            <CardTitle className="text-base">Readiness</CardTitle>
-                            <CardDescription>Based on required BOM quantity vs. on-hand and manufactured parts.</CardDescription>
+                            <CardTitle className="text-base">
+                              Readiness
+                            </CardTitle>
+                            <CardDescription>
+                              Based on required BOM quantity vs. on-hand and
+                              manufactured parts.
+                            </CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-3">
                             <Progress value={partReadiness(selectedParts)} />
-                            <p className="text-sm font-medium">{partReadiness(selectedParts)}% ready</p>
+                            <p className="text-sm font-medium">
+                              {partReadiness(selectedParts)}% ready
+                            </p>
                           </CardContent>
                         </Card>
                         <Card>
                           <CardHeader>
-                            <CardTitle className="text-base">Start Gate</CardTitle>
-                            <CardDescription>Draft projects can be switched active when work starts.</CardDescription>
+                            <CardTitle className="text-base">
+                              Start Gate
+                            </CardTitle>
+                            <CardDescription>
+                              Draft projects can be switched active when work
+                              starts.
+                            </CardDescription>
                           </CardHeader>
                           <CardContent className="flex items-center gap-2 text-sm">
                             {selectedProject.signoffRequired ? (
@@ -598,13 +1173,17 @@ export default function RDProjectsPage() {
                             ) : (
                               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                             )}
-                            {selectedProject.signoffRequired ? 'Signoff required before activation.' : 'No activation signoff required.'}
+                            {selectedProject.signoffRequired
+                              ? 'Signoff required before activation.'
+                              : 'No activation signoff required.'}
                           </CardContent>
                         </Card>
                       </div>
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base">Project Notes</CardTitle>
+                          <CardTitle className="text-base">
+                            Project Notes
+                          </CardTitle>
                         </CardHeader>
                         <CardContent className="text-sm text-muted-foreground">
                           {selectedProject.description || 'No notes entered.'}
@@ -612,29 +1191,47 @@ export default function RDProjectsPage() {
                       </Card>
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base">Draft BOM Summary</CardTitle>
+                          <CardTitle className="text-base">
+                            Draft BOM Summary
+                          </CardTitle>
                           <CardDescription>
-                            Draft Builder records linked to this R&amp;D project.
+                            Draft Builder records linked to this R&amp;D
+                            project.
                           </CardDescription>
                         </CardHeader>
                         <CardContent>
                           {selectedDraftTabs.length === 0 ? (
                             <div className="flex flex-col items-start gap-3 text-sm text-muted-foreground">
                               No Draft Builder tabs are linked to this project.
-                              <Button variant="outline" size="sm" onClick={() => setLocation('/estimating/bom-drafts')}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setLocation('/estimating/bom-drafts')
+                                }
+                              >
                                 Open Draft Builder
                               </Button>
                             </div>
                           ) : (
                             <div className="grid gap-3 md:grid-cols-2">
                               {selectedDraftTabs.map((tab) => (
-                                <div key={tab.id} className="rounded-md border bg-white px-3 py-2">
+                                <div
+                                  key={tab.id}
+                                  className="rounded-md border bg-white px-3 py-2"
+                                >
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
-                                      <p className="truncate text-sm font-medium text-slate-950">{tab.name}</p>
-                                      <p className="mt-1 text-xs text-muted-foreground">Updated {tab.updatedAt}</p>
+                                      <p className="truncate text-sm font-medium text-slate-950">
+                                        {tab.name}
+                                      </p>
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        Updated {tab.updatedAt}
+                                      </p>
                                     </div>
-                                    <Badge variant="outline">{tab.partCount} parts</Badge>
+                                    <Badge variant="outline">
+                                      {tab.partCount} parts
+                                    </Badge>
                                   </div>
                                 </div>
                               ))}
@@ -649,8 +1246,15 @@ export default function RDProjectsPage() {
                         {selectedDraftTabs.length === 0 ? (
                           <Card className="md:col-span-2">
                             <CardContent className="flex flex-col items-center gap-3 py-8 text-center text-sm text-muted-foreground">
-                              No Draft Builder tabs are attached to this project.
-                              <Button variant="outline" size="sm" onClick={() => setLocation('/estimating/bom-drafts')}>
+                              No Draft Builder tabs are attached to this
+                              project.
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setLocation('/estimating/bom-drafts')
+                                }
+                              >
                                 Open Draft Builder
                               </Button>
                             </CardContent>
@@ -663,7 +1267,9 @@ export default function RDProjectsPage() {
                                   <Boxes className="h-4 w-4 text-cyan-700" />
                                   {tab.name}
                                 </CardTitle>
-                                <CardDescription>{tab.partCount} parts, updated {tab.updatedAt}</CardDescription>
+                                <CardDescription>
+                                  {tab.partCount} parts, updated {tab.updatedAt}
+                                </CardDescription>
                               </CardHeader>
                             </Card>
                           ))
@@ -679,7 +1285,9 @@ export default function RDProjectsPage() {
                           </CardContent>
                         </Card>
                       ) : (
-                        selectedAssemblyTree.map((node) => <AssemblyTreeNode key={node.id} node={node} />)
+                        selectedAssemblyTree.map((node) => (
+                          <AssemblyTreeNode key={node.id} node={node} />
+                        ))
                       )}
                     </TabsContent>
 
@@ -700,14 +1308,22 @@ export default function RDProjectsPage() {
                           </div>
                         ) : (
                           selectedParts.map((part) => (
-                            <div key={`${part.partNumber}-${part.description}`} className="grid min-w-[760px] grid-cols-[1.2fr_2fr_repeat(4,0.7fr)_1fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0">
-                              <span className="font-mono text-xs">{part.partNumber}</span>
+                            <div
+                              key={`${part.partNumber}-${part.description}`}
+                              className="grid min-w-[760px] grid-cols-[1.2fr_2fr_repeat(4,0.7fr)_1fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0"
+                            >
+                              <span className="font-mono text-xs">
+                                {part.partNumber}
+                              </span>
                               <span>{part.description}</span>
                               <span>{part.required}</span>
                               <span>{part.onHand}</span>
                               <span>{part.ordered}</span>
                               <span>{part.manufactured}</span>
-                              <Badge variant="outline" className={statusClasses[part.status]}>
+                              <Badge
+                                variant="outline"
+                                className={statusClasses[part.status]}
+                              >
                                 {statusLabels[part.status]}
                               </Badge>
                             </div>
@@ -722,45 +1338,99 @@ export default function RDProjectsPage() {
           </div>
         )}
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create R &amp; D Project</DialogTitle>
+        <Dialog
+          open={isDialogOpen}
+          onOpenChange={(open) => {
+            if (open) {
+              setIsDialogOpen(true);
+              return;
+            }
+            closeProjectDialog();
+          }}
+        >
+          <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden flex flex-col">
+            <DialogHeader className="flex-shrink-0">
+              <DialogTitle>
+                {editingProject ? 'Edit R & D Project' : 'Create R & D Project'}
+              </DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-2">
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto py-2 pr-2">
               <div className="grid gap-2">
                 <Label htmlFor="rd-project-name">Project name</Label>
                 <Input
                   id="rd-project-name"
                   value={form.projectName}
-                  onChange={(event) => setForm((current) => ({ ...current, projectName: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      projectName: event.target.value,
+                    }))
+                  }
                 />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="rd-project-owner">Owner</Label>
-                <Input
-                  id="rd-project-owner"
+                <Select
                   value={form.owner}
-                  onChange={(event) => setForm((current) => ({ ...current, owner: event.target.value }))}
-                />
+                  onValueChange={(value) =>
+                    setForm((current) => ({ ...current, owner: value }))
+                  }
+                >
+                  <SelectTrigger id="rd-project-owner">
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeEmployees.length === 0 ? (
+                      <SelectItem value="__no_employees__" disabled>
+                        No employees available
+                      </SelectItem>
+                    ) : (
+                      activeEmployees.map((employee) => (
+                        <SelectItem
+                          key={employee.id}
+                          value={String(employee.id)}
+                        >
+                          {employee.name}
+                          {employee.employeeCode
+                            ? ` (${employee.employeeCode})`
+                            : ''}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="rd-project-description">Notes</Label>
                 <Textarea
                   id="rd-project-description"
                   value={form.description}
-                  onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
                 />
               </div>
               <div className="flex items-center justify-between rounded-md border px-3 py-2">
                 <div>
-                  <Label htmlFor="rd-signoff-required">Require signoff to activate</Label>
-                  <p className="text-xs text-muted-foreground">Select an approver when draft-to-active needs approval.</p>
+                  <Label htmlFor="rd-signoff-required">
+                    Require signoff to activate
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Select an approver when draft-to-active needs approval.
+                  </p>
                 </div>
                 <Switch
                   id="rd-signoff-required"
                   checked={form.signoffRequired}
-                  onCheckedChange={(checked) => setForm((current) => ({ ...current, signoffRequired: checked }))}
+                  onCheckedChange={(checked) =>
+                    setForm((current) => ({
+                      ...current,
+                      signoffRequired: checked,
+                    }))
+                  }
                 />
               </div>
               {form.signoffRequired && (
@@ -768,14 +1438,22 @@ export default function RDProjectsPage() {
                   <Label>Activation approver</Label>
                   <Select
                     value={form.signoffUserId}
-                    onValueChange={(value) => setForm((current) => ({ ...current, signoffUserId: value }))}
+                    onValueChange={(value) =>
+                      setForm((current) => ({
+                        ...current,
+                        signoffUserId: value,
+                      }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select user" />
                     </SelectTrigger>
                     <SelectContent>
-                      {employees.map((employee) => (
-                        <SelectItem key={employee.id} value={String(employee.id)}>
+                      {activeEmployees.map((employee) => (
+                        <SelectItem
+                          key={employee.id}
+                          value={String(employee.id)}
+                        >
                           {employee.name}
                         </SelectItem>
                       ))}
@@ -786,35 +1464,65 @@ export default function RDProjectsPage() {
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-3">
                   <Label>Draft Builder tabs</Label>
-                  <Button variant="ghost" size="sm" onClick={() => setLocation('/estimating/bom-drafts')}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLocation('/estimating/bom-drafts')}
+                  >
                     Open Draft Builder
                   </Button>
                 </div>
                 <div className="grid gap-2 rounded-md border p-3">
-                  {draftTabs.map((tab) => (
-                    <label key={tab.id} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50">
-                      <Checkbox
-                        checked={form.draftTabIds.includes(tab.id)}
-                        onCheckedChange={(checked) => toggleDraftTab(tab.id, checked === true)}
-                      />
-                      <span className="flex-1 text-sm font-medium">{tab.name}</span>
-                      <span className="text-xs text-muted-foreground">{tab.partCount} parts</span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </label>
-                  ))}
+                  {draftTabs.map((tab) => {
+                    const isChecked = form.draftTabIds.includes(tab.id);
+                    return (
+                      <div
+                        key={tab.id}
+                        role="button"
+                        tabIndex={0}
+                        className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50"
+                        onClick={() => toggleDraftTab(tab.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            toggleDraftTab(tab.id);
+                          }
+                        }}
+                      >
+                        <Checkbox
+                          checked={isChecked}
+                          onClick={(event) => event.stopPropagation()}
+                          onCheckedChange={(checked) =>
+                            toggleDraftTab(tab.id, checked === true)
+                          }
+                        />
+                        <span className="flex-1 text-sm font-medium">
+                          {tab.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {tab.partCount} parts
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            <DialogFooter className="flex-shrink-0">
+              <Button variant="outline" onClick={closeProjectDialog}>
                 Cancel
               </Button>
               <Button
-                onClick={createProject}
-                disabled={!form.projectName.trim() || !form.owner.trim() || (form.signoffRequired && !form.signoffUserId)}
+                onClick={saveProject}
+                disabled={
+                  !form.projectName.trim() ||
+                  (!editingProject && !form.owner.trim()) ||
+                  (form.signoffRequired && !form.signoffUserId)
+                }
               >
                 <PackageCheck className="mr-2 h-4 w-4" />
-                Create Draft
+                {editingProject ? 'Save Changes' : 'Create Draft'}
               </Button>
             </DialogFooter>
           </DialogContent>

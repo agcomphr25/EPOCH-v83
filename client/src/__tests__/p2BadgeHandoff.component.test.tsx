@@ -11,7 +11,7 @@
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 const mockNavigate = vi.fn();
 
@@ -97,7 +97,7 @@ function makeTravelerPayload(stepStatus: 'NOT_STARTED' | 'IN_PROGRESS') {
 }
 
 function setupFetch(overrides: Record<string, unknown> = {}) {
-  global.fetch = vi.fn().mockImplementation((url: string) => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
     const u = String(url);
     for (const [pattern, response] of Object.entries(overrides)) {
       if (u.includes(pattern)) {
@@ -105,8 +105,12 @@ function setupFetch(overrides: Record<string, unknown> = {}) {
       }
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(null) });
-  });
+  }));
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('P2TravelerPage — badge forwarding on traveler generate', () => {
   beforeEach(() => {
@@ -116,6 +120,8 @@ describe('P2TravelerPage — badge forwarding on traveler generate', () => {
   });
 
   it('navigates to /travelers/:id/execute?badge=<code> after successful generate', async () => {
+    const scannedPartBarcode = 'PART/001%LAYUP';
+
     vi.mocked(apiRequest).mockImplementation(async (url: string) => {
       if (String(url).includes('badge-lookup')) {
         return { id: 1, employeeCode: 'EMP123', name: 'Alice' };
@@ -152,10 +158,13 @@ describe('P2TravelerPage — badge forwarding on traveler generate', () => {
     fireEvent.submit(screen.getByTestId('form-badge-scan'));
 
     const partInput = await screen.findByTestId('input-part-barcode');
-    fireEvent.change(partInput, { target: { value: 'PART-001' } });
+    fireEvent.change(partInput, { target: { value: scannedPartBarcode } });
     fireEvent.submit(screen.getByTestId('form-part-scan'));
 
     await waitFor(() => {
+      expect(apiRequest).toHaveBeenCalledWith(
+        `/api/p2-traveler/verify-certification/${encodeURIComponent('EMP123')}/${encodeURIComponent(scannedPartBarcode)}`
+      );
       expect(mockNavigate).toHaveBeenCalledWith(
         expect.stringMatching(/\/travelers\/T-42\/execute\?badge=EMP123/),
       );

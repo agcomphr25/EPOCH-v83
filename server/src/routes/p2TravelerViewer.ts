@@ -21,6 +21,8 @@ import {
   travelers,
   routingDocuments,
   inventoryItems,
+  projects,
+  productionWorkOrders,
   cuttingFabricInventory,
   cuttingBuiltPackets,
   cuttingBuiltPacketFabricSources,
@@ -39,7 +41,8 @@ import {
   insertP2FinalInspectionResultSchema,
   insertP2DepartmentTransferSignatureSchema,
 } from '../../schema';
-import { eq, and, desc, sql, inArray, or, ilike, asc } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray, or, ilike, asc, type SQL } from 'drizzle-orm';
+import { formatP2DocumentPoNumber } from '../utils/p2DocumentPoNumber';
 
 const router = Router();
 
@@ -57,6 +60,90 @@ function generateDocumentNumber(prefix: string): string {
   const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
   const randomNum = Math.floor(1000 + Math.random() * 9000);
   return `${prefix}-${dateStr}-${randomNum}`;
+}
+
+function buildP2ViewerScanVariants(scanValue: string): string[] {
+  const trimmed = scanValue.trim();
+  const compact = trimmed.replace(/\s+/g, '');
+  const variants = new Set<string>([trimmed, compact]);
+
+  for (const value of Array.from(variants)) {
+    if (/^rec/i.test(value)) variants.add(`ROC${value.slice(3)}`);
+    if (/^roc/i.test(value)) variants.add(`REC${value.slice(3)}`);
+  }
+
+  return Array.from(variants).filter(Boolean);
+}
+
+async function findSerializedItemForViewerScan(scanValue: string) {
+  const fields = [
+    p2SerializedItems.barcode,
+    p2SerializedItems.travelerBarcode,
+    p2SerializedItems.serialNumber,
+    p2SerializedItems.customerSerialNumber,
+  ];
+
+  for (const variant of buildP2ViewerScanVariants(scanValue)) {
+    const item = await db.query.p2SerializedItems.findFirst({
+      where: or(...fields.map((field) => ilike(field, variant))),
+    });
+    if (item) return item;
+  }
+
+  return null;
+}
+
+async function findProductionWorkOrderForTravelerViewer(params: {
+  serializedItem: typeof p2SerializedItems.$inferSelect;
+  routing: typeof partRoutings.$inferSelect | null;
+  poItem: typeof p2PurchaseOrderItems.$inferSelect | null;
+}) {
+  const { serializedItem, routing, poItem } = params;
+  const projectRows = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.poId, serializedItem.poId));
+
+  if (projectRows.length === 0) return null;
+
+  let inventoryItem: typeof inventoryItems.$inferSelect | null = null;
+  if (poItem?.inventoryItemId) {
+    inventoryItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.id, poItem.inventoryItemId),
+    }) ?? null;
+  }
+
+  const partCandidates = new Set<string>();
+  const addPart = (value?: string | null) => {
+    const trimmed = value?.trim();
+    if (trimmed) partCandidates.add(trimmed);
+  };
+  addPart(inventoryItem?.agPartNumber ?? null);
+  addPart(poItem?.partNumber ?? null);
+  addPart(routing?.partNumber ?? null);
+  addPart(serializedItem.partNumber);
+
+  const whereParts: SQL<unknown>[] = [
+    inArray(productionWorkOrders.projectId, projectRows.map((project) => project.id)),
+    sql`${productionWorkOrders.status} NOT IN ('CANCELLED', 'CANCELED')`,
+  ];
+
+  const partFilters = Array.from(partCandidates).flatMap((part) => [
+    eq(productionWorkOrders.partNumber, part),
+    sql`lower(trim(${productionWorkOrders.partNumber})) = lower(trim(${part}))`,
+  ]);
+  if (partFilters.length > 0) {
+    whereParts.push(or(...partFilters)!);
+  }
+
+  const [workOrder] = await db
+    .select({ id: productionWorkOrders.id })
+    .from(productionWorkOrders)
+    .where(and(...whereParts))
+    .orderBy(desc(productionWorkOrders.createdAt))
+    .limit(1);
+
+  return workOrder ?? null;
 }
 
 const DEFAULT_COC_CERTIFICATION_TEXT =
@@ -135,13 +222,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
   try {
     const barcode = decodeURIComponent(req.params.barcode).trim();
 
-    // Get serialized item - check both system barcode and physical traveler barcode (case-insensitive)
-    const serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: or(
-        ilike(p2SerializedItems.barcode, barcode),
-        ilike(p2SerializedItems.travelerBarcode, barcode)
-      ),
-    });
+    const serializedItem = await findSerializedItemForViewerScan(barcode);
 
     if (!serializedItem) {
       return res.status(404).json({ error: 'Serialized item not found' });
@@ -293,12 +374,25 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       orderBy: [desc(p2DepartmentTransferSignatures.signedAt)],
     });
 
-    // Get traveler steps linked to this serialized item via serial number
+    const linkedWorkOrder = await findProductionWorkOrderForTravelerViewer({
+      serializedItem,
+      routing,
+      poItem,
+    });
+
+    // Get traveler steps linked to this serialized item. When a production
+    // work order exists, use it as the unit identity so repeated customer
+    // serials do not hydrate a prior completed traveler.
     let travelerStepData: any[] = [];
     let activeTravelerId: string | null = null;
     let activeTravelerRow: any = null;
     const linkedTravelers = await db.query.travelers.findMany({
-      where: eq(travelers.serialNumber, serializedItem.serialNumber),
+      where: linkedWorkOrder
+        ? and(
+            eq(travelers.serialNumber, serializedItem.serialNumber),
+            eq(travelers.productionWorkOrderId, linkedWorkOrder.id),
+          )
+        : eq(travelers.serialNumber, serializedItem.serialNumber),
       orderBy: [asc(travelers.createdAt)],
     });
     if (linkedTravelers.length > 0) {
@@ -1413,7 +1507,13 @@ router.post('/packing-slip', async (req: Request, res: Response) => {
       packingSlipNumber,
     });
     
-    const [packingSlip] = await db.insert(p2PackingSlips).values(validatedData).returning();
+    const [packingSlip] = await db
+      .insert(p2PackingSlips)
+      .values({
+        ...validatedData,
+        poNumber: formatP2DocumentPoNumber(validatedData.poNumber),
+      })
+      .returning();
 
     // If associated with a lot, update the lot
     if (req.body.lotNumberId) {
@@ -1423,7 +1523,10 @@ router.post('/packing-slip', async (req: Request, res: Response) => {
         .where(eq(p2LotNumbers.id, req.body.lotNumberId));
     }
 
-    return res.json({ success: true, packingSlip });
+    return res.json({
+      success: true,
+      packingSlip: { ...packingSlip, poNumber: formatP2DocumentPoNumber(packingSlip.poNumber) },
+    });
   } catch (error: any) {
     console.error('Error creating packing slip:', error);
     return res.status(500).json({ error: error.message || 'Failed to create packing slip' });
@@ -1455,7 +1558,7 @@ router.get('/packing-slip/:id', async (req: Request, res: Response) => {
     if (!packingSlip) {
       return res.status(404).json({ error: 'Packing slip not found' });
     }
-    return res.json(packingSlip);
+    return res.json({ ...packingSlip, poNumber: formatP2DocumentPoNumber(packingSlip.poNumber) });
   } catch (error: any) {
     console.error('Error getting packing slip:', error);
     return res.status(500).json({ error: 'Failed to get packing slip' });
@@ -1516,7 +1619,13 @@ router.post('/certificate-of-conformance', async (req: Request, res: Response) =
       traceabilityData,
     });
     
-    const [certificate] = await db.insert(p2CertificatesOfConformance).values(validatedData).returning();
+    const [certificate] = await db
+      .insert(p2CertificatesOfConformance)
+      .values({
+        ...validatedData,
+        poNumber: formatP2DocumentPoNumber(validatedData.poNumber),
+      })
+      .returning();
 
     // If associated with a lot, update the lot
     if (req.body.lotNumberId) {
@@ -1526,7 +1635,10 @@ router.post('/certificate-of-conformance', async (req: Request, res: Response) =
         .where(eq(p2LotNumbers.id, req.body.lotNumberId));
     }
 
-    return res.json({ success: true, certificate });
+    return res.json({
+      success: true,
+      certificate: { ...certificate, poNumber: formatP2DocumentPoNumber(certificate.poNumber) },
+    });
   } catch (error: any) {
     console.error('Error creating certificate of conformance:', error);
     return res.status(500).json({ error: error.message || 'Failed to create certificate of conformance' });
@@ -1561,6 +1673,7 @@ router.get('/certificate-of-conformance/:id', async (req: Request, res: Response
     const assignedSku = await getAssignedSkuForLot(certificate.lotNumberId);
     return res.json({
       ...certificate,
+      poNumber: formatP2DocumentPoNumber(certificate.poNumber),
       partNumber: assignedSku || certificate.partNumber,
       specialProcesses: getSpecialProcesses(certificate.processRecords),
       qaMgrTitle: getQaMgrTitle(certificate.traceabilityData),
@@ -1759,7 +1872,7 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
         lotNumber: lot.lotNumber,
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         lineItems,
         totalQuantity: serializedItems.length,
         status: 'DRAFT',
@@ -1791,7 +1904,7 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
         lotNumber: lot.lotNumber,
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         partNumber: lot.partNumber,
         partName: lot.partName,
         quantity: serializedItems.length,
@@ -1870,7 +1983,7 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
         lotNumber: lot.lotNumber,
         customerId: lot.customerId || '',
         customerName: lot.customerName || '',
-        poNumber: lot.poNumber,
+        poNumber: formatP2DocumentPoNumber(lot.poNumber),
         partNumber: lot.partNumber,
         partName: lot.partName,
         quantity: serializedItems.length,

@@ -75,6 +75,7 @@ interface QueueItem {
   partNumber: string;
   partName: string;
   poNumber: string;
+  rawPoNumber?: string;
   customerName: string;
   status: string;
   currentDepartment: string;
@@ -209,24 +210,28 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
     refetchInterval: 10000,
   });
 
+  const matchesSelectedPO = (item: QueueItem) =>
+    selectedPONumbers.includes(item.poNumber) ||
+    (item.rawPoNumber ? selectedPONumbers.includes(item.rawPoNumber) : false);
+
   const queueData: ProductionQueueData | undefined = queueDataRaw && selectedPONumbers.length > 0
     ? {
         departments: queueDataRaw.departments.map((dept) => ({
           ...dept,
-          items: dept.items.filter((item) => selectedPONumbers.includes(item.poNumber)),
-          totalItems: dept.items.filter((item) => selectedPONumbers.includes(item.poNumber)).length,
-          inProgress: dept.items.filter((item) => selectedPONumbers.includes(item.poNumber) && item.hasActiveTask).length,
-          waiting: dept.items.filter((item) => selectedPONumbers.includes(item.poNumber) && !item.hasActiveTask).length,
+          items: dept.items.filter(matchesSelectedPO),
+          totalItems: dept.items.filter(matchesSelectedPO).length,
+          inProgress: dept.items.filter((item) => matchesSelectedPO(item) && item.hasActiveTask).length,
+          waiting: dept.items.filter((item) => matchesSelectedPO(item) && !item.hasActiveTask).length,
         })).filter((dept) => dept.items.length > 0),
         summary: {
           totalActive: queueDataRaw.departments
             .flatMap((d) => d.items)
-            .filter((item) => selectedPONumbers.includes(item.poNumber)).length,
+            .filter(matchesSelectedPO).length,
           totalInProgress: queueDataRaw.departments
             .flatMap((d) => d.items)
-            .filter((item) => selectedPONumbers.includes(item.poNumber) && item.hasActiveTask).length,
+            .filter((item) => matchesSelectedPO(item) && item.hasActiveTask).length,
           departmentCount: queueDataRaw.departments
-            .filter((d) => d.items.some((item) => selectedPONumbers.includes(item.poNumber))).length,
+            .filter((d) => d.items.some(matchesSelectedPO)).length,
         },
       }
     : queueDataRaw;

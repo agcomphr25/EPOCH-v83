@@ -59,6 +59,7 @@ type BomLine = PrivateerDraftBomLine & {
   customFields?: Record<string, string>;
   inventoryItemId?: number | null;
   inventoryItemName?: string | null;
+  importedSource?: 'spreadsheet';
   isDraftPart?: boolean;
   isManufactured?: boolean;
   firstDepartment?: string;
@@ -545,6 +546,7 @@ function lineDescription(line: BomLine) {
   const partNumber = linePartNumber(line);
   const description = line.description?.trim() ?? '';
   const customDescription = customImportField(line, importedDescriptionHeaders);
+  if (line.importedSource === 'spreadsheet' && customDescription) return customDescription;
   if (description && description !== 'Imported spreadsheet line' && description !== partNumber) return description;
   return customDescription || description || line.inventoryItemName || partNumber;
 }
@@ -557,6 +559,7 @@ function normalizeBomLine(line: BomLine): BomLine {
     firstDepartment: line.firstDepartment ?? defaultDepartment,
     childDraftBoms: line.childDraftBoms ?? [],
     customFields: line.customFields ?? {},
+    importedSource: line.importedSource,
     actualCost: line.actualCost ?? '',
     service: line.service ?? false,
   };
@@ -1366,7 +1369,7 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
   let linkedCount = 0;
 
   const lines = dataRows
-    .map((cells) => {
+    .map((cells, rowIndex) => {
       const row = columns.reduce<Record<string, string>>((acc, column, index) => {
         acc[column.key] = cells[index]?.trim() ?? '';
         return acc;
@@ -1377,40 +1380,39 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
         return acc;
       }, {});
       const importedPartNumber = csvField(row, importedPartNumberHeaders);
-      const description = csvField(row, importedDescriptionHeaders) || importedPartNumber;
-      if (!description && !importedPartNumber && Object.keys(importedCustomFields).length === 0) return null;
+      const sourceDescription = csvField(row, importedDescriptionHeaders) || importedPartNumber;
+      if (!sourceDescription && !importedPartNumber && Object.keys(importedCustomFields).length === 0) return null;
 
       const inventoryMatch = linkInventoryMatches ? findInventoryMatch(importedPartNumber, inventoryItems) : null;
       if (inventoryMatch) linkedCount += 1;
-      const fallbackStatus = inventoryMatch ? 'Needs Review' : 'Needs Quote';
+      const spreadsheetLabel = `Imported spreadsheet row ${rowIndex + 1}`;
 
       return {
         ...newLine(),
-        action: 'Order / Quote',
-        category: 'Hardware/Misc.',
-        description: inventoryMatch ? inventoryDescription(inventoryMatch) : description || 'Imported spreadsheet line',
-        agPartNumber: inventoryMatch?.agPartNumber || '',
-        supplier: inventoryMatch?.source || inventoryMatch?.supplier || '',
-        supplierItemId: inventoryMatch?.supplierPartNumber || '',
-        manufacturer: inventoryMatch?.manufacturer || '',
-        unit: inventoryMatch?.usageUnit || inventoryMatch?.unit || 'EA',
-        unitCost: Number.isFinite(Number(inventoryMatch?.costPer)) ? Number(inventoryMatch?.costPer) : '',
+        action: 'Review imported line',
+        category: 'Imported Spreadsheet',
+        description: spreadsheetLabel,
+        agPartNumber: '',
+        supplier: '',
+        supplierItemId: '',
+        manufacturer: '',
+        unit: '',
+        unitCost: '',
         actualCost: '',
-        qtyNeeded: 1,
+        qtyNeeded: '',
         service: false,
-        status: fallbackStatus,
+        status: 'Needs Review',
         targetNeedDate: '',
         note: inventoryMatch
           ? `CSV import linked to inventory item #${inventoryMatch.id}`
-          : importedPartNumber
-            ? `CSV import draft part ${importedPartNumber}`
-            : 'CSV import draft part',
+          : 'Spreadsheet import; source values are preserved in imported columns.',
         inventoryItemId: inventoryMatch?.id ?? null,
         inventoryItemName: inventoryMatch?.name || inventoryMatch?.description || null,
         isDraftPart: !inventoryMatch,
         isManufactured: isInventoryManufactured(inventoryMatch),
         firstDepartment: defaultDepartment,
         childDraftBoms: [],
+        importedSource: 'spreadsheet',
         customFields: importedCustomFields,
       } satisfies BomLine;
     })
@@ -2327,11 +2329,14 @@ export default function DraftBOMBuilderPage() {
     }
 
     setCustomColumns((current) => sanitizeCustomColumns([...current, ...result.customColumns]));
+    const sourceColumnMode = result.customColumns.length > 0;
+    if (sourceColumnMode) setVisiblePartsRequestColumns([]);
     setDraft((current) => ({
       ...current,
       partsRequestLines: [...result.lines, ...(current.partsRequestLines ?? [])],
       customColumns: sanitizeCustomColumns([...(current.customColumns ?? []), ...result.customColumns]),
       customPoColumns: sanitizeCustomColumns([...(current.customPoColumns ?? []), ...result.customColumns]),
+      partsRequestVisibleColumns: sourceColumnMode ? [] : current.partsRequestVisibleColumns,
       updatedAt: new Date().toISOString(),
     }));
     toast({

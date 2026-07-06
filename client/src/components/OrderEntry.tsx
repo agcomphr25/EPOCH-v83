@@ -200,6 +200,7 @@ const LEFT_HANDED_SHORT_AND_LONG_ACTIONS = [
   'Stiller Predator/Tac',
   'Lonepeak',
   'Lone Peak',
+  'Lone Peak Fuzion/Ti/Razor',
   'Kelbly Obsidian',
   'Kelbly Prometheus',
   'Kelbly Atlas',

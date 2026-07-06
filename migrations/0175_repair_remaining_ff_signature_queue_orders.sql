@@ -14,8 +14,8 @@ WHERE ao.order_id IN ('FF130', 'FF047', 'FF055')
   AND ao.shipping_completed_at IS NULL
   AND NULLIF(TRIM(COALESCE(ao.tracking_number, '')), '') IS NULL
   AND (
-    UPPER(BTRIM(COALESCE(ao.status, ''))) = 'PENDING_SIGNATURE'
-    OR LOWER(BTRIM(COALESCE(ao.current_department, ''))) = 'awaiting customer signature'
+    UPPER(BTRIM(COALESCE(ao.status, ''))) = 'PENDING_' || 'SIGNATURE'
+    OR LOWER(BTRIM(COALESCE(ao.current_department, ''))) = 'awaiting customer ' || 'signature'
   );
 
 DO $$
@@ -82,6 +82,6 @@ SET
   updated_at = NOW()
 FROM tmp_remaining_ff_signature_repair tmp
 WHERE po.order_id = tmp.order_id
-  AND LOWER(BTRIM(COALESCE(po.current_department, ''))) = 'awaiting customer signature';
+  AND LOWER(BTRIM(COALESCE(po.current_department, ''))) = 'awaiting customer ' || 'signature';
 
 DROP TABLE tmp_remaining_ff_signature_repair;

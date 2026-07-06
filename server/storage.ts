@@ -24745,18 +24745,6 @@ export class DatabaseStorage implements IStorage {
       isActive: true
     }));
 
-    // Ensure "Awaiting Customer Signature" is always available as an option
-    const awaitingSignature = 'Awaiting Customer Signature';
-    if (!departments.some((d: any) => d.name === awaitingSignature)) {
-      departments.push({
-        id: departments.length + 1,
-        name: awaitingSignature,
-        displayName: awaitingSignature,
-        sortOrder: departments.length + 1,
-        isActive: true
-      });
-    }
-
     return departments;
   }
 

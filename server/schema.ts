@@ -3154,7 +3154,7 @@ export const insertMetalAccessoryAuditLogSchema = createInsertSchema(metalAccess
 export type InsertMetalAccessoryAuditLog = z.infer<typeof insertMetalAccessoryAuditLogSchema>;
 export type MetalAccessoryAuditLog = typeof metalAccessoryAuditLog.$inferSelect;
 
-// Backward compatibility aliases (order_drafts table removed, now using all_orders with PENDING_SIGNATURE status)
+// Backward compatibility aliases (order_drafts table removed, now using all_orders)
 export type InsertOrderDraft = InsertAllOrder;
 export type OrderDraft = AllOrder;
 export type InsertLinkedOrderGroup = z.infer<typeof insertLinkedOrderGroupSchema>;

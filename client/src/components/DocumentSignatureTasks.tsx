@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { format, isBefore } from 'date-fns';
 
-interface PendingSignatureTask {
+interface DocumentSignatureTask {
   id: string;
   type: string;
   title: string;
@@ -29,21 +29,21 @@ interface PendingSignatureTask {
   status: string;
 }
 
-interface PendingSignatureTasksProps {
+interface DocumentSignatureTasksProps {
   employeeId: number;
   employeeName: string;
   compact?: boolean;
 }
 
-export default function PendingSignatureTasks({
+export default function DocumentSignatureTasks({
   employeeId,
   employeeName,
   compact = false,
-}: PendingSignatureTasksProps) {
+}: DocumentSignatureTasksProps) {
   const queryClient = useQueryClient();
-  const [signingTask, setSigningTask] = useState<PendingSignatureTask | null>(null);
+  const [signingTask, setSigningTask] = useState<DocumentSignatureTask | null>(null);
 
-  const { data: tasks = [], isLoading, refetch } = useQuery<PendingSignatureTask[]>({
+  const { data: tasks = [], isLoading, refetch } = useQuery<DocumentSignatureTask[]>({
     queryKey: ['/api/signature-workflow/pending', employeeId],
     queryFn: () => apiRequest(`/api/signature-workflow/pending/${employeeId}`),
     enabled: !!employeeId,
@@ -61,7 +61,7 @@ export default function PendingSignatureTasks({
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <FileSignature className="h-5 w-5" />
-              Pending Signatures
+              Document Signatures
               {tasks.length > 0 && (
                 <Badge variant="secondary" className="ml-auto">
                   {tasks.length}

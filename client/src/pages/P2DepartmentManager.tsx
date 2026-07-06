@@ -223,8 +223,8 @@ export default function P2DepartmentManager() {
   const [customDataFields, setCustomDataFields] = useState<CustomDataField[]>([]);
   const [customDataValues, setCustomDataValues] = useState<Record<string, string>>({});
   const [showSignatureDialog, setShowSignatureDialog] = useState(false);
-  const [pendingSignatureItem, setPendingSignatureItem] = useState<P2SerializedItem | null>(null);
-  const [pendingSignatureNextDepartment, setPendingSignatureNextDepartment] = useState<string>('');
+  const [signatureDialogItem, setSignatureDialogItem] = useState<P2SerializedItem | null>(null);
+  const [signatureDialogNextDepartment, setSignatureDialogNextDepartment] = useState<string>('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -369,20 +369,20 @@ export default function P2DepartmentManager() {
       return;
     }
     const nextDept = getNextDepartment(item.currentDepartment);
-    setPendingSignatureItem(item);
-    setPendingSignatureNextDepartment(nextDept);
+    setSignatureDialogItem(item);
+    setSignatureDialogNextDepartment(nextDept);
     setShowSignatureDialog(true);
   };
 
   // Handle signature completion - proceed with transition
   const handleSignatureComplete = () => {
-    if (pendingSignatureItem) {
-      transitionMutation.mutate(pendingSignatureItem.id);
+    if (signatureDialogItem) {
+      transitionMutation.mutate(signatureDialogItem.id);
     }
     // Reset signature state
     setShowSignatureDialog(false);
-    setPendingSignatureItem(null);
-    setPendingSignatureNextDepartment('');
+    setSignatureDialogItem(null);
+    setSignatureDialogNextDepartment('');
   };
 
   // Handle transition - check for traceability requirements first
@@ -1447,24 +1447,24 @@ export default function P2DepartmentManager() {
       />
 
       {/* Department Transfer Signature Dialog - AS9100 Compliance */}
-      {pendingSignatureItem && currentUser && (
+      {signatureDialogItem && currentUser && (
         <DepartmentTransferSignatureDialog
           open={showSignatureDialog}
           onOpenChange={(open) => {
             if (!open) {
               setShowSignatureDialog(false);
-              setPendingSignatureItem(null);
-              setPendingSignatureNextDepartment('');
+              setSignatureDialogItem(null);
+              setSignatureDialogNextDepartment('');
             }
           }}
           onSignatureComplete={handleSignatureComplete}
-          serializedItemId={pendingSignatureItem.id}
-          barcode={pendingSignatureItem.barcode}
-          partNumber={pendingSignatureItem.partNumber}
-          partName={pendingSignatureItem.partName}
-          fromDepartment={pendingSignatureItem.currentDepartment}
-          toDepartment={pendingSignatureNextDepartment}
-          workInstructionRef={partRouting?.departmentConfig?.[pendingSignatureItem.currentDepartment]?.specialProcess}
+          serializedItemId={signatureDialogItem.id}
+          barcode={signatureDialogItem.barcode}
+          partNumber={signatureDialogItem.partNumber}
+          partName={signatureDialogItem.partName}
+          fromDepartment={signatureDialogItem.currentDepartment}
+          toDepartment={signatureDialogNextDepartment}
+          workInstructionRef={partRouting?.departmentConfig?.[signatureDialogItem.currentDepartment]?.specialProcess}
           currentUser={currentUser}
         />
       )}

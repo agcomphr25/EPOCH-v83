@@ -247,7 +247,7 @@ async function getModelMultiplier(modelId: string | null): Promise<number> {
 
 const POST_PRODUCTION_DEPARTMENTS = [
   'Shipping Management', 'Shipping Manager', 'Fulfilled', 'Shipped', 'Completed',
-  'Sales', 'Awaiting Customer Signature',
+  'Sales',
 ];
 
 async function getDepartmentBacklogs(): Promise<Record<string, number>> {
@@ -449,7 +449,7 @@ export async function generateWeeklyForecast(weekStart: Date, weekEnd: Date): Pr
      FROM all_orders
      WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
        AND current_department IS NOT NULL
-       AND current_department NOT IN ('Shipping Management', 'Shipping Manager', 'Fulfilled', 'Shipped', 'Completed', 'Sales', 'Awaiting Customer Signature')
+       AND current_department NOT IN ('Shipping Management', 'Shipping Manager', 'Fulfilled', 'Shipped', 'Completed', 'Sales')
      ORDER BY created_at ASC`
   );
 
@@ -510,7 +510,7 @@ export async function generateDashboardForecast(): Promise<DashboardForecastItem
      LEFT JOIN stock_models sm ON ao.model_id = sm.name
      WHERE ao.status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
        AND ao.current_department IS NOT NULL
-       AND ao.current_department NOT IN ('Shipping Management', 'Shipping Manager', 'Fulfilled', 'Shipped', 'Completed', 'Sales', 'Awaiting Customer Signature')
+       AND ao.current_department NOT IN ('Shipping Management', 'Shipping Manager', 'Fulfilled', 'Shipped', 'Completed', 'Sales')
      ORDER BY ao.created_at ASC
      LIMIT 500`
   );

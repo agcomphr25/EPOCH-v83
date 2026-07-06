@@ -124,7 +124,7 @@ const OnboardingDashboard = React.lazy(() => import('./pages/OnboardingDashboard
 const OnboardingInvitePage = React.lazy(() => import('./pages/OnboardingInvitePage'));
 const OnboardingPathsPage = React.lazy(() => import('./pages/OnboardingPathsPage'));
 const OnboardingSettingsPage = React.lazy(() => import('./pages/OnboardingSettingsPage'));
-const PendingEmployerSignaturesPage = React.lazy(() => import('./pages/PendingEmployerSignaturesPage'));
+const EmployerSignaturesPage = React.lazy(() => import('./pages/EmployerSignaturesPage'));
 const OnboardingFormsPage = React.lazy(() => import('./pages/OnboardingFormsPage'));
 const OnboardingSessionWizard = React.lazy(() => import('./pages/OnboardingSessionWizard'));
 const EnhancedFormsPage = React.lazy(() => import('./pages/EnhancedFormsPage'));
@@ -201,7 +201,6 @@ const BOMAdministration = React.lazy(() => import('./pages/BOMAdministration').t
 const RobustBOMAdministration = React.lazy(() => import('./pages/RobustBOMAdministration'));
 const AGBottomMetalReport = React.lazy(() => import('./pages/AGBottomMetalReport'));
 const ShippingTracker = React.lazy(() => import('./pages/ShippingTracker'));
-const AwaitingSignaturePage = React.lazy(() => import('./pages/AwaitingSignaturePage'));
 const EmployeeDashboard = React.lazy(() => import('./pages/EmployeeDashboard'));
 const EmployeeDetail = React.lazy(() => import('./pages/EmployeeDetail'));
 const EmployeePortal = React.lazy(() => import('./pages/EmployeePortal'));
@@ -902,7 +901,7 @@ function App() {
                   <Route path="/onboarding/invite/:token" component={OnboardingInvitePage} />
                   <Route path="/onboarding/paths" component={OnboardingPathsPage} />
                   <Route path="/onboarding/settings" component={OnboardingSettingsPage} />
-                  <Route path="/onboarding/employer-signatures" component={PendingEmployerSignaturesPage} />
+                  <Route path="/onboarding/employer-signatures" component={EmployerSignaturesPage} />
                   {/* DEPRECATED: Form builder hidden - using fixed demographics instead */}
                   {/* <Route path="/onboarding/forms" component={OnboardingFormsPage} /> */}
                   <Route path="/onboarding/session/:id" component={OnboardingSessionWizard} />
@@ -1358,7 +1357,6 @@ function App() {
                   />
                   <Route path="/shipping-tracker" component={ShippingTracker} />
                   <Route path="/weekly-shipments" component={RedirectToShippingTracker} />
-                  <Route path="/awaiting-signature" component={AwaitingSignaturePage} />
                   <Route path="/gateway-reports" component={GatewayReports} />
                   <Route path="/metrics-sandbox" component={MetricsSandbox} />
                   <Route path="/metric-directory" component={MetricDirectory} />

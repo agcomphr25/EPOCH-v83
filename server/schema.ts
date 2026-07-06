@@ -6054,6 +6054,8 @@ export const chargeCodes = pgTable('charge_codes', {
   activityCategory: text('activity_category'), // Reporting rollup, e.g. Layup, QC, Cleanup, CSR
   costObjectivePolicy: text('cost_objective_policy').notNull().default('NONE'), // NONE | P1_INVENTORY_WIP_GENERAL_STOCK | PROJECT_REQUIRED | CONFIGURED
   inventoryWipPolicy: text('inventory_wip_policy'), // P1_INVENTORY_WIP_GENERAL_STOCK when P1 direct stock should capitalize after approval
+  projectId: uuid('project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
+  chargePhase: text('charge_phase'),
   allowProject: boolean('allow_project').notNull().default(false),
   requireProject: boolean('require_project').notNull().default(false),
   allowClin: boolean('allow_clin').notNull().default(false),

@@ -76,6 +76,8 @@ const chargeCodeFormSchema = insertChargeCodeSchema.extend({
   activityCategory: z.string().optional().nullable(),
   costObjectivePolicy: z.string().optional().nullable(),
   inventoryWipPolicy: z.string().optional().nullable(),
+  projectId: z.string().uuid().optional().nullable(),
+  chargePhase: z.enum(['10', '20', '30', '40', '50', '60', '70', '80', '90']).optional().nullable(),
   allowProject: z.boolean().optional(),
   requireProject: z.boolean().optional(),
   allowClin: z.boolean().optional(),
@@ -122,6 +124,7 @@ type ChargeCodeAssignments = {
 type ChargeCodeRequest = {
   id: string;
   wadId: string | null;
+  projectId?: string | null;
   workOrderNumber?: string | null;
   department: string;
   operation: string;
@@ -143,6 +146,29 @@ const PRODUCTION_LINE_OPTIONS = [
   { value: 'GENERAL', label: 'General' },
   { value: 'R_AND_D', label: 'R&D' },
 ];
+
+const CHARGE_PHASE_OPTIONS = [
+  { value: '10', label: '10 Proposal' },
+  { value: '20', label: '20 Engineering' },
+  { value: '30', label: '30 Prototype' },
+  { value: '40', label: '40 Tooling' },
+  { value: '50', label: '50 Qualification' },
+  { value: '60', label: '60 Preproduction' },
+  { value: '70', label: '70 Production' },
+  { value: '80', label: '80 Warranty' },
+  { value: '90', label: '90 Closeout' },
+];
+
+const NO_PROJECT_VALUE = '__none__';
+const NO_CHARGE_PHASE_VALUE = '__none__';
+
+type ProjectOption = {
+  id: string;
+  projectCode?: string | null;
+  projectName?: string | null;
+  description?: string | null;
+  customer?: { name?: string | null } | null;
+};
 
 function chargeCodeRequestSlug(value?: string | null): string {
   const slug = (value ?? '')
@@ -194,6 +220,8 @@ function defaultValues(
     activityCategory: (code as any)?.activityCategory ?? request?.laborCategory ?? request?.operation ?? '',
     costObjectivePolicy: (code as any)?.costObjectivePolicy ?? (request ? 'PROJECT_REQUIRED' : 'NONE'),
     inventoryWipPolicy: (code as any)?.inventoryWipPolicy ?? '',
+    projectId: (code as any)?.projectId ?? request?.projectId ?? null,
+    chargePhase: (code as any)?.chargePhase ?? null,
     allowProject: (code as any)?.allowProject ?? !!request,
     requireProject: (code as any)?.requireProject ?? !!request,
     allowClin: (code as any)?.allowClin ?? false,
@@ -232,6 +260,11 @@ function ChargeCodeForm({
   const { data: employees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ['/api/employees'],
     enabled: true,
+  });
+
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
+    queryKey: ['/api/projects'],
+    queryFn: () => apiRequest('/api/projects'),
   });
 
   const { data: assignments, isLoading: assignmentsLoading } =
@@ -427,6 +460,8 @@ function ChargeCodeForm({
       activityCategory: values.activityCategory || null,
       costObjectivePolicy: values.costObjectivePolicy || null,
       inventoryWipPolicy: values.inventoryWipPolicy || null,
+      projectId: values.projectId || null,
+      chargePhase: values.chargePhase || null,
       allowProject: values.allowProject,
       requireProject: values.requireProject,
       allowClin: values.allowClin,
@@ -566,6 +601,73 @@ function ChargeCodeForm({
                   <FormControl>
                     <Input placeholder="Layup, QC, Cleanup, CSR" {...field} value={field.value ?? ''} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="projectId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Project</FormLabel>
+                  <Select
+                    value={field.value ?? NO_PROJECT_VALUE}
+                    onValueChange={(value) =>
+                      field.onChange(value === NO_PROJECT_VALUE ? null : value)
+                    }
+                    disabled={projectsLoading}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={projectsLoading ? 'Loading projects' : 'Optional project'}
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NO_PROJECT_VALUE}>No project</SelectItem>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.projectCode ?? project.id} - {project.projectName ?? project.description ?? project.customer?.name ?? 'Unnamed project'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="chargePhase"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Charge Phase</FormLabel>
+                  <Select
+                    value={field.value ?? NO_CHARGE_PHASE_VALUE}
+                    onValueChange={(value) =>
+                      field.onChange(value === NO_CHARGE_PHASE_VALUE ? null : value)
+                    }
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Optional phase" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NO_CHARGE_PHASE_VALUE}>No phase</SelectItem>
+                      {CHARGE_PHASE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

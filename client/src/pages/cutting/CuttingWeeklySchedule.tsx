@@ -266,40 +266,6 @@ export default function CuttingWeeklySchedule() {
     return { cf, fg, mesa, cheekRiser, total: cf + fg + mesa + cheekRiser, byCustomer, regularOrders, oemOrders };
   }, [weeklyQueueData?.items]);
 
-  const p2Demand = useMemo(() => {
-    if (!weeklyQueueData?.items) return [];
-    
-    const p2Items = weeklyQueueData.items.filter(i => i.source === 'P2' && Math.max(0, Number(i.packetsNeeded) || 0) > 0);
-    
-    const poMap: Record<string, {
-      poId: string;
-      customer: string;
-      items: { name: string; qty: number; materialType: string }[];
-      total: number;
-    }> = {};
-    
-    p2Items.forEach(item => {
-      const poId = item.orderId.split('-')[1] || item.orderId;
-      if (!poMap[poId]) {
-        poMap[poId] = {
-          poId,
-          customer: item.customer || 'P2 Order',
-          items: [],
-          total: 0,
-        };
-      }
-      const packetQty = Math.max(0, Number(item.packetsNeeded) || 0);
-      poMap[poId].items.push({
-        name: item.stockModel,
-        qty: packetQty,
-        materialType: item.materialType,
-      });
-      poMap[poId].total += packetQty;
-    });
-    
-    return Object.values(poMap).sort((a, b) => b.total - a.total);
-  }, [weeklyQueueData?.items]);
-
   const scheduledCounts = useMemo(() => {
     let cf = 0, fg = 0, mesa = 0, cheekRiser = 0;
     (mfgQueueData || []).forEach((item: any) => {
@@ -345,6 +311,48 @@ export default function CuttingWeeklySchedule() {
     });
     return result;
   }, [mfgQueueData]);
+
+  const p2Demand = useMemo(() => {
+    if (!weeklyQueueData?.items) return [];
+
+    const scheduledRemaining = { ...p2ScheduledByName };
+    const p2Items = weeklyQueueData.items.filter(i => i.source === 'P2' && Math.max(0, Number(i.packetsNeeded) || 0) > 0);
+
+    const poMap: Record<string, {
+      poId: string;
+      customer: string;
+      items: { name: string; qty: number; materialType: string }[];
+      total: number;
+    }> = {};
+
+    p2Items.forEach(item => {
+      const packetName = item.stockModel;
+      const grossQty = Math.max(0, Number(item.packetsNeeded) || 0);
+      const scheduledForType = Math.max(0, scheduledRemaining[packetName] || 0);
+      const scheduledForItem = Math.min(grossQty, scheduledForType);
+      scheduledRemaining[packetName] = Math.max(0, scheduledForType - scheduledForItem);
+      const packetQty = Math.max(0, grossQty - scheduledForItem);
+      if (packetQty <= 0) return;
+
+      const poId = item.orderId.split('-')[1] || item.orderId;
+      if (!poMap[poId]) {
+        poMap[poId] = {
+          poId,
+          customer: item.customer || 'P2 Order',
+          items: [],
+          total: 0,
+        };
+      }
+      poMap[poId].items.push({
+        name: packetName,
+        qty: packetQty,
+        materialType: item.materialType,
+      });
+      poMap[poId].total += packetQty;
+    });
+
+    return Object.values(poMap).sort((a, b) => b.total - a.total);
+  }, [weeklyQueueData?.items, p2ScheduledByName]);
 
   const activeScheduledRows = useMemo(
     () => (mfgQueueData || []).filter((item: any) => item.status !== 'COMPLETED'),
@@ -874,7 +882,7 @@ export default function CuttingWeeklySchedule() {
                 const colors = ['bg-purple-600', 'bg-indigo-500', 'bg-teal-500', 'bg-pink-600', 'bg-cyan-600', 'bg-violet-600'];
                 return sortedTypes.map(([name, count], idx) => {
                   const scheduledForName = p2ScheduledByName[name] || 0;
-                  const remainingForName = Math.max(0, count - scheduledForName);
+                  const remainingForName = Math.max(0, count);
                   const relevantPOs = p2Demand.filter(po => po.items.some(i => i.name === name));
                   return (
                     <div key={name} className={`p-4 ${colors[idx % colors.length]} text-white rounded-lg`}>

@@ -82,6 +82,14 @@ interface DraftBomLine {
   childDraftBoms?: DraftPartBom[];
 }
 
+interface DraftLaborEstimateLine {
+  id?: string;
+  employeeRole?: string;
+  hourlyRate?: number | string;
+  hoursPerPart?: number | string;
+  quantityPerPo?: number | string;
+}
+
 interface DraftBomComponent {
   id: string;
   sourceLineId?: string | null;
@@ -121,6 +129,9 @@ interface DraftBomRecord {
   project?: string | null;
   updatedAt?: string;
   lines?: DraftBomLine[];
+  partsRequestLines?: DraftBomLine[];
+  laborEstimateLines?: DraftLaborEstimateLine[];
+  savedDraftBoms?: DraftPartBom[];
 }
 
 interface RDPart {
@@ -154,6 +165,7 @@ interface RDProject {
 
 const R_AND_D_PROJECT_STORAGE_KEY = 'epoch.rdProjects.v1';
 const DRAFT_BOM_STORAGE_KEY = 'epoch:draft-boms';
+const DRAFT_TAB_HANDOFF_KEY = 'epoch:draft-builder-tab-handoff';
 
 const fallbackDraftTabs: DraftBuilderTab[] = [
   {
@@ -548,7 +560,9 @@ function getPartsForProject(
 ) {
   if (!project) return [];
   const attachedRecords = getDraftRecordsForProject(project, records);
-  const lines = attachedRecords.flatMap((draft) => draft.lines ?? []);
+  const lines = attachedRecords.flatMap((draft) =>
+    (draft.partsRequestLines?.length ? draft.partsRequestLines : draft.lines) ?? []
+  );
 
   if (lines.length === 0)
     return project.draftTabIds.length > 0 || attachedRecords.length > 0
@@ -569,6 +583,39 @@ function getPartsForProject(
       status,
     };
   });
+}
+
+function getBomRecordsForProject(project: RDProject | null, records: DraftBomRecord[]) {
+  if (!project) return [];
+  return getDraftRecordsForProject(project, records).flatMap((draft) => {
+    const savedBoms = draft.savedDraftBoms ?? [];
+    const childBoms = [
+      ...(draft.lines ?? []),
+      ...(draft.partsRequestLines ?? []),
+    ].flatMap((line) => line.childDraftBoms ?? []);
+    return [...savedBoms, ...childBoms].map((bom) => ({
+      ...bom,
+      sourceDraftName: [draft.name, draft.revision].filter(Boolean).join(' - '),
+    }));
+  });
+}
+
+function getLaborLinesForProject(project: RDProject | null, records: DraftBomRecord[]) {
+  if (!project) return [];
+  return getDraftRecordsForProject(project, records).flatMap((draft) =>
+    (draft.laborEstimateLines ?? []).map((line) => ({
+      ...line,
+      sourceDraftName: [draft.name, draft.revision].filter(Boolean).join(' - '),
+    }))
+  );
+}
+
+function laborLineHours(line: DraftLaborEstimateLine) {
+  return asNumber(line.hoursPerPart) * Math.max(1, asNumber(line.quantityPerPo));
+}
+
+function laborLineTotal(line: DraftLaborEstimateLine) {
+  return laborLineHours(line) * asNumber(line.hourlyRate);
 }
 
 function getComponentChildren(
@@ -692,7 +739,7 @@ function AssemblyTreeNode({
 }
 
 export default function RDProjectsPage() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { data: employees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ['/api/employees'],
@@ -731,8 +778,20 @@ export default function RDProjectsPage() {
     readJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, [])
   );
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null
+    () => new URLSearchParams(window.location.search).get('projectId')
   );
+  const rdTabAliases: Record<string, string> = {
+    'parts-request': 'material',
+    parts: 'material',
+    'direct-labor': 'labor',
+    'bom-wizard': 'bom',
+    'draft-tabs': 'files',
+  };
+  const initialProjectTab =
+    rdTabAliases[new URLSearchParams(window.location.search).get('tab') ?? 'overview'] ??
+    new URLSearchParams(window.location.search).get('tab') ??
+    'overview';
+  const [activeProjectTab, setActiveProjectTab] = useState(initialProjectTab);
 
   const projects = useMemo(
     () => mergeProjects(sharedProjects, localProjects),
@@ -754,6 +813,22 @@ export default function RDProjectsPage() {
   const selectedParts = useMemo(
     () => getPartsForProject(selectedProject, draftRecords),
     [draftRecords, selectedProject]
+  );
+  const selectedBomRecords = useMemo(
+    () => getBomRecordsForProject(selectedProject, draftRecords),
+    [draftRecords, selectedProject]
+  );
+  const selectedLaborLines = useMemo(
+    () => getLaborLinesForProject(selectedProject, draftRecords),
+    [draftRecords, selectedProject]
+  );
+  const selectedLaborHours = selectedLaborLines.reduce(
+    (sum, line) => sum + laborLineHours(line),
+    0
+  );
+  const selectedLaborTotal = selectedLaborLines.reduce(
+    (sum, line) => sum + laborLineTotal(line),
+    0
   );
   const selectedAssemblyTree = useMemo(
     () =>
@@ -785,6 +860,15 @@ export default function RDProjectsPage() {
       window.removeEventListener('focus', refreshDraftRecords);
     };
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nextProjectId = params.get('projectId');
+    const requestedTab = params.get('tab') ?? 'overview';
+    const nextTab = rdTabAliases[requestedTab] ?? requestedTab;
+    if (nextProjectId) setSelectedProjectId(nextProjectId);
+    setActiveProjectTab(nextTab);
+  }, [location]);
 
   const editingProject =
     projects.find((project) => project.id === editingProjectId) ?? null;
@@ -835,6 +919,50 @@ export default function RDProjectsPage() {
         console.error('Failed to persist shared R&D project:', error);
       });
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('draftBuilderHandoff') !== '1') return;
+
+    const projectId = params.get('projectId');
+    const draftId = params.get('draftId');
+    if (!projectId || !draftId) return;
+
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+
+    const handoff = readJsonStorage<any>(DRAFT_TAB_HANDOFF_KEY, null);
+    const handoffDraft = handoff?.draft?.id === draftId ? handoff.draft : null;
+    const existingDraft = draftRecords.find((draft) => draft.id === draftId);
+    const sourceDraft = handoffDraft ?? existingDraft;
+    if (!sourceDraft) return;
+
+    const linkedDraft = linkDraftRecordToProject(sourceDraft, project);
+    if (
+      existingDraft?.projectType !== 'R_AND_D' ||
+      existingDraft?.projectId !== project.id
+    ) {
+      setLocalDraftRecords((current) => mergeDraftRecords(current, [linkedDraft]));
+      queryClient.setQueryData<DraftBomRecord[]>(
+        ['/api/draft-bom-drafts'],
+        (current = []) => mergeDraftRecords(current, [linkedDraft])
+      );
+      saveSharedDraftRecord(linkedDraft)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ['/api/draft-bom-drafts'] });
+        })
+        .catch((error) => {
+          console.error('Failed to attach Draft Builder handoff to R&D project:', error);
+        });
+    }
+
+    if (project.deletedDraftTabIds?.includes(draftId)) {
+      persistProject({
+        ...project,
+        deletedDraftTabIds: project.deletedDraftTabIds.filter((id) => id !== draftId),
+      });
+    }
+  }, [draftRecords, location, projects, queryClient]);
 
   const syncDraftLinksForProject = (project: RDProject) => {
     const linkedIds = new Set(project.draftTabIds);
@@ -961,6 +1089,19 @@ export default function RDProjectsPage() {
     });
   };
 
+  const openProjectFolder = (projectId: string, tab = activeProjectTab) => {
+    setSelectedProjectId(projectId);
+    setActiveProjectTab(tab);
+    setLocation(`/design/rd-projects?projectId=${encodeURIComponent(projectId)}&tab=${encodeURIComponent(tab)}`);
+  };
+
+  const changeProjectTab = (tab: string) => {
+    setActiveProjectTab(tab);
+    if (selectedProject?.id) {
+      setLocation(`/design/rd-projects?projectId=${encodeURIComponent(selectedProject.id)}&tab=${encodeURIComponent(tab)}`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -1050,7 +1191,7 @@ export default function RDProjectsPage() {
                         ? 'border-primary shadow-sm ring-1 ring-primary/20'
                         : ''
                     }`}
-                    onClick={() => setSelectedProjectId(project.id)}
+                    onClick={() => openProjectFolder(project.id)}
                     data-testid={`card-rd-project-${project.id}`}
                   >
                     <CardHeader className="pb-3">
@@ -1174,14 +1315,16 @@ export default function RDProjectsPage() {
                   )}
                 </CardHeader>
                 <CardContent>
-                  <Tabs defaultValue="overview" className="space-y-4">
-                    <TabsList className="grid w-full grid-cols-4">
+                  <Tabs value={activeProjectTab} onValueChange={changeProjectTab} className="space-y-4">
+                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-6">
                       <TabsTrigger value="overview">Overview</TabsTrigger>
-                      <TabsTrigger value="draft-tabs">Draft Tabs</TabsTrigger>
+                      <TabsTrigger value="files">Files</TabsTrigger>
+                      <TabsTrigger value="bom">BOM</TabsTrigger>
+                      <TabsTrigger value="material">Material</TabsTrigger>
+                      <TabsTrigger value="labor">Labor</TabsTrigger>
                       <TabsTrigger value="assembly-tree">
                         Assembly Tree
                       </TabsTrigger>
-                      <TabsTrigger value="parts">Parts</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="overview" className="space-y-4">
@@ -1301,7 +1444,7 @@ export default function RDProjectsPage() {
                       </Card>
                     </TabsContent>
 
-                    <TabsContent value="draft-tabs">
+                    <TabsContent value="files">
                       <div className="grid gap-3 md:grid-cols-2">
                         {selectedDraftTabs.length === 0 ? (
                           <Card className="md:col-span-2">
@@ -1356,6 +1499,43 @@ export default function RDProjectsPage() {
                       </div>
                     </TabsContent>
 
+                    <TabsContent value="bom" className="space-y-3">
+                      {selectedBomRecords.length === 0 ? (
+                        <Card>
+                          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                            Push a Draft Builder BOM wizard tab or attach a draft with saved BOMs to populate this folder tab.
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {selectedBomRecords.map((bom: DraftPartBom & { sourceDraftName?: string }) => {
+                            const rootPart = bom.parts?.[0] ?? bom.rootPart;
+                            const components = rootPart?.bomItems ?? bom.rootPart?.bomItems ?? [];
+                            return (
+                              <Card key={bom.id}>
+                                <CardHeader>
+                                  <CardTitle className="flex items-center gap-2 text-base">
+                                    <Boxes className="h-4 w-4 text-cyan-700" />
+                                    {bom.name}
+                                  </CardTitle>
+                                  <CardDescription>
+                                    {bom.sourceDraftName || 'Draft Builder'} {bom.revision ? `- ${bom.revision}` : ''}
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3 text-sm">
+                                  <div className="rounded-md border bg-white p-3">
+                                    <p className="font-mono text-xs text-muted-foreground">{rootPart?.partNumber || 'No root part'}</p>
+                                    <p className="font-medium">{rootPart?.description || 'No description'}</p>
+                                  </div>
+                                  <Badge variant="outline">{components.length} component{components.length === 1 ? '' : 's'}</Badge>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </TabsContent>
+
                     <TabsContent value="assembly-tree" className="space-y-2">
                       {selectedAssemblyTree.length === 0 ? (
                         <Card>
@@ -1370,7 +1550,7 @@ export default function RDProjectsPage() {
                       )}
                     </TabsContent>
 
-                    <TabsContent value="parts">
+                    <TabsContent value="material">
                       <div className="overflow-x-auto rounded-md border bg-white">
                         <div className="grid min-w-[760px] grid-cols-[1.2fr_2fr_repeat(4,0.7fr)_1fr] gap-3 border-b bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-muted-foreground">
                           <span>Part</span>
@@ -1409,6 +1589,53 @@ export default function RDProjectsPage() {
                           ))
                         )}
                       </div>
+                    </TabsContent>
+
+                    <TabsContent value="labor" className="space-y-4">
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="rounded-md border bg-white p-3">
+                          <p className="text-xs text-muted-foreground">Estimate Lines</p>
+                          <p className="text-lg font-semibold">{selectedLaborLines.length}</p>
+                        </div>
+                        <div className="rounded-md border bg-white p-3">
+                          <p className="text-xs text-muted-foreground">Estimated Hours</p>
+                          <p className="text-lg font-semibold">{selectedLaborHours.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                        </div>
+                        <div className="rounded-md border bg-white p-3">
+                          <p className="text-xs text-muted-foreground">Estimated Labor</p>
+                          <p className="text-lg font-semibold">{selectedLaborTotal.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</p>
+                        </div>
+                      </div>
+                      {selectedLaborLines.length === 0 ? (
+                        <Card>
+                          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                            Push a Draft Direct Labor Estimate from Draft Builder to populate this folder tab.
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        <div className="space-y-2">
+                          {selectedLaborLines.map((line: DraftLaborEstimateLine & { sourceDraftName?: string }) => (
+                            <div key={line.id ?? `${line.employeeRole}-${line.sourceDraftName}`} className="grid gap-3 rounded-md border bg-white p-3 md:grid-cols-5">
+                              <div className="md:col-span-2">
+                                <p className="font-medium">{line.employeeRole || 'Unassigned role'}</p>
+                                <p className="text-xs text-muted-foreground">{line.sourceDraftName || 'Draft Builder'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Hours / Part</p>
+                                <p className="font-medium">{asNumber(line.hoursPerPart).toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Qty / PO</p>
+                                <p className="font-medium">{Math.max(1, asNumber(line.quantityPerPo)).toLocaleString()}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Ext Labor</p>
+                                <p className="font-medium">{laborLineTotal(line).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </TabsContent>
                   </Tabs>
                 </CardContent>

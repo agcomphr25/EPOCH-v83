@@ -54,6 +54,12 @@ import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 
 type BomStatus = 'Needs Review' | 'Needs Quote' | 'RFQ Sent' | 'On Order' | 'On Hand' | 'ETA / Inbound' | 'Hold';
+type DraftBuilderProcurementStatus = {
+  lineId: string;
+  status: BomStatus;
+  source: 'parts-request' | 'vendor-po';
+  reference: string;
+};
 
 type BomLine = PrivateerDraftBomLine & {
   customFields?: Record<string, string>;
@@ -535,6 +541,38 @@ const importedDescriptionHeaders = [
   'name',
   'item',
 ];
+const importedStatusHeaders = ['status', 'orderstatus', 'poorderstatus', 'procurementstatus'];
+
+function parseImportStatus(value: string, fallback: BomStatus): BomStatus {
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (!normalized) return fallback;
+
+  const statusMatch = statuses.find((status) => normalizeCsvHeader(status) === normalized);
+  if (statusMatch) return statusMatch;
+
+  if (['needquote', 'needsquote', 'quote', 'quote needed', 'quoteneeded'].includes(normalized)) return 'Needs Quote';
+  if (['needreview', 'needsreview', 'needplan', 'needsplan', 'review', 'planning'].includes(normalized)) return 'Needs Review';
+  if (['rfq', 'rfqsent', 'requestforquote', 'requestforquotesent'].includes(normalized)) return 'RFQ Sent';
+  if (['ordered', 'onorder', 'po', 'posent', 'sent'].includes(normalized)) return 'On Order';
+  if (['received', 'onhand', 'stock', 'instock', 'delivered'].includes(normalized)) return 'On Hand';
+  if (['eta', 'inbound', 'partial', 'partiallyreceived', 'receivedpartial'].includes(normalized)) return 'ETA / Inbound';
+  if (['hold', 'blocked'].includes(normalized)) return 'Hold';
+
+  return fallback;
+}
+
+function statusRank(status: BomStatus) {
+  if (status === 'On Hand') return 4;
+  if (status === 'ETA / Inbound') return 3;
+  if (status === 'On Order') return 2;
+  if (status === 'RFQ Sent') return 1;
+  return 0;
+}
+
+function shouldPromoteLineStatus(currentStatus: BomStatus, nextStatus: BomStatus) {
+  if (currentStatus === 'Hold') return false;
+  return statusRank(nextStatus) > statusRank(currentStatus);
+}
 
 function customImportField(line: BomLine, keys: string[]) {
   const customFields = line.customFields ?? {};
@@ -1469,6 +1507,7 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
       if (inventoryMatch) linkedCount += 1;
       const spreadsheetLabel = `Imported spreadsheet row ${rowIndex + 1}`;
       const description = inventoryMatch ? inventoryDescription(inventoryMatch) : sourceDescription || spreadsheetLabel;
+      const fallbackStatus = inventoryMatch ? 'Needs Review' : 'Needs Quote';
 
       return {
         ...newLine(),
@@ -1484,7 +1523,7 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
         actualCost: '',
         qtyNeeded: '',
         service: false,
-        status: 'Needs Review',
+        status: parseImportStatus(csvField(row, importedStatusHeaders), fallbackStatus),
         targetNeedDate: '',
         note: inventoryMatch
           ? `CSV import linked to inventory item #${inventoryMatch.id}`
@@ -1562,7 +1601,7 @@ function uniqueColumnNames(columns: unknown[]) {
 }
 
 function isStatusDuplicateColumn(column: string) {
-  return normalizeCsvHeader(column) === 'status';
+  return importedStatusHeaders.includes(normalizeCsvHeader(column));
 }
 
 function sanitizeCustomColumns(columns: unknown[]) {
@@ -1911,6 +1950,34 @@ export default function DraftBOMBuilderPage() {
     () => inventoryItems.filter((item) => item.isActive !== false),
     [inventoryItems],
   );
+  const procurementStatusLines = useMemo(() => {
+    return partsRequestLines
+      .map((line) => ({
+        lineId: line.id,
+        inventoryItemId: line.inventoryItemId ?? null,
+        agPartNumber: line.agPartNumber || customImportField(line, ['agpartnumber', 'agpart']) || '',
+        partNumber: linePartNumber(line),
+        supplierItemId: line.supplierItemId || '',
+        description: lineDescription(line),
+      }))
+      .filter((line) =>
+        line.lineId &&
+        (line.inventoryItemId || line.agPartNumber || line.partNumber || line.supplierItemId || line.description)
+      );
+  }, [partsRequestLines]);
+  const procurementStatusQueryKey = useMemo(
+    () => JSON.stringify(procurementStatusLines),
+    [procurementStatusLines],
+  );
+  const { data: procurementStatuses = [] } = useQuery<DraftBuilderProcurementStatus[]>({
+    queryKey: ['/api/draft-bom-drafts/procurement-status', procurementStatusQueryKey],
+    queryFn: () => apiRequest('/api/draft-bom-drafts/procurement-status', {
+      method: 'POST',
+      body: { lines: procurementStatusLines },
+    }) as Promise<DraftBuilderProcurementStatus[]>,
+    enabled: procurementStatusLines.length > 0,
+    staleTime: 30000,
+  });
   const poDescriptionMatches = useMemo(() => {
     const query = poDescription.trim().toLowerCase();
     if (query.length < 2) return [];
@@ -1975,6 +2042,31 @@ export default function DraftBOMBuilderPage() {
       window.removeEventListener('storage', refreshRDProjects);
     };
   }, []);
+
+  useEffect(() => {
+    if (!canEditActiveDraft || procurementStatuses.length === 0) return;
+    const statusByLineId = new Map(procurementStatuses.map((status) => [status.lineId, status]));
+
+    setDraft((current) => {
+      let changed = false;
+      const nextLines = (current.partsRequestLines ?? []).map((line) => {
+        const procurementStatus = statusByLineId.get(line.id);
+        if (!procurementStatus || !shouldPromoteLineStatus(line.status, procurementStatus.status)) return line;
+        changed = true;
+        return {
+          ...line,
+          status: procurementStatus.status,
+          note: line.note?.trim()
+            ? `${line.note}\nAuto-updated from ${procurementStatus.reference}.`
+            : `Auto-updated from ${procurementStatus.reference}.`,
+        };
+      });
+
+      return changed
+        ? { ...current, partsRequestLines: nextLines, updatedAt: new Date().toISOString() }
+        : current;
+    });
+  }, [canEditActiveDraft, procurementStatuses]);
 
   useEffect(() => {
     if (!sharedDraftsFetched || hasLoadedSharedDrafts) return;

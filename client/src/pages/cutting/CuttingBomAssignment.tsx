@@ -224,7 +224,7 @@ export default function CuttingBomAssignment() {
   const [newPlyNumber, setNewPlyNumber] = useState("1");
 
   const { data: weeklyQueueData } = useQuery<{
-    items: { stockModel: string; source: string; packetsNeeded: number }[];
+    items: { stockModel: string; source: string; packetsNeeded: number; materialType?: string; packetBomId?: string; isPacket?: boolean; sku?: string }[];
   }>({
     queryKey: ['/api/cutting-table/weekly-cutting-queue', 'showAll'],
     queryFn: async () => {
@@ -234,10 +234,36 @@ export default function CuttingBomAssignment() {
     },
   });
 
+  const { data: mfgQueueData = [] } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table-mfg-queue/cutting-table', 'ALL'],
+    queryFn: async () => {
+      const res = await fetch('/api/cutting-table-mfg-queue/cutting-table?status=ALL');
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const p2ScheduledByName = useMemo(() => {
+    const p1MaterialTypes = new Set(['carbon_fiber', 'fiberglass', 'mesa', 'cheek_riser']);
+    const activeStatuses = new Set(['PENDING', 'IN_PROGRESS']);
+    const result: Record<string, number> = {};
+    (mfgQueueData || []).forEach((item: any) => {
+      if (!activeStatuses.has(item.status)) return;
+      const materialType = item.materialType || '';
+      if (p1MaterialTypes.has(materialType)) return;
+      const packetName = item.packetName;
+      if (!packetName) return;
+      const remaining = (item.quantityRequested || 0) - (item.quantityCompleted || 0);
+      result[packetName] = (result[packetName] || 0) + Math.max(0, remaining);
+    });
+    return result;
+  }, [mfgQueueData]);
+
   const { packetsNeedingBom, bomDemandById } = useMemo(() => {
     if (!weeklyQueueData?.items) return { packetsNeedingBom: [], bomDemandById: new Map<string, { demand: number; source: string }>() };
     
     const demandById = new Map<string, { demand: number; source: string }>();
+    const scheduledRemaining = { ...p2ScheduledByName };
     
     const bomLookup = new Map<string, PacketBOM[]>();
     packetBOMs.forEach(bom => {
@@ -286,12 +312,21 @@ export default function CuttingBomAssignment() {
     const p2Packets: Record<string, { name: string; demand: number; source: string }> = {};
     
     weeklyQueueData.items.forEach((item: any) => {
-      const demand = item.packetsNeeded || 1;
+      let demand = Math.max(0, Number(item.packetsNeeded) || 0);
       const name = item.stockModel || '';
       const nameLower = name.toLowerCase();
       const materialType = (item.materialType || '').toLowerCase();
       const isP1 = item.source === 'P1' || item.source === 'P1_PO';
       const packetBomId = item.packetBomId;
+
+      if (item.source === 'P2') {
+        const scheduledForType = Math.max(0, scheduledRemaining[name] || 0);
+        const scheduledForItem = Math.min(demand, scheduledForType);
+        scheduledRemaining[name] = Math.max(0, scheduledForType - scheduledForItem);
+        demand = Math.max(0, demand - scheduledForItem);
+      }
+
+      if (demand <= 0) return;
       
       if (packetBomId) {
         const existing = demandById.get(packetBomId) || { demand: 0, source: item.source };
@@ -385,7 +420,7 @@ export default function CuttingBomAssignment() {
       packetsNeedingBom: result.sort((a, b) => b.demand - a.demand),
       bomDemandById: demandById
     };
-  }, [weeklyQueueData?.items, packetBOMs]);
+  }, [weeklyQueueData?.items, packetBOMs, p2ScheduledByName]);
 
   const bomsWithDemand = useMemo(() => {
     return packetBOMs.filter(bom => bomDemandById.has(bom.id)).map(bom => {

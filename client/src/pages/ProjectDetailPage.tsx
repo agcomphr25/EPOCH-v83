@@ -70,6 +70,8 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
+const DRAFT_TAB_HANDOFF_KEY = 'epoch:draft-builder-tab-handoff';
+
 const ROM_CATEGORY_CONFIG = [
   { key: 'labor', label: 'Labor', field: 'quotedHours', kind: 'hours', detail: 'Direct labor estimate from ROM/quote feedback' },
   { key: 'material', label: 'Material', field: 'budgetAmount', kind: 'currency', detail: 'Material budget that will seed the WAD' },
@@ -421,7 +423,7 @@ const STEP_STATUS_COLORS: Record<string, string> = {
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   // Read ?tab= from URL to support deep-links (e.g. from serial search)
   const requestedTab = new URLSearchParams(window.location.search).get('tab') ?? 'workflow';
@@ -434,6 +436,33 @@ export default function ProjectDetailPage() {
     closing: 'workflow',
   };
   const initialTab = tabAliases[requestedTab] ?? requestedTab;
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [draftBuilderHandoff, setDraftBuilderHandoff] = useState<any>(null);
+  useEffect(() => {
+    const nextTab = tabAliases[new URLSearchParams(window.location.search).get('tab') ?? 'workflow']
+      ?? new URLSearchParams(window.location.search).get('tab')
+      ?? 'workflow';
+    setActiveTab(nextTab);
+  }, [location]);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(DRAFT_TAB_HANDOFF_KEY);
+      if (!raw) {
+        setDraftBuilderHandoff(null);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setDraftBuilderHandoff(parsed?.projectId === id ? parsed : null);
+    } catch {
+      setDraftBuilderHandoff(null);
+    }
+  }, [id, location]);
+  const changeProjectTab = (tab: string) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', tab);
+    setLocation(`/projects/${id}?${params.toString()}`);
+  };
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -813,6 +842,24 @@ export default function ProjectDetailPage() {
   }, {});
   const hubMaterial = hubTabs.material ?? {};
   const hubLabor = hubTabs.labor ?? {};
+  const draftHandoffDraft = draftBuilderHandoff?.draft ?? {};
+  const draftPartsRequestLines = draftBuilderHandoff?.tabId === 'parts-request' && Array.isArray(draftHandoffDraft.partsRequestLines)
+    ? draftHandoffDraft.partsRequestLines
+    : [];
+  const draftLaborEstimateLines = draftBuilderHandoff?.tabId === 'direct-labor' && Array.isArray(draftHandoffDraft.laborEstimateLines)
+    ? draftHandoffDraft.laborEstimateLines
+    : [];
+  const draftLaborEstimateHours = draftLaborEstimateLines.reduce((sum: number, line: any) => {
+    const qty = Number(line.quantityPerPo ?? line.quantity ?? line.poQuantity ?? line.qty ?? 1);
+    const hours = Number(line.hoursPerPart ?? line.hours ?? 0);
+    return sum + (Number.isFinite(qty) && Number.isFinite(hours) ? qty * hours : 0);
+  }, 0);
+  const draftLaborEstimateCost = draftLaborEstimateLines.reduce((sum: number, line: any) => {
+    const qty = Number(line.quantityPerPo ?? line.quantity ?? line.poQuantity ?? line.qty ?? 1);
+    const hours = Number(line.hoursPerPart ?? line.hours ?? 0);
+    const rate = Number(line.hourlyRate ?? line.rate ?? 0);
+    return sum + (Number.isFinite(qty) && Number.isFinite(hours) && Number.isFinite(rate) ? qty * hours * rate : 0);
+  }, 0);
   const hubShippingInvoicing = hubTabs.shippingInvoicing ?? {};
   const hubDocumentCoverage = hubTabs.documentCoverage ?? {};
   const documentCoverageSummary = hubDocumentCoverage.summary ?? {};
@@ -972,6 +1019,11 @@ export default function ProjectDetailPage() {
         if (!r.ok) throw new Error('Failed to fetch quote feedback');
         return r.json();
       }),
+    enabled: !!id,
+  });
+  const { data: pmLaborSummary } = useQuery<any>({
+    queryKey: ['/api/pm-dashboard', id, 'labor'],
+    queryFn: () => fetch(`/api/pm-dashboard/${id}/labor`, { credentials: 'include' }).then(r => r.json()),
     enabled: !!id,
   });
   const linkedProjectQuoteId =
@@ -2062,7 +2114,7 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      <Tabs defaultValue={initialTab} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={changeProjectTab} className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
           <TabsTrigger value="document-coverage" data-testid="tab-document-coverage">Document Coverage</TabsTrigger>
@@ -3657,17 +3709,16 @@ export default function ProjectDetailPage() {
               ) : (
                 <p className="text-sm text-muted-foreground">No P2 production orders are linked yet.</p>
               ))}
-              {productionLinePlacements.length < 0 && (
               <div className="grid gap-4 xl:grid-cols-2">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-base">
+                <div className="rounded-md border p-4">
+                  <div className="mb-3">
+                    <h3 className="flex items-center gap-2 text-base font-semibold">
                       <Package className="h-4 w-4" />
                       Assembly Source
-                    </CardTitle>
-                    <CardDescription>PO line items and BOM records feeding production.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
+                    </h3>
+                    <p className="text-sm text-muted-foreground">PO line items and BOM records feeding production.</p>
+                  </div>
+                  <div className="space-y-3">
                     {assemblyPoItems.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No PO assembly lines are linked yet.</p>
                     ) : (
@@ -3689,18 +3740,18 @@ export default function ProjectDetailPage() {
                         <p className="font-medium">{assemblyBomRecords.length}</p>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
 
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-base">
+                <div className="rounded-md border p-4">
+                  <div className="mb-3">
+                    <h3 className="flex items-center gap-2 text-base font-semibold">
                       <Hash className="h-4 w-4" />
                       Serialized Production Status
-                    </CardTitle>
-                    <CardDescription>Serialized part progress from P2 traceability records.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Serialized part progress from P2 traceability records.</p>
+                  </div>
+                  <div className="space-y-3">
                     {projectSerializedItems.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No serialized production records are linked yet.</p>
                     ) : (
@@ -3716,10 +3767,9 @@ export default function ProjectDetailPage() {
                         ))}
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </div>
-              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -3762,6 +3812,67 @@ export default function ProjectDetailPage() {
                   Material Budget
                 </Button>
               </div>
+              {draftPartsRequestLines.length > 0 && (
+                <div className="rounded-md border p-4">
+                  <div className="mb-3">
+                    <h3 className="text-base font-semibold">Draft Builder Material Demand</h3>
+                    <p className="text-sm text-muted-foreground">Parts/Request lines pushed from the linked Draft Builder draft.</p>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {draftPartsRequestLines.map((line: any) => (
+                      <div key={line.id ?? `${line.agPartNumber}-${line.description}`} className="rounded-md border p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{line.description || line.partName || 'Requested material'}</p>
+                            <p className="truncate font-mono text-xs text-muted-foreground">{line.agPartNumber || line.supplierItemId || line.partNumber || 'No part number'}</p>
+                          </div>
+                          <Badge variant="outline">Qty {formatQuantityLabel(line.qtyNeeded ?? line.quantity ?? 0)}</Badge>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          {line.supplier ? <span>Supplier: {line.supplier}</span> : null}
+                          {line.status ? <span>Status: {line.status}</span> : null}
+                          {line.action ? <span>Action: {line.action}</span> : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {Array.isArray(hubMaterial.partsRequests) && hubMaterial.partsRequests.length > 0 && (
+                <div className="rounded-md border p-4">
+                  <div className="mb-3">
+                    <h3 className="text-base font-semibold">Project Parts Requests</h3>
+                    <p className="text-sm text-muted-foreground">Requests already created for this project file.</p>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {hubMaterial.partsRequests.map((request: any) => (
+                      <div key={request.id} className="rounded-md border p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{request.part_name ?? request.partName ?? 'Requested part'}</p>
+                            <p className="truncate font-mono text-xs text-muted-foreground">{request.part_number ?? request.partNumber ?? 'No part number'}</p>
+                          </div>
+                          <Badge variant="secondary">{request.status ?? 'Requested'}</Badge>
+                        </div>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <p className="text-muted-foreground">Needed</p>
+                            <p className="font-medium">{formatQuantityLabel(request.quantity)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Ordered</p>
+                            <p className="font-medium">{formatQuantityLabel(request.qty_ordered ?? request.qtyOrdered)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Received</p>
+                            <p className="font-medium">{formatQuantityLabel(request.qty_received ?? request.qtyReceived)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {Array.isArray(hubMaterial.parts) && hubMaterial.parts.length > 0 && (
                 <div className="space-y-2">
                   {hubMaterial.parts.map((part: any) => (
@@ -3838,11 +3949,117 @@ export default function ProjectDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-5">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Draft Estimate</p>
+                  <p className="font-medium">{formatHoursLabel(draftLaborEstimateHours, 'Not pushed')}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Draft Labor Cost</p>
+                  <p className="font-medium">{formatCurrencyLabel(draftLaborEstimateCost, 'Not pushed')}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">PM Budget</p>
+                  <p className="font-medium">{formatHoursLabel(pmLaborSummary?.summary?.budgetedHours ?? hubLabor.summary?.budgetHours, 'Not set')}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Actual Hours</p>
+                  <p className="font-medium">{formatHoursLabel(pmLaborSummary?.summary?.actualHours ?? hubLabor.summary?.actualHours ?? quoteFeedback?.actualLaborHours, 'No actuals')}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Remaining</p>
+                  <p className="font-medium">{formatHoursLabel(pmLaborSummary?.summary?.remainingHours ?? hubLabor.summary?.varianceHours ?? quoteFeedback?.laborHoursVariance, 'Pending')}</p>
+                </div>
+              </div>
+              {draftLaborEstimateLines.length > 0 && (
+                <div className="rounded-md border p-4">
+                  <div className="mb-3">
+                    <h3 className="text-base font-semibold">Draft Direct Labor Estimate</h3>
+                    <p className="text-sm text-muted-foreground">Estimated hours expected for the part from the linked Draft Builder draft.</p>
+                  </div>
+                  <div className="space-y-2">
+                    {draftLaborEstimateLines.map((line: any) => {
+                      const quantity = Number(line.quantityPerPo ?? 1);
+                      const hoursPerPart = Number(line.hoursPerPart ?? 0);
+                      const hourlyRate = Number(line.hourlyRate ?? 0);
+                      const totalHours = Number.isFinite(quantity) && Number.isFinite(hoursPerPart) ? quantity * hoursPerPart : 0;
+                      const totalCost = Number.isFinite(totalHours) && Number.isFinite(hourlyRate) ? totalHours * hourlyRate : 0;
+                      return (
+                        <div key={line.id ?? `${line.employeeRole}-${line.hoursPerPart}`} className="grid gap-2 rounded-md border p-3 md:grid-cols-5">
+                          <div className="md:col-span-2">
+                            <p className="font-medium">{line.employeeRole || 'Unassigned role'}</p>
+                            <p className="text-xs text-muted-foreground">Draft Builder estimate line</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Hours / Part</p>
+                            <p className="font-medium">{formatHoursLabel(line.hoursPerPart, '0 hrs')}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Total Hours</p>
+                            <p className="font-medium">{formatHoursLabel(totalHours, '0 hrs')}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Ext Labor</p>
+                            <p className="font-medium">{formatCurrencyLabel(totalCost, '$0.00')}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Work Orders</p>
                   <p className="font-medium">{projectWorkOrders.length}</p>
                 </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Open Labor Sessions</p>
+                  <p className="font-medium">{formatQuantityLabel(pmLaborSummary?.summary?.openSessionCount)}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Consumed</p>
+                  <p className="font-medium">{formatQuantityLabel(pmLaborSummary?.summary?.percentConsumed)}%</p>
+                </div>
+              </div>
+              {Array.isArray(pmLaborSummary?.chargeCodeRows) && pmLaborSummary.chargeCodeRows.length > 0 && (
+                <div className="rounded-md border p-4">
+                  <div className="mb-3">
+                    <h3 className="text-base font-semibold">PM Labor Summary</h3>
+                    <p className="text-sm text-muted-foreground">Charge-code budget, actual hours, and remaining time from Project Manager Control Center.</p>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {pmLaborSummary.chargeCodeRows.slice(0, 6).map((row: any) => (
+                      <div key={row.chargeCodeId ?? row.chargeCode} className="rounded-md border p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{row.chargeCode ?? 'Unassigned charge code'}</p>
+                            <p className="truncate text-xs text-muted-foreground">{row.department || row.taskName || 'Project labor'}</p>
+                          </div>
+                          <Badge variant={row.isOverrun ? 'destructive' : row.isNearLimit ? 'secondary' : 'outline'}>
+                            {formatQuantityLabel(row.percentConsumed)}%
+                          </Badge>
+                        </div>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <p className="text-muted-foreground">Budget</p>
+                            <p className="font-medium">{formatHoursLabel(row.budgetedHours, '0 hrs')}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Actual</p>
+                            <p className="font-medium">{formatHoursLabel(row.actualHours, '0 hrs')}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Remain</p>
+                            <p className="font-medium">{formatHoursLabel(row.remainingHours, '0 hrs')}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Project Manager</p>
                   <p className="font-medium">{project.projectManager?.name || 'Not assigned'}</p>

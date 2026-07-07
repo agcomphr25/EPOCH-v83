@@ -2987,6 +2987,17 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
+  function projectTabForDraftTab(tabId: WorkspaceTabId) {
+    const tabMap: Partial<Record<WorkspaceTabId, string>> = {
+      'parts-request': 'material',
+      'direct-labor': 'labor',
+      nrc: 'rom',
+      'bom-wizard': 'bom-routing',
+      'assembly-tree': 'production',
+    };
+    return tabMap[tabId] ?? null;
+  }
+
   async function pushActiveTabTo(target: 'rom' | 'p2-project' | 'rd-project') {
     const payload = {
       source: 'draft-builder',
@@ -3021,7 +3032,17 @@ export default function DraftBOMBuilderPage() {
         return;
       }
 
-      const bomsToPromote = draft.savedDraftBoms ?? [];
+      const projectTab = projectTabForDraftTab(activeWorkspaceTab);
+      if (!projectTab) {
+        toast({
+          title: 'PO draft stays in Draft Builder',
+          description: 'Use BOM wizard when the draft is ready to land in the project BOM/Routing tab.',
+        });
+        return;
+      }
+
+      const shouldPromoteDraftBoms = activeWorkspaceTab === 'bom-wizard' || activeWorkspaceTab === 'assembly-tree';
+      const bomsToPromote = shouldPromoteDraftBoms ? draft.savedDraftBoms ?? [] : [];
       const promotedDraftBoms = new Map<string, DraftPartBom>();
       try {
         for (const bomToPromote of bomsToPromote) {
@@ -3043,12 +3064,12 @@ export default function DraftBOMBuilderPage() {
           }));
         }
         toast({
-          title: 'BOM pushed to P2 project',
+          title: shouldPromoteDraftBoms ? 'BOM pushed to P2 project' : 'Draft tab pushed to P2 project',
           description: promotedDraftBoms.size > 0
             ? `${promotedDraftBoms.size} Robust BOM draft(s) promoted and bridged into the P2 BOM Wizard.`
-            : `${workspaceTabLabel(activeWorkspaceTab)} is ready in the project context.`,
+            : `${workspaceTabLabel(activeWorkspaceTab)} is ready in the project ${projectTab === 'material' ? 'Material' : projectTab === 'labor' ? 'Labor' : projectTab === 'production' ? 'Production' : 'BOM/Routing'} tab.`,
         });
-        setLocation(`/projects/${draft.projectId}?draftBuilderHandoff=1&tab=bom-routing`);
+        setLocation(`/projects/${draft.projectId}?draftBuilderHandoff=1&draftId=${encodeURIComponent(draft.id)}&tab=${encodeURIComponent(projectTab)}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to save the draft BOMs to Robust BOM.';
         toast({

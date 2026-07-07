@@ -2417,74 +2417,156 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       `);
       const p2Counts = (p2CountResult as any).rows?.[0] || p2CountResult?.[0];
       console.log('📊 P2 production orders diagnostic:', JSON.stringify(p2Counts));
-      // Query P2 production orders table - only items that are actual packets
-      // Packet identification: is_packet flag, matching cutting_packet_bom, 'packet' keyword in name/sku, or specific SKUs (P706, P707)
-      // Match inventory by sku (AG part number) first, then fall back to part_name matching
+      // Query P2 packet demand from the same unit truth the P2 Control Center uses:
+      // PO line quantity minus shipped lots, then subtract only packets committed to
+      // a started traveler. p2_production_orders is used here to identify the packet
+      // type/BOM, not as the demand quantity source.
       const p2Query = `
-            SELECT DISTINCT ON (po.id)
-              po.id,
-              po.p2_po_id as "poId",
-              po.part_name as "itemName",
-              po.sku,
-              po.quantity,
-              po.due_date as "dueDate",
-              po.order_id as "poNumber",
-              po.priority,
-              po.status,
-              po.department as "department",
-              COALESCE(p2.customer_name, 'P2 Order') as "customer",
-              'P2' as source,
-              COALESCE(inv.is_packet, false) as "isPacket",
-              bom.id as "matchedBomId",
-              po.quantity as "originalQuantity",
-              COALESCE(p2_units.serialized_count, 0) as "serializedQuantity",
-              COALESCE(committed_packets.committed_count, 0) as "committedQuantity",
-              CASE
-                WHEN COALESCE(p2_units.serialized_count, 0) > 0
-                THEN COALESCE(p2_units.serialized_count, 0)
-                ELSE 1
-              END as "unitDemandQuantity",
-              CASE
-                WHEN COALESCE(committed_packets.committed_count, 0) > 0
-                THEN GREATEST(
-                  CASE
-                    WHEN COALESCE(p2_units.serialized_count, 0) > 0
-                    THEN COALESCE(p2_units.serialized_count, 0)
-                    ELSE 1
-                  END
-                    - COALESCE(committed_packets.committed_count, 0),
-                  0
-                )
-                ELSE CASE
-                  WHEN COALESCE(p2_units.serialized_count, 0) > 0
-                  THEN COALESCE(p2_units.serialized_count, 0)
-                  ELSE 1
-                END
-              END as "openQuantity"
-            FROM p2_production_orders po
-            LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
-            LEFT JOIN inventory_items inv ON (
-              inv.ag_part_number = po.sku OR
-              LOWER(inv.ag_part_number) = LOWER(po.sku) OR
-              LOWER(inv.name) = LOWER(po.part_name) OR 
-              inv.ag_part_number = po.part_name OR
-              LOWER(inv.ag_part_number) = LOWER(po.part_name)
-            )
-            LEFT JOIN cutting_packet_boms bom ON (
-              bom.is_active = true AND (
-                bom.part_number = po.sku OR
-                bom.part_number = po.part_name OR 
-                LOWER(bom.packet_type) = LOWER(po.part_name) OR
-                LOWER(bom.part_number) = LOWER(po.part_name) OR
-                LOWER(bom.packet_type) LIKE '%' || LOWER(po.part_name) || '%' OR
-                LOWER(po.part_name) LIKE '%' || LOWER(bom.packet_type) || '%'
+            WITH packet_candidates AS (
+              SELECT
+                po.id,
+                po.p2_po_id,
+                po.p2_po_item_id,
+                po.part_name,
+                po.sku,
+                po.due_date,
+                po.order_id,
+                po.priority,
+                po.status,
+                po.department,
+                poi.quantity AS ordered_quantity,
+                COALESCE(p2.customer_name, 'P2 Order') AS customer,
+                COALESCE(inv.is_packet, false) AS is_packet,
+                inv.name AS inventory_name,
+                bom.id AS matched_bom_id,
+                bom.product_category_id AS bom_product_category_id,
+                bom.packet_type AS bom_packet_type,
+                bom.part_number AS bom_part_number
+              FROM p2_production_orders po
+              JOIN p2_purchase_order_items poi ON poi.id = po.p2_po_item_id
+              LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
+              LEFT JOIN inventory_items inv ON (
+                inv.ag_part_number = po.sku OR
+                LOWER(inv.ag_part_number) = LOWER(po.sku) OR
+                LOWER(inv.name) = LOWER(po.part_name) OR
+                inv.ag_part_number = po.part_name OR
+                LOWER(inv.ag_part_number) = LOWER(po.part_name)
               )
+              LEFT JOIN cutting_packet_boms bom ON (
+                bom.is_active = true AND (
+                  bom.part_number = po.sku OR
+                  bom.part_number = po.part_name OR
+                  LOWER(bom.packet_type) = LOWER(po.part_name) OR
+                  LOWER(bom.part_number) = LOWER(po.part_name) OR
+                  LOWER(bom.packet_type) LIKE '%' || LOWER(po.part_name) || '%' OR
+                  LOWER(po.part_name) LIKE '%' || LOWER(bom.packet_type) || '%'
+                )
+              )
+              WHERE COALESCE(UPPER(po.status), '') NOT IN ('CANCELLED', 'CANCELED')
+                AND (
+                  inv.is_packet = true
+                  OR bom.id IS NOT NULL
+                  OR LOWER(po.part_name) LIKE '%packet%'
+                  OR LOWER(po.sku) LIKE '%packet%'
+                  OR po.sku IN ('P706', 'P707')
+                )
+            ),
+            packet_groups AS (
+              SELECT
+                MIN(pc.id) AS id,
+                pc.p2_po_id AS "poId",
+                pc.p2_po_item_id AS "poItemId",
+                pc.part_name AS "itemName",
+                pc.sku,
+                MIN(pc.due_date) AS "dueDate",
+                MIN(pc.order_id) AS "poNumber",
+                MAX(pc.priority) AS priority,
+                MIN(pc.status) AS status,
+                MIN(pc.department) AS department,
+                pc.customer,
+                bool_or(pc.is_packet) AS "isPacket",
+                pc.matched_bom_id AS "matchedBomId",
+                pc.bom_product_category_id AS "bomProductCategoryId",
+                MAX(pc.inventory_name) AS "inventoryName",
+                MAX(pc.bom_packet_type) AS "bomPacketType",
+                MAX(pc.bom_part_number) AS "bomPartNumber",
+                MAX(pc.ordered_quantity)::int AS "originalQuantity",
+                COUNT(DISTINCT pc.id)::int AS "packetRowCount"
+              FROM packet_candidates pc
+              GROUP BY
+                pc.p2_po_id,
+                pc.p2_po_item_id,
+                pc.part_name,
+                pc.sku,
+                pc.customer,
+                pc.matched_bom_id,
+                pc.bom_product_category_id
+            ),
+            shipped_lot_units AS (
+              SELECT
+                po_item_id AS "poItemId",
+                COALESCE(SUM(quantity), 0)::int AS shipped_count
+              FROM p2_lot_numbers
+              WHERE po_item_id IS NOT NULL
+                AND (
+                  COALESCE(UPPER(status), '') IN ('SHIPPED', 'CLOSED', 'COMPLETE', 'COMPLETED')
+                  OR shipped_at IS NOT NULL
+                  OR packing_slip_id IS NOT NULL
+                )
+              GROUP BY po_item_id
+            ),
+            serialized_shipped_units AS (
+              SELECT
+                po_item_id AS "poItemId",
+                COUNT(*)::int AS shipped_count
+              FROM p2_serialized_items
+              WHERE COALESCE(UPPER(status), '') IN ('COMPLETED', 'COMPLETE', 'SHIPPED', 'CLOSED')
+                OR LOWER(TRIM(COALESCE(current_department, ''))) IN ('shipped', 'shipping', 'closed')
+              GROUP BY po_item_id
+            ),
+            shipped_units AS (
+              SELECT
+                poi.id AS "poItemId",
+                GREATEST(
+                  COALESCE(slu.shipped_count, 0),
+                  COALESCE(ssu.shipped_count, 0)
+                )::int AS shipped_count
+              FROM p2_purchase_order_items poi
+              LEFT JOIN shipped_lot_units slu ON slu."poItemId" = poi.id
+              LEFT JOIN serialized_shipped_units ssu ON ssu."poItemId" = poi.id
             )
+            SELECT
+              pg.id,
+              pg."poId",
+              pg."itemName",
+              pg.sku,
+              GREATEST(pg."originalQuantity" - COALESCE(su.shipped_count, 0), 0) as quantity,
+              pg."dueDate",
+              pg."poNumber",
+              pg.priority,
+              pg.status,
+              pg.department,
+              pg.customer,
+              'P2' as source,
+              pg."isPacket",
+              pg."matchedBomId",
+              pg."originalQuantity",
+              COALESCE(p2_units.serialized_count, 0) as "serializedQuantity",
+              COALESCE(su.shipped_count, 0) as "shippedQuantity",
+              COALESCE(committed_packets.committed_count, 0) as "committedQuantity",
+              GREATEST(pg."originalQuantity" - COALESCE(su.shipped_count, 0), 0) as "unitDemandQuantity",
+              GREATEST(
+                GREATEST(pg."originalQuantity" - COALESCE(su.shipped_count, 0), 0)
+                  - COALESCE(committed_packets.committed_count, 0),
+                0
+              ) as "openQuantity"
+            FROM packet_groups pg
+            LEFT JOIN shipped_units su ON su."poItemId" = pg."poItemId"
             LEFT JOIN LATERAL (
               SELECT COUNT(*)::int as serialized_count
               FROM p2_serialized_items si
-              WHERE si.po_item_id = po.p2_po_item_id
-                AND UPPER(COALESCE(si.status, 'ACTIVE')) NOT IN ('SCRAPPED', 'CANCELLED')
+              WHERE si.po_item_id = pg."poItemId"
+                AND UPPER(COALESCE(si.status, 'ACTIVE')) NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED')
             ) p2_units ON true
             LEFT JOIN LATERAL (
               SELECT COUNT(DISTINCT si.id)::int as committed_count
@@ -2496,13 +2578,14 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                   LOWER(TRIM(si.id::text)),
                   LOWER(TRIM(si.barcode)),
                   LOWER(TRIM(si.serial_number)),
-                  LOWER(TRIM(COALESCE(si.traveler_barcode, '')))
+                  LOWER(TRIM(COALESCE(si.traveler_barcode, ''))),
+                  LOWER(TRIM(COALESCE(si.customer_serial_number, '')))
                 )
               )
-              WHERE si.po_item_id = po.p2_po_item_id
-                AND UPPER(COALESCE(si.status, 'ACTIVE')) NOT IN ('SCRAPPED', 'CANCELLED')
+              WHERE si.po_item_id = pg."poItemId"
+                AND UPPER(COALESCE(si.status, 'ACTIVE')) = 'ACTIVE'
                 AND (
-                  (bom.product_category_id IS NOT NULL AND cbp.product_category_id = bom.product_category_id)
+                  (pg."bomProductCategoryId" IS NOT NULL AND cbp.product_category_id = pg."bomProductCategoryId")
                   OR (
                     cbp.product_category_id IS NOT NULL
                     AND EXISTS (
@@ -2510,32 +2593,79 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                       FROM cutting_product_categories cpc
                       WHERE cpc.id = cbp.product_category_id
                         AND (
-                          LOWER(cpc.category_name) = LOWER(COALESCE(inv.name, ''))
-                          OR LOWER(cpc.category_name) = LOWER(COALESCE(po.part_name, ''))
-                          OR LOWER(cpc.category_name) = LOWER(COALESCE(bom.packet_type, ''))
-                          OR LOWER(cpc.category_name) = LOWER(COALESCE(bom.part_number, ''))
+                          LOWER(cpc.category_name) = LOWER(COALESCE(pg."inventoryName", ''))
+                          OR LOWER(cpc.category_name) = LOWER(COALESCE(pg."itemName", ''))
+                          OR LOWER(cpc.category_name) = LOWER(COALESCE(pg."bomPacketType", ''))
+                          OR LOWER(cpc.category_name) = LOWER(COALESCE(pg."bomPartNumber", ''))
                         )
                     )
                   )
                 )
+                AND EXISTS (
+                  SELECT 1
+                  FROM travelers t
+                  WHERE (
+                    LOWER(TRIM(COALESCE(t.serial_number, ''))) IN (
+                      LOWER(TRIM(si.serial_number)),
+                      LOWER(TRIM(si.barcode)),
+                      LOWER(TRIM(COALESCE(si.traveler_barcode, ''))),
+                      LOWER(TRIM(COALESCE(si.customer_serial_number, '')))
+                    )
+                    OR LOWER(TRIM(COALESCE(t.internal_control_number, ''))) IN (
+                      LOWER(TRIM(si.serial_number)),
+                      LOWER(TRIM(si.barcode)),
+                      LOWER(TRIM(COALESCE(si.traveler_barcode, ''))),
+                      LOWER(TRIM(COALESCE(si.customer_serial_number, '')))
+                    )
+                    OR LOWER(TRIM(COALESCE(t.lot_number, ''))) IN (
+                      LOWER(TRIM(si.serial_number)),
+                      LOWER(TRIM(si.barcode)),
+                      LOWER(TRIM(COALESCE(si.traveler_barcode, ''))),
+                      LOWER(TRIM(COALESCE(si.customer_serial_number, '')))
+                    )
+                    OR LOWER(TRIM(COALESCE(t.traveler_number, ''))) IN (
+                      LOWER(TRIM(si.serial_number)),
+                      LOWER(TRIM(si.barcode)),
+                      LOWER(TRIM(COALESCE(si.traveler_barcode, ''))),
+                      LOWER(TRIM(COALESCE(si.customer_serial_number, '')))
+                    )
+                  )
+                  AND COALESCE(UPPER(t.status), '') NOT IN ('DRAFT', 'CANCELLED', 'CANCELED', 'VOID')
+                  AND (
+                    COALESCE(UPPER(t.status), '') IN ('ACTIVE', 'IN_PROGRESS', 'STARTED', 'COMPLETE', 'COMPLETED', 'CLOSED')
+                    OR EXISTS (
+                      SELECT 1
+                      FROM traveler_steps ts
+                      WHERE ts.traveler_id = t.id
+                        AND (
+                          ts.started_at IS NOT NULL
+                          OR COALESCE(UPPER(ts.status), '') IN ('STARTED', 'IN_PROGRESS', 'COMPLETE', 'COMPLETED')
+                        )
+                    )
+                    OR EXISTS (
+                      SELECT 1
+                      FROM traveler_tasks tt
+                      JOIN traveler_steps ts2 ON ts2.id = tt.traveler_step_id
+                      WHERE ts2.traveler_id = t.id
+                        AND tt.started_at IS NOT NULL
+                    )
+                  )
+                )
             ) committed_packets ON true
-            WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
-              AND (
-                inv.is_packet = true
-                OR bom.id IS NOT NULL
-                OR LOWER(po.part_name) LIKE '%packet%'
-                OR LOWER(po.sku) LIKE '%packet%'
-                OR po.sku IN ('P706', 'P707')
-              )`;
+            WHERE GREATEST(
+              GREATEST(pg."originalQuantity" - COALESCE(su.shipped_count, 0), 0)
+                - COALESCE(committed_packets.committed_count, 0),
+              0
+            ) > 0`;
       
       const p2Result = showAll === 'true'
         ? await pool.query(p2Query + `
-            ORDER BY po.id, po.due_date ASC NULLS LAST
+            ORDER BY pg.id, pg."dueDate" ASC NULLS LAST
             LIMIT 2000
           `)
         : await pool.query(p2Query + `
-              AND po.due_date >= $1 AND po.due_date < $2
-            ORDER BY po.id, po.due_date ASC
+              AND pg."dueDate" >= $1 AND pg."dueDate" < $2
+            ORDER BY pg.id, pg."dueDate" ASC
           `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
       const p2Rows = Array.isArray(p2Result) ? p2Result : (p2Result as any).rows || [];

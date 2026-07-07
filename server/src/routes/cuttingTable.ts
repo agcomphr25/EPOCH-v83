@@ -2447,7 +2447,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                     - COALESCE(committed_packets.committed_count, 0),
                   0
                 )
-                ELSE po.quantity
+                ELSE COALESCE(NULLIF(p2_units.serialized_count, 0), po.quantity)
               END as "openQuantity"
             FROM p2_production_orders po
             LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
@@ -2605,7 +2605,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           dueDate: item.dueDate,
           customer: item.customer,
           priority: 60,
-          packetsNeeded: item.openQuantity || item.quantity || 1,
+          packetsNeeded: item.openQuantity ?? item.quantity ?? 1,
           originalQuantity: item.originalQuantity || item.quantity || 1,
           serializedQuantity: item.serializedQuantity || 0,
           committedQuantity: item.committedQuantity || 0,
@@ -2638,7 +2638,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       carbon_fiber: {
         regular: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'regular').reduce((sum, i) => sum + quantityForDemand(i), 0),
         oem: queueItems.filter(i => i.materialType === 'carbon_fiber' && (i.orderType === 'oem' || i.orderType === 'p1_po')).reduce((sum, i) => sum + quantityForDemand(i), 0),
-        p2: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'p2_po').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0),
+        p2: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'p2_po').reduce((sum, i) => sum + quantityForDemand(i), 0),
         total: cfTotal,
         fromInventory: cfFromInventory,
         needsCutting: cfTotal,
@@ -2647,7 +2647,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       fiberglass: {
         regular: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'regular').reduce((sum, i) => sum + quantityForDemand(i), 0),
         oem: queueItems.filter(i => i.materialType === 'fiberglass' && (i.orderType === 'oem' || i.orderType === 'p1_po')).reduce((sum, i) => sum + quantityForDemand(i), 0),
-        p2: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'p2_po').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0),
+        p2: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'p2_po').reduce((sum, i) => sum + quantityForDemand(i), 0),
         total: fgTotal,
         fromInventory: fgFromInventory,
         needsCutting: fgTotal,

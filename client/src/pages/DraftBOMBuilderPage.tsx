@@ -544,12 +544,16 @@ function customImportField(line: BomLine, keys: string[]) {
   return '';
 }
 
+function isImportedSpreadsheetDescription(value: string) {
+  return /^Imported spreadsheet (?:line|row \d+)$/i.test(value.trim());
+}
+
 function lineDescription(line: BomLine) {
   const partNumber = linePartNumber(line);
   const description = line.description?.trim() ?? '';
   const customDescription = customImportField(line, importedDescriptionHeaders);
   if (line.importedSource === 'spreadsheet' && customDescription) return customDescription;
-  if (description && description !== 'Imported spreadsheet line' && description !== partNumber) return description;
+  if (description && !isImportedSpreadsheetDescription(description) && description !== partNumber) return description;
   return customDescription || description || line.inventoryItemName || partNumber;
 }
 
@@ -559,7 +563,7 @@ function normalizeBomLine(line: Partial<BomLine> | null | undefined): BomLine {
   const id = typeof safeLine.id === 'string' && safeLine.id.trim() ? safeLine.id : baseLine.id;
   const status = statuses.includes(safeLine.status as BomStatus) ? safeLine.status as BomStatus : baseLine.status;
 
-  return {
+  const normalizedLine = {
     ...baseLine,
     ...safeLine,
     id,
@@ -576,6 +580,10 @@ function normalizeBomLine(line: Partial<BomLine> | null | undefined): BomLine {
     actualCost: safeLine.actualCost ?? '',
     service: safeLine.service ?? false,
   };
+  if (normalizedLine.importedSource === 'spreadsheet' && isImportedSpreadsheetDescription(normalizedLine.description ?? '')) {
+    return { ...normalizedLine, description: lineDescription(normalizedLine) };
+  }
+  return normalizedLine;
 }
 
 function draftLineToPart(line: BomLine): DraftBomPart {
@@ -1460,12 +1468,13 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
       const inventoryMatch = linkInventoryMatches ? findInventoryMatch(importedPartNumber, inventoryItems) : null;
       if (inventoryMatch) linkedCount += 1;
       const spreadsheetLabel = `Imported spreadsheet row ${rowIndex + 1}`;
+      const description = inventoryMatch ? inventoryDescription(inventoryMatch) : sourceDescription || spreadsheetLabel;
 
       return {
         ...newLine(),
         action: 'Review imported line',
         category: 'Imported Spreadsheet',
-        description: spreadsheetLabel,
+        description,
         agPartNumber: '',
         supplier: '',
         supplierItemId: '',

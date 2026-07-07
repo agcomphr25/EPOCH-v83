@@ -2440,14 +2440,26 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               COALESCE(p2_units.serialized_count, 0) as "serializedQuantity",
               COALESCE(committed_packets.committed_count, 0) as "committedQuantity",
               CASE
+                WHEN COALESCE(p2_units.serialized_count, 0) > 0
+                THEN COALESCE(p2_units.serialized_count, 0)
+                ELSE 1
+              END as "unitDemandQuantity",
+              CASE
                 WHEN COALESCE(committed_packets.committed_count, 0) > 0
-                  AND COALESCE(NULLIF(p2_units.serialized_count, 0), po.quantity) > COALESCE(committed_packets.committed_count, 0)
                 THEN GREATEST(
-                  COALESCE(NULLIF(p2_units.serialized_count, 0), po.quantity)
+                  CASE
+                    WHEN COALESCE(p2_units.serialized_count, 0) > 0
+                    THEN COALESCE(p2_units.serialized_count, 0)
+                    ELSE 1
+                  END
                     - COALESCE(committed_packets.committed_count, 0),
                   0
                 )
-                ELSE COALESCE(NULLIF(p2_units.serialized_count, 0), po.quantity)
+                ELSE CASE
+                  WHEN COALESCE(p2_units.serialized_count, 0) > 0
+                  THEN COALESCE(p2_units.serialized_count, 0)
+                  ELSE 1
+                END
               END as "openQuantity"
             FROM p2_production_orders po
             LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
@@ -2607,6 +2619,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           priority: 60,
           packetsNeeded: item.openQuantity ?? item.quantity ?? 1,
           originalQuantity: item.originalQuantity || item.quantity || 1,
+          unitDemandQuantity: item.unitDemandQuantity ?? item.openQuantity ?? 1,
           serializedQuantity: item.serializedQuantity || 0,
           committedQuantity: item.committedQuantity || 0,
           usesInventory: false,

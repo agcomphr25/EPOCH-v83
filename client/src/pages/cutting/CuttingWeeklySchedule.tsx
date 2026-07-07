@@ -85,6 +85,10 @@ type WeeklyCuttingQueueItem = {
   packetsNeeded: number;
   inventoryApplied?: number;
   packetsToCut?: number;
+  originalQuantity?: number;
+  unitDemandQuantity?: number;
+  serializedQuantity?: number;
+  committedQuantity?: number;
   usesInventory: boolean;
   requiresNewCut: boolean;
   bomId?: string;
@@ -131,7 +135,7 @@ export default function CuttingWeeklySchedule() {
   const [currentWeek] = useState(getMondayOfWeek(new Date()));
   const [queueFilter, setQueueFilter] = useState<CuttingQueueFilterValue>("all");
   const [scheduleQuantities, setScheduleQuantities] = useState<Record<string, number>>({});
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({ p1: true, p2: true });
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({ p1: true, p2: false });
   const [customDemand, setCustomDemand] = useState({
     poNumber: '',
     packetType: '',
@@ -265,7 +269,7 @@ export default function CuttingWeeklySchedule() {
   const p2Demand = useMemo(() => {
     if (!weeklyQueueData?.items) return [];
     
-    const p2Items = weeklyQueueData.items.filter(i => i.source === 'P2');
+    const p2Items = weeklyQueueData.items.filter(i => i.source === 'P2' && Math.max(0, Number(i.packetsNeeded) || 0) > 0);
     
     const poMap: Record<string, {
       poId: string;
@@ -284,12 +288,13 @@ export default function CuttingWeeklySchedule() {
           total: 0,
         };
       }
+      const packetQty = Math.max(0, Number(item.packetsNeeded) || 0);
       poMap[poId].items.push({
         name: item.stockModel,
-        qty: item.packetsNeeded,
+        qty: packetQty,
         materialType: item.materialType,
       });
-      poMap[poId].total += item.packetsNeeded;
+      poMap[poId].total += packetQty;
     });
     
     return Object.values(poMap).sort((a, b) => b.total - a.total);

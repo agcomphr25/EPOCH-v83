@@ -1,8 +1,8 @@
 import { Router, type Request, type Response } from 'express';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db';
-import { draftBomDrafts } from '../../schema';
+import { draftBomDrafts, partsRequests, vendorPOItems, vendorPOs } from '../../schema';
 import { resolveUserSnapshot } from '../../utils/userSnapshot';
 
 const router = Router();
@@ -23,6 +23,28 @@ const draftPayloadSchema = z.object({
   visibility: z.enum(['public', 'private']).default('public'),
   allowPublicEdit: z.boolean().default(false),
 }).passthrough();
+
+const procurementStatusLineSchema = z.object({
+  lineId: z.string().trim().min(1),
+  inventoryItemId: z.number().int().positive().nullable().optional(),
+  agPartNumber: z.string().optional().nullable(),
+  partNumber: z.string().optional().nullable(),
+  supplierItemId: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+});
+
+const procurementStatusRequestSchema = z.object({
+  lines: z.array(procurementStatusLineSchema).max(500),
+});
+
+type BomStatus = 'Needs Review' | 'Needs Quote' | 'RFQ Sent' | 'On Order' | 'On Hand' | 'ETA / Inbound' | 'Hold';
+type ProcurementStatusCandidate = {
+  lineId: string;
+  status: BomStatus;
+  source: 'parts-request' | 'vendor-po';
+  reference: string;
+  rank: number;
+};
 
 type DraftBomActor = {
   userId: number | null;
@@ -122,6 +144,74 @@ async function userSnapshot(req: Request) {
     }));
 }
 
+function normalizedLookupValue(value?: string | null) {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function uniqueNonBlank(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => !!value)));
+}
+
+function procurementStatusRank(status: BomStatus) {
+  if (status === 'On Hand') return 4;
+  if (status === 'ETA / Inbound') return 3;
+  if (status === 'On Order') return 2;
+  if (status === 'RFQ Sent') return 1;
+  return 0;
+}
+
+function statusFromPartsRequest(row: {
+  status: string;
+  quantity: number;
+  qtyOrdered: number | null;
+  qtyReceived: number | null;
+  vendorPoId: number | null;
+}): BomStatus | null {
+  const status = row.status.toUpperCase();
+  const orderedQty = Number(row.qtyOrdered ?? 0);
+  const receivedQty = Number(row.qtyReceived ?? 0);
+  const requiredQty = Number(row.quantity ?? 0);
+
+  if (['RECEIVED', 'DELIVERED_TO_DEPT'].includes(status) || (requiredQty > 0 && receivedQty >= requiredQty)) {
+    return 'On Hand';
+  }
+  if (status === 'RECEIVED_PARTIAL' || (receivedQty > 0 && (!requiredQty || receivedQty < requiredQty))) {
+    return 'ETA / Inbound';
+  }
+  if (['ORDERED', 'ORDERED_PARTIAL'].includes(status) || orderedQty > 0 || row.vendorPoId) {
+    return 'On Order';
+  }
+  if (status === 'RFQ_SENT') return 'RFQ Sent';
+
+  return null;
+}
+
+function statusFromVendorPo(row: {
+  poStatus: string | null;
+  quantity: number;
+  receivedQuantity: number | null;
+}): BomStatus | null {
+  const status = String(row.poStatus ?? '').trim();
+  const orderedQty = Number(row.quantity ?? 0);
+  const receivedQty = Number(row.receivedQuantity ?? 0);
+
+  if (status === 'Fully Received' || (orderedQty > 0 && receivedQty >= orderedQty)) return 'On Hand';
+  if (status === 'Partially Received' || (receivedQty > 0 && (!orderedQty || receivedQty < orderedQty))) return 'ETA / Inbound';
+  if (status === 'Sent') return 'On Order';
+  if (status === 'RFQ Sent' || status === 'Quote Received') return 'RFQ Sent';
+
+  return null;
+}
+
+function bestCandidate(
+  current: ProcurementStatusCandidate | undefined,
+  next: Omit<ProcurementStatusCandidate, 'rank'>,
+) {
+  const candidate = { ...next, rank: procurementStatusRank(next.status) };
+  if (!current || candidate.rank > current.rank) return candidate;
+  return current;
+}
+
 router.get('/', async (req: Request, res: Response) => {
   try {
     const actor = await userSnapshot(req);
@@ -138,6 +228,125 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('List Draft Builder drafts error:', error);
     res.status(500).json({ error: 'Failed to fetch Draft Builder drafts' });
+  }
+});
+
+router.post('/procurement-status', async (req: Request, res: Response) => {
+  try {
+    const parsed = procurementStatusRequestSchema.parse(req.body);
+    if (parsed.lines.length === 0) return res.json([]);
+
+    const lineLookup = new Map<string, Set<string>>();
+    for (const line of parsed.lines) {
+      const keys = uniqueNonBlank([
+        line.agPartNumber,
+        line.partNumber,
+        line.supplierItemId,
+        line.description,
+      ]).map(normalizedLookupValue);
+      if (keys.length > 0) lineLookup.set(line.lineId, new Set(keys));
+    }
+
+    const agPartNumbers = uniqueNonBlank(parsed.lines.map((line) => line.agPartNumber));
+    const partNumbers = uniqueNonBlank(parsed.lines.flatMap((line) => [line.partNumber, line.supplierItemId]));
+    const descriptions = uniqueNonBlank(parsed.lines.map((line) => line.description));
+    const result = new Map<string, ProcurementStatusCandidate>();
+
+    const partsRequestConditions: SQL[] = [
+      agPartNumbers.length ? inArray(partsRequests.agPartNumber, agPartNumbers) : null,
+      partNumbers.length ? inArray(partsRequests.partNumber, partNumbers) : null,
+      descriptions.length ? inArray(partsRequests.partName, descriptions) : null,
+    ].filter((condition): condition is SQL => !!condition);
+
+    if (partsRequestConditions.length > 0) {
+      const rows = await db
+        .select({
+          id: partsRequests.id,
+          agPartNumber: partsRequests.agPartNumber,
+          partNumber: partsRequests.partNumber,
+          partName: partsRequests.partName,
+          status: partsRequests.status,
+          quantity: partsRequests.quantity,
+          qtyOrdered: partsRequests.qtyOrdered,
+          qtyReceived: partsRequests.qtyReceived,
+          vendorPoId: partsRequests.vendorPoId,
+        })
+        .from(partsRequests)
+        .where(and(eq(partsRequests.isActive, true), or(...partsRequestConditions)));
+
+      for (const row of rows) {
+        const status = statusFromPartsRequest(row);
+        if (!status) continue;
+        const rowKeys = [
+          row.agPartNumber,
+          row.partNumber,
+          row.partName,
+        ].map(normalizedLookupValue).filter(Boolean);
+
+        for (const [lineId, keys] of lineLookup.entries()) {
+          if (!rowKeys.some((key) => keys.has(key))) continue;
+          result.set(lineId, bestCandidate(result.get(lineId), {
+            lineId,
+            status,
+            source: 'parts-request',
+            reference: `parts request PR-${row.id}`,
+          }));
+        }
+      }
+    }
+
+    const vendorPoConditions: SQL[] = [
+      agPartNumbers.length ? inArray(vendorPOItems.agPartNumber, agPartNumbers) : null,
+      descriptions.length ? inArray(vendorPOItems.description, descriptions) : null,
+    ].filter((condition): condition is SQL => !!condition);
+
+    if (vendorPoConditions.length > 0) {
+      const rows = await db
+        .select({
+          id: vendorPOItems.id,
+          agPartNumber: vendorPOItems.agPartNumber,
+          description: vendorPOItems.description,
+          quantity: vendorPOItems.quantity,
+          receivedQuantity: vendorPOItems.receivedQuantity,
+          poId: vendorPOs.id,
+          poNumber: vendorPOs.poNumber,
+          poStatus: vendorPOs.status,
+        })
+        .from(vendorPOItems)
+        .innerJoin(vendorPOs, eq(vendorPOs.id, vendorPOItems.vendorPoId))
+        .where(and(
+          or(...vendorPoConditions),
+          sql`${vendorPOs.status} <> 'Cancelled'`,
+          eq(vendorPOs.isCurrentRevision, true),
+        ));
+
+      for (const row of rows) {
+        const status = statusFromVendorPo(row);
+        if (!status) continue;
+        const rowKeys = [
+          row.agPartNumber,
+          row.description,
+        ].map(normalizedLookupValue).filter(Boolean);
+
+        for (const [lineId, keys] of lineLookup.entries()) {
+          if (!rowKeys.some((key) => keys.has(key))) continue;
+          result.set(lineId, bestCandidate(result.get(lineId), {
+            lineId,
+            status,
+            source: 'vendor-po',
+            reference: row.poNumber ? `vendor PO ${row.poNumber}` : `vendor PO #${row.poId}`,
+          }));
+        }
+      }
+    }
+
+    res.json([...result.values()].map(({ rank, ...status }) => status));
+  } catch (error) {
+    console.error('Draft Builder procurement status lookup error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid procurement status request' });
+    }
+    res.status(500).json({ error: 'Failed to load Draft Builder procurement status' });
   }
 });
 

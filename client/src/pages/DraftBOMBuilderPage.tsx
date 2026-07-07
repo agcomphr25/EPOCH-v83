@@ -3090,6 +3090,16 @@ export default function DraftBOMBuilderPage() {
     return tabMap[tabId] ?? null;
   }
 
+  function rdProjectTabForDraftTab(tabId: WorkspaceTabId) {
+    const tabMap: Partial<Record<WorkspaceTabId, string>> = {
+      'parts-request': 'material',
+      'direct-labor': 'labor',
+      'bom-wizard': 'bom',
+      'assembly-tree': 'assembly-tree',
+    };
+    return tabMap[tabId] ?? null;
+  }
+
   async function pushActiveTabTo(target: 'rom' | 'p2-project' | 'rd-project') {
     const payload = {
       source: 'draft-builder',
@@ -3173,8 +3183,26 @@ export default function DraftBOMBuilderPage() {
       return;
     }
 
-    toast({ title: 'Tab pushed to R&D projects', description: `${workspaceTabLabel(activeWorkspaceTab)} is ready for R&D project attachment.` });
-    setLocation(`/rd-projects?draftBuilderHandoff=1&draftId=${encodeURIComponent(draft.id)}&tab=${encodeURIComponent(activeWorkspaceTab)}`);
+    if (draft.projectType !== 'R_AND_D' || !draft.projectId) {
+      toast({
+        title: 'Link an R&D project first',
+        description: 'Select a Design and R&D project before pushing this tab to an R&D project folder.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const rdProjectTab = rdProjectTabForDraftTab(activeWorkspaceTab);
+    if (!rdProjectTab) {
+      toast({
+        title: 'PO draft stays in Draft Builder',
+        description: 'Use BOM wizard, Parts/request, Direct Labor, or Assembly Tree when the draft is ready for the R&D project folder.',
+      });
+      return;
+    }
+
+    toast({ title: 'Tab pushed to R&D project', description: `${workspaceTabLabel(activeWorkspaceTab)} is ready in the R&D project ${rdProjectTab === 'material' ? 'Material' : rdProjectTab === 'labor' ? 'Labor' : rdProjectTab === 'bom' ? 'BOM' : 'Assembly Tree'} tab.` });
+    setLocation(`/design/rd-projects?draftBuilderHandoff=1&projectId=${encodeURIComponent(draft.projectId)}&draftId=${encodeURIComponent(draft.id)}&tab=${encodeURIComponent(rdProjectTab)}`);
   }
 
   function setWorkspaceTabVisible(tabId: WorkspaceTabId, visible: boolean) {

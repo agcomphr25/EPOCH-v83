@@ -582,6 +582,38 @@ function customImportField(line: BomLine, keys: string[]) {
   return '';
 }
 
+function parseSummaryNumber(value: number | string | '') {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const normalized = value.replace(/[$,]/g, '').trim();
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function summaryNumberValue(line: BomLine, field: 'unitCost' | 'qtyNeeded' | 'actualCost') {
+  const value = line[field];
+  if (value !== '' && value !== null && value !== undefined) return parseSummaryNumber(value);
+
+  const fallback = customImportField(
+    line,
+    field === 'qtyNeeded'
+      ? ['quantity', 'qty', 'qtyneeded', 'qnty']
+      : field === 'actualCost'
+        ? ['actualcost', 'actual']
+        : ['estimatedcost', 'unitcost', 'cost', 'price'],
+  );
+  return parseSummaryNumber(fallback);
+}
+
+function summaryLineStatus(line: BomLine): BomStatus {
+  const customStatus = customImportField(line, importedStatusHeaders);
+  return customStatus ? parseImportStatus(customStatus, line.status) : line.status;
+}
+
+function summaryLineTotal(line: BomLine) {
+  return summaryNumberValue(line, 'unitCost') * summaryNumberValue(line, 'qtyNeeded');
+}
+
 function isImportedSpreadsheetDescription(value: string) {
   return /^Imported spreadsheet (?:line|row \d+)$/i.test(value.trim());
 }
@@ -2133,14 +2165,19 @@ export default function DraftBOMBuilderPage() {
   ]);
 
   const totals = useMemo(() => {
-    const lineTotal = (line: BomLine) => asNumber(line.unitCost) * asNumber(line.qtyNeeded);
-    const materialTotal = draft.lines.reduce((sum, line) => sum + lineTotal(line), 0);
-    const selectedTotal = selectedLines.reduce((sum, line) => sum + lineTotal(line), 0);
-    const onHandTotal = draft.lines
-      .filter((line) => line.status === 'On Hand')
-      .reduce((sum, line) => sum + lineTotal(line), 0);
-    const needsQuote = draft.lines.filter((line) => line.status === 'Needs Quote' || line.unitCost === '').length;
-    const rfqSent = draft.lines.filter((line) => line.status === 'RFQ Sent').length;
+    const selectedLineIds = new Set(selectedLines.map((line) => line.id));
+    const materialTotal = partsRequestLines.reduce((sum, line) => sum + summaryLineTotal(line), 0);
+    const selectedTotal = partsRequestLines
+      .filter((line) => selectedLineIds.has(line.id))
+      .reduce((sum, line) => sum + summaryLineTotal(line), 0);
+    const onHandTotal = partsRequestLines
+      .filter((line) => summaryLineStatus(line) === 'On Hand')
+      .reduce((sum, line) => sum + summaryLineTotal(line), 0);
+    const needsQuote = partsRequestLines.filter((line) => {
+      const status = summaryLineStatus(line);
+      return status === 'Needs Quote' || summaryNumberValue(line, 'unitCost') === 0;
+    }).length;
+    const rfqSent = partsRequestLines.filter((line) => summaryLineStatus(line) === 'RFQ Sent').length;
     const laborTotal = (draft.laborEstimateLines ?? []).reduce((sum, line) => sum + laborLineTotal(line), 0);
     const laborHours = (draft.laborEstimateLines ?? []).reduce(
       (sum, line) => sum + asNumber(line.hoursPerPart) * asNumber(line.quantityPerPo),
@@ -2161,20 +2198,20 @@ export default function DraftBOMBuilderPage() {
       onHandTotal,
       needsQuote,
       rfqSent,
-      lineCount: draft.lines.length,
+      lineCount: partsRequestLines.length,
     };
-  }, [draft.laborEstimateLines, draft.lines, draft.nrcRows, selectedLines]);
+  }, [draft.laborEstimateLines, draft.nrcRows, partsRequestLines, selectedLines]);
 
   const filterTotals = useMemo(() => {
     const grouped = new Map<string, { count: number; total: number }>();
-    for (const line of draft.lines) {
+    for (const line of partsRequestLines) {
       const existing = grouped.get(line.category) ?? { count: 0, total: 0 };
       existing.count += 1;
-      existing.total += asNumber(line.unitCost) * asNumber(line.qtyNeeded);
+      existing.total += summaryLineTotal(line);
       grouped.set(line.category, existing);
     }
     return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [draft.lines]);
+  }, [partsRequestLines]);
 
   function updateLine(id: string, patch: Partial<BomLine>) {
     setDraft((current) => ({

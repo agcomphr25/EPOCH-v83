@@ -187,6 +187,7 @@ const LEFT_HANDED_SHORT_AND_LONG_ACTIONS = [
   'Defiance Ruckus-Hunter',
   'Defiance Ruckus/Target/Def Ejection',
   'Defiance Ruckus/Hunter/Def Ejection',
+  'Def Ruckus/Hunter/Def Ejection',
   'Defiance Tenacity',
   'Defiance Ti',
   'Anti/Tenacity/Hunter/Def Port',

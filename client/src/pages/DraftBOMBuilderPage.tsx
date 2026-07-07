@@ -2200,7 +2200,7 @@ export default function DraftBOMBuilderPage() {
 
   const totals = useMemo(() => {
     const selectedLineIds = new Set(selectedLines.map((line) => line.id));
-    const materialTotal = partsRequestLines.reduce((sum, line) => sum + summaryLineTotal(line), 0);
+    const partsRequestMaterialTotal = partsRequestLines.reduce((sum, line) => sum + summaryLineTotal(line), 0);
     const selectedTotal = partsRequestLines
       .filter((line) => selectedLineIds.has(line.id))
       .reduce((sum, line) => sum + summaryLineTotal(line), 0);
@@ -2221,6 +2221,7 @@ export default function DraftBOMBuilderPage() {
     const customerFacingNrcTotal = (draft.nrcRows ?? [])
       .filter((row) => row.includeInCustomerPrice && !row.internalOnly)
       .reduce((sum, row) => sum + nrcRowTotal(row), 0);
+    const materialTotal = partsRequestMaterialTotal + nrcTotal;
 
     return {
       materialTotal,

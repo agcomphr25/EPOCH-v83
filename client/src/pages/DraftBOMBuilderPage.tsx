@@ -6036,4 +6036,3 @@ function StatusBadge({ status }: { status: BomStatus }) {
     </Badge>
   );
 }
-}

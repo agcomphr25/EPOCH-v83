@@ -2686,6 +2686,8 @@ export default function DraftBOMBuilderPage() {
       projectType: selectedProject.projectType,
       updatedAt: new Date().toISOString(),
     };
+  }
+
   async function clearPartsRequestTab() {
     if (!canEditActiveDraft) {
       toast({

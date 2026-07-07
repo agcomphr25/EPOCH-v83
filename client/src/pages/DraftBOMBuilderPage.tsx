@@ -1552,6 +1552,10 @@ function uniqueColumnNames(columns: unknown[]) {
   }, []);
 }
 
+function isStatusDuplicateColumn(column: string) {
+  return normalizeCsvHeader(column) === 'status';
+}
+
 function sanitizeCustomColumns(columns: unknown[]) {
   return uniqueColumnNames(columns).filter((column) => !isStatusDuplicateColumn(column));
 }

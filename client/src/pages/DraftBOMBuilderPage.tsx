@@ -1242,6 +1242,43 @@ function normalizedAssemblyPartKey(value?: string | null) {
   return value?.trim().toLowerCase() ?? '';
 }
 
+function assemblyPartKeysForPart(
+  part: Pick<DraftBomPart | DraftBomComponent, 'partNumber' | 'description'>,
+) {
+  return new Set(
+    [
+      part.partNumber,
+      part.description,
+    ]
+      .map(normalizedAssemblyPartKey)
+      .filter(Boolean),
+  );
+}
+
+function assemblyPartKeysForLine(line: BomLine) {
+  return new Set(
+    [
+      linePartNumber(line),
+      line.agPartNumber,
+      line.supplierItemId,
+      line.description,
+      lineDescription(line),
+      line.inventoryItemName,
+      customImportField(line, importedPartNumberHeaders),
+      customImportField(line, importedDescriptionHeaders),
+    ]
+      .map(normalizedAssemblyPartKey)
+      .filter(Boolean),
+  );
+}
+
+function assemblyPartKeySetsOverlap(left: Set<string>, right: Set<string>) {
+  for (const key of left) {
+    if (right.has(key)) return true;
+  }
+  return false;
+}
+
 function findPartsRequestLineForAssemblyPart(
   part: Pick<DraftBomPart | DraftBomComponent, 'sourceLineId' | 'inventoryItemId' | 'partNumber' | 'description'>,
   lines: BomLine[],
@@ -1256,11 +1293,8 @@ function findPartsRequestLineForAssemblyPart(
     if (match) return match;
   }
 
-  const partNumber = normalizedAssemblyPartKey(part.partNumber);
-  const description = normalizedAssemblyPartKey(part.description);
-  return lines.find((line) => normalizedAssemblyPartKey(linePartNumber(line)) === partNumber)
-    ?? lines.find((line) => partNumber && normalizedAssemblyPartKey(line.agPartNumber) === partNumber)
-    ?? lines.find((line) => description && normalizedAssemblyPartKey(line.description) === description);
+  const partKeys = assemblyPartKeysForPart(part);
+  return lines.find((line) => assemblyPartKeySetsOverlap(partKeys, assemblyPartKeysForLine(line)));
 }
 
 function assemblyOrderStatus(

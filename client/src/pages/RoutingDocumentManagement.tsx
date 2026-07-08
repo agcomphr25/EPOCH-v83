@@ -74,6 +74,15 @@ interface SpecSheet {
   createdAt: string;
 }
 
+interface InventoryItem {
+  id: number;
+  agPartNumber: string;
+  name: string;
+  sku?: string | null;
+  itemType?: string | null;
+  manufacturedCategory?: string | null;
+}
+
 const FORM_DOCUMENT_TYPES = [
   { value: 'work_instruction', label: 'Work Instruction' },
   { value: 'assembly_instruction', label: 'Assembly Instruction' },
@@ -108,6 +117,54 @@ const TEMPLATE_TYPES = [
   { value: 'mixed', label: 'Mixed' },
   { value: 'other', label: 'Other' },
 ];
+
+const CNC_SPEC_SHEET_TEMPLATE_NAME = 'CNC Spec Sheet';
+
+const CNC_SPEC_SHEET_TEMPLATE = {
+  templateName: CNC_SPEC_SHEET_TEMPLATE_NAME,
+  templateType: 'spec_sheet',
+  description: 'CNC part specification sheet with materials, saw prep, CNC programs, tumbler, in-process checks, QC standards, and ANSI/ASQ Z1.4 sample sizes.',
+  structure: {
+    titlePattern: 'SPEC Sheet - {{partName}} Part #{{partNumber}}',
+    headerFields: ['sku', 'partNumber', 'partName'],
+    tableSections: [
+      'parts_list',
+      'band_saw',
+      'cnc_operations',
+      'tumbler',
+      'in_process_verification',
+      'qc_standards',
+      'qc_testing_requirements',
+    ],
+    example: {
+      title: 'SPEC Sheet - Wing Box Rib Part #26006',
+      sku: '4002P0146',
+      partNumber: '26006',
+    },
+  },
+  sections: [
+    { name: 'Header', description: 'Spec sheet title, SKU, part number, and part name' },
+    { name: 'Parts List', description: 'Qty, part number, and material/tool descriptions' },
+    { name: 'Band Saw', description: 'Cutting instructions before CNC operations' },
+    { name: 'CNC', description: 'Program name, machine, runtime, and setup side' },
+    { name: 'Tumbler', description: 'Tumbler assignment and minimum cycle time' },
+    { name: 'In-Process Verification', description: 'Operator checks performed during production' },
+    { name: 'QC Standards', description: 'Measurement, requirement, and tolerance table' },
+    { name: 'QC Testing Requirements', description: 'Lot-size sampling based on ANSI/ASQ Z1.4' },
+  ],
+  defaultFields: [
+    { fieldName: 'partName', fieldLabel: 'Part Name', fieldType: 'text', sectionName: 'Header', isRequired: true, defaultValue: 'Wing Box Rib' },
+    { fieldName: 'partNumber', fieldLabel: 'Part Number', fieldType: 'text', sectionName: 'Header', isRequired: true, defaultValue: '26006' },
+    { fieldName: 'sku', fieldLabel: 'SKU #', fieldType: 'text', sectionName: 'Header', isRequired: true, defaultValue: '4002P0146' },
+    { fieldName: 'partsList', fieldLabel: 'Parts List', fieldType: 'textarea', sectionName: 'Parts List', isRequired: true, defaultValue: '1 | 26004 | 6061 Aluminum bar, 3/8" x 4" x 6"\n1 | 373 | Sand Paper 180 grit sheets\n1 | 602 | Deburring Scraper Tool' },
+    { fieldName: 'bandSawInstructions', fieldLabel: 'Band Saw Instructions', fieldType: 'textarea', sectionName: 'Band Saw', isRequired: false, defaultValue: 'Cut the aluminum into 6" lengths' },
+    { fieldName: 'cncOperations', fieldLabel: 'CNC Operations', fieldType: 'textarea', sectionName: 'CNC', isRequired: true, defaultValue: 'WINGBOXRIB1 | 3 axis | 5 minutes\nWINGBOXRIB2 | 3 axis | 5 minutes\nside 1 | WNGBOXENDHL | Okuma | 20 seconds\nside 2 | WNGBOXENDHL | Okuma | 20 seconds' },
+    { fieldName: 'tumblerInstructions', fieldLabel: 'Tumbler Instructions', fieldType: 'textarea', sectionName: 'Tumbler', isRequired: false, defaultValue: 'N/A | Tumbler 2 | minimum 2 hours' },
+    { fieldName: 'inProcessVerification', fieldLabel: 'In-Process Verification', fieldType: 'textarea', sectionName: 'In-Process Verification', isRequired: true, defaultValue: 'M4 Hole Threads Front | Check hole threading by fully screwing in a fastener\nM4 Hole Threads Back | Check hole threading by fully screwing in a fastener' },
+    { fieldName: 'qcStandards', fieldLabel: 'QC Standards', fieldType: 'textarea', sectionName: 'QC Standards', isRequired: true, defaultValue: 'Large hole diameter | 1.256" | +/-.010\nTop width | .25" | +/-.03\nBottom width | .25" | +/-.03\nRib Thickness | 0.09" | +/-.03\nM4 Hole Threads Front | screw fully seats | 0\nM4 Hole Threads Back | screw fully seats | 0' },
+    { fieldName: 'qcTestingRequirements', fieldLabel: 'QC Testing Requirements', fieldType: 'textarea', sectionName: 'QC Testing Requirements', isRequired: true, defaultValue: '2-8 | 2\n9-15 | 3\n16-25 | 5\n26-50 | 8\n51-90 | 13\n91-150 | 20' },
+  ],
+};
 
 function typeLabel(value: string | null | undefined) {
   if (!value) return 'Document';
@@ -154,6 +211,7 @@ export default function RoutingDocumentManagement() {
   const [showEditSpecSheetDialog, setShowEditSpecSheetDialog] = useState(false);
   const [showViewSpecSheetDialog, setShowViewSpecSheetDialog] = useState(false);
   const [showViewTemplateDialog, setShowViewTemplateDialog] = useState(false);
+  const [showFillSpecSheetDialog, setShowFillSpecSheetDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'document' | 'template' | 'spec_sheet'; id: string; title: string } | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
@@ -174,6 +232,15 @@ export default function RoutingDocumentManagement() {
     title: '',
     partNumber: '',
     isTemplate: false,
+  });
+  const [fillSpecSheetForm, setFillSpecSheetForm] = useState({
+    templateId: '',
+    title: '',
+    inventoryItemId: '',
+    partNumber: '',
+    partName: '',
+    sku: '',
+    fieldValues: {} as Record<string, string>,
   });
   const [showGenerateRoutingDialog, setShowGenerateRoutingDialog] = useState(false);
   const [generateRoutingForm, setGenerateRoutingForm] = useState({
@@ -231,6 +298,14 @@ export default function RoutingDocumentManagement() {
       createdAt: s.created_at ?? s.createdAt,
     })),
   });
+
+  const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
+    queryKey: ['/api/inventory/items'],
+  });
+
+  const manufacturedParts = inventoryItems.filter((item) =>
+    item.itemType === 'MANUFACTURED' || !!item.manufacturedCategory
+  );
 
   const uploadMutation = useMutation({
     mutationFn: async (data: { file: File | null; title: string; partNumber: string; departmentName: string; documentType: string; isTemplate: boolean; autoAnalyze?: boolean }) => {
@@ -399,6 +474,59 @@ export default function RoutingDocumentManagement() {
     },
   });
 
+  const createCncSpecSheetTemplateMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/routing-documents/templates', {
+        method: 'POST',
+        body: {
+          ...CNC_SPEC_SHEET_TEMPLATE,
+          fields: CNC_SPEC_SHEET_TEMPLATE.defaultFields,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Template Created', description: 'CNC spec sheet template is ready to use' });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/templates/list'] });
+      setActiveTab('templates');
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to create CNC spec sheet template', variant: 'destructive' });
+    },
+  });
+
+  const createFilledSpecSheetMutation = useMutation({
+    mutationFn: async (data: typeof fillSpecSheetForm) => {
+      return apiRequest('/api/routing-documents/spec-sheets/from-template', {
+        method: 'POST',
+        body: {
+          templateId: data.templateId,
+          inventoryItemId: data.inventoryItemId || null,
+          partNumber: data.partNumber,
+          partName: data.partName,
+          sku: data.sku,
+          title: data.title,
+          fieldValues: data.fieldValues,
+        },
+        timeout: 120000,
+      });
+    },
+    onSuccess: (response: any) => {
+      const docNumber = response?.documentNumber || response?.controlledDocument?.documentNumber || response?.controlledDocument?.document_number;
+      toast({
+        title: 'Spec Sheet Saved',
+        description: docNumber ? `Saved to Master Document List as ${docNumber}` : 'Saved to Master Document List and central storage',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/spec-sheets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
+      setShowFillSpecSheetDialog(false);
+      setSelectedTemplate(null);
+      setActiveTab('specsheets');
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to save filled spec sheet', variant: 'destructive' });
+    },
+  });
+
   const generateRoutingMutation = useMutation({
     mutationFn: async (data: { documentId: string; partNumber: string; partName: string; inventoryItemId: string; routingName?: string }) => {
       return apiRequest(`/api/routing-documents/${data.documentId}/generate-routing`, {
@@ -455,7 +583,7 @@ export default function RoutingDocumentManagement() {
       return apiRequest(`/api/routing-documents/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      toast({ title: 'Document Deleted', description: 'Document has been removed' });
+      toast({ title: 'Document Deleted', description: 'Form or document has been removed' });
       queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
       setShowDeleteConfirm(false);
       setDeleteTarget(null);
@@ -720,6 +848,104 @@ export default function RoutingDocumentManagement() {
     }
   };
 
+  const handleCreateCncSpecSheetTemplate = () => {
+    const existingTemplate = templates.find((template) =>
+      template.templateName.trim().toLowerCase() === CNC_SPEC_SHEET_TEMPLATE_NAME.toLowerCase()
+    );
+
+    if (existingTemplate) {
+      setSelectedTemplate(existingTemplate);
+      setShowViewTemplateDialog(true);
+      return;
+    }
+
+    createCncSpecSheetTemplateMutation.mutate();
+  };
+
+  const openFillSpecSheetDialog = (template: DocumentTemplate) => {
+    const fieldValues = (template.defaultFields || []).reduce((acc: Record<string, string>, field: any) => {
+      acc[field.fieldName] = field.defaultValue || '';
+      return acc;
+    }, {});
+
+    setSelectedTemplate(template);
+    setFillSpecSheetForm({
+      templateId: template.id,
+      title: '',
+      inventoryItemId: '',
+      partNumber: fieldValues.partNumber || '',
+      partName: fieldValues.partName || '',
+      sku: fieldValues.sku || '',
+      fieldValues,
+    });
+    setShowFillSpecSheetDialog(true);
+  };
+
+  const handleUseTemplate = (template: DocumentTemplate) => {
+    if (template.templateType === 'spec_sheet') {
+      openFillSpecSheetDialog(template);
+      return;
+    }
+
+    setGenerateForm({
+      partNumber: '',
+      partName: '',
+      documentType: template.templateType || 'work_instruction',
+      templateId: template.id,
+    });
+    setShowGenerateDialog(true);
+  };
+
+  const handleManufacturedPartChange = (value: string) => {
+    const selectedPart = manufacturedParts.find((item) => String(item.id) === value);
+    setFillSpecSheetForm((prev) => {
+      const partNumber = selectedPart?.agPartNumber || prev.partNumber;
+      const partName = selectedPart?.name || prev.partName;
+      const sku = selectedPart?.sku || prev.sku;
+
+      return {
+        ...prev,
+        inventoryItemId: value,
+        partNumber,
+        partName,
+        sku,
+        title: prev.title || `SPEC Sheet - ${partName || 'Part'}${partNumber ? ` Part #${partNumber}` : ''}`,
+        fieldValues: {
+          ...prev.fieldValues,
+          partNumber,
+          partName,
+          sku,
+        },
+      };
+    });
+  };
+
+  const updateFillSpecSheetField = (fieldName: string, value: string) => {
+    setFillSpecSheetForm((prev) => ({
+      ...prev,
+      partNumber: fieldName === 'partNumber' ? value : prev.partNumber,
+      partName: fieldName === 'partName' ? value : prev.partName,
+      sku: fieldName === 'sku' ? value : prev.sku,
+      fieldValues: {
+        ...prev.fieldValues,
+        [fieldName]: value,
+      },
+    }));
+  };
+
+  const handleSaveFilledSpecSheet = () => {
+    if (!fillSpecSheetForm.templateId) {
+      toast({ title: 'Error', description: 'Please select a template', variant: 'destructive' });
+      return;
+    }
+    if (!fillSpecSheetForm.partNumber && !fillSpecSheetForm.inventoryItemId) {
+      toast({ title: 'Error', description: 'Please link a manufactured part or enter a part number', variant: 'destructive' });
+      return;
+    }
+
+    createFilledSpecSheetMutation.mutate(fillSpecSheetForm);
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -932,8 +1158,24 @@ export default function RoutingDocumentManagement() {
         <TabsContent value="templates" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Document Templates</CardTitle>
-              <CardDescription>AI-learned templates from your existing documents</CardDescription>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle>Document Templates</CardTitle>
+                  <CardDescription>AI-learned templates from your existing documents</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleCreateCncSpecSheetTemplate}
+                  disabled={createCncSpecSheetTemplateMutation.isPending}
+                >
+                  {createCncSpecSheetTemplateMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  )}
+                  Create CNC Spec Sheet
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {loadingTemplates ? (
@@ -997,7 +1239,12 @@ export default function RoutingDocumentManagement() {
                             {template.defaultFields?.length || 0} fields defined
                           </div>
                           <div className="flex gap-2 mt-2">
-                            <Button variant="outline" className="flex-1" size="sm">
+                            <Button
+                              variant="outline"
+                              className="flex-1"
+                              size="sm"
+                              onClick={() => handleUseTemplate(template)}
+                            >
                               <Sparkles className="h-4 w-4 mr-2" />
                               Use Template
                             </Button>
@@ -1107,7 +1354,7 @@ export default function RoutingDocumentManagement() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Add Form or Document</DialogTitle>
-            <DialogDescription>Upload or register a work instruction, assembly instruction, operator instruction, maintenance schedule, or reusable form template</DialogDescription>
+            <DialogDescription>Upload a PDF to create a reusable fillable template and register it in the Master Document Register, or add a standard reference document</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -1264,6 +1511,122 @@ export default function RoutingDocumentManagement() {
             <Button onClick={handleParse} disabled={parseMutation.isPending || !parseContent.trim()}>
               {parseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Brain className="h-4 w-4 mr-2" />}
               Analyze with AI
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showFillSpecSheetDialog} onOpenChange={setShowFillSpecSheetDialog}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Fill CNC Spec Sheet</DialogTitle>
+            <DialogDescription>
+              Fill the spec sheet fields, link the manufactured part, and save the finished PDF to the Master Document List
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Manufactured Part</Label>
+                <Select value={fillSpecSheetForm.inventoryItemId} onValueChange={handleManufacturedPartChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Link manufactured part" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {manufacturedParts.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>
+                        {item.agPartNumber} - {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Sheet Title</Label>
+                <Input
+                  value={fillSpecSheetForm.title}
+                  onChange={(e) => setFillSpecSheetForm({ ...fillSpecSheetForm, title: e.target.value })}
+                  placeholder="SPEC Sheet - Wing Box Rib Part #26006"
+                />
+              </div>
+              <div>
+                <Label>Part Number</Label>
+                <Input
+                  value={fillSpecSheetForm.partNumber}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFillSpecSheetForm((prev) => ({
+                      ...prev,
+                      partNumber: value,
+                      fieldValues: { ...prev.fieldValues, partNumber: value },
+                    }));
+                  }}
+                />
+              </div>
+              <div>
+                <Label>SKU #</Label>
+                <Input
+                  value={fillSpecSheetForm.sku}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFillSpecSheetForm((prev) => ({
+                      ...prev,
+                      sku: value,
+                      fieldValues: { ...prev.fieldValues, sku: value },
+                    }));
+                  }}
+                />
+              </div>
+            </div>
+
+            {(selectedTemplate?.sections || []).map((section: any) => {
+              const sectionFields = (selectedTemplate?.defaultFields || []).filter((field: any) =>
+                (field.sectionName || 'Section') === section.name
+              );
+              if (sectionFields.length === 0) return null;
+
+              return (
+                <div key={section.name} className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">{section.name}</h3>
+                    {section.description && <p className="text-xs text-muted-foreground">{section.description}</p>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {sectionFields.map((field: any) => {
+                      const value = fillSpecSheetForm.fieldValues[field.fieldName] || '';
+                      const isLongField = field.fieldType === 'textarea' || value.includes('\n');
+                      return (
+                        <div key={field.fieldName} className={isLongField ? 'col-span-2' : ''}>
+                          <Label>{field.fieldLabel || field.fieldName}</Label>
+                          {isLongField ? (
+                            <Textarea
+                              value={value}
+                              onChange={(e) => updateFillSpecSheetField(field.fieldName, e.target.value)}
+                              className="min-h-[92px]"
+                            />
+                          ) : (
+                            <Input
+                              value={value}
+                              onChange={(e) => updateFillSpecSheetField(field.fieldName, e.target.value)}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFillSpecSheetDialog(false)}>Cancel</Button>
+            <Button onClick={handleSaveFilledSpecSheet} disabled={createFilledSpecSheetMutation.isPending}>
+              {createFilledSpecSheetMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+              )}
+              Save Spec Sheet
             </Button>
           </DialogFooter>
         </DialogContent>

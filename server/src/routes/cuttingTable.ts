@@ -2652,11 +2652,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                   )
                 )
             ) committed_packets ON true
-            WHERE GREATEST(
-              GREATEST(pg."originalQuantity" - COALESCE(su.shipped_count, 0), 0)
-                - COALESCE(committed_packets.committed_count, 0),
-              0
-            ) > 0`;
+            WHERE GREATEST(pg."originalQuantity" - COALESCE(su.shipped_count, 0), 0) > 0`;
       
       const p2Result = showAll === 'true'
         ? await pool.query(p2Query + `

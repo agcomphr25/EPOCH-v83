@@ -193,6 +193,58 @@ router.get('/by-part/:partNumber', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/project/:projectId/wad-documentation-requirements', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params;
+
+    if (!z.string().uuid().safeParse(projectId).success) {
+      return res.status(400).json({ error: 'Invalid projectId' });
+    }
+
+    const rows = await pool.query(
+      `SELECT id::text, work_order_number AS "workOrderNumber", wizard_data AS "wizardData", updated_at AS "updatedAt"
+       FROM production_work_orders
+       WHERE project_id = $1
+       ORDER BY
+         CASE wad_status WHEN 'APPROVED' THEN 0 WHEN 'PENDING_APPROVAL' THEN 1 ELSE 2 END,
+         updated_at DESC NULLS LAST,
+         created_at DESC NULLS LAST
+       LIMIT 1`,
+      [projectId]
+    );
+
+    const wad = rows[0];
+    if (!wad) {
+      return res.json({
+        wadId: null,
+        workOrderNumber: null,
+        requirements: null,
+      });
+    }
+
+    const wizardData = wad.wizardData && typeof wad.wizardData === 'object' ? wad.wizardData : {};
+    const requirements = {
+      travelerRequired: wizardData.travelerRequired ?? wizardData.step6?.travelerRequired ?? true,
+      inspectionSheetRequired: wizardData.inspectionSheetRequired ?? wizardData.step7?.dimensionalReportRequired ?? false,
+      samplingPlanRequired: wizardData.samplingPlanRequired ?? false,
+      samplingPlanId: wizardData.samplingPlanId ?? '',
+      inspectionStrategy: wizardData.inspectionStrategy ?? (wizardData.step6?.finalQCOnly ? 'FINAL_ONLY' : 'FULL'),
+    };
+
+    res.json({
+      wadId: wad.id,
+      workOrderNumber: wad.workOrderNumber,
+      requirements,
+    });
+  } catch (error: any) {
+    console.error('Error fetching WAD routing requirements:', error);
+    res.status(500).json({
+      error: 'Failed to fetch WAD routing requirements',
+      message: error.message,
+    });
+  }
+});
+
 // Get part routing by ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {

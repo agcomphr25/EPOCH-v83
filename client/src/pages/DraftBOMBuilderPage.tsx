@@ -1332,6 +1332,12 @@ function isOrderedStatus(status: BomStatus) {
   return status === 'RFQ Sent' || status === 'On Order' || status === 'ETA / Inbound';
 }
 
+function statusToneClass(status: BomStatus) {
+  if (status === 'On Hand') return 'border-emerald-300 bg-emerald-50 text-emerald-800';
+  if (isOrderedStatus(status)) return 'border-yellow-300 bg-yellow-50 text-yellow-800';
+  return 'border-red-300 bg-red-50 text-red-800';
+}
+
 function manufactureStateFor(orderStatus: BomStatus, children: AssemblyTreeNode[]): AssemblyManufactureState {
   if (children.length === 0) {
     return isOnHandStatus(orderStatus) ? 'ready' : 'waiting';
@@ -4880,7 +4886,7 @@ function PartsRequestWorkspace({
                     {visibleColumns.includes('agPartNumber') ? <EditableCell value={line.agPartNumber} onChange={(value) => onUpdateLine(line.id, { agPartNumber: value })} disabled={!isEditMode} /> : null}
                     {visibleColumns.includes('status') ? <TableCell>
                       <Select value={line.status} onValueChange={(value) => onUpdateLine(line.id, { status: value as BomStatus })} disabled={!isEditMode}>
-                        <SelectTrigger className="h-9">
+                        <SelectTrigger className={cn('h-9', statusToneClass(line.status))}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -6234,17 +6240,8 @@ function EditableCell({
 }
 
 function StatusBadge({ status }: { status: BomStatus }) {
-  const tone =
-    status === 'On Hand'
-      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-      : status === 'RFQ Sent' || status === 'On Order'
-        ? 'border-sky-300 bg-sky-50 text-sky-800'
-        : status === 'Needs Quote' || status === 'Needs Review'
-          ? 'border-orange-300 bg-orange-50 text-orange-800'
-          : 'border-slate-300 bg-slate-50 text-slate-700';
-
   return (
-    <Badge variant="outline" className={tone}>
+    <Badge variant="outline" className={statusToneClass(status)}>
       {status}
     </Badge>
   );

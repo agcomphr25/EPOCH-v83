@@ -96,6 +96,24 @@ type ProductionDocumentationRequirements = Record<ProductionDocumentRequirementK
   documentationNotes: string;
 };
 
+type DocumentationRequirementState = 'required' | 'optional' | 'notRequired';
+
+interface DocumentationRequirementsEnginePackage {
+  package: Record<string, DocumentationRequirementState>;
+  requiredDocuments: string[];
+  inspectionStrategy: InspectionStrategy;
+  samplingPlanId: string;
+  qualityApprovalRequired: boolean;
+  customerApprovalRequired: boolean;
+  documentationNotes: string;
+}
+
+interface DocumentationRequirementsEngineResponse {
+  wadId: string;
+  workOrderNumber: string;
+  documentationPackage: DocumentationRequirementsEnginePackage;
+}
+
 const PRODUCTION_DOCUMENT_REQUIREMENT_ITEMS: Array<{ key: ProductionDocumentRequirementKey; label: string }> = [
   { key: 'routingRequired', label: 'Routing' },
   { key: 'travelerRequired', label: 'Traveler' },
@@ -112,6 +130,23 @@ const PRODUCTION_DOCUMENT_REQUIREMENT_ITEMS: Array<{ key: ProductionDocumentRequ
   { key: 'packagingChecklistRequired', label: 'Packaging Checklist' },
   { key: 'certificatePackageRequired', label: 'Certificate Package' },
 ];
+
+const DOCUMENT_PACKAGE_LABELS: Record<string, string> = {
+  routing: 'Routing',
+  traveler: 'Traveler',
+  inspectionSheet: 'Inspection Sheet',
+  samplingPlan: 'Sampling Plan',
+  fai: 'FAI',
+  workInstruction: 'Work Instruction',
+  cncSetupSheet: 'CNC Setup Sheet',
+  materialCutSheet: 'Material Cut Sheet',
+  layupRecord: 'Layup Record',
+  cureRecord: 'Cure Record',
+  assemblyChecklist: 'Assembly Checklist',
+  testReport: 'Test Report',
+  packagingChecklist: 'Packaging Checklist',
+  certificatePackage: 'Certificate Package',
+};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface WorkBreakdownRow {
@@ -490,6 +525,11 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
     queryFn: () => apiRequest(`/api/work-orders/production/${wadId}/wizard`),
   });
 
+  const { data: documentationRequirementsEngine } = useQuery<DocumentationRequirementsEngineResponse>({
+    queryKey: ['/api/work-orders/production', wadId, 'documentation-requirements'],
+    queryFn: () => apiRequest(`/api/work-orders/production/${wadId}/documentation-requirements`),
+  });
+
   useEffect(() => {
     if (wizardCtx?.wad?.wizardData) {
       const savedData = wizardCtx.wad.wizardData as WizardData;
@@ -528,6 +568,7 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
         }));
       }
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'wizard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'documentation-requirements'] });
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders', wadId] });
     },
     onError: (err: Error) => {
@@ -556,6 +597,7 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
         }));
       }
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'wizard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'documentation-requirements'] });
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders', wadId] });
       if (result.allApproved) {
         toast({ title: 'WAD Approved!', description: 'All required approvals collected. WAD status set to APPROVED.' });
@@ -1249,6 +1291,7 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
               wad={wad}
               approvals={approvals}
               controlStatus={controlStatus}
+              documentationPackage={documentationRequirementsEngine?.documentationPackage ?? null}
               approvalRequests={data.approvalRequests ?? []}
               revisionHistory={data.revisionHistory ?? []}
               exceptionRequestMutation={exceptionRequestMutation}
@@ -2782,11 +2825,12 @@ function Step11Approvals({ approvals, assignments, onAssignmentsChange, wadId, a
 }
 
 // ─── Step 12: Final Review ────────────────────────────────────────────────────
-function Step12FinalReview({ data, wad, approvals, controlStatus, approvalRequests, revisionHistory, exceptionRequestMutation, onApprove, isSaving }: {
+function Step12FinalReview({ data, wad, approvals, controlStatus, documentationPackage, approvalRequests, revisionHistory, exceptionRequestMutation, onApprove, isSaving }: {
   data: WizardData;
   wad: any;
   approvals: ApprovalRecord[];
   controlStatus?: WadControlStatus;
+  documentationPackage?: DocumentationRequirementsEnginePackage | null;
   approvalRequests: ApprovalRequestRecord[];
   revisionHistory: RevisionHistoryRecord[];
   exceptionRequestMutation: any;
@@ -2807,9 +2851,18 @@ function Step12FinalReview({ data, wad, approvals, controlStatus, approvalReques
   const scopeDefined = !!(data.step2?.buildType && (data.step2?.departments ?? []).length > 0);
   const chargeCodesDefined = (data.step4?.chargeCodes ?? []).every(c => !!c.chargeCode);
   const documentationRequirements = getProductionDocumentationRequirements(data);
-  const requiredProductionDocs = PRODUCTION_DOCUMENT_REQUIREMENT_ITEMS
-    .filter(item => documentationRequirements[item.key])
-    .map(item => item.label);
+  const requiredProductionDocs = documentationPackage
+    ? Object.entries(documentationPackage.package)
+        .filter(([, state]) => state === 'required')
+        .map(([key]) => DOCUMENT_PACKAGE_LABELS[key] ?? key)
+    : PRODUCTION_DOCUMENT_REQUIREMENT_ITEMS
+        .filter(item => documentationRequirements[item.key])
+        .map(item => item.label);
+  const reviewInspectionStrategy = documentationPackage?.inspectionStrategy ?? documentationRequirements.inspectionStrategy;
+  const reviewSamplingPlanId = documentationPackage?.samplingPlanId ?? documentationRequirements.samplingPlanId;
+  const reviewQualityApprovalRequired = documentationPackage?.qualityApprovalRequired ?? documentationRequirements.qualityApprovalRequired;
+  const reviewCustomerApprovalRequired = documentationPackage?.customerApprovalRequired ?? documentationRequirements.customerApprovalRequired;
+  const reviewDocumentationNotes = documentationPackage?.documentationNotes ?? documentationRequirements.documentationNotes;
 
   const gates = [
     { label: 'PO Review Approved', ok: poReviewGate },
@@ -2978,18 +3031,18 @@ function Step12FinalReview({ data, wad, approvals, controlStatus, approvalReques
       <div className="rounded-md border p-3 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="font-medium text-sm">Production Documentation Requirements</p>
-          <Badge variant="outline">{documentationRequirements.inspectionStrategy.replace('_', ' ')}</Badge>
+          <Badge variant="outline">{reviewInspectionStrategy.replace('_', ' ')}</Badge>
         </div>
         <p className="text-xs text-muted-foreground">
           Required documents: {requiredProductionDocs.length ? requiredProductionDocs.join(', ') : 'None selected'}
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
-          <span>Sampling Plan: {documentationRequirements.samplingPlanId || 'N/A'}</span>
-          <span>Quality Approval: {documentationRequirements.qualityApprovalRequired ? 'Required' : 'Not required'}</span>
-          <span>Customer Approval: {documentationRequirements.customerApprovalRequired ? 'Required' : 'Not required'}</span>
+          <span>Sampling Plan: {reviewSamplingPlanId || 'N/A'}</span>
+          <span>Quality Approval: {reviewQualityApprovalRequired ? 'Required' : 'Not required'}</span>
+          <span>Customer Approval: {reviewCustomerApprovalRequired ? 'Required' : 'Not required'}</span>
         </div>
-        {documentationRequirements.documentationNotes && (
-          <p className="text-xs text-muted-foreground">{documentationRequirements.documentationNotes}</p>
+        {reviewDocumentationNotes && (
+          <p className="text-xs text-muted-foreground">{reviewDocumentationNotes}</p>
         )}
       </div>
       {isAlreadyApproved ? (

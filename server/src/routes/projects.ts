@@ -7,6 +7,7 @@ import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogS
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosingValidation';
 import { ensureProjectHasWAD } from '../lib/wadHelper';
+import { evaluateDocumentationRequirements } from '../lib/documentationRequirementsEngine';
 import { cancelWadWorkOrdersSupersededByP2 } from '../services/wadSupersedeService';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import { resolveCustomersIntegerId } from '../lib/customerResolver';
@@ -52,6 +53,30 @@ function currentUserSnapshot(req: any): { id: number | null; displayName: string
   return {
     id: Number.isFinite(parsedId) ? parsedId : null,
     displayName: user?.displayName || user?.username || null,
+  };
+}
+
+async function getLatestProjectWadDocumentationPackage(projectId: string) {
+  const rows = await pool.query(
+    `SELECT id::text, work_order_number AS "workOrderNumber", status, wad_status AS "wadStatus", wizard_data AS "wizardData"
+       FROM production_work_orders
+      WHERE project_id = $1
+        AND (work_order_number LIKE 'WAD-%' OR wad_status IS NOT NULL)
+      ORDER BY
+        CASE wad_status WHEN 'APPROVED' THEN 0 WHEN 'PENDING_APPROVAL' THEN 1 ELSE 2 END,
+        updated_at DESC NULLS LAST,
+        created_at DESC NULLS LAST
+      LIMIT 1`,
+    [projectId]
+  );
+  const wad = rows[0];
+  if (!wad) return null;
+  return {
+    wadId: wad.id,
+    workOrderNumber: wad.workOrderNumber,
+    status: wad.status,
+    wadStatus: wad.wadStatus,
+    documentationPackage: evaluateDocumentationRequirements(wad),
   };
 }
 
@@ -1811,6 +1836,21 @@ router.post('/:id/release-to-p2', async (req, res) => {
     const WAD_APPROVED_STATUSES = ['RELEASED', 'IN_PROGRESS', 'COMPLETE', 'CLOSED'];
     const workOrders = await storage.getWorkOrdersByProject(id);
     const wadPassed = workOrders.some(wo => WAD_APPROVED_STATUSES.includes(wo.status));
+    const wadDocumentation = await getLatestProjectWadDocumentationPackage(id);
+    const documentationIssues = wadDocumentation?.documentationPackage.gates.routingApproval.requiresSamplingPlan &&
+      !wadDocumentation.documentationPackage.samplingPlanId
+      ? ['Sampling plan is required by the WAD documentation package but no sampling plan ID is recorded.']
+      : [];
+    const documentationGate = {
+      key: 'documentation_package',
+      label: 'WAD Documentation Package',
+      passed: Boolean(wadDocumentation) && documentationIssues.length === 0,
+      status: !wadDocumentation ? 'missing_wad' : documentationIssues.length > 0 ? 'incomplete' : 'ready',
+      message: !wadDocumentation
+        ? 'No WAD documentation package is available.'
+        : documentationIssues[0] ?? 'WAD documentation package is defined.',
+      documentationPackage: wadDocumentation?.documentationPackage ?? null,
+    };
 
     const quoteStep = steps.find(s => s.stepType === 'quote');
     const contractReviewGate = await getQuoteContractReviewGate(quoteStep?.linkedQuoteId ?? null, id, project.poId);
@@ -1819,6 +1859,7 @@ router.post('/:id/release-to-p2', async (req, res) => {
       { key: 'po_review', label: 'PO Review', passed: poReviewPassed },
       contractReviewGate,
       { key: 'wad', label: 'WAD (Work Authorization Document)', passed: wadPassed },
+      documentationGate,
       { key: 'preproduction', label: 'Preproduction', passed: preproductionPassed },
     ];
 
@@ -1859,6 +1900,7 @@ router.post('/:id/release-to-p2', async (req, res) => {
         stage: 'production',
         poStatus: 'in_production',
         gates,
+        documentationPackage: wadDocumentation?.documentationPackage ?? null,
       });
     }
 
@@ -1884,6 +1926,7 @@ router.post('/:id/release-to-p2', async (req, res) => {
       stage: 'p2_release',
       poStatus: 'ready_for_p2_release',
       gates,
+      documentationPackage: wadDocumentation?.documentationPackage ?? null,
     });
   } catch (error) {
     console.error('Error in release-to-p2 gate:', error);
@@ -1913,6 +1956,21 @@ router.get('/:id/p2-gate-status', async (req, res) => {
     const WAD_APPROVED_STATUSES = ['RELEASED', 'IN_PROGRESS', 'COMPLETE', 'CLOSED'];
     const workOrders = await storage.getWorkOrdersByProject(id);
     const wadPassed = workOrders.some(wo => WAD_APPROVED_STATUSES.includes(wo.status));
+    const wadDocumentation = await getLatestProjectWadDocumentationPackage(id);
+    const documentationIssues = wadDocumentation?.documentationPackage.gates.routingApproval.requiresSamplingPlan &&
+      !wadDocumentation.documentationPackage.samplingPlanId
+      ? ['Sampling plan is required by the WAD documentation package but no sampling plan ID is recorded.']
+      : [];
+    const documentationGate = {
+      key: 'documentation_package',
+      label: 'WAD Documentation Package',
+      passed: Boolean(wadDocumentation) && documentationIssues.length === 0,
+      status: !wadDocumentation ? 'missing_wad' : documentationIssues.length > 0 ? 'incomplete' : 'ready',
+      message: !wadDocumentation
+        ? 'No WAD documentation package is available.'
+        : documentationIssues[0] ?? 'WAD documentation package is defined.',
+      documentationPackage: wadDocumentation?.documentationPackage ?? null,
+    };
 
     const quoteStep = steps.find(s => s.stepType === 'quote');
     const contractReviewGate = await getQuoteContractReviewGate(quoteStep?.linkedQuoteId ?? null, id, project.poId);
@@ -1921,6 +1979,7 @@ router.get('/:id/p2-gate-status', async (req, res) => {
       { key: 'po_review', label: 'PO Review', passed: poReviewPassed },
       contractReviewGate,
       { key: 'wad', label: 'WAD (Work Authorization Document)', passed: wadPassed },
+      documentationGate,
       { key: 'preproduction', label: 'Preproduction', passed: preproductionPassed },
     ];
 
@@ -1933,6 +1992,7 @@ router.get('/:id/p2-gate-status', async (req, res) => {
       currentStage,
       alreadyReleased,
       poId: project.poId ?? null,
+      documentationPackage: wadDocumentation?.documentationPackage ?? null,
     });
   } catch (error) {
     console.error('Error fetching P2 gate status:', error);

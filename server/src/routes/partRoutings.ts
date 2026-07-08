@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertPartRoutingSchema, insertRoutingOperationSchema, insertRoutingCncOperationSchema, insertRoutingDependencySchema, updateRoutingDependencySchema } from '../../schema';
 import { pool } from '../../db';
+import { evaluateDocumentationRequirements } from '../lib/documentationRequirementsEngine';
 import OpenAI from 'openai';
 
 let openaiClient: OpenAI | null = null;
@@ -222,19 +223,19 @@ router.get('/project/:projectId/wad-documentation-requirements', async (req: Req
       });
     }
 
-    const wizardData = wad.wizardData && typeof wad.wizardData === 'object' ? wad.wizardData : {};
-    const requirements = {
-      travelerRequired: wizardData.travelerRequired ?? wizardData.step6?.travelerRequired ?? true,
-      inspectionSheetRequired: wizardData.inspectionSheetRequired ?? wizardData.step7?.dimensionalReportRequired ?? false,
-      samplingPlanRequired: wizardData.samplingPlanRequired ?? false,
-      samplingPlanId: wizardData.samplingPlanId ?? '',
-      inspectionStrategy: wizardData.inspectionStrategy ?? (wizardData.step6?.finalQCOnly ? 'FINAL_ONLY' : 'FULL'),
-    };
+    const documentationPackage = evaluateDocumentationRequirements(wad);
 
     res.json({
       wadId: wad.id,
       workOrderNumber: wad.workOrderNumber,
-      requirements,
+      requirements: {
+        travelerRequired: documentationPackage.requirements.travelerRequired === true,
+        inspectionSheetRequired: documentationPackage.requirements.inspectionSheetRequired === true,
+        samplingPlanRequired: documentationPackage.requirements.samplingPlanRequired === true,
+        samplingPlanId: String(documentationPackage.requirements.samplingPlanId ?? ''),
+        inspectionStrategy: documentationPackage.inspectionStrategy,
+      },
+      documentationPackage,
     });
   } catch (error: any) {
     console.error('Error fetching WAD routing requirements:', error);

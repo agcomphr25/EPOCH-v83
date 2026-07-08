@@ -1192,8 +1192,13 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
 
     for (const field of normalizedFields) {
       await db.insert(templateFields).values({
-        ...field,
         templateId: template.id,
+        fieldName: field.fieldName,
+        fieldLabel: field.fieldLabel,
+        fieldType: field.fieldType || 'text',
+        isRequired: field.isRequired || false,
+        defaultValue: field.defaultValue || null,
+        sortOrder: field.sortOrder ?? 0,
       });
     }
 
@@ -1652,11 +1657,8 @@ Return a JSON object with:
           fieldLabel: field.fieldLabel,
           fieldType: field.fieldType || 'text',
           isRequired: field.isRequired || false,
-          isUniquePerSerial: field.isUniquePerSerial || false,
           defaultValue: field.defaultValue,
-          sectionName: field.sectionName,
           sortOrder: field.sortOrder || 0,
-          aiSuggested: true,
         });
       }
     }
@@ -1770,15 +1772,23 @@ router.post('/spec-sheets/from-template', async (req: Request, res: Response) =>
     }
 
     const fieldResult = await db.execute(sql`SELECT * FROM template_fields WHERE template_id = ${templateId} ORDER BY sort_order ASC`);
-    const templateFields = (((fieldResult as any)?.rows || fieldResult || []) as any[]).map((field) => ({
-      fieldName: field.field_name ?? field.fieldName,
-      fieldLabel: field.field_label ?? field.fieldLabel,
-      fieldType: field.field_type ?? field.fieldType,
-      defaultValue: field.default_value ?? field.defaultValue,
-      sectionName: field.section_name ?? field.sectionName,
-      isRequired: field.is_required ?? field.isRequired,
-      sortOrder: field.sort_order ?? field.sortOrder,
-    }));
+    const defaultFields = Array.isArray(template.default_fields ?? template.defaultFields)
+      ? (template.default_fields ?? template.defaultFields)
+      : [];
+    const defaultFieldByName = new Map(defaultFields.map((field: any) => [field.fieldName ?? field.field_name, field]));
+    const templateFields = (((fieldResult as any)?.rows || fieldResult || []) as any[]).map((field) => {
+      const fieldName = field.field_name ?? field.fieldName;
+      const defaultField = defaultFieldByName.get(fieldName) ?? {};
+      return {
+        fieldName,
+        fieldLabel: field.field_label ?? field.fieldLabel ?? defaultField.fieldLabel ?? defaultField.field_label,
+        fieldType: field.field_type ?? field.fieldType ?? defaultField.fieldType ?? defaultField.field_type,
+        defaultValue: field.default_value ?? field.defaultValue ?? defaultField.defaultValue ?? defaultField.default_value,
+        sectionName: field.section_name ?? field.sectionName ?? defaultField.sectionName ?? defaultField.section_name,
+        isRequired: field.is_required ?? field.isRequired ?? defaultField.isRequired ?? defaultField.is_required,
+        sortOrder: field.sort_order ?? field.sortOrder ?? defaultField.sortOrder ?? defaultField.sort_order,
+      };
+    });
 
     const values = fieldValues && typeof fieldValues === 'object' ? fieldValues : {};
     const finalPartNumber = String(partNumber || values.partNumber || '').trim();
@@ -2370,9 +2380,6 @@ router.post('/templates', async (req: Request, res: Response) => {
         fieldType: field.fieldType || 'text',
         isRequired: field.isRequired || false,
         defaultValue: field.defaultValue || null,
-        validationRules: field.validationRules || null,
-        options: field.options || null,
-        sectionName: field.sectionName || null,
         sortOrder: field.sortOrder ?? index,
       }));
       
@@ -2425,9 +2432,6 @@ router.put('/templates/:templateId', async (req: Request, res: Response) => {
           fieldType: field.fieldType || 'text',
           isRequired: field.isRequired || false,
           defaultValue: field.defaultValue || null,
-          validationRules: field.validationRules || null,
-          options: field.options || null,
-          sectionName: field.sectionName || null,
           sortOrder: field.sortOrder ?? index,
         }));
         

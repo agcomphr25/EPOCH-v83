@@ -119,17 +119,23 @@ approvalsRouter.get('/my-tasks/:employeeId', async (req: Request, res: Response)
       .orderBy(asc(approvalRequests.currentLevelDeadline))
       .limit(100);
 
-    const approvedFollowUps = await db
-      .select()
-      .from(p2ProductionChanges)
-      .where(
-        and(
-          eq(p2ProductionChanges.status, 'APPROVED'),
-          eq(p2ProductionChanges.implementationRequired, true),
-          sql`${p2ProductionChanges.approvalAssignments} @> ${JSON.stringify([{ required: true, employeeId }])}::jsonb`,
-        ),
-      )
-      .limit(100);
+    const approvedFollowUpsResult = await db.execute(sql`
+      SELECT
+        id,
+        change_number,
+        proposed_change,
+        required_actions,
+        submitted_by_name,
+        approved_at,
+        created_at,
+        effective_date
+      FROM p2_production_changes
+      WHERE status = 'APPROVED'
+        AND implementation_required = true
+        AND approval_assignments @> ${JSON.stringify([{ required: true, employeeId }])}::jsonb
+      LIMIT 100
+    `);
+    const approvedFollowUps = ((approvedFollowUpsResult as any)?.rows || approvedFollowUpsResult || []) as any[];
 
     const now = Date.now();
     const tasks = rows.map((row) => {
@@ -163,14 +169,14 @@ approvalsRouter.get('/my-tasks/:employeeId', async (req: Request, res: Response)
       return {
         id: `p2-change-followup-${change.id}`,
         type: 'p2_production_change_followup',
-        title: `Implement production change ${change.changeNumber}`,
+        title: `Implement production change ${change.change_number ?? change.changeNumber}`,
         description: requiredActions.length > 0
           ? requiredActions.join(', ')
-          : change.proposedChange,
+          : change.proposed_change ?? change.proposedChange,
         requestType: 'PRODUCTION_CHANGE_FORM',
-        requestedByDisplayName: change.submittedByName ?? 'P2 Control Center',
-        createdAt: change.approvedAt ?? change.createdAt,
-        dueAt: change.effectiveDate ?? null,
+        requestedByDisplayName: change.submitted_by_name ?? change.submittedByName ?? 'P2 Control Center',
+        createdAt: change.approved_at ?? change.approvedAt ?? change.created_at ?? change.createdAt,
+        dueAt: change.effective_date ?? change.effectiveDate ?? null,
         priority: 'normal',
         actionUrl: `/p2-control-center?tab=changes`,
         sourceId: change.id,

@@ -69,6 +69,50 @@ const REQUIRED_APPROVAL_ROLES = [
 const RISK_TYPES = ['Technical', 'Schedule', 'Material', 'Quality', 'Tooling', 'Supplier'];
 const EMPTY_SELECT_VALUE = '__none__';
 
+type InspectionStrategy = 'FULL' | 'SAMPLING' | 'MIXED' | 'FINAL_ONLY';
+
+type ProductionDocumentRequirementKey =
+  | 'routingRequired'
+  | 'travelerRequired'
+  | 'inspectionSheetRequired'
+  | 'samplingPlanRequired'
+  | 'faiRequired'
+  | 'workInstructionRequired'
+  | 'cncSetupSheetRequired'
+  | 'materialCutSheetRequired'
+  | 'layupRecordRequired'
+  | 'cureRecordRequired'
+  | 'assemblyChecklistRequired'
+  | 'testReportRequired'
+  | 'packagingChecklistRequired'
+  | 'certificatePackageRequired';
+
+type ProductionDocumentationRequirements = Record<ProductionDocumentRequirementKey, boolean> & {
+  inspectionStrategy: InspectionStrategy;
+  samplingPlanId: string;
+  criticalFeaturesRequireFullInspection: boolean;
+  qualityApprovalRequired: boolean;
+  customerApprovalRequired: boolean;
+  documentationNotes: string;
+};
+
+const PRODUCTION_DOCUMENT_REQUIREMENT_ITEMS: Array<{ key: ProductionDocumentRequirementKey; label: string }> = [
+  { key: 'routingRequired', label: 'Routing' },
+  { key: 'travelerRequired', label: 'Traveler' },
+  { key: 'inspectionSheetRequired', label: 'Inspection Sheet' },
+  { key: 'samplingPlanRequired', label: 'Sampling Plan' },
+  { key: 'faiRequired', label: 'FAI' },
+  { key: 'workInstructionRequired', label: 'Work Instruction' },
+  { key: 'cncSetupSheetRequired', label: 'CNC Setup Sheet' },
+  { key: 'materialCutSheetRequired', label: 'Material Cut Sheet' },
+  { key: 'layupRecordRequired', label: 'Layup Record' },
+  { key: 'cureRecordRequired', label: 'Cure Record' },
+  { key: 'assemblyChecklistRequired', label: 'Assembly Checklist' },
+  { key: 'testReportRequired', label: 'Test Report' },
+  { key: 'packagingChecklistRequired', label: 'Packaging Checklist' },
+  { key: 'certificatePackageRequired', label: 'Certificate Package' },
+];
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface WorkBreakdownRow {
   department: string;
@@ -290,6 +334,26 @@ interface WizardData {
     specialProcessControls: string;
   };
   step10?: { documents: DocItem[] };
+  routingRequired?: boolean;
+  travelerRequired?: boolean;
+  inspectionSheetRequired?: boolean;
+  samplingPlanRequired?: boolean;
+  faiRequired?: boolean;
+  workInstructionRequired?: boolean;
+  cncSetupSheetRequired?: boolean;
+  materialCutSheetRequired?: boolean;
+  layupRecordRequired?: boolean;
+  cureRecordRequired?: boolean;
+  assemblyChecklistRequired?: boolean;
+  testReportRequired?: boolean;
+  packagingChecklistRequired?: boolean;
+  certificatePackageRequired?: boolean;
+  inspectionStrategy?: InspectionStrategy;
+  samplingPlanId?: string;
+  criticalFeaturesRequireFullInspection?: boolean;
+  qualityApprovalRequired?: boolean;
+  customerApprovalRequired?: boolean;
+  documentationNotes?: string;
   approvals?: ApprovalRecord[];
   approvalAssignments?: ApprovalAssignmentsMap;
   approvalRequests?: ApprovalRequestRecord[];
@@ -365,6 +429,46 @@ function inferResumeStep(wizardData: WizardData): number {
   return 1;
 }
 
+function inferInspectionStrategy(data: WizardData): InspectionStrategy {
+  if (data.inspectionStrategy) return data.inspectionStrategy;
+  if (data.step6?.finalQCOnly) return 'FINAL_ONLY';
+  if (data.step7?.spotCheckSampleSize || data.step7?.spotCheckFrequency) return 'SAMPLING';
+  if (data.step7?.inProcessQC && data.step7?.finalQC) return 'MIXED';
+  return 'FULL';
+}
+
+function getProductionDocumentationRequirements(data: WizardData): ProductionDocumentationRequirements {
+  return {
+    routingRequired: data.routingRequired ?? data.step6?.routingRequired ?? true,
+    travelerRequired: data.travelerRequired ?? data.step6?.travelerRequired ?? true,
+    inspectionSheetRequired: data.inspectionSheetRequired ?? data.step7?.dimensionalReportRequired ?? false,
+    samplingPlanRequired: data.samplingPlanRequired ?? false,
+    faiRequired: data.faiRequired ?? data.step7?.faiRequired ?? false,
+    workInstructionRequired: data.workInstructionRequired ?? data.step6?.workInstructionRequired ?? false,
+    cncSetupSheetRequired: data.cncSetupSheetRequired ?? false,
+    materialCutSheetRequired: data.materialCutSheetRequired ?? false,
+    layupRecordRequired: data.layupRecordRequired ?? false,
+    cureRecordRequired: data.cureRecordRequired ?? false,
+    assemblyChecklistRequired: data.assemblyChecklistRequired ?? false,
+    testReportRequired: data.testReportRequired ?? false,
+    packagingChecklistRequired: data.packagingChecklistRequired ?? false,
+    certificatePackageRequired: data.certificatePackageRequired ?? data.step7?.certPackageRequired ?? false,
+    inspectionStrategy: inferInspectionStrategy(data),
+    samplingPlanId: data.samplingPlanId ?? '',
+    criticalFeaturesRequireFullInspection: data.criticalFeaturesRequireFullInspection ?? false,
+    qualityApprovalRequired: data.qualityApprovalRequired ?? true,
+    customerApprovalRequired: data.customerApprovalRequired ?? data.step7?.customerSourceInspection ?? false,
+    documentationNotes: data.documentationNotes ?? '',
+  };
+}
+
+function withProductionDocumentationRequirements(data: WizardData): WizardData {
+  return {
+    ...data,
+    ...getProductionDocumentationRequirements(data),
+  };
+}
+
 function BoolField({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center gap-2">
@@ -404,7 +508,10 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
     mutationFn: async (payload: { wizardData: WizardData; wadStatus?: string }) => {
       return apiRequest(`/api/work-orders/production/${wadId}/wizard`, {
         method: 'PATCH',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          wizardData: withProductionDocumentationRequirements(payload.wizardData),
+        }),
       });
     },
     onSuccess: (result) => {
@@ -559,8 +666,12 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
       case 10: {
         const docs = d.step10?.documents ?? [];
         const pending = docs.filter((doc) => doc.status === 'PENDING');
+        const productionDocReqs = getProductionDocumentationRequirements(d);
         if (docs.length === 0) req.push('Document checklist must be reviewed');
         if (pending.length > 0) req.push(`Resolve ${pending.length} pending document(s) (Attached or Waived)`);
+        if (productionDocReqs.samplingPlanRequired && !productionDocReqs.samplingPlanId.trim()) {
+          req.push('Sampling Plan ID');
+        }
         break;
       }
       case 11: {
@@ -1114,8 +1225,8 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
           {/* ── Step 10: Document Checklist ──────────────────────────── */}
           {step === 10 && (
             <Step10Documents
-              data={data.step10}
-              onChange={(v) => patch('step10', v)}
+              data={data}
+              onChange={(v) => setData(prev => ({ ...prev, ...v }))}
             />
           )}
           {/* ── Step 11: Approvals ───────────────────────────────────── */}
@@ -2355,32 +2466,114 @@ function Step9Risks({ data, onChange }: {
 
 // ─── Step 10: Document Checklist ──────────────────────────────────────────────
 function Step10Documents({ data, onChange }: {
-  data?: WizardData['step10'];
-  onChange: (v: WizardData['step10']) => void;
+  data: WizardData;
+  onChange: (v: Partial<WizardData>) => void;
 }) {
   const initDocs = (): DocItem[] =>
     DOCUMENT_CHECKLIST_ITEMS.map(item => {
-      const existing = (data?.documents ?? []).find(d => d.key === item.key);
+      const existing = (data.step10?.documents ?? []).find(d => d.key === item.key);
       return existing ?? { key: item.key, name: item.name, status: 'PENDING', notes: '' };
     });
 
   const [docs, setDocs] = useState<DocItem[]>(initDocs);
+  const requirements = getProductionDocumentationRequirements(data);
 
   useEffect(() => { setDocs(initDocs()); }, []);
 
   const setDoc = (idx: number, patch: Partial<DocItem>) => {
     const next = docs.map((d, i) => i === idx ? { ...d, ...patch } : d);
     setDocs(next);
-    onChange({ documents: next });
+    onChange({ step10: { documents: next } });
+  };
+
+  const setRequirement = <K extends keyof ProductionDocumentationRequirements>(
+    key: K,
+    value: ProductionDocumentationRequirements[K]
+  ) => {
+    onChange({ [key]: value } as Partial<WizardData>);
   };
 
   const allRequired = docs.filter(d => d.status !== 'ATTACHED' && d.status !== 'WAIVED');
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Mark each required document as Attached or Waived. All documents must be resolved before WAD approval.
-      </p>
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm font-medium">Production Documentation Requirements</p>
+          <p className="text-sm text-muted-foreground">
+            Decide which production records this WAD requires for Routing, Travelers, QC, and P2 release.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {PRODUCTION_DOCUMENT_REQUIREMENT_ITEMS.map(item => (
+            <BoolField
+              key={item.key}
+              label={item.label}
+              value={requirements[item.key]}
+              onChange={v => setRequirement(item.key, v)}
+            />
+          ))}
+        </div>
+        <Separator />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label>Inspection Strategy</Label>
+            <Select
+              value={requirements.inspectionStrategy}
+              onValueChange={v => setRequirement('inspectionStrategy', v as InspectionStrategy)}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="FULL">Full Inspection</SelectItem>
+                <SelectItem value="SAMPLING">Sampling</SelectItem>
+                <SelectItem value="MIXED">Mixed</SelectItem>
+                <SelectItem value="FINAL_ONLY">Final Only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Sampling Plan ID</Label>
+            <Input
+              value={requirements.samplingPlanId}
+              onChange={e => setRequirement('samplingPlanId', e.target.value)}
+              placeholder="Sampling plan or controlled document ID"
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <BoolField
+            label="Critical Features Require Full Inspection"
+            value={requirements.criticalFeaturesRequireFullInspection}
+            onChange={v => setRequirement('criticalFeaturesRequireFullInspection', v)}
+          />
+          <BoolField
+            label="Quality Approval Required"
+            value={requirements.qualityApprovalRequired}
+            onChange={v => setRequirement('qualityApprovalRequired', v)}
+          />
+          <BoolField
+            label="Customer Approval Required"
+            value={requirements.customerApprovalRequired}
+            onChange={v => setRequirement('customerApprovalRequired', v)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>Documentation Notes</Label>
+          <Textarea
+            rows={3}
+            value={requirements.documentationNotes}
+            onChange={e => setRequirement('documentationNotes', e.target.value)}
+            placeholder="Production documentation notes, customer-specific instructions, or release-gate rationale..."
+          />
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Mark each required document as Attached or Waived. All documents must be resolved before WAD approval.
+        </p>
       {allRequired.length > 0 && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
@@ -2421,6 +2614,7 @@ function Step10Documents({ data, onChange }: {
           ))}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
@@ -2612,6 +2806,10 @@ function Step12FinalReview({ data, wad, approvals, controlStatus, approvalReques
   const poReviewGate = data.step1?.poReviewApproved ?? false;
   const scopeDefined = !!(data.step2?.buildType && (data.step2?.departments ?? []).length > 0);
   const chargeCodesDefined = (data.step4?.chargeCodes ?? []).every(c => !!c.chargeCode);
+  const documentationRequirements = getProductionDocumentationRequirements(data);
+  const requiredProductionDocs = PRODUCTION_DOCUMENT_REQUIREMENT_ITEMS
+    .filter(item => documentationRequirements[item.key])
+    .map(item => item.label);
 
   const gates = [
     { label: 'PO Review Approved', ok: poReviewGate },
@@ -2776,6 +2974,23 @@ function Step12FinalReview({ data, wad, approvals, controlStatus, approvalReques
             );
           })}
         </div>
+      </div>
+      <div className="rounded-md border p-3 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-medium text-sm">Production Documentation Requirements</p>
+          <Badge variant="outline">{documentationRequirements.inspectionStrategy.replace('_', ' ')}</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Required documents: {requiredProductionDocs.length ? requiredProductionDocs.join(', ') : 'None selected'}
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
+          <span>Sampling Plan: {documentationRequirements.samplingPlanId || 'N/A'}</span>
+          <span>Quality Approval: {documentationRequirements.qualityApprovalRequired ? 'Required' : 'Not required'}</span>
+          <span>Customer Approval: {documentationRequirements.customerApprovalRequired ? 'Required' : 'Not required'}</span>
+        </div>
+        {documentationRequirements.documentationNotes && (
+          <p className="text-xs text-muted-foreground">{documentationRequirements.documentationNotes}</p>
+        )}
       </div>
       {isAlreadyApproved ? (
         <Alert className="border-green-300 bg-green-50">

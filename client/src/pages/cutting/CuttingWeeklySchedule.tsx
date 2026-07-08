@@ -81,6 +81,8 @@ type WeeklyCuttingQueueItem = {
   scheduledDate: string;
   dueDate: string;
   customer: string;
+  poNumber?: string;
+  p2PoItemId?: number;
   priority: number;
   packetsNeeded: number;
   inventoryApplied?: number;
@@ -329,7 +331,9 @@ export default function CuttingWeeklySchedule() {
       const packetQty = Math.max(0, Number(item.packetsNeeded) || 0);
       if (packetQty <= 0) return;
 
-      const poId = item.orderId.split('-')[1] || item.orderId;
+      const poId = item.poNumber || (item.orderId.startsWith('PO-')
+        ? item.orderId.replace(/^PO-/, '').replace(/-\d+$/, '')
+        : item.orderId.split('-')[1] || item.orderId);
       if (!poMap[poId]) {
         poMap[poId] = {
           poId,

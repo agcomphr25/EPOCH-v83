@@ -124,15 +124,16 @@ approvalsRouter.get('/my-tasks/:employeeId', async (req: Request, res: Response)
         id,
         change_number,
         proposed_change,
-        required_actions,
+        COALESCE(to_jsonb(p) -> 'required_actions', '[]'::jsonb) AS required_actions,
         submitted_by_name,
         approved_at,
         created_at,
         effective_date
-      FROM p2_production_changes
+      FROM p2_production_changes p
       WHERE status = 'APPROVED'
         AND implementation_required = true
-        AND approval_assignments @> ${JSON.stringify([{ required: true, employeeId }])}::jsonb
+        AND COALESCE(to_jsonb(p) -> 'approval_assignments', '[]'::jsonb)
+          @> ${JSON.stringify([{ required: true, employeeId }])}::jsonb
       LIMIT 100
     `);
     const approvedFollowUps = ((approvedFollowUpsResult as any)?.rows || approvedFollowUpsResult || []) as any[];

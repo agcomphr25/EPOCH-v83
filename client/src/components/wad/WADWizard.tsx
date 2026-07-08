@@ -504,8 +504,14 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
     }
   }, [wizardCtx, initialStep, initialStepApplied]);
 
+  const loadedWadStatus = wizardCtx?.wad?.wadStatus ?? 'DRAFT';
+  const isWadApproved = loadedWadStatus === 'APPROVED';
+
   const saveMutation = useMutation({
     mutationFn: async (payload: { wizardData: WizardData; wadStatus?: string }) => {
+      if (isWadApproved) {
+        return { wad: wizardCtx?.wad };
+      }
       return apiRequest(`/api/work-orders/production/${wadId}/wizard`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -531,6 +537,15 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders', wadId] });
     },
     onError: (err: Error) => {
+      const status = (err as Error & { status?: number }).status;
+      if (status === 409) {
+        queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'wizard'] });
+        toast({
+          title: 'WAD already approved',
+          description: 'Approved WADs are read-only. Refreshing the wizard state.',
+        });
+        return;
+      }
       toast({ title: 'Save failed', description: err.message, variant: 'destructive' });
     },
   });
@@ -585,19 +600,26 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
   });
 
   const patch = useCallback((key: keyof WizardData, value: unknown) => {
+    if (isWadApproved) return;
     setData(prev => ({ ...prev, [key]: value }));
-  }, []);
+  }, [isWadApproved]);
 
   const saveAndGoTo = useCallback(async (targetStep: number) => {
     const nextStep = clampWizardStep(targetStep);
+    if (isWadApproved) {
+      setStep(nextStep);
+      return;
+    }
     setSaving(true);
     try {
       await saveMutation.mutateAsync({ wizardData: { ...data, currentStep: nextStep } });
       setStep(nextStep);
+    } catch {
+      // The mutation onError handler owns user-facing messaging.
     } finally {
       setSaving(false);
     }
-  }, [data, saveMutation]);
+  }, [data, isWadApproved, saveMutation]);
 
   const handleNext = () => saveAndGoTo(step + 1);
   const handleBack = () => setStep(s => s - 1);
@@ -697,7 +719,7 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
   const po = wizardCtx?.po;
   const controlStatus = wizardCtx?.controlStatus;
   const contractContextDefaults = wizardCtx?.contractContextDefaults ?? null;
-  const wadStatus = wad?.wadStatus ?? 'DRAFT';
+  const wadStatus = loadedWadStatus;
   const approvals: ApprovalRecord[] = (data.approvals ?? []) as ApprovalRecord[];
   const isBackfill = project?.currentStage === 'production';
 
@@ -1082,6 +1104,14 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
           </AlertDescription>
         </Alert>
       )}
+      {isWadApproved && (
+        <Alert className="border-green-300 bg-green-50">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800 text-sm">
+            This WAD is approved and read-only. To change it, start a formal revision instead of saving over the approved record.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Step progress indicator */}
       <div className="overflow-x-auto">
@@ -1253,6 +1283,15 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
               revisionHistory={data.revisionHistory ?? []}
               exceptionRequestMutation={exceptionRequestMutation}
               onApprove={async () => {
+                if (isWadApproved) {
+                  queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'wizard'] });
+                  queryClient.invalidateQueries({ queryKey: ['/api/work-orders', wadId] });
+                  toast({
+                    title: 'WAD already approved',
+                    description: 'Approved WADs are read-only and already satisfy the WAD gate.',
+                  });
+                  return;
+                }
                 // Persist the latest wizardData. The actual APPROVED transition happens
                 // server-side in POST /wizard/approve once all required slots are
                 // signed (Step 11). PATCH is intentionally not allowed to set APPROVED.
@@ -1286,7 +1325,7 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
           <Button
             variant="outline"
             onClick={() => saveMutation.mutate({ wizardData: { ...data, currentStep: step } })}
-            disabled={saveMutation.isPending || saving}
+            disabled={isWadApproved || saveMutation.isPending || saving}
           >
             {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
             Save Draft

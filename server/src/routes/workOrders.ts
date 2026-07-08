@@ -48,6 +48,7 @@ import { requireScopedCapability, ScopedForbiddenError } from '../permissions';
 import { evaluateWorkOrderLaborStatus } from '../helpers/laborBudgetHelper';
 import { evaluateWorkOrderReadiness } from '../lib/workOrderReadiness';
 import { ensureProjectHasWADFromCanonicalSources } from '../lib/wadHelper';
+import { evaluateDocumentationRequirements } from '../lib/documentationRequirementsEngine';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import { assignDashboardForWorkOrder } from '../lib/workOrderDashboardAssignment';
 import {
@@ -1328,6 +1329,14 @@ router.post('/:id/travelers/create', requirePermission('work_orders.release'), a
       return sendBlockedWadRevisionResponse(res, blockingRevision);
     }
 
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, id))
+      .limit(1);
+    if (!wad) return res.status(404).json({ error: 'Production work order not found', id });
+    const documentationPackage = evaluateDocumentationRequirements(wad);
+
     let traveler: Awaited<ReturnType<typeof storage.createTravelerFromProductionWorkOrder>>;
     try {
       traveler = await storage.createTravelerFromProductionWorkOrder(id, String(createdBy));
@@ -1355,6 +1364,7 @@ router.post('/:id/travelers/create', requirePermission('work_orders.release'), a
       status: traveler.status,
       partRoutingId: traveler.partRoutingId,
       wadRevisionId: traveler.wadRevisionId,
+      documentationPackage,
     });
   } catch (error: any) {
     console.error('[WorkOrders] Error creating traveler from WAD:', error);
@@ -3029,6 +3039,26 @@ router.get('/production/:id/wizard', async (req: Request, res: Response) => {
   }
 });
 
+// GET /production/:id/documentation-requirements - shared package engine for WAD review, routing, travelers, QC, and release gates.
+router.get('/production/:id/documentation-requirements', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!WAD_UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid WAD ID format' });
+  try {
+    const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
+    if (!wad) return res.status(404).json({ error: 'WAD not found' });
+
+    return res.json({
+      wadId: wad.id,
+      workOrderNumber: wad.workOrderNumber,
+      documentationPackage: evaluateDocumentationRequirements(wad),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[WAD Documentation Requirements] GET error:', err);
+    return res.status(500).json({ error: 'Failed to evaluate WAD documentation requirements', message: msg });
+  }
+});
+
 // PATCH /production/:id/wizard — save/update wizard data (draft save, any step).
 // Auth: authenticated session + work_orders.release capability (same as the approve route).
 // IMPORTANT: this endpoint MUST NOT be a back-door to the APPROVED state. Transitioning a
@@ -3104,6 +3134,7 @@ router.patch(
           lastEditedAt: editedAt,
         },
       };
+      mergedWizardData.__documentationRequirements = evaluateDocumentationRequirements(mergedWizardData);
 
       const updatePayload: Partial<typeof productionWorkOrders.$inferInsert> = {
         wizardData: mergedWizardData,

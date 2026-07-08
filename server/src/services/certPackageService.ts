@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { pool } from '../../db';
+import { evaluateDocumentationRequirements } from '../lib/documentationRequirementsEngine';
 
 type QueryFn = <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<T[]>;
 
@@ -310,10 +311,37 @@ export async function evaluateShippingCertPackageGate(
     revision: rows.wad?.updated_at ?? null,
   });
 
+  const documentationPackage = rows.wad ? evaluateDocumentationRequirements(rows.wad) : null;
+  const qcFinalReleaseRequirements = documentationPackage?.gates.qcFinalRelease ?? null;
+  if (documentationPackage?.gates.qcFinalRelease.samplingPlanRequired && !documentationPackage.samplingPlanId) {
+    blockers.push({
+      code: 'SAMPLING_PLAN_REQUIRED',
+      message: 'The WAD documentation package requires a sampling plan before QC final release.',
+      references: [rows.wad.work_order_number || rows.wad.id],
+    });
+  }
+  evidence.push({
+    type: 'wad_documentation_package',
+    label: 'WAD documentation package',
+    status: documentationPackage ? 'present' : 'not_applicable',
+    source: 'documentation_requirements_engine',
+    reference: rows.wad?.work_order_number ?? null,
+    revision: rows.wad?.updated_at ?? null,
+    details: documentationPackage
+      ? {
+          package: documentationPackage.package,
+          requiredDocuments: documentationPackage.requiredDocuments,
+          inspectionStrategy: documentationPackage.inspectionStrategy,
+          qcFinalRelease: documentationPackage.gates.qcFinalRelease,
+        }
+      : undefined,
+  });
+
   const cert = rows.certificate;
   const cocPresent = !!cert || !!rows.lot.certificate_upload_url;
   const cocApproved = cert ? ['APPROVED', 'ISSUED'].includes(normalizeStatus(cert.status)) || !!cert.approved_at : cocPresent;
-  if (!cocApproved) {
+  const certificatePackageRequired = qcFinalReleaseRequirements?.certificatePackageRequired ?? true;
+  if (certificatePackageRequired && !cocApproved) {
     blockers.push({
       code: 'COC_MISSING',
       message: 'A certificate of conformance must be attached and approved before shipment.',
@@ -323,7 +351,7 @@ export async function evaluateShippingCertPackageGate(
   evidence.push({
     type: 'coc',
     label: 'Certificate of Conformance',
-    status: cocApproved ? 'present' : 'missing',
+    status: cocApproved ? 'present' : certificatePackageRequired ? 'missing' : 'not_applicable',
     source: cert ? 'p2_certificates_of_conformance' : 'p2_lot_numbers.certificate_upload_url',
     reference: cert?.certificate_number ?? rows.lot.certificate_upload_url ?? null,
     revision: cert?.updated_at ?? null,
@@ -343,10 +371,19 @@ export async function evaluateShippingCertPackageGate(
     source: 'p2_certificates_of_conformance.process_records',
     details: { count: jsonArray(cert?.process_records).length },
   });
+  const faiRequired = qcFinalReleaseRequirements?.faiRequired ?? false;
+  const fairPresent = hasEntries(cert?.specifications) || hasEntries(cert?.inspection_summary);
+  if (faiRequired && !fairPresent) {
+    blockers.push({
+      code: 'FAI_REQUIRED',
+      message: 'The WAD documentation package requires FAI evidence before QC final release.',
+      references: [rows.wad?.work_order_number ?? rows.lot.lot_number],
+    });
+  }
   evidence.push({
     type: 'fair',
     label: 'FAIR / first article evidence',
-    status: hasEntries(cert?.specifications) || hasEntries(cert?.inspection_summary) ? 'present' : 'not_applicable',
+    status: fairPresent ? 'present' : faiRequired ? 'missing' : 'not_applicable',
     source: 'p2_certificates_of_conformance.specifications',
   });
   evidence.push({

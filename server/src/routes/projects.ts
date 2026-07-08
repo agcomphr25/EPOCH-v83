@@ -2109,7 +2109,7 @@ router.get('/:id/p2-hub', async (req, res) => {
       ),
     ]);
 
-    const poFamily = project.poId
+    const linkedPoFamily = project.poId
       ? await optionalHubQuery<any>(
           'PO revision family',
           `WITH selected_po AS (
@@ -2129,6 +2129,25 @@ router.get('/:id/p2-hub', async (req, res) => {
         )
       : [];
 
+    const assignedProjectPos = await optionalHubQuery<any>(
+      'project-assigned P2 POs',
+      `SELECT po.id, po.po_number, po.customer_id, po.customer_name, po.po_date,
+              po.expected_delivery, po.status, po.project_name, po.revision_number,
+              po.parent_po_id, po.change_reason, po.is_current_revision,
+              po.revised_at, po.revised_by, po.created_at, po.updated_at
+       FROM p2_purchase_orders po
+       WHERE po.project_id = $1::uuid
+       ORDER BY po.revision_number DESC, po.created_at DESC`,
+      [id],
+    );
+    const poFamilyById = new Map<number, any>();
+    [...linkedPoFamily, ...assignedProjectPos].forEach((po: any) => {
+      const poId = Number(po.id);
+      if (Number.isFinite(poId) && !poFamilyById.has(poId)) {
+        poFamilyById.set(poId, po);
+      }
+    });
+    const poFamily = Array.from(poFamilyById.values());
     const currentPo = poFamily.find((po: any) => po.is_current_revision) ?? poFamily[0] ?? null;
     const poIds = poFamily.map((po: any) => po.id);
     const activePoId = currentPo?.id ?? project.poId ?? null;
@@ -2615,7 +2634,7 @@ router.get('/:id/p2-hub', async (req, res) => {
         status: currentPo ? 'covered_by_project_data' : 'needs_upload',
         source: currentPo ? 'P2 PO record' : 'Project document upload',
         detail: currentPo ? `PO ${currentPo.po_number ?? currentPo.poNumber ?? activePoId} is linked to the project.` : 'Attach or link the customer PO before release.',
-        route: project.poId ? `/p2/purchase-orders/${project.poId}/preview` : '/p2-control-center',
+        route: currentPo ? `/p2/purchase-orders/${currentPo.id}/preview` : '/p2-control-center',
         relatedCount: currentPo ? 1 : 0,
       },
       {

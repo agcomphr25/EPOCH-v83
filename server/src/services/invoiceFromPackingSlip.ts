@@ -11,6 +11,7 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { buildRevenueDimensionTags } from './productionLineAccounting';
 import { assignReservedP2InvoiceNumberToPackingSlip } from './p2InvoiceNumberService';
+import { formatP2CustomerSerialNumbers } from '../utils/p2CustomerSerialDisplay';
 
 let p2PackingSlipInvoiceNumberSchemaReady: Promise<void> | null = null;
 let p2BillingAllocationSchemaReady: Promise<void> | null = null;
@@ -160,6 +161,7 @@ export interface InvoicePreviewLine {
   billingBucketLabel?: string | null;
   customerPoLine?: string | null;
   serialNumbers?: string[];
+  internalSerialNumbers?: string[];
   description: string;
   qty: number;
   unitPrice: number;
@@ -268,9 +270,10 @@ async function hydrateInvoiceLineItemCustomerParts(lineItems: LineItem[]): Promi
         .map((serialNumber) => ({ sku: skuBySerialNumber.get(serialNumber) })),
     );
 
-    return customerSku && !item.customerSku
-      ? { ...item, customerSku }
-      : item;
+    return {
+      ...item,
+      ...(customerSku && !item.customerSku ? { customerSku } : {}),
+    };
   });
 }
 
@@ -365,7 +368,8 @@ export async function buildInvoicePreviewFromPackingSlip(
       billingAllocationId: line.billingAllocationId || null,
       billingBucketLabel: bucketLabel,
       customerPoLine: line.customerPoLine || null,
-      serialNumbers: Array.isArray(line.serialNumbers) ? line.serialNumbers : [],
+      serialNumbers: formatP2CustomerSerialNumbers(line.serialNumbers),
+      internalSerialNumbers: Array.isArray(line.serialNumbers) ? line.serialNumbers : [],
       description: bucketLabel ? `${baseDescription} (${bucketLabel})` : baseDescription,
       qty,
       unitPrice: effectiveUnitPrice,
@@ -389,6 +393,7 @@ export async function buildInvoicePreviewFromPackingSlip(
             billingBucketLabel: base?.billingBucketLabel ?? null,
             customerPoLine: base?.customerPoLine ?? null,
             serialNumbers: base?.serialNumbers ?? [],
+            internalSerialNumbers: base?.internalSerialNumbers ?? [],
             description: String(line.description ?? base?.description ?? '').trim(),
             qty,
             unitPrice,
@@ -550,7 +555,7 @@ export async function createInvoiceFromPackingSlip(
         );
       }
 
-      const serialNumbers = preview.lines.flatMap((line) => line.serialNumbers ?? []);
+      const serialNumbers = preview.lines.flatMap((line) => line.internalSerialNumbers ?? line.serialNumbers ?? []);
       if (serialNumbers.length > 0) {
         const serialNumberList = sql.join(serialNumbers.map((serialNumber) => sql`${serialNumber}`), sql`, `);
         await tx.execute(sql`

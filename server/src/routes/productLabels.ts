@@ -4,6 +4,7 @@ import { authenticateToken } from '../../middleware/auth';
 import bwipjs from 'bwip-js';
 import { pool } from '../../db';
 import { z } from 'zod';
+import { formatP2CustomerSerialNumber } from '../utils/p2CustomerSerialDisplay';
 
 const router = Router();
 
@@ -490,7 +491,7 @@ async function buildP2LabelItems(lotId: string): Promise<LabelItem[]> {
   return serialRows.map((row) => ({
     mode: 'P2',
     sku: row.sku || finalizedSku,
-    serialNumber: row.serial_number,
+    serialNumber: formatP2CustomerSerialNumber(row.serial_number),
     lotNumber: lot.lot_number,
   }));
 }

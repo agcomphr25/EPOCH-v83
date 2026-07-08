@@ -6126,28 +6126,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                 })
                 .returning();
 
-              const rootSerial = String(item.serialNumber || item.barcode).replace(/-rma-\d+$/i, '');
-              const rmaPrefix = `${rootSerial}-rma-`;
-              const rmaRowsResult = await tx.execute(sql`
-                SELECT serial_number AS "serialNumber"
-                FROM ${p2SerializedItems}
-                WHERE lower(serial_number) LIKE ${`${rmaPrefix.toLowerCase()}%`}
-              `);
-              const rmaRows = (Array.isArray(rmaRowsResult) ? rmaRowsResult : (rmaRowsResult.rows ?? [])) as Array<{ serialNumber: string }>;
-              const maxRmaSequence = rmaRows.reduce((maxSeq, row) => {
-                const suffix = String(row.serialNumber || '').slice(rmaPrefix.length);
-                const parsed = /^\d+$/.test(suffix) ? Number(suffix) : 0;
-                return Math.max(maxSeq, parsed);
-              }, 0);
-              const rmaSerialNumber = `${rmaPrefix}${String(maxRmaSequence + 1).padStart(2, '0')}`;
-
-              const maxSequenceResult = await tx.execute(sql`
-                SELECT COALESCE(MAX(sequence_number), 0) + 1 AS "nextSequence"
-                FROM ${p2SerializedItems}
-                WHERE po_item_id = ${item.poItemId}
-              `);
-              const maxSequenceRows = (Array.isArray(maxSequenceResult) ? maxSequenceResult : (maxSequenceResult.rows ?? [])) as Array<{ nextSequence: number | string }>;
-              const nextSequence = Number(maxSequenceRows[0]?.nextSequence || 1);
               const replacementMetadata = {
                 isReplacement: true,
                 replacementForSerializedItemId: item.id,
@@ -6158,50 +6136,48 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                 nonconformingRmaId: rma.id,
                 nonconformingRmaNumber: rmaNumber,
                 rmaRequired: true,
-                rmaReplacementSerialNumber: rmaSerialNumber,
                 generatedFromScrapAt: new Date().toISOString(),
                 generatedWithoutPoQuantityIncrease: true,
               };
 
+              if (!item.poItemId) {
+                throw new Error(`Cannot allocate RMA replacement for ${item.serialNumber}: missing PO item link`);
+              }
+
+              const [allocatedReplacement] = await storage.addP2SerializedItemsForPoItem(item.poItemId, 1, tx);
+              if (!allocatedReplacement) {
+                throw new Error(`Failed to allocate replacement serial for scrapped serial ${item.serialNumber}`);
+              }
+
               const [createdReplacement] = await tx
-                .insert(p2SerializedItems)
-                .values({
-                  serialNumber: rmaSerialNumber,
-                  barcode: rmaSerialNumber,
-                  travelerBarcode: rmaSerialNumber,
-                  poId: item.poId,
-                  poItemId: item.poItemId,
-                  poNumber: item.poNumber,
-                  partNumber: item.partNumber,
-                  partName: item.partName,
-                  customerId: item.customerId,
-                  customerName: item.customerName,
-                  sequenceNumber: nextSequence,
-                  currentDepartment: 'Pending Layup',
-                  currentStageIndex: 0,
-                  status: 'ACTIVE',
-                  metadata: replacementMetadata,
-                  partRoutingId: item.partRoutingId,
-                  partRoutingRevision: item.partRoutingRevision,
+                .update(p2SerializedItems)
+                .set({
+                  metadata: {
+                    ...((allocatedReplacement.metadata as Record<string, unknown> | null) || {}),
+                    ...replacementMetadata,
+                    replacementSerialNumber: allocatedReplacement.serialNumber,
+                  },
+                  partRoutingId: item.partRoutingId ?? allocatedReplacement.partRoutingId,
+                  partRoutingRevision: item.partRoutingRevision ?? allocatedReplacement.partRoutingRevision,
                   sku: item.sku,
                   drawingName: item.drawingName,
-                  buildFamilyKey: item.buildFamilyKey,
+                  buildFamilyKey: item.buildFamilyKey || allocatedReplacement.buildFamilyKey,
                   notes: `RMA replacement generated for scrapped serial ${item.serialNumber}`,
-                  createdAt: new Date(),
                   updatedAt: new Date(),
                 })
+                .where(eq(p2SerializedItems.id, allocatedReplacement.id))
                 .returning();
 
               replacementItem = createdReplacement;
 
               await tx.insert(p2SerializedItemEvents).values({
                 serializedItemId: createdReplacement.id,
-                barcode: rmaSerialNumber,
+                barcode: createdReplacement.barcode,
                 eventType: 'REPLACEMENT_GENERATED',
                 toDepartment: createdReplacement.currentDepartment,
                 toStageIndex: createdReplacement.currentStageIndex,
                 performedBy: performedBy || 'System',
-                notes: `RMA replacement ${rmaSerialNumber} generated for scrapped serial ${item.serialNumber}`,
+                notes: `RMA replacement ${createdReplacement.serialNumber} generated for scrapped serial ${item.serialNumber}`,
                 metadata: {
                   scrappedSerializedItemId: item.id,
                   scrappedSerialNumber: item.serialNumber,
@@ -6209,7 +6185,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                   dispositionId: disposition.id,
                   rmaId: rma.id,
                   rmaNumber,
-                  replacementSerialNumber: rmaSerialNumber,
+                  replacementSerialNumber: createdReplacement.serialNumber,
                   rmaRequired: true,
                   scrapReason: reason,
                   generatedWithoutPoQuantityIncrease: true,
@@ -6227,7 +6203,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                   rmaId: rma.id,
                   rmaNumber,
                   replacementSerializedItemId: createdReplacement.id,
-                  replacementSerialNumber: rmaSerialNumber,
+                  replacementSerialNumber: createdReplacement.serialNumber,
                   reason,
                 },
               });

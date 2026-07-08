@@ -2441,7 +2441,19 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                 bom.id AS matched_bom_id,
                 bom.product_category_id AS bom_product_category_id,
                 bom.packet_type AS bom_packet_type,
-                bom.part_number AS bom_part_number
+                bom.part_number AS bom_part_number,
+                CASE
+                  WHEN COALESCE(inv.is_packet, false) = true THEN 0
+                  WHEN UPPER(COALESCE(po.notes, '')) LIKE '%PACKET DEMAND%' THEN 1
+                  WHEN (
+                    bom.part_number = po.sku OR
+                    bom.part_number = po.part_name OR
+                    LOWER(bom.packet_type) = LOWER(po.part_name) OR
+                    LOWER(bom.part_number) = LOWER(po.part_name)
+                  ) THEN 2
+                  WHEN LOWER(po.part_name) LIKE '%packet%' OR LOWER(po.sku) LIKE '%packet%' OR po.sku IN ('P706', 'P707') THEN 3
+                  ELSE 4
+                END AS packet_match_rank
               FROM p2_production_orders po
               JOIN p2_purchase_order_items poi ON poi.id = po.p2_po_item_id
               LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
@@ -2471,6 +2483,15 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                   OR po.sku IN ('P706', 'P707')
                 )
             ),
+            ranked_packet_candidates AS (
+              SELECT
+                pc.*,
+                ROW_NUMBER() OVER (
+                  PARTITION BY pc.p2_po_item_id
+                  ORDER BY pc.packet_match_rank ASC, pc.id ASC
+                ) AS packet_candidate_rank
+              FROM packet_candidates pc
+            ),
             packet_groups AS (
               SELECT
                 MIN(pc.id) AS id,
@@ -2492,7 +2513,8 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                 MAX(pc.bom_part_number) AS "bomPartNumber",
                 MAX(pc.ordered_quantity)::int AS "originalQuantity",
                 COUNT(DISTINCT pc.id)::int AS "packetRowCount"
-              FROM packet_candidates pc
+              FROM ranked_packet_candidates pc
+              WHERE pc.packet_candidate_rank = 1
               GROUP BY
                 pc.p2_po_id,
                 pc.p2_po_item_id,
@@ -2538,6 +2560,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             SELECT
               pg.id,
               pg."poId",
+              pg."poItemId",
               pg."itemName",
               pg.sku,
               GREATEST(pg."originalQuantity" - COALESCE(su.shipped_count, 0), 0) as quantity,
@@ -2738,6 +2761,8 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           sku: item.sku,
           source: 'P2',
           orderType: 'p2_po',
+          poNumber: item.poNumber,
+          p2PoItemId: item.poItemId,
           materialType,
           scheduledDate: item.dueDate,
           dueDate: item.dueDate,

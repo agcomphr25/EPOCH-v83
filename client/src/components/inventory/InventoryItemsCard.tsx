@@ -1694,6 +1694,18 @@ interface InventoryItemsCardProps {
   initialSearchTerm?: string | null;
 }
 
+type InventoryItemsPageResponse = {
+  items: InventoryItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  counts: {
+    purchased: number;
+    manufactured: number;
+  };
+};
+
 const inventoryFormSchema = z.object({
   agPartNumber: z.string().min(1, 'AG Part# is required'),
   name: z.string().min(1, 'Name is required'),
@@ -1783,9 +1795,12 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const [importFile, setImportFile] = useState<File | null>(null);
   const [replaceAllItems, setReplaceAllItems] = useState(false);
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm || '');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(initialSearchTerm || '');
   const [utilizedFilter, setUtilizedFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
   const [activeTab, setActiveTab] = useState<'purchased' | 'manufactured'>('purchased');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [isAddToGroupDialogOpen, setIsAddToGroupDialogOpen] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
@@ -1942,10 +1957,50 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     formData.usageUnit,
   ]);
 
-  const { data: allItems = [], isLoading, isError, error } = useQuery<InventoryItem[]>({
-    queryKey: ['/api/enhanced/inventory/items', { includeInactive: statusFilter !== 'active' }],
-    queryFn: () => apiRequest(`/api/enhanced/inventory/items${statusFilter !== 'active' ? '?includeInactive=true' : ''}`),
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
+  React.useEffect(() => {
+    setPage(1);
+    setSelectedItems(new Set());
+  }, [debouncedSearchTerm, utilizedFilter, statusFilter, activeTab, sortColumn, sortDirection]);
+
+  const inventoryItemsQuery = React.useMemo(() => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+      status: statusFilter,
+      itemType: activeTab,
+      utilized: utilizedFilter,
+      sort: `${sortColumn || 'name'}:${sortDirection}`,
+    });
+    const search = debouncedSearchTerm.trim();
+    if (search) {
+      params.set('search', search);
+    }
+    return params.toString();
+  }, [activeTab, debouncedSearchTerm, page, pageSize, sortColumn, sortDirection, statusFilter, utilizedFilter]);
+
+  const { data: itemsPage, isLoading, isError, error } = useQuery<InventoryItemsPageResponse>({
+    queryKey: ['/api/enhanced/inventory/items', inventoryItemsQuery],
+    queryFn: () => apiRequest(`/api/enhanced/inventory/items?${inventoryItemsQuery}`),
   });
+
+  const allItems = itemsPage?.items ?? [];
+  const totalItems = itemsPage?.total ?? 0;
+  const totalPages = itemsPage?.totalPages ?? 1;
+  const purchasedCount = itemsPage?.counts?.purchased ?? 0;
+  const manufacturedCount = itemsPage?.counts?.manufactured ?? 0;
+
+  React.useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   React.useEffect(() => {
     if (isError && error) {
@@ -2097,36 +2152,15 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     },
   });
 
-  const deferredSearchTerm = React.useDeferredValue(searchTerm);
-
-  // Type-filtered item sets for tab counts and tab filtering
+  // The server already applies tab, status, utilization, search, sort, and paging.
   const purchasedItems = React.useMemo(
-    () => Array.isArray(allItems)
-      ? allItems.filter(
-        (item) =>
-          inventoryItemMatchesStatusFilter(item, statusFilter) &&
-          (
-            item.itemType === 'PURCHASED' ||
-            (!item.itemType && item.type !== 'Manufactured' && !item.isPacket)
-          )
-      )
-      : [],
-    [allItems, statusFilter]
+    () => (activeTab === 'purchased' && Array.isArray(allItems) ? allItems : []),
+    [activeTab, allItems]
   );
 
   const manufacturedItems = React.useMemo(
-    () => Array.isArray(allItems)
-      ? allItems.filter(
-        (item) =>
-          inventoryItemMatchesStatusFilter(item, statusFilter) &&
-          (
-            item.itemType === 'MANUFACTURED' ||
-            item.type === 'Manufactured' ||
-            item.isPacket
-          )
-      )
-      : [],
-    [allItems, statusFilter]
+    () => (activeTab === 'manufactured' && Array.isArray(allItems) ? allItems : []),
+    [activeTab, allItems]
   );
 
   // Group manufactured items by category for accordion view
@@ -2160,7 +2194,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const items = Array.isArray(allItems)
     ? tabItems
         .filter((item) => {
-          if (!inventoryItemMatchesSearch(item, deferredSearchTerm)) return false;
+          if (!inventoryItemMatchesSearch(item, debouncedSearchTerm)) return false;
 
           // Utilized filter
           if (!inventoryItemMatchesUtilizedFilter(item, utilizedFilter)) return false;
@@ -2221,6 +2255,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           }
         })
     : [];
+
+  const pageStart = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+  const pageEnd = Math.min(page * pageSize, totalItems);
 
   const createMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -3196,11 +3233,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         <TabsList className="mb-4">
           <TabsTrigger value="purchased" className="flex items-center gap-2" data-testid="tab-purchased">
             Purchased
-            <Badge variant="secondary" className="ml-1">{purchasedItems.length}</Badge>
+            <Badge variant="secondary" className="ml-1">{purchasedCount}</Badge>
           </TabsTrigger>
           <TabsTrigger value="manufactured" className="flex items-center gap-2" data-testid="tab-manufactured">
             Manufactured
-            <Badge variant="secondary" className="ml-1">{manufacturedItems.length}</Badge>
+            <Badge variant="secondary" className="ml-1">{manufacturedCount}</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -3250,18 +3287,55 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         </div>
 
         {!isLoading && (
-          <div
-            className="text-sm text-gray-600 dark:text-gray-400"
-            data-testid="text-item-count"
-          >
-            Showing <span className="font-semibold">{items.length}</span>{' '}
-            {items.length === 1 ? 'item' : 'items'}
-            {tabItems.length !== items.length && (
-              <span className="text-gray-500">
-                {' '}
-                (filtered from {tabItems.length} total)
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div
+              className="text-sm text-gray-600 dark:text-gray-400"
+              data-testid="text-item-count"
+            >
+              Showing <span className="font-semibold">{pageStart}-{pageEnd}</span>{' '}
+              of <span className="font-semibold">{totalItems}</span>{' '}
+              {totalItems === 1 ? 'item' : 'items'}
+            </div>
+            <div className="flex items-center gap-2">
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-8 w-24" data-testid="select-page-size">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25 / page</SelectItem>
+                  <SelectItem value="50">50 / page</SelectItem>
+                  <SelectItem value="100">100 / page</SelectItem>
+                  <SelectItem value="250">250 / page</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Page {page} of {totalPages}
               </span>
-            )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -3756,7 +3830,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             <Accordion type="multiple" className="space-y-2">
               {MANUFACTURED_CATEGORY_ORDER.map((category) => {
                 const catItems = (groupedManufactured[category] || []).filter((item) => {
-                  if (!inventoryItemMatchesSearch(item, deferredSearchTerm)) return false;
+                  if (!inventoryItemMatchesSearch(item, debouncedSearchTerm)) return false;
                   if (!inventoryItemMatchesUtilizedFilter(item, utilizedFilter)) return false;
                   return true;
                 });
@@ -3879,7 +3953,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               })}
               {(() => {
                 const filteredUncategorized = uncategorizedManufactured.filter((item) => {
-                  if (!inventoryItemMatchesSearch(item, deferredSearchTerm)) return false;
+                  if (!inventoryItemMatchesSearch(item, debouncedSearchTerm)) return false;
                   if (!inventoryItemMatchesUtilizedFilter(item, utilizedFilter)) return false;
                   return true;
                 });

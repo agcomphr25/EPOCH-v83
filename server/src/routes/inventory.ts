@@ -6,7 +6,7 @@ import fs from 'fs/promises';
 import * as fsSync from 'fs';
 import os from 'os';
 import { randomUUID } from 'crypto';
-import { sql, eq, and, gte, lte, ilike, or, inArray, desc, asc, type SQL } from 'drizzle-orm';
+import { sql, eq, and, gte, lte, ilike, or, inArray, desc, asc, isNull, type SQL } from 'drizzle-orm';
 import { validateSameFamily } from '../utils/unitConversionService';
 import {
   calculateMaterialDemand,
@@ -23,6 +23,7 @@ import {
   insertVendorPartSchema,
   insertItemGroupSchema,
   insertDepartmentSchema,
+  inventoryItems,
   DEPARTMENT_LOCATION_MAP,
   EnrichedInventoryBalance,
   DepartmentBalanceBreakdown,
@@ -45,6 +46,178 @@ function isServiceInventoryItem(item: InventoryItem | undefined): boolean {
   if (!item) return false;
   const looseType = (item.type || '').trim().toLowerCase();
   return item.utilizedInServices === true || looseType === 'service' || looseType === 'services';
+}
+
+const inventoryItemListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(1).max(250).optional(),
+  search: z.string().trim().max(200).optional(),
+  status: z.enum(['active', 'inactive', 'all']).optional(),
+  itemType: z.enum(['purchased', 'manufactured']).optional(),
+  utilized: z.enum(['all', 'pl1', 'pl2', 'pl3', 'facilities', 'admin', 'services']).optional(),
+  manufacturedCategory: z.string().trim().optional(),
+  sort: z.string().trim().max(80).optional(),
+});
+
+type InventoryItemListParams = z.infer<typeof inventoryItemListQuerySchema>;
+
+function hasPagedInventoryItemParams(query: Request['query']) {
+  return (
+    query.page != null ||
+    query.pageSize != null ||
+    query.search != null ||
+    query.status != null ||
+    query.itemType != null ||
+    query.utilized != null ||
+    query.sort != null
+  );
+}
+
+function purchasedItemCondition() {
+  return or(
+    eq(inventoryItems.itemType, 'PURCHASED'),
+    and(
+      isNull(inventoryItems.itemType),
+      or(sql`${inventoryItems.type} IS NULL`, sql`${inventoryItems.type} <> 'Manufactured'`),
+      or(sql`${inventoryItems.isPacket} IS NULL`, eq(inventoryItems.isPacket, false))
+    )
+  );
+}
+
+function manufacturedItemCondition() {
+  return or(
+    eq(inventoryItems.itemType, 'MANUFACTURED'),
+    eq(inventoryItems.type, 'Manufactured'),
+    eq(inventoryItems.isPacket, true)
+  );
+}
+
+function inventoryItemFilterConditions(params: InventoryItemListParams, options: { includeType?: boolean } = {}) {
+  const conditions: SQL[] = [];
+  const status = params.status ?? 'active';
+
+  if (status === 'active') {
+    conditions.push(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive))!);
+  } else if (status === 'inactive') {
+    conditions.push(eq(inventoryItems.isActive, false));
+  }
+
+  if (options.includeType !== false) {
+    if (params.itemType === 'purchased') {
+      conditions.push(purchasedItemCondition()!);
+    } else if (params.itemType === 'manufactured') {
+      conditions.push(manufacturedItemCondition()!);
+    }
+  }
+
+  if (params.manufacturedCategory) {
+    conditions.push(eq(inventoryItems.manufacturedCategory, params.manufacturedCategory as ManufacturedCategory));
+  }
+
+  switch (params.utilized ?? 'all') {
+    case 'pl1':
+      conditions.push(eq(inventoryItems.utilizedInPL1, true));
+      break;
+    case 'pl2':
+      conditions.push(eq(inventoryItems.utilizedInPL2, true));
+      break;
+    case 'pl3':
+      conditions.push(eq(inventoryItems.utilizedInPL3, true));
+      break;
+    case 'facilities':
+      conditions.push(eq(inventoryItems.utilizedInFacilities, true));
+      break;
+    case 'admin':
+      conditions.push(eq(inventoryItems.utilizedInAdmin, true));
+      break;
+    case 'services':
+      conditions.push(eq(inventoryItems.utilizedInServices, true));
+      break;
+  }
+
+  const search = params.search?.trim();
+  if (search) {
+    const pattern = `%${search}%`;
+    conditions.push(or(
+      ilike(inventoryItems.agPartNumber, pattern),
+      ilike(inventoryItems.name, pattern),
+      ilike(inventoryItems.sku, pattern),
+      ilike(inventoryItems.source, pattern),
+      ilike(inventoryItems.supplierPartNumber, pattern),
+      ilike(inventoryItems.secondarySupplierPartNumber, pattern),
+      ilike(inventoryItems.department, pattern),
+      ilike(inventoryItems.notes, pattern),
+      ilike(inventoryItems.secondarySource, pattern),
+      ilike(inventoryItems.manufacturedCategory, pattern),
+      ilike(inventoryItems.manufacturingLevel, pattern),
+      ilike(inventoryItems.manufacturingDepartment, pattern),
+      ilike(inventoryItems.machineType, pattern),
+      ilike(inventoryItems.orderUrl, pattern),
+      ilike(inventoryItems.defaultOrderMethod, pattern),
+      sql`${inventoryItems.assignedDepartments}::text ILIKE ${pattern}`
+    )!);
+  }
+
+  return conditions;
+}
+
+function combineInventoryItemConditions(conditions: SQL[]) {
+  if (conditions.length === 0) return undefined;
+  if (conditions.length === 1) return conditions[0];
+  return and(...conditions);
+}
+
+function inventoryItemSort(sort?: string) {
+  const [column = 'name', direction = 'asc'] = (sort || '').split(':');
+  const sortColumns = {
+    agPartNumber: inventoryItems.agPartNumber,
+    sku: inventoryItems.sku,
+    name: inventoryItems.name,
+    source: inventoryItems.source,
+    supplierPartNumber: inventoryItems.supplierPartNumber,
+    secondarySource: inventoryItems.secondarySource,
+    department: inventoryItems.department,
+    costPer: inventoryItems.costPer,
+    itemType: inventoryItems.itemType,
+    manufacturedCategory: inventoryItems.manufacturedCategory,
+    updatedAt: inventoryItems.updatedAt,
+  } as const;
+  const selected = sortColumns[column as keyof typeof sortColumns] ?? inventoryItems.name;
+  return direction === 'desc' ? desc(selected) : asc(selected);
+}
+
+async function countInventoryItems(params: InventoryItemListParams, itemType?: 'purchased' | 'manufactured') {
+  const conditions = inventoryItemFilterConditions({ ...params, itemType }, { includeType: Boolean(itemType) });
+  const where = combineInventoryItemConditions(conditions);
+  const [row] = where
+    ? await db.select({ count: sql<number>`count(*)::int` }).from(inventoryItems).where(where)
+    : await db.select({ count: sql<number>`count(*)::int` }).from(inventoryItems);
+  return Number(row?.count ?? 0);
+}
+
+async function listInventoryItemsPage(params: InventoryItemListParams) {
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 50;
+  const offset = (page - 1) * pageSize;
+  const where = combineInventoryItemConditions(inventoryItemFilterConditions(params));
+  const orderBy = inventoryItemSort(params.sort);
+
+  const items = where
+    ? await db.select().from(inventoryItems).where(where).orderBy(orderBy).limit(pageSize).offset(offset)
+    : await db.select().from(inventoryItems).orderBy(orderBy).limit(pageSize).offset(offset);
+
+  const total = await countInventoryItems(params, params.itemType);
+  const purchased = await countInventoryItems(params, 'purchased');
+  const manufactured = await countInventoryItems(params, 'manufactured');
+
+  return {
+    items: items.map(withSupplySourceDashboard),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    counts: { purchased, manufactured },
+  };
 }
 
 import { storage } from '../../storage';
@@ -259,6 +432,16 @@ async function resolveInventoryDocumentPath(primaryDir: string, legacyDir: strin
 // Supports optional query params: ?manufacturedCategory=MACHINED_PART&includeInactive=true
 router.get('/inventory/items', async (req: Request, res: Response) => {
   try {
+    if (hasPagedInventoryItemParams(req.query)) {
+      const parsed = inventoryItemListQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid inventory item query', details: parsed.error.flatten() });
+        return;
+      }
+      res.json(await listInventoryItemsPage(parsed.data));
+      return;
+    }
+
     const { manufacturedCategory, includeInactive } = req.query;
     let items = await storage.getAllInventoryItems({ includeInactive: includeInactive === 'true' });
     if (typeof manufacturedCategory === 'string' && manufacturedCategory) {
@@ -275,6 +458,16 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
 // Supports optional query params: ?manufacturedCategory=MACHINED_PART&includeInactive=true
 router.get('/items', async (req: Request, res: Response) => {
   try {
+    if (hasPagedInventoryItemParams(req.query)) {
+      const parsed = inventoryItemListQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid inventory item query', details: parsed.error.flatten() });
+        return;
+      }
+      res.json(await listInventoryItemsPage(parsed.data));
+      return;
+    }
+
     const { manufacturedCategory, includeInactive } = req.query;
     let items = await storage.getAllInventoryItems({ includeInactive: includeInactive === 'true' });
     if (typeof manufacturedCategory === 'string' && manufacturedCategory) {
@@ -1992,7 +2185,11 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
           : sourceVendor;
       const vendorId = request.vendorId ?? resolvedVendor?.id ?? inventoryItem?.vendorId ?? null;
       const vendorName = resolvedVendor?.name ?? request.supplier ?? inventoryItem?.source ?? null;
-      const effectiveOrderMethod = request.orderMethod || inventoryItem?.defaultOrderMethod || resolvedVendor?.defaultOrderMethod || null;
+      const vendorDefaultOrderMethod = resolvedVendor?.defaultOrderMethod;
+      const effectiveOrderMethod =
+        vendorDefaultOrderMethod === 'EMAIL' || vendorDefaultOrderMethod === 'WEBSITE'
+          ? vendorDefaultOrderMethod
+          : request.orderMethod || inventoryItem?.defaultOrderMethod || vendorDefaultOrderMethod || null;
       const enrichedRequest = {
         ...request,
         orderMethod: effectiveOrderMethod,
@@ -2442,7 +2639,7 @@ router.post(
     try {
       const payload = createVendorPoFromPartsRequestsSchema.parse(req.body);
       const actor = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
-      const { partsRequests, partsRequestStatusHistory, vendorPOs, vendorPOItems, inventoryItems } = await import('../../schema');
+      const { partsRequests, partsRequestStatusHistory, vendorPOs, vendorPOItems, inventoryItems, vendors } = await import('../../schema');
       const { eq: dEq, inArray: dInArray, and: dAnd, sql: dSql } = await import('drizzle-orm');
 
       const uniqueRequestIds = Array.from(new Set(payload.requestIds));
@@ -2472,21 +2669,23 @@ router.post(
             .select({
               agPartNumber: inventoryItems.agPartNumber,
               vendorId: inventoryItems.vendorId,
+              defaultOrderMethod: inventoryItems.defaultOrderMethod,
             })
             .from(inventoryItems)
             .where(dInArray(inventoryItems.agPartNumber, selectedPartNumbers))
           : [];
-        const vendorByPartNumber = new Map(
-          inventoryVendorRows
-            .filter((row) => typeof row.vendorId === 'number')
-            .map((row) => [row.agPartNumber, row.vendorId as number])
-        );
+        const itemByPartNumber = new Map(inventoryVendorRows.map((row) => [row.agPartNumber, row]));
         const selectedWithResolvedVendors = selected.map((request) => {
+          const item = (request.agPartNumber ? itemByPartNumber.get(request.agPartNumber) : undefined)
+            ?? (request.partNumber ? itemByPartNumber.get(request.partNumber) : undefined);
           const resolvedVendorId = request.vendorId
-            ?? (request.agPartNumber ? vendorByPartNumber.get(request.agPartNumber) : undefined)
-            ?? (request.partNumber ? vendorByPartNumber.get(request.partNumber) : undefined)
+            ?? item?.vendorId
             ?? null;
-          return { ...request, vendorId: resolvedVendorId };
+          return {
+            ...request,
+            vendorId: resolvedVendorId,
+            orderMethod: request.orderMethod || item?.defaultOrderMethod || null,
+          };
         });
 
         const poDraftableStatuses = ['APPROVED', 'RECEIVED_PARTIAL'];
@@ -2531,6 +2730,16 @@ router.post(
         }
 
         const vendorId = vendorIds[0];
+        const [vendor] = await tx
+          .select({ defaultOrderMethod: vendors.defaultOrderMethod, name: vendors.name })
+          .from(vendors)
+          .where(dEq(vendors.id, vendorId));
+        if (vendor?.defaultOrderMethod === 'WEBSITE' || vendor?.defaultOrderMethod === 'EMAIL') {
+          throw Object.assign(
+            new Error(`${vendor.name} is configured for ${vendor.defaultOrderMethod === 'EMAIL' ? 'email' : 'website'} ordering and cannot be used to create a Vendor PO draft.`),
+            { status: 422 }
+          );
+        }
         const estimatedTotal = selectedWithResolvedVendors.reduce((sum, r) => sum + Number(r.estimatedCost || 0), 0);
         const requestSummary = selectedWithResolvedVendors.map((r) => `PR-${r.id}`).join(', ');
         const [vendorPO] = await tx
@@ -2711,16 +2920,30 @@ router.post(
             vendorId: inventoryItems.vendorId,
             defaultOrderMethod: inventoryItems.defaultOrderMethod,
             supplierPartNumber: inventoryItems.supplierPartNumber,
+            source: inventoryItems.source,
           })
           .from(inventoryItems)
           .where(dInArray(inventoryItems.agPartNumber, selectedPartNumbers))
         : [];
       const inventoryByPartNumber = new Map(inventoryRows.map((item) => [item.agPartNumber, item]));
+      const normalizeVendorKey = (value?: string | null) =>
+        (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const selectedVendorKey = normalizeVendorKey(vendor.name);
 
       const selectedWithContext = selected.map((request) => {
         const item = inventoryByPartNumber.get(request.agPartNumber || '') ?? inventoryByPartNumber.get(request.partNumber || '');
-        const resolvedVendorId = request.vendorId ?? item?.vendorId ?? null;
-        const effectiveOrderMethod = request.orderMethod || item?.defaultOrderMethod || vendor.defaultOrderMethod || null;
+        const sourceVendorKey = normalizeVendorKey(item?.source || request.supplier);
+        const sourceMatchesVendor = Boolean(sourceVendorKey && selectedVendorKey && (
+          sourceVendorKey === selectedVendorKey ||
+          sourceVendorKey.includes(selectedVendorKey) ||
+          selectedVendorKey.includes(sourceVendorKey)
+        ));
+        const resolvedVendorId = request.vendorId ?? item?.vendorId ?? (sourceMatchesVendor ? vendor.id : null);
+        const vendorDefaultOrderMethod = vendor.defaultOrderMethod;
+        const effectiveOrderMethod =
+          vendorDefaultOrderMethod === 'EMAIL' || vendorDefaultOrderMethod === 'WEBSITE'
+            ? vendorDefaultOrderMethod
+            : request.orderMethod || item?.defaultOrderMethod || vendorDefaultOrderMethod || null;
         const remainingQuantity = Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || request.qtyReceived || 0));
         const requestedQuantity = Number(payload.quantities?.[String(request.id)] ?? payload.quantities?.[request.id as any] ?? remainingQuantity);
         return { request, item, resolvedVendorId, effectiveOrderMethod, remainingQuantity, requestedQuantity };

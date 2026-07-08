@@ -1082,6 +1082,9 @@ function poolCandidates(code: ChargeCode) {
 }
 
 function fallbackPoolContext(candidates: Set<string>) {
+  if (candidates.has('DIRECT') || candidates.has('DIRECT_CONTRACT')) {
+    return { pool: 'Direct Contract', poolType: 'Direct Contract', allocationBase: '-' };
+  }
   if (
     candidates.has('B_AND_P') ||
     candidates.has('BID_PROPOSAL') ||

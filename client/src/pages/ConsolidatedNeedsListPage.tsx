@@ -161,10 +161,12 @@ const isArchivedFromConsolidatedNeeds = (request: PartsRequest) => {
 };
 
 const resolveEffectiveOrderMethod = (request: PartsRequest, vendor?: Vendor | null): 'PO' | 'WEBSITE' | 'EMAIL' => {
+  if (vendor?.defaultOrderMethod === 'EMAIL') return 'EMAIL';
+  if (vendor?.defaultOrderMethod === 'WEBSITE') return 'WEBSITE';
   if (request.orderMethod === 'EMAIL') return 'EMAIL';
   if (request.orderMethod === 'WEBSITE') return 'WEBSITE';
   if (request.orderMethod === 'PO') return 'PO';
-  return request.inventoryItem?.defaultOrderMethod || vendor?.defaultOrderMethod || 'PO';
+  return request.inventoryItem?.defaultOrderMethod || 'PO';
 };
 
 export default function ConsolidatedNeedsListPage() {
@@ -952,7 +954,7 @@ export default function ConsolidatedNeedsListPage() {
 
       if (vendor) {
         // Has a resolved vendor record — group under that vendor regardless of order method
-        const key = `vendor-${vendor.id}`;
+        const key = `vendor-${vendor.id}-${effectiveOrderMethod}`;
         if (!groups[key]) {
           groups[key] = {
             key,
@@ -970,7 +972,7 @@ export default function ConsolidatedNeedsListPage() {
         groups[key].totalEstimatedCost += request.estimatedCost || 0;
       } else if (vendorLabel) {
         const sourceKey = normalizeVendorName(vendorLabel);
-        const key = `source-${sourceKey || vendorLabel.toLowerCase()}`;
+        const key = `source-${sourceKey || vendorLabel.toLowerCase()}-${effectiveOrderMethod}`;
         if (!groups[key]) {
           groups[key] = {
             key,

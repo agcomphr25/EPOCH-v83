@@ -7378,7 +7378,11 @@ export class DatabaseStorage implements IStorage {
       const resolvedVendor = requestVendor ?? itemVendor ?? sourceVendor;
       const resolvedVendorId = r.request.vendorId ?? resolvedVendor?.id ?? r.inventoryItem?.vendorId ?? null;
       const resolvedVendorName = resolvedVendor?.name ?? r.request.supplier ?? r.inventoryItem?.source ?? null;
-      const effectiveOrderMethod = r.request.orderMethod || r.inventoryItem?.defaultOrderMethod || resolvedVendor?.defaultOrderMethod || null;
+      const vendorDefaultOrderMethod = resolvedVendor?.defaultOrderMethod;
+      const effectiveOrderMethod =
+        vendorDefaultOrderMethod === 'EMAIL' || vendorDefaultOrderMethod === 'WEBSITE'
+          ? vendorDefaultOrderMethod
+          : r.request.orderMethod || r.inventoryItem?.defaultOrderMethod || vendorDefaultOrderMethod || null;
 
       return {
         ...r.request,

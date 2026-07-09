@@ -131,7 +131,6 @@ approvalsRouter.get('/my-tasks/:employeeId', async (req: Request, res: Response)
         effective_date
       FROM p2_production_changes p
       WHERE status = 'APPROVED'
-        AND implementation_required = true
         AND COALESCE(to_jsonb(p) -> 'approval_assignments', '[]'::jsonb)
           @> ${JSON.stringify([{ required: true, employeeId }])}::jsonb
       LIMIT 100
@@ -166,6 +165,8 @@ approvalsRouter.get('/my-tasks/:employeeId', async (req: Request, res: Response)
     }).concat(approvedFollowUps.map((change) => {
       const requiredActions = Array.isArray((change as any).requiredActions)
         ? ((change as any).requiredActions as string[])
+        : Array.isArray((change as any).required_actions)
+        ? ((change as any).required_actions as string[])
         : [];
       return {
         id: `p2-change-followup-${change.id}`,

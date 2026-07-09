@@ -211,6 +211,18 @@ interface P2PurchaseOrderItem {
 
 const EMPTY_P2_PO_ITEMS: P2PurchaseOrderItem[] = [];
 
+const normalizeArray = <T,>(value: unknown): T[] => {
+  if (Array.isArray(value)) return value as T[];
+  if (!value || typeof value !== 'object') return [];
+
+  const record = value as Record<string, unknown>;
+  for (const key of ['data', 'items', 'results', 'purchaseOrders']) {
+    if (Array.isArray(record[key])) return record[key] as T[];
+  }
+
+  return [];
+};
+
 interface ProjectRevision {
   id: number;
   project_id: string;
@@ -516,7 +528,7 @@ export default function ProjectDetailPage() {
     queryKey: ['/api/p2-purchase-orders-bypass'],
     enabled: !!project,
   });
-  const p2PurchaseOrderOptions = Array.isArray(p2PurchaseOrders) ? p2PurchaseOrders : [];
+  const p2PurchaseOrderOptions = normalizeArray<P2PurchaseOrder>(p2PurchaseOrders);
 
   const [linkPoId, setLinkPoId] = useState<string>('');
   const [linkPoItemId, setLinkPoItemId] = useState<string>('');
@@ -630,8 +642,8 @@ export default function ProjectDetailPage() {
   );
 
   const suggestedPo = useMemo(() => {
-    if (!project || p2PurchaseOrders.length === 0) return null;
-    const available = p2PurchaseOrders.filter(po =>
+    if (!project || p2PurchaseOrderOptions.length === 0) return null;
+    const available = p2PurchaseOrderOptions.filter(po =>
       !po.projectId || po.projectId === project.id || po.id === project.poId
     );
     const sameCustomer = available.filter(po => po.customerId === project.customerId);
@@ -640,17 +652,17 @@ export default function ProjectDetailPage() {
       if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       return b.id - a.id;
     })[0] ?? null;
-  }, [project, p2PurchaseOrders]);
+  }, [project, p2PurchaseOrderOptions]);
 
   const projectP2POs = useMemo(() => {
     if (!project) return [];
-    return p2PurchaseOrders
+    return p2PurchaseOrderOptions
       .filter(po => po.projectId === project.id || po.id === project.poId)
       .sort((a, b) => {
         if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         return b.id - a.id;
       });
-  }, [project, p2PurchaseOrders]);
+  }, [project, p2PurchaseOrderOptions]);
 
   const activeLinkPoId = showManualLink ? linkPoId : (suggestedPo?.id.toString() ?? linkPoId);
 
@@ -4633,7 +4645,7 @@ export default function ProjectDetailPage() {
                               <SelectValue placeholder="Select a purchase order" />
                             </SelectTrigger>
                             <SelectContent>
-                              {p2PurchaseOrders
+                              {p2PurchaseOrderOptions
                                 .filter(po => !po.projectId || po.projectId === project.id)
                                 .filter(po => {
                                   const q = linkPoSearch.toLowerCase();

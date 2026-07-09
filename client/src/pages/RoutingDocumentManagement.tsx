@@ -667,6 +667,46 @@ export default function RoutingDocumentManagement() {
     },
   });
 
+  const createTemplateFromSpecSheetMutation = useMutation({
+    mutationFn: async (sheetId: string) => {
+      return apiRequest(`/api/routing-documents/spec-sheets/${sheetId}/create-template`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: (response: any) => {
+      toast({ title: 'Template Created', description: 'Spec sheet is ready to use as a reusable template' });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/spec-sheets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/templates/list'] });
+      const template = response?.template;
+      if (template) {
+        const responseFields = (response?.fields ?? []).map((field: any) => ({
+          ...field,
+          fieldName: field.fieldName ?? field.field_name,
+          fieldLabel: field.fieldLabel ?? field.field_label,
+          fieldType: field.fieldType ?? field.field_type,
+          isRequired: field.isRequired ?? field.is_required,
+          defaultValue: field.defaultValue ?? field.default_value,
+          sectionName: field.sectionName ?? field.section_name,
+          sortOrder: field.sortOrder ?? field.sort_order,
+        }));
+        const normalizedTemplate = {
+          ...template,
+          templateName: template.templateName ?? template.template_name,
+          templateType: template.templateType ?? template.template_type,
+          defaultFields: template.defaultFields ?? template.default_fields ?? responseFields,
+          sections: template.sections ?? [],
+          createdAt: template.createdAt ?? template.created_at,
+        } as DocumentTemplate;
+        handleUseTemplate(normalizedTemplate);
+      } else {
+        setActiveTab('templates');
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to create template from spec sheet', variant: 'destructive' });
+    },
+  });
+
   const openEditDialog = (doc: RoutingDocument) => {
     setSelectedDocument(doc);
     setEditForm({
@@ -1321,6 +1361,17 @@ export default function RoutingDocumentManagement() {
                                 }}>
                                   <Pencil className="h-4 w-4 mr-2" />
                                   Edit Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => createTemplateFromSpecSheetMutation.mutate(sheet.id)}
+                                  disabled={createTemplateFromSpecSheetMutation.isPending}
+                                >
+                                  {createTemplateFromSpecSheetMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-4 w-4 mr-2" />
+                                  )}
+                                  {sheet.isTemplate ? 'Use as Template' : 'Create Template'}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   className="text-red-600"

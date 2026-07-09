@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS design_control_steps (
 
 CREATE INDEX IF NOT EXISTS design_control_steps_record_id_idx ON design_control_steps(record_id);
 CREATE INDEX IF NOT EXISTS design_control_steps_status_idx ON design_control_steps(status);
+CREATE INDEX IF NOT EXISTS design_control_steps_project_id_idx ON design_control_steps(project_id);
+CREATE INDEX IF NOT EXISTS design_control_steps_pwo_id_idx ON design_control_steps(production_work_order_id);
+CREATE INDEX IF NOT EXISTS design_control_steps_p2_po_id_idx ON design_control_steps(p2_purchase_order_id);
 
 CREATE TABLE IF NOT EXISTS design_control_requirements (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -64,6 +67,9 @@ CREATE TABLE IF NOT EXISTS design_control_requirements (
 );
 
 CREATE INDEX IF NOT EXISTS design_control_requirements_record_id_idx ON design_control_requirements(record_id);
+CREATE INDEX IF NOT EXISTS design_control_requirements_project_id_idx ON design_control_requirements(project_id);
+CREATE INDEX IF NOT EXISTS design_control_requirements_pwo_id_idx ON design_control_requirements(production_work_order_id);
+CREATE INDEX IF NOT EXISTS design_control_requirements_p2_po_id_idx ON design_control_requirements(p2_purchase_order_id);
 
 CREATE TABLE IF NOT EXISTS design_control_risks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,6 +90,9 @@ CREATE TABLE IF NOT EXISTS design_control_risks (
 );
 
 CREATE INDEX IF NOT EXISTS design_control_risks_record_id_idx ON design_control_risks(record_id);
+CREATE INDEX IF NOT EXISTS design_control_risks_project_id_idx ON design_control_risks(project_id);
+CREATE INDEX IF NOT EXISTS design_control_risks_pwo_id_idx ON design_control_risks(production_work_order_id);
+CREATE INDEX IF NOT EXISTS design_control_risks_p2_po_id_idx ON design_control_risks(p2_purchase_order_id);
 
 CREATE TABLE IF NOT EXISTS design_control_reviews (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -105,6 +114,9 @@ CREATE TABLE IF NOT EXISTS design_control_reviews (
 );
 
 CREATE INDEX IF NOT EXISTS design_control_reviews_record_id_idx ON design_control_reviews(record_id);
+CREATE INDEX IF NOT EXISTS design_control_reviews_project_id_idx ON design_control_reviews(project_id);
+CREATE INDEX IF NOT EXISTS design_control_reviews_pwo_id_idx ON design_control_reviews(production_work_order_id);
+CREATE INDEX IF NOT EXISTS design_control_reviews_p2_po_id_idx ON design_control_reviews(p2_purchase_order_id);
 
 CREATE TABLE IF NOT EXISTS design_control_verification (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -126,6 +138,9 @@ CREATE TABLE IF NOT EXISTS design_control_verification (
 );
 
 CREATE INDEX IF NOT EXISTS design_control_verification_record_id_idx ON design_control_verification(record_id);
+CREATE INDEX IF NOT EXISTS design_control_verification_project_id_idx ON design_control_verification(project_id);
+CREATE INDEX IF NOT EXISTS design_control_verification_pwo_id_idx ON design_control_verification(production_work_order_id);
+CREATE INDEX IF NOT EXISTS design_control_verification_p2_po_id_idx ON design_control_verification(p2_purchase_order_id);
 
 CREATE TABLE IF NOT EXISTS design_control_validation (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -147,6 +162,9 @@ CREATE TABLE IF NOT EXISTS design_control_validation (
 );
 
 CREATE INDEX IF NOT EXISTS design_control_validation_record_id_idx ON design_control_validation(record_id);
+CREATE INDEX IF NOT EXISTS design_control_validation_project_id_idx ON design_control_validation(project_id);
+CREATE INDEX IF NOT EXISTS design_control_validation_pwo_id_idx ON design_control_validation(production_work_order_id);
+CREATE INDEX IF NOT EXISTS design_control_validation_p2_po_id_idx ON design_control_validation(p2_purchase_order_id);
 
 CREATE TABLE IF NOT EXISTS design_control_changes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -168,6 +186,9 @@ CREATE TABLE IF NOT EXISTS design_control_changes (
 );
 
 CREATE INDEX IF NOT EXISTS design_control_changes_record_id_idx ON design_control_changes(record_id);
+CREATE INDEX IF NOT EXISTS design_control_changes_project_id_idx ON design_control_changes(project_id);
+CREATE INDEX IF NOT EXISTS design_control_changes_pwo_id_idx ON design_control_changes(production_work_order_id);
+CREATE INDEX IF NOT EXISTS design_control_changes_p2_po_id_idx ON design_control_changes(p2_purchase_order_id);
 
 CREATE TABLE IF NOT EXISTS design_control_release_gate (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -190,3 +211,6 @@ CREATE TABLE IF NOT EXISTS design_control_release_gate (
 
 CREATE INDEX IF NOT EXISTS design_control_release_gate_record_id_idx ON design_control_release_gate(record_id);
 CREATE INDEX IF NOT EXISTS design_control_release_gate_status_idx ON design_control_release_gate(gate_status);
+CREATE INDEX IF NOT EXISTS design_control_release_gate_project_id_idx ON design_control_release_gate(project_id);
+CREATE INDEX IF NOT EXISTS design_control_release_gate_pwo_id_idx ON design_control_release_gate(production_work_order_id);
+CREATE INDEX IF NOT EXISTS design_control_release_gate_p2_po_id_idx ON design_control_release_gate(p2_purchase_order_id);

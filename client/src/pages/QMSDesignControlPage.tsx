@@ -1,0 +1,1461 @@
+import { useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  ClipboardCheck,
+  FileArchive,
+  FileCheck2,
+  FileCog,
+  FileText,
+  Flag,
+  GitBranch,
+  History,
+  ListChecks,
+  Microscope,
+  PackageCheck,
+  Plus,
+  Rocket,
+  Route,
+  ShieldCheck,
+} from 'lucide-react';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+
+type StatusTone = 'draft' | 'active' | 'review' | 'approved' | 'blocked' | 'released';
+
+type DesignProject = {
+  id: string;
+  name: string;
+  owner: string;
+  phase: string;
+  status: StatusTone;
+  readiness: number;
+  nextGate: string;
+};
+
+type RegisterRow = {
+  id: string;
+  title: string;
+  project: string;
+  owner: string;
+  status: StatusTone;
+  evidence: string;
+  due: string;
+};
+
+type RiskRow = RegisterRow & {
+  severity: string;
+  mitigation: string;
+};
+
+type ReleaseRow = RegisterRow & {
+  wad: string;
+  p2: string;
+};
+
+type WorkflowStatus = 'incomplete' | 'blocked' | 'needs_approval' | 'approved';
+
+type DesignWorkflowStep = {
+  id: string;
+  title: string;
+  purpose: string;
+  fields: string[];
+  checklist?: string[];
+  approvals?: string[];
+  examples?: string[];
+};
+
+type WorkflowStepData = {
+  fields: Record<string, string>;
+  checklist: Record<string, boolean>;
+  approvals: Record<string, boolean>;
+};
+
+const lifecycleTabs = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'projects', label: 'Design Projects' },
+  { value: 'inputs', label: 'Inputs' },
+  { value: 'outputs', label: 'Outputs' },
+  { value: 'reviews', label: 'Reviews' },
+  { value: 'risks', label: 'Risks' },
+  { value: 'verification', label: 'Verification' },
+  { value: 'validation', label: 'Validation' },
+  { value: 'changes', label: 'Engineering Changes' },
+  { value: 'release', label: 'Release to Manufacturing' },
+  { value: 'dhf', label: 'Design History File' },
+];
+
+const designProjects: DesignProject[] = [
+  {
+    id: 'DC-2026-018',
+    name: 'Composite antenna fairing redesign',
+    owner: 'Engineering',
+    phase: 'Verification',
+    status: 'review',
+    readiness: 72,
+    nextGate: 'Verification report approval',
+  },
+  {
+    id: 'DC-2026-021',
+    name: 'P2 mounting bracket light-weighting',
+    owner: 'R&D',
+    phase: 'Design Outputs',
+    status: 'active',
+    readiness: 48,
+    nextGate: 'Drawing package review',
+  },
+  {
+    id: 'DC-2026-024',
+    name: 'Bond fixture process update',
+    owner: 'Manufacturing Engineering',
+    phase: 'Release',
+    status: 'released',
+    readiness: 94,
+    nextGate: 'Manufacturing release packet',
+  },
+];
+
+const inputs: RegisterRow[] = [
+  {
+    id: 'DI-1042',
+    title: 'Customer envelope and interface requirements',
+    project: 'Composite antenna fairing redesign',
+    owner: 'Program Manager',
+    status: 'approved',
+    evidence: 'Customer spec, PO notes, RFQ risk review',
+    due: '2026-07-17',
+  },
+  {
+    id: 'DI-1048',
+    title: 'Material compatibility and cure profile limits',
+    project: 'Bond fixture process update',
+    owner: 'Process Engineering',
+    status: 'review',
+    evidence: 'Material certs, process specification',
+    due: '2026-07-22',
+  },
+  {
+    id: 'DI-1051',
+    title: 'Weight reduction target and load case assumptions',
+    project: 'P2 mounting bracket light-weighting',
+    owner: 'R&D',
+    status: 'active',
+    evidence: 'Design brief, preliminary stress notes',
+    due: '2026-07-29',
+  },
+];
+
+const outputs: RegisterRow[] = [
+  {
+    id: 'DO-2207',
+    title: 'Released drawing package',
+    project: 'Composite antenna fairing redesign',
+    owner: 'Engineering',
+    status: 'review',
+    evidence: 'Drawing, BOM, tolerance notes',
+    due: '2026-07-24',
+  },
+  {
+    id: 'DO-2215',
+    title: 'Manufacturing work instruction draft',
+    project: 'Bond fixture process update',
+    owner: 'Manufacturing Engineering',
+    status: 'approved',
+    evidence: 'WI draft, operator checklist',
+    due: '2026-07-18',
+  },
+  {
+    id: 'DO-2220',
+    title: 'Inspection criteria and acceptance plan',
+    project: 'P2 mounting bracket light-weighting',
+    owner: 'Quality',
+    status: 'draft',
+    evidence: 'Inspection feature map',
+    due: '2026-08-02',
+  },
+];
+
+const reviews: RegisterRow[] = [
+  {
+    id: 'DR-3301',
+    title: 'Preliminary design review',
+    project: 'P2 mounting bracket light-weighting',
+    owner: 'Engineering Manager',
+    status: 'approved',
+    evidence: 'Review minutes, action log',
+    due: '2026-07-15',
+  },
+  {
+    id: 'DR-3312',
+    title: 'Critical design review',
+    project: 'Composite antenna fairing redesign',
+    owner: 'Quality Engineering',
+    status: 'review',
+    evidence: 'CDR packet, open action register',
+    due: '2026-07-26',
+  },
+];
+
+const risks: RiskRow[] = [
+  {
+    id: 'RK-4104',
+    title: 'Layup thickness variation at trimmed edge',
+    project: 'Composite antenna fairing redesign',
+    owner: 'Quality Engineering',
+    status: 'active',
+    severity: 'Medium',
+    mitigation: 'Add edge-thickness verification to first article plan',
+    evidence: 'PFMEA link, inspection plan',
+    due: '2026-07-25',
+  },
+  {
+    id: 'RK-4111',
+    title: 'Fixture handling could shift bonded insert',
+    project: 'Bond fixture process update',
+    owner: 'Manufacturing Engineering',
+    status: 'review',
+    severity: 'High',
+    mitigation: 'Add locator pin poka-yoke and operator signoff',
+    evidence: 'Risk review, prototype run notes',
+    due: '2026-07-19',
+  },
+];
+
+const verification: RegisterRow[] = [
+  {
+    id: 'VER-5208',
+    title: 'Dimensional inspection against released drawing',
+    project: 'Composite antenna fairing redesign',
+    owner: 'Quality',
+    status: 'review',
+    evidence: 'FAI report, inspection record',
+    due: '2026-07-31',
+  },
+  {
+    id: 'VER-5220',
+    title: 'Work instruction dry run',
+    project: 'Bond fixture process update',
+    owner: 'Production Lead',
+    status: 'approved',
+    evidence: 'Dry-run checklist, operator feedback',
+    due: '2026-07-18',
+  },
+];
+
+const validation: RegisterRow[] = [
+  {
+    id: 'VAL-6102',
+    title: 'Customer fit-check article',
+    project: 'Composite antenna fairing redesign',
+    owner: 'Program Manager',
+    status: 'active',
+    evidence: 'Customer validation plan',
+    due: '2026-08-08',
+  },
+  {
+    id: 'VAL-6118',
+    title: 'Production-equivalent build validation',
+    project: 'P2 mounting bracket light-weighting',
+    owner: 'Manufacturing Engineering',
+    status: 'draft',
+    evidence: 'Build validation protocol',
+    due: '2026-08-14',
+  },
+];
+
+const changes: RegisterRow[] = [
+  {
+    id: 'ECR-7025',
+    title: 'Revise insert bond prep note',
+    project: 'Bond fixture process update',
+    owner: 'Document Control',
+    status: 'approved',
+    evidence: 'ECR, redline, approval record',
+    due: '2026-07-16',
+  },
+  {
+    id: 'ECR-7033',
+    title: 'Add alternate material callout',
+    project: 'Composite antenna fairing redesign',
+    owner: 'Engineering',
+    status: 'review',
+    evidence: 'ECR package, material equivalency review',
+    due: '2026-07-28',
+  },
+];
+
+const releases: ReleaseRow[] = [
+  {
+    id: 'REL-8101',
+    title: 'Manufacturing release packet',
+    project: 'Bond fixture process update',
+    owner: 'Manufacturing Engineering',
+    status: 'released',
+    evidence: 'Released WI, traveler template, QC plan',
+    due: '2026-07-18',
+    wad: 'Released',
+    p2: 'Ready for production',
+  },
+  {
+    id: 'REL-8117',
+    title: 'P2 release gate package',
+    project: 'Composite antenna fairing redesign',
+    owner: 'Program Manager',
+    status: 'review',
+    evidence: 'PO review, WAD, preproduction checklist',
+    due: '2026-08-01',
+    wad: 'Pending authorization',
+    p2: 'Pre-release',
+  },
+];
+
+const dhf: RegisterRow[] = [
+  {
+    id: 'DHF-9007',
+    title: 'Design input baseline',
+    project: 'Composite antenna fairing redesign',
+    owner: 'Document Control',
+    status: 'approved',
+    evidence: 'Controlled input bundle',
+    due: '2026-07-17',
+  },
+  {
+    id: 'DHF-9015',
+    title: 'Verification and validation evidence set',
+    project: 'Composite antenna fairing redesign',
+    owner: 'Quality',
+    status: 'review',
+    evidence: 'Inspection, validation, review records',
+    due: '2026-08-09',
+  },
+  {
+    id: 'DHF-9021',
+    title: 'Release and change history package',
+    project: 'Bond fixture process update',
+    owner: 'Document Control',
+    status: 'released',
+    evidence: 'Release packet, ECR history',
+    due: '2026-07-18',
+  },
+];
+
+const statusLabels: Record<StatusTone, string> = {
+  draft: 'Draft',
+  active: 'Active',
+  review: 'In Review',
+  approved: 'Approved',
+  blocked: 'Blocked',
+  released: 'Released',
+};
+
+const statusClasses: Record<StatusTone, string> = {
+  draft: 'border-slate-300 bg-slate-50 text-slate-700',
+  active: 'border-blue-300 bg-blue-50 text-blue-700',
+  review: 'border-amber-300 bg-amber-50 text-amber-800',
+  approved: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+  blocked: 'border-red-300 bg-red-50 text-red-700',
+  released: 'border-violet-300 bg-violet-50 text-violet-700',
+};
+
+const workflowStatusLabels: Record<WorkflowStatus, string> = {
+  incomplete: 'Incomplete',
+  blocked: 'Blocked',
+  needs_approval: 'Needs Approval',
+  approved: 'Approved',
+};
+
+const workflowStatusClasses: Record<WorkflowStatus, string> = {
+  incomplete: 'border-slate-300 bg-slate-50 text-slate-700',
+  blocked: 'border-red-300 bg-red-50 text-red-700',
+  needs_approval: 'border-amber-300 bg-amber-50 text-amber-800',
+  approved: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+};
+
+const lifecycleMetrics = [
+  { label: 'Open design projects', value: designProjects.length, icon: Route },
+  { label: 'Open risks', value: risks.length, icon: AlertTriangle },
+  { label: 'Pending reviews', value: reviews.filter((row) => row.status === 'review').length, icon: ClipboardCheck },
+  { label: 'Release packets', value: releases.length, icon: PackageCheck },
+];
+
+const lifecycleStages = [
+  { stage: 'Inputs', owner: 'Engineering', state: 'Customer and regulatory requirements baselined' },
+  { stage: 'Outputs', owner: 'Engineering', state: 'Drawings, BOMs, specifications, and acceptance criteria controlled' },
+  { stage: 'Reviews', owner: 'Quality', state: 'Cross-functional review gates and action closure tracked' },
+  { stage: 'Verification', owner: 'Quality', state: 'Evidence confirms outputs meet design inputs' },
+  { stage: 'Validation', owner: 'Program', state: 'Evidence confirms the product meets intended use' },
+  { stage: 'Release', owner: 'Manufacturing', state: 'Manufacturing packet, WAD, and P2 release gates aligned' },
+];
+
+const productionReleaseFlow = [
+  {
+    step: 'Project / PO / WAD',
+    owner: 'Program + Operations',
+    status: 'Source context',
+    description: 'Project scope, linked customer PO, and WAD authorization establish the controlled build context.',
+  },
+  {
+    step: 'Design Workflow',
+    owner: 'Engineering + Quality',
+    status: 'Design control',
+    description: 'Inputs, outputs, reviews, risks, verification, validation, changes, and DHF evidence move together.',
+  },
+  {
+    step: 'Design Production Release Gate',
+    owner: 'Quality + Manufacturing Engineering',
+    status: 'Gate decision',
+    description: 'Design evidence, production packet, WAD readiness, and P2 release conditions are checked before handoff.',
+  },
+  {
+    step: 'P2 Manufacturing',
+    owner: 'Manufacturing',
+    status: 'Released build',
+    description: 'Released work flows into P2 manufacturing with traveler, inspection, and production controls aligned.',
+  },
+];
+
+const designWorkflowSteps: DesignWorkflowStep[] = [
+  {
+    id: '1',
+    title: 'Design Project Intake',
+    purpose: 'Capture what is being designed and why.',
+    fields: [
+      'Project / customer / order link',
+      'Design type',
+      'Product name',
+      'Intended use',
+      'Customer requirements summary',
+      'Target manufacturing date',
+      'Responsible engineer',
+      'Quality representative',
+      'Manufacturing representative',
+      'Required deliverables',
+    ],
+    approvals: ['Engineering intake approval', 'Quality intake approval'],
+  },
+  {
+    id: '2',
+    title: 'Design Planning',
+    purpose: 'AS9100 design planning.',
+    fields: [
+      'Design scope',
+      'Design milestones',
+      'Required reviews',
+      'Required verification activities',
+      'Required validation activities',
+      'Required resources',
+      'Required suppliers',
+      'Required software/tools',
+      'Responsibilities',
+      'Approval roles',
+    ],
+    approvals: ['Engineering planning approval', 'Quality planning approval', 'Manufacturing planning approval'],
+  },
+  {
+    id: '3',
+    title: 'Design Inputs / Requirements',
+    purpose: 'Capture controlled design inputs.',
+    fields: [
+      'Requirement ID',
+      'Requirement category',
+      'Source',
+      'Requirement statement',
+      'Acceptance criteria',
+      'Verification method',
+      'Priority',
+      'Owner',
+      'Status',
+    ],
+    checklist: [
+      'Customer requirements captured',
+      'Performance requirements captured',
+      'Regulatory requirements captured',
+      'Safety requirements captured',
+      'Material requirements captured',
+      'Manufacturing requirements captured',
+      'Inspection requirements captured',
+      'Test requirements captured',
+      'Packaging/shipping requirements captured',
+    ],
+    approvals: ['Requirements owner approval'],
+  },
+  {
+    id: '4',
+    title: 'Requirements Review Checklist',
+    purpose: 'Confirm requirements are complete before design work proceeds.',
+    fields: ['Review notes', 'Open requirement gaps', 'Disposition of conflicts'],
+    checklist: [
+      'Requirements are complete',
+      'Requirements are clear',
+      'Requirements are measurable',
+      'Conflicts resolved',
+      'Missing information documented',
+      'Manufacturability reviewed',
+      'Inspection requirements reviewed',
+      'Test requirements reviewed',
+      'Quality approval complete',
+      'Engineering approval complete',
+    ],
+    approvals: ['Engineering approval', 'Quality approval'],
+  },
+  {
+    id: '5',
+    title: 'Design Risk Assessment',
+    purpose: 'Assess design risk before committing to the selected design path.',
+    fields: [
+      'Risk item',
+      'Failure mode',
+      'Cause',
+      'Effect',
+      'Severity',
+      'Occurrence',
+      'Detection',
+      'Risk priority',
+      'Mitigation action',
+      'Owner',
+      'Due date',
+      'Residual risk',
+      'Approval status',
+    ],
+    examples: [
+      'Battery overheating',
+      'Composite delamination',
+      'Wing flex',
+      'CG out of tolerance',
+      'Servo mount failure',
+      'Material substitution',
+      'Supplier component change',
+      'Prototype test failure',
+    ],
+    approvals: ['Engineering risk approval', 'Quality risk approval'],
+  },
+  {
+    id: '6',
+    title: 'Concept Design Review',
+    purpose: 'Approve the concept before detailed design.',
+    fields: [
+      'Concept summary',
+      'Design alternatives considered',
+      'Selected concept',
+      'Reason selected',
+      'Major assumptions',
+      'Open questions',
+      'Manufacturability concerns',
+      'Quality concerns',
+      'Attachments',
+    ],
+    checklist: [
+      'Concept meets major requirements',
+      'Risks reviewed',
+      'Manufacturing reviewed',
+      'Quality reviewed',
+      'Customer needs considered',
+      'Approval to proceed',
+    ],
+    approvals: ['Engineering concept approval', 'Quality concept approval', 'Manufacturing concept approval'],
+  },
+  {
+    id: '7',
+    title: 'Detailed Design Outputs',
+    purpose: 'Control the actual design output package.',
+    fields: ['Output package notes', 'Linked drawings/BOM/revision package', 'Design output owner'],
+    checklist: [
+      'CAD model attached',
+      'Drawing attached',
+      'BOM created',
+      'Material specs defined',
+      'Critical characteristics defined',
+      'Tolerances defined',
+      'Special processes defined',
+      'Inspection points defined',
+      'Test requirements defined',
+      'Software/firmware version defined, if applicable',
+      'Supplier parts identified',
+      'Revision assigned',
+      'Design output approved',
+    ],
+    approvals: ['Engineering output approval', 'Document control approval'],
+  },
+  {
+    id: '8',
+    title: 'Prototype Build Record',
+    purpose: 'Document exactly what was built.',
+    fields: [
+      'Prototype serial number',
+      'Build revision',
+      'Build date',
+      'Builder',
+      'Linked BOM revision',
+      'Linked drawing revisions',
+      'Material lots',
+      'Purchased component lots/serials',
+      'Deviations used',
+      'Photos',
+      'Build notes',
+      'Issues found',
+      'Disposition',
+    ],
+    approvals: ['Engineering build approval', 'Quality build approval'],
+  },
+  {
+    id: '9',
+    title: 'Design Verification',
+    purpose: 'Confirm the design output meets the design inputs.',
+    fields: [
+      'Requirement ID',
+      'Verification method',
+      'Test/inspection performed',
+      'Result',
+      'Pass/fail',
+      'Evidence attachment',
+      'Nonconformance link',
+      'Engineering disposition',
+      'Verified by',
+      'Date',
+    ],
+    approvals: ['Verification approval'],
+  },
+  {
+    id: '10',
+    title: 'Design Validation',
+    purpose: 'Confirm the product works for the intended use/customer mission.',
+    fields: [
+      'Validation activity',
+      'Intended use tested',
+      'Mission/profile tested',
+      'Customer requirement linked',
+      'Result',
+      'Pass/fail',
+      'Evidence attachment',
+      'Customer witness/approval, if applicable',
+      'Validation approval',
+    ],
+    approvals: ['Engineering validation approval', 'Quality validation approval', 'Customer/program validation approval'],
+  },
+  {
+    id: '11',
+    title: 'Final Design Review',
+    purpose: 'Cross-functional approval before manufacturing release.',
+    fields: ['Final review notes', 'Open issue disposition', 'Configuration baseline'],
+    checklist: [
+      'All requirements reviewed',
+      'All high risks closed or accepted',
+      'Design outputs approved',
+      'Prototype build documented',
+      'Verification complete',
+      'Validation complete',
+      'Open issues dispositioned',
+      'Configuration baseline established',
+      'Manufacturing reviewed',
+      'Quality reviewed',
+      'Program management reviewed',
+    ],
+    approvals: ['Engineering', 'Quality', 'Manufacturing', 'Program Manager'],
+  },
+  {
+    id: '12',
+    title: 'Design Production Release Gate',
+    purpose: 'Allow controlled release into P2 manufacturing.',
+    fields: ['Release package notes', 'Linked project_id / PO / WAD', 'Locked design revision baseline'],
+    checklist: [
+      'Released CAD',
+      'Released drawings',
+      'Released BOM',
+      'Approved routing',
+      'Approved traveler requirement',
+      'Approved work instructions',
+      'Approved inspection plan',
+      'Approved test procedure',
+      'Required certifications identified',
+      'Supplier requirements flowed down',
+      'Material requirements approved',
+      'Tooling/fixtures ready',
+      'CNC programs approved, if applicable',
+      'Training/certifications complete',
+      'Packaging/shipping requirements defined',
+      'Design revision baseline locked',
+    ],
+    approvals: [
+      'Engineering release approval',
+      'Quality release approval',
+      'Manufacturing release approval',
+      'Program Manager release approval',
+    ],
+  },
+];
+
+function createInitialWorkflowData() {
+  return designWorkflowSteps.reduce<Record<string, WorkflowStepData>>((acc, step) => {
+    acc[step.id] = {
+      fields: Object.fromEntries(step.fields.map((field) => [field, ''])),
+      checklist: Object.fromEntries((step.checklist ?? []).map((item) => [item, false])),
+      approvals: Object.fromEntries((step.approvals ?? []).map((approval) => [approval, false])),
+    };
+    return acc;
+  }, {});
+}
+
+function isWorkflowStepFilled(step: DesignWorkflowStep, data: WorkflowStepData) {
+  const fieldsComplete = step.fields.every((field) => data.fields[field]?.trim());
+  const checklistComplete = (step.checklist ?? []).every((item) => data.checklist[item]);
+  return fieldsComplete && checklistComplete;
+}
+
+function isWorkflowStepApproved(step: DesignWorkflowStep, data: WorkflowStepData) {
+  return isWorkflowStepFilled(step, data) && (step.approvals ?? []).every((approval) => data.approvals[approval]);
+}
+
+function getWorkflowStepStatus(
+  step: DesignWorkflowStep,
+  workflowData: Record<string, WorkflowStepData>
+): WorkflowStatus {
+  const data = workflowData[step.id];
+  if (step.id === '12') {
+    const prerequisitesApproved = designWorkflowSteps
+      .filter((item) => item.id !== '12')
+      .every((item) => isWorkflowStepApproved(item, workflowData[item.id]));
+    if (!prerequisitesApproved) return 'blocked';
+  }
+  if (isWorkflowStepApproved(step, data)) return 'approved';
+  if (isWorkflowStepFilled(step, data)) return 'needs_approval';
+  return 'incomplete';
+}
+
+function getMissingWorkflowItems(
+  step: DesignWorkflowStep,
+  workflowData: Record<string, WorkflowStepData>
+) {
+  const data = workflowData[step.id];
+  const missingFields = step.fields.filter((field) => !data.fields[field]?.trim()).map((field) => `Field: ${field}`);
+  const missingChecklist = (step.checklist ?? [])
+    .filter((item) => !data.checklist[item])
+    .map((item) => `Checklist: ${item}`);
+  const missingApprovals = (step.approvals ?? [])
+    .filter((approval) => !data.approvals[approval])
+    .map((approval) => `Approval: ${approval}`);
+  return [...missingFields, ...missingChecklist, ...missingApprovals];
+}
+
+function StatusBadge({ status }: { status: StatusTone }) {
+  return (
+    <Badge variant="outline" className={statusClasses[status]}>
+      {statusLabels[status]}
+    </Badge>
+  );
+}
+
+function RegisterTable({
+  rows,
+  showRisk,
+  showRelease,
+  onOpen,
+}: {
+  rows: Array<RegisterRow | RiskRow | ReleaseRow>;
+  showRisk?: boolean;
+  showRelease?: boolean;
+  onOpen: (row: RegisterRow | RiskRow | ReleaseRow) => void;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-md border bg-white">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Record</TableHead>
+            <TableHead>Project</TableHead>
+            <TableHead>Owner</TableHead>
+            {showRisk && <TableHead>Severity</TableHead>}
+            {showRelease && <TableHead>WAD / P2</TableHead>}
+            <TableHead>Status</TableHead>
+            <TableHead>Evidence</TableHead>
+            <TableHead>Due</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.id}>
+              <TableCell>
+                <div className="font-medium">{row.id}</div>
+                <div className="max-w-[260px] text-sm text-muted-foreground">{row.title}</div>
+              </TableCell>
+              <TableCell>{row.project}</TableCell>
+              <TableCell>{row.owner}</TableCell>
+              {showRisk && <TableCell>{'severity' in row ? row.severity : '-'}</TableCell>}
+              {showRelease && (
+                <TableCell>
+                  {'wad' in row ? (
+                    <div className="space-y-1 text-sm">
+                      <div>{row.wad}</div>
+                      <div className="text-muted-foreground">{row.p2}</div>
+                    </div>
+                  ) : (
+                    '-'
+                  )}
+                </TableCell>
+              )}
+              <TableCell>
+                <StatusBadge status={row.status} />
+              </TableCell>
+              <TableCell className="max-w-[280px] text-sm text-muted-foreground">{row.evidence}</TableCell>
+              <TableCell>{row.due}</TableCell>
+              <TableCell className="text-right">
+                <Button variant="ghost" size="sm" onClick={() => onOpen(row)}>
+                  Open
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function SectionHeader({
+  icon: Icon,
+  title,
+  description,
+  action,
+}: {
+  icon: typeof Route;
+  title: string;
+  description: string;
+  action?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div>
+        <div className="flex items-center gap-2">
+          <Icon className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-semibold tracking-normal">{title}</h2>
+        </div>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{description}</p>
+      </div>
+      {action && (
+        <Button className="gap-2 self-start">
+          <Plus className="h-4 w-4" />
+          {action}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export default function QMSDesignControlPage() {
+  const [selectedRecord, setSelectedRecord] = useState<RegisterRow | RiskRow | ReleaseRow | null>(null);
+  const [recordType, setRecordType] = useState('design-input');
+  const [selectedWorkflowStepId, setSelectedWorkflowStepId] = useState('1');
+  const [workflowData, setWorkflowData] = useState<Record<string, WorkflowStepData>>(() => createInitialWorkflowData());
+
+  const gateProgress = useMemo(() => {
+    const allRows = [...inputs, ...outputs, ...reviews, ...verification, ...validation, ...changes, ...releases, ...dhf];
+    const complete = allRows.filter((row) => ['approved', 'released'].includes(row.status)).length;
+    return Math.round((complete / allRows.length) * 100);
+  }, []);
+
+  const workflowStatuses = useMemo(
+    () => Object.fromEntries(designWorkflowSteps.map((step) => [step.id, getWorkflowStepStatus(step, workflowData)])) as Record<string, WorkflowStatus>,
+    [workflowData]
+  );
+  const selectedWorkflowStep = designWorkflowSteps.find((step) => step.id === selectedWorkflowStepId) ?? designWorkflowSteps[0];
+  const selectedWorkflowData = workflowData[selectedWorkflowStep.id];
+  const approvedWorkflowCount = designWorkflowSteps.filter((step) => workflowStatuses[step.id] === 'approved').length;
+  const workflowProgress = Math.round((approvedWorkflowCount / designWorkflowSteps.length) * 100);
+  const releaseReadinessItems = designWorkflowSteps.flatMap((step) => {
+    if (workflowStatuses[step.id] === 'approved') return [];
+    if (step.id !== '12') {
+      return [`Step ${step.id} ${step.title}: approval required before Design Production Release Gate`];
+    }
+    return getMissingWorkflowItems(step, workflowData).map((item) => `Release Gate ${item}`);
+  });
+
+  const updateWorkflowField = (stepId: string, field: string, value: string) => {
+    setWorkflowData((current) => ({
+      ...current,
+      [stepId]: {
+        ...current[stepId],
+        fields: {
+          ...current[stepId].fields,
+          [field]: value,
+        },
+      },
+    }));
+  };
+
+  const updateWorkflowChecklist = (stepId: string, item: string, checked: boolean) => {
+    setWorkflowData((current) => ({
+      ...current,
+      [stepId]: {
+        ...current[stepId],
+        checklist: {
+          ...current[stepId].checklist,
+          [item]: checked,
+        },
+      },
+    }));
+  };
+
+  const updateWorkflowApproval = (stepId: string, approval: string, checked: boolean) => {
+    setWorkflowData((current) => ({
+      ...current,
+      [stepId]: {
+        ...current[stepId],
+        approvals: {
+          ...current[stepId].approvals,
+          [approval]: checked,
+        },
+      },
+    }));
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <Badge variant="outline" className="mb-2 border-blue-300 bg-blue-50 text-blue-700">
+              AS9100 Design Control
+            </Badge>
+            <h1 className="text-3xl font-bold tracking-normal text-gray-900">Design Control</h1>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              Lifecycle control for design inputs, outputs, reviews, risk, verification, validation,
+              engineering change, release, and the design history file.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className="gap-2">
+              <FileArchive className="h-4 w-4" />
+              DHF Export
+            </Button>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              New Design Record
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          {lifecycleMetrics.map((metric) => {
+            const Icon = metric.icon;
+            return (
+              <Card key={metric.label}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardDescription>{metric.label}</CardDescription>
+                  <Icon className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{metric.value}</div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        <Card>
+          <CardHeader className="space-y-3">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <ShieldCheck className="h-5 w-5 text-primary" />
+                  Lifecycle Readiness
+                </CardTitle>
+                <CardDescription>Approved or released records across the controlled design lifecycle.</CardDescription>
+              </div>
+              <Badge variant="outline" className="w-fit border-emerald-300 bg-emerald-50 text-emerald-700">
+                {gateProgress}% evidence complete
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Progress value={gateProgress} />
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border bg-white px-3 py-2 text-sm">
+                <div className="font-medium">Traceability</div>
+                <div className="text-muted-foreground">Inputs link forward to outputs, reviews, and V&V evidence.</div>
+              </div>
+              <div className="rounded-md border bg-white px-3 py-2 text-sm">
+                <div className="font-medium">Release Gate</div>
+                <div className="text-muted-foreground">Manufacturing release stays aligned with WAD and P2 gates.</div>
+              </div>
+              <div className="rounded-md border bg-white px-3 py-2 text-sm">
+                <div className="font-medium">DHF Control</div>
+                <div className="text-muted-foreground">Design history file evidence is grouped by project and record.</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Route className="h-5 w-5 text-primary" />
+              Design Production Release Flow
+            </CardTitle>
+            <CardDescription>
+              The controlled handoff from project context through design evidence and release gating into P2 manufacturing.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr]">
+              {productionReleaseFlow.map((item, index) => (
+                <div key={item.step} className="contents">
+                  <div className="rounded-md border bg-white p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold">{item.step}</div>
+                        <div className="mt-1 text-xs font-medium uppercase text-muted-foreground">{item.owner}</div>
+                      </div>
+                      <Badge variant="outline" className="shrink-0">
+                        {item.status}
+                      </Badge>
+                    </div>
+                    <p className="mt-3 text-sm text-muted-foreground">{item.description}</p>
+                  </div>
+                  {index < productionReleaseFlow.length - 1 && (
+                    <div className="flex items-center justify-center text-muted-foreground">
+                      <ArrowRight className="hidden h-5 w-5 lg:block" />
+                      <div className="h-5 border-l lg:hidden" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <ListChecks className="h-5 w-5 text-primary" />
+                AS9100 Design Workflow
+              </CardTitle>
+              <CardDescription>
+                Step-by-step gated workflow. Step 12 cannot be approved until steps 1-11 are approved.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="font-medium">Workflow approval progress</span>
+                  <span className="text-muted-foreground">{approvedWorkflowCount} / {designWorkflowSteps.length}</span>
+                </div>
+                <Progress value={workflowProgress} />
+              </div>
+              <div className="space-y-2">
+                {designWorkflowSteps.map((step) => {
+                  const status = workflowStatuses[step.id];
+                  return (
+                    <button
+                      key={step.id}
+                      type="button"
+                      className={`w-full rounded-md border bg-white px-3 py-3 text-left transition hover:bg-gray-50 ${
+                        selectedWorkflowStep.id === step.id ? 'border-primary bg-primary/5' : ''
+                      }`}
+                      onClick={() => setSelectedWorkflowStepId(step.id)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold">Step {step.id}</div>
+                          <div className="text-sm text-muted-foreground">{step.title}</div>
+                        </div>
+                        <Badge variant="outline" className={workflowStatusClasses[status]}>
+                          {workflowStatusLabels[status]}
+                        </Badge>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <CardTitle className="text-xl">
+                      Step {selectedWorkflowStep.id}: {selectedWorkflowStep.title}
+                    </CardTitle>
+                    <CardDescription className="mt-1">{selectedWorkflowStep.purpose}</CardDescription>
+                  </div>
+                  <Badge variant="outline" className={workflowStatusClasses[workflowStatuses[selectedWorkflowStep.id]]}>
+                    {workflowStatusLabels[workflowStatuses[selectedWorkflowStep.id]]}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {selectedWorkflowStep.id === '12' && workflowStatuses[selectedWorkflowStep.id] === 'blocked' && (
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                    Steps 1-11 must be approved before this Design Production Release Gate can be approved.
+                  </div>
+                )}
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {selectedWorkflowStep.fields.map((field) => {
+                    const fieldId = `design-step-${selectedWorkflowStep.id}-${field.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}`;
+                    const useTextarea = /summary|requirements|scope|milestones|notes|statement|criteria|concerns|attachments|disposition|baseline/i.test(field);
+                    return (
+                      <div key={field} className="grid gap-2">
+                        <Label htmlFor={fieldId}>{field}</Label>
+                        {useTextarea ? (
+                          <Textarea
+                            id={fieldId}
+                            value={selectedWorkflowData.fields[field] ?? ''}
+                            onChange={(event) => updateWorkflowField(selectedWorkflowStep.id, field, event.target.value)}
+                            placeholder={`Enter ${field.toLowerCase()}`}
+                          />
+                        ) : (
+                          <Input
+                            id={fieldId}
+                            value={selectedWorkflowData.fields[field] ?? ''}
+                            onChange={(event) => updateWorkflowField(selectedWorkflowStep.id, field, event.target.value)}
+                            placeholder={`Enter ${field.toLowerCase()}`}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {selectedWorkflowStep.examples && (
+                  <div className="rounded-md border bg-muted/30 p-3">
+                    <div className="text-sm font-medium">Example risks</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedWorkflowStep.examples.map((example) => (
+                        <Badge key={example} variant="secondary">
+                          {example}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedWorkflowStep.checklist && selectedWorkflowStep.checklist.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="text-sm font-medium">Checklist</div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {selectedWorkflowStep.checklist.map((item) => (
+                        <label key={item} className="flex cursor-pointer items-start gap-3 rounded-md border bg-white px-3 py-2 text-sm hover:bg-gray-50">
+                          <Checkbox
+                            checked={selectedWorkflowData.checklist[item] === true}
+                            onCheckedChange={(checked) => updateWorkflowChecklist(selectedWorkflowStep.id, item, checked === true)}
+                          />
+                          <span>{item}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedWorkflowStep.approvals && selectedWorkflowStep.approvals.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="text-sm font-medium">Required approvals</div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {selectedWorkflowStep.approvals.map((approval) => (
+                        <label key={approval} className="flex cursor-pointer items-start gap-3 rounded-md border bg-white px-3 py-2 text-sm hover:bg-gray-50">
+                          <Checkbox
+                            checked={selectedWorkflowData.approvals[approval] === true}
+                            disabled={selectedWorkflowStep.id === '12' && workflowStatuses[selectedWorkflowStep.id] === 'blocked'}
+                            onCheckedChange={(checked) => updateWorkflowApproval(selectedWorkflowStep.id, approval, checked === true)}
+                          />
+                          <span>{approval}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <PackageCheck className="h-5 w-5 text-primary" />
+                  Release Readiness
+                </CardTitle>
+                <CardDescription>
+                  Missing items that must be cleared before Design Production Release Gate approval.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {releaseReadinessItems.length === 0 ? (
+                  <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Design Production Release Gate is approved and ready for P2 manufacturing handoff.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {releaseReadinessItems.slice(0, 12).map((item) => (
+                      <div key={item} className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-sm">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                    {releaseReadinessItems.length > 12 && (
+                      <div className="text-sm text-muted-foreground">
+                        {releaseReadinessItems.length - 12} additional release readiness item(s) remain.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        <Tabs defaultValue="overview" className="space-y-4">
+          <div className="overflow-x-auto rounded-md border bg-white p-1">
+            <TabsList className="h-auto min-w-max justify-start bg-transparent">
+              {lifecycleTabs.map((tab) => (
+                <TabsTrigger key={tab.value} value={tab.value}>
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+
+          <TabsContent value="overview" className="space-y-4">
+            <SectionHeader
+              icon={Route}
+              title="AS9100 Design Lifecycle"
+              description="A controlled path from requirement capture through release to manufacturing and retained DHF evidence."
+            />
+            <div className="overflow-x-auto rounded-md border bg-white">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Stage</TableHead>
+                    <TableHead>Owner</TableHead>
+                    <TableHead>Control State</TableHead>
+                    <TableHead>Flow</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lifecycleStages.map((stage, index) => (
+                    <TableRow key={stage.stage}>
+                      <TableCell className="font-medium">{stage.stage}</TableCell>
+                      <TableCell>{stage.owner}</TableCell>
+                      <TableCell className="text-muted-foreground">{stage.state}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          Step {index + 1}
+                          {index < lifecycleStages.length - 1 && <ArrowRight className="h-4 w-4" />}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="projects" className="space-y-4">
+            <SectionHeader
+              icon={GitBranch}
+              title="Design Projects"
+              description="Controlled design projects that can align with the existing Design and R&D project folders."
+              action="Open Design Project"
+            />
+            <div className="grid gap-4 lg:grid-cols-3">
+              {designProjects.map((project) => (
+                <Card key={project.id}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-base">{project.name}</CardTitle>
+                        <CardDescription>{project.id} | {project.owner}</CardDescription>
+                      </div>
+                      <StatusBadge status={project.status} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Phase</span>
+                      <span className="font-medium">{project.phase}</span>
+                    </div>
+                    <Progress value={project.readiness} />
+                    <div className="text-sm">
+                      <div className="font-medium">Next gate</div>
+                      <div className="text-muted-foreground">{project.nextGate}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="inputs" className="space-y-4">
+            <SectionHeader icon={ListChecks} title="Design Inputs" description="Customer, regulatory, functional, interface, and manufacturing requirements under revision control." action="New Input" />
+            <RegisterTable rows={inputs} onOpen={setSelectedRecord} />
+          </TabsContent>
+
+          <TabsContent value="outputs" className="space-y-4">
+            <SectionHeader icon={FileCog} title="Design Outputs" description="Drawings, BOMs, specifications, inspection criteria, and work instructions that satisfy approved inputs." action="New Output" />
+            <RegisterTable rows={outputs} onOpen={setSelectedRecord} />
+          </TabsContent>
+
+          <TabsContent value="reviews" className="space-y-4">
+            <SectionHeader icon={ClipboardCheck} title="Design Reviews" description="Formal review gates, attendees, action items, approvals, and closure evidence." action="Schedule Review" />
+            <RegisterTable rows={reviews} onOpen={setSelectedRecord} />
+          </TabsContent>
+
+          <TabsContent value="risks" className="space-y-4">
+            <SectionHeader icon={AlertTriangle} title="Risks" description="Design risk, producibility risk, mitigation ownership, and residual acceptance evidence." action="New Risk" />
+            <RegisterTable rows={risks} showRisk onOpen={setSelectedRecord} />
+          </TabsContent>
+
+          <TabsContent value="verification" className="space-y-4">
+            <SectionHeader icon={Microscope} title="Verification" description="Objective evidence that design outputs meet the approved design inputs." action="New Verification" />
+            <RegisterTable rows={verification} onOpen={setSelectedRecord} />
+          </TabsContent>
+
+          <TabsContent value="validation" className="space-y-4">
+            <SectionHeader icon={CheckCircle2} title="Validation" description="Evidence that the design meets intended use in the customer or production-equivalent environment." action="New Validation" />
+            <RegisterTable rows={validation} onOpen={setSelectedRecord} />
+          </TabsContent>
+
+          <TabsContent value="changes" className="space-y-4">
+            <SectionHeader icon={History} title="Engineering Changes" description="Change requests, impact review, redlines, approvals, implementation records, and revision history." action="New ECR" />
+            <RegisterTable rows={changes} onOpen={setSelectedRecord} />
+          </TabsContent>
+
+          <TabsContent value="release" className="space-y-4">
+            <SectionHeader icon={Rocket} title="Design Production Release Gate" description="The formal gate between Design Workflow and P2 Manufacturing, aligned to project context, PO readiness, WAD authorization, travelers, and controlled documents." action="New Release" />
+            <RegisterTable rows={releases} showRelease onOpen={setSelectedRecord} />
+          </TabsContent>
+
+          <TabsContent value="dhf" className="space-y-4">
+            <SectionHeader icon={FileCheck2} title="Design History File" description="The retained evidence set proving the design was developed and released under controlled conditions." action="Add DHF Record" />
+            <RegisterTable rows={dhf} onOpen={setSelectedRecord} />
+          </TabsContent>
+        </Tabs>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Flag className="h-5 w-5 text-primary" />
+              Quick Record Intake
+            </CardTitle>
+            <CardDescription>Capture a controlled record shell without leaving Design Control.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-[220px_1fr_1fr_auto] md:items-end">
+            <div className="grid gap-2">
+              <Label htmlFor="record-type">Record type</Label>
+              <Select value={recordType} onValueChange={setRecordType}>
+                <SelectTrigger id="record-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="design-input">Design Input</SelectItem>
+                  <SelectItem value="design-output">Design Output</SelectItem>
+                  <SelectItem value="design-review">Design Review</SelectItem>
+                  <SelectItem value="risk">Risk</SelectItem>
+                  <SelectItem value="verification">Verification</SelectItem>
+                  <SelectItem value="validation">Validation</SelectItem>
+                  <SelectItem value="engineering-change">Engineering Change</SelectItem>
+                  <SelectItem value="release">Release Record</SelectItem>
+                  <SelectItem value="dhf">DHF Record</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="record-title">Title</Label>
+              <Input id="record-title" placeholder="Controlled record title" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="record-owner">Owner</Label>
+              <Input id="record-owner" placeholder="Responsible owner" />
+            </div>
+            <Button className="gap-2">
+              <FileText className="h-4 w-4" />
+              Create Draft
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Dialog open={!!selectedRecord} onOpenChange={(open) => !open && setSelectedRecord(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{selectedRecord?.id} - {selectedRecord?.title}</DialogTitle>
+              <DialogDescription>{selectedRecord?.project}</DialogDescription>
+            </DialogHeader>
+            {selectedRecord && (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs font-medium uppercase text-muted-foreground">Owner</div>
+                    <div className="mt-1">{selectedRecord.owner}</div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs font-medium uppercase text-muted-foreground">Status</div>
+                    <div className="mt-1">
+                      <StatusBadge status={selectedRecord.status} />
+                    </div>
+                  </div>
+                </div>
+                <Separator />
+                <div>
+                  <div className="text-sm font-medium">Evidence</div>
+                  <p className="mt-1 text-sm text-muted-foreground">{selectedRecord.evidence}</p>
+                </div>
+                {'mitigation' in selectedRecord && (
+                  <div>
+                    <div className="text-sm font-medium">Mitigation</div>
+                    <p className="mt-1 text-sm text-muted-foreground">{selectedRecord.mitigation}</p>
+                  </div>
+                )}
+                {'wad' in selectedRecord && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border p-3">
+                      <div className="text-xs font-medium uppercase text-muted-foreground">WAD</div>
+                      <div className="mt-1">{selectedRecord.wad}</div>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <div className="text-xs font-medium uppercase text-muted-foreground">P2 Status</div>
+                      <div className="mt-1">{selectedRecord.p2}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSelectedRecord(null)}>
+                Close
+              </Button>
+              <Button>Open Record</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  );
+}

@@ -9,6 +9,77 @@ import { generateRequirementsFromRouting } from '../services/requirementGenerato
 
 const router = Router();
 
+async function publicColumnsExist(tableName: string, columnNames: string[]): Promise<boolean> {
+  if (columnNames.length === 0) return true;
+  const rows = await pool.query<{ column_name: string }>(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = $1
+        AND column_name = ANY($2::text[])`,
+    [tableName, columnNames]
+  );
+  const existingColumns = new Set(rows.map((row) => row.column_name));
+  return columnNames.every((columnName) => existingColumns.has(columnName));
+}
+
+async function loadProjectContextByQueueItemId(ids: number[]) {
+  const projectByItemId = new Map<number, { projectId: string; projectCode: string }>();
+  if (ids.length === 0) return projectByItemId;
+
+  try {
+    const canJoinProjects =
+      await publicColumnsExist('manufacturing_queue', ['p2_po_id']) &&
+      await publicColumnsExist('projects', ['po_id', 'project_code']);
+
+    if (!canJoinProjects) return projectByItemId;
+
+    const projectRows = await pool.query<{ id: number; projectId: string; projectCode: string }>(
+      `SELECT mq.id, p.id AS "projectId", p.project_code AS "projectCode"
+         FROM manufacturing_queue mq
+         JOIN projects p ON p.po_id = mq.p2_po_id
+        WHERE mq.id = ANY($1)`,
+      [ids]
+    );
+    for (const row of projectRows) {
+      projectByItemId.set(row.id, { projectId: row.projectId, projectCode: row.projectCode });
+    }
+  } catch (error) {
+    console.warn('Skipping manufacturing queue project enrichment:', error);
+  }
+
+  return projectByItemId;
+}
+
+async function loadWorkOrderContextByQueueItemId(ids: number[]) {
+  const workOrderByItemId = new Map<number, { workOrderId: string; workOrderNumber: string }>();
+  if (ids.length === 0) return workOrderByItemId;
+
+  try {
+    const canJoinWorkOrders =
+      await publicColumnsExist('manufacturing_queue', ['source_id', 'source_type']) &&
+      await publicColumnsExist('production_work_orders', ['work_order_number']);
+
+    if (!canJoinWorkOrders) return workOrderByItemId;
+
+    const workOrderRows = await pool.query<{ id: number; workOrderId: string; workOrderNumber: string }>(
+      `SELECT mq.id, wo.id AS "workOrderId", wo.work_order_number AS "workOrderNumber"
+         FROM manufacturing_queue mq
+         JOIN production_work_orders wo ON wo.id::text = mq.source_id
+        WHERE mq.source_type = 'production_work_order'
+          AND mq.id = ANY($1)`,
+      [ids]
+    );
+    for (const row of workOrderRows) {
+      workOrderByItemId.set(row.id, { workOrderId: row.workOrderId, workOrderNumber: row.workOrderNumber });
+    }
+  } catch (error) {
+    console.warn('Skipping manufacturing queue work order enrichment:', error);
+  }
+
+  return workOrderByItemId;
+}
+
 // Get manufacturing queue items.
 // DEMAND ROUTING — additive signal for `?department=` queries:
 // When `?department=<legacyDept>` is provided, records are matched by:
@@ -110,30 +181,8 @@ router.get('/', async (req, res) => {
     const ids = items.map((i: any) => i.id);
 
     // Enrich with project context (via p2_po_id → projects.po_id)
-    const projectRows = await pool.query<{ id: number; projectId: string; projectCode: string }>(
-      `SELECT mq.id, p.id AS "projectId", p.project_code AS "projectCode"
-       FROM manufacturing_queue mq
-       JOIN projects p ON p.po_id = mq.p2_po_id
-       WHERE mq.id = ANY($1)`,
-      [ids]
-    );
-    const projectByItemId = new Map<number, { projectId: string; projectCode: string }>();
-    for (const r of projectRows) {
-      projectByItemId.set(r.id, { projectId: r.projectId, projectCode: r.projectCode });
-    }
-
-    // Enrich with work order context (via source_id where source_type = 'production_work_order')
-    const woRows = await pool.query<{ id: number; workOrderId: string; workOrderNumber: string }>(
-      `SELECT mq.id, wo.id AS "workOrderId", wo.work_order_number AS "workOrderNumber"
-       FROM manufacturing_queue mq
-       JOIN production_work_orders wo ON wo.id::text = mq.source_id
-       WHERE mq.source_type = 'production_work_order' AND mq.id = ANY($1)`,
-      [ids]
-    );
-    const woByItemId = new Map<number, { workOrderId: string; workOrderNumber: string }>();
-    for (const r of woRows) {
-      woByItemId.set(r.id, { workOrderId: r.workOrderId, workOrderNumber: r.workOrderNumber });
-    }
+    const projectByItemId = await loadProjectContextByQueueItemId(ids);
+    const woByItemId = await loadWorkOrderContextByQueueItemId(ids);
 
     const enriched = items.map((item: any) => ({
       ...item,
@@ -217,29 +266,8 @@ router.get('/by-dashboard/:dashboard', async (req, res) => {
 
     const ids = items.map((i: any) => i.id);
 
-    const projectRows = await pool.query<{ id: number; projectId: string; projectCode: string }>(
-      `SELECT mq.id, p.id AS "projectId", p.project_code AS "projectCode"
-       FROM manufacturing_queue mq
-       JOIN projects p ON p.po_id = mq.p2_po_id
-       WHERE mq.id = ANY($1)`,
-      [ids]
-    );
-    const projectByItemId = new Map<number, { projectId: string; projectCode: string }>();
-    for (const r of projectRows) {
-      projectByItemId.set(r.id, { projectId: r.projectId, projectCode: r.projectCode });
-    }
-
-    const woRows = await pool.query<{ id: number; workOrderId: string; workOrderNumber: string }>(
-      `SELECT mq.id, wo.id AS "workOrderId", wo.work_order_number AS "workOrderNumber"
-       FROM manufacturing_queue mq
-       JOIN production_work_orders wo ON wo.id::text = mq.source_id
-       WHERE mq.source_type = 'production_work_order' AND mq.id = ANY($1)`,
-      [ids]
-    );
-    const woByItemId = new Map<number, { workOrderId: string; workOrderNumber: string }>();
-    for (const r of woRows) {
-      woByItemId.set(r.id, { workOrderId: r.workOrderId, workOrderNumber: r.workOrderNumber });
-    }
+    const projectByItemId = await loadProjectContextByQueueItemId(ids);
+    const woByItemId = await loadWorkOrderContextByQueueItemId(ids);
 
     res.json(items.map((item: any) => ({
       ...item,

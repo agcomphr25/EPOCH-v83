@@ -67,6 +67,73 @@ type ProjectDocumentRef = {
 let projectRevisionSchemaReady = false;
 let projectClinSchemaReady = false;
 
+type ProjectDocumentRow = {
+  id: number | null;
+  project_id: string;
+  label: string | null;
+  original_file_name: string;
+  file_name: string | null;
+  mime_type: string;
+  file_size: number | null;
+  media_library_id: number | null;
+  uploaded_by: string | null;
+  created_at: string | null;
+};
+
+async function getPublicTableColumns(tableName: string): Promise<Set<string>> {
+  const rows = await pool.query<{ column_name: string }>(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = $1`,
+    [tableName]
+  );
+  return new Set(rows.map((row) => row.column_name));
+}
+
+function projectDocumentSelect(columns: Set<string>, columnName: string, fallback: string, alias = columnName) {
+  return columns.has(columnName) ? `pd.${columnName}` : `${fallback} AS ${alias}`;
+}
+
+async function listProjectDocuments(projectId: string): Promise<ProjectDocumentRow[]> {
+  try {
+    const columns = await getPublicTableColumns('project_documents');
+    if (!columns.has('project_id')) return [];
+
+    const originalNameSelect = columns.has('original_file_name')
+      ? 'pd.original_file_name'
+      : columns.has('file_name')
+      ? 'pd.file_name AS original_file_name'
+      : `'Document'::text AS original_file_name`;
+    const orderBy = columns.has('created_at')
+      ? 'ORDER BY pd.created_at DESC'
+      : columns.has('id')
+      ? 'ORDER BY pd.id DESC'
+      : '';
+
+    return await pool.query<ProjectDocumentRow>(
+      `SELECT
+          ${projectDocumentSelect(columns, 'id', 'NULL::integer')},
+          pd.project_id,
+          ${projectDocumentSelect(columns, 'label', 'NULL::text')},
+          ${originalNameSelect},
+          ${projectDocumentSelect(columns, 'file_name', 'NULL::text')},
+          ${projectDocumentSelect(columns, 'mime_type', `'application/octet-stream'::text`)},
+          ${projectDocumentSelect(columns, 'file_size', 'NULL::integer')},
+          ${projectDocumentSelect(columns, 'media_library_id', 'NULL::integer')},
+          ${projectDocumentSelect(columns, 'uploaded_by', 'NULL::text')},
+          ${projectDocumentSelect(columns, 'created_at', 'NULL::timestamp')}
+         FROM project_documents pd
+        WHERE pd.project_id = $1
+        ${orderBy}`,
+      [projectId]
+    );
+  } catch (error) {
+    console.warn('Skipping project document list due to schema/read error:', error);
+    return [];
+  }
+}
+
 const ROM_LOCK_STAGES = new Set(['po_received', 'p2_release', 'production', 'completed']);
 const ROM_EDITABLE_PO_STATUSES = new Set(['OPEN', 'DRAFT', 'CREATED']);
 
@@ -3514,29 +3581,32 @@ router.get('/:id/traceability', async (req, res) => {
 router.get('/:id/documents', async (req, res) => {
   try {
     const { id } = req.params;
-    const rows = await pool.query<{
-      id: number; project_id: string; label: string | null; original_file_name: string;
-      file_name: string | null; mime_type: string; file_size: number | null;
-      media_library_id: number | null; uploaded_by: string | null; created_at: string;
-    }>(
-      `SELECT id, project_id, label, original_file_name, file_name, mime_type, file_size,
-              media_library_id, uploaded_by, created_at
-       FROM project_documents WHERE project_id = $1 ORDER BY created_at DESC`,
-      [id]
-    );
+    const rows = await listProjectDocuments(id);
     const manualDocs: ProjectDocumentRef[] = rows.map((row) => ({
-      ...row,
+      id: row.id ?? `manual:${row.original_file_name}`,
+      project_id: row.project_id,
+      label: row.label,
+      original_file_name: row.original_file_name,
+      file_name: row.file_name,
+      mime_type: row.mime_type,
+      file_size: row.file_size,
+      media_library_id: row.media_library_id,
+      uploaded_by: row.uploaded_by,
+      created_at: row.created_at ?? '',
       source: 'manual',
       document_type: null,
       part_number: null,
       department_name: null,
       has_file: true,
     }));
-    const manufacturingDocs = await getProjectManufacturingDocumentRefs(id);
+    const manufacturingDocs = await getProjectManufacturingDocumentRefs(id).catch((error) => {
+      console.warn('Skipping project manufacturing document refs:', error);
+      return [];
+    });
     res.json([...manufacturingDocs, ...manualDocs]);
   } catch (err: any) {
-    console.error('Failed to list project documents:', err);
-    res.status(500).json({ message: 'Failed to list project documents' });
+    console.warn('Failed to list project documents:', err);
+    res.json([]);
   }
 });
 

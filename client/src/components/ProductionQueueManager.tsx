@@ -229,7 +229,6 @@ export default function ProductionQueueManager() {
   // Read-only analysis views for the regular production queue
   const [queueView, setQueueView] = useState<QueueView>('orders');
   const [stockModelAnalysisQuery, setStockModelAnalysisQuery] = useState<string>('');
-  const [selectedStockModelOrders, setSelectedStockModelOrders] = useState<Record<string, string>>({});
 
   // State for layup schedule preview modal
   const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
@@ -400,7 +399,6 @@ export default function ProductionQueueManager() {
         description: `Successfully progressed ${orderIds.length} order(s) to Barcode`,
       });
       setSelectedQueueOrders(new Set());
-      setSelectedStockModelOrders({});
     },
     onError: (error: any) => {
       toast({
@@ -565,20 +563,6 @@ export default function ProductionQueueManager() {
   const handleProgressSelectedToBarcode = () => {
     if (selectedQueueOrders.size === 0) return;
     progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
-  };
-
-  const handleProgressStockModelOrderToBarcode = (stockModelKey: string) => {
-    const orderId = selectedStockModelOrders[stockModelKey];
-    if (!orderId) {
-      toast({
-        title: 'Select an order',
-        description: 'Choose an order from this stock model before moving it to Barcode.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    progressToBarcodeMutation.mutate([orderId]);
   };
 
   const generateOrderBarcodeDataUrl = (barcodeValue: string): string => {
@@ -1020,7 +1004,7 @@ export default function ProductionQueueManager() {
   const stockModelSummary = useMemo<StockModelSummaryRow[]>(() => {
     const rows = new Map<string, StockModelSummaryRow & { customers: Set<string> }>();
 
-    productionQueue.forEach((order) => {
+    filteredProductionQueue.forEach((order) => {
       const key = order.stockModelId || order.modelId || 'Unknown Stock Model';
       const existing =
         rows.get(key) ||
@@ -1050,17 +1034,14 @@ export default function ProductionQueueManager() {
       .map(({ customers: _customers, ...row }) => ({
         ...row,
         orders: [...row.orders].sort((a, b) => {
-          const dueA = parseQueueDueDate(a.dueDate)?.getTime() ?? Infinity;
-          const dueB = parseQueueDueDate(b.dueDate)?.getTime() ?? Infinity;
-          if (dueA !== dueB) return dueA - dueB;
+          if (a.queuePosition !== b.queuePosition) return a.queuePosition - b.queuePosition;
           return (a.fbOrderNumber || a.orderId).localeCompare(b.fbOrderNumber || b.orderId);
         }),
       }))
       .sort((a, b) => {
-        if (b.orderCount !== a.orderCount) return b.orderCount - a.orderCount;
         return a.key.localeCompare(b.key);
       });
-  }, [productionQueue]);
+  }, [filteredProductionQueue]);
 
   const filteredStockModelSummary = useMemo(() => {
     const query = stockModelAnalysisQuery.trim().toLowerCase();
@@ -1104,6 +1085,232 @@ export default function ProductionQueueManager() {
         return a.dueDate.localeCompare(b.dueDate);
       });
   }, [productionQueue]);
+
+  const renderQueueOrderTable = (orders: ProductionQueueOrder[], testIdPrefix: string) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-12">
+            <Checkbox
+              checked={
+                orders.length > 0 &&
+                orders.every((order) => selectedQueueOrders.has(order.orderId))
+              }
+              onCheckedChange={(checked) => {
+                setSelectedQueueOrders((current) => {
+                  const next = new Set(current);
+                  orders.forEach((order) => {
+                    if (checked) {
+                      next.add(order.orderId);
+                    } else {
+                      next.delete(order.orderId);
+                    }
+                  });
+                  return next;
+                });
+              }}
+            />
+          </TableHead>
+          <TableHead className="w-20">Priority</TableHead>
+          <TableHead>Order ID</TableHead>
+          <TableHead>Customer</TableHead>
+          <TableHead>Model</TableHead>
+          <TableHead>Stock Model</TableHead>
+          <TableHead>Action Length</TableHead>
+          <TableHead>Bottom Metal</TableHead>
+          <TableHead>LOP / Fill</TableHead>
+          <TableHead>Due Date</TableHead>
+          <TableHead>Days to Due</TableHead>
+          <TableHead>Urgency</TableHead>
+          <TableHead>Score</TableHead>
+          <TableHead className="w-32">Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {orders.map((order) => {
+          let actionLength = order.features?.action_length;
+          if (!actionLength || actionLength === 'none') {
+            const actionInlet = order.features?.action_inlet;
+            if (actionInlet) {
+              if (actionInlet.toLowerCase().includes('short')) actionLength = 'Short';
+              else if (actionInlet.toLowerCase().includes('long')) actionLength = 'Long';
+            }
+          }
+          const hasActionLength = actionLength && actionLength !== 'none';
+          const isTikkaModel = (order.modelId || '').toLowerCase().includes('tikka');
+          const bottomMetal = order.features?.bottom_metal;
+          const showBottomMetal =
+            bottomMetal &&
+            typeof bottomMetal === 'string' &&
+            bottomMetal.toLowerCase().includes('adl');
+          const bottomMetalDisplay = showBottomMetal
+            ? bottomMetal.replace(/_/g, ' ').toUpperCase()
+            : '';
+          const lop = order.features?.length_of_pull;
+          const hasLopAdjustment = lop && lop !== 'no_lop_change' && lop.includes('lop_adj_');
+          const lopDisplay = hasLopAdjustment
+            ? lop.replace('lop_adj_', 'LOP ').replace('_', '.')
+            : '';
+          const otherOptions = order.features?.other_options || [];
+          const hasHeavyFill = Array.isArray(otherOptions) && otherOptions.includes('heavy_fill');
+          const queueIndex = productionQueue.findIndex((queueOrder) => queueOrder.orderId === order.orderId);
+
+          return (
+            <TableRow
+              key={order.orderId}
+              interactive
+              className={order.isOverdue ? 'bg-red-50' : ''}
+            >
+              <TableCell>
+                <Checkbox
+                  checked={selectedQueueOrders.has(order.orderId)}
+                  onCheckedChange={() => handleToggleOrderSelection(order.orderId)}
+                  data-testid={`${testIdPrefix}-select-${order.orderId}`}
+                />
+              </TableCell>
+              <TableCell className="font-bold text-center">
+                #{order.queuePosition}
+              </TableCell>
+              <TableCell className="font-medium">
+                <div className="flex items-center gap-2">
+                  <div>
+                    {order.fbOrderNumber || order.orderId}
+                    {order.fbOrderNumber && (
+                      <div className="text-xs text-gray-500">
+                        {order.orderId}
+                      </div>
+                    )}
+                  </div>
+                  {order.isManualUrgency && (
+                    <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-1 font-bold">
+                      <Zap className="w-3 h-3" />
+                      URGENT!!!
+                    </Badge>
+                  )}
+                  {hasRushFee(order, 'rush_fee2') && (
+                    <Badge
+                      className="bg-purple-600 text-white flex items-center gap-1 px-2 py-1 font-semibold"
+                      title="Expedite - 4 weeks faster ($250)"
+                    >
+                      EXPEDITE
+                    </Badge>
+                  )}
+                  {hasRushFee(order, 'rush_fee1') && (
+                    <Badge
+                      className="bg-blue-600 text-white flex items-center gap-1 px-2 py-1 font-semibold"
+                      title="Rush - 2 weeks faster ($200)"
+                    >
+                      RUSH
+                    </Badge>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-1">
+                  <User className="w-3 h-3 text-gray-400" />
+                  {order.customerName || order.customerId}
+                </div>
+              </TableCell>
+              <TableCell>{order.modelId}</TableCell>
+              <TableCell>
+                <Badge variant="outline">{order.stockModelId}</Badge>
+              </TableCell>
+              <TableCell>
+                {hasActionLength ? (
+                  <Badge variant="secondary" className="font-medium">
+                    {actionLength}
+                  </Badge>
+                ) : order.isFlattop ? (
+                  <Badge
+                    className="bg-yellow-100 text-yellow-900 border-yellow-300 font-semibold"
+                    title="Flattop stock: action length is not machined"
+                  >
+                    FLATTOP
+                  </Badge>
+                ) : isTikkaModel ? (
+                  <Badge
+                    variant="secondary"
+                    className="font-medium"
+                    title="Tikka stock: action length is not differentiated"
+                  >
+                    None
+                  </Badge>
+                ) : (
+                  <span className="text-gray-400">-</span>
+                )}
+              </TableCell>
+              <TableCell>
+                {showBottomMetal && (
+                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-semibold">
+                    {bottomMetalDisplay}
+                  </Badge>
+                )}
+              </TableCell>
+              <TableCell>
+                <div className="flex flex-col gap-1">
+                  {hasLopAdjustment && (
+                    <Badge className="bg-green-100 text-green-800 border-green-200 font-semibold text-xs">
+                      {lopDisplay}
+                    </Badge>
+                  )}
+                  {hasHeavyFill && (
+                    <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-semibold text-xs">
+                      HEAVY FILL
+                    </Badge>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-gray-400" />
+                  {new Date(order.dueDate).toLocaleDateString()}
+                </div>
+              </TableCell>
+              <TableCell className={order.isOverdue ? 'text-red-600 font-semibold' : ''}>
+                {order.daysToDue} days
+              </TableCell>
+              <TableCell>
+                <Badge className={getUrgencyBadgeColor(order.urgencyLevel)}>
+                  {order.urgencyLevel.toUpperCase()}
+                </Badge>
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                {order.priorityScore}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => movePriority(queueIndex, 'up')}
+                    disabled={queueIndex <= 0 || updatePrioritiesMutation.isPending}
+                  >
+                    <ArrowUp className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => movePriority(queueIndex, 'down')}
+                    disabled={
+                      queueIndex < 0 ||
+                      queueIndex === productionQueue.length - 1 ||
+                      updatePrioritiesMutation.isPending
+                    }
+                  >
+                    <ArrowDown className="w-3 h-3" />
+                  </Button>
+                  <OrderActionButtons
+                    orderId={order.orderId}
+                    showReassignButton={isAdmin}
+                  />
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
 
   // Explicit guards to distinguish truly empty queue from filtered-to-empty
   const isTrulyEmpty = productionQueue.length === 0;
@@ -2250,82 +2457,47 @@ export default function ProductionQueueManager() {
                         <p>No stock models match your filter</p>
                       </div>
                     ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Stock Model</TableHead>
-                            <TableHead className="text-right">Orders</TableHead>
-                            <TableHead className="text-right">Customers</TableHead>
-                            <TableHead className="text-right">Overdue</TableHead>
-                            <TableHead>Earliest Due Date</TableHead>
-                            <TableHead>Move Order</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredStockModelSummary.map((row) => (
-                            <TableRow key={row.key}>
-                              <TableCell>
-                                <Badge variant="outline">{row.key}</Badge>
-                              </TableCell>
-                              <TableCell className="text-right font-semibold">
-                                {row.orderCount}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {row.customerCount}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {row.overdueCount > 0 ? (
-                                  <Badge className="bg-red-100 text-red-800 border-red-200">
-                                    {row.overdueCount}
-                                  </Badge>
-                                ) : (
-                                  <span className="text-gray-400">0</span>
-                                )}
-                              </TableCell>
-                              <TableCell>{formatDueDate(row.earliestDueDate)}</TableCell>
-                              <TableCell>
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                  <Select
-                                    value={selectedStockModelOrders[row.key] || ''}
-                                    onValueChange={(value) =>
-                                      setSelectedStockModelOrders((current) => ({
-                                        ...current,
-                                        [row.key]: value,
-                                      }))
-                                    }
-                                  >
-                                    <SelectTrigger
-                                      className="min-w-[260px] max-w-full"
-                                      data-testid={`select-stock-model-order-${row.key}`}
-                                    >
-                                      <SelectValue placeholder="Select order" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {row.orders.map((order) => (
-                                        <SelectItem key={order.orderId} value={order.orderId}>
-                                          {(order.fbOrderNumber || order.orderId)} - {order.customerName || order.customerId || 'Unknown Customer'} - due {formatDueDate(order.dueDate)}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleProgressStockModelOrderToBarcode(row.key)}
-                                    disabled={
-                                      !selectedStockModelOrders[row.key] ||
-                                      progressToBarcodeMutation.isPending
-                                    }
-                                    data-testid={`button-progress-stock-model-order-${row.key}`}
-                                  >
-                                    <ArrowRight className="w-4 h-4 mr-1" />
-                                    Barcode
-                                  </Button>
+                      <Accordion type="multiple" className="space-y-3">
+                        {filteredStockModelSummary.map((row) => (
+                          <AccordionItem
+                            key={row.key}
+                            value={row.key}
+                            className="rounded-lg border border-gray-200 bg-white px-4"
+                          >
+                            <AccordionTrigger
+                              className="py-4 hover:no-underline"
+                              data-testid={`accordion-stock-model-${row.key}`}
+                            >
+                              <div className="flex w-full flex-col gap-2 pr-4 text-left lg:flex-row lg:items-center lg:justify-between">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant="outline">{row.key}</Badge>
+                                  <span className="font-semibold text-gray-900">
+                                    {row.orderCount} order{row.orderCount === 1 ? '' : 's'}
+                                  </span>
+                                  <span className="text-sm text-gray-500">
+                                    {row.customerCount} customer{row.customerCount === 1 ? '' : 's'}
+                                  </span>
                                 </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                                  {row.overdueCount > 0 ? (
+                                    <Badge className="bg-red-100 text-red-800 border-red-200">
+                                      {row.overdueCount} overdue
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-gray-400">0 overdue</span>
+                                  )}
+                                  <span>Earliest due {formatDueDate(row.earliestDueDate)}</span>
+                                </div>
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <div className="overflow-x-auto pb-4">
+                                {renderQueueOrderTable(row.orders, `stock-model-${row.key}`)}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
                     )}
                   </TabsContent>
 

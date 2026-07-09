@@ -196,6 +196,56 @@ async function drawP1Label(
   boldFont: PDFFont,
   logo: EmbeddedLogo
 ): Promise<void> {
+  if (template.key === '8162' && !logo) {
+    const padding = 8;
+    const labelInnerWidth = template.labelWidth - padding * 2;
+    const centerX = x + template.labelWidth / 2;
+
+    const codeTopOffset = 8;
+    const barcodeTopOffset = 22;
+    const barcodeHeight = 42;
+    const descTopOffset = 68;
+
+    const codeText = item.barcodeValue || '';
+    const codeFontSize = fitText(codeText, boldFont, 11, labelInnerWidth);
+    drawCenteredText(
+      page,
+      codeText,
+      boldFont,
+      codeFontSize,
+      centerX,
+      y + template.labelHeight - codeTopOffset - codeFontSize
+    );
+
+    if (item.barcodeValue) {
+      try {
+        const pngBuffer = await generateBarcodePng(item.barcodeValue, template);
+        const barcodeImage = await pdfDoc.embedPng(pngBuffer);
+        const barcodeDisplayWidth = Math.min(labelInnerWidth - 16, 250);
+
+        page.drawImage(barcodeImage, {
+          x: centerX - barcodeDisplayWidth / 2,
+          y: y + template.labelHeight - barcodeTopOffset - barcodeHeight,
+          width: barcodeDisplayWidth,
+          height: barcodeHeight,
+        });
+      } catch (barcodeError) {
+        console.error('Barcode generation error:', barcodeError);
+        drawCenteredText(page, '[BARCODE ERROR]', boldFont, 7, centerX, y + template.labelHeight / 2);
+      }
+    }
+
+    const descFontSize = 9;
+    const lineSpacing = template.labelHeight * 0.115;
+    const descLines = wrapText(item.description || '', font, descFontSize, labelInnerWidth - 8).slice(0, 2);
+    const descBaseY = y + template.labelHeight - descTopOffset - descFontSize;
+
+    descLines.forEach((line, lineIndex) => {
+      drawCenteredText(page, line, font, descFontSize, centerX, descBaseY - lineIndex * lineSpacing);
+    });
+    return;
+  }
+
   const padding = template.key === '8160' ? 5 : 8;
   const innerWidth = template.labelWidth - padding * 2;
   const centerX = x + template.labelWidth / 2;

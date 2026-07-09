@@ -113,6 +113,7 @@ interface QueueSummaryRow {
 
 interface StockModelSummaryRow extends QueueSummaryRow {
   customerCount: number;
+  orders: ProductionQueueOrder[];
 }
 
 interface DueDateSummaryRow {
@@ -228,6 +229,7 @@ export default function ProductionQueueManager() {
   // Read-only analysis views for the regular production queue
   const [queueView, setQueueView] = useState<QueueView>('orders');
   const [stockModelAnalysisQuery, setStockModelAnalysisQuery] = useState<string>('');
+  const [selectedStockModelOrders, setSelectedStockModelOrders] = useState<Record<string, string>>({});
 
   // State for layup schedule preview modal
   const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
@@ -386,7 +388,7 @@ export default function ProductionQueueManager() {
       );
       return Promise.all(progressPromises);
     },
-    onSuccess: () => {
+    onSuccess: (_result, orderIds) => {
       queryClient.invalidateQueries({
         queryKey: ['/api/production-queue/prioritized'],
       });
@@ -395,9 +397,10 @@ export default function ProductionQueueManager() {
       });
       toast({
         title: 'Success',
-        description: `Successfully progressed ${selectedQueueOrders.size} order(s) to Barcode`,
+        description: `Successfully progressed ${orderIds.length} order(s) to Barcode`,
       });
       setSelectedQueueOrders(new Set());
+      setSelectedStockModelOrders({});
     },
     onError: (error: any) => {
       toast({
@@ -562,6 +565,20 @@ export default function ProductionQueueManager() {
   const handleProgressSelectedToBarcode = () => {
     if (selectedQueueOrders.size === 0) return;
     progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
+  };
+
+  const handleProgressStockModelOrderToBarcode = (stockModelKey: string) => {
+    const orderId = selectedStockModelOrders[stockModelKey];
+    if (!orderId) {
+      toast({
+        title: 'Select an order',
+        description: 'Choose an order from this stock model before moving it to Barcode.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    progressToBarcodeMutation.mutate([orderId]);
   };
 
   const generateOrderBarcodeDataUrl = (barcodeValue: string): string => {
@@ -1013,11 +1030,13 @@ export default function ProductionQueueManager() {
           overdueCount: 0,
           earliestDueDate: null,
           customerCount: 0,
+          orders: [],
           customers: new Set<string>(),
         };
 
       existing.orderCount += 1;
       existing.overdueCount += order.isOverdue ? 1 : 0;
+      existing.orders.push(order);
       existing.customers.add(order.customerName || order.customerId || 'Unknown Customer');
       existing.customerCount = existing.customers.size;
       if (isEarlierDueDate(order.dueDate, existing.earliestDueDate)) {
@@ -1028,7 +1047,15 @@ export default function ProductionQueueManager() {
     });
 
     return Array.from(rows.values())
-      .map(({ customers: _customers, ...row }) => row)
+      .map(({ customers: _customers, ...row }) => ({
+        ...row,
+        orders: [...row.orders].sort((a, b) => {
+          const dueA = parseQueueDueDate(a.dueDate)?.getTime() ?? Infinity;
+          const dueB = parseQueueDueDate(b.dueDate)?.getTime() ?? Infinity;
+          if (dueA !== dueB) return dueA - dueB;
+          return (a.fbOrderNumber || a.orderId).localeCompare(b.fbOrderNumber || b.orderId);
+        }),
+      }))
       .sort((a, b) => {
         if (b.orderCount !== a.orderCount) return b.orderCount - a.orderCount;
         return a.key.localeCompare(b.key);
@@ -2231,6 +2258,7 @@ export default function ProductionQueueManager() {
                             <TableHead className="text-right">Customers</TableHead>
                             <TableHead className="text-right">Overdue</TableHead>
                             <TableHead>Earliest Due Date</TableHead>
+                            <TableHead>Move Order</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2255,6 +2283,45 @@ export default function ProductionQueueManager() {
                                 )}
                               </TableCell>
                               <TableCell>{formatDueDate(row.earliestDueDate)}</TableCell>
+                              <TableCell>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                  <Select
+                                    value={selectedStockModelOrders[row.key] || ''}
+                                    onValueChange={(value) =>
+                                      setSelectedStockModelOrders((current) => ({
+                                        ...current,
+                                        [row.key]: value,
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger
+                                      className="min-w-[260px] max-w-full"
+                                      data-testid={`select-stock-model-order-${row.key}`}
+                                    >
+                                      <SelectValue placeholder="Select order" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {row.orders.map((order) => (
+                                        <SelectItem key={order.orderId} value={order.orderId}>
+                                          {(order.fbOrderNumber || order.orderId)} - {order.customerName || order.customerId || 'Unknown Customer'} - due {formatDueDate(order.dueDate)}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleProgressStockModelOrderToBarcode(row.key)}
+                                    disabled={
+                                      !selectedStockModelOrders[row.key] ||
+                                      progressToBarcodeMutation.isPending
+                                    }
+                                    data-testid={`button-progress-stock-model-order-${row.key}`}
+                                  >
+                                    <ArrowRight className="w-4 h-4 mr-1" />
+                                    Barcode
+                                  </Button>
+                                </div>
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>

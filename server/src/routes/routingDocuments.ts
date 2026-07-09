@@ -28,6 +28,50 @@ import * as path from 'path';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
+const TEMPLATE_UPLOAD_TABLES = new Set([
+  'routing_documents',
+  'document_templates',
+  'template_fields',
+  'controlled_documents',
+  'document_version_history',
+]);
+
+async function getPublicTableColumns(tableName: string) {
+  const result = await db.execute(sql`
+    SELECT column_name, data_type
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = ${tableName}
+  `);
+  const rows = ((result as any)?.rows || result || []) as any[];
+  return new Map(rows.map((row) => [String(row.column_name), String(row.data_type || '')]));
+}
+
+async function insertPublicRowReturning(tableName: string, values: Record<string, any>, requiredColumns: string[] = []) {
+  if (!TEMPLATE_UPLOAD_TABLES.has(tableName)) {
+    throw new Error(`Unsupported template upload table: ${tableName}`);
+  }
+
+  const columns = await getPublicTableColumns(tableName);
+  const availableKeys = Object.keys(values).filter((key) => columns.has(key) && values[key] !== undefined);
+  const missingRequired = requiredColumns.filter((key) => !availableKeys.includes(key));
+  if (missingRequired.length > 0) {
+    throw new Error(`${tableName} is missing required column(s): ${missingRequired.join(', ')}`);
+  }
+  if (availableKeys.length === 0) {
+    throw new Error(`${tableName} has no compatible columns for insert`);
+  }
+
+  const columnSql = availableKeys.map((key) => sql.raw(`"${key}"`));
+  const valueSql = availableKeys.map((key) => sql`${values[key]}`);
+  const result = await db.execute(sql`
+    INSERT INTO ${sql.raw(`"${tableName}"`)} (${sql.join(columnSql, sql`, `)})
+    VALUES (${sql.join(valueSql, sql`, `)})
+    RETURNING *
+  `);
+  const rows = ((result as any)?.rows || result || []) as any[];
+  return rows[0];
+}
 
 async function resolveFileToBuffer(fileUrl: string): Promise<Buffer | null> {
   if (fileUrl.startsWith('/assets/documents/')) {
@@ -1154,80 +1198,95 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
     const expirationDate = new Date();
     expirationDate.setFullYear(expirationDate.getFullYear() + 1);
 
-    const [routingDocument] = await db.insert(routingDocuments).values({
+    const routingDocument = await insertPublicRowReturning('routing_documents', {
       title: finalTitle,
-      partNumber: partNumber || null,
-      departmentName: finalDepartment,
-      documentType: finalDocumentType,
-      sourceType: 'uploaded',
-      fileUrl,
-      fileName,
-      fileType: mimeType || 'application/pdf',
-      fileSize: fileBuffer.length,
-      extractedText: extractedText || null,
-      aiExtractedContent: aiResult || null,
-      aiExtractedFields: normalizedFields,
-      aiProcessedAt: aiResult ? new Date() : null,
+      part_number: partNumber || null,
+      department_name: finalDepartment,
+      document_type: finalDocumentType,
+      source_type: 'uploaded',
+      file_url: fileUrl,
+      file_name: fileName,
+      file_type: mimeType || 'application/pdf',
+      file_size: fileBuffer.length,
+      extracted_text: extractedText || null,
+      ai_extracted_content: aiResult || null,
+      ai_extracted_fields: normalizedFields,
+      ai_processed_at: aiResult ? new Date() : null,
       description: `Reusable controlled template ${documentNumber}`,
-      isTemplate: true,
-      createdBy,
-    }).returning();
+      is_template: true,
+      is_active: true,
+      created_by: createdBy,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['title', 'document_type']);
 
-    const [template] = await db.insert(documentTemplates).values({
-      templateName: finalTitle,
-      templateType: finalDocumentType,
+    const template = await insertPublicRowReturning('document_templates', {
+      template_name: finalTitle,
+      template_type: finalDocumentType,
       description: `Controlled template ${documentNumber} created from ${fileName}`,
-      sourceDocumentIds: [routingDocument.id],
-      learnedFromCount: 1,
+      learned_from_count: 1,
       structure: {
         source: 'pdf_upload',
         controlledDocumentNumber: documentNumber,
+        sourceDocumentId: routingDocument.id,
         sourceFileName: fileName,
       },
       sections: templateSections,
-      defaultFields: normalizedFields,
-      aiGeneratedPrompt: aiResult ? 'Generate a fillable form using the extracted controlled-template fields and source document structure.' : null,
-      createdBy,
-    }).returning();
+      default_fields: normalizedFields,
+      ai_generated_prompt: aiResult ? 'Generate a fillable form using the extracted controlled-template fields and source document structure.' : null,
+      is_active: true,
+      created_by: createdBy,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['template_name', 'template_type']);
 
     for (const field of normalizedFields) {
-      await db.insert(templateFields).values({
-        templateId: template.id,
-        fieldName: field.fieldName,
-        fieldLabel: field.fieldLabel,
-        fieldType: field.fieldType || 'text',
-        isRequired: field.isRequired || false,
-        defaultValue: field.defaultValue || null,
-        sortOrder: field.sortOrder ?? 0,
-      });
+      await insertPublicRowReturning('template_fields', {
+        template_id: template.id,
+        field_name: field.fieldName,
+        field_label: field.fieldLabel,
+        field_type: field.fieldType || 'text',
+        is_required: field.isRequired || false,
+        is_unique_per_serial: field.isUniquePerSerial || false,
+        default_value: field.defaultValue || null,
+        validation_rules: field.validationRules || null,
+        options: field.options || null,
+        section_name: field.sectionName || null,
+        sort_order: field.sortOrder ?? 0,
+        ai_suggested: field.aiSuggested || false,
+        created_at: new Date(),
+      }, ['template_id', 'field_name', 'field_label', 'field_type']);
     }
 
-    const [controlledDocument] = await db.insert(controlledDocuments).values({
-      documentNumber,
-      documentName: finalTitle,
-      documentType: finalDocumentType,
+    const controlledDocument = await insertPublicRowReturning('controlled_documents', {
+      document_number: documentNumber,
+      document_name: finalTitle,
+      document_type: finalDocumentType,
       department: finalDepartment,
       category: 'Form & Document Builder Template',
       description: `Reusable fillable template created from uploaded PDF ${fileName}`,
-      currentVersion: '1.0',
+      current_version: '1.0',
       status: 'pending',
-      retentionLength: 'controlled',
-      documentOwner: createdBy,
-      filePath: fileUrl,
-      createdBy,
-      expirationDate: expirationDate.toISOString().split('T')[0],
-    }).returning();
+      retention_length: 'controlled',
+      document_owner: createdBy,
+      file_path: fileUrl,
+      created_by: createdBy,
+      expiration_date: expirationDate.toISOString().split('T')[0],
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['document_number', 'document_name', 'document_type', 'department', 'current_version', 'status', 'created_by']);
 
-    await db.insert(documentVersionHistory).values({
-      documentId: controlledDocument.id,
-      versionNumber: '1.0',
-      changeDescription: 'Initial controlled template imported from Form & Document Builder',
-      changeType: 'major',
-      filePath: fileUrl,
+    await insertPublicRowReturning('document_version_history', {
+      document_id: controlledDocument.id,
+      version_number: '1.0',
+      change_description: 'Initial controlled template imported from Form & Document Builder',
+      change_type: 'major',
+      file_path: fileUrl,
       status: 'pending',
-      createdBy,
-      expirationDate: expirationDate.toISOString().split('T')[0],
-    });
+      created_by: createdBy,
+      expiration_date: expirationDate.toISOString().split('T')[0],
+      created_at: new Date(),
+    }, ['document_id', 'version_number', 'status', 'created_by']);
 
     res.status(201).json({
       document: routingDocument,

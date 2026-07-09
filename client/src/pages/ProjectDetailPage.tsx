@@ -1165,9 +1165,14 @@ export default function ProjectDetailPage() {
 
   // ── Project manual document attachments ──
   interface ProjectDoc {
-    id: number; project_id: string; label: string | null; original_file_name: string;
+    id: number | string; project_id: string; label: string | null; original_file_name: string;
     file_name: string | null; mime_type: string; file_size: number | null;
     media_library_id: number | null; uploaded_by: string | null; created_at: string;
+    source?: 'manual' | 'work_instruction' | 'spec_sheet';
+    document_type?: string | null;
+    part_number?: string | null;
+    department_name?: string | null;
+    has_file?: boolean;
   }
   interface MediaItem {
     id: number; filename: string; title: string | null; mimeType: string;
@@ -1189,6 +1194,8 @@ export default function ProjectDetailPage() {
     queryFn: () => fetch(`/api/projects/${id}/documents`).then(r => r.json()),
     enabled: !!id,
   });
+  const manufacturingProjectDocs = projectDocs.filter((doc) => doc.source === 'work_instruction' || doc.source === 'spec_sheet');
+  const manualProjectDocs = projectDocs.filter((doc) => !doc.source || doc.source === 'manual');
 
   const { data: mediaSearchResults = [] } = useQuery<MediaItem[]>({
     queryKey: ['/api/media', mediaSearch],
@@ -6082,15 +6089,69 @@ export default function ProjectDetailPage() {
                     )}
 
                     {/* ── Manual attachments ── */}
-                    {projectDocs.length > 0 && (
+                    {manufacturingProjectDocs.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 pt-2">
+                          <div className="flex-1 border-t" />
+                          <span className="text-xs text-muted-foreground px-2">Work Instructions & Spec Sheets</span>
+                          <div className="flex-1 border-t" />
+                        </div>
+                        {manufacturingProjectDocs.map(doc => (
+                          <div key={String(doc.id)} className="flex items-center justify-between py-2 px-3 rounded-lg border">
+                            <div className="flex items-center gap-3 min-w-0">
+                              {doc.source === 'spec_sheet' ? (
+                                <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                              ) : (
+                                <ClipboardList className="h-4 w-4 text-green-600 flex-shrink-0" />
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{doc.label || doc.original_file_name}</p>
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                  <Badge variant="secondary" className="text-xs">
+                                    {doc.source === 'spec_sheet' ? 'Spec Sheet' : 'Work Instruction'}
+                                  </Badge>
+                                  {doc.part_number && (
+                                    <Badge variant="outline" className="text-xs font-mono">{doc.part_number}</Badge>
+                                  )}
+                                  {doc.department_name && (
+                                    <Badge variant="outline" className="text-xs">{doc.department_name}</Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {doc.has_file && (
+                                <>
+                                  <Button size="sm" variant="ghost" title="Preview"
+                                    onClick={() => { setPdfPreviewUrl(`/api/projects/${id}/documents/${encodeURIComponent(String(doc.id))}/file`); setPdfPreviewTitle(doc.label || doc.original_file_name); }}>
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" title="Download" asChild>
+                                    <a href={`/api/projects/${id}/documents/${encodeURIComponent(String(doc.id))}/file`} download={doc.original_file_name}>
+                                      <Download className="h-3.5 w-3.5" />
+                                    </a>
+                                  </Button>
+                                </>
+                              )}
+                              <Button size="sm" variant="ghost" title="Revise in builder"
+                                onClick={() => setLocation(`/forms/document-builder?partNumber=${encodeURIComponent(doc.part_number || '')}`)}>
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+
+                    {manualProjectDocs.length > 0 && (
                       <>
                         <div className="flex items-center gap-2 pt-2">
                           <div className="flex-1 border-t" />
                           <span className="text-xs text-muted-foreground px-2">Manual Attachments</span>
                           <div className="flex-1 border-t" />
                         </div>
-                        {projectDocs.map(doc => (
-                          <div key={doc.id} className="flex items-center justify-between py-2 px-3 rounded-lg border">
+                        {manualProjectDocs.map(doc => (
+                          <div key={String(doc.id)} className="flex items-center justify-between py-2 px-3 rounded-lg border">
                             <div className="flex items-center gap-3">
                               <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                               <div className="min-w-0">
@@ -6114,7 +6175,7 @@ export default function ProjectDetailPage() {
                                 </a>
                               </Button>
                               <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" title="Remove"
-                                onClick={() => deleteDocMutation.mutate(doc.id)}
+                                onClick={() => deleteDocMutation.mutate(Number(doc.id))}
                                 disabled={deleteDocMutation.isPending}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>

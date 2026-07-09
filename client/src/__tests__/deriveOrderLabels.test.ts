@@ -73,3 +73,21 @@ describe('deriveOrderLabels - material derivation', () => {
     });
   });
 });
+
+describe('deriveOrderLabels - action badge derivation', () => {
+  it('marks Def XM Snowy Mountain medium actions as SMR', () => {
+    const order = {
+      orderId: 'SMR001',
+      modelId: 'm1a_carbon',
+      features: {
+        action_inlet: 'Def XM - Snowy Mtn Med',
+      },
+    };
+
+    const labels = deriveOrderLabels(order);
+
+    expect(labels.actionLengthRaw).toBe('medium');
+    expect(labels.actionBadgeLabel).toBe('Medium (SMR)');
+    expect(labels.actionLabel).toBe('Medium (SMR) Action');
+  });
+});

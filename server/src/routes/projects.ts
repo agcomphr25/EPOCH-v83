@@ -39,6 +39,24 @@ const uploadProjectDoc = multer({
 
 const router = Router();
 
+type ProjectDocumentRef = {
+  id: string | number;
+  project_id: string;
+  label: string | null;
+  original_file_name: string;
+  file_name: string | null;
+  mime_type: string;
+  file_size: number | null;
+  media_library_id: number | null;
+  uploaded_by: string | null;
+  created_at: string;
+  source: 'manual' | 'work_instruction' | 'spec_sheet';
+  document_type?: string | null;
+  part_number?: string | null;
+  department_name?: string | null;
+  has_file?: boolean;
+};
+
 let projectRevisionSchemaReady = false;
 let projectClinSchemaReady = false;
 
@@ -87,6 +105,122 @@ function normalizeRomCategories(raw: unknown): Record<string, any> {
     escalationAndInflation: normalizeCategory('escalationAndInflation', ['budgetAmount']),
     profitFee: normalizeCategory('profitFee', ['budgetAmount']),
   };
+}
+
+function normalizeProjectPartNumber(value: unknown) {
+  return String(value ?? '').trim();
+}
+
+function resolveBuilderAssetPath(fileUrl: string | null | undefined) {
+  if (!fileUrl) return null;
+  if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
+  if (fileUrl.startsWith('/assets/documents/')) {
+    const filename = fileUrl.replace('/assets/documents/', '');
+    return path.join(process.cwd(), 'server/src/assets/documents', filename);
+  }
+  if (path.isAbsolute(fileUrl)) return fileUrl;
+  return null;
+}
+
+async function getProjectManufacturingDocumentRefs(projectId: string): Promise<ProjectDocumentRef[]> {
+  const projectRows = await pool.query<{ id: string; po_id: number | null }>(
+    `SELECT id, po_id FROM projects WHERE id = $1 LIMIT 1`,
+    [projectId],
+  );
+  const project = projectRows[0];
+  if (!project) return [];
+
+  const partRows = project.po_id
+    ? await pool.query<{ part_number: string | null }>(
+        `SELECT DISTINCT part_number
+           FROM p2_purchase_order_items
+          WHERE po_id = $1
+            AND NULLIF(TRIM(part_number), '') IS NOT NULL`,
+        [project.po_id],
+      )
+    : [];
+  const routingRows = await pool.query<{ id: string; part_number: string | null }>(
+    `SELECT id::text, part_number
+       FROM part_routings
+      WHERE project_id = $1::uuid
+         OR (
+           NULLIF(TRIM(part_number), '') IS NOT NULL
+           AND part_number = ANY($2::text[])
+         )`,
+    [projectId, partRows.map((row) => normalizeProjectPartNumber(row.part_number)).filter(Boolean)],
+  );
+  const partNumbers = Array.from(new Set([
+    ...partRows.map((row) => normalizeProjectPartNumber(row.part_number)),
+    ...routingRows.map((row) => normalizeProjectPartNumber(row.part_number)),
+  ].filter(Boolean)));
+  const routingIds = routingRows.map((row) => row.id).filter(Boolean);
+
+  if (partNumbers.length === 0 && routingIds.length === 0) return [];
+
+  const workInstructionRows = await pool.query<any>(
+    `SELECT id::text, title, file_name, file_url, file_type, file_size,
+            document_type, part_number, department_name, created_by, created_at
+       FROM routing_documents
+      WHERE is_active = true
+        AND COALESCE(is_template, false) = false
+        AND document_type <> 'spec_sheet'
+        AND (
+          part_number = ANY($1::text[])
+          OR part_routing_id = ANY($2::uuid[])
+        )
+      ORDER BY created_at DESC`,
+    [partNumbers, routingIds],
+  );
+  const specSheetRows = await pool.query<any>(
+    `SELECT id::text, title, file_name, file_url, file_type, file_size,
+            part_number, created_by, created_at
+       FROM spec_sheets
+      WHERE is_active = true
+        AND COALESCE(is_template, false) = false
+        AND (
+          part_number = ANY($1::text[])
+          OR part_routing_id = ANY($2::uuid[])
+        )
+      ORDER BY created_at DESC`,
+    [partNumbers, routingIds],
+  );
+
+  return [
+    ...workInstructionRows.map((doc: any): ProjectDocumentRef => ({
+      id: `routing:${doc.id}`,
+      project_id: projectId,
+      label: doc.title,
+      original_file_name: doc.file_name || `${doc.title}.pdf`,
+      file_name: doc.file_name,
+      mime_type: doc.file_type || 'application/pdf',
+      file_size: doc.file_size ?? null,
+      media_library_id: null,
+      uploaded_by: doc.created_by ?? null,
+      created_at: doc.created_at,
+      source: 'work_instruction',
+      document_type: doc.document_type,
+      part_number: doc.part_number,
+      department_name: doc.department_name,
+      has_file: !!doc.file_url,
+    })),
+    ...specSheetRows.map((doc: any): ProjectDocumentRef => ({
+      id: `spec:${doc.id}`,
+      project_id: projectId,
+      label: doc.title,
+      original_file_name: doc.file_name || `${doc.title}.pdf`,
+      file_name: doc.file_name,
+      mime_type: doc.file_type || 'application/pdf',
+      file_size: doc.file_size ?? null,
+      media_library_id: null,
+      uploaded_by: doc.created_by ?? null,
+      created_at: doc.created_at,
+      source: 'spec_sheet',
+      document_type: 'spec_sheet',
+      part_number: doc.part_number,
+      department_name: null,
+      has_file: !!doc.file_url,
+    })),
+  ];
 }
 
 async function getRomLockState(projectId: string) {
@@ -3103,8 +3237,18 @@ router.get('/:id/documents', async (req, res) => {
        FROM project_documents WHERE project_id = $1 ORDER BY created_at DESC`,
       [id]
     );
-    res.json(rows);
+    const manualDocs: ProjectDocumentRef[] = rows.map((row) => ({
+      ...row,
+      source: 'manual',
+      document_type: null,
+      part_number: null,
+      department_name: null,
+      has_file: true,
+    }));
+    const manufacturingDocs = await getProjectManufacturingDocumentRefs(id);
+    res.json([...manufacturingDocs, ...manualDocs]);
   } catch (err: any) {
+    console.error('Failed to list project documents:', err);
     res.status(500).json({ message: 'Failed to list project documents' });
   }
 });
@@ -3181,6 +3325,44 @@ router.delete('/:id/documents/:docId', async (req, res) => {
 router.get('/:id/documents/:docId/file', async (req, res) => {
   try {
     const { id, docId } = req.params;
+    const generatedMatch = String(docId).match(/^(routing|spec):([0-9a-f-]{36})$/i);
+    if (generatedMatch) {
+      const [, source, generatedId] = generatedMatch;
+      const allowedRefs = await getProjectManufacturingDocumentRefs(id);
+      if (!allowedRefs.some((ref) => String(ref.id).toLowerCase() === String(docId).toLowerCase())) {
+        return res.status(404).json({ message: 'Document not found for this project' });
+      }
+      const rows = source === 'spec'
+        ? await pool.query<{
+            file_url: string | null; file_name: string | null; title: string; file_type: string | null;
+          }>(
+            `SELECT file_url, file_name, title, file_type
+               FROM spec_sheets
+              WHERE id = $1::uuid AND is_active = true
+              LIMIT 1`,
+            [generatedId],
+          )
+        : await pool.query<{
+            file_url: string | null; file_name: string | null; title: string; file_type: string | null;
+          }>(
+            `SELECT file_url, file_name, title, file_type
+               FROM routing_documents
+              WHERE id = $1::uuid AND is_active = true
+              LIMIT 1`,
+            [generatedId],
+          );
+      const generatedDoc = rows[0];
+      if (!generatedDoc) return res.status(404).json({ message: 'Document not found' });
+      const resolved = resolveBuilderAssetPath(generatedDoc.file_url);
+      if (!resolved) return res.status(404).json({ message: 'No document file is attached yet' });
+      if (/^https?:\/\//i.test(resolved)) return res.redirect(resolved);
+      if (!fs.existsSync(resolved)) return res.status(404).json({ message: 'File not found on disk' });
+
+      res.set('Content-Type', generatedDoc.file_type || 'application/pdf');
+      res.set('Content-Disposition', `inline; filename="${generatedDoc.file_name || `${generatedDoc.title}.pdf`}"`);
+      return res.sendFile(path.resolve(resolved));
+    }
+
     const rows = await pool.query<{
       file_path: string | null; file_name: string | null; original_file_name: string;
       mime_type: string; media_library_id: number | null;

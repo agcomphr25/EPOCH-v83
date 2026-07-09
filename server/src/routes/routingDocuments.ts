@@ -17,6 +17,7 @@ import {
 } from '@shared/schema';
 import { eq, desc, and, ilike, sql } from 'drizzle-orm';
 import OpenAI from 'openai';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import {
   getFileStorageProvider,
   getFileStorageProviderForObjectPath,
@@ -185,6 +186,104 @@ async function saveControlledDocumentFile(fileName: string, fileBuffer: Buffer) 
   const storedFileName = sanitizeFileName(fileName);
   fs.writeFileSync(path.join(uploadDir, storedFileName), fileBuffer);
   return `/assets/documents/${storedFileName}`;
+}
+
+function humanizeDocumentType(value: string) {
+  return String(value || 'Document')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function stringifyGeneratedSection(section: any) {
+  if (!section || typeof section !== 'object') return String(section ?? '');
+  const fields = Array.isArray(section.fields) && section.fields.length > 0
+    ? `\nFields: ${section.fields.map((field: any) => field.fieldLabel || field.fieldName).filter(Boolean).join(', ')}`
+    : '';
+  return `${section.name || 'Section'}\n${section.content || section.description || ''}${fields}`;
+}
+
+function wrapPdfText(text: string, maxChars = 92) {
+  const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    if ((line + ' ' + word).trim().length > maxChars) {
+      if (line) lines.push(line);
+      line = word;
+    } else {
+      line = (line ? `${line} ` : '') + word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length > 0 ? lines : [''];
+}
+
+async function createGeneratedControlledPdf(params: {
+  title: string;
+  documentType: string;
+  partNumber: string;
+  partName?: string | null;
+  documentNumber: string;
+  generatedContent: any;
+}) {
+  const pdfDoc = await PDFDocument.create();
+  let page = pdfDoc.addPage([612, 792]);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const margin = 48;
+  let y = 744;
+
+  const addPageIfNeeded = (height = 16) => {
+    if (y - height < 64) {
+      page = pdfDoc.addPage([612, 792]);
+      y = 744;
+    }
+  };
+  const drawLine = (text: string, options: { size?: number; bold?: boolean; color?: any; gap?: number } = {}) => {
+    addPageIfNeeded(options.gap ?? 16);
+    page.drawText(text.substring(0, 120), {
+      x: margin,
+      y,
+      size: options.size ?? 10,
+      font: options.bold ? boldFont : font,
+      color: options.color ?? rgb(0.12, 0.12, 0.12),
+    });
+    y -= options.gap ?? 16;
+  };
+  const drawWrapped = (text: string, options: { size?: number; bold?: boolean; gap?: number } = {}) => {
+    for (const line of wrapPdfText(text, options.size && options.size > 11 ? 76 : 92)) {
+      drawLine(line, options);
+    }
+  };
+
+  drawWrapped(params.title, { size: 18, bold: true, gap: 22 });
+  drawLine(`${params.documentNumber} | ${humanizeDocumentType(params.documentType)}`, { size: 10, bold: true, color: rgb(0.32, 0.32, 0.32) });
+  drawLine(`Part / Source: ${params.partNumber}${params.partName ? ` - ${params.partName}` : ''}`, { size: 10 });
+  drawLine(`Generated: ${new Date().toLocaleDateString()}`, { size: 9, color: rgb(0.42, 0.42, 0.42), gap: 24 });
+
+  const sections = Array.isArray(params.generatedContent?.sections) ? params.generatedContent.sections : [];
+  if (sections.length > 0) {
+    sections.forEach((section: any, index: number) => {
+      drawLine(`${index + 1}. ${section?.name || 'Section'}`, { size: 12, bold: true, gap: 18 });
+      drawWrapped(section?.content || section?.description || stringifyGeneratedSection(section), { size: 10 });
+      y -= 6;
+    });
+  } else {
+    drawWrapped(JSON.stringify(params.generatedContent, null, 2), { size: 9 });
+  }
+
+  pdfDoc.getPages().forEach((pdfPage) => {
+    pdfPage.drawText(`Doc #: ${params.documentNumber} | Version: 1.0 | Date: ${new Date().toLocaleDateString()}`, {
+      x: margin,
+      y: 28,
+      size: 8,
+      font,
+      color: rgb(0.42, 0.42, 0.42),
+    });
+  });
+
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes);
 }
 
 // Helper to format UUID bytes to string if needed
@@ -1318,10 +1417,13 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
 // AI Generate new document from templates
 router.post('/ai-generate', async (req: Request, res: Response) => {
   try {
-    const { templateId, partNumber, partName, documentType, customFields, referenceDocumentIds } = req.body;
+    const { templateId, partNumber, partName, departmentName, documentType, customFields, referenceDocumentIds } = req.body;
     const finalDocumentType = typeof documentType === 'string' && documentType.trim()
       ? documentType.trim()
       : 'work_instruction';
+    const finalDepartment = typeof departmentName === 'string' && departmentName.trim()
+      ? departmentName.trim()
+      : 'Manufacturing';
     
     if (!partNumber) {
       return res.status(400).json({ error: 'Reference, part, or equipment ID is required' });
@@ -1391,6 +1493,7 @@ Return a JSON object with:
 Document Type: ${finalDocumentType}
 Reference / Part / Equipment ID: ${partNumber || 'Not specified'}
 Subject / Part Name: ${partName || 'Not specified'}
+Department: ${finalDepartment}
 Custom Requirements: ${JSON.stringify(customFields || {})}
 
 ${referenceContent ? `Reference Documents:\n${referenceContent}` : ''}
@@ -1407,21 +1510,90 @@ ${templateContent ? `\nTemplate:\n${templateContent}` : ''}`;
     });
     
     const generatedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
-    
+    const documentTitle = generatedContent.title || `${humanizeDocumentType(finalDocumentType)} for ${partNumber}`;
+    const documentNumber = await generateControlledTemplateNumber();
+    const createdBy = (req as any).user?.username || 'system';
+    const pdfBuffer = await createGeneratedControlledPdf({
+      title: documentTitle,
+      documentType: finalDocumentType,
+      partNumber,
+      partName,
+      documentNumber,
+      generatedContent,
+    });
+    const pdfFileName = `${documentNumber}-${documentTitle}.pdf`;
+    const fileUrl = await saveControlledDocumentFile(pdfFileName, pdfBuffer);
+    const expirationDate = new Date();
+    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+
     // Create new routing document with generated content
     const [newDocument] = await db.insert(routingDocuments).values({
-      title: generatedContent.title || `Generated Document for ${partNumber}`,
+      title: documentTitle,
       partNumber,
+      departmentName: finalDepartment,
       documentType: finalDocumentType,
       sourceType: 'generated',
+      fileUrl,
+      fileName: pdfFileName,
+      fileType: 'application/pdf',
+      fileSize: pdfBuffer.length,
       aiExtractedContent: generatedContent,
       aiExtractedFields: generatedContent.fields || [],
       aiProcessedAt: new Date(),
       isTemplate: false,
-      createdBy: (req as any).user?.username || 'system',
+      description: `Controlled generated document ${documentNumber}`,
+      createdBy,
     }).returning();
+
+    let specSheet = null;
+    if (finalDocumentType === 'spec_sheet' || finalDocumentType === 'specification') {
+      [specSheet] = await db.insert(specSheets).values({
+        title: documentTitle,
+        partNumber,
+        partRoutingId: null,
+        description: `Controlled generated spec sheet ${documentNumber}`,
+        sourceType: 'generated',
+        fileUrl,
+        fileName: pdfFileName,
+        fileType: 'application/pdf',
+        fileSize: pdfBuffer.length,
+        specifications: generatedContent,
+        aiExtractedContent: generatedContent,
+        aiExtractedFields: generatedContent.fields || [],
+        aiProcessedAt: new Date(),
+        isTemplate: false,
+        createdBy,
+      }).returning();
+    }
+
+    const [controlledDocument] = await db.insert(controlledDocuments).values({
+      documentNumber,
+      documentName: documentTitle,
+      documentType: finalDocumentType,
+      department: finalDepartment,
+      category: specSheet ? 'Form & Document Builder Spec Sheet' : 'Form & Document Builder Work Instruction',
+      description: `${humanizeDocumentType(finalDocumentType)} generated from Form & Document Builder for ${partNumber}`,
+      currentVersion: '1.0',
+      status: 'pending',
+      retentionLength: 'controlled',
+      documentOwner: createdBy,
+      filePath: fileUrl,
+      createdBy,
+      expirationDate: expirationDate.toISOString().split('T')[0],
+    }).returning();
+
+    await db.insert(documentVersionHistory).values({
+      documentId: controlledDocument.id,
+      versionNumber: '1.0',
+      changeDescription: 'Initial generated document created from Form & Document Builder',
+      changeType: 'major',
+      filePath: fileUrl,
+      status: 'pending',
+      createdBy,
+      expirationDate: expirationDate.toISOString().split('T')[0],
+    });
     
-    res.status(201).json({ document: newDocument, generatedContent });
+    res.status(201).json({ document: newDocument, specSheet, controlledDocument, generatedContent });
   } catch (error) {
     console.error('Error generating document with AI:', error);
     res.status(500).json({ error: 'Failed to generate document' });

@@ -140,6 +140,7 @@ export default function RoutingDocumentManagement() {
   const [generateForm, setGenerateForm] = useState({
     partNumber: '',
     partName: '',
+    departmentName: '',
     documentType: 'work_instruction',
     templateId: '',
   });
@@ -339,7 +340,7 @@ export default function RoutingDocumentManagement() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: async (data: { partNumber: string; partName: string; documentType: string; templateId?: string; referenceDocumentIds?: string[] }) => {
+    mutationFn: async (data: { partNumber: string; partName: string; departmentName: string; documentType: string; templateId?: string; referenceDocumentIds?: string[] }) => {
       return apiRequest('/api/routing-documents/ai-generate', {
         method: 'POST',
         body: data,
@@ -349,8 +350,10 @@ export default function RoutingDocumentManagement() {
     onSuccess: () => {
       toast({ title: 'Form Generated', description: 'New form or instruction document has been created from AI analysis' });
       queryClient.invalidateQueries({ queryKey: ['/api/routing-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/spec-sheets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
       setShowGenerateDialog(false);
-      setGenerateForm({ partNumber: '', partName: '', documentType: 'work_instruction', templateId: '' });
+      setGenerateForm({ partNumber: '', partName: '', departmentName: '', documentType: 'work_instruction', templateId: '' });
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message || 'Failed to generate document', variant: 'destructive' });
@@ -681,6 +684,7 @@ export default function RoutingDocumentManagement() {
     generateMutation.mutate({
       partNumber: generateForm.partNumber,
       partName: generateForm.partName,
+      departmentName: generateForm.departmentName,
       documentType: generateForm.documentType,
       templateId: generateForm.templateId || undefined,
       referenceDocumentIds: selectedDocuments.length > 0 ? selectedDocuments : undefined,
@@ -1292,6 +1296,14 @@ export default function RoutingDocumentManagement() {
                 value={generateForm.partName}
                 onChange={(e) => setGenerateForm({ ...generateForm, partName: e.target.value })}
                 placeholder="e.g., Carbon Fiber Stock, Weekly CNC Maintenance"
+              />
+            </div>
+            <div>
+              <Label>Department</Label>
+              <Input
+                value={generateForm.departmentName}
+                onChange={(e) => setGenerateForm({ ...generateForm, departmentName: e.target.value })}
+                placeholder="e.g., Layup, CNC, Finish, Quality Control"
               />
             </div>
             <div>

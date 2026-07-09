@@ -318,6 +318,65 @@ describe('upsertGroupedCuttingQueueEntry — grouping invariants', () => {
     ).toEqual(['PO-100', 'PO-200']);
   });
 
+  it('updates the newest active grouped row for the same inventory item when packet labels or due dates drift', async () => {
+    store.rows.push(
+      {
+        id: store.nextId++,
+        inventoryItemId: CF_BASE.inventoryItemId,
+        department: 'Cutting Table',
+        quantityRequested: 228,
+        quantityCompleted: 131,
+        priority: 50,
+        status: 'IN_PROGRESS',
+        dueDate: new Date('2026-05-04T05:00:00Z'),
+        notes: JSON.stringify({
+          isP2Packet: true,
+          packetName: 'Legacy Disruptor Packet Label',
+          poNumbers: [{ poNumber: 'FC090', quantity: 1, p2PoItemId: null, p2PoId: null }],
+        }),
+        requestedBy: 'system',
+        createdAt: new Date('2026-05-04T18:44:58Z'),
+        updatedAt: new Date('2026-06-15T23:13:23Z'),
+      },
+      {
+        id: store.nextId++,
+        inventoryItemId: CF_BASE.inventoryItemId,
+        department: 'Cutting Table',
+        quantityRequested: 330,
+        quantityCompleted: 93,
+        priority: 50,
+        status: 'IN_PROGRESS',
+        dueDate: null,
+        notes: JSON.stringify({
+          isP2Packet: true,
+          packetName: '12" Blank Fuselage Tube Packet 98" long',
+          poNumbers: [{ poNumber: 'PO014332', quantity: 330, p2PoItemId: 9, p2PoId: 14 }],
+        }),
+        requestedBy: 'system',
+        createdAt: new Date('2026-05-21T20:09:01Z'),
+        updatedAt: new Date('2026-07-09T20:11:32Z'),
+      }
+    );
+
+    const result = await upsertGroupedCuttingQueueEntry({
+      ...CF_BASE,
+      packetName: '12" Blank Fuselage Tube Packet 98" long',
+      materialType: 'p2_packet',
+      dueDate: new Date('2026-07-09T12:00:00Z'),
+      items: [{ poNumber: 'PO014333', quantity: 1, p2PoItemId: 10, p2PoId: 14 }],
+    });
+
+    expect(result!.created).toBe(false);
+    expect(result!.queueItem.id).toBe(2);
+    expect(result!.addedQuantity).toBe(1);
+    expect(store.rows).toHaveLength(2);
+    expect(store.rows[1].quantityRequested).toBe(331);
+
+    const newestNotes = JSON.parse(store.rows[1].notes!);
+    expect(newestNotes.packetName).toBe('12" Blank Fuselage Tube Packet 98" long');
+    expect(newestNotes.poNumbers.map((p: { poNumber: string }) => p.poNumber)).toContain('PO014333');
+  });
+
   it('does not merge across different times of day on the same calendar bucket (uses date-only key)', async () => {
     // Two times on the same UTC day → same bucket → must merge into one row.
     await upsertGroupedCuttingQueueEntry({

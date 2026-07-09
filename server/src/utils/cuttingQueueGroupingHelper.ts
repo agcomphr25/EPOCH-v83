@@ -49,6 +49,39 @@ function itemKey(item: GroupedCuttingItem): string {
   return `po:${item.poNumber}`;
 }
 
+function parseQueueNotes(notes: string | null): Record<string, unknown> {
+  if (!notes) return {};
+  try {
+    const parsed = JSON.parse(notes);
+    return parsed && typeof parsed === 'object'
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function isActiveGroupedP2CuttingRow(row: ManufacturingQueue): boolean {
+  if (!['PENDING', 'IN_PROGRESS'].includes(row.status)) return false;
+  const parsedNotes = parseQueueNotes(row.notes);
+  return parsedNotes.isP2Packet === true;
+}
+
+function rowUpdatedTime(row: ManufacturingQueue): number {
+  const updated = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
+  if (updated) return updated;
+  const created = row.createdAt ? new Date(row.createdAt).getTime() : 0;
+  return created || 0;
+}
+
+function chooseNewestRow(rows: ManufacturingQueue[]): ManufacturingQueue | undefined {
+  return rows.slice().sort((a, b) => {
+    const timeDiff = rowUpdatedTime(b) - rowUpdatedTime(a);
+    if (timeDiff !== 0) return timeDiff;
+    return (b.id || 0) - (a.id || 0);
+  })[0];
+}
+
 async function resolveBomIdForMaterialType(materialType: string | null): Promise<string | null> {
   if (!materialType) return null;
   const packetTypeName =
@@ -134,9 +167,11 @@ async function resolveInventoryItemId(packetName: string, materialType: string |
  * Upsert a grouped cutting-table manufacturing queue row for a given packet type.
  *
  * Behavior:
- *   - Finds an existing PENDING manufacturing_queue row for the same packet type
- *     (matched by inventoryItemId + notes.packetName + notes.isP2Packet=true) and
- *     the same due-date bucket (same calendar day, or both null).
+ *   - Finds the newest active grouped manufacturing_queue row for the same
+ *     inventory item (PENDING or IN_PROGRESS, notes.isP2Packet=true). Prefer
+ *     the same packet-name/due-date bucket, but fall back to the newest active
+ *     row for the same inventory item so P2 re-syncs cannot create a duplicate
+ *     work order after operators have already started the prior one.
  *   - If found, merges the new items into notes.poNumbers (deduplicated by
  *     p2PoItemId, falling back to poNumber) and adds their quantity to
  *     quantityRequested. Re-runs with the same items are idempotent.
@@ -180,36 +215,28 @@ export async function upsertGroupedCuttingQueueEntry(
 
   const targetBucket = dueDateBucketKey(dueDate);
 
-  // Find candidate PENDING grouped rows for this packet type
+  // Find active grouped rows for this packet inventory item. This intentionally
+  // includes IN_PROGRESS rows so a P2/manual sync updates the live cutting job
+  // instead of creating a duplicate beside work already on the table.
   const candidates = await db.select()
     .from(manufacturingQueue)
     .where(and(
       eq(manufacturingQueue.department, 'Cutting Table'),
-      eq(manufacturingQueue.status, 'PENDING'),
       eq(manufacturingQueue.inventoryItemId, inventoryItemId),
     ));
 
-  const existingRow = candidates.find(row => {
+  const activeGroupedRows = candidates.filter(isActiveGroupedP2CuttingRow);
+  const exactRows = activeGroupedRows.filter(row => {
     if (dueDateBucketKey(row.dueDate) !== targetBucket) return false;
-    let parsedNotes: Record<string, unknown> = {};
-    try {
-      parsedNotes = row.notes ? JSON.parse(row.notes) : {};
-    } catch {
-      return false;
-    }
-    if (parsedNotes.isP2Packet !== true) return false;
+    const parsedNotes = parseQueueNotes(row.notes);
     const rowPacketName = typeof parsedNotes.packetName === 'string' ? parsedNotes.packetName : null;
     if (rowPacketName && rowPacketName.toLowerCase() !== packetName.toLowerCase()) return false;
     return true;
   });
+  const existingRow = chooseNewestRow(exactRows) ?? chooseNewestRow(activeGroupedRows);
 
   if (existingRow) {
-    let existingNotes: Record<string, unknown> = {};
-    try {
-      existingNotes = existingRow.notes ? JSON.parse(existingRow.notes) : {};
-    } catch {
-      existingNotes = {};
-    }
+    const existingNotes = parseQueueNotes(existingRow.notes);
 
     const existingPos: GroupedCuttingItem[] = Array.isArray(existingNotes.poNumbers)
       ? (existingNotes.poNumbers as GroupedCuttingItem[])

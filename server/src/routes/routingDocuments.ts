@@ -73,6 +73,33 @@ async function insertPublicRowReturning(tableName: string, values: Record<string
   return rows[0];
 }
 
+async function updatePublicRowByIdReturning(tableName: string, id: string, values: Record<string, any>) {
+  if (!TEMPLATE_UPLOAD_TABLES.has(tableName)) {
+    throw new Error(`Unsupported template upload table: ${tableName}`);
+  }
+
+  const columns = await getPublicTableColumns(tableName);
+  const availableKeys = Object.keys(values).filter((key) => columns.has(key) && values[key] !== undefined);
+  if (availableKeys.length === 0) {
+    const existingResult = await db.execute(sql`
+      SELECT *
+      FROM ${sql.raw(`"${tableName}"`)}
+      WHERE id = ${id}
+      LIMIT 1
+    `);
+    return (((existingResult as any)?.rows || existingResult || []) as any[])[0];
+  }
+
+  const setSql = availableKeys.map((key) => sql`${sql.raw(`"${key}"`)} = ${values[key]}`);
+  const result = await db.execute(sql`
+    UPDATE ${sql.raw(`"${tableName}"`)}
+    SET ${sql.join(setSql, sql`, `)}
+    WHERE id = ${id}
+    RETURNING *
+  `);
+  return (((result as any)?.rows || result || []) as any[])[0];
+}
+
 async function resolveFileToBuffer(fileUrl: string): Promise<Buffer | null> {
   if (fileUrl.startsWith('/assets/documents/')) {
     const filename = fileUrl.replace('/assets/documents/', '');
@@ -237,6 +264,48 @@ function buildSpecSheetTemplateFields(sheet: any) {
     fields.findIndex((candidate) => candidate.fieldName === field.fieldName) === index
   );
   return merged.map(normalizeTemplateField);
+}
+
+function buildFallbackDocumentAnalysis(title: string, textContent: string, documentType = 'work_instruction') {
+  const lines = textContent
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const likelyFields = [
+    { key: 'partNumber', label: 'Part Number', pattern: /\b(?:part\s*#|part\s*number|p\/n)\s*:?\s*([A-Z0-9._-]+)/i },
+    { key: 'sku', label: 'SKU #', pattern: /\bsku\s*#?\s*:?\s*([A-Z0-9._-]+)/i },
+    { key: 'revision', label: 'Revision', pattern: /\b(?:rev|revision)\s*:?\s*([A-Z0-9._-]+)/i },
+  ];
+  const dataFields = likelyFields.map((field, index) => {
+    const match = textContent.match(field.pattern);
+    return normalizeTemplateField({
+      fieldName: field.key,
+      fieldLabel: field.label,
+      fieldType: 'text',
+      sectionName: 'Header',
+      defaultValue: match?.[1] || '',
+      sortOrder: index,
+    });
+  });
+  dataFields.push(normalizeTemplateField({
+    fieldName: 'documentNotes',
+    fieldLabel: 'Document Notes',
+    fieldType: 'textarea',
+    sectionName: 'Document',
+    defaultValue: lines.slice(0, 30).join('\n'),
+    sortOrder: dataFields.length,
+  }));
+
+  return {
+    documentType,
+    title,
+    summary: lines.slice(0, 8).join(' '),
+    routingSteps: [],
+    dataFields,
+    qualityChecks: [],
+    materials: [],
+    source: 'fallback_text_analysis',
+  };
 }
 
 async function generateControlledTemplateNumber() {
@@ -1486,7 +1555,9 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
     
     const systemPrompt = COMPOSITE_ANALYSIS_PROMPT + COMPOSITE_ANALYSIS_JSON_SCHEMA;
 
-    const response = await getOpenAI().chat.completions.create({
+    let parsedContent: any;
+    try {
+      const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
@@ -1496,22 +1567,23 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
       max_completion_tokens: 4096,
     });
     
-    const parsedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
-    
-    const updateData: any = {
-      aiExtractedContent: parsedContent,
-      aiExtractedFields: parsedContent.dataFields || [],
-      aiProcessedAt: new Date(),
-      updatedAt: new Date(),
-    };
-    if (!document.extracted_text && textContent.trim()) {
-      updateData.extractedText = textContent;
+      parsedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
+    } catch (aiError) {
+      console.error('[AI Parse] AI analysis failed, using fallback text analysis:', aiError);
+      parsedContent = buildFallbackDocumentAnalysis(document.title, textContent, document.document_type || 'work_instruction');
     }
     
-    const [updatedDocument] = await db.update(routingDocuments)
-      .set(updateData)
-      .where(eq(routingDocuments.id, req.params.id))
-      .returning();
+    const updateData: Record<string, any> = {
+      ai_extracted_content: parsedContent,
+      ai_extracted_fields: parsedContent.dataFields || [],
+      ai_processed_at: new Date(),
+      updated_at: new Date(),
+    };
+    if (!document.extracted_text && textContent.trim()) {
+      updateData.extracted_text = textContent;
+    }
+    
+    const updatedDocument = await updatePublicRowByIdReturning('routing_documents', req.params.id, updateData);
     
     res.json({ document: updatedDocument, extractedContent: parsedContent });
   } catch (error) {
@@ -1699,35 +1771,56 @@ Return a JSON object with:
 
     console.log(`[Learn Template] Analyzing ${refDocs.length} documents, ${hasActualText ? 'with' : 'WITHOUT'} actual text content`);
 
-    const response = await getOpenAI().chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Analyze these ${refDocs.length} documents and create a template based on their ACTUAL content:\n\n${JSON.stringify(documentAnalysis, null, 2)}` }
-      ],
-      response_format: { type: 'json_object' },
-      max_completion_tokens: 4096,
-    });
-    
-    const learnedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
+    let learnedContent: any;
+    try {
+      const response = await getOpenAI().chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Analyze these ${refDocs.length} documents and create a template based on their ACTUAL content:\n\n${JSON.stringify(documentAnalysis, null, 2)}` }
+        ],
+        response_format: { type: 'json_object' },
+        max_completion_tokens: 4096,
+      });
+      learnedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
+    } catch (aiError) {
+      console.error('[Learn Template] AI analysis failed, using fallback template content:', aiError);
+      const combinedText = refDocs
+        .map((doc: any) => doc.extracted_text || '')
+        .filter(Boolean)
+        .join('\n\n---\n\n');
+      const fallbackAnalysis = buildFallbackDocumentAnalysis(templateName, combinedText || JSON.stringify(documentAnalysis), templateType || 'mixed');
+      learnedContent = {
+        structure: { source: 'fallback_text_analysis', documentCount: refDocs.length },
+        sections: [
+          { name: 'Header', description: 'Document identity fields', order: 1 },
+          { name: 'Document', description: 'Fields inferred from extracted text', order: 2 },
+        ],
+        defaultFields: fallbackAnalysis.dataFields,
+        aiGeneratedPrompt: 'Template created from extracted document text using fallback analysis.',
+      };
+    }
     
     // Create template with explicit error handling
     let template: any;
     try {
-      const templateResult = await db.insert(documentTemplates).values({
-        templateName: templateName || 'Learned Template',
-        templateType: templateType || 'mixed',
+      template = await insertPublicRowReturning('document_templates', {
+        template_name: templateName || 'Learned Template',
+        template_type: templateType || 'mixed',
         description: description || 'Template learned from reference documents',
-        sourceDocumentIds: referenceDocumentIds,
-        learnedFromCount: referenceDocumentIds.length,
-        structure: learnedContent.structure || null,
+        learned_from_count: referenceDocumentIds.length,
+        structure: {
+          ...(learnedContent.structure || {}),
+          sourceDocumentIds: referenceDocumentIds,
+        },
         sections: learnedContent.sections || null,
-        defaultFields: learnedContent.defaultFields || null,
-        aiGeneratedPrompt: learnedContent.aiGeneratedPrompt || null,
-        createdBy: (req as any).user?.username || 'system',
-      }).returning();
-      
-      template = templateResult[0];
+        default_fields: learnedContent.defaultFields || null,
+        ai_generated_prompt: learnedContent.aiGeneratedPrompt || null,
+        is_active: true,
+        created_by: (req as any).user?.username || 'system',
+        created_at: new Date(),
+        updated_at: new Date(),
+      }, ['template_name', 'template_type']);
     } catch (insertError) {
       console.error('Template insert error:', insertError);
       return res.status(500).json({ error: 'Failed to insert template into database' });
@@ -1741,15 +1834,22 @@ Return a JSON object with:
     // Create template fields
     if (learnedContent.defaultFields && learnedContent.defaultFields.length > 0) {
       for (const field of learnedContent.defaultFields) {
-        await db.insert(templateFields).values({
-          templateId: template.id,
-          fieldName: field.fieldName,
-          fieldLabel: field.fieldLabel,
-          fieldType: field.fieldType || 'text',
-          isRequired: field.isRequired || false,
-          defaultValue: field.defaultValue,
-          sortOrder: field.sortOrder || 0,
-        });
+        const normalizedField = normalizeTemplateField(field);
+        await insertPublicRowReturning('template_fields', {
+          template_id: template.id,
+          field_name: normalizedField.fieldName,
+          field_label: normalizedField.fieldLabel,
+          field_type: normalizedField.fieldType || 'text',
+          is_required: normalizedField.isRequired || false,
+          is_unique_per_serial: normalizedField.isUniquePerSerial || false,
+          default_value: normalizedField.defaultValue || null,
+          validation_rules: normalizedField.validationRules || null,
+          options: normalizedField.options || null,
+          section_name: normalizedField.sectionName || null,
+          sort_order: normalizedField.sortOrder || 0,
+          ai_suggested: true,
+          created_at: new Date(),
+        }, ['template_id', 'field_name', 'field_label', 'field_type']);
       }
     }
     

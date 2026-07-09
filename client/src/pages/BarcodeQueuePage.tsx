@@ -323,6 +323,18 @@ export default function BarcodeQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
+  const getActionBadgeLabel = (orderLabels: ReturnType<typeof deriveOrderLabels>) => {
+    return orderLabels.actionBadgeLabel || (
+      orderLabels.actionLengthRaw === 'short'
+        ? 'Short'
+        : orderLabels.actionLengthRaw === 'medium'
+          ? 'Medium'
+          : orderLabels.actionLengthRaw === 'long'
+            ? 'Long'
+            : 'Unknown'
+    );
+  };
+
   // Categorize orders by stock model only, sorted by due date
   const categorizedOrders = useMemo(() => {
     const categories: Record<string, any[]> = {};
@@ -1013,7 +1025,7 @@ export default function BarcodeQueuePage() {
                             {isRegularFlatTop && <Badge variant="outline" className="text-xs border-purple-500 text-purple-700 bg-purple-50 font-semibold">Flat Top</Badge>}
                             {isTikka && <Badge variant="outline" className="text-xs border-purple-600 text-purple-700 bg-purple-50 font-semibold">Tikka</Badge>}
                             <Badge variant="outline" className={`text-xs ${actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' : actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' : actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-500 text-gray-700 bg-gray-50'}`}>
-                              {actionLength === 'short' ? 'Short' : actionLength === 'medium' ? 'Medium' : actionLength === 'long' ? 'Long' : 'Unknown'} Action
+                              {getActionBadgeLabel(orderLabels)} Action
                             </Badge>
                             {lopVal && <Badge variant="outline" className="text-xs border-teal-600 text-teal-700 bg-teal-50 font-semibold">LOP {lopVal}</Badge>}
                             {hasHeavyFill && <Badge variant="outline" className="text-xs border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
@@ -1123,7 +1135,7 @@ export default function BarcodeQueuePage() {
                         </td>
                         <td className="px-3 py-2">
                           <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' : actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' : actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-500 text-gray-700 bg-gray-50'}`}>
-                            {actionLength === 'short' ? 'Short' : actionLength === 'medium' ? 'Medium' : actionLength === 'long' ? 'Long' : '—'}
+                            {actionLength === 'unknown' ? '—' : getActionBadgeLabel(orderLabels)}
                           </Badge>
                         </td>
                         <td className="px-3 py-2">
@@ -1371,14 +1383,7 @@ export default function BarcodeQueuePage() {
                                               : 'border-gray-500 text-gray-700 bg-gray-50'
                                       }`}
                                     >
-                                      {actionLength === 'short'
-                                        ? 'Short'
-                                        : actionLength === 'medium'
-                                          ? 'Medium'
-                                          : actionLength === 'long'
-                                            ? 'Long'
-                                            : 'Unknown'}{' '}
-                                      Action
+                                      {getActionBadgeLabel(orderLabels)} Action
                                     </Badge>
                                     {lopVal && <Badge variant="outline" className="text-xs border-teal-600 text-teal-700 bg-teal-50 font-semibold">LOP {lopVal}</Badge>}
                                     {hasHeavyFill && <Badge variant="outline" className="text-xs border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
@@ -1691,14 +1696,7 @@ export default function BarcodeQueuePage() {
                                                   : 'border-gray-500 text-gray-700 bg-gray-50'
                                           }`}
                                         >
-                                          {actionLength === 'short'
-                                            ? 'Short'
-                                            : actionLength === 'medium'
-                                              ? 'Medium'
-                                              : actionLength === 'long'
-                                                ? 'Long'
-                                                : 'Unknown'}{' '}
-                                          Action
+                                          {getActionBadgeLabel(orderLabels2)} Action
                                         </Badge>
                                         {/* Flattop badge for P1 PO orders */}
                                         {isPOOrder && (order.features?.flattop === true || order.features?.flattop === 'true') && (

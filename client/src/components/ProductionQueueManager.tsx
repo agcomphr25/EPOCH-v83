@@ -71,6 +71,7 @@ import type { P1POQueueCustomer } from '@shared/schema';
 import { LayupSchedulePreview } from './LayupSchedulePreview';
 import { ScheduleHistoryDialog } from './ScheduleHistoryDialog';
 import { MoldSettings } from './MoldSettings';
+import { deriveOrderLabels } from '@/utils/deriveOrderLabels';
 
 interface ProductionQueueOrder {
   orderId: string;
@@ -1971,19 +1972,10 @@ export default function ProductionQueueManager() {
                     </TableHeader>
                     <TableBody>
                       {filteredProductionQueue.map((order, index) => {
-                        // Get action length
-                        let actionLength = order.features?.action_length;
-                        if (!actionLength || actionLength === 'none') {
-                          // Try to derive from action_inlet
-                          const actionInlet = order.features?.action_inlet;
-                          if (actionInlet) {
-                            if (actionInlet.toLowerCase().includes('short'))
-                              actionLength = 'Short';
-                            else if (actionInlet.toLowerCase().includes('long'))
-                              actionLength = 'Long';
-                          }
-                        }
-                        const hasActionLength = actionLength && actionLength !== 'none';
+                        const orderLabels = deriveOrderLabels(order);
+                        const actionLength = orderLabels.actionLengthRaw;
+                        const actionLengthDisplay = orderLabels.actionBadgeLabel;
+                        const hasActionLength = actionLength !== 'unknown';
                         const isTikkaModel = (order.modelId || '').toLowerCase().includes('tikka');
 
                         // Check if bottom metal contains "adl"
@@ -2076,7 +2068,7 @@ export default function ProductionQueueManager() {
                                   variant="secondary"
                                   className="font-medium"
                                 >
-                                  {actionLength}
+                                  {actionLengthDisplay}
                                 </Badge>
                               ) : order.isFlattop ? (
                                 <Badge

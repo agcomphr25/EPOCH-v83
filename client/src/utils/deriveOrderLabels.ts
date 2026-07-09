@@ -1,6 +1,7 @@
 export interface DerivedOrderLabels {
   materialLabel: string;
   actionLabel: string;
+  actionBadgeLabel: string;
   actionLengthRaw: string;
   modelBadgeLabel: string | null;
   isTikka: boolean;
@@ -215,6 +216,50 @@ function deriveActionLength(order: any, debugReasons: string[]): string {
   return 'unknown';
 }
 
+function normalizeDescriptor(raw: unknown): string {
+  return typeof raw === 'string'
+    ? raw.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+    : '';
+}
+
+function deriveActionDescriptor(order: any): string {
+  const features = order.features || {};
+  const parsedSpecs = order.parsedSpecs || order.specifications || {};
+
+  return [
+    features.action_inlet,
+    features.actionInlet,
+    features.action,
+    parsedSpecs.action_inlet,
+    parsedSpecs.actionInlet,
+    parsedSpecs.action,
+    parsedSpecs.inlet,
+  ]
+    .map(normalizeDescriptor)
+    .filter(Boolean)
+    .join(' ');
+}
+
+function shouldShowSmrActionSuffix(order: any, actionLengthRaw: string, debugReasons: string[]): boolean {
+  if (actionLengthRaw !== 'medium') return false;
+
+  const actionDescriptor = deriveActionDescriptor(order);
+  if (!actionDescriptor) return false;
+
+  const isSnowyMountainDefianceXm =
+    actionDescriptor.includes('def') &&
+    actionDescriptor.includes('xm') &&
+    actionDescriptor.includes('snowy') &&
+    (actionDescriptor.includes('mtn') || actionDescriptor.includes('mountain')) &&
+    (actionDescriptor.includes('med') || actionDescriptor.includes('medium'));
+
+  if (isSnowyMountainDefianceXm) {
+    debugReasons.push(`SMR action suffix from action descriptor: "${actionDescriptor}"`);
+  }
+
+  return isSnowyMountainDefianceXm;
+}
+
 function deriveTikka(order: any, debugReasons: string[]): boolean {
   if (order.tikkaOption) {
     debugReasons.push('tikka from order.tikkaOption');
@@ -272,14 +317,28 @@ export function deriveOrderLabels(order: any): DerivedOrderLabels {
 
   const materialLabel = deriveMaterial(order, debugReasons);
   const actionLengthRaw = deriveActionLength(order, debugReasons);
+  const showSmrActionSuffix = shouldShowSmrActionSuffix(order, actionLengthRaw, debugReasons);
   const isTikka = deriveTikka(order, debugReasons);
   const modelBadgeLabel = deriveModelBadge(order, isTikka, debugReasons);
+
+  const actionBadgeLabel =
+    actionLengthRaw === 'short'
+      ? 'Short'
+      : actionLengthRaw === 'medium'
+        ? showSmrActionSuffix
+          ? 'Medium (SMR)'
+          : 'Medium'
+        : actionLengthRaw === 'long'
+          ? 'Long'
+          : 'Unknown';
 
   const actionLabel =
     actionLengthRaw === 'short'
       ? 'Short Action'
       : actionLengthRaw === 'medium'
-        ? 'Medium Action'
+        ? showSmrActionSuffix
+          ? 'Medium (SMR) Action'
+          : 'Medium Action'
         : actionLengthRaw === 'long'
           ? 'Long Action'
           : 'Unknown Action';
@@ -287,6 +346,7 @@ export function deriveOrderLabels(order: any): DerivedOrderLabels {
   return {
     materialLabel,
     actionLabel,
+    actionBadgeLabel,
     actionLengthRaw,
     modelBadgeLabel,
     isTikka,

@@ -3,7 +3,13 @@ import { z } from 'zod';
 import { storage } from '../../storage';
 import { db, pool } from '../../db';
 import { sql } from 'drizzle-orm';
-import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogSchema, insertProjectNotificationSchema } from '../../schema';
+import {
+  insertInventoryItemSchema,
+  insertProjectSchema,
+  insertProjectStepSchema,
+  insertProjectActivityLogSchema,
+  insertProjectNotificationSchema,
+} from '../../schema';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosingValidation';
 import { ensureProjectHasWAD } from '../lib/wadHelper';
@@ -84,6 +90,22 @@ function normalizeRomNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+async function nextNumericInventoryPartNumber() {
+  const result = await db.execute(
+    sql`SELECT ag_part_number FROM inventory_items WHERE ag_part_number ~ '^[0-9]+$' ORDER BY CAST(ag_part_number AS INTEGER) DESC LIMIT 1`,
+  );
+  const maxNum = result.rows?.[0]?.ag_part_number ? Number.parseInt(String(result.rows[0].ag_part_number), 10) : 0;
+  return String(maxNum + 1);
+}
+
+function duplicateInventoryPartNumberError(error: unknown) {
+  return typeof error === 'object' && error !== null && (
+    (error as any).code === '23505' ||
+    (error as any).cause?.code === '23505' ||
+    String((error as any).message || '').includes('inventory_items_ag_part_number')
+  );
 }
 
 function normalizeRomCategories(raw: unknown): Record<string, any> {
@@ -2073,6 +2095,156 @@ router.patch('/:id/rom-draft', async (req, res) => {
   }
 });
 
+const projectSourcePartInventorySchema = z.object({
+  poItemId: z.number().int().positive().optional().nullable(),
+  partNumber: z.string().min(1, 'Source part number is required'),
+  partName: z.string().optional().nullable(),
+  manufacturedCategory: z
+    .enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT'])
+    .default('COMPONENT'),
+});
+
+// POST /api/projects/:id/p2-hub/source-parts/inventory-item - convert a project PO source part into a manufactured AG inventory item.
+router.post('/:id/p2-hub/source-parts/inventory-item', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await storage.getProject(id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    const input = projectSourcePartInventorySchema.parse(req.body);
+    const poRows = await pool.query<any>(
+      `WITH selected_po AS (
+         SELECT COALESCE(parent_po_id, id) AS family_root_id
+         FROM p2_purchase_orders
+         WHERE id = $2
+       ),
+       project_pos AS (
+         SELECT po.id
+         FROM p2_purchase_orders po
+         LEFT JOIN selected_po sp ON true
+         WHERE po.project_id = $1::uuid
+            OR po.id = $2
+            OR po.id = sp.family_root_id
+            OR po.parent_po_id = sp.family_root_id
+       )
+       SELECT poi.id, poi.po_id, poi.inventory_item_id, poi.part_number, poi.part_name,
+              poi.quantity, poi.specifications, poi.notes
+       FROM p2_purchase_order_items poi
+       JOIN project_pos pp ON pp.id = poi.po_id
+       WHERE ($3::int IS NULL OR poi.id = $3::int)
+          OR LOWER(TRIM(poi.part_number)) = LOWER(TRIM($4::text))
+       ORDER BY CASE WHEN poi.id = $3::int THEN 0 ELSE 1 END, poi.id ASC`,
+      [id, project.poId ?? null, input.poItemId ?? null, input.partNumber],
+    );
+    const sourceLine = poRows[0];
+    if (!sourceLine) {
+      return res.status(404).json({ error: 'Source part was not found on this project PO family.' });
+    }
+
+    const existingByLink = sourceLine.inventory_item_id
+      ? await pool.query<any>(
+          `SELECT id, ag_part_number, name, item_type, manufactured_category
+           FROM inventory_items
+           WHERE id = $1
+           LIMIT 1`,
+          [sourceLine.inventory_item_id],
+        )
+      : [];
+    const existingByPartNumber = existingByLink.length > 0
+      ? []
+      : await pool.query<any>(
+          `SELECT id, ag_part_number, name, item_type, manufactured_category
+           FROM inventory_items
+           WHERE LOWER(TRIM(ag_part_number)) = LOWER(TRIM($1))
+           LIMIT 1`,
+          [sourceLine.part_number],
+        );
+    const existingItem = existingByLink[0] ?? existingByPartNumber[0] ?? null;
+    const linkedPoItemIds = poRows.map((row: any) => row.id);
+
+    if (existingItem) {
+      const updated = await pool.query<any>(
+        `UPDATE inventory_items
+         SET item_type = 'MANUFACTURED',
+             type = 'Manufactured',
+             manufactured_category = COALESCE(manufactured_category, $2),
+             manufacturing_level = COALESCE(manufacturing_level, 'COMPONENT'),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, ag_part_number, name, item_type, manufactured_category`,
+        [existingItem.id, input.manufacturedCategory],
+      );
+      await pool.query(
+        `UPDATE p2_purchase_order_items
+         SET inventory_item_id = $1, updated_at = NOW()
+         WHERE id = ANY($2::int[])`,
+        [existingItem.id, linkedPoItemIds],
+      );
+      return res.json({
+        inventoryItem: updated[0] ?? existingItem,
+        linkedPoItemIds,
+        created: false,
+      });
+    }
+
+    const sourcePartName = input.partName || sourceLine.part_name || sourceLine.part_number;
+    const notes = [
+      'Created from P2 Project BOM/Routing source part conversion.',
+      project.projectCode || project.projectName ? `Project: ${project.projectCode || project.projectName}` : null,
+      sourceLine.part_number ? `Source PO part: ${sourceLine.part_number}` : null,
+      sourceLine.specifications ? `Specifications: ${sourceLine.specifications}` : null,
+      sourceLine.notes ? `PO line notes: ${sourceLine.notes}` : null,
+    ].filter(Boolean).join('\n');
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const agPartNumber = await nextNumericInventoryPartNumber();
+      const itemData = insertInventoryItemSchema.parse({
+        agPartNumber,
+        name: sourcePartName,
+        description: sourcePartName,
+        source: 'P2 Project BOM/Routing',
+        supplierPartNumber: sourceLine.part_number,
+        usageUnit: 'EA',
+        purchaseUnit: 'EA',
+        notes,
+        itemType: 'MANUFACTURED',
+        type: 'Manufactured',
+        manufacturedCategory: input.manufacturedCategory,
+        manufacturingLevel: 'COMPONENT',
+        isActive: true,
+        utilizedInPL2: true,
+      });
+
+      try {
+        const newItem = await storage.createInventoryItem(itemData);
+        await pool.query(
+          `UPDATE p2_purchase_order_items
+           SET inventory_item_id = $1, updated_at = NOW()
+           WHERE id = ANY($2::int[])`,
+          [newItem.id, linkedPoItemIds],
+        );
+        return res.status(201).json({
+          inventoryItem: newItem,
+          linkedPoItemIds,
+          created: true,
+        });
+      } catch (error) {
+        if (duplicateInventoryPartNumberError(error) && attempt < 4) continue;
+        throw error;
+      }
+    }
+
+    return res.status(409).json({ error: 'Unable to allocate a unique AG part number. Please retry.' });
+  } catch (error) {
+    console.error('Create project source inventory item error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid source part payload' });
+    }
+    if (error instanceof Error) return res.status(400).json({ error: error.message });
+    return res.status(500).json({ error: 'Failed to create manufactured inventory item for source part' });
+  }
+});
+
 // GET /api/projects/:id/p2-hub - read-only P2 Project Hub tab model.
 router.get('/:id/p2-hub', async (req, res) => {
   try {
@@ -2169,13 +2341,14 @@ router.get('/:id/p2-hub', async (req, res) => {
     const poInventoryItems = poInventoryItemIds.length > 0
       ? await optionalHubQuery<any>(
           'PO inventory items',
-          `SELECT id, ag_part_number, name
+          `SELECT id, ag_part_number, name, item_type, type, manufactured_category
            FROM inventory_items
            WHERE id = ANY($1::int[])`,
           [poInventoryItemIds],
         )
       : [];
     const poInventoryPartById = new Map(poInventoryItems.map((item: any) => [Number(item.id), item.ag_part_number]));
+    const poInventoryItemById = new Map(poInventoryItems.map((item: any) => [Number(item.id), item]));
     const partNumbers = Array.from(new Set([
       ...poItems.map((item: any) => item.part_number).filter(Boolean),
       ...poItems
@@ -2429,6 +2602,23 @@ router.get('/:id/p2-hub', async (req, res) => {
       return bTime - aTime;
     })[0] ?? null;
     const activePoItems = activePoId ? poItems.filter((item: any) => item.po_id === activePoId) : poItems;
+    const sourceParts = activePoItems.map((item: any) => {
+      const inventoryItem = poInventoryItemById.get(Number(item.inventory_item_id)) ?? null;
+      const itemType = String(inventoryItem?.item_type ?? inventoryItem?.type ?? '').trim().toUpperCase();
+      return {
+        poItemId: item.id,
+        poId: item.po_id,
+        partNumber: item.part_number,
+        partName: item.part_name,
+        quantity: item.quantity,
+        inventoryItemId: inventoryItem?.id ?? null,
+        agPartNumber: inventoryItem?.ag_part_number ?? null,
+        inventoryName: inventoryItem?.name ?? null,
+        itemType: inventoryItem?.item_type ?? inventoryItem?.type ?? null,
+        manufacturedCategory: inventoryItem?.manufactured_category ?? null,
+        isManufactured: itemType === 'MANUFACTURED',
+      };
+    });
     const normalizeProductionKey = (value: unknown) => String(value ?? '').trim().toLowerCase();
     const normalizePlacementLabel = (value: unknown) => {
       const raw = String(value ?? '').trim();
@@ -2820,6 +3010,7 @@ router.get('/:id/p2-hub', async (req, res) => {
           bomRecords,
           routings: projectRoutings,
           sourcePartNumbers: partNumbers,
+          sourceParts,
           changeLinks: projectRevisions.filter((revision: any) => ['drawing', 'contract'].includes(revision.revisionType)),
         },
         wad: {

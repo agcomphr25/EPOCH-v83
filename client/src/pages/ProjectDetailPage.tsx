@@ -869,6 +869,7 @@ export default function ProjectDetailPage() {
   const bomRoutingRecords = Array.isArray(hubBomRouting.bomRecords) ? hubBomRouting.bomRecords : [];
   const assemblyBomRecords = Array.isArray(productionAssemblyTree.bomRecords) ? productionAssemblyTree.bomRecords : bomRoutingRecords;
   const bomRoutingRoutings = Array.isArray(hubBomRouting.routings) ? hubBomRouting.routings : [];
+  const bomRoutingSourceParts = Array.isArray(hubBomRouting.sourceParts) ? hubBomRouting.sourceParts : [];
   const bomRoutingPartNumbers = Array.isArray(hubBomRouting.sourcePartNumbers) ? hubBomRouting.sourcePartNumbers : [];
   const bomRoutingChangeLinks = Array.isArray(hubBomRouting.changeLinks)
     ? hubBomRouting.changeLinks
@@ -926,6 +927,37 @@ export default function ProjectDetailPage() {
       },
     } as any);
   };
+
+  const convertSourcePartMutation = useMutation({
+    mutationFn: (sourcePart: any) =>
+      apiRequest(`/api/projects/${id}/p2-hub/source-parts/inventory-item`, {
+        method: 'POST',
+        body: {
+          poItemId: sourcePart.poItemId ?? null,
+          partNumber: sourcePart.partNumber,
+          partName: sourcePart.partName || sourcePart.inventoryName || sourcePart.partNumber,
+          manufacturedCategory: sourcePart.manufacturedCategory || 'COMPONENT',
+        },
+      }),
+    onSuccess: (data: any) => {
+      const agPartNumber = data?.inventoryItem?.agPartNumber ?? data?.inventoryItem?.ag_part_number;
+      toast({
+        title: data?.created ? 'AG inventory item created' : 'AG inventory item updated',
+        description: agPartNumber
+          ? `${agPartNumber} is now linked as a manufactured source part.`
+          : 'The source part is now linked as a manufactured inventory item.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'p2-hub'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Source part update failed',
+        description: err?.message || 'Could not convert this source part to manufactured AG inventory.',
+        variant: 'destructive',
+      });
+    },
+  });
   const hubPo = hubTabs.po ?? {};
   const currentProjectPo = hubPo.currentPo ?? linkedProjectPO ?? projectP2POs[0] ?? null;
   const currentPoLineItems = Array.isArray(hubPo.lineItems) ? hubPo.lineItems : [];
@@ -3062,23 +3094,78 @@ export default function ProjectDetailPage() {
             </CardContent>
           </Card>
 
-          {bomRoutingPartNumbers.length > 0 && (
+          {(bomRoutingSourceParts.length > 0 || bomRoutingPartNumbers.length > 0) && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Tag className="h-4 w-4" />
                   Source Parts
                 </CardTitle>
-                <CardDescription>Manufactured PO parts used to find BOM and routing records.</CardDescription>
+                <CardDescription>PO source parts used to find BOM/routing records and link manufactured AG inventory items.</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {bomRoutingPartNumbers.map((partNumber: string) => (
-                    <Badge key={partNumber} variant="outline" className="font-mono">
-                      {partNumber}
-                    </Badge>
-                  ))}
-                </div>
+                {bomRoutingSourceParts.length > 0 ? (
+                  <div className="space-y-3">
+                    {bomRoutingSourceParts.map((sourcePart: any) => {
+                      const rowKey = sourcePart.poItemId ?? sourcePart.partNumber;
+                      const isLinkedManufactured = Boolean(sourcePart.agPartNumber && sourcePart.isManufactured);
+                      return (
+                        <div key={rowKey} className="rounded-md border p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono font-semibold">{sourcePart.partNumber || 'Unknown source'}</span>
+                                {sourcePart.quantity !== undefined && (
+                                  <Badge variant="outline">Qty {formatQuantityLabel(sourcePart.quantity)}</Badge>
+                                )}
+                                {isLinkedManufactured ? (
+                                  <Badge className="bg-green-100 text-green-800">Manufactured AG item</Badge>
+                                ) : sourcePart.agPartNumber ? (
+                                  <Badge variant="secondary">AG item linked</Badge>
+                                ) : (
+                                  <Badge variant="outline">PO source</Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {sourcePart.partName || sourcePart.inventoryName || 'No part name'}
+                              </p>
+                              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                <span className="rounded bg-muted px-2 py-1">
+                                  AG inventory: <span className="font-mono">{sourcePart.agPartNumber || 'Not linked'}</span>
+                                </span>
+                                <span className="rounded bg-muted px-2 py-1">
+                                  Category: {sourcePart.manufacturedCategory || 'Component default'}
+                                </span>
+                              </div>
+                            </div>
+                            <Button
+                              variant={isLinkedManufactured ? 'outline' : 'default'}
+                              size="sm"
+                              onClick={() => convertSourcePartMutation.mutate(sourcePart)}
+                              disabled={convertSourcePartMutation.isPending || !sourcePart.partNumber}
+                              data-testid={`button-convert-source-part-${sourcePart.poItemId ?? sourcePart.partNumber}`}
+                            >
+                              {convertSourcePartMutation.isPending ? (
+                                <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />
+                              ) : (
+                                <Edit className="h-4 w-4 mr-1.5" />
+                              )}
+                              {isLinkedManufactured ? 'Refresh Link' : 'Make AG Manufactured'}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {bomRoutingPartNumbers.map((partNumber: string) => (
+                      <Badge key={partNumber} variant="outline" className="font-mono">
+                        {partNumber}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

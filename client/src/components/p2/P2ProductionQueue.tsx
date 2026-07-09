@@ -636,11 +636,15 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
 
   const handlePrintSelectedLabels = (dept: Department) => {
     const selected = dept.items.filter(item => selectedLayupItems.has(item.id));
-    const printed = printAveryLabels(selected, `P2 Layup Selected Labels (${selected.length})`);
+    const printed = printAveryLabels(selected, `P2 ${dept.name} Selected Labels (${selected.length})`);
     if (printed) {
       const sns = [...new Set(selected.map(i => i.serialNumber).filter(Boolean))];
       if (sns.length > 0) stampPrintMutation.mutate(sns);
-      setSelectedLayupItems(new Set());
+      setSelectedLayupItems(prev => {
+        const next = new Set(prev);
+        selected.forEach(item => next.delete(item.id));
+        return next;
+      });
     }
   };
 
@@ -788,6 +792,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
           >
             {queueData?.departments.map((dept) => {
               const isReprintDepartment = isDepartmentAfterLayup(dept.name);
+              const selectedInDept = dept.items.filter(i => selectedLayupItems.has(i.id));
 
               return (
               <AccordionItem 
@@ -819,28 +824,28 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                     </div>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="px-4 pb-4" stickyChildren={dept.name === 'Layup' && dept.items.length > 0}>
-                  {dept.name === 'Layup' && dept.items.length > 0 && (
+                <AccordionContent className="px-4 pb-4" stickyChildren={dept.items.length > 0}>
+                  {dept.items.length > 0 && (
                     <div className="sticky top-[44px] z-10 mb-4 flex items-center justify-between gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800 shadow-sm">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
                           <Checkbox
-                            id="select-all-layup"
+                            id={`select-all-${dept.name}`}
                             checked={dept.items.length > 0 && dept.items.every(i => selectedLayupItems.has(i.id))}
                             onCheckedChange={() => toggleAllLayupItems(dept)}
                           />
-                          <label htmlFor="select-all-layup" className="text-sm font-medium cursor-pointer">
+                          <label htmlFor={`select-all-${dept.name}`} className="text-sm font-medium cursor-pointer">
                             Select All
                           </label>
                         </div>
-                        {selectedLayupItems.size > 0 && (
+                        {selectedInDept.length > 0 && (
                           <Badge variant="secondary" className="text-xs">
-                            {dept.items.filter(i => selectedLayupItems.has(i.id)).length} selected
+                            {selectedInDept.length} selected
                           </Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {selectedLayupItems.size > 0 && (
+                        {selectedInDept.length > 0 && (
                           <Button
                             variant="default"
                             size="sm"
@@ -848,7 +853,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                             data-testid="button-print-selected-labels"
                           >
                             <Printer className="mr-2 h-4 w-4" />
-                            Print Selected ({dept.items.filter(i => selectedLayupItems.has(i.id)).length})
+                            Print Selected ({selectedInDept.length})
                           </Button>
                         )}
                         <Button
@@ -898,8 +903,8 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                         {customerEntries.map(([customerName, customerItems]) => {
                           const groupKey = `${dept.name}||${customerName}`;
                           const printedCount = customerItems.filter(i => i.barcodePrintedAt).length;
-                          const layupSelectedInGroup = dept.name === 'Layup' ? customerItems.filter(i => selectedLayupItems.has(i.id)).length : 0;
-                          const allGroupSelected = dept.name === 'Layup' && customerItems.length > 0 && customerItems.every(i => selectedLayupItems.has(i.id));
+                          const selectedInGroup = customerItems.filter(i => selectedLayupItems.has(i.id));
+                          const allGroupSelected = customerItems.length > 0 && customerItems.every(i => selectedLayupItems.has(i.id));
                           return (
                             <AccordionItem
                               key={groupKey}
@@ -923,44 +928,43 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                     )}
                                   </div>
                                   <div className="flex items-center gap-2 mr-2">
-                                    {dept.name === 'Layup' && (
-                                      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-                                        <Checkbox
-                                          id={`select-all-${groupKey}`}
-                                          checked={allGroupSelected}
-                                          onCheckedChange={() => {
-                                            const ids = customerItems.map(i => i.id);
-                                            if (allGroupSelected) {
-                                              setSelectedLayupItems(prev => {
-                                                const next = new Set(prev);
-                                                ids.forEach(id => next.delete(id));
-                                                return next;
-                                              });
-                                            } else {
-                                              setSelectedLayupItems(prev => {
-                                                const next = new Set(prev);
-                                                ids.forEach(id => next.add(id));
-                                                return next;
-                                              });
-                                            }
-                                          }}
-                                        />
-                                        <label
-                                          htmlFor={`select-all-${groupKey}`}
-                                          className="text-xs text-muted-foreground cursor-pointer"
-                                          onClick={e => e.stopPropagation()}
-                                        >
-                                          {layupSelectedInGroup > 0 ? `${layupSelectedInGroup} selected` : 'Select all'}
-                                        </label>
-                                      </div>
-                                    )}
+                                    <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                                      <Checkbox
+                                        id={`select-all-${groupKey}`}
+                                        checked={allGroupSelected}
+                                        onCheckedChange={() => {
+                                          const ids = customerItems.map(i => i.id);
+                                          if (allGroupSelected) {
+                                            setSelectedLayupItems(prev => {
+                                              const next = new Set(prev);
+                                              ids.forEach(id => next.delete(id));
+                                              return next;
+                                            });
+                                          } else {
+                                            setSelectedLayupItems(prev => {
+                                              const next = new Set(prev);
+                                              ids.forEach(id => next.add(id));
+                                              return next;
+                                            });
+                                          }
+                                        }}
+                                      />
+                                      <label
+                                        htmlFor={`select-all-${groupKey}`}
+                                        className="text-xs text-muted-foreground cursor-pointer"
+                                        onClick={e => e.stopPropagation()}
+                                      >
+                                        {selectedInGroup.length > 0 ? `${selectedInGroup.length} selected` : 'Select all'}
+                                      </label>
+                                    </div>
                                     <Button
                                       variant="ghost"
                                       size="sm"
                                       className="h-6 px-2 text-xs"
                                       onClick={e => {
                                         e.stopPropagation();
-                                        handlePrintCustomerLabels(customerItems, dept.name, customerName);
+                                        const printItems = selectedInGroup.length > 0 ? selectedInGroup : customerItems;
+                                        handlePrintCustomerLabels(printItems, dept.name, customerName);
                                       }}
                                     >
                                       <Printer className="h-3 w-3 mr-1" />
@@ -973,7 +977,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
-                                      {dept.name === 'Layup' && <TableHead className="w-10"></TableHead>}
+                                      <TableHead className="w-10"></TableHead>
                                       <TableHead>Barcode</TableHead>
                                       <TableHead>Part Number</TableHead>
                                       <TableHead
@@ -992,15 +996,13 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                   </TableHeader>
                                   <TableBody>
                                     {customerItems.map((item) => (
-                                      <TableRow key={item.id} className={dept.name === 'Layup' && selectedLayupItems.has(item.id) ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''}>
-                                        {dept.name === 'Layup' && (
-                                          <TableCell>
-                                            <Checkbox
-                                              checked={selectedLayupItems.has(item.id)}
-                                              onCheckedChange={() => toggleLayupItem(item.id)}
-                                            />
-                                          </TableCell>
-                                        )}
+                                      <TableRow key={item.id} className={selectedLayupItems.has(item.id) ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''}>
+                                        <TableCell>
+                                          <Checkbox
+                                            checked={selectedLayupItems.has(item.id)}
+                                            onCheckedChange={() => toggleLayupItem(item.id)}
+                                          />
+                                        </TableCell>
                                         <TableCell className="font-mono font-semibold">
                                           <div className="flex items-center gap-1.5">
                                             {item.barcode || item.serialNumber}

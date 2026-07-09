@@ -54,6 +54,12 @@ import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 
 type BomStatus = 'Needs Review' | 'Needs Quote' | 'RFQ Sent' | 'On Order' | 'On Hand' | 'ETA / Inbound' | 'Hold';
+type DraftBuilderProcurementStatus = {
+  lineId: string;
+  status: BomStatus;
+  source: 'parts-request' | 'vendor-po';
+  reference: string;
+};
 
 type BomLine = PrivateerDraftBomLine & {
   customFields?: Record<string, string>;
@@ -516,7 +522,8 @@ function inventoryDescription(item: InventoryItemOption) {
 }
 
 function linePartNumber(line: BomLine) {
-  return line.agPartNumber || line.supplierItemId || customImportField(line, importedPartNumberHeaders) || `DRAFT-${line.id.slice(0, 8).toUpperCase()}`;
+  const lineId = typeof line.id === 'string' && line.id ? line.id : crypto.randomUUID();
+  return line.agPartNumber || line.supplierItemId || customImportField(line, importedPartNumberHeaders) || `DRAFT-${lineId.slice(0, 8).toUpperCase()}`;
 }
 
 const importedPartNumberHeaders = ['agpartnumber', 'agpart', 'partnumber', 'partno', 'partnum', 'part', 'itemnumber', 'sku'];
@@ -534,13 +541,81 @@ const importedDescriptionHeaders = [
   'name',
   'item',
 ];
+const importedStatusHeaders = ['status', 'orderstatus', 'poorderstatus', 'procurementstatus'];
+
+function parseImportStatus(value: string, fallback: BomStatus): BomStatus {
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (!normalized) return fallback;
+
+  const statusMatch = statuses.find((status) => normalizeCsvHeader(status) === normalized);
+  if (statusMatch) return statusMatch;
+
+  if (['needquote', 'needsquote', 'quote', 'quote needed', 'quoteneeded'].includes(normalized)) return 'Needs Quote';
+  if (['needreview', 'needsreview', 'needplan', 'needsplan', 'review', 'planning'].includes(normalized)) return 'Needs Review';
+  if (['rfq', 'rfqsent', 'requestforquote', 'requestforquotesent'].includes(normalized)) return 'RFQ Sent';
+  if (['ordered', 'onorder', 'po', 'posent', 'sent'].includes(normalized)) return 'On Order';
+  if (['received', 'onhand', 'stock', 'instock', 'delivered'].includes(normalized)) return 'On Hand';
+  if (['eta', 'inbound', 'partial', 'partiallyreceived', 'receivedpartial'].includes(normalized)) return 'ETA / Inbound';
+  if (['hold', 'blocked'].includes(normalized)) return 'Hold';
+
+  return fallback;
+}
+
+function statusRank(status: BomStatus) {
+  if (status === 'On Hand') return 4;
+  if (status === 'ETA / Inbound') return 3;
+  if (status === 'On Order') return 2;
+  if (status === 'RFQ Sent') return 1;
+  return 0;
+}
+
+function shouldPromoteLineStatus(currentStatus: BomStatus, nextStatus: BomStatus) {
+  if (currentStatus === 'Hold') return false;
+  return statusRank(nextStatus) > statusRank(currentStatus);
+}
 
 function customImportField(line: BomLine, keys: string[]) {
   const customFields = line.customFields ?? {};
   for (const [label, value] of Object.entries(customFields)) {
-    if (keys.includes(normalizeCsvHeader(label)) && value.trim()) return value.trim();
+    if (typeof value === 'string' && keys.includes(normalizeCsvHeader(label)) && value.trim()) return value.trim();
   }
   return '';
+}
+
+function parseSummaryNumber(value: number | string | '') {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const normalized = value.replace(/[$,]/g, '').trim();
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function summaryNumberValue(line: BomLine, field: 'unitCost' | 'qtyNeeded' | 'actualCost') {
+  const value = line[field];
+  if (value !== '' && value !== null && value !== undefined) return parseSummaryNumber(value);
+
+  const fallback = customImportField(
+    line,
+    field === 'qtyNeeded'
+      ? ['quantity', 'qty', 'qtyneeded', 'qnty']
+      : field === 'actualCost'
+        ? ['actualcost', 'actual']
+        : ['estimatedcost', 'unitcost', 'cost', 'price'],
+  );
+  return parseSummaryNumber(fallback);
+}
+
+function summaryLineStatus(line: BomLine): BomStatus {
+  const customStatus = customImportField(line, importedStatusHeaders);
+  return customStatus ? parseImportStatus(customStatus, line.status) : line.status;
+}
+
+function summaryLineTotal(line: BomLine) {
+  return summaryNumberValue(line, 'unitCost') * summaryNumberValue(line, 'qtyNeeded');
+}
+
+function isImportedSpreadsheetDescription(value: string) {
+  return /^Imported spreadsheet (?:line|row \d+)$/i.test(value.trim());
 }
 
 function lineDescription(line: BomLine) {
@@ -548,22 +623,37 @@ function lineDescription(line: BomLine) {
   const description = line.description?.trim() ?? '';
   const customDescription = customImportField(line, importedDescriptionHeaders);
   if (line.importedSource === 'spreadsheet' && customDescription) return customDescription;
-  if (description && description !== 'Imported spreadsheet line' && description !== partNumber) return description;
+  if (description && !isImportedSpreadsheetDescription(description) && description !== partNumber) return description;
   return customDescription || description || line.inventoryItemName || partNumber;
 }
 
-function normalizeBomLine(line: BomLine): BomLine {
-  return {
-    ...line,
-    isDraftPart: line.isDraftPart ?? !line.inventoryItemId,
-    isManufactured: line.isManufactured ?? false,
-    firstDepartment: line.firstDepartment ?? defaultDepartment,
-    childDraftBoms: line.childDraftBoms ?? [],
-    customFields: line.customFields ?? {},
-    importedSource: line.importedSource,
-    actualCost: line.actualCost ?? '',
-    service: line.service ?? false,
+function normalizeBomLine(line: Partial<BomLine> | null | undefined): BomLine {
+  const baseLine = newLine();
+  const safeLine = line && typeof line === 'object' ? line : {};
+  const id = typeof safeLine.id === 'string' && safeLine.id.trim() ? safeLine.id : baseLine.id;
+  const status = statuses.includes(safeLine.status as BomStatus) ? safeLine.status as BomStatus : baseLine.status;
+
+  const normalizedLine = {
+    ...baseLine,
+    ...safeLine,
+    id,
+    status,
+    include: safeLine.include ?? baseLine.include,
+    qtyNeeded: safeLine.qtyNeeded ?? baseLine.qtyNeeded,
+    unitCost: safeLine.unitCost ?? baseLine.unitCost,
+    isDraftPart: safeLine.isDraftPart ?? !safeLine.inventoryItemId,
+    isManufactured: safeLine.isManufactured ?? false,
+    firstDepartment: safeLine.firstDepartment ?? defaultDepartment,
+    childDraftBoms: Array.isArray(safeLine.childDraftBoms) ? safeLine.childDraftBoms : [],
+    customFields: safeLine.customFields && typeof safeLine.customFields === 'object' ? safeLine.customFields : {},
+    importedSource: safeLine.importedSource,
+    actualCost: safeLine.actualCost ?? '',
+    service: safeLine.service ?? false,
   };
+  if (normalizedLine.importedSource === 'spreadsheet' && isImportedSpreadsheetDescription(normalizedLine.description ?? '')) {
+    return { ...normalizedLine, description: lineDescription(normalizedLine) };
+  }
+  return normalizedLine;
 }
 
 function draftLineToPart(line: BomLine): DraftBomPart {
@@ -765,24 +855,47 @@ function draftMatchesSelectedProject(draft: BomDraft, selectedProject: ProjectSe
   });
 }
 
-function normalizeDraft(draft: BomDraft): BomDraft {
-  const lines = (draft.lines ?? []).map(normalizeBomLine);
-  const partsRequestLines = (draft.partsRequestLines ?? draft.lines ?? []).map(normalizeBomLine);
+function draftArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value.filter((item): item is T => item != null && typeof item === 'object') : [];
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function normalizeDraft(draft: Partial<BomDraft> | null | undefined): BomDraft {
+  const safeDraft = draft && typeof draft === 'object' ? draft : {};
+  const rawLines = draftArray<Partial<BomLine>>(safeDraft.lines);
+  const rawPartsRequestLines = draftArray<Partial<BomLine>>(safeDraft.partsRequestLines);
+  const laborEstimateSource = draftArray<DraftLaborEstimateLine>(safeDraft.laborEstimateLines);
+  const customColumnsSource = stringArray(safeDraft.customColumns);
+  const customPoColumnsSource = stringArray(safeDraft.customPoColumns);
+  const lines = rawLines.map(normalizeBomLine);
+  const partsRequestLines = (rawPartsRequestLines.length ? rawPartsRequestLines : rawLines).map(normalizeBomLine);
+  const fallbackDraft = createPrivateerDraft();
 
   return {
-    ...draft,
-    projectId: draft.projectId ?? null,
-    projectCode: draft.projectCode ?? null,
-    projectName: draft.projectName ?? draft.project ?? null,
-    projectType: draft.projectType ?? null,
+    ...fallbackDraft,
+    ...safeDraft,
+    id: typeof safeDraft.id === 'string' && safeDraft.id.trim() ? safeDraft.id : crypto.randomUUID(),
+    name: typeof safeDraft.name === 'string' && safeDraft.name.trim() ? safeDraft.name : 'Untitled draft',
+    revision: typeof safeDraft.revision === 'string' && safeDraft.revision.trim() ? safeDraft.revision : 'Draft A',
+    owner: typeof safeDraft.owner === 'string' ? safeDraft.owner : '',
+    project: typeof safeDraft.project === 'string' ? safeDraft.project : '',
+    notes: typeof safeDraft.notes === 'string' ? safeDraft.notes : '',
+    updatedAt: typeof safeDraft.updatedAt === 'string' ? safeDraft.updatedAt : new Date().toISOString(),
+    projectId: safeDraft.projectId ?? null,
+    projectCode: safeDraft.projectCode ?? null,
+    projectName: safeDraft.projectName ?? safeDraft.project ?? null,
+    projectType: safeDraft.projectType ?? null,
     lines,
     partsRequestLines,
     savedDraftBoms: mergeDraftBoms([
-      ...(draft.savedDraftBoms ?? []),
+      ...draftArray<DraftPartBom>(safeDraft.savedDraftBoms),
       ...lines.flatMap((line) => line.childDraftBoms ?? []),
       ...partsRequestLines.flatMap((line) => line.childDraftBoms ?? []),
     ]),
-    laborEstimateLines: (draft.laborEstimateLines?.length ? draft.laborEstimateLines : [newLaborEstimateLine()]).map((line) => ({
+    laborEstimateLines: (laborEstimateSource.length ? laborEstimateSource : [newLaborEstimateLine()]).map((line) => ({
       ...line,
       department: line.department || defaultDepartment,
       employeeRole: line.employeeRole ?? '',
@@ -790,7 +903,7 @@ function normalizeDraft(draft: BomDraft): BomDraft {
       hoursPerPart: line.hoursPerPart ?? '',
       quantityPerPo: line.quantityPerPo ?? 1,
     })),
-    nrcRows: (draft.nrcRows ?? []).map((row) => {
+    nrcRows: draftArray<NrcCostRow>(safeDraft.nrcRows).map((row) => {
       const normalized = {
         ...newNrcRow(),
         ...row,
@@ -813,18 +926,18 @@ function normalizeDraft(draft: BomDraft): BomDraft {
       normalized.totalCost = nrcRowTotal(normalized);
       return normalized;
     }),
-    customLaborDepartments: draft.customLaborDepartments ?? [],
-    poVisibleColumns: sanitizePoColumns(draft.poVisibleColumns),
-    partsRequestVisibleColumns: draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
-    directLaborVisibleColumns: draft.directLaborVisibleColumns ?? defaultDirectLaborColumns,
-    assemblyVisibleColumns: draft.assemblyVisibleColumns ?? defaultSourcingColumns,
-    customColumns: sanitizeCustomColumns([...(draft.customColumns ?? []), ...(draft.customPoColumns ?? [])]),
-    customPoColumns: sanitizeCustomColumns(draft.customPoColumns ?? []),
-    workspaceTabs: normalizeWorkspaceTabs(draft.workspaceTabs),
-    visibility: draft.visibility === 'private' ? 'private' : 'public',
-    allowPublicEdit: draft.allowPublicEdit === true,
-    canEdit: draft.canEdit,
-    canManageAccess: draft.canManageAccess,
+    customLaborDepartments: stringArray(safeDraft.customLaborDepartments),
+    poVisibleColumns: sanitizePoColumns(safeDraft.poVisibleColumns),
+    partsRequestVisibleColumns: safeDraft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
+    directLaborVisibleColumns: safeDraft.directLaborVisibleColumns ?? defaultDirectLaborColumns,
+    assemblyVisibleColumns: safeDraft.assemblyVisibleColumns ?? defaultSourcingColumns,
+    customColumns: sanitizeCustomColumns([...customColumnsSource, ...customPoColumnsSource]),
+    customPoColumns: sanitizeCustomColumns(customPoColumnsSource),
+    workspaceTabs: normalizeWorkspaceTabs(safeDraft.workspaceTabs),
+    visibility: safeDraft.visibility === 'private' ? 'private' : 'public',
+    allowPublicEdit: safeDraft.allowPublicEdit === true,
+    canEdit: safeDraft.canEdit,
+    canManageAccess: safeDraft.canManageAccess,
   };
 }
 
@@ -1129,6 +1242,43 @@ function normalizedAssemblyPartKey(value?: string | null) {
   return value?.trim().toLowerCase() ?? '';
 }
 
+function assemblyPartKeysForPart(
+  part: Pick<DraftBomPart | DraftBomComponent, 'partNumber' | 'description'>,
+) {
+  return new Set(
+    [
+      part.partNumber,
+      part.description,
+    ]
+      .map(normalizedAssemblyPartKey)
+      .filter(Boolean),
+  );
+}
+
+function assemblyPartKeysForLine(line: BomLine) {
+  return new Set(
+    [
+      linePartNumber(line),
+      line.agPartNumber,
+      line.supplierItemId,
+      line.description,
+      lineDescription(line),
+      line.inventoryItemName,
+      customImportField(line, importedPartNumberHeaders),
+      customImportField(line, importedDescriptionHeaders),
+    ]
+      .map(normalizedAssemblyPartKey)
+      .filter(Boolean),
+  );
+}
+
+function assemblyPartKeySetsOverlap(left: Set<string>, right: Set<string>) {
+  for (const key of left) {
+    if (right.has(key)) return true;
+  }
+  return false;
+}
+
 function findPartsRequestLineForAssemblyPart(
   part: Pick<DraftBomPart | DraftBomComponent, 'sourceLineId' | 'inventoryItemId' | 'partNumber' | 'description'>,
   lines: BomLine[],
@@ -1143,11 +1293,8 @@ function findPartsRequestLineForAssemblyPart(
     if (match) return match;
   }
 
-  const partNumber = normalizedAssemblyPartKey(part.partNumber);
-  const description = normalizedAssemblyPartKey(part.description);
-  return lines.find((line) => normalizedAssemblyPartKey(linePartNumber(line)) === partNumber)
-    ?? lines.find((line) => partNumber && normalizedAssemblyPartKey(line.agPartNumber) === partNumber)
-    ?? lines.find((line) => description && normalizedAssemblyPartKey(line.description) === description);
+  const partKeys = assemblyPartKeysForPart(part);
+  return lines.find((line) => assemblyPartKeySetsOverlap(partKeys, assemblyPartKeysForLine(line)));
 }
 
 function assemblyOrderStatus(
@@ -1183,6 +1330,12 @@ function isOnHandStatus(status: BomStatus) {
 
 function isOrderedStatus(status: BomStatus) {
   return status === 'RFQ Sent' || status === 'On Order' || status === 'ETA / Inbound';
+}
+
+function statusToneClass(status: BomStatus) {
+  if (status === 'On Hand') return 'border-emerald-300 bg-emerald-50 text-emerald-800';
+  if (isOrderedStatus(status)) return 'border-yellow-300 bg-yellow-50 text-yellow-800';
+  return 'border-red-300 bg-red-50 text-red-800';
 }
 
 function manufactureStateFor(orderStatus: BomStatus, children: AssemblyTreeNode[]): AssemblyManufactureState {
@@ -1425,12 +1578,14 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
       const inventoryMatch = linkInventoryMatches ? findInventoryMatch(importedPartNumber, inventoryItems) : null;
       if (inventoryMatch) linkedCount += 1;
       const spreadsheetLabel = `Imported spreadsheet row ${rowIndex + 1}`;
+      const description = inventoryMatch ? inventoryDescription(inventoryMatch) : sourceDescription || spreadsheetLabel;
+      const fallbackStatus = inventoryMatch ? 'Needs Review' : 'Needs Quote';
 
       return {
         ...newLine(),
         action: 'Review imported line',
         category: 'Imported Spreadsheet',
-        description: spreadsheetLabel,
+        description,
         agPartNumber: '',
         supplier: '',
         supplierItemId: '',
@@ -1440,7 +1595,7 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
         actualCost: '',
         qtyNeeded: '',
         service: false,
-        status: 'Needs Review',
+        status: parseImportStatus(csvField(row, importedStatusHeaders), fallbackStatus),
         targetNeedDate: '',
         note: inventoryMatch
           ? `CSV import linked to inventory item #${inventoryMatch.id}`
@@ -1473,7 +1628,7 @@ function laborDepartmentValue(label: string) {
 }
 
 function normalizeWorkspaceTabs(tabs?: readonly WorkspaceTabId[] | null): WorkspaceTabId[] {
-  const sourceTabs = tabs?.length ? [...tabs] : [...defaultWorkspaceTabs];
+  const sourceTabs = tabs?.length ? tabs.filter((tabId): tabId is WorkspaceTabId => typeof tabId === 'string') : [...defaultWorkspaceTabs];
   const normalized: WorkspaceTabId[] = [];
   const customLabels = new Set<string>();
 
@@ -1508,23 +1663,29 @@ function normalizeWorkspaceTabs(tabs?: readonly WorkspaceTabId[] | null): Worksp
   return normalized;
 }
 
-function uniqueColumnNames(columns: string[]) {
+function uniqueColumnNames(columns: unknown[]) {
   return columns.reduce<string[]>((result, column) => {
+    if (typeof column !== 'string') return result;
     const label = column.trim();
     if (!label || result.includes(label)) return result;
     return [...result, label];
   }, []);
 }
 
-function sanitizeCustomColumns(columns: string[]) {
-  return uniqueColumnNames(columns);
+function isStatusDuplicateColumn(column: string) {
+  return importedStatusHeaders.includes(normalizeCsvHeader(column));
+}
+
+function sanitizeCustomColumns(columns: unknown[]) {
+  return uniqueColumnNames(columns).filter((column) => !isStatusDuplicateColumn(column));
 }
 
 function loadDrafts(): BomDraft[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [createPrivateerDraft()];
-    const drafts = (JSON.parse(raw) as BomDraft[]).map(normalizeDraft);
+    const parsed = JSON.parse(raw);
+    const drafts = (Array.isArray(parsed) ? parsed : []).map(normalizeDraft);
     const privateer = drafts.find((item) => item.id === PRIVATEER_DRAFT_ID);
     if (privateer) return [privateer, ...drafts.filter((item) => item.id !== PRIVATEER_DRAFT_ID)];
     return [createPrivateerDraft(), ...drafts];
@@ -1724,8 +1885,8 @@ function createBlankDraftForTemporaryProject(projectName: string): BomDraft {
   };
 }
 
-function formatDraftUpdatedAt(value: string) {
-  const time = new Date(value);
+function formatDraftUpdatedAt(value?: string | null) {
+  const time = new Date(value ?? '');
   if (Number.isNaN(time.getTime())) return 'Unknown';
   return time.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -1861,6 +2022,34 @@ export default function DraftBOMBuilderPage() {
     () => inventoryItems.filter((item) => item.isActive !== false),
     [inventoryItems],
   );
+  const procurementStatusLines = useMemo(() => {
+    return partsRequestLines
+      .map((line) => ({
+        lineId: line.id,
+        inventoryItemId: line.inventoryItemId ?? null,
+        agPartNumber: line.agPartNumber || customImportField(line, ['agpartnumber', 'agpart']) || '',
+        partNumber: linePartNumber(line),
+        supplierItemId: line.supplierItemId || '',
+        description: lineDescription(line),
+      }))
+      .filter((line) =>
+        line.lineId &&
+        (line.inventoryItemId || line.agPartNumber || line.partNumber || line.supplierItemId || line.description)
+      );
+  }, [partsRequestLines]);
+  const procurementStatusQueryKey = useMemo(
+    () => JSON.stringify(procurementStatusLines),
+    [procurementStatusLines],
+  );
+  const { data: procurementStatuses = [] } = useQuery<DraftBuilderProcurementStatus[]>({
+    queryKey: ['/api/draft-bom-drafts/procurement-status', procurementStatusQueryKey],
+    queryFn: () => apiRequest('/api/draft-bom-drafts/procurement-status', {
+      method: 'POST',
+      body: { lines: procurementStatusLines },
+    }) as Promise<DraftBuilderProcurementStatus[]>,
+    enabled: procurementStatusLines.length > 0,
+    staleTime: 30000,
+  });
   const poDescriptionMatches = useMemo(() => {
     const query = poDescription.trim().toLowerCase();
     if (query.length < 2) return [];
@@ -1927,8 +2116,34 @@ export default function DraftBOMBuilderPage() {
   }, []);
 
   useEffect(() => {
+    if (!canEditActiveDraft || procurementStatuses.length === 0) return;
+    const statusByLineId = new Map(procurementStatuses.map((status) => [status.lineId, status]));
+
+    setDraft((current) => {
+      let changed = false;
+      const nextLines = (current.partsRequestLines ?? []).map((line) => {
+        const procurementStatus = statusByLineId.get(line.id);
+        if (!procurementStatus || !shouldPromoteLineStatus(line.status, procurementStatus.status)) return line;
+        changed = true;
+        return {
+          ...line,
+          status: procurementStatus.status,
+          note: line.note?.trim()
+            ? `${line.note}\nAuto-updated from ${procurementStatus.reference}.`
+            : `Auto-updated from ${procurementStatus.reference}.`,
+        };
+      });
+
+      return changed
+        ? { ...current, partsRequestLines: nextLines, updatedAt: new Date().toISOString() }
+        : current;
+    });
+  }, [canEditActiveDraft, procurementStatuses]);
+
+  useEffect(() => {
     if (!sharedDraftsFetched || hasLoadedSharedDrafts) return;
-    const sourceDrafts = sharedDrafts.length > 0 ? sharedDrafts : loadDrafts();
+    const sharedDraftList = Array.isArray(sharedDrafts) ? sharedDrafts : [];
+    const sourceDrafts = sharedDraftList.length > 0 ? sharedDraftList : loadDrafts();
     const normalizedDrafts = sourceDrafts.map(normalizeDraft);
     const nextDrafts = normalizedDrafts.length > 0 ? normalizedDrafts : [createPrivateerDraft()];
     const selectedDraft = nextDrafts.find((item) => item.id === selectedDraftId) ?? nextDrafts[0];
@@ -1990,14 +2205,19 @@ export default function DraftBOMBuilderPage() {
   ]);
 
   const totals = useMemo(() => {
-    const lineTotal = (line: BomLine) => asNumber(line.unitCost) * asNumber(line.qtyNeeded);
-    const materialTotal = draft.lines.reduce((sum, line) => sum + lineTotal(line), 0);
-    const selectedTotal = selectedLines.reduce((sum, line) => sum + lineTotal(line), 0);
-    const onHandTotal = draft.lines
-      .filter((line) => line.status === 'On Hand')
-      .reduce((sum, line) => sum + lineTotal(line), 0);
-    const needsQuote = draft.lines.filter((line) => line.status === 'Needs Quote' || line.unitCost === '').length;
-    const rfqSent = draft.lines.filter((line) => line.status === 'RFQ Sent').length;
+    const selectedLineIds = new Set(selectedLines.map((line) => line.id));
+    const partsRequestMaterialTotal = partsRequestLines.reduce((sum, line) => sum + summaryLineTotal(line), 0);
+    const selectedTotal = partsRequestLines
+      .filter((line) => selectedLineIds.has(line.id))
+      .reduce((sum, line) => sum + summaryLineTotal(line), 0);
+    const onHandTotal = partsRequestLines
+      .filter((line) => summaryLineStatus(line) === 'On Hand')
+      .reduce((sum, line) => sum + summaryLineTotal(line), 0);
+    const needsQuote = partsRequestLines.filter((line) => {
+      const status = summaryLineStatus(line);
+      return status === 'Needs Quote' || summaryNumberValue(line, 'unitCost') === 0;
+    }).length;
+    const rfqSent = partsRequestLines.filter((line) => summaryLineStatus(line) === 'RFQ Sent').length;
     const laborTotal = (draft.laborEstimateLines ?? []).reduce((sum, line) => sum + laborLineTotal(line), 0);
     const laborHours = (draft.laborEstimateLines ?? []).reduce(
       (sum, line) => sum + asNumber(line.hoursPerPart) * asNumber(line.quantityPerPo),
@@ -2007,6 +2227,7 @@ export default function DraftBOMBuilderPage() {
     const customerFacingNrcTotal = (draft.nrcRows ?? [])
       .filter((row) => row.includeInCustomerPrice && !row.internalOnly)
       .reduce((sum, row) => sum + nrcRowTotal(row), 0);
+    const materialTotal = partsRequestMaterialTotal + nrcTotal;
 
     return {
       materialTotal,
@@ -2018,20 +2239,20 @@ export default function DraftBOMBuilderPage() {
       onHandTotal,
       needsQuote,
       rfqSent,
-      lineCount: draft.lines.length,
+      lineCount: partsRequestLines.length,
     };
-  }, [draft.laborEstimateLines, draft.lines, draft.nrcRows, selectedLines]);
+  }, [draft.laborEstimateLines, draft.nrcRows, partsRequestLines, selectedLines]);
 
   const filterTotals = useMemo(() => {
     const grouped = new Map<string, { count: number; total: number }>();
-    for (const line of draft.lines) {
+    for (const line of partsRequestLines) {
       const existing = grouped.get(line.category) ?? { count: 0, total: 0 };
       existing.count += 1;
-      existing.total += asNumber(line.unitCost) * asNumber(line.qtyNeeded);
+      existing.total += summaryLineTotal(line);
       grouped.set(line.category, existing);
     }
     return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [draft.lines]);
+  }, [partsRequestLines]);
 
   function updateLine(id: string, patch: Partial<BomLine>) {
     setDraft((current) => ({
@@ -2644,6 +2865,8 @@ export default function DraftBOMBuilderPage() {
       projectType: selectedProject.projectType,
       updatedAt: new Date().toISOString(),
     };
+  }
+
   async function clearPartsRequestTab() {
     if (!canEditActiveDraft) {
       toast({
@@ -2934,6 +3157,27 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
+  function projectTabForDraftTab(tabId: WorkspaceTabId) {
+    const tabMap: Partial<Record<WorkspaceTabId, string>> = {
+      'parts-request': 'material',
+      'direct-labor': 'labor',
+      nrc: 'rom',
+      'bom-wizard': 'bom-routing',
+      'assembly-tree': 'production',
+    };
+    return tabMap[tabId] ?? null;
+  }
+
+  function rdProjectTabForDraftTab(tabId: WorkspaceTabId) {
+    const tabMap: Partial<Record<WorkspaceTabId, string>> = {
+      'parts-request': 'material',
+      'direct-labor': 'labor',
+      'bom-wizard': 'bom',
+      'assembly-tree': 'assembly-tree',
+    };
+    return tabMap[tabId] ?? null;
+  }
+
   async function pushActiveTabTo(target: 'rom' | 'p2-project' | 'rd-project') {
     const payload = {
       source: 'draft-builder',
@@ -2968,7 +3212,17 @@ export default function DraftBOMBuilderPage() {
         return;
       }
 
-      const bomsToPromote = draft.savedDraftBoms ?? [];
+      const projectTab = projectTabForDraftTab(activeWorkspaceTab);
+      if (!projectTab) {
+        toast({
+          title: 'PO draft stays in Draft Builder',
+          description: 'Use BOM wizard when the draft is ready to land in the project BOM/Routing tab.',
+        });
+        return;
+      }
+
+      const shouldPromoteDraftBoms = activeWorkspaceTab === 'bom-wizard' || activeWorkspaceTab === 'assembly-tree';
+      const bomsToPromote = shouldPromoteDraftBoms ? draft.savedDraftBoms ?? [] : [];
       const promotedDraftBoms = new Map<string, DraftPartBom>();
       try {
         for (const bomToPromote of bomsToPromote) {
@@ -2990,12 +3244,12 @@ export default function DraftBOMBuilderPage() {
           }));
         }
         toast({
-          title: 'BOM pushed to P2 project',
+          title: shouldPromoteDraftBoms ? 'BOM pushed to P2 project' : 'Draft tab pushed to P2 project',
           description: promotedDraftBoms.size > 0
             ? `${promotedDraftBoms.size} Robust BOM draft(s) promoted and bridged into the P2 BOM Wizard.`
-            : `${workspaceTabLabel(activeWorkspaceTab)} is ready in the project context.`,
+            : `${workspaceTabLabel(activeWorkspaceTab)} is ready in the project ${projectTab === 'material' ? 'Material' : projectTab === 'labor' ? 'Labor' : projectTab === 'production' ? 'Production' : 'BOM/Routing'} tab.`,
         });
-        setLocation(`/projects/${draft.projectId}?draftBuilderHandoff=1&tab=bom-routing`);
+        setLocation(`/projects/${draft.projectId}?draftBuilderHandoff=1&draftId=${encodeURIComponent(draft.id)}&tab=${encodeURIComponent(projectTab)}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to save the draft BOMs to Robust BOM.';
         toast({
@@ -3007,8 +3261,26 @@ export default function DraftBOMBuilderPage() {
       return;
     }
 
-    toast({ title: 'Tab pushed to R&D projects', description: `${workspaceTabLabel(activeWorkspaceTab)} is ready for R&D project attachment.` });
-    setLocation(`/rd-projects?draftBuilderHandoff=1&draftId=${encodeURIComponent(draft.id)}&tab=${encodeURIComponent(activeWorkspaceTab)}`);
+    if (draft.projectType !== 'R_AND_D' || !draft.projectId) {
+      toast({
+        title: 'Link an R&D project first',
+        description: 'Select a Design and R&D project before pushing this tab to an R&D project folder.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const rdProjectTab = rdProjectTabForDraftTab(activeWorkspaceTab);
+    if (!rdProjectTab) {
+      toast({
+        title: 'PO draft stays in Draft Builder',
+        description: 'Use BOM wizard, Parts/request, Direct Labor, or Assembly Tree when the draft is ready for the R&D project folder.',
+      });
+      return;
+    }
+
+    toast({ title: 'Tab pushed to R&D project', description: `${workspaceTabLabel(activeWorkspaceTab)} is ready in the R&D project ${rdProjectTab === 'material' ? 'Material' : rdProjectTab === 'labor' ? 'Labor' : rdProjectTab === 'bom' ? 'BOM' : 'Assembly Tree'} tab.` });
+    setLocation(`/design/rd-projects?draftBuilderHandoff=1&projectId=${encodeURIComponent(draft.projectId)}&draftId=${encodeURIComponent(draft.id)}&tab=${encodeURIComponent(rdProjectTab)}`);
   }
 
   function setWorkspaceTabVisible(tabId: WorkspaceTabId, visible: boolean) {
@@ -3268,7 +3540,7 @@ export default function DraftBOMBuilderPage() {
                             <div className="truncate font-medium text-slate-950">{item.name}</div>
                             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
                               <span>{item.revision || 'Draft'}</span>
-                              <span>{item.lines.length} line{item.lines.length === 1 ? '' : 's'}</span>
+                              <span>{(item.lines ?? []).length} line{(item.lines ?? []).length === 1 ? '' : 's'}</span>
                               <span>{draftSavedBomCount(item)} BOM{draftSavedBomCount(item) === 1 ? '' : 's'}</span>
                             </div>
                           </div>
@@ -4614,7 +4886,7 @@ function PartsRequestWorkspace({
                     {visibleColumns.includes('agPartNumber') ? <EditableCell value={line.agPartNumber} onChange={(value) => onUpdateLine(line.id, { agPartNumber: value })} disabled={!isEditMode} /> : null}
                     {visibleColumns.includes('status') ? <TableCell>
                       <Select value={line.status} onValueChange={(value) => onUpdateLine(line.id, { status: value as BomStatus })} disabled={!isEditMode}>
-                        <SelectTrigger className="h-9">
+                        <SelectTrigger className={cn('h-9', statusToneClass(line.status))}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -5968,19 +6240,9 @@ function EditableCell({
 }
 
 function StatusBadge({ status }: { status: BomStatus }) {
-  const tone =
-    status === 'On Hand'
-      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-      : status === 'RFQ Sent' || status === 'On Order'
-        ? 'border-sky-300 bg-sky-50 text-sky-800'
-        : status === 'Needs Quote' || status === 'Needs Review'
-          ? 'border-orange-300 bg-orange-50 text-orange-800'
-          : 'border-slate-300 bg-slate-50 text-slate-700';
-
   return (
-    <Badge variant="outline" className={tone}>
+    <Badge variant="outline" className={statusToneClass(status)}>
       {status}
     </Badge>
   );
-}
 }

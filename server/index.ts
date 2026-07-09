@@ -6707,14 +6707,18 @@ async function initializeBackgroundServices() {
           description TEXT,
           total_amount REAL NOT NULL DEFAULT 0,
           status TEXT NOT NULL DEFAULT 'DRAFT',
+          project_id UUID,
           valid_until TIMESTAMP,
           quoted_by TEXT,
           notes TEXT,
           attachments TEXT[],
+          customers_integer_id INTEGER,
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `);
+      await pool.query(`ALTER TABLE quotes ADD COLUMN IF NOT EXISTS project_id UUID`);
+      await pool.query(`ALTER TABLE quotes ADD COLUMN IF NOT EXISTS customers_integer_id INTEGER`);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS quote_line_items (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -6726,9 +6730,13 @@ async function initializeBackgroundServices() {
           total_price REAL NOT NULL DEFAULT 0,
           inventory_item_id INTEGER,
           ag_part_number TEXT,
+          labor_hours REAL,
+          department TEXT,
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);
+      await pool.query(`ALTER TABLE quote_line_items ADD COLUMN IF NOT EXISTS labor_hours REAL`);
+      await pool.query(`ALTER TABLE quote_line_items ADD COLUMN IF NOT EXISTS department TEXT`);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS quote_snapshots (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

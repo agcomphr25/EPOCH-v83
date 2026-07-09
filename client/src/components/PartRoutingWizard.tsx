@@ -109,6 +109,22 @@ interface ProjectOption {
   status?: string;
 }
 
+type WadInspectionStrategy = 'FULL' | 'SAMPLING' | 'MIXED' | 'FINAL_ONLY';
+
+interface WadRoutingDocumentationRequirements {
+  travelerRequired: boolean;
+  inspectionSheetRequired: boolean;
+  samplingPlanRequired: boolean;
+  samplingPlanId: string;
+  inspectionStrategy: WadInspectionStrategy;
+}
+
+interface WadRoutingRequirementsResponse {
+  wadId: string | null;
+  workOrderNumber: string | null;
+  requirements: WadRoutingDocumentationRequirements | null;
+}
+
 interface MaterialRequirement {
   partId: string;
   partNumber: string;
@@ -124,6 +140,8 @@ interface QCStandard {
   requirement: string; // Specific requirement or specification
   hardQcStop?: boolean;
   referenceLink?: string; // URL to reference table, chart, or document
+  inspectionCoveragePercent?: number;
+  sampleSize?: string;
 }
 
 interface OvenCuringStep {
@@ -192,6 +210,7 @@ interface PhaseCheck {
   signatureRole?: 'OPERATOR' | 'LEAD' | 'QC' | 'ENGINEERING' | 'CUSTOM';
   requiresCertification: boolean;
   hardQcStop?: boolean;
+  inspectionCoveragePercent?: number;
   instructionPack?: InstructionPack;
 }
 
@@ -333,7 +352,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const [qcToleranceInput, setQcToleranceInput] = useState<string>('');
   const [qcRequirementInput, setQcRequirementInput] = useState<string>('');
   const [qcReferenceLinkInput, setQcReferenceLinkInput] = useState<string>('');
-  const [qcInputDept, setQcInputDept] = useState<Record<string, { standard: string; tolerance: string; requirement: string; referenceLink?: string }>>({});
+  const [qcInputDept, setQcInputDept] = useState<Record<string, { standard: string; tolerance: string; requirement: string; referenceLink?: string; sampleSize?: string }>>({});
   
   const [aiSnippetGenerating, setAiSnippetGenerating] = useState<string | null>(null);
   const [showDocPicker, setShowDocPicker] = useState(false);
@@ -456,6 +475,12 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const { data: projectsList = [] } = useQuery<ProjectOption[]>({
     queryKey: ['/api/projects'],
     enabled: open && step === 1,
+  });
+
+  const { data: wadRoutingRequirements } = useQuery<WadRoutingRequirementsResponse>({
+    queryKey: ['/api/part-routings/project', selectedProjectId, 'wad-documentation-requirements'],
+    queryFn: () => apiRequest(`/api/part-routings/project/${selectedProjectId}/wad-documentation-requirements`),
+    enabled: open && !!selectedProjectId,
   });
 
   // Fetch inventory items for step 3 (materials selection)
@@ -587,6 +612,61 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
         }
       : undefined);
   const selectedProject = displayProjects.find(project => project.id === selectedProjectId);
+  const wadRequirements = wadRoutingRequirements?.requirements ?? null;
+  const allowsSampleSize =
+    wadRequirements?.inspectionStrategy === 'SAMPLING' ||
+    wadRequirements?.inspectionStrategy === 'MIXED';
+  const requiresFullInspection = wadRequirements?.inspectionStrategy === 'FULL';
+
+  const getAllQcStandards = (config: DepartmentConfiguration) => [
+    ...(config.startQcStandards ?? []),
+    ...(config.qcStandards ?? []),
+    ...(config.finishQcStandards ?? []),
+  ];
+
+  const hasQcInspectionSetup = () => selectedDepartments.some((dept) => {
+    const config = departmentConfig[dept];
+    if (!config) return false;
+    const hasQcStandards = getAllQcStandards(config).length > 0;
+    const hasQcChecks = [...(config.startChecks ?? []), ...(config.workChecks ?? []), ...(config.finishChecks ?? [])]
+      .some((check) => check.taskType === 'QC');
+    const hasQcSignature = config.signatureConfig?.requiredSignatures?.includes('qc_inspector') ||
+      config.signatureConfig?.requiredSignatures?.includes('QC');
+    return hasQcStandards || hasQcChecks || hasQcSignature;
+  });
+
+  const routingRequirementIssues = (): string[] => {
+    const issues: string[] = [];
+    if (!wadRequirements) return issues;
+    if (wadRequirements.inspectionSheetRequired && !hasQcInspectionSetup()) {
+      issues.push('WAD requires an inspection sheet, so add at least one QC check, QC standard, or QC signoff.');
+    }
+    if (wadRequirements.samplingPlanRequired && !wadRequirements.samplingPlanId?.trim()) {
+      issues.push('WAD requires a sampling plan before routing approval.');
+    }
+    return issues;
+  };
+
+  const applyWadInspectionDefaults = (standard: QCStandard): QCStandard => {
+    if (requiresFullInspection) {
+      return { ...standard, inspectionCoveragePercent: 100, sampleSize: undefined };
+    }
+    if (allowsSampleSize) {
+      return {
+        ...standard,
+        inspectionCoveragePercent: standard.inspectionCoveragePercent ?? undefined,
+        sampleSize: standard.sampleSize?.trim() || undefined,
+      };
+    }
+    return standard;
+  };
+
+  const applyWadCheckDefaults = (check: PhaseCheck): PhaseCheck => {
+    if (requiresFullInspection && check.required && check.taskType === 'QC') {
+      return { ...check, inspectionCoveragePercent: 100 };
+    }
+    return check;
+  };
 
   // Create/Update mutation
   const saveMutation = useMutation({
@@ -694,6 +774,17 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const handleSave = () => {
     if (!selectedItem) return;
 
+    const requirementIssues = routingRequirementIssues();
+    if (requirementIssues.length > 0) {
+      toast({
+        title: 'WAD routing requirements incomplete',
+        description: requirementIssues[0],
+        variant: 'destructive',
+      });
+      setStep(3);
+      return;
+    }
+
     // Build traceabilityConfig from current material assignments only.
     // Preserving old department keys makes material prompts appear on steps
     // after the user has moved or removed the material in routing.
@@ -722,8 +813,23 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
           ...m,
           partId: String(m.partId), // Ensure partId is string
         })),
+        startQcStandards: (config.startQcStandards ?? []).map(applyWadInspectionDefaults),
+        qcStandards: (config.qcStandards ?? []).map(applyWadInspectionDefaults),
+        finishQcStandards: (config.finishQcStandards ?? []).map(applyWadInspectionDefaults),
+        startChecks: (config.startChecks ?? []).map(applyWadCheckDefaults),
+        workChecks: (config.workChecks ?? []).map(applyWadCheckDefaults),
+        finishChecks: (config.finishChecks ?? []).map(applyWadCheckDefaults),
       };
     });
+
+    if (wadRoutingRequirements?.wadId && wadRequirements) {
+      (sanitizedDepartmentConfig as any).__wadDocumentationRequirements = {
+        wadId: wadRoutingRequirements.wadId,
+        workOrderNumber: wadRoutingRequirements.workOrderNumber,
+        ...wadRequirements,
+        travelerRequired: wadRequirements.travelerRequired === true,
+      };
+    }
 
     const data = {
       inventoryItemId: String(selectedItem.id), // Ensure inventoryItemId is string
@@ -1406,13 +1512,19 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
-  const addStartQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string, referenceLink?: string) => {
+  const addStartQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string, referenceLink?: string, sampleSize?: string) => {
     const s = standard || qcStandardInput;
     const t = tolerance || qcToleranceInput;
     const r = requirement || qcRequirementInput;
     if (!s.trim() || !t.trim() || !r.trim()) return;
     const config = getOrCreateDeptConfig(dept);
-    const newStandard: QCStandard = { standard: s.trim(), tolerance: t.trim(), requirement: r.trim(), ...(referenceLink?.trim() ? { referenceLink: referenceLink.trim() } : {}) };
+    const newStandard: QCStandard = applyWadInspectionDefaults({
+      standard: s.trim(),
+      tolerance: t.trim(),
+      requirement: r.trim(),
+      ...(referenceLink?.trim() ? { referenceLink: referenceLink.trim() } : {}),
+      ...(sampleSize?.trim() ? { sampleSize: sampleSize.trim() } : {}),
+    });
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: { ...config, startQcStandards: [...(config.startQcStandards || []), newStandard] },
@@ -1428,13 +1540,19 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     });
   };
 
-  const addFinishQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string, referenceLink?: string) => {
+  const addFinishQcStandard = (dept: string, standard?: string, tolerance?: string, requirement?: string, referenceLink?: string, sampleSize?: string) => {
     const s = standard || qcStandardInput;
     const t = tolerance || qcToleranceInput;
     const r = requirement || qcRequirementInput;
     if (!s.trim() || !t.trim() || !r.trim()) return;
     const config = getOrCreateDeptConfig(dept);
-    const newStandard: QCStandard = { standard: s.trim(), tolerance: t.trim(), requirement: r.trim(), ...(referenceLink?.trim() ? { referenceLink: referenceLink.trim() } : {}) };
+    const newStandard: QCStandard = applyWadInspectionDefaults({
+      standard: s.trim(),
+      tolerance: t.trim(),
+      requirement: r.trim(),
+      ...(referenceLink?.trim() ? { referenceLink: referenceLink.trim() } : {}),
+      ...(sampleSize?.trim() ? { sampleSize: sampleSize.trim() } : {}),
+    });
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: { ...config, finishQcStandards: [...(config.finishQcStandards || []), newStandard] },
@@ -1731,6 +1849,29 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                   </CardContent>
                 </Card>
               )}
+
+              {selectedProjectId && wadRoutingRequirements?.requirements && (
+                <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
+                  <CardContent className="p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">WAD Documentation Requirements</p>
+                      <Badge variant="outline">{wadRoutingRequirements.workOrderNumber ?? 'WAD'}</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <Badge variant={wadRequirements?.travelerRequired ? 'default' : 'outline'}>
+                        Traveler {wadRequirements?.travelerRequired ? 'Required' : 'Not Required'}
+                      </Badge>
+                      <Badge variant={wadRequirements?.inspectionSheetRequired ? 'default' : 'outline'}>
+                        Inspection Sheet {wadRequirements?.inspectionSheetRequired ? 'Required' : 'Optional'}
+                      </Badge>
+                      <Badge variant={wadRequirements?.samplingPlanRequired ? 'default' : 'outline'}>
+                        Sampling Plan {wadRequirements?.samplingPlanRequired ? (wadRequirements.samplingPlanId || 'Required') : 'Optional'}
+                      </Badge>
+                      <Badge variant="outline">Inspection: {wadRequirements?.inspectionStrategy}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 
@@ -1962,6 +2103,41 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                 </p>
               </div>
 
+              {wadRequirements && (
+                <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{wadRoutingRequirements?.workOrderNumber ?? 'WAD'}</Badge>
+                      <Badge variant={wadRequirements.travelerRequired ? 'default' : 'outline'}>
+                        Traveler {wadRequirements.travelerRequired ? 'Required' : 'Not Required'}
+                      </Badge>
+                      <Badge variant={wadRequirements.inspectionSheetRequired ? 'default' : 'outline'}>
+                        Inspection Sheet {wadRequirements.inspectionSheetRequired ? 'Required' : 'Optional'}
+                      </Badge>
+                      <Badge variant={wadRequirements.samplingPlanRequired ? 'default' : 'outline'}>
+                        Sampling Plan {wadRequirements.samplingPlanRequired ? (wadRequirements.samplingPlanId || 'Required') : 'Optional'}
+                      </Badge>
+                      <Badge variant="outline">Inspection: {wadRequirements.inspectionStrategy}</Badge>
+                    </div>
+                    {!wadRequirements.travelerRequired && (
+                      <p className="text-xs text-muted-foreground">
+                        This WAD does not require a traveler; routing can be approved without traveler generation.
+                      </p>
+                    )}
+                    {routingRequirementIssues().length > 0 && (
+                      <div className="text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                        {routingRequirementIssues().map(issue => (
+                          <p key={issue} className="flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3 shrink-0" />
+                            {issue}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {selectedDepartments.length === 0 ? (
                 <Card>
                   <CardContent className="p-6 text-center text-muted-foreground">
@@ -2081,7 +2257,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                       onClick={() => {
                                         setDepartmentConfig(prev => ({
                                           ...prev,
-                                          [dept]: { ...config, startChecks: DEFAULT_START_CHECKS.map(c => ({ ...c })) },
+                                          [dept]: { ...config, startChecks: DEFAULT_START_CHECKS.map(c => applyWadCheckDefaults({ ...c })) },
                                         }));
                                       }}
                                     >
@@ -2144,6 +2320,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                             <Flag className={`h-2.5 w-2.5 mr-0.5 ${check.hardQcStop ? 'text-white' : ''}`} />
                                             {check.hardQcStop ? 'Hard QC Stop' : 'No Stop'}
                                           </Badge>
+                                          {(check.inspectionCoveragePercent === 100 || (requiresFullInspection && check.required && check.taskType === 'QC')) && (
+                                            <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+                                              100% Inspection
+                                            </Badge>
+                                          )}
                                         </div>
                                       </div>
                                     ))}
@@ -2245,6 +2426,12 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                                 <ExternalLink className="h-2.5 w-2.5" /> Reference
                                               </a>
                                             )}
+                                            {qc.inspectionCoveragePercent === 100 && (
+                                              <p className="text-[10px] text-blue-700">Inspection: 100%</p>
+                                            )}
+                                            {qc.sampleSize && (
+                                              <p className="text-[10px] text-blue-700">Sample size: {qc.sampleSize}</p>
+                                            )}
                                           </div>
                                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeStartQcStandard(dept, idx)}>
                                             <X className="h-3 w-3" />
@@ -2271,11 +2458,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                     <Input placeholder="Requirement" value={qcInputDept[`start_${dept}`]?.requirement || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), requirement: e.target.value } }))} className="text-sm" />
                                   </div>
                                   <Input placeholder="Reference link (table/chart URL, optional)" value={qcInputDept[`start_${dept}`]?.referenceLink || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), referenceLink: e.target.value } }))} className="text-sm" />
+                                  {allowsSampleSize && (
+                                    <Input placeholder="Sample size (per WAD sampling strategy)" value={qcInputDept[`start_${dept}`]?.sampleSize || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { ...(prev[`start_${dept}`] || { standard: '', tolerance: '', requirement: '' }), sampleSize: e.target.value } }))} className="text-sm" />
+                                  )}
                                   <Button size="sm" onClick={() => {
                                     const vals = qcInputDept[`start_${dept}`];
                                     if (!vals?.standard?.trim() || !vals?.tolerance?.trim() || !vals?.requirement?.trim()) return;
-                                    addStartQcStandard(dept, vals.standard, vals.tolerance, vals.requirement, vals.referenceLink);
-                                    setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { standard: '', tolerance: '', requirement: '', referenceLink: '' } }));
+                                    addStartQcStandard(dept, vals.standard, vals.tolerance, vals.requirement, vals.referenceLink, vals.sampleSize);
+                                    setQcInputDept(prev => ({ ...prev, [`start_${dept}`]: { standard: '', tolerance: '', requirement: '', referenceLink: '', sampleSize: '' } }));
                                   }} disabled={!qcInputDept[`start_${dept}`]?.standard?.trim() || !qcInputDept[`start_${dept}`]?.tolerance?.trim() || !qcInputDept[`start_${dept}`]?.requirement?.trim()}>
                                     <Plus className="h-4 w-4 mr-1" /> Add QC Standard
                                   </Button>
@@ -2311,6 +2501,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           <Badge variant="outline" className="text-[10px]">{check.taskType || 'CHECK'}</Badge>
                                           <span className="text-sm">{check.title}</span>
                                           {check.required && <Badge className="text-[9px] bg-red-100 text-red-700 border-red-200">Required</Badge>}
+                                          {(check.inspectionCoveragePercent === 100 || (requiresFullInspection && check.required && check.taskType === 'QC')) && (
+                                            <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">
+                                              100% Inspection
+                                            </Badge>
+                                          )}
                                         </div>
                                         <Button
                                           type="button"
@@ -2719,6 +2914,12 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                           <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium">{qc.standard}</p>
                                             <p className="text-[10px] text-muted-foreground">Tol: {qc.tolerance} | Req: {qc.requirement}</p>
+                                            {qc.inspectionCoveragePercent === 100 && (
+                                              <p className="text-[10px] text-amber-700">Inspection: 100%</p>
+                                            )}
+                                            {qc.sampleSize && (
+                                              <p className="text-[10px] text-amber-700">Sample size: {qc.sampleSize}</p>
+                                            )}
                                           </div>
                                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => {
                                             const updated = { ...config, qcStandards: (config.qcStandards || []).filter((_, i) => i !== idx) };
@@ -2751,12 +2952,20 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                     <Input placeholder="Tolerance" value={qcInputDept[`work_${dept}`]?.tolerance || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`work_${dept}`]: { ...(prev[`work_${dept}`] || { standard: '', tolerance: '', requirement: '' }), tolerance: e.target.value } }))} className="text-sm" />
                                     <Input placeholder="Requirement" value={qcInputDept[`work_${dept}`]?.requirement || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`work_${dept}`]: { ...(prev[`work_${dept}`] || { standard: '', tolerance: '', requirement: '' }), requirement: e.target.value } }))} className="text-sm" />
                                   </div>
+                                  {allowsSampleSize && (
+                                    <Input placeholder="Sample size (per WAD sampling strategy)" value={qcInputDept[`work_${dept}`]?.sampleSize || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`work_${dept}`]: { ...(prev[`work_${dept}`] || { standard: '', tolerance: '', requirement: '' }), sampleSize: e.target.value } }))} className="text-sm" />
+                                  )}
                                   <Button size="sm" onClick={() => {
                                     const vals = qcInputDept[`work_${dept}`];
                                     if (!vals?.standard?.trim() || !vals?.tolerance?.trim() || !vals?.requirement?.trim()) return;
-                                    const newQc: QCStandard = { standard: vals.standard.trim(), tolerance: vals.tolerance.trim(), requirement: vals.requirement.trim() };
+                                    const newQc: QCStandard = applyWadInspectionDefaults({
+                                      standard: vals.standard.trim(),
+                                      tolerance: vals.tolerance.trim(),
+                                      requirement: vals.requirement.trim(),
+                                      ...(vals.sampleSize?.trim() ? { sampleSize: vals.sampleSize.trim() } : {}),
+                                    });
                                     setDepartmentConfig({ ...departmentConfig, [dept]: { ...config, qcStandards: [...(config.qcStandards || []), newQc] } });
-                                    setQcInputDept(prev => ({ ...prev, [`work_${dept}`]: { standard: '', tolerance: '', requirement: '' } }));
+                                    setQcInputDept(prev => ({ ...prev, [`work_${dept}`]: { standard: '', tolerance: '', requirement: '', sampleSize: '' } }));
                                   }} disabled={!qcInputDept[`work_${dept}`]?.standard?.trim()}>
                                     <Plus className="h-4 w-4 mr-1" /> Add QC Standard
                                   </Button>
@@ -2806,7 +3015,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                   Start Timer
                                 </h4>
                                 <p className="text-xs text-muted-foreground mb-3">
-                                  Enable a production timer that operators can start from the traveler. The serial number will auto-fill from the traveler.
+                                  Enable a production timer for this routing step. {wadRequirements?.travelerRequired === false ? 'This WAD does not require traveler generation.' : 'When a traveler exists, its serial number can auto-fill the timer context.'}
                                 </p>
                                 <div className="space-y-3">
                                   <div className="flex items-center gap-3">
@@ -2873,7 +3082,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                       )}
                                       <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded border border-blue-100 dark:border-blue-900">
                                         <p className="text-xs text-blue-700 dark:text-blue-300">
-                                          When an operator reaches this department in the traveler, they can start a timer. The serial number from the traveler fills in automatically. Once started, the timer runs on the Timer Station and the operator continues with the traveler.
+                                          {wadRequirements?.travelerRequired === false
+                                            ? 'Operators can start this timer from the routing context without requiring traveler generation.'
+                                            : 'When an operator reaches this department in the traveler, they can start a timer. The serial number from the traveler fills in automatically. Once started, the timer runs on the Timer Station and the operator continues with the traveler.'}
                                         </p>
                                       </div>
                                     </div>
@@ -2985,7 +3196,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                       onClick={() => {
                                         setDepartmentConfig(prev => ({
                                           ...prev,
-                                          [dept]: { ...config, finishChecks: DEFAULT_FINISH_CHECKS.map(c => ({ ...c })) },
+                                          [dept]: { ...config, finishChecks: DEFAULT_FINISH_CHECKS.map(c => applyWadCheckDefaults({ ...c })) },
                                         }));
                                       }}
                                     >
@@ -3048,6 +3259,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                             <Flag className={`h-2.5 w-2.5 mr-0.5 ${check.hardQcStop ? 'text-white' : ''}`} />
                                             {check.hardQcStop ? 'Hard QC Stop' : 'No Stop'}
                                           </Badge>
+                                          {(check.inspectionCoveragePercent === 100 || (requiresFullInspection && check.required && check.taskType === 'QC')) && (
+                                            <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">
+                                              100% Inspection
+                                            </Badge>
+                                          )}
                                         </div>
                                       </div>
                                     ))}
@@ -3149,6 +3365,12 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                                 <ExternalLink className="h-2.5 w-2.5" /> Reference
                                               </a>
                                             )}
+                                            {qc.inspectionCoveragePercent === 100 && (
+                                              <p className="text-[10px] text-green-700">Inspection: 100%</p>
+                                            )}
+                                            {qc.sampleSize && (
+                                              <p className="text-[10px] text-green-700">Sample size: {qc.sampleSize}</p>
+                                            )}
                                           </div>
                                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeFinishQcStandard(dept, idx)}>
                                             <X className="h-3 w-3" />
@@ -3175,11 +3397,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                                     <Input placeholder="Requirement" value={qcInputDept[`finish_${dept}`]?.requirement || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), requirement: e.target.value } }))} className="text-sm" />
                                   </div>
                                   <Input placeholder="Reference link (table/chart URL, optional)" value={qcInputDept[`finish_${dept}`]?.referenceLink || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), referenceLink: e.target.value } }))} className="text-sm" />
+                                  {allowsSampleSize && (
+                                    <Input placeholder="Sample size (per WAD sampling strategy)" value={qcInputDept[`finish_${dept}`]?.sampleSize || ''} onChange={(e) => setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { ...(prev[`finish_${dept}`] || { standard: '', tolerance: '', requirement: '' }), sampleSize: e.target.value } }))} className="text-sm" />
+                                  )}
                                   <Button size="sm" onClick={() => {
                                     const vals = qcInputDept[`finish_${dept}`];
                                     if (!vals?.standard?.trim() || !vals?.tolerance?.trim() || !vals?.requirement?.trim()) return;
-                                    addFinishQcStandard(dept, vals.standard, vals.tolerance, vals.requirement, vals.referenceLink);
-                                    setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { standard: '', tolerance: '', requirement: '', referenceLink: '' } }));
+                                    addFinishQcStandard(dept, vals.standard, vals.tolerance, vals.requirement, vals.referenceLink, vals.sampleSize);
+                                    setQcInputDept(prev => ({ ...prev, [`finish_${dept}`]: { standard: '', tolerance: '', requirement: '', referenceLink: '', sampleSize: '' } }));
                                   }} disabled={!qcInputDept[`finish_${dept}`]?.standard?.trim() || !qcInputDept[`finish_${dept}`]?.tolerance?.trim() || !qcInputDept[`finish_${dept}`]?.requirement?.trim()}>
                                     <Plus className="h-4 w-4 mr-1" /> Add QC Standard
                                   </Button>

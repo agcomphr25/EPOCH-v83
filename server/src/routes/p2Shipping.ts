@@ -33,6 +33,7 @@ import {
   reserveP2InvoiceNumber,
   syncP2InvoiceSequenceFromManualNumber,
 } from '../services/p2InvoiceNumberService';
+import { formatP2CustomerSerialNumbers } from '../utils/p2CustomerSerialDisplay';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -407,7 +408,7 @@ async function buildP2PackingSlipPdfData(slip: any): Promise<PackingSlipData> {
       )
     ).join(', ') || item.drawingName || item.partName || item.partNumber || 'N/A',
     quantity: item.quantity ?? (Array.isArray(item.serialNumbers) ? item.serialNumbers.length : 1),
-    serialNumbers: Array.isArray(item.serialNumbers) ? item.serialNumbers : [],
+    serialNumbers: formatP2CustomerSerialNumbers(item.serialNumbers),
     lotNumber: item.lotNumber || slip.lotNumber || undefined,
   }));
   const invoiceNumber = await getLinkedP2InvoiceNumberForPackingSlip(slip.id, slip.lotNumberId)
@@ -474,6 +475,27 @@ function assignedSkuFromSerials(serials: Array<{ sku?: string | null }>): string
   return skus.length > 0 ? skus.join(', ') : null;
 }
 
+function hasP2CustomerSerialDisplaySuffix(lineItems: unknown): boolean {
+  if (!Array.isArray(lineItems)) return false;
+
+  return lineItems.some((item) =>
+    Array.isArray((item as { serialNumbers?: unknown }).serialNumbers) &&
+    (item as { serialNumbers: unknown[] }).serialNumbers.some((serialNumber) =>
+      typeof serialNumber === 'string' &&
+      formatP2CustomerSerialNumbers([serialNumber])[0] !== serialNumber.trim()
+    )
+  );
+}
+
+function formatP2PackingSlipCustomerLineItems(lineItems: unknown): unknown {
+  if (!Array.isArray(lineItems)) return lineItems;
+
+  return lineItems.map((item) => ({
+    ...item,
+    serialNumbers: formatP2CustomerSerialNumbers((item as { serialNumbers?: unknown }).serialNumbers),
+  }));
+}
+
 async function hydratePackingSlipLineItemSkus(lineItems: any[]): Promise<any[]> {
   const serialNumbers = Array.from(
     new Set(
@@ -501,9 +523,13 @@ async function hydratePackingSlipLineItemSkus(lineItems: any[]): Promise<any[]> 
         .map((serialNumber: string) => ({ sku: skuBySerialNumber.get(serialNumber) }))
     );
 
-    return customerSku
-      ? { ...item, customerSku }
-      : item;
+    const formattedSerialNumbers = formatP2CustomerSerialNumbers(item.serialNumbers);
+
+    return {
+      ...item,
+      ...(customerSku ? { customerSku } : {}),
+      ...(formattedSerialNumbers.length > 0 ? { serialNumbers: formattedSerialNumbers } : {}),
+    };
   });
 }
 
@@ -1114,6 +1140,30 @@ async function assignSerialBillingBucket(params: {
   );
 }
 
+type P2PoFamilyRow = {
+  id: number;
+  po_number: string;
+  family_po_id: number;
+};
+
+async function assertSerialsSharePoFamily(serials: any[]): Promise<void> {
+  const poIds = Array.from(new Set(serials.map((serial) => Number(serial.poId)).filter(Number.isFinite)));
+  if (poIds.length <= 1) return;
+
+  const rows = await pool.query<P2PoFamilyRow>(
+    `SELECT id, po_number, COALESCE(parent_po_id, id) AS family_po_id
+       FROM p2_purchase_orders
+      WHERE id = ANY($1::int[])`,
+    [poIds],
+  );
+  const familyIds = Array.from(new Set(rows.map((row) => Number(row.family_po_id))));
+  if (familyIds.length > 1 || rows.length !== poIds.length) {
+    throw new Error(`All serials must belong to the same PO project. Found: ${
+      Array.from(new Set(serials.map((serial) => serial.poNumber))).join(', ')
+    }`);
+  }
+}
+
 async function assignSerialsToPoItemBuckets(
   serials: any[],
   actor: string,
@@ -1271,11 +1321,12 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       });
     }
 
-    const poNumbers = Array.from(new Set(serials.map((s) => s.poNumber)));
-    if (poNumbers.length > 1) {
+    try {
+      await assertSerialsSharePoFamily(serials);
+    } catch (familyErr: any) {
       return res.status(400).json({
-        error: 'All serials must belong to the same PO',
-        found: poNumbers,
+        error: familyErr?.message || 'All serials must belong to the same PO project',
+        found: Array.from(new Set(serials.map((s) => s.poNumber))),
       });
     }
 
@@ -1950,11 +2001,16 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
       poNumber: formatP2DocumentPoNumber(slip.poNumber),
       lineItems,
       originalPackingSlip: originalPackingSlip
-        ? { ...originalPackingSlip, poNumber: formatP2DocumentPoNumber(originalPackingSlip.poNumber) }
+        ? {
+            ...originalPackingSlip,
+            poNumber: formatP2DocumentPoNumber(originalPackingSlip.poNumber),
+            lineItems: formatP2PackingSlipCustomerLineItems(originalPackingSlip.lineItems),
+          }
         : null,
       replacementSlips: replacementSlips.map((replacement) => ({
         ...replacement,
         poNumber: formatP2DocumentPoNumber(replacement.poNumber),
+        lineItems: formatP2PackingSlipCustomerLineItems(replacement.lineItems),
       })),
     });
   } catch (err: any) {
@@ -2195,9 +2251,10 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
   try {
     const slip = await selectP2PackingSlipById(req.params.id);
     if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
-    let shouldPersistSnapshot = !slip.externalPdfUrl;
+    const requiresCustomerSerialRefresh = hasP2CustomerSerialDisplaySuffix(slip.lineItems);
+    let shouldPersistSnapshot = !slip.externalPdfUrl || requiresCustomerSerialRefresh;
 
-    if (slip.externalPdfUrl) {
+    if (slip.externalPdfUrl && !requiresCustomerSerialRefresh) {
       try {
         const storedBytes = await downloadStoredBuffer(slip.externalPdfUrl);
         res.set('Content-Type', 'application/pdf');
@@ -2267,7 +2324,7 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
         )
       ).join(', ') || item.drawingName || item.partName || item.partNumber || 'N/A',
       quantity: item.quantity ?? (Array.isArray(item.serialNumbers) ? item.serialNumbers.length : 1),
-      serialNumbers: Array.isArray(item.serialNumbers) ? item.serialNumbers : [],
+      serialNumbers: formatP2CustomerSerialNumbers(item.serialNumbers),
       lotNumber: item.lotNumber || slip.lotNumber || undefined,
     }));
 
@@ -2622,7 +2679,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
         partNumber: assignedSku || lot.partNumber,
         partName: lot.partName,
         quantity: serials.length,
-        serialNumbers: serials.map((s) => s.serialNumber),
+        serialNumbers: formatP2CustomerSerialNumbers(serials.map((s) => s.serialNumber)),
         manufacturingDate: manufacturingDate as Date,
         shipDate: input.shipDate ? new Date(`${input.shipDate}T12:00:00`) : new Date(),
         certificationText: input.certificationText || defaultText,
@@ -2680,6 +2737,7 @@ router.get('/certificates/:id', async (req: Request, res: Response) => {
       ...cert,
       poNumber: formatP2DocumentPoNumber(cert.poNumber),
       partNumber: assignedSku || cert.partNumber,
+      serialNumbers: formatP2CustomerSerialNumbers(cert.serialNumbers),
       specialProcesses: getSpecialProcesses(cert.processRecords),
       qaMgrTitle: getQaMgrTitle(cert.traceabilityData),
     });
@@ -2825,7 +2883,7 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     page.drawText('Serial Numbers:', { x: margin, y, size: 9, font: boldFont, color: darkGray });
     y -= 14;
 
-    const serialNums = (cert.serialNumbers as string[]) || [];
+    const serialNums = formatP2CustomerSerialNumbers(cert.serialNumbers);
     const serialsPerRow = 4;
     const serialColW = usableWidth / serialsPerRow;
     for (let i = 0; i < serialNums.length; i += serialsPerRow) {
@@ -3048,7 +3106,17 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
          FROM p2_packing_slips WHERE id = $1`,
         [lot.packing_slip_id]
       );
-      if (psRows.length) packingSlip = psRows[0];
+      if (psRows.length) {
+        packingSlip = {
+          ...psRows[0],
+          line_items: Array.isArray(psRows[0].line_items)
+            ? psRows[0].line_items.map((item: any) => ({
+                ...item,
+                serialNumbers: formatP2CustomerSerialNumbers(item.serialNumbers),
+              }))
+            : psRows[0].line_items,
+        };
+      }
     }
 
     // Fetch certificate if linked
@@ -3062,7 +3130,12 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
          FROM p2_certificates_of_conformance WHERE id = $1`,
         [lot.certificate_id]
       );
-      if (certRows.length) certificate = certRows[0];
+      if (certRows.length) {
+        certificate = {
+          ...certRows[0],
+          serial_numbers: formatP2CustomerSerialNumbers(certRows[0].serial_numbers),
+        };
+      }
     }
     if (!certificate) {
       const certRows = await pool.query(
@@ -3077,7 +3150,10 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
         [lot.id, lot.lot_number]
       );
       if (certRows.length) {
-        certificate = certRows[0];
+        certificate = {
+          ...certRows[0],
+          serial_numbers: formatP2CustomerSerialNumbers(certRows[0].serial_numbers),
+        };
         await pool.query(
           `UPDATE p2_lot_numbers
              SET certificate_id = $1,

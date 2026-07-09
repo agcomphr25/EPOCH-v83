@@ -3,6 +3,7 @@ import { db } from '../../db';
 import { 
   controlledDocuments,
   documentVersionHistory,
+  inventoryItems,
   routingDocuments, 
   specSheets, 
   documentTemplates, 
@@ -25,6 +26,80 @@ import {
 } from '../services/fileStorageProvider';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const TEMPLATE_UPLOAD_TABLES = new Set([
+  'routing_documents',
+  'document_templates',
+  'template_fields',
+  'controlled_documents',
+  'document_version_history',
+]);
+
+async function getPublicTableColumns(tableName: string) {
+  const result = await db.execute(sql`
+    SELECT column_name, data_type
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = ${tableName}
+  `);
+  const rows = ((result as any)?.rows || result || []) as any[];
+  return new Map(rows.map((row) => [String(row.column_name), String(row.data_type || '')]));
+}
+
+async function insertPublicRowReturning(tableName: string, values: Record<string, any>, requiredColumns: string[] = []) {
+  if (!TEMPLATE_UPLOAD_TABLES.has(tableName)) {
+    throw new Error(`Unsupported template upload table: ${tableName}`);
+  }
+
+  const columns = await getPublicTableColumns(tableName);
+  const availableKeys = Object.keys(values).filter((key) => columns.has(key) && values[key] !== undefined);
+  const missingRequired = requiredColumns.filter((key) => !availableKeys.includes(key));
+  if (missingRequired.length > 0) {
+    throw new Error(`${tableName} is missing required column(s): ${missingRequired.join(', ')}`);
+  }
+  if (availableKeys.length === 0) {
+    throw new Error(`${tableName} has no compatible columns for insert`);
+  }
+
+  const columnSql = availableKeys.map((key) => sql.raw(`"${key}"`));
+  const valueSql = availableKeys.map((key) => sql`${values[key]}`);
+  const result = await db.execute(sql`
+    INSERT INTO ${sql.raw(`"${tableName}"`)} (${sql.join(columnSql, sql`, `)})
+    VALUES (${sql.join(valueSql, sql`, `)})
+    RETURNING *
+  `);
+  const rows = ((result as any)?.rows || result || []) as any[];
+  return rows[0];
+}
+
+async function updatePublicRowByIdReturning(tableName: string, id: string, values: Record<string, any>) {
+  if (!TEMPLATE_UPLOAD_TABLES.has(tableName)) {
+    throw new Error(`Unsupported template upload table: ${tableName}`);
+  }
+
+  const columns = await getPublicTableColumns(tableName);
+  const availableKeys = Object.keys(values).filter((key) => columns.has(key) && values[key] !== undefined);
+  if (availableKeys.length === 0) {
+    const existingResult = await db.execute(sql`
+      SELECT *
+      FROM ${sql.raw(`"${tableName}"`)}
+      WHERE id = ${id}
+      LIMIT 1
+    `);
+    return (((existingResult as any)?.rows || existingResult || []) as any[])[0];
+  }
+
+  const setSql = availableKeys.map((key) => sql`${sql.raw(`"${key}"`)} = ${values[key]}`);
+  const result = await db.execute(sql`
+    UPDATE ${sql.raw(`"${tableName}"`)}
+    SET ${sql.join(setSql, sql`, `)}
+    WHERE id = ${id}
+    RETURNING *
+  `);
+  return (((result as any)?.rows || result || []) as any[])[0];
+}
 
 async function resolveFileToBuffer(fileUrl: string): Promise<Buffer | null> {
   if (fileUrl.startsWith('/assets/documents/')) {
@@ -161,6 +236,79 @@ function fallbackTemplateFields(documentType: string) {
   return baseFields.map(normalizeTemplateField);
 }
 
+function buildSpecSheetTemplateFields(sheet: any) {
+  const specifications = sheet.specifications && typeof sheet.specifications === 'object' ? sheet.specifications : {};
+  const fieldValues = specifications.fieldValues && typeof specifications.fieldValues === 'object'
+    ? specifications.fieldValues
+    : specifications;
+  const seededFields = [
+    { fieldName: 'partNumber', fieldLabel: 'Part Number', fieldType: 'text', sectionName: 'Header', isRequired: true, defaultValue: sheet.part_number ?? sheet.partNumber ?? '' },
+    { fieldName: 'title', fieldLabel: 'Spec Sheet Title', fieldType: 'text', sectionName: 'Header', isRequired: true, defaultValue: sheet.title ?? '' },
+  ];
+
+  const valueFields = Object.entries(fieldValues)
+    .filter(([key]) => !['templateId', 'templateName', 'manufacturedPart', 'controlledDocumentNumber'].includes(key))
+    .map(([key, value], index) => {
+      const displayValue = Array.isArray(value) ? value.join('\n') : value == null ? '' : String(value);
+      return {
+        fieldName: key,
+        fieldLabel: key.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, (match) => match.toUpperCase()),
+        fieldType: displayValue.includes('\n') || displayValue.length > 80 ? 'textarea' : 'text',
+        sectionName: key === 'partNumber' || key === 'partName' || key === 'sku' ? 'Header' : 'Spec Sheet',
+        isRequired: false,
+        defaultValue: displayValue,
+        sortOrder: index + seededFields.length,
+      };
+    });
+
+  const merged = [...seededFields, ...valueFields].filter((field, index, fields) =>
+    fields.findIndex((candidate) => candidate.fieldName === field.fieldName) === index
+  );
+  return merged.map(normalizeTemplateField);
+}
+
+function buildFallbackDocumentAnalysis(title: string, textContent: string, documentType = 'work_instruction') {
+  const lines = textContent
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const likelyFields = [
+    { key: 'partNumber', label: 'Part Number', pattern: /\b(?:part\s*#|part\s*number|p\/n)\s*:?\s*([A-Z0-9._-]+)/i },
+    { key: 'sku', label: 'SKU #', pattern: /\bsku\s*#?\s*:?\s*([A-Z0-9._-]+)/i },
+    { key: 'revision', label: 'Revision', pattern: /\b(?:rev|revision)\s*:?\s*([A-Z0-9._-]+)/i },
+  ];
+  const dataFields = likelyFields.map((field, index) => {
+    const match = textContent.match(field.pattern);
+    return normalizeTemplateField({
+      fieldName: field.key,
+      fieldLabel: field.label,
+      fieldType: 'text',
+      sectionName: 'Header',
+      defaultValue: match?.[1] || '',
+      sortOrder: index,
+    });
+  });
+  dataFields.push(normalizeTemplateField({
+    fieldName: 'documentNotes',
+    fieldLabel: 'Document Notes',
+    fieldType: 'textarea',
+    sectionName: 'Document',
+    defaultValue: lines.slice(0, 30).join('\n'),
+    sortOrder: dataFields.length,
+  }));
+
+  return {
+    documentType,
+    title,
+    summary: lines.slice(0, 8).join(' '),
+    routingSteps: [],
+    dataFields,
+    qualityChecks: [],
+    materials: [],
+    source: 'fallback_text_analysis',
+  };
+}
+
 async function generateControlledTemplateNumber() {
   const year = new Date().getFullYear();
   const prefix = `${CONTROLLED_TEMPLATE_PREFIX}-${year}-`;
@@ -284,6 +432,107 @@ async function createGeneratedControlledPdf(params: {
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
+}
+
+async function generateSpecSheetDocumentNumber() {
+  const year = new Date().getFullYear();
+  const prefix = `SPEC-${year}-`;
+  const result = await db.execute(sql`
+    SELECT document_number
+    FROM controlled_documents
+    WHERE document_number LIKE ${`${prefix}%`}
+    ORDER BY document_number DESC
+    LIMIT 1
+  `);
+  const rows = ((result as any)?.rows || result || []) as any[];
+  const lastSequence = rows
+    .map((row) => Number(String(row.document_number || '').replace(prefix, '')))
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => b - a)[0] || 0;
+
+  return `${prefix}${String(lastSequence + 1).padStart(3, '0')}`;
+}
+
+function normalizeSpecSheetFileName(title: string, partNumber: string | null | undefined) {
+  const base = `${partNumber || 'spec-sheet'}-${title || 'spec-sheet'}`
+    .replace(/[^a-z0-9-_ ]/gi, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .slice(0, 100) || 'spec-sheet';
+  return `${base}-${Date.now()}.pdf`;
+}
+
+async function renderSpecSheetPdf(input: {
+  title: string;
+  sku?: string | null;
+  partNumber?: string | null;
+  partName?: string | null;
+  manufacturedPart?: any;
+  fieldValues: Record<string, any>;
+  templateSections: any[];
+  templateFields: any[];
+  documentNumber: string;
+}) {
+  const PDFDocument = require('pdfkit');
+  const doc = new PDFDocument({ margin: 36, size: 'LETTER' });
+  const chunks: Buffer[] = [];
+
+  doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+  const finished = new Promise<Buffer>((resolve) => {
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const writeLine = (label: string, value: any) => {
+    doc.font('Helvetica-Bold').text(`${label}: `, { continued: true });
+    doc.font('Helvetica').text(value ? String(value) : '-');
+  };
+
+  doc.font('Helvetica-Bold').fontSize(16).text(input.title, { width: pageWidth });
+  doc.moveDown(0.4);
+  doc.fontSize(9).font('Helvetica').text(`Controlled Doc #: ${input.documentNumber}`);
+  doc.moveDown(0.8);
+  writeLine('SKU #', input.sku);
+  writeLine('Part #', input.partNumber);
+  writeLine('Part Name', input.partName);
+  if (input.manufacturedPart) {
+    writeLine('Linked Manufactured Part', `${input.manufacturedPart.agPartNumber || input.manufacturedPart.id} - ${input.manufacturedPart.name || ''}`);
+  }
+
+  const sections = input.templateSections.length > 0
+    ? input.templateSections
+    : Array.from(new Set(input.templateFields.map((field) => field.sectionName).filter(Boolean))).map((name) => ({ name }));
+
+  for (const section of sections) {
+    const sectionName = section.name || section.sectionName || 'Section';
+    const fields = input.templateFields.filter((field) => (field.sectionName || 'Section') === sectionName);
+    if (fields.length === 0) continue;
+
+    doc.moveDown(0.9);
+    doc.font('Helvetica-Bold').fontSize(12).text(sectionName, { underline: true });
+    doc.moveDown(0.25);
+
+    for (const field of fields) {
+      const rawValue = input.fieldValues[field.fieldName] ?? field.defaultValue ?? '';
+      const value = Array.isArray(rawValue) ? rawValue.join('\n') : String(rawValue || '');
+      doc.font('Helvetica-Bold').fontSize(9).text(field.fieldLabel || field.fieldName);
+      doc.font('Helvetica').fontSize(9).text(value || '-', { width: pageWidth, lineGap: 2 });
+      doc.moveDown(0.35);
+    }
+  }
+
+  doc.moveDown(1);
+  doc.fontSize(8).fillColor('gray').text(`Generated by Form & Document Builder on ${new Date().toLocaleDateString()}`);
+  doc.end();
+  return finished;
+}
+
+async function saveSpecSheetPdfFile(fileName: string, fileBuffer: Buffer) {
+  const uploadDir = path.join(process.cwd(), 'server/src/assets/documents/spec-sheets');
+  fs.mkdirSync(uploadDir, { recursive: true });
+  const storedFileName = normalizeSpecSheetFileName(fileName, null);
+  fs.writeFileSync(path.join(uploadDir, storedFileName), fileBuffer);
+  return `/assets/documents/spec-sheets/${storedFileName}`;
 }
 
 // Helper to format UUID bytes to string if needed
@@ -1012,6 +1261,11 @@ router.post('/upload-with-extraction', async (req: Request, res: Response) => {
     // Decode base64 file content
     const fileBuffer = Buffer.from(fileContent, 'base64');
     let extractedText = '';
+    let fileUrl: string | null = null;
+
+    if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+      fileUrl = await saveControlledDocumentFile(fileName, fileBuffer);
+    }
     
     // Extract text based on file type
     if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
@@ -1143,75 +1397,95 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
     const expirationDate = new Date();
     expirationDate.setFullYear(expirationDate.getFullYear() + 1);
 
-    const [routingDocument] = await db.insert(routingDocuments).values({
+    const routingDocument = await insertPublicRowReturning('routing_documents', {
       title: finalTitle,
-      partNumber: partNumber || null,
-      departmentName: finalDepartment,
-      documentType: finalDocumentType,
-      sourceType: 'uploaded',
-      fileUrl,
-      fileName,
-      fileType: mimeType || 'application/pdf',
-      fileSize: fileBuffer.length,
-      extractedText: extractedText || null,
-      aiExtractedContent: aiResult || null,
-      aiExtractedFields: normalizedFields,
-      aiProcessedAt: aiResult ? new Date() : null,
+      part_number: partNumber || null,
+      department_name: finalDepartment,
+      document_type: finalDocumentType,
+      source_type: 'uploaded',
+      file_url: fileUrl,
+      file_name: fileName,
+      file_type: mimeType || 'application/pdf',
+      file_size: fileBuffer.length,
+      extracted_text: extractedText || null,
+      ai_extracted_content: aiResult || null,
+      ai_extracted_fields: normalizedFields,
+      ai_processed_at: aiResult ? new Date() : null,
       description: `Reusable controlled template ${documentNumber}`,
-      isTemplate: true,
-      createdBy,
-    }).returning();
+      is_template: true,
+      is_active: true,
+      created_by: createdBy,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['title', 'document_type']);
 
-    const [template] = await db.insert(documentTemplates).values({
-      templateName: finalTitle,
-      templateType: finalDocumentType,
+    const template = await insertPublicRowReturning('document_templates', {
+      template_name: finalTitle,
+      template_type: finalDocumentType,
       description: `Controlled template ${documentNumber} created from ${fileName}`,
-      sourceDocumentIds: [routingDocument.id],
-      learnedFromCount: 1,
+      learned_from_count: 1,
       structure: {
         source: 'pdf_upload',
         controlledDocumentNumber: documentNumber,
+        sourceDocumentId: routingDocument.id,
         sourceFileName: fileName,
       },
       sections: templateSections,
-      defaultFields: normalizedFields,
-      aiGeneratedPrompt: aiResult ? 'Generate a fillable form using the extracted controlled-template fields and source document structure.' : null,
-      createdBy,
-    }).returning();
+      default_fields: normalizedFields,
+      ai_generated_prompt: aiResult ? 'Generate a fillable form using the extracted controlled-template fields and source document structure.' : null,
+      is_active: true,
+      created_by: createdBy,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['template_name', 'template_type']);
 
     for (const field of normalizedFields) {
-      await db.insert(templateFields).values({
-        ...field,
-        templateId: template.id,
-      });
+      await insertPublicRowReturning('template_fields', {
+        template_id: template.id,
+        field_name: field.fieldName,
+        field_label: field.fieldLabel,
+        field_type: field.fieldType || 'text',
+        is_required: field.isRequired || false,
+        is_unique_per_serial: field.isUniquePerSerial || false,
+        default_value: field.defaultValue || null,
+        validation_rules: field.validationRules || null,
+        options: field.options || null,
+        section_name: field.sectionName || null,
+        sort_order: field.sortOrder ?? 0,
+        ai_suggested: field.aiSuggested || false,
+        created_at: new Date(),
+      }, ['template_id', 'field_name', 'field_label', 'field_type']);
     }
 
-    const [controlledDocument] = await db.insert(controlledDocuments).values({
-      documentNumber,
-      documentName: finalTitle,
-      documentType: finalDocumentType,
+    const controlledDocument = await insertPublicRowReturning('controlled_documents', {
+      document_number: documentNumber,
+      document_name: finalTitle,
+      document_type: finalDocumentType,
       department: finalDepartment,
       category: 'Form & Document Builder Template',
       description: `Reusable fillable template created from uploaded PDF ${fileName}`,
-      currentVersion: '1.0',
+      current_version: '1.0',
       status: 'pending',
-      retentionLength: 'controlled',
-      documentOwner: createdBy,
-      filePath: fileUrl,
-      createdBy,
-      expirationDate: expirationDate.toISOString().split('T')[0],
-    }).returning();
+      retention_length: 'controlled',
+      document_owner: createdBy,
+      file_path: fileUrl,
+      created_by: createdBy,
+      expiration_date: expirationDate.toISOString().split('T')[0],
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['document_number', 'document_name', 'document_type', 'department', 'current_version', 'status', 'created_by']);
 
-    await db.insert(documentVersionHistory).values({
-      documentId: controlledDocument.id,
-      versionNumber: '1.0',
-      changeDescription: 'Initial controlled template imported from Form & Document Builder',
-      changeType: 'major',
-      filePath: fileUrl,
+    await insertPublicRowReturning('document_version_history', {
+      document_id: controlledDocument.id,
+      version_number: '1.0',
+      change_description: 'Initial controlled template imported from Form & Document Builder',
+      change_type: 'major',
+      file_path: fileUrl,
       status: 'pending',
-      createdBy,
-      expirationDate: expirationDate.toISOString().split('T')[0],
-    });
+      created_by: createdBy,
+      expiration_date: expirationDate.toISOString().split('T')[0],
+      created_at: new Date(),
+    }, ['document_id', 'version_number', 'status', 'created_by']);
 
     res.status(201).json({
       document: routingDocument,
@@ -1380,7 +1654,9 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
     
     const systemPrompt = COMPOSITE_ANALYSIS_PROMPT + COMPOSITE_ANALYSIS_JSON_SCHEMA;
 
-    const response = await getOpenAI().chat.completions.create({
+    let parsedContent: any;
+    try {
+      const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
@@ -1390,22 +1666,23 @@ router.post('/:id/ai-parse', async (req: Request, res: Response) => {
       max_completion_tokens: 4096,
     });
     
-    const parsedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
-    
-    const updateData: any = {
-      aiExtractedContent: parsedContent,
-      aiExtractedFields: parsedContent.dataFields || [],
-      aiProcessedAt: new Date(),
-      updatedAt: new Date(),
-    };
-    if (!document.extracted_text && textContent.trim()) {
-      updateData.extractedText = textContent;
+      parsedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
+    } catch (aiError) {
+      console.error('[AI Parse] AI analysis failed, using fallback text analysis:', aiError);
+      parsedContent = buildFallbackDocumentAnalysis(document.title, textContent, document.document_type || 'work_instruction');
     }
     
-    const [updatedDocument] = await db.update(routingDocuments)
-      .set(updateData)
-      .where(eq(routingDocuments.id, req.params.id))
-      .returning();
+    const updateData: Record<string, any> = {
+      ai_extracted_content: parsedContent,
+      ai_extracted_fields: parsedContent.dataFields || [],
+      ai_processed_at: new Date(),
+      updated_at: new Date(),
+    };
+    if (!document.extracted_text && textContent.trim()) {
+      updateData.extracted_text = textContent;
+    }
+    
+    const updatedDocument = await updatePublicRowByIdReturning('routing_documents', req.params.id, updateData);
     
     res.json({ document: updatedDocument, extractedContent: parsedContent });
   } catch (error) {
@@ -1666,35 +1943,56 @@ Return a JSON object with:
 
     console.log(`[Learn Template] Analyzing ${refDocs.length} documents, ${hasActualText ? 'with' : 'WITHOUT'} actual text content`);
 
-    const response = await getOpenAI().chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Analyze these ${refDocs.length} documents and create a template based on their ACTUAL content:\n\n${JSON.stringify(documentAnalysis, null, 2)}` }
-      ],
-      response_format: { type: 'json_object' },
-      max_completion_tokens: 4096,
-    });
-    
-    const learnedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
+    let learnedContent: any;
+    try {
+      const response = await getOpenAI().chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Analyze these ${refDocs.length} documents and create a template based on their ACTUAL content:\n\n${JSON.stringify(documentAnalysis, null, 2)}` }
+        ],
+        response_format: { type: 'json_object' },
+        max_completion_tokens: 4096,
+      });
+      learnedContent = JSON.parse(response.choices[0]?.message?.content || '{}');
+    } catch (aiError) {
+      console.error('[Learn Template] AI analysis failed, using fallback template content:', aiError);
+      const combinedText = refDocs
+        .map((doc: any) => doc.extracted_text || '')
+        .filter(Boolean)
+        .join('\n\n---\n\n');
+      const fallbackAnalysis = buildFallbackDocumentAnalysis(templateName, combinedText || JSON.stringify(documentAnalysis), templateType || 'mixed');
+      learnedContent = {
+        structure: { source: 'fallback_text_analysis', documentCount: refDocs.length },
+        sections: [
+          { name: 'Header', description: 'Document identity fields', order: 1 },
+          { name: 'Document', description: 'Fields inferred from extracted text', order: 2 },
+        ],
+        defaultFields: fallbackAnalysis.dataFields,
+        aiGeneratedPrompt: 'Template created from extracted document text using fallback analysis.',
+      };
+    }
     
     // Create template with explicit error handling
     let template: any;
     try {
-      const templateResult = await db.insert(documentTemplates).values({
-        templateName: templateName || 'Learned Template',
-        templateType: templateType || 'mixed',
+      template = await insertPublicRowReturning('document_templates', {
+        template_name: templateName || 'Learned Template',
+        template_type: templateType || 'mixed',
         description: description || 'Template learned from reference documents',
-        sourceDocumentIds: referenceDocumentIds,
-        learnedFromCount: referenceDocumentIds.length,
-        structure: learnedContent.structure || null,
+        learned_from_count: referenceDocumentIds.length,
+        structure: {
+          ...(learnedContent.structure || {}),
+          sourceDocumentIds: referenceDocumentIds,
+        },
         sections: learnedContent.sections || null,
-        defaultFields: learnedContent.defaultFields || null,
-        aiGeneratedPrompt: learnedContent.aiGeneratedPrompt || null,
-        createdBy: (req as any).user?.username || 'system',
-      }).returning();
-      
-      template = templateResult[0];
+        default_fields: learnedContent.defaultFields || null,
+        ai_generated_prompt: learnedContent.aiGeneratedPrompt || null,
+        is_active: true,
+        created_by: (req as any).user?.username || 'system',
+        created_at: new Date(),
+        updated_at: new Date(),
+      }, ['template_name', 'template_type']);
     } catch (insertError) {
       console.error('Template insert error:', insertError);
       return res.status(500).json({ error: 'Failed to insert template into database' });
@@ -1708,18 +2006,22 @@ Return a JSON object with:
     // Create template fields
     if (learnedContent.defaultFields && learnedContent.defaultFields.length > 0) {
       for (const field of learnedContent.defaultFields) {
-        await db.insert(templateFields).values({
-          templateId: template.id,
-          fieldName: field.fieldName,
-          fieldLabel: field.fieldLabel,
-          fieldType: field.fieldType || 'text',
-          isRequired: field.isRequired || false,
-          isUniquePerSerial: field.isUniquePerSerial || false,
-          defaultValue: field.defaultValue,
-          sectionName: field.sectionName,
-          sortOrder: field.sortOrder || 0,
-          aiSuggested: true,
-        });
+        const normalizedField = normalizeTemplateField(field);
+        await insertPublicRowReturning('template_fields', {
+          template_id: template.id,
+          field_name: normalizedField.fieldName,
+          field_label: normalizedField.fieldLabel,
+          field_type: normalizedField.fieldType || 'text',
+          is_required: normalizedField.isRequired || false,
+          is_unique_per_serial: normalizedField.isUniquePerSerial || false,
+          default_value: normalizedField.defaultValue || null,
+          validation_rules: normalizedField.validationRules || null,
+          options: normalizedField.options || null,
+          section_name: normalizedField.sectionName || null,
+          sort_order: normalizedField.sortOrder || 0,
+          ai_suggested: true,
+          created_at: new Date(),
+        }, ['template_id', 'field_name', 'field_label', 'field_type']);
       }
     }
     
@@ -1801,6 +2103,163 @@ router.post('/spec-sheets/complete-upload', async (req: Request, res: Response) 
   } catch (error) {
     console.error('Error completing spec sheet upload:', error);
     res.status(500).json({ error: 'Failed to complete spec sheet upload' });
+  }
+});
+
+// Fill a spec sheet template, link it to a manufactured part, save the PDF, and register it in MDR
+router.post('/spec-sheets/from-template', async (req: Request, res: Response) => {
+  try {
+    const {
+      templateId,
+      inventoryItemId,
+      partNumber,
+      partName,
+      sku,
+      title,
+      fieldValues,
+      description,
+    } = req.body;
+    const user = (req as any).user;
+    const createdBy = user?.username || 'system';
+
+    if (!templateId) {
+      return res.status(400).json({ error: 'Template is required' });
+    }
+
+    const templateResult = await db.execute(sql`SELECT * FROM document_templates WHERE id = ${templateId} AND is_active = true LIMIT 1`);
+    const templateRows = ((templateResult as any)?.rows || templateResult || []) as any[];
+    const template = templateRows[0];
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    const fieldResult = await db.execute(sql`SELECT * FROM template_fields WHERE template_id = ${templateId} ORDER BY sort_order ASC`);
+    const defaultFields = Array.isArray(template.default_fields ?? template.defaultFields)
+      ? (template.default_fields ?? template.defaultFields)
+      : [];
+    const defaultFieldByName = new Map(defaultFields.map((field: any) => [field.fieldName ?? field.field_name, field]));
+    const templateFields = (((fieldResult as any)?.rows || fieldResult || []) as any[]).map((field) => {
+      const fieldName = field.field_name ?? field.fieldName;
+      const defaultField = defaultFieldByName.get(fieldName) ?? {};
+      return {
+        fieldName,
+        fieldLabel: field.field_label ?? field.fieldLabel ?? defaultField.fieldLabel ?? defaultField.field_label,
+        fieldType: field.field_type ?? field.fieldType ?? defaultField.fieldType ?? defaultField.field_type,
+        defaultValue: field.default_value ?? field.defaultValue ?? defaultField.defaultValue ?? defaultField.default_value,
+        sectionName: field.section_name ?? field.sectionName ?? defaultField.sectionName ?? defaultField.section_name,
+        isRequired: field.is_required ?? field.isRequired ?? defaultField.isRequired ?? defaultField.is_required,
+        sortOrder: field.sort_order ?? field.sortOrder ?? defaultField.sortOrder ?? defaultField.sort_order,
+      };
+    });
+
+    const values = fieldValues && typeof fieldValues === 'object' ? fieldValues : {};
+    const finalPartNumber = String(partNumber || values.partNumber || '').trim();
+    const finalPartName = String(partName || values.partName || '').trim();
+    const finalSku = String(sku || values.sku || '').trim();
+
+    let manufacturedPart: any = null;
+    const parsedInventoryItemId = Number(inventoryItemId);
+    if (Number.isFinite(parsedInventoryItemId) && parsedInventoryItemId > 0) {
+      const [item] = await db.select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        sku: inventoryItems.sku,
+        itemType: inventoryItems.itemType,
+        manufacturedCategory: inventoryItems.manufacturedCategory,
+      }).from(inventoryItems).where(eq(inventoryItems.id, parsedInventoryItemId)).limit(1);
+      if (!item) {
+        return res.status(404).json({ error: 'Manufactured part not found' });
+      }
+      manufacturedPart = item;
+    }
+
+    const resolvedPartNumber = finalPartNumber || manufacturedPart?.agPartNumber || null;
+    const resolvedPartName = finalPartName || manufacturedPart?.name || null;
+    const resolvedSku = finalSku || manufacturedPart?.sku || null;
+    const finalTitle = String(title || `SPEC Sheet - ${resolvedPartName || 'Part'}${resolvedPartNumber ? ` Part #${resolvedPartNumber}` : ''}`).trim();
+    const templateSections = Array.isArray(template.sections) ? template.sections : [];
+    const documentNumber = await generateSpecSheetDocumentNumber();
+    const pdfBuffer = await renderSpecSheetPdf({
+      title: finalTitle,
+      sku: resolvedSku,
+      partNumber: resolvedPartNumber,
+      partName: resolvedPartName,
+      manufacturedPart,
+      fieldValues: values,
+      templateSections,
+      templateFields,
+      documentNumber,
+    });
+    const fileName = normalizeSpecSheetFileName(finalTitle, resolvedPartNumber);
+    const fileUrl = await saveSpecSheetPdfFile(fileName, pdfBuffer);
+    const specifications = {
+      templateId,
+      templateName: template.template_name ?? template.templateName,
+      fieldValues: values,
+      manufacturedPart: manufacturedPart ? {
+        inventoryItemId: manufacturedPart.id,
+        agPartNumber: manufacturedPart.agPartNumber,
+        name: manufacturedPart.name,
+        sku: manufacturedPart.sku,
+        manufacturedCategory: manufacturedPart.manufacturedCategory,
+      } : null,
+      controlledDocumentNumber: documentNumber,
+    };
+
+    const [specSheet] = await db.insert(specSheets).values({
+      partNumber: resolvedPartNumber,
+      title: finalTitle,
+      version: 1,
+      description: description || `Filled CNC spec sheet from template ${template.template_name ?? template.templateName}`,
+      specifications,
+      sourceType: 'generated',
+      fileUrl,
+      fileName: path.basename(fileUrl),
+      fileType: 'application/pdf',
+      fileSize: pdfBuffer.length,
+      isTemplate: false,
+      createdBy,
+    }).returning();
+
+    const expirationDate = new Date();
+    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+    const [controlledDocument] = await db.insert(controlledDocuments).values({
+      documentNumber,
+      documentName: finalTitle,
+      documentType: 'spec_sheet',
+      department: 'CNC',
+      category: 'Spec Sheet',
+      description: description || `Manufactured part spec sheet${resolvedPartNumber ? ` for ${resolvedPartNumber}` : ''}`,
+      currentVersion: '1.0',
+      status: 'pending',
+      retentionLength: 'controlled',
+      documentOwner: createdBy,
+      filePath: fileUrl,
+      createdBy,
+      expirationDate: expirationDate.toISOString().split('T')[0],
+    }).returning();
+
+    await db.insert(documentVersionHistory).values({
+      documentId: controlledDocument.id,
+      versionNumber: '1.0',
+      changeDescription: 'Initial filled spec sheet created from Form & Document Builder template',
+      changeType: 'major',
+      filePath: fileUrl,
+      status: 'pending',
+      createdBy,
+      expirationDate: expirationDate.toISOString().split('T')[0],
+    });
+
+    res.status(201).json({
+      specSheet,
+      controlledDocument,
+      fileUrl,
+      documentNumber,
+    });
+  } catch (error) {
+    console.error('Error creating filled spec sheet:', error);
+    res.status(500).json({ error: 'Failed to create filled spec sheet' });
   }
 });
 
@@ -2170,6 +2629,103 @@ router.post('/spec-sheets', async (req: Request, res: Response) => {
   }
 });
 
+// Convert an existing spec sheet into a reusable fillable template
+router.post('/spec-sheets/:id/create-template', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid spec sheet ID format' });
+    }
+
+    const sheetResult = await db.execute(sql`SELECT * FROM spec_sheets WHERE id = ${req.params.id} AND is_active = true LIMIT 1`);
+    const sheetRows = ((sheetResult as any)?.rows || sheetResult || []) as any[];
+    const sheet = sheetRows[0];
+    if (!sheet) {
+      return res.status(404).json({ error: 'Spec sheet not found' });
+    }
+
+    const templateName = `${sheet.title} Template`;
+    const existingTemplateResult = await db.execute(sql`
+      SELECT *
+      FROM document_templates
+      WHERE template_name = ${templateName}
+        AND template_type = 'spec_sheet'
+        AND COALESCE(is_active, true) = true
+      ORDER BY created_at DESC NULLS LAST
+      LIMIT 1
+    `);
+    const existingTemplateRows = ((existingTemplateResult as any)?.rows || existingTemplateResult || []) as any[];
+    const existingTemplate = existingTemplateRows[0];
+    if (existingTemplate) {
+      const existingFieldsResult = await db.execute(sql`
+        SELECT *
+        FROM template_fields
+        WHERE template_id = ${existingTemplate.id}
+        ORDER BY sort_order ASC
+      `);
+      const existingFields = ((existingFieldsResult as any)?.rows || existingFieldsResult || []) as any[];
+      await db.update(specSheets)
+        .set({ isTemplate: true, updatedAt: new Date() })
+        .where(eq(specSheets.id, req.params.id));
+      return res.status(200).json({ template: existingTemplate, fields: existingFields });
+    }
+
+    const templateFieldsForSheet = buildSpecSheetTemplateFields(sheet);
+    const sections = Array.from(new Set(templateFieldsForSheet.map((field) => field.sectionName).filter(Boolean)))
+      .map((name, index) => ({
+        name,
+        description: name === 'Header' ? 'Spec sheet identity fields' : 'Reusable spec sheet fields',
+        order: index + 1,
+      }));
+    const createdBy = (req as any).user?.username || 'system';
+    const template = await insertPublicRowReturning('document_templates', {
+      template_name: templateName,
+      template_type: 'spec_sheet',
+      description: `Reusable template created from spec sheet ${sheet.title}`,
+      learned_from_count: 1,
+      structure: {
+        source: 'spec_sheet',
+        sourceSpecSheetId: sheet.id,
+        sourceFileName: sheet.file_name ?? sheet.fileName ?? null,
+        sourceFileUrl: sheet.file_url ?? sheet.fileUrl ?? null,
+      },
+      sections,
+      default_fields: templateFieldsForSheet,
+      is_active: true,
+      created_by: createdBy,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['template_name', 'template_type']);
+
+    for (const field of templateFieldsForSheet) {
+      await insertPublicRowReturning('template_fields', {
+        template_id: template.id,
+        field_name: field.fieldName,
+        field_label: field.fieldLabel,
+        field_type: field.fieldType || 'text',
+        is_required: field.isRequired || false,
+        is_unique_per_serial: field.isUniquePerSerial || false,
+        default_value: field.defaultValue || null,
+        validation_rules: field.validationRules || null,
+        options: field.options || null,
+        section_name: field.sectionName || null,
+        sort_order: field.sortOrder ?? 0,
+        ai_suggested: false,
+        created_at: new Date(),
+      }, ['template_id', 'field_name', 'field_label', 'field_type']);
+    }
+
+    await db.update(specSheets)
+      .set({ isTemplate: true, updatedAt: new Date() })
+      .where(eq(specSheets.id, req.params.id));
+
+    res.status(201).json({ template, fields: templateFieldsForSheet });
+  } catch (error) {
+    console.error('Error creating template from spec sheet:', error);
+    res.status(500).json({ error: 'Failed to create template from spec sheet' });
+  }
+});
+
 // Get single spec sheet
 router.get('/spec-sheets/:id', async (req: Request, res: Response) => {
   try {
@@ -2200,7 +2756,7 @@ router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid spec sheet ID format' });
     }
 
-    const { partNumber, title, version, description, specifications, isActive } = req.body;
+    const { partNumber, title, version, description, specifications, isTemplate, isActive } = req.body;
     
     const updateData: any = { updatedAt: new Date() };
     if (partNumber !== undefined) updateData.partNumber = partNumber;
@@ -2208,6 +2764,7 @@ router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
     if (version !== undefined) updateData.version = version;
     if (description !== undefined) updateData.description = description;
     if (specifications !== undefined) updateData.specifications = specifications;
+    if (isTemplate !== undefined) updateData.isTemplate = isTemplate === true || isTemplate === 'true';
     if (isActive !== undefined) updateData.isActive = isActive === true || isActive === 'true';
 
     const [updated] = await db.update(specSheets)

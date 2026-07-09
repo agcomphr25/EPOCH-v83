@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertPartRoutingSchema, insertRoutingOperationSchema, insertRoutingCncOperationSchema, insertRoutingDependencySchema, updateRoutingDependencySchema } from '../../schema';
 import { pool } from '../../db';
+import { evaluateDocumentationRequirements } from '../lib/documentationRequirementsEngine';
 import OpenAI from 'openai';
 
 let openaiClient: OpenAI | null = null;
@@ -189,6 +190,58 @@ router.get('/by-part/:partNumber', async (req: Request, res: Response) => {
     res.status(500).json({ 
       error: 'Failed to fetch part routing',
       message: error.message 
+    });
+  }
+});
+
+router.get('/project/:projectId/wad-documentation-requirements', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params;
+
+    if (!z.string().uuid().safeParse(projectId).success) {
+      return res.status(400).json({ error: 'Invalid projectId' });
+    }
+
+    const rows = await pool.query(
+      `SELECT id::text, work_order_number AS "workOrderNumber", wizard_data AS "wizardData", updated_at AS "updatedAt"
+       FROM production_work_orders
+       WHERE project_id = $1
+       ORDER BY
+         CASE wad_status WHEN 'APPROVED' THEN 0 WHEN 'PENDING_APPROVAL' THEN 1 ELSE 2 END,
+         updated_at DESC NULLS LAST,
+         created_at DESC NULLS LAST
+       LIMIT 1`,
+      [projectId]
+    );
+
+    const wad = rows[0];
+    if (!wad) {
+      return res.json({
+        wadId: null,
+        workOrderNumber: null,
+        requirements: null,
+      });
+    }
+
+    const documentationPackage = evaluateDocumentationRequirements(wad);
+
+    res.json({
+      wadId: wad.id,
+      workOrderNumber: wad.workOrderNumber,
+      requirements: {
+        travelerRequired: documentationPackage.requirements.travelerRequired === true,
+        inspectionSheetRequired: documentationPackage.requirements.inspectionSheetRequired === true,
+        samplingPlanRequired: documentationPackage.requirements.samplingPlanRequired === true,
+        samplingPlanId: String(documentationPackage.requirements.samplingPlanId ?? ''),
+        inspectionStrategy: documentationPackage.inspectionStrategy,
+      },
+      documentationPackage,
+    });
+  } catch (error: any) {
+    console.error('Error fetching WAD routing requirements:', error);
+    res.status(500).json({
+      error: 'Failed to fetch WAD routing requirements',
+      message: error.message,
     });
   }
 });

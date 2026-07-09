@@ -2099,6 +2099,7 @@ const projectSourcePartInventorySchema = z.object({
   poItemId: z.number().int().positive().optional().nullable(),
   partNumber: z.string().min(1, 'Source part number is required'),
   partName: z.string().optional().nullable(),
+  internalPartNumber: z.string().trim().optional().nullable(),
   manufacturedCategory: z
     .enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT'])
     .default('COMPONENT'),
@@ -2141,7 +2142,23 @@ router.post('/:id/p2-hub/source-parts/inventory-item', async (req, res) => {
       return res.status(404).json({ error: 'Source part was not found on this project PO family.' });
     }
 
-    const existingByLink = sourceLine.inventory_item_id
+    const requestedInternalPartNumber = input.internalPartNumber?.trim() || '';
+    const requestedInternalItems = requestedInternalPartNumber
+      ? await pool.query<any>(
+          `SELECT id, ag_part_number, name, item_type, manufactured_category
+           FROM inventory_items
+           WHERE LOWER(TRIM(ag_part_number)) = LOWER(TRIM($1))
+           LIMIT 1`,
+          [requestedInternalPartNumber],
+        )
+      : [];
+    if (requestedInternalPartNumber && requestedInternalItems.length === 0) {
+      return res.status(404).json({
+        error: `Internal AG part ${requestedInternalPartNumber} was not found in inventory items.`,
+      });
+    }
+
+    const existingByLink = !requestedInternalPartNumber && sourceLine.inventory_item_id
       ? await pool.query<any>(
           `SELECT id, ag_part_number, name, item_type, manufactured_category
            FROM inventory_items
@@ -2150,7 +2167,7 @@ router.post('/:id/p2-hub/source-parts/inventory-item', async (req, res) => {
           [sourceLine.inventory_item_id],
         )
       : [];
-    const existingByPartNumber = existingByLink.length > 0
+    const existingByPartNumber = requestedInternalPartNumber || existingByLink.length > 0
       ? []
       : await pool.query<any>(
           `SELECT id, ag_part_number, name, item_type, manufactured_category
@@ -2159,7 +2176,7 @@ router.post('/:id/p2-hub/source-parts/inventory-item', async (req, res) => {
            LIMIT 1`,
           [sourceLine.part_number],
         );
-    const existingItem = existingByLink[0] ?? existingByPartNumber[0] ?? null;
+    const existingItem = requestedInternalItems[0] ?? existingByLink[0] ?? existingByPartNumber[0] ?? null;
     const linkedPoItemIds = poRows.map((row: any) => row.id);
 
     if (existingItem) {

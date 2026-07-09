@@ -541,6 +541,7 @@ export default function ProjectDetailPage() {
     categories: {} as Record<string, Record<string, string>>,
   });
   const [romFormHydratedKey, setRomFormHydratedKey] = useState('');
+  const [sourcePartInternalNumbers, setSourcePartInternalNumbers] = useState<Record<string, string>>({});
 
   const linkedProjectPO = useMemo(() => {
     if (!project?.poId) return null;
@@ -936,6 +937,7 @@ export default function ProjectDetailPage() {
           poItemId: sourcePart.poItemId ?? null,
           partNumber: sourcePart.partNumber,
           partName: sourcePart.partName || sourcePart.inventoryName || sourcePart.partNumber,
+          internalPartNumber: sourcePart.internalPartNumber || null,
           manufacturedCategory: sourcePart.manufacturedCategory || 'COMPONENT',
         },
       }),
@@ -958,6 +960,17 @@ export default function ProjectDetailPage() {
       });
     },
   });
+  const updateSourcePartInternalNumber = (rowKey: string, value: string) => {
+    setSourcePartInternalNumbers((prev) => ({ ...prev, [rowKey]: value }));
+  };
+
+  const linkSourcePartToInternalNumber = (sourcePart: any, rowKey: string) => {
+    const internalPartNumber = (sourcePartInternalNumbers[rowKey] ?? sourcePart.agPartNumber ?? '').trim();
+    convertSourcePartMutation.mutate({
+      ...sourcePart,
+      internalPartNumber,
+    });
+  };
   const hubPo = hubTabs.po ?? {};
   const currentProjectPo = hubPo.currentPo ?? linkedProjectPO ?? projectP2POs[0] ?? null;
   const currentPoLineItems = Array.isArray(hubPo.lineItems) ? hubPo.lineItems : [];
@@ -3109,9 +3122,10 @@ export default function ProjectDetailPage() {
                     {bomRoutingSourceParts.map((sourcePart: any) => {
                       const rowKey = sourcePart.poItemId ?? sourcePart.partNumber;
                       const isLinkedManufactured = Boolean(sourcePart.agPartNumber && sourcePart.isManufactured);
+                      const internalPartInput = sourcePartInternalNumbers[String(rowKey)] ?? sourcePart.agPartNumber ?? '';
                       return (
                         <div key={rowKey} className="rounded-md border p-3">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,300px)_auto] lg:items-start">
                             <div className="min-w-0 space-y-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="font-mono font-semibold">{sourcePart.partNumber || 'Unknown source'}</span>
@@ -3138,20 +3152,49 @@ export default function ProjectDetailPage() {
                                 </span>
                               </div>
                             </div>
-                            <Button
-                              variant={isLinkedManufactured ? 'outline' : 'default'}
-                              size="sm"
-                              onClick={() => convertSourcePartMutation.mutate(sourcePart)}
-                              disabled={convertSourcePartMutation.isPending || !sourcePart.partNumber}
-                              data-testid={`button-convert-source-part-${sourcePart.poItemId ?? sourcePart.partNumber}`}
-                            >
-                              {convertSourcePartMutation.isPending ? (
-                                <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />
-                              ) : (
-                                <Edit className="h-4 w-4 mr-1.5" />
-                              )}
-                              {isLinkedManufactured ? 'Refresh Link' : 'Make AG Manufactured'}
-                            </Button>
+                            <div className="space-y-1">
+                              <Label htmlFor={`source-part-internal-${rowKey}`} className="text-xs">
+                                Internal AG part #
+                              </Label>
+                              <Input
+                                id={`source-part-internal-${rowKey}`}
+                                value={internalPartInput}
+                                onChange={(event) => updateSourcePartInternalNumber(String(rowKey), event.target.value)}
+                                placeholder="Enter AG part #"
+                                className="h-9 font-mono"
+                                data-testid={`input-source-part-internal-${sourcePart.poItemId ?? sourcePart.partNumber}`}
+                              />
+                            </div>
+                            <div className="flex flex-wrap gap-2 lg:justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => linkSourcePartToInternalNumber(sourcePart, String(rowKey))}
+                                disabled={convertSourcePartMutation.isPending || !sourcePart.partNumber || !internalPartInput.trim()}
+                                data-testid={`button-link-source-part-internal-${sourcePart.poItemId ?? sourcePart.partNumber}`}
+                              >
+                                {convertSourcePartMutation.isPending ? (
+                                  <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />
+                                ) : (
+                                  <LinkIcon className="h-4 w-4 mr-1.5" />
+                                )}
+                                Link AG Part
+                              </Button>
+                              <Button
+                                variant={isLinkedManufactured ? 'outline' : 'default'}
+                                size="sm"
+                                onClick={() => convertSourcePartMutation.mutate(sourcePart)}
+                                disabled={convertSourcePartMutation.isPending || !sourcePart.partNumber}
+                                data-testid={`button-convert-source-part-${sourcePart.poItemId ?? sourcePart.partNumber}`}
+                              >
+                                {convertSourcePartMutation.isPending ? (
+                                  <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />
+                                ) : (
+                                  <Edit className="h-4 w-4 mr-1.5" />
+                                )}
+                                {isLinkedManufactured ? 'Refresh Link' : 'Create AG Item'}
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       );

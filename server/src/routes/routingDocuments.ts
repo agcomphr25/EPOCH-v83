@@ -208,6 +208,37 @@ function fallbackTemplateFields(documentType: string) {
   return baseFields.map(normalizeTemplateField);
 }
 
+function buildSpecSheetTemplateFields(sheet: any) {
+  const specifications = sheet.specifications && typeof sheet.specifications === 'object' ? sheet.specifications : {};
+  const fieldValues = specifications.fieldValues && typeof specifications.fieldValues === 'object'
+    ? specifications.fieldValues
+    : specifications;
+  const seededFields = [
+    { fieldName: 'partNumber', fieldLabel: 'Part Number', fieldType: 'text', sectionName: 'Header', isRequired: true, defaultValue: sheet.part_number ?? sheet.partNumber ?? '' },
+    { fieldName: 'title', fieldLabel: 'Spec Sheet Title', fieldType: 'text', sectionName: 'Header', isRequired: true, defaultValue: sheet.title ?? '' },
+  ];
+
+  const valueFields = Object.entries(fieldValues)
+    .filter(([key]) => !['templateId', 'templateName', 'manufacturedPart', 'controlledDocumentNumber'].includes(key))
+    .map(([key, value], index) => {
+      const displayValue = Array.isArray(value) ? value.join('\n') : value == null ? '' : String(value);
+      return {
+        fieldName: key,
+        fieldLabel: key.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, (match) => match.toUpperCase()),
+        fieldType: displayValue.includes('\n') || displayValue.length > 80 ? 'textarea' : 'text',
+        sectionName: key === 'partNumber' || key === 'partName' || key === 'sku' ? 'Header' : 'Spec Sheet',
+        isRequired: false,
+        defaultValue: displayValue,
+        sortOrder: index + seededFields.length,
+      };
+    });
+
+  const merged = [...seededFields, ...valueFields].filter((field, index, fields) =>
+    fields.findIndex((candidate) => candidate.fieldName === field.fieldName) === index
+  );
+  return merged.map(normalizeTemplateField);
+}
+
 async function generateControlledTemplateNumber() {
   const year = new Date().getFullYear();
   const prefix = `${CONTROLLED_TEMPLATE_PREFIX}-${year}-`;
@@ -2326,6 +2357,103 @@ router.post('/spec-sheets', async (req: Request, res: Response) => {
   }
 });
 
+// Convert an existing spec sheet into a reusable fillable template
+router.post('/spec-sheets/:id/create-template', async (req: Request, res: Response) => {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid spec sheet ID format' });
+    }
+
+    const sheetResult = await db.execute(sql`SELECT * FROM spec_sheets WHERE id = ${req.params.id} AND is_active = true LIMIT 1`);
+    const sheetRows = ((sheetResult as any)?.rows || sheetResult || []) as any[];
+    const sheet = sheetRows[0];
+    if (!sheet) {
+      return res.status(404).json({ error: 'Spec sheet not found' });
+    }
+
+    const templateName = `${sheet.title} Template`;
+    const existingTemplateResult = await db.execute(sql`
+      SELECT *
+      FROM document_templates
+      WHERE template_name = ${templateName}
+        AND template_type = 'spec_sheet'
+        AND COALESCE(is_active, true) = true
+      ORDER BY created_at DESC NULLS LAST
+      LIMIT 1
+    `);
+    const existingTemplateRows = ((existingTemplateResult as any)?.rows || existingTemplateResult || []) as any[];
+    const existingTemplate = existingTemplateRows[0];
+    if (existingTemplate) {
+      const existingFieldsResult = await db.execute(sql`
+        SELECT *
+        FROM template_fields
+        WHERE template_id = ${existingTemplate.id}
+        ORDER BY sort_order ASC
+      `);
+      const existingFields = ((existingFieldsResult as any)?.rows || existingFieldsResult || []) as any[];
+      await db.update(specSheets)
+        .set({ isTemplate: true, updatedAt: new Date() })
+        .where(eq(specSheets.id, req.params.id));
+      return res.status(200).json({ template: existingTemplate, fields: existingFields });
+    }
+
+    const templateFieldsForSheet = buildSpecSheetTemplateFields(sheet);
+    const sections = Array.from(new Set(templateFieldsForSheet.map((field) => field.sectionName).filter(Boolean)))
+      .map((name, index) => ({
+        name,
+        description: name === 'Header' ? 'Spec sheet identity fields' : 'Reusable spec sheet fields',
+        order: index + 1,
+      }));
+    const createdBy = (req as any).user?.username || 'system';
+    const template = await insertPublicRowReturning('document_templates', {
+      template_name: templateName,
+      template_type: 'spec_sheet',
+      description: `Reusable template created from spec sheet ${sheet.title}`,
+      learned_from_count: 1,
+      structure: {
+        source: 'spec_sheet',
+        sourceSpecSheetId: sheet.id,
+        sourceFileName: sheet.file_name ?? sheet.fileName ?? null,
+        sourceFileUrl: sheet.file_url ?? sheet.fileUrl ?? null,
+      },
+      sections,
+      default_fields: templateFieldsForSheet,
+      is_active: true,
+      created_by: createdBy,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['template_name', 'template_type']);
+
+    for (const field of templateFieldsForSheet) {
+      await insertPublicRowReturning('template_fields', {
+        template_id: template.id,
+        field_name: field.fieldName,
+        field_label: field.fieldLabel,
+        field_type: field.fieldType || 'text',
+        is_required: field.isRequired || false,
+        is_unique_per_serial: field.isUniquePerSerial || false,
+        default_value: field.defaultValue || null,
+        validation_rules: field.validationRules || null,
+        options: field.options || null,
+        section_name: field.sectionName || null,
+        sort_order: field.sortOrder ?? 0,
+        ai_suggested: false,
+        created_at: new Date(),
+      }, ['template_id', 'field_name', 'field_label', 'field_type']);
+    }
+
+    await db.update(specSheets)
+      .set({ isTemplate: true, updatedAt: new Date() })
+      .where(eq(specSheets.id, req.params.id));
+
+    res.status(201).json({ template, fields: templateFieldsForSheet });
+  } catch (error) {
+    console.error('Error creating template from spec sheet:', error);
+    res.status(500).json({ error: 'Failed to create template from spec sheet' });
+  }
+});
+
 // Get single spec sheet
 router.get('/spec-sheets/:id', async (req: Request, res: Response) => {
   try {
@@ -2356,7 +2484,7 @@ router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid spec sheet ID format' });
     }
 
-    const { partNumber, title, version, description, specifications, isActive } = req.body;
+    const { partNumber, title, version, description, specifications, isTemplate, isActive } = req.body;
     
     const updateData: any = { updatedAt: new Date() };
     if (partNumber !== undefined) updateData.partNumber = partNumber;
@@ -2364,6 +2492,7 @@ router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
     if (version !== undefined) updateData.version = version;
     if (description !== undefined) updateData.description = description;
     if (specifications !== undefined) updateData.specifications = specifications;
+    if (isTemplate !== undefined) updateData.isTemplate = isTemplate === true || isTemplate === 'true';
     if (isActive !== undefined) updateData.isActive = isActive === true || isActive === 'true';
 
     const [updated] = await db.update(specSheets)

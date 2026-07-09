@@ -48,6 +48,15 @@ async function getPublicTableColumns(tableName: string) {
   return new Map(rows.map((row) => [String(row.column_name), String(row.data_type || '')]));
 }
 
+function valueSqlForPublicColumn(columns: Map<string, string>, key: string, value: any) {
+  const dataType = columns.get(key);
+  if ((dataType === 'json' || dataType === 'jsonb') && value !== null) {
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    return dataType === 'jsonb' ? sql`${serialized}::jsonb` : sql`${serialized}::json`;
+  }
+  return sql`${value}`;
+}
+
 async function insertPublicRowReturning(tableName: string, values: Record<string, any>, requiredColumns: string[] = []) {
   if (!TEMPLATE_UPLOAD_TABLES.has(tableName)) {
     throw new Error(`Unsupported template upload table: ${tableName}`);
@@ -64,7 +73,7 @@ async function insertPublicRowReturning(tableName: string, values: Record<string
   }
 
   const columnSql = availableKeys.map((key) => sql.raw(`"${key}"`));
-  const valueSql = availableKeys.map((key) => sql`${values[key]}`);
+  const valueSql = availableKeys.map((key) => valueSqlForPublicColumn(columns, key, values[key]));
   const result = await db.execute(sql`
     INSERT INTO ${sql.raw(`"${tableName}"`)} (${sql.join(columnSql, sql`, `)})
     VALUES (${sql.join(valueSql, sql`, `)})
@@ -91,7 +100,7 @@ async function updatePublicRowByIdReturning(tableName: string, id: string, value
     return (((existingResult as any)?.rows || existingResult || []) as any[])[0];
   }
 
-  const setSql = availableKeys.map((key) => sql`${sql.raw(`"${key}"`)} = ${values[key]}`);
+  const setSql = availableKeys.map((key) => sql`${sql.raw(`"${key}"`)} = ${valueSqlForPublicColumn(columns, key, values[key])}`);
   const result = await db.execute(sql`
     UPDATE ${sql.raw(`"${tableName}"`)}
     SET ${sql.join(setSql, sql`, `)}
@@ -1498,7 +1507,10 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
     });
   } catch (error) {
     console.error('Error uploading registered template:', error);
-    res.status(500).json({ error: 'Failed to upload and register reusable template' });
+    res.status(500).json({
+      error: 'Failed to upload and register reusable template',
+      details: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 

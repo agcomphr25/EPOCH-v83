@@ -460,6 +460,7 @@ export default function RoutingDocumentManagement() {
       return apiRequest('/api/routing-documents/templates/learn', {
         method: 'POST',
         body: data,
+        timeout: 120000,
       });
     },
     onSuccess: () => {

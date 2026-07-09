@@ -122,7 +122,9 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
   const [partsNeedingBOM, setPartsNeedingBOM] = useState<PartNeedingBOM[]>([]);
   const [currentBOMItems, setCurrentBOMItems] = useState<BOMItem[]>([]);
   const [newItem, setNewItem] = useState<Partial<BOMItem>>({});
+  const [newItemQuantity, setNewItemQuantity] = useState('');
   const [editingItem, setEditingItem] = useState<BOMItem | null>(null);
+  const [editingQuantity, setEditingQuantity] = useState('');
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<any>(null);
@@ -251,7 +253,9 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
   };
 
   const addBOMItem = () => {
-    if (!newItem.partNumber || !newItem.quantity) {
+    const quantity = parsePositiveQuantity(newItemQuantity);
+
+    if (!newItem.partNumber || quantity <= 0) {
       toast({
         title: 'Missing Information',
         description: 'Please enter part number and quantity',
@@ -265,13 +269,14 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
       inventoryItemId: newItem.inventoryItemId || null,
       partNumber: newItem.partNumber || '',
       description: newItem.description || '',
-      quantity: newItem.quantity || 1,
+      quantity,
       isManufactured: newItem.isManufactured || false,
       firstDepartment: newItem.firstDepartment || DEFAULT_DEPARTMENT,
     };
 
     setCurrentBOMItems([...currentBOMItems, item]);
     setNewItem({});
+    setNewItemQuantity('');
     setSelectedInventoryItem(null);
 
     if (item.isManufactured) {
@@ -561,11 +566,10 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
             <div>
               <Label>Quantity</Label>
               <Input
-                type="number"
-                value={newItem.quantity || ''}
-                onChange={(e) => setNewItem({ ...newItem, quantity: parsePositiveQuantity(e.target.value) })}
-                min="0.0001"
-                step="any"
+                type="text"
+                inputMode="decimal"
+                value={newItemQuantity}
+                onChange={(e) => setNewItemQuantity(e.target.value)}
                 placeholder="Qty"
                 data-testid="input-bom-quantity"
               />
@@ -652,7 +656,10 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setEditingItem(item)}
+                        onClick={() => {
+                          setEditingItem(item);
+                          setEditingQuantity(String(item.quantity));
+                        }}
                         data-testid={`button-edit-bom-${item.id}`}
                       >
                         <Pencil className="h-4 w-4" />
@@ -694,11 +701,10 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
                   <div>
                     <Label>Quantity</Label>
                     <Input
-                      type="number"
-                      value={editingItem.quantity}
-                      onChange={(e) => setEditingItem({ ...editingItem, quantity: parsePositiveQuantity(e.target.value, 1) })}
-                      min="0.0001"
-                      step="any"
+                      type="text"
+                      inputMode="decimal"
+                      value={editingQuantity}
+                      onChange={(e) => setEditingQuantity(e.target.value)}
                       data-testid="input-edit-quantity"
                     />
                   </div>
@@ -744,7 +750,16 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
                   </Button>
                   <Button onClick={() => {
                     if (editingItem) {
-                      updateBOMItem({ ...editingItem });
+                      const quantity = parsePositiveQuantity(editingQuantity);
+                      if (quantity <= 0) {
+                        toast({
+                          title: 'Invalid Quantity',
+                          description: 'Please enter a quantity greater than 0',
+                          variant: 'destructive',
+                        });
+                        return;
+                      }
+                      updateBOMItem({ ...editingItem, quantity });
                     }
                   }}>
                     Save Changes

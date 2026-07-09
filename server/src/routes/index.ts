@@ -37,6 +37,7 @@ import vendorsRoutes from './vendors';
 import vendorPOsRoutes from './vendorPOs';
 import pdfTemplatesRoutes from './pdfTemplates';
 import qualityRoutes from './quality';
+import qmsDesignControlRoutes from './qmsDesignControl';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
 import layupPdfRoute from './layupPdfRoute';
@@ -1248,6 +1249,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Quality control and maintenance routes
   app.use('/api/quality', qualityRoutes);
+  app.use('/api/qms/design-control', qmsDesignControlRoutes);
 
   // Asset Management routes
   app.use('/api/assets', assetManagementRoutes);

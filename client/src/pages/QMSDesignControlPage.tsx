@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { apiRequest } from '@/lib/queryClient';
 
 type StatusTone = 'draft' | 'active' | 'review' | 'approved' | 'blocked' | 'released';
 
@@ -96,6 +97,34 @@ type WorkflowStepData = {
   fields: Record<string, string>;
   checklist: Record<string, boolean>;
   approvals: Record<string, boolean>;
+};
+
+type DesignControlRecord = {
+  id: string;
+  recordNumber?: string | null;
+  title: string;
+  status: string;
+  projectId?: string | null;
+  productionWorkOrderId?: string | null;
+  p2PurchaseOrderId?: number | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+type DesignControlStepRecord = {
+  stepKey: string;
+  title: string;
+  status: string;
+  formData?: Record<string, unknown> | null;
+  checklist?: Record<string, unknown> | null;
+  approvals?: Record<string, unknown> | null;
+  attachments?: unknown[] | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+type DesignControlReadiness = {
+  ready: boolean;
+  missingItems: string[];
+  steps: Array<{ key: string; title: string; status: string }>;
 };
 
 const lifecycleTabs = [
@@ -722,6 +751,32 @@ function createInitialWorkflowData() {
   }, {});
 }
 
+function mergePersistedWorkflowData(steps: DesignControlStepRecord[]) {
+  const base = createInitialWorkflowData();
+
+  for (const persistedStep of steps) {
+    const step = designWorkflowSteps.find((item) => item.id === persistedStep.stepKey);
+    if (!step) continue;
+
+    base[step.id] = {
+      fields: {
+        ...base[step.id].fields,
+        ...Object.fromEntries(Object.entries(persistedStep.formData ?? {}).map(([key, value]) => [key, String(value ?? '')])),
+      },
+      checklist: {
+        ...base[step.id].checklist,
+        ...Object.fromEntries(Object.entries(persistedStep.checklist ?? {}).map(([key, value]) => [key, value === true])),
+      },
+      approvals: {
+        ...base[step.id].approvals,
+        ...Object.fromEntries(Object.entries(persistedStep.approvals ?? {}).map(([key, value]) => [key, value === true])),
+      },
+    };
+  }
+
+  return base;
+}
+
 function isWorkflowStepFilled(step: DesignWorkflowStep, data: WorkflowStepData) {
   const fieldsComplete = step.fields.every((field) => data.fields[field]?.trim());
   const checklistComplete = (step.checklist ?? []).every((item) => data.checklist[item]);
@@ -871,8 +926,22 @@ function SectionHeader({
 export default function QMSDesignControlPage() {
   const [selectedRecord, setSelectedRecord] = useState<RegisterRow | RiskRow | ReleaseRow | null>(null);
   const [recordType, setRecordType] = useState('design-input');
+  const [draftRecordTitle, setDraftRecordTitle] = useState('');
+  const [draftRecordOwner, setDraftRecordOwner] = useState('');
   const [selectedWorkflowStepId, setSelectedWorkflowStepId] = useState('1');
   const [workflowData, setWorkflowData] = useState<Record<string, WorkflowStepData>>(() => createInitialWorkflowData());
+  const [designControlRecords, setDesignControlRecords] = useState<DesignControlRecord[]>([]);
+  const [activeDesignControlRecordId, setActiveDesignControlRecordId] = useState<string | null>(null);
+  const [activeDesignControlRecord, setActiveDesignControlRecord] = useState<DesignControlRecord | null>(null);
+  const [serverReadiness, setServerReadiness] = useState<DesignControlReadiness | null>(null);
+  const [isLoadingRecords, setIsLoadingRecords] = useState(true);
+  const [isLoadingRecord, setIsLoadingRecord] = useState(false);
+  const [isSavingStep, setIsSavingStep] = useState(false);
+  const [isCreatingRecord, setIsCreatingRecord] = useState(false);
+  const [isSubmittingRelease, setIsSubmittingRelease] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [lastSavedStep, setLastSavedStep] = useState<string | null>(null);
 
   const gateProgress = useMemo(() => {
     const allRows = [...inputs, ...outputs, ...reviews, ...verification, ...validation, ...changes, ...releases, ...dhf];
@@ -888,13 +957,171 @@ export default function QMSDesignControlPage() {
   const selectedWorkflowData = workflowData[selectedWorkflowStep.id];
   const approvedWorkflowCount = designWorkflowSteps.filter((step) => workflowStatuses[step.id] === 'approved').length;
   const workflowProgress = Math.round((approvedWorkflowCount / designWorkflowSteps.length) * 100);
-  const releaseReadinessItems = designWorkflowSteps.flatMap((step) => {
+  const localReleaseReadinessItems = designWorkflowSteps.flatMap((step) => {
     if (workflowStatuses[step.id] === 'approved') return [];
     if (step.id !== '12') {
       return [`Step ${step.id} ${step.title}: approval required before Design Production Release Gate`];
     }
     return getMissingWorkflowItems(step, workflowData).map((item) => `Release Gate ${item}`);
   });
+  const releaseReadinessItems = serverReadiness?.missingItems ?? localReleaseReadinessItems;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRecords() {
+      setIsLoadingRecords(true);
+      setLoadError(null);
+      try {
+        const response = await apiRequest('/api/qms/design-control') as { records: DesignControlRecord[] };
+        if (cancelled) return;
+        setDesignControlRecords(response.records ?? []);
+        setActiveDesignControlRecordId((current) => current ?? response.records?.[0]?.id ?? null);
+      } catch (error: any) {
+        if (!cancelled) setLoadError(error.message || 'Failed to load design control records.');
+      } finally {
+        if (!cancelled) setIsLoadingRecords(false);
+      }
+    }
+
+    loadRecords();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeDesignControlRecordId) {
+      setActiveDesignControlRecord(null);
+      setServerReadiness(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadRecord() {
+      setIsLoadingRecord(true);
+      setLoadError(null);
+      try {
+        const detail = await apiRequest(`/api/qms/design-control/${activeDesignControlRecordId}`) as {
+          record: DesignControlRecord;
+          steps: DesignControlStepRecord[];
+        };
+        const readiness = await apiRequest(`/api/qms/design-control/${activeDesignControlRecordId}/readiness`) as DesignControlReadiness;
+        if (cancelled) return;
+        setActiveDesignControlRecord(detail.record);
+        setWorkflowData(mergePersistedWorkflowData(detail.steps ?? []));
+        setServerReadiness(readiness);
+      } catch (error: any) {
+        if (!cancelled) setLoadError(error.message || 'Failed to load the selected design control record.');
+      } finally {
+        if (!cancelled) setIsLoadingRecord(false);
+      }
+    }
+
+    loadRecord();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDesignControlRecordId]);
+
+  const createDesignControlRecord = async (title?: string) => {
+    setIsCreatingRecord(true);
+    setSaveError(null);
+    try {
+      const response = await apiRequest('/api/qms/design-control', {
+        method: 'POST',
+        body: {
+          title: title?.trim() || draftRecordTitle.trim() || 'New Design Control Record',
+          metadata: {
+            recordType,
+            owner: draftRecordOwner.trim() || null,
+            source: '/qms/design-control',
+          },
+        },
+      }) as { record: DesignControlRecord };
+      setDesignControlRecords((current) => [response.record, ...current.filter((record) => record.id !== response.record.id)]);
+      setActiveDesignControlRecordId(response.record.id);
+      setDraftRecordTitle('');
+      setDraftRecordOwner('');
+    } catch (error: any) {
+      setSaveError(error.message || 'Failed to create design control record.');
+    } finally {
+      setIsCreatingRecord(false);
+    }
+  };
+
+  const saveWorkflowStep = async () => {
+    if (!activeDesignControlRecordId) {
+      setSaveError('Create or select a design control record before saving workflow steps.');
+      return;
+    }
+
+    const step = selectedWorkflowStep;
+    const data = workflowData[step.id];
+    setIsSavingStep(true);
+    setSaveError(null);
+    setLastSavedStep(null);
+    try {
+      const response = await apiRequest(`/api/qms/design-control/${activeDesignControlRecordId}/steps/${step.id}`, {
+        method: 'PATCH',
+        body: {
+          status: workflowStatuses[step.id],
+          formData: data.fields,
+          checklist: data.checklist,
+          approvals: data.approvals,
+          metadata: {
+            title: step.title,
+            purpose: step.purpose,
+            source: '/qms/design-control',
+          },
+        },
+      }) as { readiness: DesignControlReadiness };
+      setServerReadiness(response.readiness);
+      setLastSavedStep(`Step ${step.id} saved`);
+    } catch (error: any) {
+      setSaveError(error.message || 'Failed to save design control step.');
+      if (error.responseData?.missingItems) {
+        setServerReadiness({
+          ready: false,
+          missingItems: error.responseData.missingItems,
+          steps: serverReadiness?.steps ?? [],
+        });
+      }
+    } finally {
+      setIsSavingStep(false);
+    }
+  };
+
+  const submitReleaseGate = async () => {
+    if (!activeDesignControlRecordId) {
+      setSaveError('Create or select a design control record before submitting the release gate.');
+      return;
+    }
+
+    setIsSubmittingRelease(true);
+    setSaveError(null);
+    try {
+      const response = await apiRequest(`/api/qms/design-control/${activeDesignControlRecordId}/submit-release`, {
+        method: 'POST',
+        body: {},
+      }) as { record: DesignControlRecord; readiness: DesignControlReadiness };
+      setActiveDesignControlRecord(response.record);
+      setServerReadiness(response.readiness);
+      setLastSavedStep('Release gate submitted');
+    } catch (error: any) {
+      setSaveError(error.message || 'Failed to submit release gate.');
+      if (error.responseData?.missingItems) {
+        setServerReadiness({
+          ready: false,
+          missingItems: error.responseData.missingItems,
+          steps: serverReadiness?.steps ?? [],
+        });
+      }
+    } finally {
+      setIsSubmittingRelease(false);
+    }
+  };
 
   const updateWorkflowField = (stepId: string, field: string, value: string) => {
     setWorkflowData((current) => ({
@@ -954,12 +1181,70 @@ export default function QMSDesignControlPage() {
               <FileArchive className="h-4 w-4" />
               DHF Export
             </Button>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={() => createDesignControlRecord()} disabled={isCreatingRecord}>
               <Plus className="h-4 w-4" />
-              New Design Record
+              {isCreatingRecord ? 'Creating...' : 'New Design Record'}
             </Button>
           </div>
         </div>
+
+        {(loadError || saveError || lastSavedStep || isLoadingRecords || isLoadingRecord) && (
+          <Card>
+            <CardContent className="flex flex-col gap-2 py-3 text-sm md:flex-row md:items-center md:justify-between">
+              <div className="text-muted-foreground">
+                {isLoadingRecords || isLoadingRecord
+                  ? 'Loading persistent design control data...'
+                  : activeDesignControlRecord
+                    ? `Active record: ${activeDesignControlRecord.title}`
+                    : 'No active design control record selected.'}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {lastSavedStep && (
+                  <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700">
+                    {lastSavedStep}
+                  </Badge>
+                )}
+                {(loadError || saveError) && (
+                  <Badge variant="outline" className="border-red-300 bg-red-50 text-red-700">
+                    {loadError || saveError}
+                  </Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Persistent Design Record</CardTitle>
+            <CardDescription>Select the database-backed record that owns this AS9100 workflow.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+            <div className="grid gap-2">
+              <Label htmlFor="active-design-control-record">Active record</Label>
+              <Select
+                value={activeDesignControlRecordId ?? undefined}
+                onValueChange={setActiveDesignControlRecordId}
+                disabled={isLoadingRecords || designControlRecords.length === 0}
+              >
+                <SelectTrigger id="active-design-control-record">
+                  <SelectValue placeholder={isLoadingRecords ? 'Loading records...' : 'Select a design control record'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {designControlRecords.map((record) => (
+                    <SelectItem key={record.id} value={record.id}>
+                      {record.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="outline" className="gap-2" onClick={() => createDesignControlRecord()} disabled={isCreatingRecord}>
+              <Plus className="h-4 w-4" />
+              Create Record
+            </Button>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 md:grid-cols-4">
           {lifecycleMetrics.map((metric) => {
@@ -1107,9 +1392,20 @@ export default function QMSDesignControlPage() {
                     </CardTitle>
                     <CardDescription className="mt-1">{selectedWorkflowStep.purpose}</CardDescription>
                   </div>
-                  <Badge variant="outline" className={workflowStatusClasses[workflowStatuses[selectedWorkflowStep.id]]}>
-                    {workflowStatusLabels[workflowStatuses[selectedWorkflowStep.id]]}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={workflowStatusClasses[workflowStatuses[selectedWorkflowStep.id]]}>
+                      {workflowStatusLabels[workflowStatuses[selectedWorkflowStep.id]]}
+                    </Badge>
+                    <Button
+                      size="sm"
+                      className="gap-2"
+                      onClick={saveWorkflowStep}
+                      disabled={isSavingStep || isLoadingRecord || !activeDesignControlRecordId}
+                    >
+                      <FileCheck2 className="h-4 w-4" />
+                      {isSavingStep ? 'Saving...' : 'Save Step'}
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -1198,13 +1494,26 @@ export default function QMSDesignControlPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <PackageCheck className="h-5 w-5 text-primary" />
-                  Release Readiness
-                </CardTitle>
-                <CardDescription>
-                  Missing items that must be cleared before Design Production Release Gate approval.
-                </CardDescription>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <PackageCheck className="h-5 w-5 text-primary" />
+                      Release Readiness
+                    </CardTitle>
+                    <CardDescription>
+                      Missing items that must be cleared before Design Production Release Gate approval.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant={releaseReadinessItems.length === 0 ? 'default' : 'outline'}
+                    className="gap-2 self-start"
+                    onClick={submitReleaseGate}
+                    disabled={isSubmittingRelease || !activeDesignControlRecordId}
+                  >
+                    <Rocket className="h-4 w-4" />
+                    {isSubmittingRelease ? 'Submitting...' : 'Submit Release'}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {releaseReadinessItems.length === 0 ? (
@@ -1389,15 +1698,25 @@ export default function QMSDesignControlPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="record-title">Title</Label>
-              <Input id="record-title" placeholder="Controlled record title" />
+              <Input
+                id="record-title"
+                value={draftRecordTitle}
+                onChange={(event) => setDraftRecordTitle(event.target.value)}
+                placeholder="Controlled record title"
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="record-owner">Owner</Label>
-              <Input id="record-owner" placeholder="Responsible owner" />
+              <Input
+                id="record-owner"
+                value={draftRecordOwner}
+                onChange={(event) => setDraftRecordOwner(event.target.value)}
+                placeholder="Responsible owner"
+              />
             </div>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={() => createDesignControlRecord()} disabled={isCreatingRecord}>
               <FileText className="h-4 w-4" />
-              Create Draft
+              {isCreatingRecord ? 'Creating...' : 'Create Draft'}
             </Button>
           </CardContent>
         </Card>

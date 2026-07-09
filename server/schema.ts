@@ -17323,6 +17323,177 @@ export const insertProductionWorkOrderSchema = createInsertSchema(productionWork
 export type ProductionWorkOrder = typeof productionWorkOrders.$inferSelect;
 export type InsertProductionWorkOrder = z.infer<typeof insertProductionWorkOrderSchema>;
 
+export const designControlRecords = pgTable('design_control_records', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  recordNumber: text('record_number'),
+  title: text('title').notNull(),
+  status: text('status').notNull().default('draft'),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  productionWorkOrderId: uuid('production_work_order_id').references(() => productionWorkOrders.id, { onDelete: 'set null' }),
+  p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
+  formData: jsonb('form_data').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  checklist: jsonb('checklist').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  approvals: jsonb('approvals').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  attachments: jsonb('attachments').$type<unknown[]>().default(sql`'[]'::jsonb`).notNull(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  submittedAt: timestamp('submitted_at'),
+  releasedAt: timestamp('released_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdx: index('design_control_records_project_id_idx').on(table.projectId),
+  productionWorkOrderIdx: index('design_control_records_pwo_id_idx').on(table.productionWorkOrderId),
+  p2PurchaseOrderIdx: index('design_control_records_p2_po_id_idx').on(table.p2PurchaseOrderId),
+  statusIdx: index('design_control_records_status_idx').on(table.status),
+}));
+
+const designControlTraceabilityColumns = () => ({
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  productionWorkOrderId: uuid('production_work_order_id').references(() => productionWorkOrders.id, { onDelete: 'set null' }),
+  p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
+});
+
+const designControlJsonColumns = () => ({
+  formData: jsonb('form_data').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  checklist: jsonb('checklist').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  approvals: jsonb('approvals').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  attachments: jsonb('attachments').$type<unknown[]>().default(sql`'[]'::jsonb`).notNull(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+});
+
+export const designControlSteps = pgTable('design_control_steps', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  recordId: uuid('record_id').notNull().references(() => designControlRecords.id, { onDelete: 'cascade' }),
+  stepKey: text('step_key').notNull(),
+  title: text('title').notNull(),
+  status: text('status').notNull().default('incomplete'),
+  ...designControlTraceabilityColumns(),
+  ...designControlJsonColumns(),
+  approvedAt: timestamp('approved_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordStepUnique: uniqueIndex('design_control_steps_record_step_unique').on(table.recordId, table.stepKey),
+  recordIdx: index('design_control_steps_record_id_idx').on(table.recordId),
+  statusIdx: index('design_control_steps_status_idx').on(table.status),
+}));
+
+export const designControlRequirements = pgTable('design_control_requirements', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  recordId: uuid('record_id').notNull().references(() => designControlRecords.id, { onDelete: 'cascade' }),
+  requirementKey: text('requirement_key'),
+  title: text('title'),
+  status: text('status').notNull().default('draft'),
+  ...designControlTraceabilityColumns(),
+  ...designControlJsonColumns(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordIdx: index('design_control_requirements_record_id_idx').on(table.recordId),
+}));
+
+export const designControlRisks = pgTable('design_control_risks', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  recordId: uuid('record_id').notNull().references(() => designControlRecords.id, { onDelete: 'cascade' }),
+  riskKey: text('risk_key'),
+  title: text('title'),
+  status: text('status').notNull().default('draft'),
+  ...designControlTraceabilityColumns(),
+  ...designControlJsonColumns(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordIdx: index('design_control_risks_record_id_idx').on(table.recordId),
+}));
+
+export const designControlReviews = pgTable('design_control_reviews', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  recordId: uuid('record_id').notNull().references(() => designControlRecords.id, { onDelete: 'cascade' }),
+  reviewType: text('review_type'),
+  title: text('title'),
+  status: text('status').notNull().default('draft'),
+  ...designControlTraceabilityColumns(),
+  ...designControlJsonColumns(),
+  reviewedAt: timestamp('reviewed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordIdx: index('design_control_reviews_record_id_idx').on(table.recordId),
+}));
+
+export const designControlVerification = pgTable('design_control_verification', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  recordId: uuid('record_id').notNull().references(() => designControlRecords.id, { onDelete: 'cascade' }),
+  verificationKey: text('verification_key'),
+  title: text('title'),
+  status: text('status').notNull().default('draft'),
+  ...designControlTraceabilityColumns(),
+  ...designControlJsonColumns(),
+  verifiedAt: timestamp('verified_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordIdx: index('design_control_verification_record_id_idx').on(table.recordId),
+}));
+
+export const designControlValidation = pgTable('design_control_validation', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  recordId: uuid('record_id').notNull().references(() => designControlRecords.id, { onDelete: 'cascade' }),
+  validationKey: text('validation_key'),
+  title: text('title'),
+  status: text('status').notNull().default('draft'),
+  ...designControlTraceabilityColumns(),
+  ...designControlJsonColumns(),
+  validatedAt: timestamp('validated_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordIdx: index('design_control_validation_record_id_idx').on(table.recordId),
+}));
+
+export const designControlChanges = pgTable('design_control_changes', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  recordId: uuid('record_id').notNull().references(() => designControlRecords.id, { onDelete: 'cascade' }),
+  changeKey: text('change_key'),
+  title: text('title'),
+  status: text('status').notNull().default('draft'),
+  ...designControlTraceabilityColumns(),
+  ...designControlJsonColumns(),
+  approvedAt: timestamp('approved_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordIdx: index('design_control_changes_record_id_idx').on(table.recordId),
+}));
+
+export const designControlReleaseGate = pgTable('design_control_release_gate', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  recordId: uuid('record_id').notNull().references(() => designControlRecords.id, { onDelete: 'cascade' }),
+  gateStatus: text('gate_status').notNull().default('not_ready'),
+  ...designControlTraceabilityColumns(),
+  ...designControlJsonColumns(),
+  submittedAt: timestamp('submitted_at'),
+  releasedAt: timestamp('released_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordUnique: uniqueIndex('design_control_release_gate_record_unique').on(table.recordId),
+  recordIdx: index('design_control_release_gate_record_id_idx').on(table.recordId),
+  gateStatusIdx: index('design_control_release_gate_status_idx').on(table.gateStatus),
+}));
+
+export const insertDesignControlRecordSchema = createInsertSchema(designControlRecords).omit({
+  id: true,
+  submittedAt: true,
+  releasedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DesignControlRecord = typeof designControlRecords.$inferSelect;
+export type InsertDesignControlRecord = z.infer<typeof insertDesignControlRecordSchema>;
+export type DesignControlStep = typeof designControlSteps.$inferSelect;
+
 export const wadRevisions = pgTable('wad_revisions', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   wadId: uuid('wad_id').notNull().references(() => productionWorkOrders.id, { onDelete: 'cascade' }),

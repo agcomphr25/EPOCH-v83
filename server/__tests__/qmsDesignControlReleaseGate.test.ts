@@ -52,7 +52,7 @@ describe('QMS design control release gate validation', () => {
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate checklist incomplete: released CAD',
+      'Step 12 Design Production Release Gate source status incomplete: released CAD (Design Outputs / CAD vault)',
     );
     expect(readiness.missingItems).toContain(
       'Step 12 Design Production Release Gate approval missing: engineering release approval',
@@ -73,8 +73,8 @@ describe('QMS design control release gate validation', () => {
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toEqual(
       expect.arrayContaining([
-        'Step 12 Design Production Release Gate checklist incomplete: released drawings',
-        'Step 12 Design Production Release Gate checklist incomplete: approved routing',
+        'Step 12 Design Production Release Gate source status incomplete: released drawings (Document Control / released drawings)',
+        'Step 12 Design Production Release Gate source status incomplete: approved routing (Routing module)',
       ]),
     );
   });
@@ -128,7 +128,30 @@ describe('QMS design control release gate validation', () => {
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate checklist incomplete: material requirements approved',
+      'Step 12 Design Production Release Gate source status incomplete: material requirements approved (Material / Inventory module)',
+    );
+  });
+
+  it('reports manufacturing module source status without duplicating source data', () => {
+    const readiness = buildReadinessFromSteps([
+      ...workflowSteps.filter((step) => step.key !== '12').map((step) => persistedStep(step.key)),
+      { stepKey: '12', status: 'needs_approval', formData: {}, checklist: {}, approvals: {} },
+    ]);
+
+    expect(readiness.sourceOfTruthPrinciple).toMatch(/manufacturing modules own their own data/i);
+    expect(readiness.manufacturingSourceStatuses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          requirement: 'released BOM',
+          source: 'BOM module',
+          ready: false,
+        }),
+        expect.objectContaining({
+          requirement: 'approved traveler requirement',
+          source: 'Traveler module',
+          ready: false,
+        }),
+      ]),
     );
   });
 
@@ -153,7 +176,7 @@ describe('QMS design control release gate validation', () => {
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate checklist incomplete: released BOM',
+      'Step 12 Design Production Release Gate source status incomplete: released BOM (BOM module)',
     );
   });
 

@@ -125,6 +125,12 @@ type DesignControlStepRecord = {
 type DesignControlReadiness = {
   ready: boolean;
   missingItems: string[];
+  sourceOfTruthPrinciple?: string;
+  manufacturingSourceStatuses?: Array<{
+    requirement: string;
+    source: string;
+    ready: boolean;
+  }>;
   steps: Array<{ key: string; title: string; status: string }>;
 };
 
@@ -714,6 +720,25 @@ const designWorkflowSteps: DesignWorkflowStep[] = [
   },
 ];
 
+const releaseGateSourceModules: Record<string, string> = {
+  'Released CAD': 'Design Outputs / CAD vault',
+  'Released drawings': 'Document Control / released drawings',
+  'Released BOM': 'BOM module',
+  'Approved routing': 'Routing module',
+  'Approved traveler requirement': 'Traveler module',
+  'Approved work instructions': 'Work Instructions module',
+  'Approved inspection plan': 'Inspection / QC module',
+  'Approved test procedure': 'Verification / Test module',
+  'Required certifications identified': 'Certifications / Quality module',
+  'Supplier requirements flowed down': 'Supplier Quality / Procurement module',
+  'Material requirements approved': 'Material / Inventory module',
+  'Tooling/fixtures ready': 'Manufacturing Engineering module',
+  'CNC programs approved, if applicable': 'CNC / Manufacturing module',
+  'Training/certifications complete': 'Training module',
+  'Packaging/shipping requirements defined': 'Shipping / Packaging module',
+  'Design revision baseline locked': 'Document Control / Revision baseline',
+};
+
 function createInitialWorkflowData() {
   return designWorkflowSteps.reduce<Record<string, WorkflowStepData>>((acc, step) => {
     acc[step.id] = {
@@ -1056,6 +1081,10 @@ export default function QMSDesignControlPage() {
             title: step.title,
             purpose: step.purpose,
             source: '/qms/design-control',
+            sourceOfTruthPrinciple: step.id === '12'
+              ? 'R&D Project owns engineering process; Design Control orchestrates; manufacturing modules own their own data and Design Control evaluates their status.'
+              : undefined,
+            manufacturingSourceModules: step.id === '12' ? releaseGateSourceModules : undefined,
           },
         },
       }) as { readiness: DesignControlReadiness };
@@ -1401,7 +1430,16 @@ export default function QMSDesignControlPage() {
 
                 {selectedWorkflowStep.checklist && selectedWorkflowStep.checklist.length > 0 && (
                   <div className="space-y-3">
-                    <div className="text-sm font-medium">Checklist</div>
+                    <div>
+                      <div className="text-sm font-medium">
+                        {selectedWorkflowStep.id === '12' ? 'Manufacturing source status' : 'Checklist'}
+                      </div>
+                      {selectedWorkflowStep.id === '12' && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Design Control evaluates these source-of-truth modules. It should not duplicate BOM, routing, traveler, work-instruction, inspection, or P2 manufacturing data.
+                        </p>
+                      )}
+                    </div>
                     <div className="grid gap-2 md:grid-cols-2">
                       {selectedWorkflowStep.checklist.map((item) => (
                         <label key={item} className="flex cursor-pointer items-start gap-3 rounded-md border bg-white px-3 py-2 text-sm hover:bg-gray-50">
@@ -1409,7 +1447,14 @@ export default function QMSDesignControlPage() {
                             checked={selectedWorkflowData.checklist[item] === true}
                             onCheckedChange={(checked) => updateWorkflowChecklist(selectedWorkflowStep.id, item, checked === true)}
                           />
-                          <span>{item}</span>
+                          <span>
+                            {item}
+                            {selectedWorkflowStep.id === '12' && releaseGateSourceModules[item] && (
+                              <span className="mt-1 block text-xs text-muted-foreground">
+                                Source: {releaseGateSourceModules[item]}
+                              </span>
+                            )}
+                          </span>
                         </label>
                       ))}
                     </div>
@@ -1460,6 +1505,27 @@ export default function QMSDesignControlPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                {serverReadiness?.manufacturingSourceStatuses && serverReadiness.manufacturingSourceStatuses.length > 0 && (
+                  <div className="mb-4 space-y-3">
+                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                      {serverReadiness.sourceOfTruthPrinciple
+                        ?? 'R&D Project owns engineering process; Design Control orchestrates; manufacturing modules own their own data and Design Control evaluates their status.'}
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {serverReadiness.manufacturingSourceStatuses.map((status) => (
+                        <div key={`${status.source}-${status.requirement}`} className="flex items-start justify-between gap-3 rounded-md border bg-white px-3 py-2 text-sm">
+                          <div>
+                            <div className="font-medium">{status.requirement}</div>
+                            <div className="text-xs text-muted-foreground">{status.source}</div>
+                          </div>
+                          <Badge variant="outline" className={status.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}>
+                            {status.ready ? 'Ready' : 'Needs source'}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {releaseReadinessItems.length === 0 ? (
                   <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                     <CheckCircle2 className="h-4 w-4" />

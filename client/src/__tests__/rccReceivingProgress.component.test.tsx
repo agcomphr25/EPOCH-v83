@@ -42,6 +42,7 @@ function makeUnit(id: number): NonNullable<Receipt['units']>[number] {
     barcode: `UNIT-${id}`,
     disposition: 'accepted',
     quantity: '1',
+    location: 'Conex 1',
   };
 }
 
@@ -394,7 +395,23 @@ describe('PutawayStep — completeReceiptMutation invalidates the correct query 
     fireEvent.click(screen.getByText('Complete Receipt'));
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith('Failed to complete receipt');
+      expect(mockToastError).toHaveBeenCalledWith('Server error');
     });
+  });
+
+  it('locks completion and lists accepted units that still need putaway', () => {
+    renderPutawayStep(makeReceipt({
+      units: [
+        { ...makeUnit(1), location: undefined, freezerNumber: undefined },
+        makeUnit(2),
+      ],
+    }));
+
+    expect(screen.getByTestId('putaway-completion-blockers').textContent).toContain('UNIT-1');
+    expect(screen.getByText('Complete Receipt')).toHaveAttribute('disabled');
+    expect(mockApiRequest).not.toHaveBeenCalledWith('/api/receipts/1', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'complete' }),
+    }));
   });
 });

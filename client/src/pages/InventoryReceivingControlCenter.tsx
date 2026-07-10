@@ -2838,6 +2838,26 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
   const renderProjectTargetLabel = (project: ReceivingProjectTarget) =>
     `${project.projectCode} - ${project.projectName}${project.customerName ? ` (${project.customerName})` : ''}`;
 
+  const needsPutaway = (unit: ReceivedUnit) =>
+    unit.disposition === 'accepted' &&
+    !unit.location?.trim() &&
+    unit.freezerNumber == null;
+
+  const pendingInspectionUnits = units.filter(u => u.disposition === 'pending_inspection');
+  const putawayBlockers = units.filter(needsPutaway);
+  const canCompleteReceipt =
+    units.length > 0 &&
+    pendingInspectionUnits.length === 0 &&
+    putawayBlockers.length === 0 &&
+    !deptApplyPending &&
+    !batchPending;
+
+  const summarizeUnitList = (blockedUnits: ReceivedUnit[]) => {
+    const labels = blockedUnits.slice(0, 6).map(unit => unit.barcode || `Unit ${unit.id}`);
+    const extra = blockedUnits.length - labels.length;
+    return `${labels.join(', ')}${extra > 0 ? `, +${extra} more` : ''}`;
+  };
+
   const applyDeptDefaults = async (dept: InventoryDepartment | null, newLocation: string | null, newFreezer: number | null, silent = false) => {
     if (!dept || (newLocation == null && newFreezer == null)) return;
     const unitsToFill = units.filter(u => (newLocation != null && !u.location) || (newFreezer != null && u.freezerNumber == null));
@@ -2944,10 +2964,19 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
   };
 
   const completeReceiptMutation = useMutation({
-    mutationFn: () => apiRequest(`/api/receipts/${receipt.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'complete' }),
-    }),
+    mutationFn: () => {
+      if (!canCompleteReceipt) {
+        const message = putawayBlockers.length > 0
+          ? `Put away ${putawayBlockers.length} accepted unit(s) before completing this receipt.`
+          : `Inspect all units before completing this receipt.`;
+        throw new Error(message);
+      }
+
+      return apiRequest(`/api/receipts/${receipt.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'complete' }),
+      });
+    },
     onSuccess: (data) => {
       onUpdate({ ...receipt, ...data });
       for (const key of getRccCompleteInvalidationKeys(receipt.vendorPoId)) {
@@ -2955,7 +2984,7 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
       }
       onComplete();
     },
-    onError: () => toast.error('Failed to complete receipt'),
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to complete receipt'),
   });
 
   return (
@@ -3056,6 +3085,23 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
       {units.length === 0 && (
         <div className="text-center text-xs text-gray-500 py-4">No units to assign location</div>
       )}
+      {(pendingInspectionUnits.length > 0 || putawayBlockers.length > 0) && (
+        <div
+          data-testid="putaway-completion-blockers"
+          className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-3 py-2 text-amber-800 dark:text-amber-300 text-xs space-y-1"
+        >
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            Complete receipt is locked until every accepted unit has a location or freezer.
+          </div>
+          {putawayBlockers.length > 0 && (
+            <div>Needs putaway: {summarizeUnitList(putawayBlockers)}</div>
+          )}
+          {pendingInspectionUnits.length > 0 && (
+            <div>Still needs disposition: {summarizeUnitList(pendingInspectionUnits)}</div>
+          )}
+        </div>
+      )}
       {units.map(unit => (
         <div key={unit.id} className="border rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between">
@@ -3130,7 +3176,7 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
           size="sm"
           className="w-full bg-green-600 hover:bg-green-700 mt-2"
           onClick={() => completeReceiptMutation.mutate()}
-          disabled={completeReceiptMutation.isPending}
+          disabled={completeReceiptMutation.isPending || !canCompleteReceipt}
         >
           {completeReceiptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Check className="w-3 h-3 mr-1" />}
           Complete Receipt

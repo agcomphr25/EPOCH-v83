@@ -1712,6 +1712,9 @@ function P2POBOMsSection() {
     firstDept: 'Layup',
     notes: '',
   });
+  const [internalPartSearch, setInternalPartSearch] = useState('');
+  const [debouncedInternalPartSearch, setDebouncedInternalPartSearch] = useState('');
+  const [isInternalPartPopoverOpen, setIsInternalPartPopoverOpen] = useState(false);
 
   const { data: p2PoBoms, isLoading } = useQuery({
     queryKey: ['/api/robust-boms/p2-po-boms', { search: searchTerm }],
@@ -1725,13 +1728,36 @@ function P2POBOMsSection() {
   });
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedInternalPartSearch(internalPartSearch), 300);
+    return () => clearTimeout(timer);
+  }, [internalPartSearch]);
+
+  const internalPartsQueryUrl = `/api/robust-boms/parts?${debouncedInternalPartSearch ? `search=${encodeURIComponent(debouncedInternalPartSearch)}&` : ''}pageSize=50`;
+  const { data: internalPartsData, isFetching: isInternalPartsFetching } = useQuery({
+    queryKey: [internalPartsQueryUrl],
+    enabled: isInternalPartPopoverOpen,
+  });
+  const internalPartResults = (internalPartsData as any)?.data || [];
+  const selectedInternalPart = metadataDraft.inventoryItemId
+    ? internalPartResults.find((part: any) => part.id === metadataDraft.inventoryItemId) || {
+        id: metadataDraft.inventoryItemId,
+        agPartNumber: metadataDraft.internalPartNumber,
+        name: metadataDraft.internalPartName,
+      }
+    : null;
+
+  useEffect(() => {
     if (!bomDetail) return;
     setMetadataDraft({
       sku: bomDetail.sku || '',
       modelName: bomDetail.modelName || '',
       revision: bomDetail.revision || 'A',
       description: bomDetail.description || '',
+      inventoryItemId: bomDetail.inventoryItemId || null,
+      internalPartNumber: bomDetail.internalPartNumber || '',
+      internalPartName: bomDetail.internalPartName || '',
     });
+    setInternalPartSearch(bomDetail.internalPartNumber || '');
     setItemDrafts((bomDetail.items || []).map((item: any) => ({
       ...item,
       quantity: String(item.quantity ?? 1),
@@ -1942,17 +1968,81 @@ function P2POBOMsSection() {
                   </div>
                   <div>
                     <Label>Internal Part #</Label>
-                    {bomDetail.internalPartNumber ? (
-                      <Button
-                        variant="link"
-                        className="h-10 px-0 font-mono"
-                        onClick={() => window.open(`/inventory/manager?part=${encodeURIComponent(bomDetail.internalPartNumber)}`, '_self')}
-                      >
-                        {bomDetail.internalPartNumber} - {bomDetail.internalPartName || 'Inventory item'}
-                      </Button>
-                    ) : (
-                      <div className="flex h-10 items-center text-sm text-muted-foreground">No internal inventory part linked</div>
-                    )}
+                    <div className="flex gap-2">
+                      <Popover open={isInternalPartPopoverOpen} onOpenChange={setIsInternalPartPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" role="combobox" className="h-10 flex-1 justify-between">
+                            <span className={cn('truncate text-left', !selectedInternalPart?.agPartNumber && 'text-muted-foreground')}>
+                              {selectedInternalPart?.agPartNumber
+                                ? `${selectedInternalPart.agPartNumber} - ${selectedInternalPart.name || 'Inventory item'}`
+                                : 'Select internal inventory part'}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[420px] p-0" align="start">
+                          <Command shouldFilter={false}>
+                            <CommandInput
+                              placeholder="Search internal parts..."
+                              value={internalPartSearch}
+                              onValueChange={setInternalPartSearch}
+                            />
+                            <CommandList>
+                              <CommandEmpty>
+                                {isInternalPartsFetching ? 'Searching internal parts...' : 'No internal parts found.'}
+                              </CommandEmpty>
+                              <CommandGroup>
+                                {internalPartResults.map((part: any) => (
+                                  <CommandItem
+                                    key={part.id}
+                                    value={part.agPartNumber}
+                                    onSelect={() => {
+                                      setMetadataDraft({
+                                        ...metadataDraft,
+                                        inventoryItemId: part.id,
+                                        internalPartNumber: part.agPartNumber,
+                                        internalPartName: part.name || '',
+                                      });
+                                      setInternalPartSearch(part.agPartNumber || '');
+                                      setIsInternalPartPopoverOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        'mr-2 h-4 w-4',
+                                        metadataDraft.inventoryItemId === part.id ? 'opacity-100' : 'opacity-0'
+                                      )}
+                                    />
+                                    <div className="min-w-0">
+                                      <div className="font-mono text-sm">{part.agPartNumber}</div>
+                                      <div className="truncate text-xs text-muted-foreground">{part.name || 'Inventory item'}</div>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      {metadataDraft.inventoryItemId && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            setMetadataDraft({
+                              ...metadataDraft,
+                              inventoryItemId: null,
+                              internalPartNumber: '',
+                              internalPartName: '',
+                            });
+                            setInternalPartSearch('');
+                          }}
+                          title="Unlink internal part"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="col-span-2">
                     <Label>Description</Label>

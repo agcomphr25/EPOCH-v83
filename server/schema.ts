@@ -7939,6 +7939,7 @@ export const surveyContextTypeEnum = pgEnum('survey_context_type', [
 export const bomDefinitions = pgTable('bom_definitions', {
   id: uuid('id').defaultRandom().primaryKey(),
   sku: text('sku'),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id),
   modelName: text('model_name').notNull(),
   revision: text('revision').notNull().default('A'),
   description: text('description'),

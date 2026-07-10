@@ -414,6 +414,7 @@ router.post('/from-draft-builder', requirePermission('inventory.adjust'), async 
         ? await db
             .update(bomDefinitions)
             .set({
+              inventoryItemId: rootInventory.id,
               modelName: rootInventory.name || rootDescription || rootPartNumber,
               revision: revCode,
               description: p2BomDescription,
@@ -426,6 +427,7 @@ router.post('/from-draft-builder', requirePermission('inventory.adjust'), async 
             .insert(bomDefinitions)
             .values({
               sku: rootPartNumber,
+              inventoryItemId: rootInventory.id,
               modelName: rootInventory.name || rootDescription || rootPartNumber,
               revision: revCode,
               description: p2BomDescription,
@@ -887,7 +889,10 @@ router.get('/p2-po-boms', async (req, res) => {
       inventoryItemId: p2PurchaseOrderItems.inventoryItemId,
     })
       .from(p2PurchaseOrderItems);
-    const inventoryIds = Array.from(new Set(poItemPartNumbers.map(p => p.inventoryItemId).filter(Boolean))) as number[];
+    const inventoryIds = Array.from(new Set([
+      ...poItemPartNumbers.map(p => p.inventoryItemId).filter(Boolean),
+      ...allBomDefs.map(bom => bom.inventoryItemId).filter(Boolean),
+    ])) as number[];
     const linkedInventoryById = inventoryIds.length > 0
       ? await db.select({
           id: inventoryItems.id,
@@ -921,11 +926,17 @@ router.get('/p2-po-boms', async (req, res) => {
       if (internalPart) poPartSet.add(internalPart);
     });
 
-    const p2Boms = allBomDefs.filter(bom => 
-      bom.sku && poPartSet.has(bom.sku)
-    ).map(bom => {
+    const p2Boms = allBomDefs.filter(bom => {
+      const explicitInternalPart = bom.inventoryItemId ? inventoryById.get(bom.inventoryItemId)?.agPartNumber : null;
+      return (
+        (bom.sku && poPartSet.has(bom.sku)) ||
+        (explicitInternalPart && poPartSet.has(explicitInternalPart))
+      );
+    }).map(bom => {
       const baseSku = String(bom.sku || '').replace(/\s+Rev\s+.+$/i, '');
-      const internalPart = inventoryByPartNumber.get(String(bom.sku || '')) || inventoryByPartNumber.get(baseSku);
+      const internalPart = (
+        bom.inventoryItemId ? inventoryById.get(bom.inventoryItemId) : null
+      ) || inventoryByPartNumber.get(String(bom.sku || '')) || inventoryByPartNumber.get(baseSku);
       return {
         ...bom,
         internalPartNumber: internalPart?.agPartNumber || null,
@@ -972,7 +983,17 @@ router.get('/p2-po-boms/:id', async (req, res) => {
       .orderBy(bomItems.assemblyLevel, bomItems.partName);
 
     const baseSku = String(bom.sku || '').replace(/\s+Rev\s+.+$/i, '');
-    const [internalPart] = bom.sku
+    const [explicitInternalPart] = bom.inventoryItemId
+      ? await db.select({
+          id: inventoryItems.id,
+          agPartNumber: inventoryItems.agPartNumber,
+          name: inventoryItems.name,
+        })
+        .from(inventoryItems)
+        .where(eq(inventoryItems.id, bom.inventoryItemId))
+        .limit(1)
+      : [];
+    const [skuMatchedInternalPart] = bom.sku && !explicitInternalPart
       ? await db.select({
           id: inventoryItems.id,
           agPartNumber: inventoryItems.agPartNumber,
@@ -982,6 +1003,7 @@ router.get('/p2-po-boms/:id', async (req, res) => {
         .where(inArray(inventoryItems.agPartNumber, [bom.sku, baseSku]))
         .limit(1)
       : [];
+    const internalPart = explicitInternalPart || skuMatchedInternalPart;
 
     const poItems = bom.sku
       ? await db.select({
@@ -992,7 +1014,10 @@ router.get('/p2-po-boms/:id', async (req, res) => {
         .from(p2PurchaseOrderItems)
         .innerJoin(p2PurchaseOrders, eq(p2PurchaseOrderItems.poId, p2PurchaseOrders.id))
         .where(internalPart
-          ? inArray(p2PurchaseOrderItems.inventoryItemId, [internalPart.id])
+          ? or(
+              eq(p2PurchaseOrderItems.inventoryItemId, internalPart.id),
+              eq(p2PurchaseOrderItems.partNumber, bom.sku)
+            )
           : eq(p2PurchaseOrderItems.partNumber, bom.sku))
       : [];
 
@@ -1013,13 +1038,35 @@ router.get('/p2-po-boms/:id', async (req, res) => {
 router.put('/p2-po-boms/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = {
+    const updateData: Record<string, unknown> = {
       sku: req.body.sku,
       modelName: req.body.modelName,
       revision: req.body.revision,
       description: req.body.description,
       updatedAt: new Date(),
     };
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'inventoryItemId')) {
+      const rawInventoryItemId = req.body.inventoryItemId;
+      if (rawInventoryItemId === null || rawInventoryItemId === '') {
+        updateData.inventoryItemId = null;
+      } else {
+        const inventoryItemId = Number.parseInt(String(rawInventoryItemId), 10);
+        if (!Number.isInteger(inventoryItemId) || inventoryItemId <= 0) {
+          return res.status(400).json({ error: 'Invalid internal inventory part' });
+        }
+
+        const [inventoryItem] = await db.select({ id: inventoryItems.id })
+          .from(inventoryItems)
+          .where(eq(inventoryItems.id, inventoryItemId))
+          .limit(1);
+        if (!inventoryItem) {
+          return res.status(404).json({ error: 'Internal inventory part not found' });
+        }
+
+        updateData.inventoryItemId = inventoryItemId;
+      }
+    }
 
     const [updated] = await db.update(bomDefinitions)
       .set(updateData)

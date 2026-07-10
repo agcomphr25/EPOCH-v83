@@ -6651,12 +6651,20 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       if (!bomDef) {
         const [newBom] = await db.insert(bomDefinitions).values({
           sku: canonicalPartNumber,
+          inventoryItemId: linkedPoInventoryItem?.id ?? null,
           modelName: linkedPoInventoryItem?.name || canonicalPartNumber,
           revision: 'A',
           description: `BOM for P2 part ${canonicalPartNumber}`,
           isActive: true
         }).returning();
         bomDef = newBom;
+      } else if (linkedPoInventoryItem?.id && !bomDef.inventoryItemId) {
+        const [updatedBom] = await db
+          .update(bomDefinitions)
+          .set({ inventoryItemId: linkedPoInventoryItem.id, updatedAt: new Date() })
+          .where(eq(bomDefinitions.id, bomDef.id))
+          .returning();
+        bomDef = updatedBom || bomDef;
       }
       
       // Clear existing BOM items for this definition
@@ -6693,6 +6701,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               try {
                 const [newChildBom] = await db.insert(bomDefinitions).values({
                   sku: item.partNumber,
+                  inventoryItemId: item.inventoryItemId ?? null,
                   modelName: item.partNumber,
                   revision: 'A',
                   description: item.description || `BOM for manufactured part ${item.partNumber}`,

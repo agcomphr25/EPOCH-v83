@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingFabricInventoryTransactions, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
+import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, p2SerializedItems, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingFabricInventoryTransactions, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
 import { eq, and, or, asc, desc, inArray, like, count } from 'drizzle-orm';
 import {
   adjustPacketInventoryForMaterial,
@@ -88,6 +88,37 @@ function parseQueueNotes(notes: string | null): Record<string, any> {
   } catch {
     return { rawNotes: notes };
   }
+}
+
+function parseStoredMaterialSources(materialDetails: string | null, builtPacketId: number): any[] {
+  if (!materialDetails) return [];
+  try {
+    const stored = JSON.parse(materialDetails);
+    if (!Array.isArray(stored)) return [];
+
+    return stored.map((source: any, index: number) => ({
+      id: -((Math.abs(builtPacketId) * 1000) + index + 1),
+      builtPacketId,
+      fabricInventoryId: source.fabricInventoryId || source.id || null,
+      fabricType: source.fabricType || source.fabric || source.commonName || source.nickname || null,
+      lotNumber: source.lotNumber || null,
+      batchNumber: source.batchNumber || null,
+      rollNumber: source.rollNumber || null,
+      supplierPartNumber: source.supplierPartNumber || source.fabricPartNumber || null,
+      internalControlNumber: source.internalControlNumber || source.barcode || null,
+      expirationDate: source.expirationDate || null,
+      quantityUsed: source.quantityUsed || 1,
+      isPrimary: source.isPrimary ?? index === 0,
+      createdAt: source.createdAt || null,
+      isDerivedFromQueueMaterial: true,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
 }
 
 function stringifyQueueNotes(notes: Record<string, any>): string {
@@ -2382,10 +2413,53 @@ router.get('/built-packets', async (req: Request, res: Response) => {
     let fabricSources: any[] = [];
     if (packetIds.length > 0) {
       const sources = await db
-        .select()
+        .select({
+          id: cuttingBuiltPacketFabricSources.id,
+          builtPacketId: cuttingBuiltPacketFabricSources.builtPacketId,
+          fabricInventoryId: cuttingBuiltPacketFabricSources.fabricInventoryId,
+          fabricType: cuttingBuiltPacketFabricSources.fabricType,
+          lotNumber: cuttingBuiltPacketFabricSources.lotNumber,
+          batchNumber: cuttingBuiltPacketFabricSources.batchNumber,
+          rollNumber: cuttingBuiltPacketFabricSources.rollNumber,
+          supplierPartNumber: cuttingBuiltPacketFabricSources.supplierPartNumber,
+          internalControlNumber: cuttingBuiltPacketFabricSources.internalControlNumber,
+          expirationDate: cuttingBuiltPacketFabricSources.expirationDate,
+          quantityUsed: cuttingBuiltPacketFabricSources.quantityUsed,
+          isPrimary: cuttingBuiltPacketFabricSources.isPrimary,
+          createdAt: cuttingBuiltPacketFabricSources.createdAt,
+          invFabric: cuttingFabricInventory.fabric,
+          invFabricPartNumber: cuttingFabricInventory.fabricPartNumber,
+          invNickname: cuttingFabricInventory.nickname,
+          invCommonName: cuttingFabricInventory.commonName,
+          invLotNumber: cuttingFabricInventory.lotNumber,
+          invBatchNumber: cuttingFabricInventory.batchNumber,
+          invRollNumber: cuttingFabricInventory.rollNumber,
+          invSupplierPartNumber: cuttingFabricInventory.supplierPartNumber,
+          invInternalControlNumber: cuttingFabricInventory.internalControlNumber,
+          invExpirationDate: cuttingFabricInventory.expirationDate,
+          invBarcode: cuttingFabricInventory.barcode,
+        })
         .from(cuttingBuiltPacketFabricSources)
+        .leftJoin(
+          cuttingFabricInventory,
+          eq(cuttingBuiltPacketFabricSources.fabricInventoryId, cuttingFabricInventory.id)
+        )
         .where(inArray(cuttingBuiltPacketFabricSources.builtPacketId, packetIds));
-      fabricSources = sources;
+      fabricSources = sources.map(source => ({
+        id: source.id,
+        builtPacketId: source.builtPacketId,
+        fabricInventoryId: source.fabricInventoryId,
+        fabricType: source.fabricType || source.invFabric || source.invCommonName || source.invNickname,
+        lotNumber: source.lotNumber || source.invLotNumber,
+        batchNumber: source.batchNumber || source.invBatchNumber,
+        rollNumber: source.rollNumber || source.invRollNumber,
+        supplierPartNumber: source.supplierPartNumber || source.invSupplierPartNumber || source.invFabricPartNumber,
+        internalControlNumber: source.internalControlNumber || source.invInternalControlNumber || source.invBarcode,
+        expirationDate: source.expirationDate || source.invExpirationDate,
+        quantityUsed: source.quantityUsed,
+        isPrimary: source.isPrimary,
+        createdAt: source.createdAt,
+      }));
     }
 
     const parsedPackets = packets.map(packet => {
@@ -2433,16 +2507,56 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       visiblePackets.map(p => p.queueId).filter((id): id is string => id !== null)
     )].map(id => parseInt(id)).filter(id => !isNaN(id));
 
-    const queueTotals: Record<string, number> = {};
+    const queueMeta: Record<string, { quantityRequested: number; materialDetails: string | null }> = {};
     if (uniqueQueueIds.length > 0) {
       const queueRows = await db
-        .select({ id: manufacturingQueue.id, quantityRequested: manufacturingQueue.quantityRequested })
+        .select({
+          id: manufacturingQueue.id,
+          quantityRequested: manufacturingQueue.quantityRequested,
+          materialDetails: manufacturingQueue.materialDetails,
+        })
         .from(manufacturingQueue)
         .where(inArray(manufacturingQueue.id, uniqueQueueIds));
       queueRows.forEach(row => {
-        queueTotals[String(row.id)] = row.quantityRequested;
+        queueMeta[String(row.id)] = {
+          quantityRequested: row.quantityRequested,
+          materialDetails: row.materialDetails,
+        };
       });
     }
+
+    const allocationRefs = [...new Set(
+      visiblePackets
+        .map(packet => packet.allocatedToOrder)
+        .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
+        .map(value => value.trim())
+    )];
+    const allocationUuids = allocationRefs.filter(isUuid);
+    const allocationConditions = [
+      inArray(p2SerializedItems.barcode, allocationRefs),
+      inArray(p2SerializedItems.serialNumber, allocationRefs),
+      ...(allocationUuids.length > 0 ? [inArray(p2SerializedItems.id, allocationUuids)] : []),
+    ];
+    const allocatedSerialRows = allocationRefs.length > 0
+      ? await db
+        .select({
+          id: p2SerializedItems.id,
+          serialNumber: p2SerializedItems.serialNumber,
+          barcode: p2SerializedItems.barcode,
+          travelerBarcode: p2SerializedItems.travelerBarcode,
+          poNumber: p2SerializedItems.poNumber,
+          partNumber: p2SerializedItems.partNumber,
+          partName: p2SerializedItems.partName,
+        })
+        .from(p2SerializedItems)
+        .where(or(...allocationConditions))
+      : [];
+    const serializedByAllocationRef = new Map<string, any>();
+    allocatedSerialRows.forEach(item => {
+      serializedByAllocationRef.set(item.id, item);
+      serializedByAllocationRef.set(item.barcode, item);
+      serializedByAllocationRef.set(item.serialNumber, item);
+    });
 
     // Compute displayPacketNumber: rank each packet within its queueId group,
     // sorted by id ascending. This must be computed against ALL packets for the
@@ -2485,12 +2599,23 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       }
     }
 
-    const result = visiblePackets.map(packet => ({
-      ...packet,
-      displayPacketNumber: displayPacketNumberMap[packet.id] ?? packet.packetNumber,
-      quantityOrdered: packet.queueId ? (queueTotals[packet.queueId] ?? null) : null,
-      fabricSources: fabricSources.filter(s => s.builtPacketId === packet.id),
-    }));
+    const result = visiblePackets.map(packet => {
+      const packetSources = fabricSources.filter(s => s.builtPacketId === packet.id);
+      const derivedSources = packetSources.length === 0 && packet.queueId
+        ? parseStoredMaterialSources(queueMeta[packet.queueId]?.materialDetails ?? null, packet.id)
+        : [];
+      const allocatedSerializedItem = packet.allocatedToOrder
+        ? serializedByAllocationRef.get(packet.allocatedToOrder.trim()) ?? null
+        : null;
+
+      return {
+        ...packet,
+        displayPacketNumber: displayPacketNumberMap[packet.id] ?? packet.packetNumber,
+        quantityOrdered: packet.queueId ? (queueMeta[packet.queueId]?.quantityRequested ?? null) : null,
+        allocatedSerializedItem,
+        fabricSources: packetSources.length > 0 ? packetSources : derivedSources,
+      };
+    });
 
     let batchRows: any[] = [];
     if (!status) {
@@ -2517,15 +2642,17 @@ router.get('/built-packets', async (req: Request, res: Response) => {
         const materialType = getP1PacketMaterialFromQueueNotes(parseQueueNotes(row.queue.notes));
         if (!row.item || !materialType) return [];
         const packetName = getP1PacketName(materialType);
+        const syntheticPacketId = -row.queue.id;
+        const fabricSources = parseStoredMaterialSources(row.queue.materialDetails, syntheticPacketId);
         return [{
-          id: -row.queue.id,
+          id: syntheticPacketId,
           barcode: `BATCH-${row.queue.id}`,
           packetNumber: 1,
           displayPacketNumber: null,
           buildDate: row.queue.completedAt || row.queue.updatedAt || row.queue.createdAt,
           status: 'BATCH',
-          isMixedFabric: false,
-          fabricSourceCount: 0,
+          isMixedFabric: fabricSources.length > 1,
+          fabricSourceCount: fabricSources.length,
           notes: row.queue.completionNotes || row.queue.notes,
           createdBy: row.queue.completedBy,
           allocatedToOrder: null,
@@ -2535,7 +2662,7 @@ router.get('/built-packets', async (req: Request, res: Response) => {
           quantityOrdered: row.queue.quantityCompleted || row.queue.quantityRequested || 0,
           batchQuantity: row.queue.quantityCompleted || row.queue.quantityRequested || 0,
           isBatchEntry: true,
-          fabricSources: [],
+          fabricSources,
         }];
       });
     }

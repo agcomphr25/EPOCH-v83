@@ -17329,6 +17329,7 @@ export const designControlRecords = pgTable('design_control_records', {
   recordNumber: text('record_number'),
   title: text('title').notNull(),
   status: text('status').notNull().default('draft'),
+  rdProjectId: text('rd_project_id').references(() => rdProjects.id, { onDelete: 'set null' }),
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   productionWorkOrderId: uuid('production_work_order_id').references(() => productionWorkOrders.id, { onDelete: 'set null' }),
   p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
@@ -17343,12 +17344,14 @@ export const designControlRecords = pgTable('design_control_records', {
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   projectIdx: index('design_control_records_project_id_idx').on(table.projectId),
+  rdProjectIdx: index('design_control_records_rd_project_id_idx').on(table.rdProjectId),
   productionWorkOrderIdx: index('design_control_records_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_records_p2_po_id_idx').on(table.p2PurchaseOrderId),
   statusIdx: index('design_control_records_status_idx').on(table.status),
 }));
 
 const designControlTraceabilityColumns = () => ({
+  rdProjectId: text('rd_project_id').references(() => rdProjects.id, { onDelete: 'set null' }),
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   productionWorkOrderId: uuid('production_work_order_id').references(() => productionWorkOrders.id, { onDelete: 'set null' }),
   p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
@@ -17377,6 +17380,7 @@ export const designControlSteps = pgTable('design_control_steps', {
   recordStepUnique: uniqueIndex('design_control_steps_record_step_unique').on(table.recordId, table.stepKey),
   recordIdx: index('design_control_steps_record_id_idx').on(table.recordId),
   statusIdx: index('design_control_steps_status_idx').on(table.status),
+  rdProjectIdx: index('design_control_steps_rd_project_id_idx').on(table.rdProjectId),
   projectIdx: index('design_control_steps_project_id_idx').on(table.projectId),
   productionWorkOrderIdx: index('design_control_steps_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_steps_p2_po_id_idx').on(table.p2PurchaseOrderId),
@@ -17394,6 +17398,7 @@ export const designControlRequirements = pgTable('design_control_requirements', 
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   recordIdx: index('design_control_requirements_record_id_idx').on(table.recordId),
+  rdProjectIdx: index('design_control_requirements_rd_project_id_idx').on(table.rdProjectId),
   projectIdx: index('design_control_requirements_project_id_idx').on(table.projectId),
   productionWorkOrderIdx: index('design_control_requirements_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_requirements_p2_po_id_idx').on(table.p2PurchaseOrderId),
@@ -17411,6 +17416,7 @@ export const designControlRisks = pgTable('design_control_risks', {
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   recordIdx: index('design_control_risks_record_id_idx').on(table.recordId),
+  rdProjectIdx: index('design_control_risks_rd_project_id_idx').on(table.rdProjectId),
   projectIdx: index('design_control_risks_project_id_idx').on(table.projectId),
   productionWorkOrderIdx: index('design_control_risks_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_risks_p2_po_id_idx').on(table.p2PurchaseOrderId),
@@ -17429,6 +17435,7 @@ export const designControlReviews = pgTable('design_control_reviews', {
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   recordIdx: index('design_control_reviews_record_id_idx').on(table.recordId),
+  rdProjectIdx: index('design_control_reviews_rd_project_id_idx').on(table.rdProjectId),
   projectIdx: index('design_control_reviews_project_id_idx').on(table.projectId),
   productionWorkOrderIdx: index('design_control_reviews_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_reviews_p2_po_id_idx').on(table.p2PurchaseOrderId),
@@ -17447,6 +17454,7 @@ export const designControlVerification = pgTable('design_control_verification', 
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   recordIdx: index('design_control_verification_record_id_idx').on(table.recordId),
+  rdProjectIdx: index('design_control_verification_rd_project_id_idx').on(table.rdProjectId),
   projectIdx: index('design_control_verification_project_id_idx').on(table.projectId),
   productionWorkOrderIdx: index('design_control_verification_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_verification_p2_po_id_idx').on(table.p2PurchaseOrderId),
@@ -17465,6 +17473,7 @@ export const designControlValidation = pgTable('design_control_validation', {
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   recordIdx: index('design_control_validation_record_id_idx').on(table.recordId),
+  rdProjectIdx: index('design_control_validation_rd_project_id_idx').on(table.rdProjectId),
   projectIdx: index('design_control_validation_project_id_idx').on(table.projectId),
   productionWorkOrderIdx: index('design_control_validation_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_validation_p2_po_id_idx').on(table.p2PurchaseOrderId),
@@ -17483,6 +17492,7 @@ export const designControlChanges = pgTable('design_control_changes', {
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   recordIdx: index('design_control_changes_record_id_idx').on(table.recordId),
+  rdProjectIdx: index('design_control_changes_rd_project_id_idx').on(table.rdProjectId),
   projectIdx: index('design_control_changes_project_id_idx').on(table.projectId),
   productionWorkOrderIdx: index('design_control_changes_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_changes_p2_po_id_idx').on(table.p2PurchaseOrderId),
@@ -17502,6 +17512,7 @@ export const designControlReleaseGate = pgTable('design_control_release_gate', {
   recordUnique: uniqueIndex('design_control_release_gate_record_unique').on(table.recordId),
   recordIdx: index('design_control_release_gate_record_id_idx').on(table.recordId),
   gateStatusIdx: index('design_control_release_gate_status_idx').on(table.gateStatus),
+  rdProjectIdx: index('design_control_release_gate_rd_project_id_idx').on(table.rdProjectId),
   projectIdx: index('design_control_release_gate_project_id_idx').on(table.projectId),
   productionWorkOrderIdx: index('design_control_release_gate_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_release_gate_p2_po_id_idx').on(table.p2PurchaseOrderId),

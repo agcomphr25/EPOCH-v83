@@ -433,6 +433,12 @@ const STEP_STATUS_COLORS: Record<string, string> = {
   not_applicable: 'text-gray-300',
 };
 
+const WAD_WORKFLOW_STATUS_OVERRIDES: Record<string, string> = {
+  RELEASED: 'released',
+  COMPLETE: 'completed',
+  CLOSED: 'completed',
+};
+
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [location, setLocation] = useLocation();
@@ -2203,6 +2209,9 @@ export default function ProjectDetailPage() {
             const wadStep = projectSteps.find(s => s.stepType === 'p2_order');
             const preprodStep = projectSteps.find(s => s.stepType === 'preproduction_checklist');
             const projectWorkOrder = projectWorkOrders[0];
+            const wadStatusOverride = WAD_WORKFLOW_STATUS_OVERRIDES[
+              String(projectWorkOrder?.status ?? '').toUpperCase()
+            ];
             const wadRoute = projectWorkOrder
               ? `/work-orders/${projectWorkOrder.id}/wizard`
               : `/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}`;
@@ -2227,6 +2236,7 @@ export default function ProjectDetailPage() {
                 route: wadRoute,
                 icon: <FileText className="h-5 w-5 text-purple-600" />,
                 gateLabel: 'Complete before Pre-Production',
+                statusOverride: wadStatusOverride,
               },
               {
                 key: 'preprod',
@@ -2241,55 +2251,62 @@ export default function ProjectDetailPage() {
               },
             ];
 
-            const getStepBadge = (step: ProjectStep | undefined) => {
-              if (!step) return null;
+            const getStepBadge = (step: ProjectStep | undefined, statusOverride?: string) => {
+              const status = statusOverride ?? step?.status;
+              if (!status) return null;
               const colors: Record<string, string> = {
+                released: 'bg-green-100 text-green-800',
                 completed: 'bg-green-100 text-green-800',
                 in_progress: 'bg-blue-100 text-blue-800',
                 pending: 'bg-gray-100 text-gray-600',
                 blocked: 'bg-red-100 text-red-800',
               };
               const labels: Record<string, string> = {
+                released: 'Released',
                 completed: 'Complete',
                 in_progress: 'In Progress',
                 pending: 'Pending',
                 blocked: 'Blocked',
               };
               return (
-                <Badge className={`${colors[step.status] || 'bg-gray-100 text-gray-600'} text-xs`}>
-                  {labels[step.status] || step.status}
+                <Badge className={`${colors[status] || 'bg-gray-100 text-gray-600'} text-xs`}>
+                  {labels[status] || status}
                 </Badge>
               );
             };
 
             return (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {actionCards.map((card) => (
-                  <Card key={card.key} className={`border-l-4 ${card.step?.status === 'completed' ? 'border-l-green-500' : card.step?.status === 'in_progress' ? 'border-l-blue-500' : 'border-l-gray-300'}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {card.icon}
-                          <span className="text-sm font-semibold">{card.title}</span>
+                {actionCards.map((card) => {
+                  const status = card.statusOverride ?? card.step?.status;
+
+                  return (
+                    <Card key={card.key} className={`border-l-4 ${status === 'completed' || status === 'released' ? 'border-l-green-500' : status === 'in_progress' ? 'border-l-blue-500' : 'border-l-gray-300'}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {card.icon}
+                            <span className="text-sm font-semibold">{card.title}</span>
+                          </div>
+                          {getStepBadge(card.step, card.statusOverride)}
                         </div>
-                        {getStepBadge(card.step)}
-                      </div>
-                      <p className="text-xs text-muted-foreground mb-3">{card.description}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5">{card.gateLabel}</span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          onClick={() => setLocation(card.route)}
-                        >
-                          <ExternalLink className="h-3 w-3 mr-1" />
-                          Open
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                        <p className="text-xs text-muted-foreground mb-3">{card.description}</p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5">{card.gateLabel}</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => setLocation(card.route)}
+                          >
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                            Open
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             );
           })()}

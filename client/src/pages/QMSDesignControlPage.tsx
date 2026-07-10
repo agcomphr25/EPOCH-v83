@@ -443,33 +443,6 @@ const lifecycleStages = [
   { stage: 'Release', owner: 'Manufacturing', state: 'Manufacturing packet, WAD, and P2 release gates aligned' },
 ];
 
-const productionReleaseFlow = [
-  {
-    step: 'Project / PO / WAD',
-    owner: 'Program + Operations',
-    status: 'Source context',
-    description: 'Project scope, linked customer PO, and WAD authorization establish the controlled build context.',
-  },
-  {
-    step: 'Design Workflow',
-    owner: 'Engineering + Quality',
-    status: 'Design control',
-    description: 'Inputs, outputs, reviews, risks, verification, validation, changes, and DHF evidence move together.',
-  },
-  {
-    step: 'Design Production Release Gate',
-    owner: 'Quality + Manufacturing Engineering',
-    status: 'Gate decision',
-    description: 'Design evidence, production packet, WAD readiness, and P2 release conditions are checked before handoff.',
-  },
-  {
-    step: 'P2 Manufacturing',
-    owner: 'Manufacturing',
-    status: 'Released build',
-    description: 'Released work flows into P2 manufacturing with traveler, inspection, and production controls aligned.',
-  },
-];
-
 const designWorkflowSteps: DesignWorkflowStep[] = [
   {
     id: '1',
@@ -1293,44 +1266,6 @@ export default function QMSDesignControlPage() {
                 <div className="font-medium">DHF Control</div>
                 <div className="text-muted-foreground">Design history file evidence is grouped by project and record.</div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Route className="h-5 w-5 text-primary" />
-              Design Production Release Flow
-            </CardTitle>
-            <CardDescription>
-              The controlled handoff from project context through design evidence and release gating into P2 manufacturing.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr]">
-              {productionReleaseFlow.map((item, index) => (
-                <div key={item.step} className="contents">
-                  <div className="rounded-md border bg-white p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold">{item.step}</div>
-                        <div className="mt-1 text-xs font-medium uppercase text-muted-foreground">{item.owner}</div>
-                      </div>
-                      <Badge variant="outline" className="shrink-0">
-                        {item.status}
-                      </Badge>
-                    </div>
-                    <p className="mt-3 text-sm text-muted-foreground">{item.description}</p>
-                  </div>
-                  {index < productionReleaseFlow.length - 1 && (
-                    <div className="flex items-center justify-center text-muted-foreground">
-                      <ArrowRight className="hidden h-5 w-5 lg:block" />
-                      <div className="h-5 border-l lg:hidden" />
-                    </div>
-                  )}
-                </div>
-              ))}
             </div>
           </CardContent>
         </Card>

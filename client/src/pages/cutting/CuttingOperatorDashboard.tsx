@@ -90,7 +90,18 @@ type BuiltPacketFabricSource = {
   expirationDate: string | null;
   quantityUsed: number;
   isPrimary: boolean;
-  createdAt: string;
+  createdAt: string | null;
+  isDerivedFromQueueMaterial?: boolean;
+};
+
+type BuiltPacketSerializedItem = {
+  id: string;
+  serialNumber: string;
+  barcode: string;
+  travelerBarcode: string | null;
+  poNumber: string;
+  partNumber: string;
+  partName: string;
 };
 
 type BuiltPacket = {
@@ -106,6 +117,7 @@ type BuiltPacket = {
   notes: string | null;
   createdBy: string | null;
   allocatedToOrder: string | null;
+  allocatedSerializedItem?: BuiltPacketSerializedItem | null;
   categoryName: string | null;
   sku: string | null;
   queueId: string | null;
@@ -2734,8 +2746,13 @@ export default function CuttingOperatorDashboard() {
                                 {packet.categoryName && (
                                   <span className="text-xs text-muted-foreground">{packet.categoryName}</span>
                                 )}
-                                {packet.allocatedToOrder && (
-                                  <span className="text-xs text-muted-foreground">Order: {packet.allocatedToOrder}</span>
+                                {packet.allocatedSerializedItem ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    Serial: <span className="font-mono">{packet.allocatedSerializedItem.serialNumber}</span>
+                                    {packet.allocatedSerializedItem.travelerBarcode ? ` (${packet.allocatedSerializedItem.travelerBarcode})` : ''}
+                                  </span>
+                                ) : packet.allocatedToOrder && (
+                                  <span className="text-xs text-muted-foreground">Serial link: {packet.allocatedToOrder}</span>
                                 )}
                               </div>
                               <div className="text-xs text-muted-foreground mt-0.5">
@@ -2811,64 +2828,67 @@ export default function CuttingOperatorDashboard() {
                                   {source.supplierPartNumber && <span>Supplier P/N: {source.supplierPartNumber}</span>}
                                   {source.expirationDate && <span>Exp: {new Date(source.expirationDate).toLocaleDateString()}</span>}
                                   <span>Qty used: {source.quantityUsed}</span>
+                                  {source.isDerivedFromQueueMaterial && <span>From queue scan history</span>}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingSource(source);
-                                    setEditingPacketId(packet.id);
-                                    setFabricSourceForm({
-                                      fabricType: source.fabricType || '',
-                                      lotNumber: source.lotNumber || '',
-                                      batchNumber: source.batchNumber || '',
-                                      rollNumber: source.rollNumber || '',
-                                      supplierPartNumber: source.supplierPartNumber || '',
-                                      internalControlNumber: source.internalControlNumber || '',
-                                      expirationDate: source.expirationDate || '',
-                                    });
-                                    setEditFabricSourceOpen(true);
-                                  }}
-                                >
-                                  <Pencil className="h-3 w-3 mr-1" />
-                                  Edit
-                                </Button>
-                                {isAdmin && (
-                                  confirmDeleteSourceId === source.id ? (
-                                    <div className="flex items-center gap-1">
+                              {!source.isDerivedFromQueueMaterial && (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingSource(source);
+                                      setEditingPacketId(packet.id);
+                                      setFabricSourceForm({
+                                        fabricType: source.fabricType || '',
+                                        lotNumber: source.lotNumber || '',
+                                        batchNumber: source.batchNumber || '',
+                                        rollNumber: source.rollNumber || '',
+                                        supplierPartNumber: source.supplierPartNumber || '',
+                                        internalControlNumber: source.internalControlNumber || '',
+                                        expirationDate: source.expirationDate || '',
+                                      });
+                                      setEditFabricSourceOpen(true);
+                                    }}
+                                  >
+                                    <Pencil className="h-3 w-3 mr-1" />
+                                    Edit
+                                  </Button>
+                                  {isAdmin && (
+                                    confirmDeleteSourceId === source.id ? (
+                                      <div className="flex items-center gap-1">
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          disabled={deleteFabricSourceMutation.isPending}
+                                          onClick={() => {
+                                            deleteFabricSourceMutation.mutate({ packetId: packet.id, sourceId: source.id });
+                                          }}
+                                        >
+                                          Confirm
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => setConfirmDeleteSourceId(null)}
+                                        >
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                    ) : (
                                       <Button
                                         size="sm"
-                                        variant="destructive"
-                                        disabled={deleteFabricSourceMutation.isPending}
-                                        onClick={() => {
-                                          deleteFabricSourceMutation.mutate({ packetId: packet.id, sourceId: source.id });
-                                        }}
+                                        variant="outline"
+                                        className="text-destructive border-destructive/30 hover:bg-destructive hover:text-destructive-foreground"
+                                        onClick={() => setConfirmDeleteSourceId(source.id)}
                                       >
-                                        Confirm
+                                        <Trash2 className="h-3 w-3 mr-1" />
+                                        Delete
                                       </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => setConfirmDeleteSourceId(null)}
-                                      >
-                                        Cancel
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="text-destructive border-destructive/30 hover:bg-destructive hover:text-destructive-foreground"
-                                      onClick={() => setConfirmDeleteSourceId(source.id)}
-                                    >
-                                      <Trash2 className="h-3 w-3 mr-1" />
-                                      Delete
-                                    </Button>
-                                  )
-                                )}
-                              </div>
+                                    )
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>

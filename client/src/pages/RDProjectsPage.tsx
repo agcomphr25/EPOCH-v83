@@ -6,6 +6,7 @@ import {
   Boxes,
   CheckCircle2,
   ChevronRight,
+  ExternalLink,
   FilePlus2,
   FlaskConical,
   FolderOpen,
@@ -13,6 +14,7 @@ import {
   PackageCheck,
   Pencil,
   Plus,
+  ShieldCheck,
   Trash2,
   UserCheck,
 } from 'lucide-react';
@@ -161,6 +163,15 @@ interface RDProject {
   draftTabIds: string[];
   deletedDraftTabIds?: string[];
   description: string;
+}
+
+interface DesignControlProjectRecord {
+  id: string;
+  title: string;
+  status: string;
+  rdProjectId?: string | null;
+  updatedAt?: string | null;
+  releasedAt?: string | null;
 }
 
 const R_AND_D_PROJECT_STORAGE_KEY = 'epoch.rdProjects.v1';
@@ -777,6 +788,7 @@ export default function RDProjectsPage() {
   const [localProjects, setLocalProjects] = useState<RDProject[]>(() =>
     readJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, [])
   );
+  const [isCreatingDesignControlRecord, setIsCreatingDesignControlRecord] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('projectId')
   );
@@ -845,6 +857,27 @@ export default function RDProjectsPage() {
     () => employees.filter((employee) => employee.isActive !== false),
     [employees]
   );
+  const {
+    data: selectedDesignControlPayload,
+    isLoading: isLoadingDesignControlRecords,
+  } = useQuery<{ records: DesignControlProjectRecord[] }>({
+    queryKey: ['/api/qms/design-control', 'rd-project', selectedProject?.id],
+    enabled: Boolean(selectedProject?.id),
+    retry: false,
+    queryFn: async () => {
+      if (!selectedProject?.id) return { records: [] };
+      const params = new URLSearchParams({ rdProjectId: selectedProject.id });
+      const response = await fetch(`/api/qms/design-control?${params.toString()}`, {
+        credentials: 'include',
+      });
+      if (!response.ok) return { records: [] };
+      const payload = await response.json();
+      return {
+        records: Array.isArray(payload.records) ? payload.records : [],
+      };
+    },
+  });
+  const selectedDesignControlRecords = selectedDesignControlPayload?.records ?? [];
 
   useEffect(() => {
     writeJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, localProjects);
@@ -1102,6 +1135,50 @@ export default function RDProjectsPage() {
     }
   };
 
+  const designControlUrl = (project: RDProject, recordId?: string) => {
+    const params = new URLSearchParams({
+      rdProjectId: project.id,
+      rdProjectName: project.projectName,
+    });
+    if (recordId) params.set('recordId', recordId);
+    return `/qms/design-control?${params.toString()}`;
+  };
+
+  const createDesignControlRecordForProject = async () => {
+    if (!selectedProject) return;
+    setIsCreatingDesignControlRecord(true);
+    try {
+      const response = await fetch('/api/qms/design-control', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `${selectedProject.projectName} Design Control`,
+          rdProjectId: selectedProject.id,
+          metadata: {
+            rdProjectName: selectedProject.projectName,
+            source: '/design/rd-projects',
+            downstreamIntent: 'released-design-to-manufactured-inventory-item',
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create design control record');
+      }
+
+      const payload = await response.json();
+      await queryClient.invalidateQueries({
+        queryKey: ['/api/qms/design-control', 'rd-project', selectedProject.id],
+      });
+      setLocation(designControlUrl(selectedProject, payload.record?.id));
+    } catch (error) {
+      console.error('Failed to create R&D design control record:', error);
+    } finally {
+      setIsCreatingDesignControlRecord(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -1316,12 +1393,15 @@ export default function RDProjectsPage() {
                 </CardHeader>
                 <CardContent>
                   <Tabs value={activeProjectTab} onValueChange={changeProjectTab} className="space-y-4">
-                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-6">
+                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-7">
                       <TabsTrigger value="overview">Overview</TabsTrigger>
                       <TabsTrigger value="files">Files</TabsTrigger>
                       <TabsTrigger value="bom">BOM</TabsTrigger>
                       <TabsTrigger value="material">Material</TabsTrigger>
                       <TabsTrigger value="labor">Labor</TabsTrigger>
+                      <TabsTrigger value="design-control">
+                        Design Control
+                      </TabsTrigger>
                       <TabsTrigger value="assembly-tree">
                         Assembly Tree
                       </TabsTrigger>
@@ -1636,6 +1716,87 @@ export default function RDProjectsPage() {
                           ))}
                         </div>
                       )}
+                    </TabsContent>
+
+                    <TabsContent value="design-control" className="space-y-4">
+                      <Card>
+                        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                              <ShieldCheck className="h-4 w-4 text-primary" />
+                              Design Control
+                            </CardTitle>
+                            <CardDescription>
+                              Design-control records linked to this R&amp;D project only.
+                            </CardDescription>
+                          </div>
+                          <Button
+                            className="gap-2 self-start"
+                            onClick={createDesignControlRecordForProject}
+                            disabled={isCreatingDesignControlRecord}
+                          >
+                            <Plus className="h-4 w-4" />
+                            {isCreatingDesignControlRecord ? 'Creating...' : 'Create Design Control'}
+                          </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="rounded-md border bg-white px-3 py-2 text-sm text-muted-foreground">
+                            When this design is released, its R&amp;D data can become the source package for a manufactured inventory item. That released item can later be selected from P2 when a PO is received.
+                          </div>
+                          {isLoadingDesignControlRecords ? (
+                            <div className="rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
+                              Loading design-control records...
+                            </div>
+                          ) : selectedDesignControlRecords.length === 0 ? (
+                            <div className="flex flex-col items-start gap-3 rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
+                              No design-control record is linked to this R&amp;D project yet.
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={createDesignControlRecordForProject}
+                                disabled={isCreatingDesignControlRecord}
+                              >
+                                <FilePlus2 className="h-4 w-4" />
+                                Create Linked Record
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="grid gap-3 md:grid-cols-2">
+                              {selectedDesignControlRecords.map((record) => (
+                                <div key={record.id} className="rounded-md border bg-white px-3 py-3">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-medium text-slate-950">
+                                        {record.title}
+                                      </p>
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        {record.releasedAt
+                                          ? 'Released design control'
+                                          : `Status: ${record.status}`}
+                                      </p>
+                                    </div>
+                                    <Badge variant="outline">
+                                      {record.status}
+                                    </Badge>
+                                  </div>
+                                  <div className="mt-3 flex justify-end">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-2"
+                                      onClick={() => setLocation(designControlUrl(selectedProject, record.id))}
+                                    >
+                                      <ExternalLink className="h-4 w-4" />
+                                      Open
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
                     </TabsContent>
                   </Tabs>
                 </CardContent>

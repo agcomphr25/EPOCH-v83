@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 
 import { db } from '../../db';
 import {
@@ -265,10 +265,10 @@ const workflowSteps = [
       'required certifications identified',
       'supplier requirements flowed down',
       'material requirements approved',
-      'tooling/fixtures ready',
-      'CNC programs approved if applicable',
-      'training/certifications complete',
-      'packaging/shipping requirements defined',
+      'tooling and fixtures ready',
+      'CNC programs approved when applicable',
+      'training and certifications complete',
+      'packaging and shipping requirements defined',
       'design revision baseline locked',
     ],
     requiredApprovals: [
@@ -282,6 +282,14 @@ const workflowSteps = [
 
 const requiredStepKeys = workflowSteps.filter((step) => step.key !== '12').map((step) => step.key);
 type WorkflowStepDefinition = typeof workflowSteps[number];
+type StepMissingEvidence = ReturnType<typeof missingForStep>;
+type PersistedWorkflowStep = {
+  stepKey: string;
+  status?: string | null;
+  formData?: unknown;
+  checklist?: unknown;
+  approvals?: unknown;
+};
 
 function isRecordObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -375,12 +383,23 @@ function deriveStatus(step: WorkflowStepDefinition, payload: StepPayload) {
   };
 }
 
-function formatMissingItems(step: WorkflowStepDefinition, missing: ReturnType<typeof missingForStep>) {
+function formatMissingItems(step: WorkflowStepDefinition, missing: StepMissingEvidence) {
   return [
     ...missing.fields.map((field) => `Step ${step.key} ${step.title} field missing: ${field}`),
     ...missing.checklist.map((item) => `Step ${step.key} ${step.title} checklist incomplete: ${item}`),
     ...missing.approvals.map((approval) => `Step ${step.key} ${step.title} approval missing: ${approval}`),
   ];
+}
+
+function formatStepRequirementError(step: WorkflowStepDefinition, missing: StepMissingEvidence) {
+  return {
+    error: 'Step requirements are incomplete',
+    stepKey: step.key,
+    missingFormFields: missing.fields,
+    missingChecklistItems: missing.checklist,
+    missingApprovals: missing.approvals,
+    missingItems: formatMissingItems(step, missing),
+  };
 }
 
 async function getRecord(id: string) {
@@ -392,30 +411,7 @@ async function getSteps(recordId: string) {
   return db.select().from(designControlSteps).where(eq(designControlSteps.recordId, recordId));
 }
 
-async function ensureWorkflowSteps(record: typeof designControlRecords.$inferSelect, client: typeof db = db) {
-  for (const step of workflowSteps) {
-    await client
-      .insert(designControlSteps)
-      .values({
-        recordId: record.id,
-        stepKey: step.key,
-        title: step.title,
-        status: 'incomplete',
-        projectId: record.projectId,
-        productionWorkOrderId: record.productionWorkOrderId,
-        p2PurchaseOrderId: record.p2PurchaseOrderId,
-        formData: {},
-        checklist: {},
-        approvals: {},
-        attachments: [],
-        metadata: { source: 'qms-design-control' },
-      })
-      .onConflictDoNothing();
-  }
-}
-
-async function buildReadiness(recordId: string) {
-  const steps = await getSteps(recordId);
+function buildReadinessFromSteps(steps: PersistedWorkflowStep[]) {
   const byKey = new Map(steps.map((step) => [step.stepKey, step]));
   const missingItems: string[] = [];
 
@@ -454,6 +450,34 @@ async function buildReadiness(recordId: string) {
   };
 }
 
+async function ensureWorkflowSteps(record: typeof designControlRecords.$inferSelect, client: typeof db = db) {
+  for (const step of workflowSteps) {
+    await client
+      .insert(designControlSteps)
+      .values({
+        recordId: record.id,
+        stepKey: step.key,
+        title: step.title,
+        status: 'incomplete',
+        rdProjectId: record.rdProjectId,
+        projectId: record.projectId,
+        productionWorkOrderId: record.productionWorkOrderId,
+        p2PurchaseOrderId: record.p2PurchaseOrderId,
+        formData: {},
+        checklist: {},
+        approvals: {},
+        attachments: [],
+        metadata: { source: 'qms-design-control' },
+      })
+      .onConflictDoNothing();
+  }
+}
+
+async function buildReadiness(recordId: string) {
+  const steps = await getSteps(recordId);
+  return buildReadinessFromSteps(steps);
+}
+
 async function upsertReleaseGate(
   record: typeof designControlRecords.$inferSelect,
   payload: StepPayload,
@@ -464,6 +488,7 @@ async function upsertReleaseGate(
   const values = {
     recordId: record.id,
     gateStatus,
+    rdProjectId: record.rdProjectId,
     projectId: record.projectId,
     productionWorkOrderId: record.productionWorkOrderId,
     p2PurchaseOrderId: record.p2PurchaseOrderId,
@@ -485,12 +510,38 @@ async function upsertReleaseGate(
     });
 }
 
+async function createDesignControlRecordWithInitialWorkflow(
+  data: typeof designControlRecords.$inferInsert,
+  client: typeof db = db
+) {
+  return client.transaction(async (tx) => {
+    const [createdRecord] = await tx.insert(designControlRecords).values(data).returning();
+    await ensureWorkflowSteps(createdRecord, tx as typeof db);
+    await upsertReleaseGate(createdRecord, {}, 'not_ready', tx as typeof db);
+    return createdRecord;
+  });
+}
+
 router.get('/', async (_req: Request, res: Response) => {
   try {
-    const records = await db
-      .select()
-      .from(designControlRecords)
-      .orderBy(desc(designControlRecords.updatedAt), desc(designControlRecords.createdAt));
+    const conditions: SQL[] = [];
+    if (typeof _req.query.rdProjectId === 'string' && _req.query.rdProjectId.trim()) {
+      conditions.push(eq(designControlRecords.rdProjectId, _req.query.rdProjectId.trim()));
+    }
+    if (typeof _req.query.projectId === 'string' && _req.query.projectId.trim()) {
+      conditions.push(eq(designControlRecords.projectId, _req.query.projectId.trim()));
+    }
+
+    const records = conditions.length > 0
+      ? await db
+        .select()
+        .from(designControlRecords)
+        .where(and(...conditions))
+        .orderBy(desc(designControlRecords.updatedAt), desc(designControlRecords.createdAt))
+      : await db
+        .select()
+        .from(designControlRecords)
+        .orderBy(desc(designControlRecords.updatedAt), desc(designControlRecords.createdAt));
     res.json({ records });
   } catch (error) {
     console.error('[qms-design-control] Failed to list records', error);
@@ -504,6 +555,7 @@ router.post('/', async (req: Request, res: Response) => {
       title: req.body?.title || 'New Design Control Record',
       recordNumber: req.body?.recordNumber ?? null,
       status: req.body?.status || 'draft',
+      rdProjectId: req.body?.rdProjectId ?? null,
       projectId: req.body?.projectId ?? null,
       productionWorkOrderId: req.body?.productionWorkOrderId ?? null,
       p2PurchaseOrderId: req.body?.p2PurchaseOrderId ?? null,
@@ -519,12 +571,7 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const record = await db.transaction(async (tx) => {
-      const [createdRecord] = await tx.insert(designControlRecords).values(parsed.data).returning();
-      await ensureWorkflowSteps(createdRecord, tx as typeof db);
-      await upsertReleaseGate(createdRecord, {}, 'not_ready', tx as typeof db);
-      return createdRecord;
-    });
+    const record = await createDesignControlRecordWithInitialWorkflow(parsed.data);
 
     res.status(201).json({ record });
   } catch (error) {
@@ -589,7 +636,11 @@ router.patch('/:id/steps/:stepKey', async (req: Request, res: Response) => {
 
     const step = workflowSteps.find((item) => item.key === req.params.stepKey);
     if (!step) {
-      res.status(404).json({ message: 'Design control step not found' });
+      res.status(400).json({
+        error: 'Invalid design control step',
+        stepKey: req.params.stepKey,
+        validStepKeys: workflowSteps.map((item) => item.key),
+      });
       return;
     }
 
@@ -610,7 +661,7 @@ router.patch('/:id/steps/:stepKey', async (req: Request, res: Response) => {
     if (derived.rejectedApproval) {
       res.status(400).json({
         message: `Step ${step.key} cannot be approved until required evidence is complete`,
-        missingItems: formatMissingItems(step, derived.missing),
+        ...formatStepRequirementError(step, derived.missing),
       });
       return;
     }
@@ -656,6 +707,7 @@ router.patch('/:id/steps/:stepKey', async (req: Request, res: Response) => {
       stepKey: step.key,
       title: step.title,
       status,
+      rdProjectId: record.rdProjectId,
       projectId: record.projectId,
       productionWorkOrderId: record.productionWorkOrderId,
       p2PurchaseOrderId: record.p2PurchaseOrderId,
@@ -772,5 +824,15 @@ router.get('/:id/readiness', async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Failed to compute design control readiness' });
   }
 });
+
+export const qmsDesignControlTestInternals = {
+  workflowSteps,
+  requiredStepKeys,
+  buildReadinessFromSteps,
+  createDesignControlRecordWithInitialWorkflow,
+  deriveStatus,
+  formatStepRequirementError,
+  missingForStep,
+};
 
 export default router;

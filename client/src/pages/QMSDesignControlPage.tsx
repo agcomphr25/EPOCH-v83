@@ -104,6 +104,7 @@ type DesignControlRecord = {
   recordNumber?: string | null;
   title: string;
   status: string;
+  rdProjectId?: string | null;
   projectId?: string | null;
   productionWorkOrderId?: string | null;
   p2PurchaseOrderId?: number | null;
@@ -897,6 +898,10 @@ function SectionHeader({
 }
 
 export default function QMSDesignControlPage() {
+  const routeParams = new URLSearchParams(window.location.search);
+  const rdProjectIdParam = routeParams.get('rdProjectId');
+  const rdProjectNameParam = routeParams.get('rdProjectName');
+  const recordIdParam = routeParams.get('recordId');
   const [selectedRecord, setSelectedRecord] = useState<RegisterRow | RiskRow | ReleaseRow | null>(null);
   const [recordType, setRecordType] = useState('design-input');
   const [draftRecordTitle, setDraftRecordTitle] = useState('');
@@ -946,10 +951,12 @@ export default function QMSDesignControlPage() {
       setIsLoadingRecords(true);
       setLoadError(null);
       try {
-        const response = await apiRequest('/api/qms/design-control') as { records: DesignControlRecord[] };
+        const params = new URLSearchParams();
+        if (rdProjectIdParam) params.set('rdProjectId', rdProjectIdParam);
+        const response = await apiRequest(`/api/qms/design-control${params.toString() ? `?${params.toString()}` : ''}`) as { records: DesignControlRecord[] };
         if (cancelled) return;
         setDesignControlRecords(response.records ?? []);
-        setActiveDesignControlRecordId((current) => current ?? response.records?.[0]?.id ?? null);
+        setActiveDesignControlRecordId((current) => current ?? recordIdParam ?? response.records?.[0]?.id ?? null);
       } catch (error: any) {
         if (!cancelled) setLoadError(error.message || 'Failed to load design control records.');
       } finally {
@@ -961,7 +968,7 @@ export default function QMSDesignControlPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [rdProjectIdParam, recordIdParam]);
 
   useEffect(() => {
     if (!activeDesignControlRecordId) {
@@ -1006,9 +1013,11 @@ export default function QMSDesignControlPage() {
         method: 'POST',
         body: {
           title: title?.trim() || draftRecordTitle.trim() || 'New Design Control Record',
+          rdProjectId: rdProjectIdParam,
           metadata: {
             recordType,
             owner: draftRecordOwner.trim() || null,
+            rdProjectName: rdProjectNameParam,
             source: '/qms/design-control',
           },
         },

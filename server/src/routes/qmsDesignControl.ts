@@ -281,6 +281,24 @@ const workflowSteps = [
 ];
 
 const requiredStepKeys = workflowSteps.filter((step) => step.key !== '12').map((step) => step.key);
+const releaseGateSourceRequirements = [
+  { item: 'released CAD', source: 'Design Outputs / CAD vault' },
+  { item: 'released drawings', source: 'Document Control / released drawings' },
+  { item: 'released BOM', source: 'BOM module' },
+  { item: 'approved routing', source: 'Routing module' },
+  { item: 'approved traveler requirement', source: 'Traveler module' },
+  { item: 'approved work instructions', source: 'Work Instructions module' },
+  { item: 'approved inspection plan', source: 'Inspection / QC module' },
+  { item: 'approved test procedure', source: 'Verification / Test module' },
+  { item: 'required certifications identified', source: 'Certifications / Quality module' },
+  { item: 'supplier requirements flowed down', source: 'Supplier Quality / Procurement module' },
+  { item: 'material requirements approved', source: 'Material / Inventory module' },
+  { item: 'tooling and fixtures ready', source: 'Manufacturing Engineering module' },
+  { item: 'CNC programs approved when applicable', source: 'CNC / Manufacturing module' },
+  { item: 'training and certifications complete', source: 'Training module' },
+  { item: 'packaging and shipping requirements defined', source: 'Shipping / Packaging module' },
+  { item: 'design revision baseline locked', source: 'Document Control / Revision baseline' },
+];
 type WorkflowStepDefinition = typeof workflowSteps[number];
 type StepMissingEvidence = ReturnType<typeof missingForStep>;
 type PersistedWorkflowStep = {
@@ -386,18 +404,35 @@ function deriveStatus(step: WorkflowStepDefinition, payload: StepPayload) {
 function formatMissingItems(step: WorkflowStepDefinition, missing: StepMissingEvidence) {
   return [
     ...missing.fields.map((field) => `Step ${step.key} ${step.title} field missing: ${field}`),
-    ...missing.checklist.map((item) => `Step ${step.key} ${step.title} checklist incomplete: ${item}`),
+    ...missing.checklist.map((item) => {
+      const sourceRequirement = releaseGateSourceRequirements.find((requirement) => normalizeKey(requirement.item) === normalizeKey(item));
+      if (step.key === '12' && sourceRequirement) {
+        return `Step ${step.key} ${step.title} source status incomplete: ${item} (${sourceRequirement.source})`;
+      }
+      return `Step ${step.key} ${step.title} checklist incomplete: ${item}`;
+    }),
     ...missing.approvals.map((approval) => `Step ${step.key} ${step.title} approval missing: ${approval}`),
   ];
 }
 
 function formatStepRequirementError(step: WorkflowStepDefinition, missing: StepMissingEvidence) {
+  const missingSourceStatuses = step.key === '12'
+    ? missing.checklist.map((item) => {
+      const sourceRequirement = releaseGateSourceRequirements.find((requirement) => normalizeKey(requirement.item) === normalizeKey(item));
+      return {
+        item,
+        source: sourceRequirement?.source ?? 'External source of truth',
+      };
+    })
+    : [];
+
   return {
     error: 'Step requirements are incomplete',
     stepKey: step.key,
     missingFormFields: missing.fields,
     missingChecklistItems: missing.checklist,
     missingApprovals: missing.approvals,
+    missingSourceStatuses,
     missingItems: formatMissingItems(step, missing),
   };
 }
@@ -442,6 +477,18 @@ function buildReadinessFromSteps(steps: PersistedWorkflowStep[]) {
   return {
     ready: missingItems.length === 0,
     missingItems,
+    sourceOfTruthPrinciple: 'R&D Project owns engineering process; Design Control orchestrates; manufacturing modules own their own data and Design Control evaluates their status.',
+    manufacturingSourceStatuses: releaseGateSourceRequirements.map((requirement) => ({
+      requirement: requirement.item,
+      source: requirement.source,
+      ready: releaseStep
+        ? !missingForStep(workflowSteps.find((step) => step.key === '12')!, {
+          formData: normalizeJsonObject(releaseStep.formData),
+          checklist: normalizeJsonObject(releaseStep.checklist),
+          approvals: normalizeJsonObject(releaseStep.approvals),
+        }).checklist.some((item) => normalizeKey(item) === normalizeKey(requirement.item))
+        : false,
+    })),
     steps: workflowSteps.map((step) => ({
       key: step.key,
       title: step.title,
@@ -828,6 +875,7 @@ router.get('/:id/readiness', async (req: Request, res: Response) => {
 export const qmsDesignControlTestInternals = {
   workflowSteps,
   requiredStepKeys,
+  releaseGateSourceRequirements,
   buildReadinessFromSteps,
   createDesignControlRecordWithInitialWorkflow,
   deriveStatus,

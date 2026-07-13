@@ -2385,8 +2385,21 @@ router.get('/built-packets', async (req: Request, res: Response) => {
     const parsedLimit = parseInt(limit as string);
     const parsedOffset = parseInt(offset as string);
 
-    await ensureP1PacketInventoryForCompletedQueueRows();
-    await ensureBuiltPacketsForCompletedQueueRows();
+    // These repair passes keep older completed queue rows in sync, but they are
+    // not prerequisites for reading packets that already exist. A single
+    // malformed legacy row or inventory repair failure must not take down the
+    // Made Packets card for every operator.
+    try {
+      await ensureP1PacketInventoryForCompletedQueueRows();
+    } catch (repairError) {
+      console.error('[built-packets] P1 packet inventory repair failed; continuing with existing packets:', repairError);
+    }
+
+    try {
+      await ensureBuiltPacketsForCompletedQueueRows();
+    } catch (repairError) {
+      console.error('[built-packets] Completed queue packet repair failed; continuing with existing packets:', repairError);
+    }
 
     const packets = await db
       .select({

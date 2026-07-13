@@ -58,7 +58,7 @@ interface EmployeeOption {
   userRole?: string;
 }
 
-type RDProjectStatus = 'draft' | 'active';
+type RDProjectStatus = 'draft' | 'active' | 'released';
 type PartStatus = 'on_hand' | 'ordered' | 'manufacturing' | 'short';
 
 interface DraftBuilderTab {
@@ -158,6 +158,7 @@ interface RDProject {
   projectName: string;
   owner: string;
   status: RDProjectStatus;
+  engineeringStatus?: string;
   signoffRequired: boolean;
   signoffUserId: string;
   draftTabIds: string[];
@@ -172,6 +173,43 @@ interface DesignControlProjectRecord {
   rdProjectId?: string | null;
   updatedAt?: string | null;
   releasedAt?: string | null;
+}
+
+interface EngineeringReleasePreview {
+  ready: boolean;
+  rdProjectName: string | null;
+  productName: string;
+  proposedReleaseRevision: string;
+  releaseNumber: string;
+  effectiveDate: string;
+  requirementsSummary: string;
+  riskSummary: string;
+  prototypeIdentifier: string | null;
+  bomRevision: string | null;
+  drawingRevisions: string[];
+  cadRevision: string | null;
+  verificationStatus: string;
+  validationStatus: string;
+  designReviewStatus: string;
+  manufacturingEvidenceStatus: string;
+  approvers: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
+  missingEvidence: string[];
+  baselineItems: Array<{
+    baselineCategory: string;
+    sourceModule: string | null;
+    sourceRecordId: string | null;
+    sourceRevision: string | null;
+    sourceStatus: string | null;
+  }>;
+  changedSinceReleaseWarnings: string[];
+  existingRelease?: {
+    id: string;
+    releaseNumber: string;
+    releaseRevision: string;
+    releaseStatus: string;
+    releasedBy: string | null;
+    releasedAt: string | null;
+  } | null;
 }
 
 const R_AND_D_PROJECT_STORAGE_KEY = 'epoch.rdProjects.v1';
@@ -789,15 +827,20 @@ export default function RDProjectsPage() {
     readJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, [])
   );
   const [isCreatingDesignControlRecord, setIsCreatingDesignControlRecord] = useState(false);
+  const [isReleaseDialogOpen, setIsReleaseDialogOpen] = useState(false);
+  const [isSubmittingEngineeringRelease, setIsSubmittingEngineeringRelease] = useState(false);
+  const [engineeringReleaseError, setEngineeringReleaseError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('projectId')
   );
   const rdTabAliases: Record<string, string> = {
-    'parts-request': 'material',
-    parts: 'material',
+    'parts-request': 'requirements',
+    parts: 'requirements',
     'direct-labor': 'labor',
-    'bom-wizard': 'bom',
-    'draft-tabs': 'files',
+    'bom-wizard': 'outputs',
+    bom: 'outputs',
+    files: 'outputs',
+    'draft-tabs': 'outputs',
   };
   const initialProjectTab =
     rdTabAliases[new URLSearchParams(window.location.search).get('tab') ?? 'overview'] ??
@@ -878,6 +921,24 @@ export default function RDProjectsPage() {
     },
   });
   const selectedDesignControlRecords = selectedDesignControlPayload?.records ?? [];
+  const activeDesignControlRecord = selectedDesignControlRecords[0] ?? null;
+  const {
+    data: engineeringReleasePayload,
+    isLoading: isLoadingEngineeringReleasePreview,
+  } = useQuery<{ preview: EngineeringReleasePreview } | null>({
+    queryKey: ['/api/qms/design-control', activeDesignControlRecord?.id, 'engineering-release-preview'],
+    enabled: Boolean(activeDesignControlRecord?.id),
+    retry: false,
+    queryFn: async () => {
+      if (!activeDesignControlRecord?.id) return null;
+      const response = await fetch(`/api/qms/design-control/${activeDesignControlRecord.id}/engineering-release-preview`, {
+        credentials: 'include',
+      });
+      if (!response.ok) return null;
+      return response.json();
+    },
+  });
+  const engineeringReleasePreview = engineeringReleasePayload?.preview ?? null;
 
   useEffect(() => {
     writeJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, localProjects);
@@ -1179,6 +1240,36 @@ export default function RDProjectsPage() {
     }
   };
 
+  const submitEngineeringReleaseForProject = async () => {
+    if (!activeDesignControlRecord?.id) return;
+    setIsSubmittingEngineeringRelease(true);
+    setEngineeringReleaseError(null);
+    try {
+      const response = await fetch(`/api/qms/design-control/${activeDesignControlRecord.id}/engineering-release`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          effectiveDate: engineeringReleasePreview?.effectiveDate,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.message || 'Engineering Release Gate is not ready.');
+      }
+      setIsReleaseDialogOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/qms/design-control', 'rd-project', selectedProject?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/qms/design-control', activeDesignControlRecord.id, 'engineering-release-preview'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/rd-projects'] }),
+      ]);
+    } catch (error: any) {
+      setEngineeringReleaseError(error.message || 'Failed to release engineering baseline.');
+    } finally {
+      setIsSubmittingEngineeringRelease(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -1393,17 +1484,22 @@ export default function RDProjectsPage() {
                 </CardHeader>
                 <CardContent>
                   <Tabs value={activeProjectTab} onValueChange={changeProjectTab} className="space-y-4">
-                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-7">
+                    <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-12">
                       <TabsTrigger value="overview">Overview</TabsTrigger>
-                      <TabsTrigger value="files">Files</TabsTrigger>
-                      <TabsTrigger value="bom">BOM</TabsTrigger>
-                      <TabsTrigger value="material">Material</TabsTrigger>
-                      <TabsTrigger value="labor">Labor</TabsTrigger>
+                      <TabsTrigger value="requirements">Requirements</TabsTrigger>
+                      <TabsTrigger value="risks">Risks</TabsTrigger>
+                      <TabsTrigger value="outputs">Design Outputs</TabsTrigger>
+                      <TabsTrigger value="prototype">Prototype</TabsTrigger>
+                      <TabsTrigger value="verification">Verification</TabsTrigger>
+                      <TabsTrigger value="validation">Validation</TabsTrigger>
+                      <TabsTrigger value="reviews">Design Reviews</TabsTrigger>
+                      <TabsTrigger value="changes">Changes</TabsTrigger>
+                      <TabsTrigger value="dhf">DHF</TabsTrigger>
                       <TabsTrigger value="design-control">
-                        Design Control
+                        Design Control (QMS)
                       </TabsTrigger>
-                      <TabsTrigger value="assembly-tree">
-                        Assembly Tree
+                      <TabsTrigger value="engineering-release">
+                        Engineering Release
                       </TabsTrigger>
                     </TabsList>
 
@@ -1520,6 +1616,125 @@ export default function RDProjectsPage() {
                               ))}
                             </div>
                           )}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="requirements" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Requirements</CardTitle>
+                          <CardDescription>Customer, regulatory, performance, material, inspection, and test requirements owned by this R&amp;D project.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-sm text-muted-foreground">
+                          Design Control evaluates completeness; the R&amp;D project owns the requirement set.
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="risks" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Risks</CardTitle>
+                          <CardDescription>Design risk assessment and mitigation closure for the selected R&amp;D project.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-sm text-muted-foreground">
+                          Open high risks block Engineering Release until dispositioned.
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="outputs" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Design Outputs</CardTitle>
+                          <CardDescription>Draft Builder tabs, BOM records, CAD/drawing references, and output package evidence.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid gap-3 md:grid-cols-3">
+                          <div className="rounded-md border bg-white p-3">
+                            <p className="text-xs text-muted-foreground">Linked draft tabs</p>
+                            <p className="text-lg font-semibold">{selectedDraftTabs.length}</p>
+                          </div>
+                          <div className="rounded-md border bg-white p-3">
+                            <p className="text-xs text-muted-foreground">BOM records</p>
+                            <p className="text-lg font-semibold">{selectedBomRecords.length}</p>
+                          </div>
+                          <div className="rounded-md border bg-white p-3">
+                            <p className="text-xs text-muted-foreground">Parts</p>
+                            <p className="text-lg font-semibold">{selectedParts.length}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="prototype" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Prototype</CardTitle>
+                          <CardDescription>Prototype build identity, build notes, lots, deviations, and evidence attachments.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-sm text-muted-foreground">
+                          The Engineering Release preview pulls the prototype identifier from the linked Design Control workflow.
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="verification" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Verification</CardTitle>
+                          <CardDescription>Evidence that design outputs meet design inputs.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-sm text-muted-foreground">
+                          Verification must be complete before Engineering Release.
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="validation" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Validation</CardTitle>
+                          <CardDescription>Evidence that the product meets intended use and customer mission.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-sm text-muted-foreground">
+                          Validation must be complete before Engineering Release.
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="reviews" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Design Reviews</CardTitle>
+                          <CardDescription>Concept, requirements, and final design review status.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-sm text-muted-foreground">
+                          Approved final design review is required for release.
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="changes" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Engineering Changes</CardTitle>
+                          <CardDescription>Open changes and future revision work for this design.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-sm text-muted-foreground">
+                          Changes to released design data require Engineering Change and do not alter the locked baseline.
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="dhf" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Design History File</CardTitle>
+                          <CardDescription>Release-ready design evidence retained by R&amp;D project and Design Control record.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-sm text-muted-foreground">
+                          Engineering Release freezes a reproducible baseline snapshot for the DHF.
                         </CardContent>
                       </Card>
                     </TabsContent>
@@ -1798,12 +2013,296 @@ export default function RDProjectsPage() {
                         </CardContent>
                       </Card>
                     </TabsContent>
+
+                    <TabsContent value="engineering-release" className="space-y-4">
+                      <Card>
+                        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                              <PackageCheck className="h-4 w-4 text-primary" />
+                              Engineering Release Gate
+                            </CardTitle>
+                            <CardDescription>
+                              Freeze the approved R&amp;D design baseline before manufactured inventory item creation.
+                            </CardDescription>
+                          </div>
+                          <Button
+                            className="gap-2 self-start"
+                            disabled={!engineeringReleasePreview?.ready || isSubmittingEngineeringRelease || Boolean(engineeringReleasePreview?.existingRelease)}
+                            onClick={() => setIsReleaseDialogOpen(true)}
+                          >
+                            <PackageCheck className="h-4 w-4" />
+                            Release Engineering Baseline
+                          </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {!activeDesignControlRecord ? (
+                            <div className="flex flex-col items-start gap-3 rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
+                              Create a linked Design Control record before releasing an engineering baseline.
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={createDesignControlRecordForProject}
+                                disabled={isCreatingDesignControlRecord}
+                              >
+                                <FilePlus2 className="h-4 w-4" />
+                                Create Design Control
+                              </Button>
+                            </div>
+                          ) : isLoadingEngineeringReleasePreview ? (
+                            <div className="rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
+                              Loading engineering release readiness...
+                            </div>
+                          ) : engineeringReleasePreview ? (
+                            <>
+                              <div className="grid gap-3 md:grid-cols-4">
+                                <div className="rounded-md border bg-white p-3">
+                                  <p className="text-xs text-muted-foreground">Release readiness</p>
+                                  <Badge
+                                    variant="outline"
+                                    className={engineeringReleasePreview.ready ? 'mt-2 border-emerald-300 bg-emerald-50 text-emerald-700' : 'mt-2 border-amber-300 bg-amber-50 text-amber-800'}
+                                  >
+                                    {engineeringReleasePreview.ready ? 'Ready' : 'Blocked'}
+                                  </Badge>
+                                </div>
+                                <div className="rounded-md border bg-white p-3">
+                                  <p className="text-xs text-muted-foreground">Release revision</p>
+                                  <p className="mt-1 text-lg font-semibold">{engineeringReleasePreview.proposedReleaseRevision}</p>
+                                </div>
+                                <div className="rounded-md border bg-white p-3">
+                                  <p className="text-xs text-muted-foreground">Effective date</p>
+                                  <p className="mt-1 text-lg font-semibold">{engineeringReleasePreview.effectiveDate}</p>
+                                </div>
+                                <div className="rounded-md border bg-white p-3">
+                                  <p className="text-xs text-muted-foreground">Manufacturing evidence</p>
+                                  <p className="mt-1 text-lg font-semibold">{engineeringReleasePreview.manufacturingEvidenceStatus}</p>
+                                </div>
+                              </div>
+
+                              {engineeringReleasePreview.existingRelease && (
+                                <div className="space-y-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                                  <div>
+                                    <div className="text-base font-semibold">Engineering Release</div>
+                                    <div className="text-emerald-800">
+                                      Released by {engineeringReleasePreview.existingRelease.releasedBy || 'system'} on {engineeringReleasePreview.existingRelease.releasedAt || 'recorded release date'}
+                                    </div>
+                                  </div>
+                                  <div className="grid gap-3 md:grid-cols-3">
+                                    <div className="rounded-md border border-emerald-200 bg-white p-3">
+                                      <p className="text-xs text-muted-foreground">Status</p>
+                                      <p className="font-semibold">Released</p>
+                                    </div>
+                                    <div className="rounded-md border border-emerald-200 bg-white p-3">
+                                      <p className="text-xs text-muted-foreground">Release Number</p>
+                                      <p className="font-semibold">{engineeringReleasePreview.existingRelease.releaseNumber}</p>
+                                    </div>
+                                    <div className="rounded-md border border-emerald-200 bg-white p-3">
+                                      <p className="text-xs text-muted-foreground">Revision</p>
+                                      <p className="font-semibold">{engineeringReleasePreview.existingRelease.releaseRevision}</p>
+                                    </div>
+                                    <div className="rounded-md border border-emerald-200 bg-white p-3">
+                                      <p className="text-xs text-muted-foreground">Baseline</p>
+                                      <p className="font-semibold">Locked</p>
+                                    </div>
+                                    <div className="rounded-md border border-emerald-200 bg-white p-3">
+                                      <p className="text-xs text-muted-foreground">Manufactured Item</p>
+                                      <p className="font-semibold">Pending creation</p>
+                                    </div>
+                                    <div className="rounded-md border border-emerald-200 bg-white p-3">
+                                      <p className="text-xs text-muted-foreground">Manufacturing</p>
+                                      <p className="font-semibold">Baseline ready</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-700">Available after item creation for Quote</Badge>
+                                    <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-700">Available after item creation for Future PO</Badge>
+                                    <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-700">Ready for Manufacturing setup</Badge>
+                                  </div>
+                                  <Button variant="outline" size="sm" className="gap-2" disabled>
+                                    <ExternalLink className="h-4 w-4" />
+                                    Open Inventory Item
+                                  </Button>
+                                  <div className="font-medium">Next action: Create Manufactured Inventory Item</div>
+                                </div>
+                              )}
+
+                              {engineeringReleaseError && (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                                  {engineeringReleaseError}
+                                </div>
+                              )}
+
+                              {engineeringReleasePreview.missingEvidence.length > 0 && (
+                                <div className="space-y-2">
+                                  <div className="text-sm font-medium">Blocked items</div>
+                                  {engineeringReleasePreview.missingEvidence.slice(0, 12).map((item) => (
+                                    <div key={item} className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-sm">
+                                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                      <span>{item}</span>
+                                    </div>
+                                  ))}
+                                  {engineeringReleasePreview.missingEvidence.length > 12 && (
+                                    <p className="text-sm text-muted-foreground">
+                                      {engineeringReleasePreview.missingEvidence.length - 12} additional item(s) remain.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="grid gap-4 lg:grid-cols-2">
+                                <Card>
+                                  <CardHeader>
+                                    <CardTitle className="text-base">Baseline Preview</CardTitle>
+                                    <CardDescription>
+                                      Immutable snapshots that will be locked by Engineering Release.
+                                    </CardDescription>
+                                  </CardHeader>
+                                  <CardContent className="space-y-2">
+                                    {engineeringReleasePreview.baselineItems.slice(0, 10).map((item) => (
+                                      <div key={`${item.baselineCategory}-${item.sourceRecordId ?? item.sourceModule}`} className="rounded-md border bg-white px-3 py-2 text-sm">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div>
+                                            <div className="font-medium">{item.baselineCategory}</div>
+                                            <div className="text-xs text-muted-foreground">{item.sourceModule || 'Source module pending'}</div>
+                                          </div>
+                                          <Badge variant="outline">{item.sourceStatus || 'snapshot'}</Badge>
+                                        </div>
+                                        {(item.sourceRevision || item.sourceRecordId) && (
+                                          <p className="mt-1 text-xs text-muted-foreground">
+                                            {item.sourceRevision ? `Revision ${item.sourceRevision}` : 'No revision'}{item.sourceRecordId ? ` · ${item.sourceRecordId}` : ''}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </CardContent>
+                                </Card>
+
+                                <Card>
+                                  <CardHeader>
+                                    <CardTitle className="text-base">Approval Status</CardTitle>
+                                    <CardDescription>
+                                      Required approvals for Engineering Release.
+                                    </CardDescription>
+                                  </CardHeader>
+                                  <CardContent className="space-y-2">
+                                    {engineeringReleasePreview.approvers.map((approval) => (
+                                      <div key={approval.role} className="flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm">
+                                        <span>{approval.role}</span>
+                                        <Badge
+                                          variant="outline"
+                                          className={approval.approved ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-amber-300 bg-amber-50 text-amber-800'}
+                                        >
+                                          {approval.approved ? 'Approved' : 'Missing'}
+                                        </Badge>
+                                      </div>
+                                    ))}
+                                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                                      Verification: {engineeringReleasePreview.verificationStatus} · Validation: {engineeringReleasePreview.validationStatus} · Review: {engineeringReleasePreview.designReviewStatus}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </div>
+
+                              {engineeringReleasePreview.changedSinceReleaseWarnings.length > 0 && (
+                                <div className="space-y-2">
+                                  <div className="text-sm font-medium">Changed since release</div>
+                                  {engineeringReleasePreview.changedSinceReleaseWarnings.map((warning) => (
+                                    <div key={warning} className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                      <span>{warning}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
+                              Engineering release preview is unavailable for this design control record.
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
                   </Tabs>
                 </CardContent>
               </Card>
             )}
           </div>
         )}
+
+        <Dialog open={isReleaseDialogOpen} onOpenChange={setIsReleaseDialogOpen}>
+          <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden flex flex-col">
+            <DialogHeader className="flex-shrink-0">
+              <DialogTitle>Release Engineering Baseline</DialogTitle>
+            </DialogHeader>
+            {engineeringReleasePreview && selectedProject && (
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-2 pr-2 text-sm">
+                <div className="rounded-md border bg-white p-3">
+                  <div className="font-medium">{selectedProject.projectName}</div>
+                  <div className="text-muted-foreground">{engineeringReleasePreview.productName}</div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md border bg-white p-3">
+                    <p className="text-xs text-muted-foreground">Release revision</p>
+                    <p className="font-medium">{engineeringReleasePreview.proposedReleaseRevision}</p>
+                  </div>
+                  <div className="rounded-md border bg-white p-3">
+                    <p className="text-xs text-muted-foreground">Effective date</p>
+                    <p className="font-medium">{engineeringReleasePreview.effectiveDate}</p>
+                  </div>
+                  <div className="rounded-md border bg-white p-3">
+                    <p className="text-xs text-muted-foreground">BOM revision</p>
+                    <p className="font-medium">{engineeringReleasePreview.bomRevision || 'Not captured'}</p>
+                  </div>
+                  <div className="rounded-md border bg-white p-3">
+                    <p className="text-xs text-muted-foreground">CAD revision</p>
+                    <p className="font-medium">{engineeringReleasePreview.cadRevision || 'Not captured'}</p>
+                  </div>
+                  <div className="rounded-md border bg-white p-3">
+                    <p className="text-xs text-muted-foreground">Prototype</p>
+                    <p className="font-medium">{engineeringReleasePreview.prototypeIdentifier || 'Not captured'}</p>
+                  </div>
+                  <div className="rounded-md border bg-white p-3">
+                    <p className="text-xs text-muted-foreground">V&amp;V</p>
+                    <p className="font-medium">{engineeringReleasePreview.verificationStatus} / {engineeringReleasePreview.validationStatus}</p>
+                  </div>
+                </div>
+                <div className="rounded-md border bg-white p-3">
+                  <p className="text-xs text-muted-foreground">Drawing revisions</p>
+                  <p className="font-medium">
+                    {engineeringReleasePreview.drawingRevisions.length > 0
+                      ? engineeringReleasePreview.drawingRevisions.join(', ')
+                      : 'Not captured'}
+                  </p>
+                </div>
+                <div className="rounded-md border bg-white p-3">
+                  <p className="text-xs text-muted-foreground">Approvers</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {engineeringReleasePreview.approvers.map((approval) => (
+                      <Badge key={approval.role} variant="outline">
+                        {approval.role}: {approval.approved ? 'Approved' : 'Missing'}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter className="flex-shrink-0">
+              <Button variant="outline" onClick={() => setIsReleaseDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="gap-2"
+                onClick={submitEngineeringReleaseForProject}
+                disabled={isSubmittingEngineeringRelease || !engineeringReleasePreview?.ready}
+              >
+                <PackageCheck className="h-4 w-4" />
+                {isSubmittingEngineeringRelease ? 'Releasing...' : 'Release Engineering Baseline'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog
           open={isDialogOpen}

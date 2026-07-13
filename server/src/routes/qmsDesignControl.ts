@@ -19,6 +19,10 @@ import {
   getDesignManufacturingEvidence,
   type DesignManufacturingEvidence,
 } from '../services/designManufacturingEvidenceService';
+import {
+  getEngineeringReleasePreview,
+  submitEngineeringRelease,
+} from '../services/engineeringReleaseService';
 
 const router = Router();
 
@@ -256,7 +260,7 @@ const workflowSteps = [
   },
   {
     key: '12',
-    title: 'Design Production Release Gate',
+    title: 'Engineering Release Gate',
     requiredFields: ['Release package notes', 'Linked project_id / PO / WAD', 'Locked design revision baseline'],
     requiredChecklist: [
       'released CAD',
@@ -449,13 +453,13 @@ function buildReadinessFromSteps(steps: PersistedWorkflowStep[], manufacturingEv
       continue;
     }
     if (step.key !== '12' && persisted.status !== 'approved') {
-      missingItems.push(`Step ${step.key} ${step.title}: approval required before Design Production Release Gate`);
+      missingItems.push(`Step ${step.key} ${step.title}: approval required before Engineering Release Gate`);
     }
   }
 
   const releaseStep = byKey.get('12');
   if (!releaseStep) {
-    missingItems.push('Release Gate: step 12 record is missing');
+    missingItems.push('Engineering Release Gate: step 12 record is missing');
   } else {
     const releaseDefinition = workflowSteps.find((step) => step.key === '12')!;
     const missing = missingForStep(releaseDefinition, {
@@ -470,10 +474,10 @@ function buildReadinessFromSteps(steps: PersistedWorkflowStep[], manufacturingEv
   }
 
   if (manufacturingEvidence) {
-    missingItems.push(...manufacturingEvidence.missingItems.map((item) => `Step 12 Design Production Release Gate source incomplete: ${item}`));
+    missingItems.push(...manufacturingEvidence.missingItems.map((item) => `Step 12 Engineering Release Gate source incomplete: ${item}`));
   } else {
     missingItems.push(...canonicalManufacturingEvidenceRequirements.map((requirement) => (
-      `Step 12 Design Production Release Gate source incomplete: ${requirement.label}: source evidence has not been evaluated`
+      `Step 12 Engineering Release Gate source incomplete: ${requirement.label}: source evidence has not been evaluated`
     )));
   }
 
@@ -526,6 +530,11 @@ async function buildReadiness(recordId: string) {
     ? await getDesignManufacturingEvidence({ rdProjectId: record.rdProjectId, designControlRecordId: record.id })
     : null;
   return buildReadinessFromSteps(steps, manufacturingEvidence);
+}
+
+function actorFromRequest(req: Request) {
+  const user = (req as any).user;
+  return user?.username || user?.email || user?.displayName || 'system';
 }
 
 async function upsertReleaseGate(
@@ -814,7 +823,7 @@ router.post('/:id/submit-release', async (req: Request, res: Response) => {
     const readiness = await buildReadiness(record.id);
     if (!readiness.ready) {
       res.status(422).json({
-        message: 'Design Production Release Gate is not ready',
+        message: 'Engineering Release Gate is not ready',
         missingItems: readiness.missingItems,
       });
       return;
@@ -858,7 +867,7 @@ router.post('/:id/submit-release', async (req: Request, res: Response) => {
     res.json({ record: updatedRecord, readiness: await buildReadiness(record.id) });
   } catch (error) {
     console.error('[qms-design-control] Failed to submit release gate', error);
-    res.status(500).json({ message: 'Failed to submit design production release gate' });
+    res.status(500).json({ message: 'Failed to submit engineering release gate' });
   }
 });
 
@@ -877,6 +886,50 @@ router.get('/:id/manufacturing-evidence', async (req: Request, res: Response) =>
   } catch (error) {
     console.error('[qms-design-control] Failed to compute manufacturing evidence', error);
     res.status(500).json({ message: 'Failed to compute design manufacturing evidence' });
+  }
+});
+
+router.get('/:id/engineering-release-preview', async (req: Request, res: Response) => {
+  try {
+    const preview = await getEngineeringReleasePreview(req.params.id);
+    if (!preview) {
+      res.status(404).json({ message: 'Design control record not found' });
+      return;
+    }
+
+    res.json({ preview });
+  } catch (error) {
+    console.error('[qms-design-control] Failed to compute engineering release preview', error);
+    res.status(500).json({ message: 'Failed to compute engineering release preview' });
+  }
+});
+
+router.post('/:id/engineering-release', async (req: Request, res: Response) => {
+  try {
+    const result = await submitEngineeringRelease({
+      recordId: req.params.id,
+      actor: actorFromRequest(req),
+      effectiveDate: typeof req.body?.effectiveDate === 'string' ? req.body.effectiveDate : null,
+    });
+
+    if (result.status === 'not_found') {
+      res.status(404).json({ message: 'Design control record not found' });
+      return;
+    }
+
+    if (result.status === 'blocked') {
+      res.status(422).json({
+        message: 'Engineering Release Gate is not ready',
+        missingEvidence: result.missingEvidence,
+        preview: result.preview ?? null,
+      });
+      return;
+    }
+
+    res.status(result.status === 'existing' ? 200 : 201).json(result);
+  } catch (error) {
+    console.error('[qms-design-control] Failed to submit engineering release', error);
+    res.status(500).json({ message: 'Failed to submit engineering release' });
   }
 });
 

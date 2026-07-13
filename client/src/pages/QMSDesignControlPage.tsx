@@ -410,7 +410,7 @@ const releases: ReleaseRow[] = [
   },
   {
     id: 'REL-8117',
-    title: 'P2 release gate package',
+    title: 'Engineering release package',
     project: 'Composite antenna fairing redesign',
     owner: 'Program Manager',
     status: 'review',
@@ -518,7 +518,7 @@ const lifecycleStages = [
   { stage: 'Reviews', owner: 'Quality', state: 'Cross-functional review gates and action closure tracked' },
   { stage: 'Verification', owner: 'Quality', state: 'Evidence confirms outputs meet design inputs' },
   { stage: 'Validation', owner: 'Program', state: 'Evidence confirms the product meets intended use' },
-  { stage: 'Release', owner: 'Manufacturing', state: 'Manufacturing packet, WAD, and P2 release gates aligned' },
+  { stage: 'Release', owner: 'Manufacturing', state: 'Engineering baseline ready for manufactured-item creation' },
 ];
 
 const designWorkflowSteps: DesignWorkflowStep[] = [
@@ -761,8 +761,8 @@ const designWorkflowSteps: DesignWorkflowStep[] = [
   },
   {
     id: '12',
-    title: 'Design Production Release Gate',
-    purpose: 'Allow controlled release into P2 manufacturing.',
+    title: 'Engineering Release Gate',
+    purpose: 'Freeze the controlled engineering baseline before manufactured inventory item creation.',
     fields: ['Release package notes', 'Linked project_id / PO / WAD', 'Locked design revision baseline'],
     checklist: [
       'Released CAD',
@@ -1021,7 +1021,7 @@ export default function QMSDesignControlPage() {
   const localReleaseReadinessItems = designWorkflowSteps.flatMap((step) => {
     if (workflowStatuses[step.id] === 'approved') return [];
     if (step.id !== '12') {
-      return [`Step ${step.id} ${step.title}: approval required before Design Production Release Gate`];
+      return [`Step ${step.id} ${step.title}: approval required before Engineering Release Gate`];
     }
     return getMissingWorkflowItems(step, workflowData).map((item) => `Release Gate ${item}`);
   });
@@ -1165,7 +1165,7 @@ export default function QMSDesignControlPage() {
 
   const submitReleaseGate = async () => {
     if (!activeDesignControlRecordId) {
-      setSaveError('Create or select a design control record before submitting the release gate.');
+      setSaveError('Create or select a design control record before submitting the engineering release.');
       return;
     }
 
@@ -1180,7 +1180,7 @@ export default function QMSDesignControlPage() {
       setServerReadiness(response.readiness);
       setLastSavedStep('Release gate submitted');
     } catch (error: any) {
-      setSaveError(error.message || 'Failed to submit release gate.');
+      setSaveError(error.message || 'Failed to submit engineering release.');
       if (error.responseData?.missingItems) {
         setServerReadiness({
           ready: false,
@@ -1357,8 +1357,8 @@ export default function QMSDesignControlPage() {
                 <div className="text-muted-foreground">Inputs link forward to outputs, reviews, and V&V evidence.</div>
               </div>
               <div className="rounded-md border bg-white px-3 py-2 text-sm">
-                <div className="font-medium">Release Gate</div>
-                <div className="text-muted-foreground">Manufacturing release stays aligned with WAD and P2 gates.</div>
+                <div className="font-medium">Engineering Release</div>
+                <div className="text-muted-foreground">The frozen baseline prepares the design for manufactured-item creation.</div>
               </div>
               <div className="rounded-md border bg-white px-3 py-2 text-sm">
                 <div className="font-medium">DHF Control</div>
@@ -1444,7 +1444,7 @@ export default function QMSDesignControlPage() {
               <CardContent className="space-y-6">
                 {selectedWorkflowStep.id === '12' && workflowStatuses[selectedWorkflowStep.id] === 'blocked' && (
                   <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                    Steps 1-11 must be approved before this Design Production Release Gate can be approved.
+                    Steps 1-11 must be approved before this Engineering Release Gate can be approved.
                   </div>
                 )}
 
@@ -1600,17 +1600,21 @@ export default function QMSDesignControlPage() {
                       Release Readiness
                     </CardTitle>
                     <CardDescription>
-                      Missing items that must be cleared before Design Production Release Gate approval.
+                      Missing items that must be cleared before Engineering Release Gate approval.
                     </CardDescription>
                   </div>
                   <Button
                     variant={releaseReadinessItems.length === 0 ? 'default' : 'outline'}
                     className="gap-2 self-start"
-                    onClick={submitReleaseGate}
-                    disabled={isSubmittingRelease || !activeDesignControlRecordId}
+                    onClick={() => {
+                      if (activeDesignControlRecord?.rdProjectId) {
+                        window.location.assign(`/design/rd-projects?projectId=${encodeURIComponent(activeDesignControlRecord.rdProjectId)}&tab=engineering-release`);
+                      }
+                    }}
+                    disabled={!activeDesignControlRecord?.rdProjectId}
                   >
                     <Rocket className="h-4 w-4" />
-                    {isSubmittingRelease ? 'Submitting...' : 'Submit Release'}
+                    Open Engineering Release
                   </Button>
                 </div>
               </CardHeader>
@@ -1639,7 +1643,7 @@ export default function QMSDesignControlPage() {
                 {releaseReadinessItems.length === 0 ? (
                   <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                     <CheckCircle2 className="h-4 w-4" />
-                    Design Production Release Gate is approved and ready for P2 manufacturing handoff.
+                    Engineering Release Gate is approved and ready for engineering baseline release.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1778,7 +1782,7 @@ export default function QMSDesignControlPage() {
           </TabsContent>
 
           <TabsContent value="release" className="space-y-4">
-            <SectionHeader icon={Rocket} title="Design Production Release Gate" description="The formal gate between Design Workflow and P2 Manufacturing, aligned to project context, PO readiness, WAD authorization, travelers, and controlled documents." action="New Release" />
+            <SectionHeader icon={Rocket} title="Engineering Release Gate" description="The formal gate that freezes the R&D engineering baseline before manufactured inventory item creation." action="New Release" />
             <RegisterTable rows={releases} showRelease onOpen={setSelectedRecord} />
           </TabsContent>
 

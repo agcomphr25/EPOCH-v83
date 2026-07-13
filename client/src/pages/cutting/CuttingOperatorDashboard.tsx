@@ -2748,7 +2748,7 @@ export default function CuttingOperatorDashboard() {
                                 )}
                                 {packet.allocatedSerializedItem ? (
                                   <span className="text-xs text-muted-foreground">
-                                    Serial: <span className="font-mono">{packet.allocatedSerializedItem.serialNumber}</span>
+                                    Used for serial: <span className="font-mono">{packet.allocatedSerializedItem.serialNumber}</span>
                                     {packet.allocatedSerializedItem.travelerBarcode ? ` (${packet.allocatedSerializedItem.travelerBarcode})` : ''}
                                   </span>
                                 ) : packet.allocatedToOrder && (

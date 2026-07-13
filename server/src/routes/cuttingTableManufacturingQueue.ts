@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, p2SerializedItems, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingFabricInventoryTransactions, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
-import { eq, and, or, asc, desc, inArray, like, count } from 'drizzle-orm';
+import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, p2SerializedItems, p2SerializedItemTraceability, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingFabricInventoryTransactions, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
+import { eq, and, or, asc, desc, inArray, like, count, isNull } from 'drizzle-orm';
 import {
   adjustPacketInventoryForMaterial,
   getP1PacketName,
@@ -246,7 +246,27 @@ async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
     inArray(inventoryItems.manufacturedCategory, cuttingTableCategories)
   );
 
-  const completedRows = await db
+  // Source-less packets can belong to an older queue row that has fallen outside
+  // the recent-row repair window. Resolve those queue IDs first so packet fabric
+  // traceability is repairable regardless of the queue row's age.
+  const sourceLessPackets = await db
+    .select({ barcode: cuttingBuiltPackets.barcode })
+    .from(cuttingBuiltPackets)
+    .leftJoin(
+      cuttingBuiltPacketFabricSources,
+      eq(cuttingBuiltPacketFabricSources.builtPacketId, cuttingBuiltPackets.id)
+    )
+    .where(and(
+      like(cuttingBuiltPackets.barcode, 'PKT-%'),
+      isNull(cuttingBuiltPacketFabricSources.id)
+    ));
+  const sourceLessQueueIds = [...new Set(
+    sourceLessPackets
+      .map((packet) => parseQueueIdFromBuiltPacketBarcode(packet.barcode))
+      .filter((queueId): queueId is number => queueId !== null)
+  )];
+
+  let completedRows = await db
     .select({
       queue: manufacturingQueue,
       item: inventoryItems,
@@ -262,6 +282,28 @@ async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
     ))
     .orderBy(desc(manufacturingQueue.completedAt), desc(manufacturingQueue.updatedAt))
     .limit(250);
+
+  if (sourceLessQueueIds.length > 0) {
+    const sourceLessQueueRows = await db
+      .select({
+        queue: manufacturingQueue,
+        item: inventoryItems,
+      })
+      .from(manufacturingQueue)
+      .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+      .where(and(
+        routingSignal,
+        or(
+          eq(manufacturingQueue.status, 'COMPLETED'),
+          eq(manufacturingQueue.status, 'IN_PROGRESS')
+        ),
+        inArray(manufacturingQueue.id, sourceLessQueueIds)
+      ));
+    const recentQueueIds = new Set(completedRows.map((row) => row.queue.id));
+    completedRows = completedRows.concat(
+      sourceLessQueueRows.filter((row) => !recentQueueIds.has(row.queue.id))
+    );
+  }
 
   for (const row of completedRows) {
     const completedQuantity = row.queue.quantityCompleted || 0;
@@ -2617,12 +2659,46 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       });
     }
 
-    const allocationRefs = [...new Set(
-      visiblePackets
+    const packetIdByTraceReference = new Map<string, number>();
+    visiblePackets.forEach((packet) => {
+      const references = [String(packet.id), packet.barcode];
+      if (packet.queueId && packet.sku) {
+        references.push(`MFG-${packet.queueId}-${packet.sku}-${packet.printedPacketNumber ?? packet.packetNumber}`);
+      }
+      references.forEach((reference) => {
+        const normalized = reference.trim().toUpperCase();
+        if (normalized) packetIdByTraceReference.set(normalized, packet.id);
+      });
+    });
+    const packetTraceReferences = [...packetIdByTraceReference.keys()];
+    const packetTraceRows = packetTraceReferences.length > 0
+      ? await db
+        .select({
+          serializedItemId: p2SerializedItemTraceability.serializedItemId,
+          inventoryPartId: p2SerializedItemTraceability.inventoryPartId,
+          inventoryPartNumber: p2SerializedItemTraceability.inventoryPartNumber,
+          traceabilityValue: p2SerializedItemTraceability.traceabilityValue,
+          createdAt: p2SerializedItemTraceability.createdAt,
+        })
+        .from(p2SerializedItemTraceability)
+        .where(and(
+          eq(p2SerializedItemTraceability.traceabilityType, 'packet_barcode'),
+          or(
+            inArray(p2SerializedItemTraceability.inventoryPartId, packetTraceReferences),
+            inArray(p2SerializedItemTraceability.inventoryPartNumber, packetTraceReferences),
+            inArray(p2SerializedItemTraceability.traceabilityValue, packetTraceReferences)
+          )
+        ))
+        .orderBy(desc(p2SerializedItemTraceability.createdAt))
+      : [];
+
+    const allocationRefs = [...new Set([
+      ...visiblePackets
         .map(packet => packet.allocatedToOrder)
         .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
-        .map(value => value.trim())
-    )];
+        .map(value => value.trim()),
+      ...packetTraceRows.map(row => row.serializedItemId),
+    ])];
     const allocationUuids = allocationRefs.filter(isUuid);
     const allocationConditions = [
       inArray(p2SerializedItems.barcode, allocationRefs),
@@ -2648,6 +2724,17 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       serializedByAllocationRef.set(item.id, item);
       serializedByAllocationRef.set(item.barcode, item);
       serializedByAllocationRef.set(item.serialNumber, item);
+    });
+    const serializedByPacketId = new Map<number, any>();
+    packetTraceRows.forEach((trace) => {
+      const packetId = [trace.inventoryPartId, trace.inventoryPartNumber, trace.traceabilityValue]
+        .map(value => String(value || '').trim().toUpperCase())
+        .map(value => packetIdByTraceReference.get(value))
+        .find((value): value is number => value !== undefined);
+      const serializedItem = serializedByAllocationRef.get(trace.serializedItemId);
+      if (packetId !== undefined && serializedItem && !serializedByPacketId.has(packetId)) {
+        serializedByPacketId.set(packetId, serializedItem);
+      }
     });
 
     // Compute displayPacketNumber: rank each packet within its queueId group,
@@ -2696,9 +2783,12 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       const derivedSources = packetSources.length === 0 && packet.queueId
         ? parseStoredMaterialSources(queueMeta[packet.queueId]?.materialDetails ?? null, packet.id)
         : [];
-      const allocatedSerializedItem = packet.allocatedToOrder
+      const directlyAllocatedSerializedItem = packet.allocatedToOrder
         ? serializedByAllocationRef.get(packet.allocatedToOrder.trim()) ?? null
         : null;
+      const allocatedSerializedItem = directlyAllocatedSerializedItem
+        ?? serializedByPacketId.get(packet.id)
+        ?? null;
 
       return {
         ...packet,

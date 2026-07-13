@@ -14,6 +14,11 @@ import {
   designControlVerification,
   insertDesignControlRecordSchema,
 } from '../../schema';
+import {
+  canonicalManufacturingEvidenceRequirements,
+  getDesignManufacturingEvidence,
+  type DesignManufacturingEvidence,
+} from '../services/designManufacturingEvidenceService';
 
 const router = Router();
 
@@ -281,24 +286,10 @@ const workflowSteps = [
 ];
 
 const requiredStepKeys = workflowSteps.filter((step) => step.key !== '12').map((step) => step.key);
-const releaseGateSourceRequirements = [
-  { item: 'released CAD', source: 'Design Outputs / CAD vault' },
-  { item: 'released drawings', source: 'Document Control / released drawings' },
-  { item: 'released BOM', source: 'BOM module' },
-  { item: 'approved routing', source: 'Routing module' },
-  { item: 'approved traveler requirement', source: 'Traveler module' },
-  { item: 'approved work instructions', source: 'Work Instructions module' },
-  { item: 'approved inspection plan', source: 'Inspection / QC module' },
-  { item: 'approved test procedure', source: 'Verification / Test module' },
-  { item: 'required certifications identified', source: 'Certifications / Quality module' },
-  { item: 'supplier requirements flowed down', source: 'Supplier Quality / Procurement module' },
-  { item: 'material requirements approved', source: 'Material / Inventory module' },
-  { item: 'tooling and fixtures ready', source: 'Manufacturing Engineering module' },
-  { item: 'CNC programs approved when applicable', source: 'CNC / Manufacturing module' },
-  { item: 'training and certifications complete', source: 'Training module' },
-  { item: 'packaging and shipping requirements defined', source: 'Shipping / Packaging module' },
-  { item: 'design revision baseline locked', source: 'Document Control / Revision baseline' },
-];
+const releaseGateSourceRequirements = canonicalManufacturingEvidenceRequirements.map((requirement) => ({
+  item: requirement.label,
+  source: requirement.sourceModule,
+}));
 type WorkflowStepDefinition = typeof workflowSteps[number];
 type StepMissingEvidence = ReturnType<typeof missingForStep>;
 type PersistedWorkflowStep = {
@@ -350,14 +341,15 @@ function hasFilledCanonicalValue(values: Record<string, unknown>, canonicalKey: 
   return String(value ?? '').trim().length > 0;
 }
 
-function missingForStep(step: WorkflowStepDefinition, payload: StepPayload) {
+function missingForStep(step: WorkflowStepDefinition, payload: StepPayload, options: { includeChecklist?: boolean } = {}) {
   const formData = normalizeJsonObject(payload.formData);
   const checklist = normalizeJsonObject(payload.checklist);
   const approvals = normalizeJsonObject(payload.approvals);
+  const includeChecklist = options.includeChecklist ?? true;
 
   return {
     fields: step.requiredFields.filter((field) => !hasFilledCanonicalValue(formData, field)),
-    checklist: step.requiredChecklist.filter((item) => !isTruthyCanonical(checklist, item)),
+    checklist: includeChecklist ? step.requiredChecklist.filter((item) => !isTruthyCanonical(checklist, item)) : [],
     approvals: step.requiredApprovals.filter((approval) => !isTruthyCanonical(approvals, approval)),
   };
 }
@@ -373,9 +365,9 @@ function hasAnyStepEvidence(payload: StepPayload) {
   );
 }
 
-function deriveStatus(step: WorkflowStepDefinition, payload: StepPayload) {
+function deriveStatus(step: WorkflowStepDefinition, payload: StepPayload, options: { includeChecklist?: boolean } = {}) {
   const requestedStatus = typeof payload.status === 'string' ? payload.status.trim().toLowerCase() : '';
-  const missing = missingForStep(step, payload);
+  const missing = missingForStep(step, payload, options);
   const complete = missing.fields.length === 0 && missing.checklist.length === 0 && missing.approvals.length === 0;
 
   if (requestedStatus === 'approved' && !complete) {
@@ -446,7 +438,7 @@ async function getSteps(recordId: string) {
   return db.select().from(designControlSteps).where(eq(designControlSteps.recordId, recordId));
 }
 
-function buildReadinessFromSteps(steps: PersistedWorkflowStep[]) {
+function buildReadinessFromSteps(steps: PersistedWorkflowStep[], manufacturingEvidence?: DesignManufacturingEvidence | null) {
   const byKey = new Map(steps.map((step) => [step.stepKey, step]));
   const missingItems: string[] = [];
 
@@ -470,24 +462,31 @@ function buildReadinessFromSteps(steps: PersistedWorkflowStep[]) {
       formData: normalizeJsonObject(releaseStep.formData),
       checklist: normalizeJsonObject(releaseStep.checklist),
       approvals: normalizeJsonObject(releaseStep.approvals),
-    });
-    missingItems.push(...formatMissingItems(releaseDefinition, missing));
+    }, { includeChecklist: false });
+    missingItems.push(
+      ...missing.fields.map((field) => `Step ${releaseDefinition.key} ${releaseDefinition.title} field missing: ${field}`),
+      ...missing.approvals.map((approval) => `Step ${releaseDefinition.key} ${releaseDefinition.title} approval missing: ${approval}`)
+    );
+  }
+
+  if (manufacturingEvidence) {
+    missingItems.push(...manufacturingEvidence.missingItems.map((item) => `Step 12 Design Production Release Gate source incomplete: ${item}`));
+  } else {
+    missingItems.push(...canonicalManufacturingEvidenceRequirements.map((requirement) => (
+      `Step 12 Design Production Release Gate source incomplete: ${requirement.label}: source evidence has not been evaluated`
+    )));
   }
 
   return {
     ready: missingItems.length === 0,
     missingItems,
     sourceOfTruthPrinciple: 'R&D Project owns engineering process; Design Control orchestrates; manufacturing modules own their own data and Design Control evaluates their status.',
-    manufacturingSourceStatuses: releaseGateSourceRequirements.map((requirement) => ({
-      requirement: requirement.item,
-      source: requirement.source,
-      ready: releaseStep
-        ? !missingForStep(workflowSteps.find((step) => step.key === '12')!, {
-          formData: normalizeJsonObject(releaseStep.formData),
-          checklist: normalizeJsonObject(releaseStep.checklist),
-          approvals: normalizeJsonObject(releaseStep.approvals),
-        }).checklist.some((item) => normalizeKey(item) === normalizeKey(requirement.item))
-        : false,
+    manufacturingEvidence: manufacturingEvidence ?? null,
+    manufacturingSourceStatuses: (manufacturingEvidence?.sources ?? []).map((source) => ({
+      requirement: source.label,
+      source: source.sourceModule,
+      ready: source.ready,
+      status: source.status,
     })),
     steps: workflowSteps.map((step) => ({
       key: step.key,
@@ -521,8 +520,12 @@ async function ensureWorkflowSteps(record: typeof designControlRecords.$inferSel
 }
 
 async function buildReadiness(recordId: string) {
+  const record = await getRecord(recordId);
   const steps = await getSteps(recordId);
-  return buildReadinessFromSteps(steps);
+  const manufacturingEvidence = record
+    ? await getDesignManufacturingEvidence({ rdProjectId: record.rdProjectId, designControlRecordId: record.id })
+    : null;
+  return buildReadinessFromSteps(steps, manufacturingEvidence);
 }
 
 async function upsertReleaseGate(
@@ -701,7 +704,7 @@ router.patch('/:id/steps/:stepKey', async (req: Request, res: Response) => {
       metadata: normalizeJsonObject(req.body?.metadata),
       status: req.body?.status,
     };
-    const derived = deriveStatus(step, payload);
+    const derived = deriveStatus(step, payload, { includeChecklist: step.key !== '12' });
     const requestedStatus = typeof req.body?.status === 'string' ? req.body.status.trim().toLowerCase() : '';
     let status = derived.status;
 
@@ -738,12 +741,15 @@ router.patch('/:id/steps/:stepKey', async (req: Request, res: Response) => {
     }
 
     if (step.key === '12' && status === 'approved') {
-      const readiness = await buildReadiness(record.id);
-      const missingPrerequisites = readiness.missingItems.filter((item) => item.startsWith('Step ') && !item.startsWith('Step 12 '));
-      if (missingPrerequisites.length > 0) {
+      const manufacturingEvidence = await getDesignManufacturingEvidence({
+        rdProjectId: record.rdProjectId,
+        designControlRecordId: record.id,
+      });
+      if (!manufacturingEvidence.ready) {
         res.status(422).json({
-          message: 'Step 12 cannot be approved until steps 1-11 are approved',
-          missingItems: missingPrerequisites,
+          message: 'Step 12 cannot be approved until manufacturing source evidence is ready',
+          missingItems: manufacturingEvidence.missingItems,
+          manufacturingEvidence,
         });
         return;
       }
@@ -853,6 +859,24 @@ router.post('/:id/submit-release', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[qms-design-control] Failed to submit release gate', error);
     res.status(500).json({ message: 'Failed to submit design production release gate' });
+  }
+});
+
+router.get('/:id/manufacturing-evidence', async (req: Request, res: Response) => {
+  try {
+    const record = await getRecord(req.params.id);
+    if (!record) {
+      res.status(404).json({ message: 'Design control record not found' });
+      return;
+    }
+
+    res.json(await getDesignManufacturingEvidence({
+      rdProjectId: record.rdProjectId,
+      designControlRecordId: record.id,
+    }));
+  } catch (error) {
+    console.error('[qms-design-control] Failed to compute manufacturing evidence', error);
+    res.status(500).json({ message: 'Failed to compute design manufacturing evidence' });
   }
 });
 

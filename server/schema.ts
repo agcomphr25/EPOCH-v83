@@ -17518,6 +17518,27 @@ export const designControlReleaseGate = pgTable('design_control_release_gate', {
   p2PurchaseOrderIdx: index('design_control_release_gate_p2_po_id_idx').on(table.p2PurchaseOrderId),
 }));
 
+export const designControlRequirementApplicability = pgTable('design_control_requirement_applicability', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  recordId: uuid('record_id').notNull().references(() => designControlRecords.id, { onDelete: 'cascade' }),
+  rdProjectId: text('rd_project_id').references(() => rdProjects.id, { onDelete: 'set null' }),
+  requirementKey: text('requirement_key').notNull(),
+  applicable: boolean('applicable').notNull().default(true),
+  justification: text('justification'),
+  approvedBy: text('approved_by'),
+  approvedRole: text('approved_role'),
+  approvedAt: timestamp('approved_at'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordRequirementUnique: uniqueIndex('design_control_requirement_applicability_record_requirement_unique').on(table.recordId, table.requirementKey),
+  recordIdx: index('design_control_req_app_record_id_idx').on(table.recordId),
+  rdProjectIdx: index('design_control_req_app_rd_project_id_idx').on(table.rdProjectId),
+  requirementKeyIdx: index('design_control_req_app_requirement_key_idx').on(table.requirementKey),
+  applicableIdx: index('design_control_req_app_applicable_idx').on(table.applicable),
+}));
+
 export const insertDesignControlRecordSchema = createInsertSchema(designControlRecords).omit({
   id: true,
   submittedAt: true,

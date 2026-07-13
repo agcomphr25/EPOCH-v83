@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
 import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, p2SerializedItems, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingFabricInventoryTransactions, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
-import { eq, and, or, asc, desc, inArray, like, count } from 'drizzle-orm';
+import { eq, and, or, asc, desc, inArray, like, count, isNull } from 'drizzle-orm';
 import {
   adjustPacketInventoryForMaterial,
   getP1PacketName,
@@ -246,7 +246,27 @@ async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
     inArray(inventoryItems.manufacturedCategory, cuttingTableCategories)
   );
 
-  const completedRows = await db
+  // Source-less packets can belong to an older queue row that has fallen outside
+  // the recent-row repair window. Resolve those queue IDs first so packet fabric
+  // traceability is repairable regardless of the queue row's age.
+  const sourceLessPackets = await db
+    .select({ barcode: cuttingBuiltPackets.barcode })
+    .from(cuttingBuiltPackets)
+    .leftJoin(
+      cuttingBuiltPacketFabricSources,
+      eq(cuttingBuiltPacketFabricSources.builtPacketId, cuttingBuiltPackets.id)
+    )
+    .where(and(
+      like(cuttingBuiltPackets.barcode, 'PKT-%'),
+      isNull(cuttingBuiltPacketFabricSources.id)
+    ));
+  const sourceLessQueueIds = [...new Set(
+    sourceLessPackets
+      .map((packet) => parseQueueIdFromBuiltPacketBarcode(packet.barcode))
+      .filter((queueId): queueId is number => queueId !== null)
+  )];
+
+  let completedRows = await db
     .select({
       queue: manufacturingQueue,
       item: inventoryItems,
@@ -262,6 +282,28 @@ async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
     ))
     .orderBy(desc(manufacturingQueue.completedAt), desc(manufacturingQueue.updatedAt))
     .limit(250);
+
+  if (sourceLessQueueIds.length > 0) {
+    const sourceLessQueueRows = await db
+      .select({
+        queue: manufacturingQueue,
+        item: inventoryItems,
+      })
+      .from(manufacturingQueue)
+      .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+      .where(and(
+        routingSignal,
+        or(
+          eq(manufacturingQueue.status, 'COMPLETED'),
+          eq(manufacturingQueue.status, 'IN_PROGRESS')
+        ),
+        inArray(manufacturingQueue.id, sourceLessQueueIds)
+      ));
+    const recentQueueIds = new Set(completedRows.map((row) => row.queue.id));
+    completedRows = completedRows.concat(
+      sourceLessQueueRows.filter((row) => !recentQueueIds.has(row.queue.id))
+    );
+  }
 
   for (const row of completedRows) {
     const completedQuantity = row.queue.quantityCompleted || 0;

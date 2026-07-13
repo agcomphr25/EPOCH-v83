@@ -119,10 +119,13 @@ export async function backfillPacketFromQueue(
 }
 
 export async function resolvePacketBarcode(barcode: string): Promise<PacketResolutionResult | null> {
+  const normalizedBarcode = barcode.trim().toUpperCase();
+  if (!normalizedBarcode) return null;
+
   const [directPacket] = await db
     .select()
     .from(cuttingBuiltPackets)
-    .where(eq(cuttingBuiltPackets.barcode, barcode))
+    .where(eq(cuttingBuiltPackets.barcode, normalizedBarcode))
     .limit(1);
 
   if (directPacket) {
@@ -130,14 +133,14 @@ export async function resolvePacketBarcode(barcode: string): Promise<PacketResol
       source: 'built_packet',
       packetRecord: directPacket,
       queueItem: null,
-      barcode,
+      barcode: normalizedBarcode,
       packetNumber: directPacket.packetNumber ?? 1,
       backfillAttempted: false,
       backfillResult: null,
     };
   }
 
-  const mfgMatch = barcode.match(/^MFG-(\d+)-([^-]+)(?:-(\d+))?$/);
+  const mfgMatch = normalizedBarcode.match(/^MFG-(\d+)-([^-]+)(?:-(\d+))?$/);
   if (!mfgMatch) {
     return null;
   }
@@ -160,7 +163,7 @@ export async function resolvePacketBarcode(barcode: string): Promise<PacketResol
   const [exactPacket] = await db
     .select()
     .from(cuttingBuiltPackets)
-    .where(eq(cuttingBuiltPackets.barcode, barcode))
+    .where(eq(cuttingBuiltPackets.barcode, normalizedBarcode))
     .limit(1);
   builtPacketForQueue = exactPacket;
 
@@ -189,7 +192,7 @@ export async function resolvePacketBarcode(barcode: string): Promise<PacketResol
       source: 'built_packet',
       packetRecord: builtPacketForQueue,
       queueItem,
-      barcode,
+      barcode: normalizedBarcode,
       packetNumber: builtPacketForQueue.packetNumber ?? 1,
       backfillAttempted: false,
       backfillResult: null,
@@ -240,14 +243,14 @@ export async function resolvePacketBarcode(barcode: string): Promise<PacketResol
   // queue-derived and surface the same warning path as before any backfill ran.  See Task #43.
   let backfillResult: 'created' | 'existed' | 'skipped' | null = null;
   if (fabricRolls.length > 0) {
-    backfillResult = await backfillPacketFromQueue(queueItem, barcode, packetNumber, fabricRolls);
+    backfillResult = await backfillPacketFromQueue(queueItem, normalizedBarcode, packetNumber, fabricRolls);
   }
 
   return {
     source: 'manufacturing_queue',
     packetRecord: null,
     queueItem,
-    barcode,
+    barcode: normalizedBarcode,
     packetNumber,
     backfillAttempted: fabricRolls.length > 0,
     backfillResult,

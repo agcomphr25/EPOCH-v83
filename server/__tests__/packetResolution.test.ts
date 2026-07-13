@@ -142,6 +142,44 @@ describe('resolvePacketBarcode — Task #43 sibling-packet leak guard', () => {
     expect(result!.packetRecord?.packetNumber).toBe(46);
   });
 
+  it('normalizes a lowercase MFG scan before resolving the built packet', async () => {
+    const queueItem = {
+      id: 254,
+      inventoryItemId: null,
+      materialDetails: null,
+      fabricLot: null,
+      fabricBatch: null,
+      fabricRoll: null,
+      completedAt: null,
+      startedAt: null,
+      parentProductionOrderId: null,
+      sourceId: null,
+    };
+    const realPacket = {
+      id: 97,
+      barcode: 'PKT-97-254-330-1700000000000',
+      packetNumber: 330,
+      buildDate: new Date('2026-07-13'),
+      status: 'AVAILABLE',
+      isMixedFabric: false,
+      allocatedToOrder: null,
+    };
+
+    sequenceDbSelects(
+      [],
+      [queueItem],
+      [],
+      [realPacket],
+    );
+
+    const result = await resolvePacketBarcode('mfg-254-97-330');
+
+    expect(result).not.toBeNull();
+    expect(result!.source).toBe('built_packet');
+    expect(result!.packetRecord?.id).toBe(97);
+    expect(result!.barcode).toBe('MFG-254-97-330');
+  });
+
   it('keeps source as manufacturing_queue even when the backfill side-effect succeeds', async () => {
     // When the helper falls through to the queue branch and the on-the-fly backfill
     // actually creates a built_packet row, it must NOT reclassify the response as

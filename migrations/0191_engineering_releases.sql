@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS engineering_release_baseline_items (
   source_record_id text,
   source_revision text,
   source_status text,
+  captured_at timestamp DEFAULT now(),
+  immutable_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
   source_checksum text,
   immutable_snapshot_id text,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,

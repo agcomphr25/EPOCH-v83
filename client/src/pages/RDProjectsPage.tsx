@@ -177,11 +177,14 @@ interface DesignControlProjectRecord {
 
 interface EngineeringReleasePreview {
   ready: boolean;
+  rdProjectId: string | null;
   rdProjectName: string | null;
+  designControlRecordId: string;
   productName: string;
+  proposedReleaseNumber: string;
   proposedReleaseRevision: string;
-  releaseNumber: string;
   effectiveDate: string;
+  workflowSummary: Array<{ stepKey: string; title: string; status: string }>;
   requirementsSummary: string;
   riskSummary: string;
   prototypeIdentifier: string | null;
@@ -190,9 +193,11 @@ interface EngineeringReleasePreview {
   cadRevision: string | null;
   verificationStatus: string;
   validationStatus: string;
-  designReviewStatus: string;
+  finalDesignReviewStatus: string;
+  engineeringChangeStatus: string;
   manufacturingEvidenceStatus: string;
-  approvers: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
+  requiredApprovals: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
+  completedApprovals: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
   missingEvidence: string[];
   baselineItems: Array<{
     baselineCategory: string;
@@ -202,6 +207,14 @@ interface EngineeringReleasePreview {
     sourceStatus: string | null;
   }>;
   changedSinceReleaseWarnings: string[];
+  releaseHistory: Array<{
+    id: string;
+    releaseNumber: string;
+    releaseRevision: string;
+    releaseStatus: string;
+    releasedBy: string | null;
+    releasedAt: string | null;
+  }>;
   existingRelease?: {
     id: string;
     releaseNumber: string;
@@ -2067,6 +2080,10 @@ export default function RDProjectsPage() {
                                   </Badge>
                                 </div>
                                 <div className="rounded-md border bg-white p-3">
+                                  <p className="text-xs text-muted-foreground">Release number</p>
+                                  <p className="mt-1 text-lg font-semibold">{engineeringReleasePreview.proposedReleaseNumber}</p>
+                                </div>
+                                <div className="rounded-md border bg-white p-3">
                                   <p className="text-xs text-muted-foreground">Release revision</p>
                                   <p className="mt-1 text-lg font-semibold">{engineeringReleasePreview.proposedReleaseRevision}</p>
                                 </div>
@@ -2186,7 +2203,7 @@ export default function RDProjectsPage() {
                                     </CardDescription>
                                   </CardHeader>
                                   <CardContent className="space-y-2">
-                                    {engineeringReleasePreview.approvers.map((approval) => (
+                                    {engineeringReleasePreview.requiredApprovals.map((approval) => (
                                       <div key={approval.role} className="flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm">
                                         <span>{approval.role}</span>
                                         <Badge
@@ -2198,11 +2215,31 @@ export default function RDProjectsPage() {
                                       </div>
                                     ))}
                                     <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                                      Verification: {engineeringReleasePreview.verificationStatus} · Validation: {engineeringReleasePreview.validationStatus} · Review: {engineeringReleasePreview.designReviewStatus}
+                                      Verification: {engineeringReleasePreview.verificationStatus} · Validation: {engineeringReleasePreview.validationStatus} · Review: {engineeringReleasePreview.finalDesignReviewStatus} · Changes: {engineeringReleasePreview.engineeringChangeStatus}
                                     </div>
                                   </CardContent>
                                 </Card>
                               </div>
+
+                              {engineeringReleasePreview.releaseHistory.length > 0 && (
+                                <Card>
+                                  <CardHeader>
+                                    <CardTitle className="text-base">Release History</CardTitle>
+                                    <CardDescription>Engineering releases previously created for this R&amp;D design.</CardDescription>
+                                  </CardHeader>
+                                  <CardContent className="space-y-2">
+                                    {engineeringReleasePreview.releaseHistory.map((release) => (
+                                      <div key={release.id} className="flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm">
+                                        <div>
+                                          <div className="font-medium">{release.releaseNumber}</div>
+                                          <div className="text-xs text-muted-foreground">Revision {release.releaseRevision} · {release.releasedAt || 'released'}</div>
+                                        </div>
+                                        <Badge variant="outline">{release.releaseStatus}</Badge>
+                                      </div>
+                                    ))}
+                                  </CardContent>
+                                </Card>
+                              )}
 
                               {engineeringReleasePreview.changedSinceReleaseWarnings.length > 0 && (
                                 <div className="space-y-2">
@@ -2244,6 +2281,10 @@ export default function RDProjectsPage() {
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-md border bg-white p-3">
+                    <p className="text-xs text-muted-foreground">Release number</p>
+                    <p className="font-medium">{engineeringReleasePreview.proposedReleaseNumber}</p>
+                  </div>
+                  <div className="rounded-md border bg-white p-3">
                     <p className="text-xs text-muted-foreground">Release revision</p>
                     <p className="font-medium">{engineeringReleasePreview.proposedReleaseRevision}</p>
                   </div>
@@ -2279,7 +2320,7 @@ export default function RDProjectsPage() {
                 <div className="rounded-md border bg-white p-3">
                   <p className="text-xs text-muted-foreground">Approvers</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {engineeringReleasePreview.approvers.map((approval) => (
+                    {engineeringReleasePreview.requiredApprovals.map((approval) => (
                       <Badge key={approval.role} variant="outline">
                         {approval.role}: {approval.approved ? 'Approved' : 'Missing'}
                       </Badge>

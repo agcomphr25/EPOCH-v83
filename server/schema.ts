@@ -17592,6 +17592,8 @@ export const engineeringReleaseBaselineItems = pgTable('engineering_release_base
   sourceRecordId: text('source_record_id'),
   sourceRevision: text('source_revision'),
   sourceStatus: text('source_status'),
+  capturedAt: timestamp('captured_at').defaultNow(),
+  immutableSnapshot: jsonb('immutable_snapshot').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
   sourceChecksum: text('source_checksum'),
   immutableSnapshotId: text('immutable_snapshot_id'),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),

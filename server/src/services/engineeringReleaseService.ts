@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../db';
 import {
@@ -46,10 +46,12 @@ export type EngineeringReleasePreview = {
   ready: boolean;
   rdProjectId: string | null;
   rdProjectName: string | null;
+  designControlRecordId: string;
   productName: string;
+  proposedReleaseNumber: string;
   proposedReleaseRevision: string;
-  releaseNumber: string;
   effectiveDate: string;
+  workflowSummary: Array<{ stepKey: string; title: string; status: string }>;
   requirementsSummary: string;
   riskSummary: string;
   prototypeIdentifier: string | null;
@@ -58,12 +60,22 @@ export type EngineeringReleasePreview = {
   cadRevision: string | null;
   verificationStatus: string;
   validationStatus: string;
-  designReviewStatus: string;
+  finalDesignReviewStatus: string;
+  engineeringChangeStatus: string;
   manufacturingEvidenceStatus: string;
-  approvers: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
+  requiredApprovals: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
+  completedApprovals: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
   missingEvidence: string[];
   baselineItems: EngineeringBaselineItemPreview[];
   changedSinceReleaseWarnings: string[];
+  releaseHistory: Array<{
+    id: string;
+    releaseNumber: string;
+    releaseRevision: string;
+    releaseStatus: string;
+    releasedBy: string | null;
+    releasedAt: string | null;
+  }>;
   existingRelease?: {
     id: string;
     releaseNumber: string;
@@ -81,6 +93,8 @@ export type EngineeringBaselineItemPreview = {
   sourceRecordId: string | null;
   sourceRevision: string | null;
   sourceStatus: string | null;
+  capturedAt: string;
+  immutableSnapshot: Record<string, unknown>;
   sourceChecksum: string;
   immutableSnapshotId: string;
   metadata: Record<string, unknown>;
@@ -144,8 +158,15 @@ function approved(values: unknown, label: string) {
   return canonicalValue(values, label) === true;
 }
 
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
+  if (!isRecord(value)) return JSON.stringify(value);
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+}
+
 function stableHash(value: unknown) {
-  return createHash('sha256').update(JSON.stringify(value, Object.keys(jsonRecord(value)).sort())).digest('hex');
+  return createHash('sha256').update(stableStringify(value)).digest('hex');
 }
 
 function sourceTableFor(source: ManufacturingEvidenceSource) {
@@ -172,6 +193,7 @@ function riskIsBlocking(risk: typeof designControlRisks.$inferSelect) {
 }
 
 function sourceBaselineItem(source: ManufacturingEvidenceSource): EngineeringBaselineItemPreview {
+  const capturedAt = new Date().toISOString();
   const metadata = {
     key: source.key,
     label: source.label,
@@ -192,6 +214,7 @@ function sourceBaselineItem(source: ManufacturingEvidenceSource): EngineeringBas
     sourceRecordId: source.recordId ?? null,
     sourceRevision: source.revision ?? null,
     sourceStatus: source.status,
+    capturedAt,
     metadata,
   };
   const checksum = stableHash(snapshot);
@@ -202,6 +225,8 @@ function sourceBaselineItem(source: ManufacturingEvidenceSource): EngineeringBas
     sourceRecordId: source.recordId ?? null,
     sourceRevision: source.revision ?? null,
     sourceStatus: source.status,
+    capturedAt,
+    immutableSnapshot: snapshot,
     sourceChecksum: checksum,
     immutableSnapshotId: `sha256:${checksum}`,
     metadata,
@@ -233,6 +258,7 @@ function productName(record: DesignControlRecord, rdProject: RdProject | null, s
 
 function buildBaselineItems(context: ReleaseContext): EngineeringBaselineItemPreview[] {
   const stepItems = context.steps.map((step) => {
+    const capturedAt = new Date().toISOString();
     const snapshot = {
       stepKey: step.stepKey,
       title: step.title,
@@ -241,6 +267,7 @@ function buildBaselineItems(context: ReleaseContext): EngineeringBaselineItemPre
       approvals: step.approvals,
       approvedAt: step.approvedAt,
       updatedAt: step.updatedAt,
+      capturedAt,
     };
     const checksum = stableHash(snapshot);
     return {
@@ -250,14 +277,76 @@ function buildBaselineItems(context: ReleaseContext): EngineeringBaselineItemPre
       sourceRecordId: step.id,
       sourceRevision: step.stepKey,
       sourceStatus: step.status,
+      capturedAt,
+      immutableSnapshot: snapshot,
       sourceChecksum: checksum,
       immutableSnapshotId: `sha256:${checksum}`,
       metadata: snapshot,
     };
   });
 
+  const registerItems = [
+    { category: 'requirements', sourceTable: 'design_control_requirements', records: context.requirements },
+    { category: 'risks', sourceTable: 'design_control_risks', records: context.risks },
+    { category: 'design_reviews', sourceTable: 'design_control_reviews', records: context.reviews },
+    { category: 'verification', sourceTable: 'design_control_verification', records: context.verification },
+    { category: 'validation', sourceTable: 'design_control_validation', records: context.validation },
+    { category: 'engineering_changes', sourceTable: 'design_control_changes', records: context.changes },
+  ].map(({ category, sourceTable, records }) => {
+    const capturedAt = new Date().toISOString();
+    const snapshot = {
+      count: records.length,
+      records: records.map((record: any) => ({
+        id: record.id,
+        title: record.title ?? null,
+        status: record.status ?? null,
+        updatedAt: record.updatedAt ?? null,
+        key: record.requirementKey ?? record.riskKey ?? record.reviewType ?? record.verificationKey ?? record.validationKey ?? record.changeKey ?? null,
+      })),
+      capturedAt,
+    };
+    const checksum = stableHash(snapshot);
+    return {
+      baselineCategory: category,
+      sourceTable,
+      sourceModule: 'Design Control',
+      sourceRecordId: context.record.id,
+      sourceRevision: null,
+      sourceStatus: records.some((record: any) => statusIsOpen(record.status)) ? 'OPEN' : 'CONTROLLED',
+      capturedAt,
+      immutableSnapshot: snapshot,
+      sourceChecksum: checksum,
+      immutableSnapshotId: `sha256:${checksum}`,
+      metadata: snapshot,
+    };
+  });
+
+  const projectCapturedAt = new Date().toISOString();
+  const projectSnapshot = {
+    rdProjectId: context.rdProject?.id ?? null,
+    rdProjectName: context.rdProject?.projectName ?? null,
+    designControlRecordId: context.record.id,
+    designControlTitle: context.record.title,
+    capturedAt: projectCapturedAt,
+  };
+  const projectChecksum = stableHash(projectSnapshot);
+
   return [
+    {
+      baselineCategory: 'rd_project',
+      sourceTable: 'rd_projects',
+      sourceModule: 'R&D Project',
+      sourceRecordId: context.rdProject?.id ?? context.record.rdProjectId,
+      sourceRevision: null,
+      sourceStatus: context.rdProject?.engineeringStatus ?? context.rdProject?.status ?? null,
+      capturedAt: projectCapturedAt,
+      immutableSnapshot: projectSnapshot,
+      sourceChecksum: projectChecksum,
+      immutableSnapshotId: `sha256:${projectChecksum}`,
+      metadata: projectSnapshot,
+    },
     ...stepItems,
+    ...registerItems,
     ...context.manufacturingEvidence.sources.map(sourceBaselineItem),
   ];
 }
@@ -272,7 +361,15 @@ function changedWarningsFromRelease(
   const previousByCategory = new Map(previousItems.map((item) => [item.baselineCategory, item]));
   return currentBaselineItems.flatMap((item) => {
     const previous = previousByCategory.get(item.baselineCategory);
-    if (!previous || previous.sourceChecksum === item.sourceChecksum) return [];
+    if (!previous) return `${item.baselineCategory}: baseline source record was removed or no longer resolves`;
+    if (previous.sourceChecksum === item.sourceChecksum) return [];
+    if (item.baselineCategory === 'released_bom') return 'BOM revision changed since Engineering Release';
+    if (item.baselineCategory === 'released_drawings') return 'Controlled drawing revision changed since Engineering Release';
+    if (item.baselineCategory === 'released_cad') return 'CAD revision changed since Engineering Release';
+    if (item.baselineCategory === 'verification') return 'Verification evidence changed since Engineering Release';
+    if (item.baselineCategory === 'validation') return 'Validation evidence changed since Engineering Release';
+    if (item.baselineCategory === 'design_step_12') return 'Engineering Release approval state changed since release';
+    if (item.baselineCategory === 'engineering_changes') return 'Engineering Change state changed since release';
     return `${item.baselineCategory}: Changed since release`;
   });
 }
@@ -321,7 +418,8 @@ async function loadContext(recordId: string, client: DbClient = db): Promise<Rel
 
 export function buildEngineeringReleasePreviewFromContext(
   context: ReleaseContext,
-  existingRelease: EngineeringRelease | null = null
+  existingRelease: EngineeringRelease | null = null,
+  releaseHistory: EngineeringRelease[] = []
 ): EngineeringReleasePreview {
   const byStep = new Map(context.steps.map((step) => [step.stepKey, step]));
   const step12 = byStep.get('12');
@@ -361,15 +459,31 @@ export function buildEngineeringReleasePreviewFromContext(
   const releasedBom = context.manufacturingEvidence.sources.find((source) => source.key === 'released_bom');
   const drawings = context.manufacturingEvidence.sources.filter((source) => source.key === 'released_drawings' && source.revision);
   const cad = context.manufacturingEvidence.sources.find((source) => source.key === 'released_cad');
+  const proposedReleaseRevision = proposedRevision(context.record, step12);
+  const proposedReleaseNumber = `ER-${context.record.rdProjectId ?? context.record.id}-${proposedReleaseRevision}`;
+  const history = releaseHistory.map((release) => ({
+    id: release.id,
+    releaseNumber: release.releaseNumber,
+    releaseRevision: release.releaseRevision,
+    releaseStatus: release.releaseStatus,
+    releasedBy: release.releasedBy,
+    releasedAt: release.releasedAt ? release.releasedAt.toISOString() : null,
+  }));
 
   return {
     ready: missingEvidence.length === 0,
     rdProjectId: context.record.rdProjectId,
     rdProjectName: context.rdProject?.projectName ?? null,
+    designControlRecordId: context.record.id,
     productName: productName(context.record, context.rdProject, byStep.get('1'), step12),
-    proposedReleaseRevision: proposedRevision(context.record, step12),
-    releaseNumber: `ER-${context.record.rdProjectId ?? context.record.id}-${proposedRevision(context.record, step12)}`,
+    proposedReleaseNumber,
+    proposedReleaseRevision,
     effectiveDate: new Date().toISOString().slice(0, 10),
+    workflowSummary: Object.entries(requiredStepTitles).map(([stepKey]) => ({
+      stepKey,
+      title: byStep.get(stepKey)?.title ?? `Step ${stepKey}`,
+      status: byStep.get(stepKey)?.status ?? 'missing',
+    })),
     requirementsSummary: `${context.requirements.length} persisted requirement record(s); step 3 is ${byStep.get('3')?.status ?? 'missing'}.`,
     riskSummary: blockingRisks.length > 0 ? `${blockingRisks.length} open high risk item(s)` : 'No open high risk items detected.',
     prototypeIdentifier: textValue(byStep.get('8')?.formData, ['Prototype serial number', 'Prototype identifier']),
@@ -378,12 +492,15 @@ export function buildEngineeringReleasePreviewFromContext(
     cadRevision: cad?.revision ?? null,
     verificationStatus: byStep.get('9')?.status ?? 'missing',
     validationStatus: byStep.get('10')?.status ?? 'missing',
-    designReviewStatus: byStep.get('11')?.status ?? 'missing',
+    finalDesignReviewStatus: byStep.get('11')?.status ?? 'missing',
+    engineeringChangeStatus: openChanges.length > 0 ? 'open_changes' : 'dispositioned',
     manufacturingEvidenceStatus: context.manufacturingEvidence.overallStatus,
-    approvers,
+    requiredApprovals: approvers,
+    completedApprovals: approvers.filter((approval) => approval.approved),
     missingEvidence,
     baselineItems,
     changedSinceReleaseWarnings: changedWarningsFromRelease(existingRelease, baselineItems),
+    releaseHistory: history,
     existingRelease: existingRelease
       ? {
         id: existingRelease.id,
@@ -401,18 +518,18 @@ export async function getEngineeringReleasePreview(recordId: string, client: DbC
   const context = await loadContext(recordId, client);
   if (!context) return null;
   const releaseRevision = proposedRevision(context.record, context.steps.find((step) => step.stepKey === '12'));
-  const [existingRelease] = context.record.rdProjectId
+  const releaseHistory = context.record.rdProjectId
     ? await client
       .select()
       .from(engineeringReleases)
       .where(and(
         eq(engineeringReleases.rdProjectId, context.record.rdProjectId),
-        eq(engineeringReleases.designControlRecordId, context.record.id),
-        eq(engineeringReleases.releaseRevision, releaseRevision)
+        eq(engineeringReleases.designControlRecordId, context.record.id)
       ))
-      .limit(1)
+      .orderBy(desc(engineeringReleases.releasedAt), desc(engineeringReleases.createdAt))
     : [];
-  return buildEngineeringReleasePreviewFromContext(context, existingRelease ?? null);
+  const existingRelease = releaseHistory.find((release) => release.releaseRevision === releaseRevision) ?? null;
+  return buildEngineeringReleasePreviewFromContext(context, existingRelease, releaseHistory);
 }
 
 export async function submitEngineeringRelease(input: {
@@ -446,7 +563,7 @@ export async function submitEngineeringRelease(input: {
       return {
         status: 'existing' as const,
         release: existingRelease,
-        preview: buildEngineeringReleasePreviewFromContext(context, existingRelease),
+        preview: buildEngineeringReleasePreviewFromContext(context, existingRelease, [existingRelease]),
       };
     }
 
@@ -463,7 +580,7 @@ export async function submitEngineeringRelease(input: {
     const [release] = await tx.insert(engineeringReleases).values({
       rdProjectId: context.record.rdProjectId,
       designControlRecordId: context.record.id,
-      releaseNumber: preview.releaseNumber,
+      releaseNumber: preview.proposedReleaseNumber,
       releaseRevision: preview.proposedReleaseRevision,
       releaseStatus: 'RELEASED',
       productName: preview.productName,
@@ -475,7 +592,7 @@ export async function submitEngineeringRelease(input: {
         manufacturingEvidence: context.manufacturingEvidence,
         baselineItems: preview.baselineItems,
       },
-      approvalSnapshot: { approvers: preview.approvers },
+      approvalSnapshot: { approvers: preview.requiredApprovals },
       metadata: {
         source: 'engineering-release-gate',
         nextAction: 'Create Manufactured Inventory Item',
@@ -506,13 +623,15 @@ export async function submitEngineeringRelease(input: {
         sourceRecordId: item.sourceRecordId,
         sourceRevision: item.sourceRevision,
         sourceStatus: item.sourceStatus,
+        capturedAt: new Date(item.capturedAt),
+        immutableSnapshot: item.immutableSnapshot,
         sourceChecksum: item.sourceChecksum,
         immutableSnapshotId: item.immutableSnapshotId,
         metadata: item.metadata,
       });
     }
 
-    for (const approval of preview.approvers) {
+    for (const approval of preview.requiredApprovals) {
       await tx.insert(engineeringReleaseApprovals).values({
         engineeringReleaseId: release.id,
         approvalRole: approval.role,

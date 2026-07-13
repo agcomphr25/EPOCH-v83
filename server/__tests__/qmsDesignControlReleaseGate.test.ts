@@ -5,6 +5,11 @@ vi.mock('../db', () => ({
 }));
 
 import { qmsDesignControlTestInternals } from '../src/routes/qmsDesignControl';
+import {
+  canonicalManufacturingEvidenceRequirements,
+  type DesignManufacturingEvidence,
+  type ManufacturingEvidenceSource,
+} from '../src/services/designManufacturingEvidenceService';
 
 const {
   buildReadinessFromSteps,
@@ -41,6 +46,50 @@ function completePersistedSteps() {
   return workflowSteps.map((step) => persistedStep(step.key));
 }
 
+function evidenceSource(key: string, overrides: Partial<ManufacturingEvidenceSource> = {}): ManufacturingEvidenceSource {
+  const requirement = canonicalManufacturingEvidenceRequirements.find((item) => item.key === key)
+    ?? canonicalManufacturingEvidenceRequirements[0];
+
+  return {
+    key: requirement.key,
+    label: requirement.label,
+    sourceModule: requirement.sourceModule,
+    managedBy: 'SOURCE_MODULE',
+    sourceAvailable: true,
+    status: 'RELEASED',
+    ready: true,
+    explanation: `${requirement.label} is released.`,
+    missingItems: [],
+    ...overrides,
+  };
+}
+
+function manufacturingEvidence(overrides: Record<string, Partial<ManufacturingEvidenceSource>> = {}): DesignManufacturingEvidence {
+  const sources = canonicalManufacturingEvidenceRequirements.map((requirement) => evidenceSource(requirement.key, overrides[requirement.key]));
+  const missingItems = sources.flatMap((source) => source.missingItems);
+  return {
+    rdProjectId: 'rd-1',
+    designControlRecordId: 'record-1',
+    overallStatus: missingItems.length === 0 ? 'RELEASED' : 'BLOCKED',
+    ready: missingItems.length === 0,
+    missingItems,
+    sources,
+  };
+}
+
+function blockedEvidenceFor(...keys: string[]) {
+  return manufacturingEvidence(Object.fromEntries(keys.map((key) => {
+    const requirement = canonicalManufacturingEvidenceRequirements.find((item) => item.key === key)!;
+    return [key, {
+      sourceAvailable: false,
+      status: 'NOT_CONFIGURED' as const,
+      ready: false,
+      explanation: `${requirement.label} source missing.`,
+      missingItems: [`${requirement.label}: source module is not configured for this R&D project`],
+    }];
+  })));
+}
+
 describe('QMS design control release gate validation', () => {
   it('reports empty Step 12 as not ready with canonical missing evidence', () => {
     const steps = [
@@ -48,11 +97,11 @@ describe('QMS design control release gate validation', () => {
       { stepKey: '12', status: 'incomplete', formData: {}, checklist: {}, approvals: {} },
     ];
 
-    const readiness = buildReadinessFromSteps(steps);
+    const readiness = buildReadinessFromSteps(steps, blockedEvidenceFor('released_cad'));
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate source status incomplete: released CAD (Design Outputs / CAD vault)',
+      'Step 12 Design Production Release Gate source incomplete: released CAD: source module is not configured for this R&D project',
     );
     expect(readiness.missingItems).toContain(
       'Step 12 Design Production Release Gate approval missing: engineering release approval',
@@ -68,13 +117,13 @@ describe('QMS design control release gate validation', () => {
     const readiness = buildReadinessFromSteps([
       ...workflowSteps.filter((step) => step.key !== '12').map((step) => persistedStep(step.key)),
       step12,
-    ]);
+    ], blockedEvidenceFor('released_drawings', 'approved_routing'));
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toEqual(
       expect.arrayContaining([
-        'Step 12 Design Production Release Gate source status incomplete: released drawings (Document Control / released drawings)',
-        'Step 12 Design Production Release Gate source status incomplete: approved routing (Routing module)',
+        'Step 12 Design Production Release Gate source incomplete: released drawings: source module is not configured for this R&D project',
+        'Step 12 Design Production Release Gate source incomplete: approved routing: source module is not configured for this R&D project',
       ]),
     );
   });
@@ -104,7 +153,7 @@ describe('QMS design control release gate validation', () => {
     const readiness = buildReadinessFromSteps([
       ...workflowSteps.filter((step) => step.key !== '12').map((step) => persistedStep(step.key)),
       step12,
-    ]);
+    ], manufacturingEvidence());
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
@@ -112,23 +161,23 @@ describe('QMS design control release gate validation', () => {
     );
   });
 
-  it('reports a missing Step 12 checklist item even when other checklist entries are complete', () => {
+  it('does not allow manual Step 12 checklist values to override source evidence', () => {
     const step12Payload = completePayloadForStep(stepByKey('12'));
     const step12 = persistedStep('12', {
       checklist: {
         ...step12Payload.checklist,
-        'material requirements approved': false,
+        'material requirements approved': true,
       },
     });
 
     const readiness = buildReadinessFromSteps([
       ...workflowSteps.filter((step) => step.key !== '12').map((step) => persistedStep(step.key)),
       step12,
-    ]);
+    ], blockedEvidenceFor('material_requirements_approved'));
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate source status incomplete: material requirements approved (Material / Inventory module)',
+      'Step 12 Design Production Release Gate source incomplete: material requirements approved: source module is not configured for this R&D project',
     );
   });
 
@@ -136,14 +185,14 @@ describe('QMS design control release gate validation', () => {
     const readiness = buildReadinessFromSteps([
       ...workflowSteps.filter((step) => step.key !== '12').map((step) => persistedStep(step.key)),
       { stepKey: '12', status: 'needs_approval', formData: {}, checklist: {}, approvals: {} },
-    ]);
+    ], blockedEvidenceFor('released_bom', 'approved_traveler_requirement'));
 
     expect(readiness.sourceOfTruthPrinciple).toMatch(/manufacturing modules own their own data/i);
     expect(readiness.manufacturingSourceStatuses).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           requirement: 'released BOM',
-          source: 'BOM module',
+          source: 'Draft Builder BOM / BOM module',
           ready: false,
         }),
         expect.objectContaining({
@@ -160,7 +209,7 @@ describe('QMS design control release gate validation', () => {
     const firstStep = steps.find((step) => step.stepKey === '1');
     if (firstStep) firstStep.status = 'needs_approval';
 
-    const readiness = buildReadinessFromSteps(steps);
+    const readiness = buildReadinessFromSteps(steps, manufacturingEvidence());
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
@@ -172,16 +221,16 @@ describe('QMS design control release gate validation', () => {
     const readiness = buildReadinessFromSteps([
       ...workflowSteps.filter((step) => step.key !== '12').map((step) => persistedStep(step.key)),
       { stepKey: '12', status: 'needs_approval', formData: {}, checklist: {}, approvals: {} },
-    ]);
+    ], blockedEvidenceFor('released_bom'));
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate source status incomplete: released BOM (BOM module)',
+      'Step 12 Design Production Release Gate source incomplete: released BOM: source module is not configured for this R&D project',
     );
   });
 
   it('allows submit-release readiness when all canonical requirements are satisfied', () => {
-    const readiness = buildReadinessFromSteps(completePersistedSteps());
+    const readiness = buildReadinessFromSteps(completePersistedSteps(), manufacturingEvidence());
 
     expect(readiness.ready).toBe(true);
     expect(readiness.missingItems).toEqual([]);

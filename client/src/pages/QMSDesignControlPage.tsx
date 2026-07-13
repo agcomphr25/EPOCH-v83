@@ -122,14 +122,63 @@ type DesignControlStepRecord = {
   metadata?: Record<string, unknown> | null;
 };
 
+type ManufacturingEvidenceStatus =
+  | 'NOT_CONFIGURED'
+  | 'NOT_STARTED'
+  | 'IN_PROGRESS'
+  | 'NEEDS_REVIEW'
+  | 'APPROVED'
+  | 'RELEASED'
+  | 'BLOCKED'
+  | 'NOT_APPLICABLE';
+
+type ManufacturingEvidenceSource = {
+  key: string;
+  label: string;
+  sourceModule: string;
+  managedBy: 'SOURCE_MODULE' | 'DESIGN_CONTROL';
+  sourceAvailable: boolean;
+  status: ManufacturingEvidenceStatus;
+  ready: boolean;
+  recordId?: string | null;
+  revision?: string | null;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  releasedBy?: string | null;
+  releasedAt?: string | null;
+  updatedAt?: string | null;
+  openUrl?: string | null;
+  explanation: string;
+  missingItems: string[];
+  applicability?: {
+    applicable: boolean;
+    justification?: string | null;
+    approvedBy?: string | null;
+    approvedRole?: string | null;
+    approvedAt?: string | null;
+    approved: boolean;
+  };
+};
+
+type DesignManufacturingEvidence = {
+  rdProjectId: string | null;
+  designControlRecordId: string;
+  overallStatus: ManufacturingEvidenceStatus;
+  ready: boolean;
+  missingItems: string[];
+  sources: ManufacturingEvidenceSource[];
+};
+
 type DesignControlReadiness = {
   ready: boolean;
   missingItems: string[];
   sourceOfTruthPrinciple?: string;
+  manufacturingEvidence?: DesignManufacturingEvidence | null;
   manufacturingSourceStatuses?: Array<{
     requirement: string;
     source: string;
     ready: boolean;
+    status?: ManufacturingEvidenceStatus;
   }>;
   steps: Array<{ key: string; title: string; status: string }>;
 };
@@ -434,6 +483,28 @@ const workflowStatusClasses: Record<WorkflowStatus, string> = {
   approved: 'border-emerald-300 bg-emerald-50 text-emerald-700',
 };
 
+const manufacturingEvidenceLabels: Record<ManufacturingEvidenceStatus, string> = {
+  NOT_CONFIGURED: 'Source not configured',
+  NOT_STARTED: 'Not started',
+  IN_PROGRESS: 'In progress',
+  NEEDS_REVIEW: 'Needs review',
+  APPROVED: 'Approved',
+  RELEASED: 'Released',
+  BLOCKED: 'Blocked',
+  NOT_APPLICABLE: 'Not applicable',
+};
+
+const manufacturingEvidenceClasses: Record<ManufacturingEvidenceStatus, string> = {
+  NOT_CONFIGURED: 'border-slate-300 bg-slate-50 text-slate-700',
+  NOT_STARTED: 'border-slate-300 bg-slate-50 text-slate-700',
+  IN_PROGRESS: 'border-blue-300 bg-blue-50 text-blue-700',
+  NEEDS_REVIEW: 'border-amber-300 bg-amber-50 text-amber-800',
+  APPROVED: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+  RELEASED: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+  BLOCKED: 'border-red-300 bg-red-50 text-red-700',
+  NOT_APPLICABLE: 'border-zinc-300 bg-zinc-50 text-zinc-700',
+};
+
 const lifecycleMetrics = [
   { label: 'Open design projects', value: designProjects.length, icon: Route },
   { label: 'Open risks', value: risks.length, icon: AlertTriangle },
@@ -720,25 +791,6 @@ const designWorkflowSteps: DesignWorkflowStep[] = [
   },
 ];
 
-const releaseGateSourceModules: Record<string, string> = {
-  'Released CAD': 'Design Outputs / CAD vault',
-  'Released drawings': 'Document Control / released drawings',
-  'Released BOM': 'BOM module',
-  'Approved routing': 'Routing module',
-  'Approved traveler requirement': 'Traveler module',
-  'Approved work instructions': 'Work Instructions module',
-  'Approved inspection plan': 'Inspection / QC module',
-  'Approved test procedure': 'Verification / Test module',
-  'Required certifications identified': 'Certifications / Quality module',
-  'Supplier requirements flowed down': 'Supplier Quality / Procurement module',
-  'Material requirements approved': 'Material / Inventory module',
-  'Tooling/fixtures ready': 'Manufacturing Engineering module',
-  'CNC programs approved, if applicable': 'CNC / Manufacturing module',
-  'Training/certifications complete': 'Training module',
-  'Packaging/shipping requirements defined': 'Shipping / Packaging module',
-  'Design revision baseline locked': 'Document Control / Revision baseline',
-};
-
 function createInitialWorkflowData() {
   return designWorkflowSteps.reduce<Record<string, WorkflowStepData>>((acc, step) => {
     acc[step.id] = {
@@ -952,10 +1004,16 @@ export default function QMSDesignControlPage() {
     return Math.round((complete / allRows.length) * 100);
   }, []);
 
-  const workflowStatuses = useMemo(
-    () => Object.fromEntries(designWorkflowSteps.map((step) => [step.id, getWorkflowStepStatus(step, workflowData)])) as Record<string, WorkflowStatus>,
-    [workflowData]
-  );
+  const workflowStatuses = useMemo(() => {
+    const serverStatusByStep = new Map((serverReadiness?.steps ?? []).map((step) => [step.key, step.status]));
+    return Object.fromEntries(designWorkflowSteps.map((step) => {
+      const serverStatus = serverStatusByStep.get(step.id);
+      if (serverStatus === 'approved') return [step.id, 'approved'];
+      if (serverStatus === 'needs_approval') return [step.id, 'needs_approval'];
+      if (serverStatus === 'blocked') return [step.id, 'blocked'];
+      return [step.id, getWorkflowStepStatus(step, workflowData)];
+    })) as Record<string, WorkflowStatus>;
+  }, [serverReadiness?.steps, workflowData]);
   const selectedWorkflowStep = designWorkflowSteps.find((step) => step.id === selectedWorkflowStepId) ?? designWorkflowSteps[0];
   const selectedWorkflowData = workflowData[selectedWorkflowStep.id];
   const approvedWorkflowCount = designWorkflowSteps.filter((step) => workflowStatuses[step.id] === 'approved').length;
@@ -968,6 +1026,7 @@ export default function QMSDesignControlPage() {
     return getMissingWorkflowItems(step, workflowData).map((item) => `Release Gate ${item}`);
   });
   const releaseReadinessItems = serverReadiness?.missingItems ?? localReleaseReadinessItems;
+  const manufacturingEvidence = serverReadiness?.manufacturingEvidence ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -1075,7 +1134,7 @@ export default function QMSDesignControlPage() {
         body: {
           status: workflowStatuses[step.id],
           formData: data.fields,
-          checklist: data.checklist,
+          checklist: step.id === '12' ? {} : data.checklist,
           approvals: data.approvals,
           metadata: {
             title: step.title,
@@ -1084,7 +1143,6 @@ export default function QMSDesignControlPage() {
             sourceOfTruthPrinciple: step.id === '12'
               ? 'R&D Project owns engineering process; Design Control orchestrates; manufacturing modules own their own data and Design Control evaluates their status.'
               : undefined,
-            manufacturingSourceModules: step.id === '12' ? releaseGateSourceModules : undefined,
           },
         },
       }) as { readiness: DesignControlReadiness };
@@ -1096,6 +1154,7 @@ export default function QMSDesignControlPage() {
         setServerReadiness({
           ready: false,
           missingItems: error.responseData.missingItems,
+          manufacturingEvidence: error.responseData.manufacturingEvidence ?? serverReadiness?.manufacturingEvidence ?? null,
           steps: serverReadiness?.steps ?? [],
         });
       }
@@ -1126,6 +1185,7 @@ export default function QMSDesignControlPage() {
         setServerReadiness({
           ready: false,
           missingItems: error.responseData.missingItems,
+          manufacturingEvidence: error.responseData.manufacturingEvidence ?? serverReadiness?.manufacturingEvidence ?? null,
           steps: serverReadiness?.steps ?? [],
         });
       }
@@ -1428,17 +1488,74 @@ export default function QMSDesignControlPage() {
                   </div>
                 )}
 
-                {selectedWorkflowStep.checklist && selectedWorkflowStep.checklist.length > 0 && (
+                {selectedWorkflowStep.id === '12' && (
                   <div className="space-y-3">
                     <div>
-                      <div className="text-sm font-medium">
-                        {selectedWorkflowStep.id === '12' ? 'Manufacturing source status' : 'Checklist'}
+                      <div className="text-sm font-medium">Manufacturing source status</div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Design Control evaluates these source-of-truth modules. It does not duplicate BOM, routing, traveler, work-instruction, inspection, training, or P2 manufacturing data.
+                      </p>
+                    </div>
+                    {manufacturingEvidence?.sources?.length ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {manufacturingEvidence.sources.map((source) => (
+                          <div key={source.key} className="rounded-md border bg-white p-3 text-sm">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-medium">{source.label}</div>
+                                <div className="mt-1 text-xs text-muted-foreground">{source.sourceModule}</div>
+                              </div>
+                              <Badge variant="outline" className={manufacturingEvidenceClasses[source.status]}>
+                                {manufacturingEvidenceLabels[source.status]}
+                              </Badge>
+                            </div>
+                            <p className="mt-3 text-xs text-muted-foreground">{source.explanation}</p>
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                              {source.revision && <Badge variant="secondary">Rev {source.revision}</Badge>}
+                              {source.approvedBy && <Badge variant="secondary">Approved by {source.approvedBy}</Badge>}
+                              {source.releasedBy && <Badge variant="secondary">Released by {source.releasedBy}</Badge>}
+                              {source.applicability?.applicable === false && (
+                                <Badge variant="secondary">
+                                  N/A {source.applicability.approved ? 'approved' : 'pending approval'}
+                                </Badge>
+                              )}
+                            </div>
+                            {source.missingItems.length > 0 && (
+                              <div className="mt-3 space-y-1">
+                                {source.missingItems.map((item) => (
+                                  <div key={item} className="flex items-start gap-2 text-xs text-amber-700">
+                                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                    <span>{item}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {source.openUrl && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="mt-3 h-8"
+                                onClick={() => window.location.assign(source.openUrl!)}
+                              >
+                                Open source
+                              </Button>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                      {selectedWorkflowStep.id === '12' && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Design Control evaluates these source-of-truth modules. It should not duplicate BOM, routing, traveler, work-instruction, inspection, or P2 manufacturing data.
-                        </p>
-                      )}
+                    ) : (
+                      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                        Source evidence will load after a persistent design control record is selected.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedWorkflowStep.id !== '12' && selectedWorkflowStep.checklist && selectedWorkflowStep.checklist.length > 0 && (
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-sm font-medium">Checklist</div>
                     </div>
                     <div className="grid gap-2 md:grid-cols-2">
                       {selectedWorkflowStep.checklist.map((item) => (
@@ -1447,14 +1564,7 @@ export default function QMSDesignControlPage() {
                             checked={selectedWorkflowData.checklist[item] === true}
                             onCheckedChange={(checked) => updateWorkflowChecklist(selectedWorkflowStep.id, item, checked === true)}
                           />
-                          <span>
-                            {item}
-                            {selectedWorkflowStep.id === '12' && releaseGateSourceModules[item] && (
-                              <span className="mt-1 block text-xs text-muted-foreground">
-                                Source: {releaseGateSourceModules[item]}
-                              </span>
-                            )}
-                          </span>
+                          <span>{item}</span>
                         </label>
                       ))}
                     </div>
@@ -1505,21 +1615,21 @@ export default function QMSDesignControlPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {serverReadiness?.manufacturingSourceStatuses && serverReadiness.manufacturingSourceStatuses.length > 0 && (
+                {manufacturingEvidence?.sources && manufacturingEvidence.sources.length > 0 && (
                   <div className="mb-4 space-y-3">
                     <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                       {serverReadiness.sourceOfTruthPrinciple
                         ?? 'R&D Project owns engineering process; Design Control orchestrates; manufacturing modules own their own data and Design Control evaluates their status.'}
                     </div>
                     <div className="grid gap-2 md:grid-cols-2">
-                      {serverReadiness.manufacturingSourceStatuses.map((status) => (
-                        <div key={`${status.source}-${status.requirement}`} className="flex items-start justify-between gap-3 rounded-md border bg-white px-3 py-2 text-sm">
+                      {manufacturingEvidence.sources.map((source) => (
+                        <div key={source.key} className="flex items-start justify-between gap-3 rounded-md border bg-white px-3 py-2 text-sm">
                           <div>
-                            <div className="font-medium">{status.requirement}</div>
-                            <div className="text-xs text-muted-foreground">{status.source}</div>
+                            <div className="font-medium">{source.label}</div>
+                            <div className="text-xs text-muted-foreground">{source.sourceModule}</div>
                           </div>
-                          <Badge variant="outline" className={status.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}>
-                            {status.ready ? 'Ready' : 'Needs source'}
+                          <Badge variant="outline" className={manufacturingEvidenceClasses[source.status]}>
+                            {manufacturingEvidenceLabels[source.status]}
                           </Badge>
                         </div>
                       ))}

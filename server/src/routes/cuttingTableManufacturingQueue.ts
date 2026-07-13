@@ -121,6 +121,35 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
 }
 
+function parseStoredMaterialSourceValues(materialDetails: string | null): any[] {
+  return parseStoredMaterialSources(materialDetails, 0)
+    .map((source) => {
+      const fabricInventoryId = String(source.fabricInventoryId || '').trim();
+      const quantityUsed = Number(source.quantityUsed);
+      return {
+        fabricInventoryId: isUuid(fabricInventoryId) ? fabricInventoryId : null,
+        fabricType: source.fabricType || null,
+        lotNumber: source.lotNumber || null,
+        batchNumber: source.batchNumber || null,
+        rollNumber: source.rollNumber || null,
+        supplierPartNumber: source.supplierPartNumber || null,
+        internalControlNumber: source.internalControlNumber || null,
+        expirationDate: source.expirationDate || null,
+        quantityUsed: Number.isFinite(quantityUsed) && quantityUsed > 0 ? Math.max(1, Math.round(quantityUsed)) : 1,
+        isPrimary: source.isPrimary ?? false,
+      };
+    })
+    .filter((source) => Boolean(
+      source.fabricInventoryId
+      || source.fabricType
+      || source.lotNumber
+      || source.batchNumber
+      || source.rollNumber
+      || source.supplierPartNumber
+      || source.internalControlNumber
+    ));
+}
+
 function stringifyQueueNotes(notes: Record<string, any>): string {
   const { rawNotes, ...serializableNotes } = notes;
   return JSON.stringify(serializableNotes);
@@ -241,12 +270,54 @@ async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
 
     const partNumber = row.item.agPartNumber || 'UNK';
     const barcodePrefix = `PKT-${partNumber}-${row.queue.id}-%`;
-    const [{ existingCount }] = await db
-      .select({ existingCount: count() })
+    const existingPackets = await db
+      .select({ id: cuttingBuiltPackets.id })
       .from(cuttingBuiltPackets)
       .where(like(cuttingBuiltPackets.barcode, barcodePrefix));
 
+    const existingCount = existingPackets.length;
     const missingCount = completedQuantity - existingCount;
+    const storedSourceValues = parseStoredMaterialSourceValues(row.queue.materialDetails);
+
+    if (storedSourceValues.length > 0 && existingPackets.length > 0) {
+      const sourceRows = await db
+        .select({ builtPacketId: cuttingBuiltPacketFabricSources.builtPacketId })
+        .from(cuttingBuiltPacketFabricSources)
+        .where(inArray(cuttingBuiltPacketFabricSources.builtPacketId, existingPackets.map((packet) => packet.id)));
+      const packetIdsWithSources = new Set(sourceRows.map((source) => source.builtPacketId));
+
+      for (const packet of existingPackets) {
+        if (packetIdsWithSources.has(packet.id)) continue;
+
+        await db.transaction(async (tx) => {
+          await tx
+            .select({ id: cuttingBuiltPackets.id })
+            .from(cuttingBuiltPackets)
+            .where(eq(cuttingBuiltPackets.id, packet.id))
+            .for('update');
+
+          const [existingSource] = await tx
+            .select({ id: cuttingBuiltPacketFabricSources.id })
+            .from(cuttingBuiltPacketFabricSources)
+            .where(eq(cuttingBuiltPacketFabricSources.builtPacketId, packet.id))
+            .limit(1);
+          if (existingSource) return;
+
+          await tx.insert(cuttingBuiltPacketFabricSources).values(
+            storedSourceValues.map((source) => ({ ...source, builtPacketId: packet.id }))
+          );
+          await tx
+            .update(cuttingBuiltPackets)
+            .set({
+              fabricSourceCount: storedSourceValues.length,
+              isMixedFabric: storedSourceValues.length > 1,
+              updatedAt: new Date(),
+            })
+            .where(eq(cuttingBuiltPackets.id, packet.id));
+        });
+      }
+    }
+
     if (missingCount <= 0) continue;
 
     let productCategory = await db.query.cuttingProductCategories.findFirst({
@@ -274,20 +345,29 @@ async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
       const packetNumber = existingCount + i + 1;
       const barcode = `PKT-${partNumber}-${row.queue.id}-${packetNumber}-${buildDate.getTime()}-${i}`;
 
-      await db
-        .insert(cuttingBuiltPackets)
-        .values({
-          productCategoryId,
-          barcode,
-          packetNumber,
-          buildDate,
-          status: 'AVAILABLE',
-          isMixedFabric: false,
-          fabricSourceCount: 0,
-          notes: row.queue.completionNotes || 'Backfilled from completed cutting queue row',
-          createdBy,
-        })
-        .onConflictDoNothing();
+      await db.transaction(async (tx) => {
+        const [insertedPacket] = await tx
+          .insert(cuttingBuiltPackets)
+          .values({
+            productCategoryId,
+            barcode,
+            packetNumber,
+            buildDate,
+            status: 'AVAILABLE',
+            isMixedFabric: storedSourceValues.length > 1,
+            fabricSourceCount: storedSourceValues.length,
+            notes: row.queue.completionNotes || 'Backfilled from completed cutting queue row',
+            createdBy,
+          })
+          .onConflictDoNothing()
+          .returning({ id: cuttingBuiltPackets.id });
+
+        if (insertedPacket && storedSourceValues.length > 0) {
+          await tx.insert(cuttingBuiltPacketFabricSources).values(
+            storedSourceValues.map((source) => ({ ...source, builtPacketId: insertedPacket.id }))
+          );
+        }
+      });
     }
   }
 }

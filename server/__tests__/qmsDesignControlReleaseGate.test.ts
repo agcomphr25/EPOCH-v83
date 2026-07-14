@@ -101,10 +101,10 @@ describe('QMS design control release gate validation', () => {
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate source incomplete: released CAD: source module is not configured for this R&D project',
+      'Step 12 Engineering Release Gate source incomplete: released CAD: source module is not configured for this R&D project',
     );
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate approval missing: engineering release approval',
+      'Step 12 Engineering Release Gate approval missing: engineering release approval',
     );
   });
 
@@ -122,8 +122,8 @@ describe('QMS design control release gate validation', () => {
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toEqual(
       expect.arrayContaining([
-        'Step 12 Design Production Release Gate source incomplete: released drawings: source module is not configured for this R&D project',
-        'Step 12 Design Production Release Gate source incomplete: approved routing: source module is not configured for this R&D project',
+        'Step 12 Engineering Release Gate source incomplete: released drawings: source module is not configured for this R&D project',
+        'Step 12 Engineering Release Gate source incomplete: approved routing: source module is not configured for this R&D project',
       ]),
     );
   });
@@ -157,7 +157,7 @@ describe('QMS design control release gate validation', () => {
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate approval missing: quality release approval',
+      'Step 12 Engineering Release Gate approval missing: quality release approval',
     );
   });
 
@@ -177,7 +177,7 @@ describe('QMS design control release gate validation', () => {
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate source incomplete: material requirements approved: source module is not configured for this R&D project',
+      'Step 12 Engineering Release Gate source incomplete: material requirements approved: source module is not configured for this R&D project',
     );
   });
 
@@ -213,7 +213,7 @@ describe('QMS design control release gate validation', () => {
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 1 Design Project Intake: approval required before Design Production Release Gate',
+      'Step 1 Design Project Intake: approval required before Engineering Release Gate',
     );
   });
 
@@ -225,7 +225,7 @@ describe('QMS design control release gate validation', () => {
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Design Production Release Gate source incomplete: released BOM: source module is not configured for this R&D project',
+      'Step 12 Engineering Release Gate source incomplete: released BOM: source module is not configured for this R&D project',
     );
   });
 

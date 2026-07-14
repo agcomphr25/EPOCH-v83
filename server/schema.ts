@@ -16444,6 +16444,7 @@ export const rdProjects = pgTable('rd_projects', {
   projectName: text('project_name').notNull(),
   owner: text('owner').notNull().default(''),
   status: text('status').notNull().default('draft'),
+  engineeringStatus: text('engineering_status').notNull().default('DRAFT'),
   signoffRequired: boolean('signoff_required').notNull().default(false),
   signoffUserId: text('signoff_user_id').notNull().default(''),
   draftTabIds: jsonb('draft_tab_ids').notNull().$type<string[]>().default(sql`'[]'::jsonb`),
@@ -17537,6 +17538,86 @@ export const designControlRequirementApplicability = pgTable('design_control_req
   rdProjectIdx: index('design_control_req_app_rd_project_id_idx').on(table.rdProjectId),
   requirementKeyIdx: index('design_control_req_app_requirement_key_idx').on(table.requirementKey),
   applicableIdx: index('design_control_req_app_applicable_idx').on(table.applicable),
+}));
+
+export const engineeringReleases = pgTable('engineering_releases', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  rdProjectId: text('rd_project_id').notNull().references(() => rdProjects.id, { onDelete: 'restrict' }),
+  designControlRecordId: uuid('design_control_record_id').notNull().references(() => designControlRecords.id, { onDelete: 'restrict' }),
+  releaseNumber: text('release_number').notNull(),
+  releaseRevision: text('release_revision').notNull(),
+  releaseStatus: text('release_status').notNull().default('RELEASED'),
+  productName: text('product_name').notNull(),
+  effectiveDate: date('effective_date'),
+  releasedBy: text('released_by'),
+  releasedAt: timestamp('released_at'),
+  readinessSnapshot: jsonb('readiness_snapshot').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  sourceEvidenceSnapshot: jsonb('source_evidence_snapshot').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  approvalSnapshot: jsonb('approval_snapshot').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordRevisionUnique: uniqueIndex('engineering_releases_record_revision_unique').on(table.rdProjectId, table.designControlRecordId, table.releaseRevision),
+  rdProjectIdx: index('engineering_releases_rd_project_id_idx').on(table.rdProjectId),
+  designControlRecordIdx: index('engineering_releases_design_control_record_id_idx').on(table.designControlRecordId),
+  releaseStatusIdx: index('engineering_releases_release_status_idx').on(table.releaseStatus),
+}));
+
+export const engineeringReleaseBaselines = pgTable('engineering_release_baselines', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  engineeringReleaseId: uuid('engineering_release_id').notNull().references(() => engineeringReleases.id, { onDelete: 'cascade' }),
+  rdProjectId: text('rd_project_id').notNull().references(() => rdProjects.id, { onDelete: 'restrict' }),
+  designControlRecordId: uuid('design_control_record_id').notNull().references(() => designControlRecords.id, { onDelete: 'restrict' }),
+  baselineStatus: text('baseline_status').notNull().default('LOCKED'),
+  baselineRevision: text('baseline_revision').notNull(),
+  lockedAt: timestamp('locked_at'),
+  lockedBy: text('locked_by'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  releaseUnique: uniqueIndex('engineering_release_baselines_release_unique').on(table.engineeringReleaseId),
+  rdProjectIdx: index('engineering_release_baselines_rd_project_id_idx').on(table.rdProjectId),
+  designControlRecordIdx: index('engineering_release_baselines_design_control_record_id_idx').on(table.designControlRecordId),
+}));
+
+export const engineeringReleaseBaselineItems = pgTable('engineering_release_baseline_items', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  engineeringReleaseId: uuid('engineering_release_id').notNull().references(() => engineeringReleases.id, { onDelete: 'cascade' }),
+  baselineId: uuid('baseline_id').notNull().references(() => engineeringReleaseBaselines.id, { onDelete: 'cascade' }),
+  baselineCategory: text('baseline_category').notNull(),
+  sourceTable: text('source_table'),
+  sourceModule: text('source_module'),
+  sourceRecordId: text('source_record_id'),
+  sourceRevision: text('source_revision'),
+  sourceStatus: text('source_status'),
+  capturedAt: timestamp('captured_at').defaultNow(),
+  immutableSnapshot: jsonb('immutable_snapshot').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  sourceChecksum: text('source_checksum'),
+  immutableSnapshotId: text('immutable_snapshot_id'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  releaseIdx: index('engineering_release_baseline_items_release_id_idx').on(table.engineeringReleaseId),
+  baselineIdx: index('engineering_release_baseline_items_baseline_id_idx').on(table.baselineId),
+  sourceIdx: index('engineering_release_baseline_items_source_idx').on(table.sourceTable, table.sourceRecordId),
+}));
+
+export const engineeringReleaseApprovals = pgTable('engineering_release_approvals', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  engineeringReleaseId: uuid('engineering_release_id').notNull().references(() => engineeringReleases.id, { onDelete: 'cascade' }),
+  approvalRole: text('approval_role').notNull(),
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at'),
+  approvalStatus: text('approval_status').notNull().default('APPROVED'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  releaseRoleUnique: uniqueIndex('engineering_release_approvals_release_role_unique').on(table.engineeringReleaseId, table.approvalRole),
+  releaseIdx: index('engineering_release_approvals_release_id_idx').on(table.engineeringReleaseId),
 }));
 
 export const insertDesignControlRecordSchema = createInsertSchema(designControlRecords).omit({

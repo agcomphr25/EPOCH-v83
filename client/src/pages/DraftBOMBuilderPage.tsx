@@ -4659,60 +4659,67 @@ function PartsRequestWorkspace({
                 Add draft part lines, match inventory items, then stage selected vendor lines for RFQ or Vendor PO creation.
               </p>
             </div>
-            <div className="grid gap-2 lg:grid-cols-[minmax(280px,520px)_auto]">
-              <Input
-                value={description}
-                onChange={(event) => onDescriptionChange(event.target.value)}
-                placeholder="Part description"
-                disabled={!isEditMode}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    onCreateLine(matches[0]);
-                  }
-                }}
-              />
-              <Button type="button" onClick={() => onCreateLine(matches[0])} disabled={!isEditMode || !typedDescription}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add part line
-              </Button>
-            </div>
+            <Accordion type="single" collapsible className="rounded-md border border-slate-200 px-3">
+              <AccordionItem value="part-search" className="border-0">
+                <AccordionTrigger className="py-3 text-sm font-semibold hover:no-underline">Search and add part</AccordionTrigger>
+                <AccordionContent className="space-y-3 pb-3">
+                  <div className="grid gap-2 lg:grid-cols-[minmax(280px,520px)_auto]">
+                    <Input
+                      value={description}
+                      onChange={(event) => onDescriptionChange(event.target.value)}
+                      placeholder="Part description"
+                      disabled={!isEditMode}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          onCreateLine(matches[0]);
+                        }
+                      }}
+                    />
+                    <Button type="button" onClick={() => onCreateLine(matches[0])} disabled={!isEditMode || !typedDescription}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add part line
+                    </Button>
+                  </div>
 
-            {typedDescription.length >= 2 ? (
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                {matches.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Inventory matches</p>
-                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                      {matches.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className="rounded-md border border-slate-200 bg-white p-3 text-left text-sm hover:border-blue-300 hover:bg-blue-50"
-                          onClick={() => onCreateLine(item)}
-                          disabled={!isEditMode}
-                        >
-                          <span className="block font-medium text-slate-950">{item.name || item.description || 'Inventory item'}</span>
-                          <span className="mt-1 block text-xs text-slate-500">
-                            {[item.agPartNumber, item.source || item.supplier].filter(Boolean).join(' - ') || `Item #${item.id}`}
-                          </span>
-                        </button>
-                      ))}
+                  {typedDescription.length >= 2 ? (
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      {matches.length > 0 ? (
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Inventory matches</p>
+                          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                            {matches.map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                className="rounded-md border border-slate-200 bg-white p-3 text-left text-sm hover:border-blue-300 hover:bg-blue-50"
+                                onClick={() => onCreateLine(item)}
+                                disabled={!isEditMode}
+                              >
+                                <span className="block font-medium text-slate-950">{item.name || item.description || 'Inventory item'}</span>
+                                <span className="mt-1 block text-xs text-slate-500">
+                                  {[item.agPartNumber, item.source || item.supplier].filter(Boolean).join(' - ') || `Item #${item.id}`}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                          <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()} disabled={!isEditMode}>
+                            Create draft part instead
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-sm text-slate-600">No inventory match found.</span>
+                          <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()} disabled={!isEditMode}>
+                            Create draft part
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()} disabled={!isEditMode}>
-                      Create draft part instead
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm text-slate-600">No inventory match found.</span>
-                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()} disabled={!isEditMode}>
-                      Create draft part
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ) : null}
+                  ) : null}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

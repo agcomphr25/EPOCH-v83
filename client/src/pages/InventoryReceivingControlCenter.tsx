@@ -212,6 +212,7 @@ interface ReceiptDocument {
   id: number;
   receiptId: number;
   receivedUnitId?: number;
+  mediaId?: string;
   docType?: string;
   filename?: string;
   storagePath?: string;
@@ -3405,9 +3406,11 @@ function DocumentsTab({ receipt, onUpdate }: { receipt: Receipt; onUpdate: (r: R
                 <span className="font-medium truncate max-w-[120px]">{doc.filename ?? 'Document'}</span>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {doc.storagePath && (
+                {(doc.mediaId || doc.storagePath) && (
                   <a
-                    href={`/api/media/download?path=${encodeURIComponent(doc.storagePath)}`}
+                    href={doc.mediaId
+                      ? `/api/media/${doc.mediaId}/download`
+                      : `/api/media/download?path=${encodeURIComponent(doc.storagePath!)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center h-6 w-6 rounded hover:bg-gray-100 justify-center text-blue-500"

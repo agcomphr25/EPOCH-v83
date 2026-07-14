@@ -41,7 +41,7 @@ import { z } from 'zod';
 import multer from 'multer';
 import { generateBarcodeImage, generateReceivingUnitBarcodeValue } from '../utils/barcodeGenerator';
 import { requireRole } from '../../middleware/auth';
-import { getStorageErrorResponse } from '../services/fileStorageProvider';
+import { getFileStorageProvider, getStorageErrorResponse } from '../services/fileStorageProvider';
 import { createInventoryEvent } from '../services/inventoryEventService';
 import { recordInventoryLedgerEntry } from '../services/inventoryTransactionLedgerService';
 import { ensureInventoryItemForReceipt } from '../services/ensureInventoryItemForReceipt';
@@ -82,13 +82,37 @@ function sanitizeUploadFilename(filename: string): string {
   return `${Date.now()}-${randomUUID()}-${baseName}${ext}`;
 }
 
-async function saveReceivingMediaFile(file: Express.Multer.File): Promise<string> {
+async function saveReceivingMediaFileLocally(file: Express.Multer.File): Promise<string> {
   const storedFilename = sanitizeUploadFilename(file.originalname);
   const storagePath = path.posix.join('uploads', 'media-library', 'receiving', storedFilename);
   const absoluteDir = path.join(process.cwd(), RECEIVING_MEDIA_STORAGE_DIR);
   await fs.mkdir(absoluteDir, { recursive: true });
   await fs.writeFile(path.join(absoluteDir, storedFilename), file.buffer);
   return storagePath;
+}
+
+async function saveReceivingMediaFile(file: Express.Multer.File, receiptId: number): Promise<string> {
+  try {
+    return await getFileStorageProvider().uploadBuffer({
+      buffer: file.buffer,
+      fileName: file.originalname,
+      contentType: file.mimetype || 'application/octet-stream',
+      scope: 'receiving',
+      entityId: String(receiptId),
+    });
+  } catch (error) {
+    const { reason, message } = getStorageErrorResponse(error);
+    if (process.env.NODE_ENV === 'production') {
+      throw error;
+    }
+    console.warn('Receiving document durable upload unavailable outside production; using local fallback', {
+      receiptId,
+      filename: file.originalname,
+      reason,
+      message,
+    });
+    return saveReceivingMediaFileLocally(file);
+  }
 }
 
 async function getOrCreateReceivingMediaFolder(user: AuthUser, displayName: string): Promise<string | null> {
@@ -1463,7 +1487,7 @@ router.post('/:id/documents', requireReceivingAccess, uploadReceiptDocument, asy
       mimeType = req.file.mimetype;
       fileSize = req.file.size;
 
-      storagePath = await saveReceivingMediaFile(req.file);
+      storagePath = await saveReceivingMediaFile(req.file, receiptId);
       const receivingFolderId = await getOrCreateReceivingMediaFolder(user, displayName);
 
       // Create media_library record for cross-system traceability

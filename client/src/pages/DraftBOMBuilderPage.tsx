@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -72,6 +73,9 @@ type BomLine = PrivateerDraftBomLine & {
   childDraftBoms?: DraftPartBom[];
   actualCost?: number | '';
   service?: boolean;
+  vendorId?: number | null;
+  partsRequestId?: number | null;
+  partsRequestStatus?: string | null;
 };
 type DraftBomSource = 'draft-part' | 'inventory-item' | 'new-part';
 type DraftBomComponent = {
@@ -249,6 +253,19 @@ type RobustBomAcceptResult = {
 type InventoryDepartmentOption = {
   id: number;
   name: string;
+};
+type VendorOption = {
+  id: number;
+  name: string;
+  isActive?: boolean | null;
+};
+type VendorListResponse = {
+  data?: VendorOption[];
+};
+type SessionUser = {
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
 };
 
 type DepartmentOption = {
@@ -470,7 +487,7 @@ function newNrcRow(): NrcCostRow {
 function newLine(): BomLine {
   return {
     id: crypto.randomUUID(),
-    include: true,
+    include: false,
     action: 'Order / Quote',
     category: 'Hardware/Misc.',
     supplier: '',
@@ -638,7 +655,7 @@ function normalizeBomLine(line: Partial<BomLine> | null | undefined): BomLine {
     ...safeLine,
     id,
     status,
-    include: safeLine.include ?? baseLine.include,
+    include: false,
     qtyNeeded: safeLine.qtyNeeded ?? baseLine.qtyNeeded,
     unitCost: safeLine.unitCost ?? baseLine.unitCost,
     isDraftPart: safeLine.isDraftPart ?? !safeLine.inventoryItemId,
@@ -684,6 +701,7 @@ async function createInventoryItemFromDraftLine(
       name: lineDescription(line),
       description: lineDescription(line),
       supplier: line.supplier || null,
+      vendorId: line.vendorId ?? null,
       supplierPartNumber: line.supplierItemId || null,
       manufacturer: line.manufacturer || null,
       costPer: asNumber(line.actualCost) || asNumber(line.unitCost) || null,
@@ -1932,6 +1950,7 @@ export default function DraftBOMBuilderPage() {
   const [newLaborDepartmentName, setNewLaborDepartmentName] = useState('');
   const [wizardSeedLineId, setWizardSeedLineId] = useState<string | null>(null);
   const [isFinalizingParts, setIsFinalizingParts] = useState(false);
+  const [isFinalizeForRequestOpen, setIsFinalizeForRequestOpen] = useState(false);
   const [hasLoadedSharedDrafts, setHasLoadedSharedDrafts] = useState(false);
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
@@ -1951,6 +1970,20 @@ export default function DraftBOMBuilderPage() {
   const { data: inventoryDepartments = [] } = useQuery<InventoryDepartmentOption[]>({
     queryKey: ['/api/inventory/departments'],
   });
+
+  const { data: vendorResponse } = useQuery<VendorListResponse>({
+    queryKey: ['/api/vendors', 'draft-builder'],
+    queryFn: () => apiRequest('/api/vendors?pageSize=10000&approved=any&sort=name:asc'),
+  });
+
+  const { data: sessionUser } = useQuery<SessionUser | null>({
+    queryKey: ['/api/auth/session'],
+  });
+
+  const vendorOptions = useMemo(
+    () => (vendorResponse?.data ?? []).filter((vendor) => vendor.isActive !== false).sort((a, b) => a.name.localeCompare(b.name)),
+    [vendorResponse],
+  );
 
   const bomDepartmentOptions = useMemo<DepartmentOption[]>(() => {
     if (inventoryDepartments.length === 0) return fallbackBomDepartmentOptions;
@@ -2004,6 +2037,7 @@ export default function DraftBOMBuilderPage() {
   const draftPoLines = draft.lines;
   const partsRequestLines = draft.partsRequestLines ?? [];
   const selectedLines = useMemo(() => partsRequestLines.filter((line) => line.include), [partsRequestLines]);
+  const selectedUnfinalizedLines = useMemo(() => selectedLines.filter((line) => !line.finalized), [selectedLines]);
   const laborDepartments = useMemo(() => {
     const customDepartments = draft.customLaborDepartments ?? [];
     return [
@@ -2408,7 +2442,7 @@ export default function DraftBOMBuilderPage() {
           ? ({
               ...newLine(),
               id: rootLineId,
-              include: true,
+              include: false,
               action: 'Hold',
               category: 'Hardware/Misc.',
               agPartNumber: part.partNumber,
@@ -2976,7 +3010,30 @@ export default function DraftBOMBuilderPage() {
     setActiveWorkspaceTab('po-draft');
   }
 
-  async function markSelectedFinalized() {
+  function startPartsRequestWorkflow() {
+    if (selectedLines.length === 0) {
+      toast({
+        title: 'Select parts first',
+        description: 'Check the finalized items that need Parts Requests, or select draft items to finalize and request together.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (selectedLines.every((line) => line.partsRequestId)) {
+      toast({
+        title: 'Parts Requests already created',
+        description: 'Every selected line is already linked to a Parts Request.',
+      });
+      return;
+    }
+    if (selectedUnfinalizedLines.length > 0) {
+      setIsFinalizeForRequestOpen(true);
+      return;
+    }
+    void markSelectedFinalized(true);
+  }
+
+  async function markSelectedFinalized(createPartsRequests = false) {
     if (!canEditActiveDraft) {
       toast({
         title: 'View-only draft',
@@ -3000,6 +3057,8 @@ export default function DraftBOMBuilderPage() {
     const createdByLineId = new Map<string, DraftFinalizedInventoryItem>();
     const selectedLineIds = new Set(selectedDraftLines.map((line) => line.id));
     const acceptedDraftBoms = new Map<string, DraftPartBom>();
+    const createdRequestsByLineId = new Map<string, number>();
+    const requestErrors: string[] = [];
     let draftBomAcceptError: string | null = null;
 
     setIsFinalizingParts(true);
@@ -3025,6 +3084,25 @@ export default function DraftBOMBuilderPage() {
         }
       }
 
+      const finalizedByLineId = new Map<string, BomLine>();
+      for (const line of selectedDraftLines) {
+        const createdItem = createdByLineId.get(line.id);
+        if (draftLineNeedsInventoryItem(line) && !createdItem) continue;
+        finalizedByLineId.set(line.id, {
+          ...line,
+          finalized: true,
+          include: false,
+          action: 'Do Not Order',
+          agPartNumber: createdItem?.agPartNumber ?? line.agPartNumber,
+          inventoryItemId: createdItem?.id ?? line.inventoryItemId ?? null,
+          inventoryItemName: createdItem?.name ?? line.inventoryItemName ?? lineDescription(line),
+          isDraftPart: false,
+          note: createdItem
+            ? `Finalized to inventory item #${createdItem.id} (${createdItem.agPartNumber})`
+            : line.note,
+        });
+      }
+
       setDraft((current) => ({
         ...current,
         savedDraftBoms: (current.savedDraftBoms ?? []).map((bom) =>
@@ -3040,23 +3118,8 @@ export default function DraftBOMBuilderPage() {
           const childDraftBoms = (line.childDraftBoms ?? []).map((bom) =>
             acceptedDraftBoms.get(bom.id) ?? applyFinalizedInventoryToDraftBom(bom, createdByLineId),
           );
-          if (!line.include) return { ...line, childDraftBoms };
-          const createdItem = createdByLineId.get(line.id);
-          if (draftLineNeedsInventoryItem(line) && !createdItem) return { ...line, childDraftBoms };
-          return {
-            ...line,
-            childDraftBoms,
-            finalized: true,
-            include: false,
-            action: 'Do Not Order',
-            agPartNumber: createdItem?.agPartNumber ?? line.agPartNumber,
-            inventoryItemId: createdItem?.id ?? line.inventoryItemId ?? null,
-            inventoryItemName: createdItem?.name ?? line.inventoryItemName ?? lineDescription(line),
-            isDraftPart: false,
-            note: createdItem
-              ? `Finalized to inventory item #${createdItem.id} (${createdItem.agPartNumber})`
-              : line.note,
-          };
+          const finalizedLine = finalizedByLineId.get(line.id);
+          return finalizedLine ? { ...finalizedLine, childDraftBoms } : { ...line, childDraftBoms };
         }),
       }));
 
@@ -3064,15 +3127,77 @@ export default function DraftBOMBuilderPage() {
         await queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
       }
 
+      if (createPartsRequests) {
+        const requestedBy = sessionUser?.username
+          || [sessionUser?.firstName, sessionUser?.lastName].filter(Boolean).join(' ').trim()
+          || 'Draft Builder';
+        for (const line of finalizedByLineId.values()) {
+          if (line.partsRequestId) continue;
+          if (!line.agPartNumber) {
+            requestErrors.push(`${lineDescription(line)} does not have an AG part number.`);
+            continue;
+          }
+          const matchedVendor = vendorOptions.find((vendor) => vendor.name.trim().toLowerCase() === (line.supplier || '').trim().toLowerCase());
+          try {
+            const request = await apiRequest('/api/inventory/parts-requests', {
+              method: 'POST',
+              body: {
+                agPartNumber: line.agPartNumber,
+                partNumber: line.agPartNumber,
+                partName: lineDescription(line),
+                requestedBy,
+                productionLine: draft.projectType === 'P2_PROJECT' ? 'P2' : null,
+                projectId: draft.projectType === 'P2_PROJECT' ? draft.projectId : null,
+                department: line.firstDepartment || line.department || null,
+                quantity: Math.max(1, Math.ceil(asNumber(line.qtyNeeded))),
+                urgency: 'MEDIUM',
+                supplier: line.supplier || null,
+                vendorId: line.vendorId ?? matchedVendor?.id ?? null,
+                vendorPartNumber: line.supplierItemId || null,
+                estimatedCost: asNumber(line.actualCost) || asNumber(line.unitCost) || null,
+                reason: `Created from Draft Builder: ${draft.name}`,
+              },
+            });
+            createdRequestsByLineId.set(line.id, request.id);
+          } catch (error) {
+            requestErrors.push(`${lineDescription(line)}: ${error instanceof Error ? error.message : 'request creation failed'}`);
+          }
+        }
+
+        if (createdRequestsByLineId.size > 0) {
+          setDraft((current) => ({
+            ...current,
+            partsRequestLines: (current.partsRequestLines ?? []).map((line) => {
+              const partsRequestId = createdRequestsByLineId.get(line.id);
+              return partsRequestId
+                ? { ...line, include: false, partsRequestId, partsRequestStatus: 'PENDING' }
+                : line;
+            }),
+          }));
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] }),
+            queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] }),
+          ]);
+        }
+      }
+
       toast({
-        title: 'Inventory finalization complete',
+        title: createPartsRequests ? 'Parts request workflow complete' : 'Inventory finalization complete',
         description: [
           createdByLineId.size > 0
             ? `${selectedDraftLines.length} line(s) finalized, ${createdByLineId.size} new inventory item(s) created with AG part numbers.`
             : `${selectedDraftLines.length} line(s) finalized.`,
           acceptedDraftBoms.size > 0 ? `${acceptedDraftBoms.size} draft BOM(s) saved to Robust BOM.` : '',
+          createPartsRequests ? `${createdRequestsByLineId.size} parts request(s) created.` : '',
         ].filter(Boolean).join(' '),
       });
+      if (requestErrors.length > 0) {
+        toast({
+          title: 'Some parts requests were not created',
+          description: requestErrors.join(' '),
+          variant: 'destructive',
+        });
+      }
       if (draftBomAcceptError) {
         toast({
           title: 'Draft BOM needs inventory matches',
@@ -4140,8 +4265,10 @@ export default function DraftBOMBuilderPage() {
                   onUpdateNumberLine={(id, field, value) => updatePartsRequestLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
                   onImportCsv={importPartsRequestCsv}
                   onCreateVendorPoDraft={createVendorPoHandoff}
+                  onCreatePartsRequests={startPartsRequestWorkflow}
                   onFinalizeSelected={markSelectedFinalized}
                   onDeleteLine={deletePartsRequestLine}
+                  vendors={vendorOptions}
                   isEditMode={effectiveEditMode}
                   isFinalizingParts={isFinalizingParts}
                 />
@@ -4228,6 +4355,42 @@ export default function DraftBOMBuilderPage() {
           </Tabs>
         </section>
       </div>
+      <Dialog open={isFinalizeForRequestOpen} onOpenChange={setIsFinalizeForRequestOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Finalize and create Parts Requests?</DialogTitle>
+            <DialogDescription>
+              {selectedUnfinalizedLines.length} selected item{selectedUnfinalizedLines.length === 1 ? '' : 's'} must be finalized before a Parts Request can be created.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-slate-200 p-3">
+            {selectedLines.map((line) => (
+              <div key={line.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate">{lineDescription(line)}</span>
+                <Badge variant={line.finalized ? 'outline' : 'secondary'}>
+                  {line.finalized ? line.agPartNumber || 'Finalized' : 'Will finalize'}
+                </Badge>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm text-slate-600">
+            Draft items will be added to Inventory, their generated AG part numbers will populate the AG Part # column, and then one pending Parts Request will be created per selected item.
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsFinalizeForRequestOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setIsFinalizeForRequestOpen(false);
+                void markSelectedFinalized(true);
+              }}
+              disabled={isFinalizingParts}
+            >
+              {isFinalizingParts ? 'Working...' : 'Finalize and create requests'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
@@ -4535,8 +4698,10 @@ function PartsRequestWorkspace({
   onUpdateNumberLine,
   onImportCsv,
   onCreateVendorPoDraft,
+  onCreatePartsRequests,
   onFinalizeSelected,
   onDeleteLine,
+  vendors,
   isEditMode,
   isFinalizingParts,
 }: {
@@ -4552,8 +4717,10 @@ function PartsRequestWorkspace({
   onUpdateNumberLine: (id: string, field: 'unitCost' | 'actualCost' | 'qtyNeeded', value: string) => void;
   onImportCsv: (file: File, linkInventoryMatches: boolean) => Promise<void>;
   onCreateVendorPoDraft: () => void;
+  onCreatePartsRequests: () => void;
   onFinalizeSelected: () => Promise<void>;
   onDeleteLine: (lineId: string) => void;
+  vendors: VendorOption[];
   isEditMode: boolean;
   isFinalizingParts: boolean;
 }) {
@@ -4565,6 +4732,11 @@ function PartsRequestWorkspace({
   const [searchQuery, setSearchQuery] = useState('');
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [sortState, setSortState] = useState<PartsRequestSortState>(null);
+  const [vendorTargetLineId, setVendorTargetLineId] = useState<string | null>(null);
+  const [newVendorName, setNewVendorName] = useState('');
+  const [isCreatingVendor, setIsCreatingVendor] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const tableColumns = useMemo<PartsRequestTableColumnId[]>(
     () => [
       'include',
@@ -4646,6 +4818,65 @@ function PartsRequestWorkspace({
     } finally {
       setIsImportingCsv(false);
     }
+  }
+
+  async function createVendorForSelectedLine() {
+    const name = newVendorName.trim();
+    if (!name || !vendorTargetLineId) return;
+    setIsCreatingVendor(true);
+    try {
+      const vendor = await apiRequest('/api/vendors', {
+        method: 'POST',
+        body: { name, isActive: true },
+      });
+      onUpdateLine(vendorTargetLineId, { supplier: vendor.name || name, vendorId: vendor.id ?? null });
+      await queryClient.invalidateQueries({ queryKey: ['/api/vendors', 'draft-builder'] });
+      setVendorTargetLineId(null);
+      setNewVendorName('');
+    } catch (error) {
+      toast({
+        title: 'Unable to add vendor',
+        description: error instanceof Error ? error.message : 'Vendor creation failed.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreatingVendor(false);
+    }
+  }
+
+  function supplierEditor(line: BomLine) {
+    const supplier = (line.supplier || '').trim();
+    const isLegacySupplier = supplier && !vendors.some((vendor) => vendor.name === supplier);
+    return (
+      <TableCell>
+        <Select
+          value={supplier || '__unassigned__'}
+          onValueChange={(value) => {
+            if (value === '__add_vendor__') {
+              setVendorTargetLineId(line.id);
+              setNewVendorName('');
+              return;
+            }
+            const vendor = vendors.find((item) => item.name === value);
+            onUpdateLine(line.id, {
+              supplier: value === '__unassigned__' ? '' : value,
+              vendorId: value === '__unassigned__' ? null : vendor?.id ?? line.vendorId ?? null,
+            });
+          }}
+          disabled={!isEditMode}
+        >
+          <SelectTrigger className="h-9 min-w-[180px]">
+            <SelectValue placeholder="Select supplier" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__unassigned__">Unassigned</SelectItem>
+            {isLegacySupplier ? <SelectItem value={supplier}>{supplier}</SelectItem> : null}
+            {vendors.map((vendor) => <SelectItem key={vendor.id} value={vendor.name}>{vendor.name}</SelectItem>)}
+            <SelectItem value="__add_vendor__">+ Add new vendor</SelectItem>
+          </SelectContent>
+        </Select>
+      </TableCell>
+    );
   }
 
   return (
@@ -4767,7 +4998,11 @@ function PartsRequestWorkspace({
               <PackagePlus className="mr-2 h-4 w-4" />
               Create Vendor PO draft
             </Button>
-            <Button type="button" onClick={onFinalizeSelected} disabled={!isEditMode || selectedCount === 0 || isFinalizingParts}>
+            <Button type="button" variant="outline" onClick={onCreatePartsRequests} disabled={!isEditMode || selectedCount === 0 || isFinalizingParts}>
+              <Send className="mr-2 h-4 w-4" />
+              Create Parts Requests
+            </Button>
+            <Button type="button" onClick={() => void onFinalizeSelected()} disabled={!isEditMode || selectedCount === 0 || isFinalizingParts}>
               <Check className="mr-2 h-4 w-4" />
               {isFinalizingParts ? 'Finalizing...' : 'Finalize checked'}
             </Button>
@@ -4846,7 +5081,7 @@ function PartsRequestWorkspace({
                       />
                     </TableCell>
                     <EditableCell value={line.description} onChange={(value) => onUpdateLine(line.id, { description: value })} disabled={!isEditMode} wide />
-                    {visibleColumns.includes('supplier') ? <EditableCell value={line.supplier} onChange={(value) => onUpdateLine(line.id, { supplier: value })} disabled={!isEditMode} /> : null}
+                    {visibleColumns.includes('supplier') ? supplierEditor(line) : null}
                     {visibleColumns.includes('supplierItemId') ? <EditableCell value={line.supplierItemId} onChange={(value) => onUpdateLine(line.id, { supplierItemId: value })} disabled={!isEditMode} /> : null}
                     {visibleColumns.includes('manufacturer') ? <EditableCell value={line.manufacturer} onChange={(value) => onUpdateLine(line.id, { manufacturer: value })} disabled={!isEditMode} /> : null}
                     {visibleColumns.includes('unitCost') ? <TableCell>
@@ -4890,7 +5125,17 @@ function PartsRequestWorkspace({
                         disabled={!isEditMode}
                       />
                     </TableCell> : null}
-                    {visibleColumns.includes('agPartNumber') ? <EditableCell value={line.agPartNumber} onChange={(value) => onUpdateLine(line.id, { agPartNumber: value })} disabled={!isEditMode} /> : null}
+                    {visibleColumns.includes('agPartNumber') ? <TableCell>
+                      <div className="space-y-1">
+                        <Input
+                          className="h-9"
+                          value={line.agPartNumber}
+                          onChange={(event) => onUpdateLine(line.id, { agPartNumber: event.target.value })}
+                          disabled={!isEditMode || line.finalized === true}
+                        />
+                        {line.partsRequestId ? <Badge variant="outline">PR #{line.partsRequestId}</Badge> : null}
+                      </div>
+                    </TableCell> : null}
                     {visibleColumns.includes('status') ? <TableCell>
                       <Select value={line.status} onValueChange={(value) => onUpdateLine(line.id, { status: value as BomStatus })} disabled={!isEditMode}>
                         <SelectTrigger className={cn('h-9', statusToneClass(line.status))}>
@@ -4936,10 +5181,44 @@ function PartsRequestWorkspace({
           </Table>
         <Separator />
         <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-slate-500">
-          <span>{selectedCount} checked line{selectedCount === 1 ? '' : 's'} ready for Vendor PO/RFQ or inventory finalization.</span>
-          <span>Vendor PO handoff keeps draft BOM line status visible while the PO workflow owns RFQ sending.</span>
+          <span>{selectedCount} checked line{selectedCount === 1 ? '' : 's'} ready for finalization, Parts Requests, or Vendor PO handoff.</span>
+          <span>Parts Requests require finalized inventory items with AG part numbers.</span>
         </div>
       </section>
+      <Dialog open={vendorTargetLineId !== null} onOpenChange={(open) => {
+        if (!open) {
+          setVendorTargetLineId(null);
+          setNewVendorName('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add vendor</DialogTitle>
+            <DialogDescription>Create a vendor and assign it to this Parts/Request line.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="draft-builder-new-vendor">Vendor name</Label>
+            <Input
+              id="draft-builder-new-vendor"
+              value={newVendorName}
+              onChange={(event) => setNewVendorName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void createVendorForSelectedLine();
+                }
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setVendorTargetLineId(null)}>Cancel</Button>
+            <Button type="button" onClick={() => void createVendorForSelectedLine()} disabled={!newVendorName.trim() || isCreatingVendor}>
+              {isCreatingVendor ? 'Adding...' : 'Add vendor'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

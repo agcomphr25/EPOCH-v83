@@ -192,6 +192,17 @@ function riskIsBlocking(risk: typeof designControlRisks.$inferSelect) {
   return severityIsHigh(severity) && statusIsOpen(risk.status);
 }
 
+function manufacturingEvidenceScopeErrors(context: ReleaseContext) {
+  const errors: string[] = [];
+  if (context.manufacturingEvidence.designControlRecordId !== context.record.id) {
+    errors.push('manufacturing-source evidence belongs to a different Design Control record');
+  }
+  if (context.manufacturingEvidence.rdProjectId !== context.record.rdProjectId) {
+    errors.push('manufacturing-source evidence belongs to a different R&D project');
+  }
+  return errors;
+}
+
 function sourceBaselineItem(source: ManufacturingEvidenceSource): EngineeringBaselineItemPreview {
   const capturedAt = new Date().toISOString();
   const metadata = {
@@ -444,6 +455,7 @@ export function buildEngineeringReleasePreviewFromContext(
   if (!context.manufacturingEvidence.ready) {
     missingEvidence.push(...context.manufacturingEvidence.missingItems.map((item) => `manufacturing-source evidence: ${item}`));
   }
+  missingEvidence.push(...manufacturingEvidenceScopeErrors(context));
 
   const baselineLocked = context.manufacturingEvidence.sources.some((source) => (
     source.key === 'design_revision_baseline_locked' && source.ready

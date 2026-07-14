@@ -176,6 +176,35 @@ describe('engineering release preview', () => {
     expect(preview.missingEvidence).toContain('manufacturing-source evidence: released BOM: linked BOM is not approved or released');
   });
 
+  it('isolates preview evidence to the linked R&D project', () => {
+    const preview = buildEngineeringReleasePreviewFromContext(context({
+      manufacturingEvidence: manufacturingEvidence({
+        rdProjectId: 'rd-2',
+        ready: true,
+        overallStatus: 'RELEASED',
+        missingItems: [],
+      }),
+    }));
+
+    expect(preview.rdProjectId).toBe('rd-1');
+    expect(preview.ready).toBe(false);
+    expect(preview.missingEvidence).toContain('manufacturing-source evidence belongs to a different R&D project');
+  });
+
+  it('blocks stale Design Control evidence even when the evidence payload claims ready', () => {
+    const preview = buildEngineeringReleasePreviewFromContext(context({
+      manufacturingEvidence: manufacturingEvidence({
+        designControlRecordId: 'dc-2',
+        ready: true,
+        overallStatus: 'RELEASED',
+        missingItems: [],
+      }),
+    }));
+
+    expect(preview.ready).toBe(false);
+    expect(preview.missingEvidence).toContain('manufacturing-source evidence belongs to a different Design Control record');
+  });
+
   it('blocks release by missing approval', () => {
     const ctx = context();
     ctx.steps[11] = step('12', 'approved', {
@@ -202,8 +231,11 @@ describe('engineering release preview', () => {
       expect.arrayContaining([
         expect.objectContaining({ sourceTable: 'design_control_steps', sourceStatus: 'approved' }),
         expect.objectContaining({ baselineCategory: 'released_bom', sourceTable: 'draft_bom_drafts' }),
+        expect.objectContaining({ baselineCategory: 'rd_project', sourceRecordId: 'rd-1' }),
       ]),
     );
+    expect(preview.baselineItems.every((item) => item.immutableSnapshotId.startsWith('sha256:'))).toBe(true);
+    expect(preview.baselineItems.some((item) => item.baselineCategory === 'manufactured_inventory_item')).toBe(false);
   });
 
   it('reports changed-since-release without mutating the old baseline snapshot', () => {

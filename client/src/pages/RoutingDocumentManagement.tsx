@@ -31,7 +31,9 @@ import {
   Library,
   Pencil,
   Trash2,
-  MoreHorizontal
+  MoreHorizontal,
+  Plus,
+  X
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -186,6 +188,7 @@ export default function RoutingDocumentManagement() {
   const [showParseDialog, setShowParseDialog] = useState(false);
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [showLearnDialog, setShowLearnDialog] = useState(false);
+  const [showCreateTemplateDialog, setShowCreateTemplateDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<RoutingDocument | null>(null);
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
@@ -311,6 +314,14 @@ export default function RoutingDocumentManagement() {
 
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory/items'],
+  });
+  const [createTemplateForm, setCreateTemplateForm] = useState({
+    templateName: '',
+    templateType: 'work_instruction',
+    description: '',
+    fields: [
+      { fieldName: 'title', fieldLabel: 'Title', fieldType: 'text', sectionName: 'Document Information', isRequired: true, defaultValue: '' },
+    ],
   });
 
   const { data: projects = [] } = useQuery<ProjectOption[]>({
@@ -486,6 +497,40 @@ export default function RoutingDocumentManagement() {
       setShowLearnDialog(false);
       setLearnForm({ templateName: '', templateType: 'work_instruction', description: '' });
       setSelectedDocuments([]);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to create template', variant: 'destructive' });
+    },
+  });
+
+  const createTemplateMutation = useMutation({
+    mutationFn: async (data: typeof createTemplateForm) => {
+      const fields = data.fields.map((field, index) => ({ ...field, sortOrder: index }));
+      const sections = Array.from(new Set(fields.map((field) => field.sectionName.trim() || 'General')))
+        .map((name, index) => ({ name, description: '', order: index + 1 }));
+      return apiRequest('/api/routing-documents/templates', {
+        method: 'POST',
+        body: {
+          templateName: data.templateName.trim(),
+          templateType: data.templateType,
+          description: data.description.trim(),
+          sections,
+          defaultFields: fields,
+          fields,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Template Created', description: 'The reusable template is ready for users to fill out' });
+      queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/templates/list'] });
+      setShowCreateTemplateDialog(false);
+      setCreateTemplateForm({
+        templateName: '',
+        templateType: 'work_instruction',
+        description: '',
+        fields: [{ fieldName: 'title', fieldLabel: 'Title', fieldType: 'text', sectionName: 'Document Information', isRequired: true, defaultValue: '' }],
+      });
+      setActiveTab('templates');
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message || 'Failed to create template', variant: 'destructive' });
@@ -1216,18 +1261,24 @@ export default function RoutingDocumentManagement() {
                   <CardTitle>Document Templates</CardTitle>
                   <CardDescription>AI-learned templates from your existing documents</CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={handleCreateCncSpecSheetTemplate}
-                  disabled={createCncSpecSheetTemplateMutation.isPending}
-                >
-                  {createCncSpecSheetTemplateMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  )}
-                  Create CNC Spec Sheet
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => setShowCreateTemplateDialog(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Template
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleCreateCncSpecSheetTemplate}
+                    disabled={createCncSpecSheetTemplateMutation.isPending}
+                  >
+                    {createCncSpecSheetTemplateMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    )}
+                    CNC Starter
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -1308,7 +1359,7 @@ export default function RoutingDocumentManagement() {
                   ))}
                   {templates.length === 0 && (
                     <div className="col-span-3 text-center py-8 text-muted-foreground">
-                      No templates yet. Select documents and click "Learn Template" to create one.
+                      No templates yet. Click "Create Template" to define your first reusable document.
                     </div>
                   )}
                 </div>
@@ -1575,6 +1626,172 @@ export default function RoutingDocumentManagement() {
             <Button onClick={handleParse} disabled={parseMutation.isPending || !parseContent.trim()}>
               {parseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Brain className="h-4 w-4 mr-2" />}
               Analyze with AI
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCreateTemplateDialog} onOpenChange={setShowCreateTemplateDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Reusable Template</DialogTitle>
+            <DialogDescription>
+              Define the fields users will complete when creating a work instruction, specification, checklist, or other controlled document.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Template Name *</Label>
+                <Input
+                  value={createTemplateForm.templateName}
+                  onChange={(e) => setCreateTemplateForm({ ...createTemplateForm, templateName: e.target.value })}
+                  placeholder="Assembly Work Instruction"
+                />
+              </div>
+              <div>
+                <Label>Document Type *</Label>
+                <Select
+                  value={createTemplateForm.templateType}
+                  onValueChange={(value) => setCreateTemplateForm({ ...createTemplateForm, templateType: value })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TEMPLATE_TYPES.filter((type) => type.value !== 'mixed').map((type) => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2">
+                <Label>Description</Label>
+                <Textarea
+                  value={createTemplateForm.description}
+                  onChange={(e) => setCreateTemplateForm({ ...createTemplateForm, description: e.target.value })}
+                  placeholder="Explain when users should use this template"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold">Fillable Fields</h3>
+                  <p className="text-sm text-muted-foreground">Each row becomes a field users complete before the PDF is created.</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCreateTemplateForm((prev) => ({
+                    ...prev,
+                    fields: [...prev.fields, { fieldName: `field${prev.fields.length + 1}`, fieldLabel: '', fieldType: 'text', sectionName: 'General', isRequired: false, defaultValue: '' }],
+                  }))}
+                >
+                  <Plus className="h-4 w-4 mr-2" /> Add Field
+                </Button>
+              </div>
+
+              {createTemplateForm.fields.map((field, index) => (
+                <Card key={index}>
+                  <CardContent className="pt-4">
+                    <div className="grid grid-cols-12 gap-3 items-end">
+                      <div className="col-span-4">
+                        <Label>Field Label *</Label>
+                        <Input
+                          value={field.fieldLabel}
+                          onChange={(e) => {
+                            const fields = [...createTemplateForm.fields];
+                            const label = e.target.value;
+                            fields[index] = {
+                              ...fields[index],
+                              fieldLabel: label,
+                              fieldName: label.trim().replace(/[^a-zA-Z0-9]+(.)/g, (_match, char) => char.toUpperCase()).replace(/^[A-Z]/, (char) => char.toLowerCase()) || `field${index + 1}`,
+                            };
+                            setCreateTemplateForm({ ...createTemplateForm, fields });
+                          }}
+                          placeholder="Step Instructions"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <Label>Section</Label>
+                        <Input
+                          value={field.sectionName}
+                          onChange={(e) => {
+                            const fields = [...createTemplateForm.fields];
+                            fields[index] = { ...fields[index], sectionName: e.target.value };
+                            setCreateTemplateForm({ ...createTemplateForm, fields });
+                          }}
+                          placeholder="Process Steps"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label>Field Type</Label>
+                        <Select
+                          value={field.fieldType}
+                          onValueChange={(value) => {
+                            const fields = [...createTemplateForm.fields];
+                            fields[index] = { ...fields[index], fieldType: value };
+                            setCreateTemplateForm({ ...createTemplateForm, fields });
+                          }}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="text">Short Text</SelectItem>
+                            <SelectItem value="textarea">Long Text</SelectItem>
+                            <SelectItem value="number">Number</SelectItem>
+                            <SelectItem value="date">Date</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="col-span-2 flex items-center gap-2 pb-2">
+                        <Checkbox
+                          checked={field.isRequired}
+                          onCheckedChange={(checked) => {
+                            const fields = [...createTemplateForm.fields];
+                            fields[index] = { ...fields[index], isRequired: checked === true };
+                            setCreateTemplateForm({ ...createTemplateForm, fields });
+                          }}
+                        />
+                        <Label>Required</Label>
+                      </div>
+                      <div className="col-span-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          disabled={createTemplateForm.fields.length === 1}
+                          onClick={() => setCreateTemplateForm((prev) => ({ ...prev, fields: prev.fields.filter((_, fieldIndex) => fieldIndex !== index) }))}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="col-span-12">
+                        <Label>Default or Instruction Text (optional)</Label>
+                        <Input
+                          value={field.defaultValue}
+                          onChange={(e) => {
+                            const fields = [...createTemplateForm.fields];
+                            fields[index] = { ...fields[index], defaultValue: e.target.value };
+                            setCreateTemplateForm({ ...createTemplateForm, fields });
+                          }}
+                          placeholder="Leave blank when each user should enter a new value"
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateTemplateDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => createTemplateMutation.mutate(createTemplateForm)}
+              disabled={createTemplateMutation.isPending || !createTemplateForm.templateName.trim() || createTemplateForm.fields.some((field) => !field.fieldLabel.trim())}
+            >
+              {createTemplateMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+              Save Template
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -213,6 +213,7 @@ type ProjectSelectOption = {
 
 type InventoryItemOption = {
   id: number;
+  vendorId?: number | null;
   agPartNumber?: string | null;
   name?: string | null;
   description?: string | null;
@@ -656,6 +657,9 @@ function normalizeBomLine(line: Partial<BomLine> | null | undefined): BomLine {
     id,
     status,
     include: false,
+    finalized: safeLine.finalized === true
+      && Boolean(safeLine.inventoryItemId)
+      && Boolean(String(safeLine.agPartNumber || '').trim()),
     qtyNeeded: safeLine.qtyNeeded ?? baseLine.qtyNeeded,
     unitCost: safeLine.unitCost ?? baseLine.unitCost,
     isDraftPart: safeLine.isDraftPart ?? !safeLine.inventoryItemId,
@@ -688,14 +692,14 @@ function draftLineToPart(line: BomLine): DraftBomPart {
 }
 
 function draftLineNeedsInventoryItem(line: BomLine) {
-  return line.isDraftPart !== false && !line.inventoryItemId;
+  return !line.inventoryItemId;
 }
 
 async function createInventoryItemFromDraftLine(
   line: BomLine,
   draft: BomDraft,
 ): Promise<DraftFinalizedInventoryItem> {
-  return await apiRequest('/api/inventory/items/from-draft-builder', {
+  const response = await apiRequest('/api/inventory/items/from-draft-builder', {
     method: 'POST',
     body: {
       name: lineDescription(line),
@@ -713,7 +717,14 @@ async function createInventoryItemFromDraftLine(
       draftName: `${draft.name} ${draft.revision}`.trim(),
       draftLineId: line.id,
     },
-  }) as DraftFinalizedInventoryItem;
+  });
+  const createdItem = response?.item ?? response;
+  const inventoryItemId = Number(createdItem?.id);
+  const agPartNumber = String(createdItem?.agPartNumber || '').trim();
+  if (!Number.isInteger(inventoryItemId) || inventoryItemId <= 0 || !agPartNumber) {
+    throw new Error(`Inventory finalization did not return a valid AG part number for ${lineDescription(line)}.`);
+  }
+  return { ...createdItem, id: inventoryItemId, agPartNumber } as DraftFinalizedInventoryItem;
 }
 
 async function saveDraftBomToRobustBom(
@@ -1604,12 +1615,13 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
         action: 'Review imported line',
         category: 'Imported Spreadsheet',
         description,
-        agPartNumber: '',
-        supplier: '',
-        supplierItemId: '',
-        manufacturer: '',
-        unit: '',
-        unitCost: '',
+        agPartNumber: inventoryMatch?.agPartNumber || '',
+        supplier: inventoryMatch?.source || inventoryMatch?.supplier || '',
+        vendorId: inventoryMatch?.vendorId ?? null,
+        supplierItemId: inventoryMatch?.supplierPartNumber || inventoryMatch?.manufacturerPartNumber || '',
+        manufacturer: inventoryMatch?.manufacturer || '',
+        unit: inventoryMatch?.usageUnit || inventoryMatch?.unit || '',
+        unitCost: inventoryMatch?.costPer == null ? '' : asNumber(inventoryMatch.costPer),
         actualCost: '',
         qtyNeeded: '',
         service: false,
@@ -1984,6 +1996,28 @@ export default function DraftBOMBuilderPage() {
     () => (vendorResponse?.data ?? []).filter((vendor) => vendor.isActive !== false).sort((a, b) => a.name.localeCompare(b.name)),
     [vendorResponse],
   );
+
+  useEffect(() => {
+    if (inventoryItems.length === 0) return;
+    const inventoryById = new Map(inventoryItems.map((item) => [item.id, item]));
+    setDraft((current) => {
+      let changed = false;
+      const partsRequestLines = (current.partsRequestLines ?? []).map((line) => {
+        if (line.agPartNumber || !line.inventoryItemId) return line;
+        const inventoryItem = inventoryById.get(line.inventoryItemId);
+        const agPartNumber = String(inventoryItem?.agPartNumber || '').trim();
+        if (!agPartNumber) return line;
+        changed = true;
+        return {
+          ...line,
+          agPartNumber,
+          inventoryItemName: line.inventoryItemName || inventoryItem?.name || inventoryItem?.description || null,
+          isDraftPart: false,
+        };
+      });
+      return changed ? { ...current, partsRequestLines } : current;
+    });
+  }, [inventoryItems]);
 
   const bomDepartmentOptions = useMemo<DepartmentOption[]>(() => {
     if (inventoryDepartments.length === 0) return fallbackBomDepartmentOptions;
@@ -4848,7 +4882,7 @@ function PartsRequestWorkspace({
     const supplier = (line.supplier || '').trim();
     const isLegacySupplier = supplier && !vendors.some((vendor) => vendor.name === supplier);
     return (
-      <TableCell>
+      <TableCell className="w-[180px] min-w-[180px]">
         <Select
           value={supplier || '__unassigned__'}
           onValueChange={(value) => {
@@ -4865,7 +4899,7 @@ function PartsRequestWorkspace({
           }}
           disabled={!isEditMode}
         >
-          <SelectTrigger className="h-9 min-w-[180px]">
+          <SelectTrigger className="h-9 w-full min-w-0 pr-2 [&>svg]:ml-2 [&>svg]:shrink-0 [&>svg]:opacity-100">
             <SelectValue placeholder="Select supplier" />
           </SelectTrigger>
           <SelectContent>
@@ -4954,13 +4988,20 @@ function PartsRequestWorkspace({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm">
+            <label
+              className="flex items-start gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
+              title="During spreadsheet import, match exact AG, supplier, or manufacturer part numbers to existing Inventory items."
+            >
               <Checkbox
                 checked={linkInventoryMatches}
                 onCheckedChange={(checked) => setLinkInventoryMatches(checked === true)}
                 disabled={!isEditMode}
+                className="mt-0.5"
               />
-              Permit inventory linking
+              <span>
+                <span className="block font-medium">Link matching imported parts</span>
+                <span className="block text-xs text-slate-500">Applies to the next spreadsheet import</span>
+              </span>
             </label>
             <label
               className={cn(
@@ -5011,40 +5052,53 @@ function PartsRequestWorkspace({
       </div>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="space-y-3 border-b border-slate-200 p-3">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="relative md:w-[360px]">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <Input
-                className="pl-9"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search parts/request"
-              />
-            </div>
-            <div className="text-sm text-slate-500">
-              {displayedLines.length} of {lines.length} line{lines.length === 1 ? '' : 's'}
-            </div>
-          </div>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-            {tableColumns.map((columnId) => (
-              <div key={columnId} className="space-y-1">
-                <Label className="text-xs text-slate-500">{partsRequestColumnLabel(columnId)}</Label>
-                <Input
-                  className="h-8"
-                  value={columnFilters[columnId] ?? ''}
-                  onChange={(event) => updateColumnFilter(columnId, event.target.value)}
-                />
+        <Accordion type="single" collapsible className="border-b border-slate-200">
+          <AccordionItem value="table-search-filters" className="border-0">
+            <AccordionTrigger className="px-3 py-3 hover:no-underline">
+              <span className="flex flex-1 items-center justify-between gap-3 pr-3 text-left">
+                <span className="font-semibold text-slate-800">Search and filter Parts/Request</span>
+                <span className="text-sm font-normal text-slate-500">
+                  {activeFilterCount > 0 ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'} · ` : ''}
+                  {displayedLines.length} of {lines.length} lines
+                </span>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3 px-3 pb-3">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="relative md:w-[360px]">
+                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <Input
+                    className="pl-9"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search parts/request"
+                  />
+                </div>
+                <div className="text-sm text-slate-500">
+                  {displayedLines.length} of {lines.length} line{lines.length === 1 ? '' : 's'}
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                {tableColumns.map((columnId) => (
+                  <div key={columnId} className="space-y-1">
+                    <Label className="text-xs text-slate-500">{partsRequestColumnLabel(columnId)}</Label>
+                    <Input
+                      className="h-8"
+                      value={columnFilters[columnId] ?? ''}
+                      onChange={(event) => updateColumnFilter(columnId, event.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
         <Table className="min-w-[1200px]" containerClassName="min-h-[260px] max-h-[min(70vh,720px)] overflow-auto">
           <TableHeader className="sticky top-0 z-10 bg-white shadow-sm">
               <TableRow>
                 {sortableHeader('include', 'w-[112px]')}
                 {sortableHeader('description', 'min-w-[300px]')}
-                {visibleColumns.includes('supplier') ? sortableHeader('supplier', 'w-[160px]') : null}
+                {visibleColumns.includes('supplier') ? sortableHeader('supplier', 'w-[180px] min-w-[180px]') : null}
                 {visibleColumns.includes('supplierItemId') ? sortableHeader('supplierItemId', 'w-[170px]') : null}
                 {visibleColumns.includes('manufacturer') ? sortableHeader('manufacturer', 'w-[160px]') : null}
                 {visibleColumns.includes('unitCost') ? sortableHeader('unitCost', 'w-[130px] text-right') : null}

@@ -118,6 +118,7 @@ export default function StartProductionTimerModal({
   const [serialNumber, setSerialNumber] = useState('');
   const [mandrelNumber, setMandrelNumber] = useState('');
   const [ovenNumber, setOvenNumber] = useState('');
+  const [ovenTemperature, setOvenTemperature] = useState('');
   const [ovenSlot, setOvenSlot] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [barcodeSupported, setBarcodeSupported] = useState(false);
@@ -214,6 +215,7 @@ export default function StartProductionTimerModal({
           serialNumber: serialNumber.trim(),
           mandrelNumber: parseInt(mandrelNumber, 10),
           ovenNumber: parseInt(ovenNumber, 10),
+          ...(ovenTemperature.trim() ? { ovenTemperature: parseFloat(ovenTemperature) } : {}),
           ovenSlot,
           ...(resolvedTraveler?.scannedTravelerBarcode || travelerBarcode.trim()
             ? { scannedTravelerBarcode: resolvedTraveler?.scannedTravelerBarcode || travelerBarcode.trim() }
@@ -489,7 +491,7 @@ export default function StartProductionTimerModal({
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div className="space-y-2">
               <Label htmlFor="mandrel">Mandrel # *</Label>
               <Select value={mandrelNumber} onValueChange={setMandrelNumber}>
@@ -515,6 +517,21 @@ export default function StartProductionTimerModal({
                   <SelectItem value="2">2</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ovenTemperature">Oven Temp (°F)</Label>
+              <Input
+                id="ovenTemperature"
+                type="number"
+                min="0"
+                max="2000"
+                step="0.1"
+                inputMode="decimal"
+                value={ovenTemperature}
+                onChange={(event) => setOvenTemperature(event.target.value)}
+                placeholder="e.g. 250"
+              />
             </div>
 
             <div className="space-y-2">

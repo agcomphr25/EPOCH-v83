@@ -6,6 +6,6 @@ ALTER TABLE public.punch_ledger
 
 ALTER TABLE public.punch_ledger
   ADD CONSTRAINT punch_ledger_source_check
-    CHECK (source IN ('KIOSK', 'PORTAL', 'TRAVELER')),
+    CHECK (source IN ('KIOSK', 'PORTAL', 'TRAVELER', 'SALARIED_ENTRY')),
   ADD CONSTRAINT punch_ledger_labor_class_check
     CHECK (labor_class IN ('REGULAR', 'OVERTIME', 'DOUBLE_TIME', 'BREAK'));

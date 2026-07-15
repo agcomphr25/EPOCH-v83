@@ -13,6 +13,7 @@ import { requireStepUp } from '../../../server/middleware/auth';
 import { writeAccessLog } from './vault';
 import { fileURLToPath } from 'url';
 import { PDFDocument, PDFFont, StandardFonts, rgb } from 'pdf-lib';
+import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 
 const router = Router();
 
@@ -733,6 +734,17 @@ router.get('/:id/view', requireAuth, requireStepUp(), async (req: Request, res: 
       return res.redirect(externalRedirectUrl);
     }
 
+    if (doc.filePath.startsWith('/objects/') || doc.filePath.startsWith('/supabase-objects/')) {
+      const stampedPdf = await addControlledDocumentFooter(
+        await getFileStorageProviderForObjectPath(doc.filePath).downloadBuffer(doc.filePath),
+        doc,
+      );
+      await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${doc.documentNumber}.pdf"`);
+      return res.send(stampedPdf);
+    }
+
     const filePath = resolveControlledDocumentFile(doc.filePath);
     if (!filePath) {
       return res.status(422).json({ error: 'Document file path is not a supported app-accessible location' });
@@ -812,6 +824,17 @@ router.get('/:id/download', requireAuth, requireStepUp(), async (req: Request, r
     if (externalRedirectUrl) {
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
       return res.redirect(externalRedirectUrl);
+    }
+
+    if (doc.filePath.startsWith('/objects/') || doc.filePath.startsWith('/supabase-objects/')) {
+      const stampedPdf = await addControlledDocumentFooter(
+        await getFileStorageProviderForObjectPath(doc.filePath).downloadBuffer(doc.filePath),
+        doc,
+      );
+      await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${doc.documentNumber}.pdf"`);
+      return res.send(stampedPdf);
     }
 
     const filePath = resolveControlledDocumentFile(doc.filePath);

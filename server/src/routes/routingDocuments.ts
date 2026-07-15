@@ -35,6 +35,7 @@ const TEMPLATE_UPLOAD_TABLES = new Set([
   'template_fields',
   'controlled_documents',
   'document_version_history',
+  'project_documents',
 ]);
 
 async function getPublicTableColumns(tableName: string) {
@@ -338,11 +339,13 @@ async function generateControlledTemplateNumber() {
 }
 
 async function saveControlledDocumentFile(fileName: string, fileBuffer: Buffer) {
-  const uploadDir = path.join(process.cwd(), 'server/src/assets/documents');
-  fs.mkdirSync(uploadDir, { recursive: true });
   const storedFileName = sanitizeFileName(fileName);
-  fs.writeFileSync(path.join(uploadDir, storedFileName), fileBuffer);
-  return `/assets/documents/${storedFileName}`;
+  return getFileStorageProvider().uploadBuffer({
+    fileName: storedFileName,
+    contentType: 'application/pdf',
+    scope: 'controlled-documents',
+    buffer: fileBuffer,
+  });
 }
 
 function humanizeDocumentType(value: string) {
@@ -537,11 +540,13 @@ async function renderSpecSheetPdf(input: {
 }
 
 async function saveSpecSheetPdfFile(fileName: string, fileBuffer: Buffer) {
-  const uploadDir = path.join(process.cwd(), 'server/src/assets/documents/spec-sheets');
-  fs.mkdirSync(uploadDir, { recursive: true });
   const storedFileName = normalizeSpecSheetFileName(fileName, null);
-  fs.writeFileSync(path.join(uploadDir, storedFileName), fileBuffer);
-  return `/assets/documents/spec-sheets/${storedFileName}`;
+  return getFileStorageProvider().uploadBuffer({
+    fileName: storedFileName,
+    contentType: 'application/pdf',
+    scope: 'form-document-builder',
+    buffer: fileBuffer,
+  });
 }
 
 // Helper to format UUID bytes to string if needed
@@ -2118,8 +2123,9 @@ router.post('/spec-sheets/complete-upload', async (req: Request, res: Response) 
   }
 });
 
-// Fill a spec sheet template, link it to a manufactured part, save the PDF, and register it in MDR
-router.post('/spec-sheets/from-template', async (req: Request, res: Response) => {
+// Fill any reusable template, save the finished PDF in central storage, register it in MDR,
+// and optionally attach it directly to a project.
+const createDocumentFromTemplate = async (req: Request, res: Response) => {
   try {
     const {
       templateId,
@@ -2130,6 +2136,7 @@ router.post('/spec-sheets/from-template', async (req: Request, res: Response) =>
       title,
       fieldValues,
       description,
+      projectId,
     } = req.body;
     const user = (req as any).user;
     const createdBy = user?.username || 'system';
@@ -2189,11 +2196,16 @@ router.post('/spec-sheets/from-template', async (req: Request, res: Response) =>
     const resolvedPartNumber = finalPartNumber || manufacturedPart?.agPartNumber || null;
     const resolvedPartName = finalPartName || manufacturedPart?.name || null;
     const resolvedSku = finalSku || manufacturedPart?.sku || null;
-    const finalTitle = String(title || `SPEC Sheet - ${resolvedPartName || 'Part'}${resolvedPartNumber ? ` Part #${resolvedPartNumber}` : ''}`).trim();
+    const templateType = String(template.template_type ?? template.templateType ?? 'work_instruction');
+    const finalDepartment = String(template.department_name ?? template.departmentName ?? (templateType === 'spec_sheet' ? 'CNC' : 'Manufacturing'));
+    const fallbackTitle = `${humanizeDocumentType(templateType)} - ${resolvedPartName || resolvedPartNumber || 'New Document'}`;
+    const resolvedTitle = String(title || fallbackTitle).trim();
     const templateSections = Array.isArray(template.sections) ? template.sections : [];
-    const documentNumber = await generateSpecSheetDocumentNumber();
+    const documentNumber = templateType === 'spec_sheet' || templateType === 'specification'
+      ? await generateSpecSheetDocumentNumber()
+      : await generateControlledTemplateNumber();
     const pdfBuffer = await renderSpecSheetPdf({
-      title: finalTitle,
+      title: resolvedTitle,
       sku: resolvedSku,
       partNumber: resolvedPartNumber,
       partName: resolvedPartName,
@@ -2203,7 +2215,7 @@ router.post('/spec-sheets/from-template', async (req: Request, res: Response) =>
       templateFields,
       documentNumber,
     });
-    const fileName = normalizeSpecSheetFileName(finalTitle, resolvedPartNumber);
+    const fileName = normalizeSpecSheetFileName(resolvedTitle, resolvedPartNumber || templateType);
     const fileUrl = await saveSpecSheetPdfFile(fileName, pdfBuffer);
     const specifications = {
       templateId,
@@ -2219,30 +2231,51 @@ router.post('/spec-sheets/from-template', async (req: Request, res: Response) =>
       controlledDocumentNumber: documentNumber,
     };
 
-    const [specSheet] = await db.insert(specSheets).values({
+    const [routingDocument] = await db.insert(routingDocuments).values({
       partNumber: resolvedPartNumber,
-      title: finalTitle,
+      title: resolvedTitle,
       version: 1,
-      description: description || `Filled CNC spec sheet from template ${template.template_name ?? template.templateName}`,
-      specifications,
+      description: description || `Filled ${humanizeDocumentType(templateType)} from template ${template.template_name ?? template.templateName}`,
+      departmentName: finalDepartment,
+      documentType: templateType,
       sourceType: 'generated',
       fileUrl,
       fileName: path.basename(fileUrl),
       fileType: 'application/pdf',
       fileSize: pdfBuffer.length,
+      aiExtractedContent: specifications,
+      aiExtractedFields: templateFields,
       isTemplate: false,
       createdBy,
     }).returning();
+
+    let specSheet = null;
+    if (templateType === 'spec_sheet' || templateType === 'specification') {
+      [specSheet] = await db.insert(specSheets).values({
+        partNumber: resolvedPartNumber,
+        title: resolvedTitle,
+        version: 1,
+        description: description || `Filled spec sheet from template ${template.template_name ?? template.templateName}`,
+        specifications,
+        sourceType: 'generated',
+        fileUrl,
+        fileName: path.basename(fileUrl),
+        fileType: 'application/pdf',
+        fileSize: pdfBuffer.length,
+        isTemplate: false,
+        createdBy,
+      }).returning();
+    }
 
     const expirationDate = new Date();
     expirationDate.setFullYear(expirationDate.getFullYear() + 1);
     const [controlledDocument] = await db.insert(controlledDocuments).values({
       documentNumber,
-      documentName: finalTitle,
-      documentType: 'spec_sheet',
-      department: 'CNC',
-      category: 'Spec Sheet',
-      description: description || `Manufactured part spec sheet${resolvedPartNumber ? ` for ${resolvedPartNumber}` : ''}`,
+      documentName: resolvedTitle,
+      documentType: templateType,
+      department: finalDepartment,
+      category: templateType === 'spec_sheet' ? 'Spec Sheet' : 'Form & Document Builder',
+      description: description || `${humanizeDocumentType(templateType)} created from reusable template${resolvedPartNumber ? ` for ${resolvedPartNumber}` : ''}`,
       currentVersion: '1.0',
       status: 'pending',
       retentionLength: 'controlled',
@@ -2255,7 +2288,7 @@ router.post('/spec-sheets/from-template', async (req: Request, res: Response) =>
     await db.insert(documentVersionHistory).values({
       documentId: controlledDocument.id,
       versionNumber: '1.0',
-      changeDescription: 'Initial filled spec sheet created from Form & Document Builder template',
+      changeDescription: `Initial ${humanizeDocumentType(templateType)} created from reusable Form & Document Builder template`,
       changeType: 'major',
       filePath: fileUrl,
       status: 'pending',
@@ -2263,17 +2296,37 @@ router.post('/spec-sheets/from-template', async (req: Request, res: Response) =>
       expirationDate: expirationDate.toISOString().split('T')[0],
     });
 
+    let projectDocument = null;
+    if (projectId) {
+      projectDocument = await insertPublicRowReturning('project_documents', {
+        project_id: projectId,
+        label: resolvedTitle,
+        original_file_name: path.basename(fileUrl),
+        file_name: path.basename(fileUrl),
+        file_path: fileUrl,
+        mime_type: 'application/pdf',
+        file_size: pdfBuffer.length,
+        uploaded_by: createdBy,
+        created_at: new Date(),
+      }, ['project_id']);
+    }
+
     res.status(201).json({
+      document: routingDocument,
       specSheet,
       controlledDocument,
+      projectDocument,
       fileUrl,
       documentNumber,
     });
   } catch (error) {
-    console.error('Error creating filled spec sheet:', error);
-    res.status(500).json({ error: 'Failed to create filled spec sheet' });
+    console.error('Error creating document from template:', error);
+    res.status(500).json({ error: 'Failed to create document from template' });
   }
-});
+};
+
+router.post('/documents/from-template', createDocumentFromTemplate);
+router.post('/spec-sheets/from-template', createDocumentFromTemplate);
 
 // Create Distribution Log
 router.post('/distribution-logs', async (req: Request, res: Response) => {

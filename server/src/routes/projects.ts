@@ -22,6 +22,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 
 // ── Project document upload setup ──────────────────────────────────────────
 const projectDocsDir = path.join(process.cwd(), 'uploads', 'project-documents');
@@ -3710,6 +3711,12 @@ router.get('/:id/documents/:docId/file', async (req, res) => {
           );
       const generatedDoc = rows[0];
       if (!generatedDoc) return res.status(404).json({ message: 'Document not found' });
+      if (generatedDoc.file_url?.startsWith('/objects/') || generatedDoc.file_url?.startsWith('/supabase-objects/')) {
+        return getFileStorageProviderForObjectPath(generatedDoc.file_url).downloadObject(generatedDoc.file_url, res, {
+          contentType: generatedDoc.file_type || 'application/pdf',
+          contentDisposition: `inline; filename="${generatedDoc.file_name || `${generatedDoc.title}.pdf`}"`,
+        });
+      }
       const resolved = resolveBuilderAssetPath(generatedDoc.file_url);
       if (!resolved) return res.status(404).json({ message: 'No document file is attached yet' });
       if (/^https?:\/\//i.test(resolved)) return res.redirect(resolved);
@@ -3734,6 +3741,13 @@ router.get('/:id/documents/:docId/file', async (req, res) => {
     if (doc.media_library_id) {
       // Redirect to existing media serve endpoint
       return res.redirect(`/api/media/${doc.media_library_id}/download`);
+    }
+
+    if (doc.file_path?.startsWith('/objects/') || doc.file_path?.startsWith('/supabase-objects/')) {
+      return getFileStorageProviderForObjectPath(doc.file_path).downloadObject(doc.file_path, res, {
+        contentType: doc.mime_type || 'application/pdf',
+        contentDisposition: `inline; filename="${doc.original_file_name}"`,
+      });
     }
 
     if (!doc.file_path || !fs.existsSync(doc.file_path)) {

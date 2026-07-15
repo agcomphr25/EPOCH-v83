@@ -83,6 +83,14 @@ interface InventoryItem {
   manufacturedCategory?: string | null;
 }
 
+interface ProjectOption {
+  id: string;
+  projectNumber?: string | null;
+  project_number?: string | null;
+  name?: string | null;
+  title?: string | null;
+}
+
 const FORM_DOCUMENT_TYPES = [
   { value: 'work_instruction', label: 'Work Instruction' },
   { value: 'assembly_instruction', label: 'Assembly Instruction' },
@@ -241,6 +249,7 @@ export default function RoutingDocumentManagement() {
     partNumber: '',
     partName: '',
     sku: '',
+    projectId: '',
     fieldValues: {} as Record<string, string>,
   });
   const [showGenerateRoutingDialog, setShowGenerateRoutingDialog] = useState(false);
@@ -302,6 +311,11 @@ export default function RoutingDocumentManagement() {
 
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory/items'],
+  });
+
+  const { data: projects = [] } = useQuery<ProjectOption[]>({
+    queryKey: ['/api/projects'],
+    queryFn: () => apiRequest('/api/projects'),
   });
 
   const manufacturedParts = inventoryItems.filter((item) =>
@@ -500,7 +514,7 @@ export default function RoutingDocumentManagement() {
 
   const createFilledSpecSheetMutation = useMutation({
     mutationFn: async (data: typeof fillSpecSheetForm) => {
-      return apiRequest('/api/routing-documents/spec-sheets/from-template', {
+      return apiRequest('/api/routing-documents/documents/from-template', {
         method: 'POST',
         body: {
           templateId: data.templateId,
@@ -510,6 +524,7 @@ export default function RoutingDocumentManagement() {
           sku: data.sku,
           title: data.title,
           fieldValues: data.fieldValues,
+          projectId: data.projectId || null,
         },
         timeout: 120000,
       });
@@ -517,17 +532,17 @@ export default function RoutingDocumentManagement() {
     onSuccess: (response: any) => {
       const docNumber = response?.documentNumber || response?.controlledDocument?.documentNumber || response?.controlledDocument?.document_number;
       toast({
-        title: 'Spec Sheet Saved',
-        description: docNumber ? `Saved to Master Document List as ${docNumber}` : 'Saved to Master Document List and central storage',
+        title: 'Document Saved',
+        description: docNumber ? `Saved to central storage and the Master Document List as ${docNumber}` : 'Saved to central storage and the Master Document List',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/routing-documents/spec-sheets'] });
       queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
       setShowFillSpecSheetDialog(false);
       setSelectedTemplate(null);
-      setActiveTab('specsheets');
+      setActiveTab('documents');
     },
     onError: (error: any) => {
-      toast({ title: 'Error', description: error.message || 'Failed to save filled spec sheet', variant: 'destructive' });
+      toast({ title: 'Error', description: error.message || 'Failed to create document from template', variant: 'destructive' });
     },
   });
 
@@ -921,24 +936,14 @@ export default function RoutingDocumentManagement() {
       partNumber: fieldValues.partNumber || '',
       partName: fieldValues.partName || '',
       sku: fieldValues.sku || '',
+      projectId: '',
       fieldValues,
     });
     setShowFillSpecSheetDialog(true);
   };
 
   const handleUseTemplate = (template: DocumentTemplate) => {
-    if (template.templateType === 'spec_sheet') {
-      openFillSpecSheetDialog(template);
-      return;
-    }
-
-    setGenerateForm({
-      partNumber: '',
-      partName: '',
-      documentType: template.templateType || 'work_instruction',
-      templateId: template.id,
-    });
-    setShowGenerateDialog(true);
+    openFillSpecSheetDialog(template);
   };
 
   const handleManufacturedPartChange = (value: string) => {
@@ -983,8 +988,11 @@ export default function RoutingDocumentManagement() {
       toast({ title: 'Error', description: 'Please select a template', variant: 'destructive' });
       return;
     }
-    if (!fillSpecSheetForm.partNumber && !fillSpecSheetForm.inventoryItemId) {
-      toast({ title: 'Error', description: 'Please link a manufactured part or enter a part number', variant: 'destructive' });
+    const missingRequired = (selectedTemplate?.defaultFields || []).find((field: any) =>
+      field.isRequired && !String(fillSpecSheetForm.fieldValues[field.fieldName] || '').trim()
+    );
+    if (missingRequired) {
+      toast({ title: 'Required Field', description: `${missingRequired.fieldLabel || missingRequired.fieldName} is required`, variant: 'destructive' });
       return;
     }
 
@@ -1575,15 +1583,15 @@ export default function RoutingDocumentManagement() {
       <Dialog open={showFillSpecSheetDialog} onOpenChange={setShowFillSpecSheetDialog}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Fill CNC Spec Sheet</DialogTitle>
+            <DialogTitle>Create {typeLabel(selectedTemplate?.templateType)}</DialogTitle>
             <DialogDescription>
-              Fill the spec sheet fields, link the manufactured part, and save the finished PDF to the Master Document List
+              Complete the reusable template. The finished PDF will be saved in central storage and registered in the Master Document List.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Manufactured Part</Label>
+                <Label>Manufactured Part (optional)</Label>
                 <Select value={fillSpecSheetForm.inventoryItemId} onValueChange={handleManufacturedPartChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Link manufactured part" />
@@ -1598,11 +1606,11 @@ export default function RoutingDocumentManagement() {
                 </Select>
               </div>
               <div>
-                <Label>Sheet Title</Label>
+                <Label>Document Title</Label>
                 <Input
                   value={fillSpecSheetForm.title}
                   onChange={(e) => setFillSpecSheetForm({ ...fillSpecSheetForm, title: e.target.value })}
-                  placeholder="SPEC Sheet - Wing Box Rib Part #26006"
+                  placeholder={`${typeLabel(selectedTemplate?.templateType)} title`}
                 />
               </div>
               <div>
@@ -1632,6 +1640,25 @@ export default function RoutingDocumentManagement() {
                     }));
                   }}
                 />
+              </div>
+              <div className="col-span-2">
+                <Label>Attach to Project (optional)</Label>
+                <Select
+                  value={fillSpecSheetForm.projectId || 'none'}
+                  onValueChange={(value) => setFillSpecSheetForm({ ...fillSpecSheetForm, projectId: value === 'none' ? '' : value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Do not attach to a project</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.projectNumber || project.project_number || project.id} - {project.name || project.title || 'Project'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -1682,7 +1709,7 @@ export default function RoutingDocumentManagement() {
               ) : (
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
               )}
-              Save Spec Sheet
+              Create and Save Document
             </Button>
           </DialogFooter>
         </DialogContent>

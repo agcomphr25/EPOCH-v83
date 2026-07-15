@@ -23,8 +23,26 @@ import {
   getEngineeringReleasePreview,
   submitEngineeringRelease,
 } from '../services/engineeringReleaseService';
+import {
+  assertDesignControlSchemaReady,
+  designControlSchemaNotReadyPayload,
+  isDesignControlSchemaNotReadyError,
+} from '../services/designControlSchemaReadiness';
 
 const router = Router();
+
+router.use(async (_req, res, next) => {
+  try {
+    await assertDesignControlSchemaReady();
+    next();
+  } catch (error) {
+    if (isDesignControlSchemaNotReadyError(error)) {
+      res.status(503).json(designControlSchemaNotReadyPayload(error));
+      return;
+    }
+    next(error);
+  }
+});
 
 type StepPayload = {
   formData?: Record<string, unknown>;

@@ -3,14 +3,11 @@ import { join } from 'path';
 import { Pool } from 'pg';
 import { pathToFileURL } from 'url';
 
-const connectionString = process.env.FORCE_DATABASE_URL || process.env.DATABASE_URL;
-
-if (!connectionString) {
-  console.error('Missing required database environment variable: FORCE_DATABASE_URL or DATABASE_URL');
-  process.exit(1);
+export function getSafeBootMigrationConnectionString() {
+  return process.env.FORCE_DATABASE_URL || process.env.DATABASE_URL;
 }
 
-const safeFiles = [
+export const safeMigrationFiles = [
   '0000_shiny_amazoness.sql',
   '0001_fix_cutting_built_packets_category_uuid.sql',
   '0002_fix_fabric_sources_inventory_id_uuid.sql',
@@ -218,7 +215,7 @@ const safeFiles = [
   'investigation_308_order_duplication.sql',
 ];
 
-const criticalMigrations = new Set([
+export const criticalMigrationFiles = new Set([
   '0060_punch_ledger.sql',
   '0061_punch_ledger_pwo_fk.sql',
   '0062_punch_ledger_check_constraints.sql',
@@ -226,18 +223,27 @@ const criticalMigrations = new Set([
   '0064_punch_ledger_wad_traceability.sql',
   '0065_vendor_date_columns_proper_type.sql',
   '0090_labor_allocations.sql',
+  '0189_design_control_workflow.sql',
+  '0190_design_control_requirement_applicability.sql',
+  '0191_engineering_releases.sql',
+  '0192_engineering_packages.sql',
 ]);
 
 export async function runSafeBootMigrations() {
+  const connectionString = getSafeBootMigrationConnectionString();
+  if (!connectionString) {
+    throw new Error('Missing required database environment variable: FORCE_DATABASE_URL or DATABASE_URL');
+  }
+
   const migrPool = new Pool({ connectionString });
   const migrationsDir = join(process.cwd(), 'migrations');
   let appliedCount = 0;
 
   try {
-    for (const f of safeFiles) {
+    for (const f of safeMigrationFiles) {
       const filePath = join(migrationsDir, f);
       if (!existsSync(filePath)) {
-        if (criticalMigrations.has(f)) {
+        if (criticalMigrationFiles.has(f)) {
           throw new Error(`Critical migration file not found on disk: ${f}`);
         }
         continue;
@@ -246,7 +252,7 @@ export async function runSafeBootMigrations() {
         await migrPool.query(readFileSync(filePath, 'utf-8'));
         appliedCount++;
       } catch (fileErr: any) {
-        if (criticalMigrations.has(f)) {
+        if (criticalMigrationFiles.has(f)) {
           console.error(`❌ Critical migration ${f} failed: ${fileErr.message}`);
           throw fileErr;
         }
@@ -259,7 +265,7 @@ export async function runSafeBootMigrations() {
     } catch (_) {}
   }
 
-  console.log(`✅ Pre-deploy migrations: ${appliedCount}/${safeFiles.length} applied (or already correct)`);
+  console.log(`✅ Pre-deploy migrations: ${appliedCount}/${safeMigrationFiles.length} applied (or already correct)`);
 
   try {
     const { logCriticalSchemaHealth } = await import('../../utils/schemaHealth');
@@ -277,11 +283,11 @@ export async function runSafeBootMigrations() {
 
   try {
     const diskFiles = readdirSync(migrationsDir).filter((f: string) => f.endsWith('.sql'));
-    const safeSet = new Set(safeFiles);
+    const safeSet = new Set(safeMigrationFiles);
     const missing = diskFiles.filter((f: string) => !safeSet.has(f));
     if (missing.length > 0) {
       for (const f of missing) {
-        console.warn(`⚠️ Migration file on disk is NOT in safeFiles and will be skipped: ${f}`);
+        console.warn(`⚠️ Migration file on disk is NOT in safeMigrationFiles and will be skipped: ${f}`);
       }
     }
   } catch (scanErr: any) {

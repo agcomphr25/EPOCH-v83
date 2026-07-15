@@ -225,6 +225,61 @@ interface EngineeringReleasePreview {
   } | null;
 }
 
+interface EngineeringPackagePreview {
+  ready: boolean;
+  releaseInformation: {
+    id: string;
+    releaseNumber: string;
+    releaseRevision: string;
+    releaseStatus: string;
+    productName: string;
+    releasedBy: string | null;
+    releasedAt: string | null;
+  } | null;
+  packageCompleteness: {
+    status: string;
+    requiredCount: number;
+    presentRequiredCount: number;
+    totalContentCount: number;
+  };
+  documentSummary: {
+    controlledDocumentCount: number;
+    drawingCount: number;
+    cadCount: number;
+    specificationCount: number;
+  };
+  bomSummary: {
+    revision: string | null;
+    sourceRecordId: string | null;
+    status: string | null;
+  };
+  revisionSummary: Array<{
+    category: string;
+    revision: string | null;
+    sourceRecordId: string | null;
+    status: string | null;
+  }>;
+  missingEngineeringDocuments: string[];
+  missingControlledRecords: string[];
+  contents: Array<{
+    category: string;
+    label: string;
+    sourceRecordId: string | null;
+    sourceRevision: string | null;
+    sourceStatus: string | null;
+    required: boolean;
+    present: boolean;
+  }>;
+  existingPackage?: {
+    id: string;
+    packageNumber: string;
+    packageRevision: string;
+    packageStatus: string;
+    lockedBy: string | null;
+    lockedAt: string | null;
+  } | null;
+}
+
 const R_AND_D_PROJECT_STORAGE_KEY = 'epoch.rdProjects.v1';
 const DRAFT_BOM_STORAGE_KEY = 'epoch:draft-boms';
 const DRAFT_TAB_HANDOFF_KEY = 'epoch:draft-builder-tab-handoff';
@@ -842,7 +897,9 @@ export default function RDProjectsPage() {
   const [isCreatingDesignControlRecord, setIsCreatingDesignControlRecord] = useState(false);
   const [isReleaseDialogOpen, setIsReleaseDialogOpen] = useState(false);
   const [isSubmittingEngineeringRelease, setIsSubmittingEngineeringRelease] = useState(false);
+  const [isGeneratingEngineeringPackage, setIsGeneratingEngineeringPackage] = useState(false);
   const [engineeringReleaseError, setEngineeringReleaseError] = useState<string | null>(null);
+  const [engineeringPackageError, setEngineeringPackageError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('projectId')
   );
@@ -952,6 +1009,24 @@ export default function RDProjectsPage() {
     },
   });
   const engineeringReleasePreview = engineeringReleasePayload?.preview ?? null;
+  const releasedEngineeringReleaseId = engineeringReleasePreview?.existingRelease?.id ?? null;
+  const {
+    data: engineeringPackagePayload,
+    isLoading: isLoadingEngineeringPackagePreview,
+  } = useQuery<{ preview: EngineeringPackagePreview } | null>({
+    queryKey: ['/api/engineering-releases', releasedEngineeringReleaseId, 'package-preview'],
+    enabled: Boolean(releasedEngineeringReleaseId),
+    retry: false,
+    queryFn: async () => {
+      if (!releasedEngineeringReleaseId) return null;
+      const response = await fetch(`/api/engineering-releases/${releasedEngineeringReleaseId}/package-preview`, {
+        credentials: 'include',
+      });
+      if (!response.ok) return null;
+      return response.json();
+    },
+  });
+  const engineeringPackagePreview = engineeringPackagePayload?.preview ?? null;
 
   useEffect(() => {
     writeJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, localProjects);
@@ -1280,6 +1355,31 @@ export default function RDProjectsPage() {
       setEngineeringReleaseError(error.message || 'Failed to release engineering baseline.');
     } finally {
       setIsSubmittingEngineeringRelease(false);
+    }
+  };
+
+  const generateEngineeringPackageForRelease = async () => {
+    if (!releasedEngineeringReleaseId) return;
+    setIsGeneratingEngineeringPackage(true);
+    setEngineeringPackageError(null);
+    try {
+      const response = await fetch(`/api/engineering-releases/${releasedEngineeringReleaseId}/generate-package`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const missingItems = Array.isArray(payload.missingItems) ? ` ${payload.missingItems.join('; ')}` : '';
+        throw new Error(`${payload.message || 'Engineering Package is not ready.'}${missingItems}`);
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ['/api/engineering-releases', releasedEngineeringReleaseId, 'package-preview'],
+      });
+    } catch (error: any) {
+      setEngineeringPackageError(error.message || 'Failed to generate Engineering Package.');
+    } finally {
+      setIsGeneratingEngineeringPackage(false);
     }
   };
 
@@ -2142,6 +2242,141 @@ export default function RDProjectsPage() {
                                   </Button>
                                   <div className="font-medium">Next action: Create Manufactured Inventory Item</div>
                                 </div>
+                              )}
+
+                              {engineeringReleasePreview.existingRelease && (
+                                <Card>
+                                  <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                    <div>
+                                      <CardTitle className="flex items-center gap-2 text-base">
+                                        <ShieldCheck className="h-4 w-4 text-primary" />
+                                        Engineering Package
+                                      </CardTitle>
+                                      <CardDescription>
+                                        Locked Technical Data Package used as the engineering source for future manufactured inventory items.
+                                      </CardDescription>
+                                    </div>
+                                    <Button
+                                      className="gap-2 self-start"
+                                      disabled={
+                                        !engineeringPackagePreview?.ready ||
+                                        Boolean(engineeringPackagePreview?.existingPackage) ||
+                                        isGeneratingEngineeringPackage
+                                      }
+                                      onClick={generateEngineeringPackageForRelease}
+                                    >
+                                      <ShieldCheck className="h-4 w-4" />
+                                      {isGeneratingEngineeringPackage ? 'Generating...' : 'Generate Package'}
+                                    </Button>
+                                  </CardHeader>
+                                  <CardContent className="space-y-4">
+                                    {isLoadingEngineeringPackagePreview ? (
+                                      <div className="rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
+                                        Loading Engineering Package preview...
+                                      </div>
+                                    ) : engineeringPackagePreview ? (
+                                      <>
+                                        <div className="grid gap-3 md:grid-cols-4">
+                                          <div className="rounded-md border bg-white p-3">
+                                            <p className="text-xs text-muted-foreground">Status</p>
+                                            <p className="mt-1 font-semibold">
+                                              {engineeringPackagePreview.existingPackage?.packageStatus ?? engineeringPackagePreview.packageCompleteness.status}
+                                            </p>
+                                          </div>
+                                          <div className="rounded-md border bg-white p-3">
+                                            <p className="text-xs text-muted-foreground">Revision</p>
+                                            <p className="mt-1 font-semibold">
+                                              {engineeringPackagePreview.existingPackage?.packageRevision ?? engineeringReleasePreview.existingRelease.releaseRevision}
+                                            </p>
+                                          </div>
+                                          <div className="rounded-md border bg-white p-3">
+                                            <p className="text-xs text-muted-foreground">Contents</p>
+                                            <p className="mt-1 font-semibold">
+                                              {engineeringPackagePreview.packageCompleteness.presentRequiredCount}/{engineeringPackagePreview.packageCompleteness.requiredCount} required
+                                            </p>
+                                          </div>
+                                          <div className="rounded-md border bg-white p-3">
+                                            <p className="text-xs text-muted-foreground">BOM revision</p>
+                                            <p className="mt-1 font-semibold">{engineeringPackagePreview.bomSummary.revision || 'Not captured'}</p>
+                                          </div>
+                                        </div>
+
+                                        {engineeringPackagePreview.existingPackage ? (
+                                          <div className="space-y-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                                            <div className="grid gap-3 md:grid-cols-4">
+                                              <div className="rounded-md border border-emerald-200 bg-white p-3">
+                                                <p className="text-xs text-muted-foreground">Package Number</p>
+                                                <p className="font-semibold">{engineeringPackagePreview.existingPackage.packageNumber}</p>
+                                              </div>
+                                              <div className="rounded-md border border-emerald-200 bg-white p-3">
+                                                <p className="text-xs text-muted-foreground">Revision</p>
+                                                <p className="font-semibold">{engineeringPackagePreview.existingPackage.packageRevision}</p>
+                                              </div>
+                                              <div className="rounded-md border border-emerald-200 bg-white p-3">
+                                                <p className="text-xs text-muted-foreground">Created By</p>
+                                                <p className="font-semibold">{engineeringPackagePreview.existingPackage.lockedBy || 'system'}</p>
+                                              </div>
+                                              <div className="rounded-md border border-emerald-200 bg-white p-3">
+                                                <p className="text-xs text-muted-foreground">Package Status</p>
+                                                <p className="font-semibold">Locked</p>
+                                              </div>
+                                            </div>
+                                            <div className="text-emerald-800">
+                                              Created {engineeringPackagePreview.existingPackage.lockedAt || 'at recorded package time'}.
+                                            </div>
+                                            <Button variant="outline" size="sm" className="gap-2" disabled>
+                                              <ExternalLink className="h-4 w-4" />
+                                              Open Package
+                                            </Button>
+                                          </div>
+                                        ) : null}
+
+                                        {engineeringPackageError && (
+                                          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                                            {engineeringPackageError}
+                                          </div>
+                                        )}
+
+                                        {(engineeringPackagePreview.missingEngineeringDocuments.length > 0 || engineeringPackagePreview.missingControlledRecords.length > 0) && (
+                                          <div className="space-y-2">
+                                            <div className="text-sm font-medium">Missing Items</div>
+                                            {[...engineeringPackagePreview.missingEngineeringDocuments, ...engineeringPackagePreview.missingControlledRecords].map((item) => (
+                                              <div key={item} className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-sm">
+                                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                                <span>{item}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        <div className="grid gap-2 md:grid-cols-2">
+                                          {engineeringPackagePreview.contents.slice(0, 12).map((item) => (
+                                            <div key={item.category} className="rounded-md border bg-white px-3 py-2 text-sm">
+                                              <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                  <div className="font-medium">{item.label}</div>
+                                                  <div className="text-xs text-muted-foreground">
+                                                    {item.sourceRevision ? `Revision ${item.sourceRevision}` : item.sourceRecordId || 'Reference pending'}
+                                                  </div>
+                                                </div>
+                                                <Badge
+                                                  variant="outline"
+                                                  className={item.present ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-amber-300 bg-amber-50 text-amber-800'}
+                                                >
+                                                  {item.present ? 'Referenced' : 'Missing'}
+                                                </Badge>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
+                                        Engineering Package preview is unavailable for this release.
+                                      </div>
+                                    )}
+                                  </CardContent>
+                                </Card>
                               )}
 
                               {engineeringReleaseError && (

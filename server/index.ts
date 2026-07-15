@@ -67,6 +67,12 @@ type BootState = {
     completedAt?: string;
     error?: { message: string; stack?: string };
   };
+  schemaMigrations: {
+    status: 'pending' | 'running' | 'complete' | 'failed';
+    startedAt?: string;
+    completedAt?: string;
+    error?: { message: string; stack?: string };
+  };
   backgroundServices: {
     status: 'pending' | 'running' | 'complete' | 'failed';
     startedAt?: string;
@@ -94,6 +100,7 @@ const bootState: BootState = {
   pid: process.pid,
   routesReady: false,
   routeRegistration: { status: 'pending' },
+  schemaMigrations: { status: 'pending' },
   backgroundServices: { status: 'pending' },
   fatalErrors: [],
 };
@@ -135,6 +142,7 @@ app.get(['/readyz', '/boot-status', '/api/boot-status'], async (_req, res) => {
   const ready =
     bootState.routesReady &&
     bootState.routeRegistration.status === 'ready' &&
+    bootState.schemaMigrations.status === 'complete' &&
     bootState.fatalErrors.length === 0 &&
     database.ok;
 
@@ -427,6 +435,20 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
     bootState.routeRegistration.status = 'loading';
     bootState.routeRegistration.startedAt = new Date().toISOString();
 
+    bootState.schemaMigrations.status = 'running';
+    bootState.schemaMigrations.startedAt = new Date().toISOString();
+    try {
+      const { runSafeBootMigrations } = await import('./scripts/migrations/runSafeBootMigrations');
+      await runSafeBootMigrations();
+      bootState.schemaMigrations.status = 'complete';
+      bootState.schemaMigrations.completedAt = new Date().toISOString();
+    } catch (migrationError) {
+      bootState.schemaMigrations.status = 'failed';
+      bootState.schemaMigrations.completedAt = new Date().toISOString();
+      bootState.schemaMigrations.error = serializeError(migrationError);
+      throw migrationError;
+    }
+
     // Dynamic import defers tsx compilation of routes/index.ts (137 files, 9300 lines)
     // until AFTER the server is already listening.  Static import would block the entire
     // module from running (including earlyServer.listen) for ~13 seconds while tsx
@@ -500,8 +522,8 @@ async function initializeBackgroundServices() {
     } else {
       console.log('✅ Database connection successful');
 
-      // Safe boot migrations are intentionally not run during normal server startup.
-      // Run them before deploy or manually with: npm run maintenance:safe-migrations
+      // Safe boot migrations run before route registration. Keep background
+      // maintenance below limited to legacy/module-specific repairs.
 
       try {
         await pool.query(`

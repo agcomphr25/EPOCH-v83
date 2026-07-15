@@ -17620,6 +17620,56 @@ export const engineeringReleaseApprovals = pgTable('engineering_release_approval
   releaseIdx: index('engineering_release_approvals_release_id_idx').on(table.engineeringReleaseId),
 }));
 
+export const engineeringPackages = pgTable('engineering_packages', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  engineeringReleaseId: uuid('engineering_release_id').notNull().references(() => engineeringReleases.id, { onDelete: 'restrict' }),
+  engineeringBaselineId: uuid('engineering_baseline_id').notNull().references(() => engineeringReleaseBaselines.id, { onDelete: 'restrict' }),
+  rdProjectId: text('rd_project_id').notNull().references(() => rdProjects.id, { onDelete: 'restrict' }),
+  designControlRecordId: uuid('design_control_record_id').notNull().references(() => designControlRecords.id, { onDelete: 'restrict' }),
+  packageNumber: text('package_number').notNull(),
+  packageRevision: text('package_revision').notNull(),
+  packageStatus: text('package_status').notNull().default('LOCKED'),
+  productName: text('product_name').notNull(),
+  lockedAt: timestamp('locked_at'),
+  lockedBy: text('locked_by'),
+  packageSnapshot: jsonb('package_snapshot').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  completenessSnapshot: jsonb('completeness_snapshot').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  contentsSummary: jsonb('contents_summary').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  releaseUnique: uniqueIndex('engineering_packages_release_unique').on(table.engineeringReleaseId),
+  numberUnique: uniqueIndex('engineering_packages_number_unique').on(table.packageNumber),
+  rdProjectIdx: index('engineering_packages_rd_project_id_idx').on(table.rdProjectId),
+  designControlRecordIdx: index('engineering_packages_design_control_record_id_idx').on(table.designControlRecordId),
+  baselineIdx: index('engineering_packages_baseline_id_idx').on(table.engineeringBaselineId),
+  statusIdx: index('engineering_packages_status_idx').on(table.packageStatus),
+}));
+
+export const engineeringPackageItems = pgTable('engineering_package_items', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  engineeringPackageId: uuid('engineering_package_id').notNull().references(() => engineeringPackages.id, { onDelete: 'cascade' }),
+  engineeringReleaseId: uuid('engineering_release_id').notNull().references(() => engineeringReleases.id, { onDelete: 'restrict' }),
+  engineeringBaselineItemId: uuid('engineering_baseline_item_id').references(() => engineeringReleaseBaselineItems.id, { onDelete: 'set null' }),
+  packageCategory: text('package_category').notNull(),
+  sourceTable: text('source_table'),
+  sourceModule: text('source_module'),
+  sourceRecordId: text('source_record_id'),
+  sourceRevision: text('source_revision'),
+  sourceStatus: text('source_status'),
+  referenceSnapshot: jsonb('reference_snapshot').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  sourceChecksum: text('source_checksum'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  packageIdx: index('engineering_package_items_package_id_idx').on(table.engineeringPackageId),
+  releaseIdx: index('engineering_package_items_release_id_idx').on(table.engineeringReleaseId),
+  baselineItemIdx: index('engineering_package_items_baseline_item_id_idx').on(table.engineeringBaselineItemId),
+  sourceIdx: index('engineering_package_items_source_idx').on(table.sourceTable, table.sourceRecordId),
+}));
+
 export const insertDesignControlRecordSchema = createInsertSchema(designControlRecords).omit({
   id: true,
   submittedAt: true,

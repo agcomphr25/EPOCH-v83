@@ -211,6 +211,10 @@ const safeFiles = [
   '0185_draft_bom_drafts.sql',
   '0186_inventory_items_machined_part_fields.sql',
   '0187_repair_p2_po_unit_serials.sql',
+  '0189_design_control_workflow.sql',
+  '0190_design_control_requirement_applicability.sql',
+  '0191_engineering_releases.sql',
+  '0192_engineering_packages.sql',
   'investigation_308_order_duplication.sql',
 ];
 

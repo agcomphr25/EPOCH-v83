@@ -101,6 +101,7 @@ async function autoCreateLinkedLog(
     serialNumber: run.serialNumber || item.serialNumber || null,
     mandrelNumber: run.mandrelNumber || null,
     ovenNumber: run.ovenNumber || null,
+    ovenTemperature: run.ovenTemperature ?? null,
     ovenSlot: run.ovenSlot || null,
   };
   try {
@@ -111,6 +112,7 @@ async function autoCreateLinkedLog(
         partNumber: item.partNumber,
         department: dept,
         ovenId: run.ovenNumber ? `Oven ${run.ovenNumber}` : null,
+        actualTemperature: run.ovenTemperature ?? null,
         cycleNumber: null,
         startTime: run.startedAt,
         endTime: null,
@@ -335,6 +337,7 @@ const startRunSchema = z.object({
   inventoryItemId: z.number().int().positive('Inventory Item is required').optional(),
   mandrelNumber: z.number().int().min(1).max(3),
   ovenNumber: z.number().int().min(1).max(2),
+  ovenTemperature: z.number().min(0).max(2000).optional(),
   ovenSlot: z.enum(['A', 'B']),
   badgeId: z.string().optional(),
   travelerId: z.string().optional(),
@@ -524,7 +527,7 @@ router.post('/runs/start', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid payload', details: parseResult.error.issues });
     }
 
-    const { programId, instanceName, sku, serialNumber, inventoryItemId, mandrelNumber, ovenNumber, ovenSlot, travelerId, travelerStepId, travelerTaskId, departmentName, scannedTravelerBarcode } = parseResult.data;
+    const { programId, instanceName, sku, serialNumber, inventoryItemId, mandrelNumber, ovenNumber, ovenTemperature, ovenSlot, travelerId, travelerStepId, travelerTaskId, departmentName, scannedTravelerBarcode } = parseResult.data;
 
     const [program] = await db
       .select()
@@ -569,7 +572,11 @@ router.post('/runs/start', async (req: Request, res: Response) => {
     });
 
     // Auto-create linked AS9100 log entry if this program type requires it
-    const runWithScan = { ...run, scannedTravelerBarcode: scannedTravelerBarcode || null };
+    const runWithScan = {
+      ...run,
+      ovenTemperature: ovenTemperature ?? null,
+      scannedTravelerBarcode: scannedTravelerBarcode || null,
+    };
     const { linkedLogId, linkedLogType } = await autoCreateLinkedLog(runWithScan, program, userId);
     if (linkedLogId && linkedLogType) {
       await db.update(productionProgramRuns)

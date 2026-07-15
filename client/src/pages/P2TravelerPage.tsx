@@ -2180,6 +2180,8 @@ export default function P2TravelerPage() {
         defaultSerialNumber={verificationData?.serializedItem?.serialNumber || activeTask?.barcode || ''}
         navigateToStation={false}
         badgeId={badgeInput || undefined}
+        travelerTaskId={activeTask?.id}
+        departmentName={activeTask?.department || verificationData?.nextDepartment}
         onTimerStarted={() => {
           toast({
             title: 'Timer Started',

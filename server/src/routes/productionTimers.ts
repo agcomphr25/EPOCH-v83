@@ -19,6 +19,7 @@ import { eq, and, desc, or, inArray, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { authenticateToken, optionalAuth } from '../../middleware/auth';
 import { validateActionToken } from '../../middleware/actionToken';
+import { isRoutingConnectedOvenCureRun } from '../lib/timerTraceability';
 
 // ── Auto-logging helpers ──────────────────────────────────────────────────────
 // Resolves serialized item from run serial number / sku for log creation
@@ -72,7 +73,12 @@ async function autoCreateLinkedLog(
   program: any,
   userId: number | null,
 ): Promise<{ linkedLogId: string | null; linkedLogType: string | null }> {
-  const logType: string = program.logType || 'none';
+  // Routing is the source of truth for process traceability. An Oven/Cure
+  // routing step must create a cure record even when the reusable timer
+  // program was left with its legacy `none` log type.
+  const logType: string = isRoutingConnectedOvenCureRun(run)
+    ? 'oven_cure'
+    : (program.logType || 'none');
   if (logType === 'none') return { linkedLogId: null, linkedLogType: null };
 
   const item = await lookupSerializedItem(run.serialNumber, run.sku, run.travelerId || null);
@@ -159,8 +165,9 @@ async function autoCloseLinkedLog(run: any, result: 'PASS' | 'STOPPED', endTime:
   if (!run.linkedLogId || !run.linkedLogType) return;
   try {
     if (run.linkedLogType === 'oven_cure') {
+      const actualDuration = Math.max(0, Math.ceil((endTime.getTime() - new Date(run.startedAt).getTime()) / 60000));
       await db.update(p2OvenCureLogs)
-        .set({ endTime, result, updatedAt: endTime })
+        .set({ endTime, actualDuration, result, updatedAt: endTime })
         .where(eq(p2OvenCureLogs.id, run.linkedLogId));
     } else if (run.linkedLogType === 'vacuum_leak_test') {
       await db.update(p2VacuumLeakTests)

@@ -23,19 +23,8 @@ import {
   getEngineeringReleasePreview,
   submitEngineeringRelease,
 } from '../services/engineeringReleaseService';
-import { ensureDesignControlSchema } from '../services/designControlSchemaGuard';
 
 const router = Router();
-
-router.use(async (_req, res, next) => {
-  try {
-    await ensureDesignControlSchema();
-    next();
-  } catch (error) {
-    console.error('[qms-design-control] Failed to ensure design control schema', error);
-    res.status(500).json({ message: 'Failed to prepare design control schema' });
-  }
-});
 
 type StepPayload = {
   formData?: Record<string, unknown>;

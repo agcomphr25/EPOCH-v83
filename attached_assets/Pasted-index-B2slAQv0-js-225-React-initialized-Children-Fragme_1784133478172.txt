@@ -1,0 +1,150 @@
+index-B2slAQv0.js:225 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-B2slAQv0.js:225 React hooks: {useState: ƒ, useEffect: ƒ}
+index-B2slAQv0.js:225 [EPOCH SYNC] Sync engine starting
+index-B2slAQv0.js:225 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-B2slAQv0.js:222 App component is rendering...
+index-B2slAQv0.js:222 Environment: production
+index-B2slAQv0.js:222 Base URL: /
+index-B2slAQv0.js:189 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-B2slAQv0.js:189 [EPOCH] Install prompt captured and ready
+login:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-B2slAQv0.js:189  GET https://agcompepoch.xyz/api/auth/session 503 (Service Unavailable)
+(anonymous) @ index-B2slAQv0.js:189
+a @ vendor-query-BPlGaSCj.js:9
+M @ vendor-query-BPlGaSCj.js:9
+start @ vendor-query-BPlGaSCj.js:9
+fetch @ vendor-query-BPlGaSCj.js:9
+jt @ vendor-query-BPlGaSCj.js:9
+onSubscribe @ vendor-query-BPlGaSCj.js:9
+subscribe @ vendor-query-BPlGaSCj.js:9
+(anonymous) @ vendor-query-BPlGaSCj.js:9
+oa @ vendor-react-D1EEdWjZ.js:30
+ol @ vendor-react-D1EEdWjZ.js:32
+Xt @ vendor-react-D1EEdWjZ.js:32
+Ii @ vendor-react-D1EEdWjZ.js:32
+pt @ vendor-react-D1EEdWjZ.js:30
+id @ vendor-react-D1EEdWjZ.js:32
+yt @ vendor-react-D1EEdWjZ.js:32
+Ua @ vendor-react-D1EEdWjZ.js:32
+E @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+pl @ vendor-react-D1EEdWjZ.js:17
+e.unstable_scheduleCallback @ vendor-react-D1EEdWjZ.js:17
+Qa @ vendor-react-D1EEdWjZ.js:32
+de @ vendor-react-D1EEdWjZ.js:32
+Re @ vendor-react-D1EEdWjZ.js:32
+al @ vendor-react-D1EEdWjZ.js:32
+fl.render.zo.render @ vendor-react-D1EEdWjZ.js:32
+(anonymous) @ index-B2slAQv0.js:225
+index-B2slAQv0.js:189 [QUERY] /api/auth/session returned startup 503; retrying in 2000ms (1/8)
+(anonymous) @ index-B2slAQv0.js:189
+await in (anonymous)
+a @ vendor-query-BPlGaSCj.js:9
+M @ vendor-query-BPlGaSCj.js:9
+start @ vendor-query-BPlGaSCj.js:9
+fetch @ vendor-query-BPlGaSCj.js:9
+jt @ vendor-query-BPlGaSCj.js:9
+onSubscribe @ vendor-query-BPlGaSCj.js:9
+subscribe @ vendor-query-BPlGaSCj.js:9
+(anonymous) @ vendor-query-BPlGaSCj.js:9
+oa @ vendor-react-D1EEdWjZ.js:30
+ol @ vendor-react-D1EEdWjZ.js:32
+Xt @ vendor-react-D1EEdWjZ.js:32
+Ii @ vendor-react-D1EEdWjZ.js:32
+pt @ vendor-react-D1EEdWjZ.js:30
+id @ vendor-react-D1EEdWjZ.js:32
+yt @ vendor-react-D1EEdWjZ.js:32
+Ua @ vendor-react-D1EEdWjZ.js:32
+E @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+pl @ vendor-react-D1EEdWjZ.js:17
+e.unstable_scheduleCallback @ vendor-react-D1EEdWjZ.js:17
+Qa @ vendor-react-D1EEdWjZ.js:32
+de @ vendor-react-D1EEdWjZ.js:32
+Re @ vendor-react-D1EEdWjZ.js:32
+al @ vendor-react-D1EEdWjZ.js:32
+fl.render.zo.render @ vendor-react-D1EEdWjZ.js:32
+(anonymous) @ index-B2slAQv0.js:225
+index-B2slAQv0.js:194  GET https://agcompepoch.xyz/api/auth/session 503 (Service Unavailable)
+queryFn @ index-B2slAQv0.js:194
+a @ vendor-query-BPlGaSCj.js:9
+M @ vendor-query-BPlGaSCj.js:9
+start @ vendor-query-BPlGaSCj.js:9
+fetch @ vendor-query-BPlGaSCj.js:9
+jt @ vendor-query-BPlGaSCj.js:9
+onSubscribe @ vendor-query-BPlGaSCj.js:9
+subscribe @ vendor-query-BPlGaSCj.js:9
+(anonymous) @ vendor-query-BPlGaSCj.js:9
+oa @ vendor-react-D1EEdWjZ.js:30
+ol @ vendor-react-D1EEdWjZ.js:32
+Xt @ vendor-react-D1EEdWjZ.js:32
+Ii @ vendor-react-D1EEdWjZ.js:32
+pt @ vendor-react-D1EEdWjZ.js:30
+id @ vendor-react-D1EEdWjZ.js:32
+yt @ vendor-react-D1EEdWjZ.js:32
+Ua @ vendor-react-D1EEdWjZ.js:32
+E @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+pl @ vendor-react-D1EEdWjZ.js:17
+e.unstable_scheduleCallback @ vendor-react-D1EEdWjZ.js:17
+Qa @ vendor-react-D1EEdWjZ.js:32
+de @ vendor-react-D1EEdWjZ.js:32
+Re @ vendor-react-D1EEdWjZ.js:32
+al @ vendor-react-D1EEdWjZ.js:32
+fl.render.zo.render @ vendor-react-D1EEdWjZ.js:32
+(anonymous) @ index-B2slAQv0.js:225
+index-B2slAQv0.js:194 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=29028e91f6bb3edd3a52137d2df2a4bb2fc63078aee340d5c7aca744bc6917af' failed: Error during WebSocket handshake: Unexpected response code: 404
+(anonymous) @ index-B2slAQv0.js:194
+index-B2slAQv0.js:189  GET https://agcompepoch.xyz/api/auth/session 503 (Service Unavailable)
+(anonymous) @ index-B2slAQv0.js:189
+await in (anonymous)
+a @ vendor-query-BPlGaSCj.js:9
+M @ vendor-query-BPlGaSCj.js:9
+start @ vendor-query-BPlGaSCj.js:9
+fetch @ vendor-query-BPlGaSCj.js:9
+jt @ vendor-query-BPlGaSCj.js:9
+onSubscribe @ vendor-query-BPlGaSCj.js:9
+subscribe @ vendor-query-BPlGaSCj.js:9
+(anonymous) @ vendor-query-BPlGaSCj.js:9
+oa @ vendor-react-D1EEdWjZ.js:30
+ol @ vendor-react-D1EEdWjZ.js:32
+Xt @ vendor-react-D1EEdWjZ.js:32
+Ii @ vendor-react-D1EEdWjZ.js:32
+pt @ vendor-react-D1EEdWjZ.js:30
+id @ vendor-react-D1EEdWjZ.js:32
+yt @ vendor-react-D1EEdWjZ.js:32
+Ua @ vendor-react-D1EEdWjZ.js:32
+E @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+pl @ vendor-react-D1EEdWjZ.js:17
+e.unstable_scheduleCallback @ vendor-react-D1EEdWjZ.js:17
+Qa @ vendor-react-D1EEdWjZ.js:32
+de @ vendor-react-D1EEdWjZ.js:32
+Re @ vendor-react-D1EEdWjZ.js:32
+al @ vendor-react-D1EEdWjZ.js:32
+fl.render.zo.render @ vendor-react-D1EEdWjZ.js:32
+(anonymous) @ index-B2slAQv0.js:225
+index-B2slAQv0.js:194 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=29028e91f6bb3edd3a52137d2df2a4bb2fc63078aee340d5c7aca744bc6917af' failed: Error during WebSocket handshake: Unexpected response code: 404
+(anonymous) @ index-B2slAQv0.js:194
+index-B2slAQv0.js:194 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=29028e91f6bb3edd3a52137d2df2a4bb2fc63078aee340d5c7aca744bc6917af' failed: Error during WebSocket handshake: Unexpected response code: 404
+(anonymous) @ index-B2slAQv0.js:194

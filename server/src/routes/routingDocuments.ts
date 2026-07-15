@@ -2905,6 +2905,7 @@ router.post('/templates', async (req: Request, res: Response) => {
         fieldType: field.fieldType || 'text',
         isRequired: field.isRequired || false,
         defaultValue: field.defaultValue || null,
+        sectionName: field.sectionName || 'General',
         sortOrder: field.sortOrder ?? index,
       }));
       
@@ -2957,6 +2958,7 @@ router.put('/templates/:templateId', async (req: Request, res: Response) => {
           fieldType: field.fieldType || 'text',
           isRequired: field.isRequired || false,
           defaultValue: field.defaultValue || null,
+          sectionName: field.sectionName || 'General',
           sortOrder: field.sortOrder ?? index,
         }));
         

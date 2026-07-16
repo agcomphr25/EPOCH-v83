@@ -166,7 +166,7 @@ const CNC_SPEC_SHEET_TEMPLATE = {
     { fieldName: 'partName', fieldLabel: 'Part Name', fieldType: 'text', sectionName: 'Header', isRequired: true, defaultValue: 'Wing Box Rib' },
     { fieldName: 'partNumber', fieldLabel: 'Part Number', fieldType: 'text', sectionName: 'Header', isRequired: true, defaultValue: '26006' },
     { fieldName: 'sku', fieldLabel: 'SKU #', fieldType: 'text', sectionName: 'Header', isRequired: true, defaultValue: '4002P0146' },
-    { fieldName: 'partsList', fieldLabel: 'Parts List', fieldType: 'textarea', sectionName: 'Parts List', isRequired: true, defaultValue: '1 | 26004 | 6061 Aluminum bar, 3/8" x 4" x 6"\n1 | 373 | Sand Paper 180 grit sheets\n1 | 602 | Deburring Scraper Tool' },
+    { fieldName: 'partsList', fieldLabel: 'Parts List', fieldType: 'inventory_parts', sectionName: 'Parts List', isRequired: true, defaultValue: '1 | 26004 | 6061 Aluminum bar, 3/8" x 4" x 6"\n1 | 373 | Sand Paper 180 grit sheets\n1 | 602 | Deburring Scraper Tool' },
     { fieldName: 'bandSawInstructions', fieldLabel: 'Band Saw Instructions', fieldType: 'textarea', sectionName: 'Band Saw', isRequired: false, defaultValue: 'Cut the aluminum into 6" lengths' },
     { fieldName: 'cncOperations', fieldLabel: 'CNC Operations', fieldType: 'textarea', sectionName: 'CNC', isRequired: true, defaultValue: 'WINGBOXRIB1 | 3 axis | 5 minutes\nWINGBOXRIB2 | 3 axis | 5 minutes\nside 1 | WNGBOXENDHL | Okuma | 20 seconds\nside 2 | WNGBOXENDHL | Okuma | 20 seconds' },
     { fieldName: 'tumblerInstructions', fieldLabel: 'Tumbler Instructions', fieldType: 'textarea', sectionName: 'Tumbler', isRequired: false, defaultValue: 'N/A | Tumbler 2 | minimum 2 hours' },
@@ -1741,6 +1741,7 @@ export default function RoutingDocumentManagement() {
                             <SelectItem value="textarea">Long Text</SelectItem>
                             <SelectItem value="number">Number</SelectItem>
                             <SelectItem value="date">Date</SelectItem>
+                            <SelectItem value="inventory_parts">Inventory Parts List</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1894,11 +1895,48 @@ export default function RoutingDocumentManagement() {
                   <div className="grid grid-cols-2 gap-3">
                     {sectionFields.map((field: any) => {
                       const value = fillSpecSheetForm.fieldValues[field.fieldName] || '';
-                      const isLongField = field.fieldType === 'textarea' || value.includes('\n');
+                      const isInventoryParts = field.fieldType === 'inventory_parts';
+                      const isLongField = field.fieldType === 'textarea' || isInventoryParts || value.includes('\n');
                       return (
                         <div key={field.fieldName} className={isLongField ? 'col-span-2' : ''}>
                           <Label>{field.fieldLabel || field.fieldName}</Label>
-                          {isLongField ? (
+                          {isInventoryParts ? (
+                            <div className="space-y-2">
+                              <Select
+                                value=""
+                                onValueChange={(inventoryItemId) => {
+                                  const item = inventoryItems.find((candidate) => String(candidate.id) === inventoryItemId);
+                                  if (!item) return;
+                                  const partNumber = item.agPartNumber || item.sku || String(item.id);
+                                  const newLine = `1 | ${partNumber} | ${item.name}`;
+                                  const existingLines = value.split('\n').map((line) => line.trim()).filter(Boolean);
+                                  if (!existingLines.some((line) => line.includes(`| ${partNumber} |`))) {
+                                    updateFillSpecSheetField(field.fieldName, [...existingLines, newLine].join('\n'));
+                                  }
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Add an item from inventory" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {inventoryItems.map((item) => (
+                                    <SelectItem key={item.id} value={String(item.id)}>
+                                      {item.agPartNumber || item.sku || item.id} - {item.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Textarea
+                                value={value}
+                                onChange={(e) => updateFillSpecSheetField(field.fieldName, e.target.value)}
+                                placeholder="Quantity | Part Number | Description"
+                                className="min-h-[120px] font-mono text-sm"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Select inventory items above, then adjust quantities in the generated parts list.
+                              </p>
+                            </div>
+                          ) : isLongField ? (
                             <Textarea
                               value={value}
                               onChange={(e) => updateFillSpecSheetField(field.fieldName, e.target.value)}

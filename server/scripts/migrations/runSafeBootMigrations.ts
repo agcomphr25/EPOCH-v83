@@ -216,6 +216,7 @@ export const safeMigrationFiles = [
   '0192_engineering_packages.sql',
   '0194_layup_schedule_history.sql',
   '0195_production_order_transition_history.sql',
+  '0196_document_template_builder_tables.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -233,6 +234,7 @@ export const criticalMigrationFiles = new Set([
   '0190_design_control_requirement_applicability.sql',
   '0191_engineering_releases.sql',
   '0192_engineering_packages.sql',
+  '0196_document_template_builder_tables.sql',
 ]);
 
 export async function runSafeBootMigrations() {

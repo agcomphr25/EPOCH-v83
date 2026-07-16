@@ -79,7 +79,7 @@ export function ScheduleHistoryDialog({ open, onClose }: ScheduleHistoryDialogPr
               <FileText className="w-16 h-16 text-gray-300 mb-4" />
               <p className="text-gray-500">No schedules found</p>
               <p className="text-sm text-gray-400 mt-1">
-                Approved schedules will appear here
+                Scheduled work will appear here
               </p>
             </div>
           ) : (

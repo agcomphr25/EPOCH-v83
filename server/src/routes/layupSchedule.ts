@@ -1442,6 +1442,17 @@ router.get('/weeks', async (req: Request, res: Response) => {
     console.log('📅 SCHEDULE WEEKS: Fetching list of weeks with schedules...');
     
     const weeks = await pool.query(`
+      WITH latest_day_states AS (
+        SELECT DISTINCT ON (source_schedule_id, layup_day)
+          source_schedule_id,
+          order_id,
+          layup_day,
+          created_at,
+          recorded_at
+        FROM layup_schedule_history
+        WHERE layup_day IS NOT NULL
+        ORDER BY source_schedule_id, layup_day, recorded_at DESC, history_id DESC
+      )
       SELECT 
         TO_CHAR(DATE_TRUNC('week', layup_day), 'YYYY-MM-DD') AS week_start,
         TO_CHAR(MIN(layup_day), 'YYYY-MM-DD') AS first_day,
@@ -1452,11 +1463,9 @@ router.get('/weeks', async (req: Request, res: Response) => {
         COUNT(DISTINCT CASE WHEN order_id NOT LIKE 'PO-%' THEN order_id END) AS regular_order_count,
         ARRAY_AGG(DISTINCT order_id ORDER BY order_id) AS order_ids,
         ARRAY_AGG(DISTINCT TO_CHAR(layup_day, 'YYYY-MM-DD') ORDER BY TO_CHAR(layup_day, 'YYYY-MM-DD')) AS schedule_days
-      FROM layup_schedule
-      WHERE layup_day IS NOT NULL
+      FROM latest_day_states
       GROUP BY DATE_TRUNC('week', layup_day)
       ORDER BY DATE_TRUNC('week', layup_day) DESC
-      LIMIT 52
     `);
     
     console.log(`✅ Found ${weeks.length} weeks with schedules`);
@@ -1487,17 +1496,30 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     // Get all schedule entries for this week
     const scheduleEntries = await pool.query(
       `
+      WITH latest_day_states AS (
+        SELECT DISTINCT ON (source_schedule_id, layup_day)
+          history_id,
+          order_id,
+          layup_day,
+          mold_id,
+          employee_assignments,
+          is_override,
+          created_at,
+          recorded_at
+        FROM layup_schedule_history
+        WHERE layup_day >= $1::date
+          AND layup_day < $2::date
+        ORDER BY source_schedule_id, layup_day, recorded_at DESC, history_id DESC
+      )
       SELECT 
-        ls.id,
+        ls.history_id AS id,
         ls.order_id,
         ls.layup_day AS scheduled_date,
         ls.mold_id,
         ls.employee_assignments,
         ls.is_override,
         ls.created_at
-      FROM layup_schedule ls
-      WHERE ls.layup_day >= $1::date 
-        AND ls.layup_day < $2::date
+      FROM latest_day_states ls
       ORDER BY ls.layup_day, ls.order_id
     `,
       [weekStart, weekEnd]

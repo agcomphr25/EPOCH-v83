@@ -56,6 +56,10 @@ function valueSqlForPublicColumn(columns: Map<string, string>, key: string, valu
     const serialized = typeof value === 'string' ? value : JSON.stringify(value);
     return dataType === 'jsonb' ? sql`${serialized}::jsonb` : sql`${serialized}::json`;
   }
+  if (dataType?.toLowerCase() === 'array' && Array.isArray(value)) {
+    const serialized = JSON.stringify(value.map((entry) => String(entry)));
+    return sql`ARRAY(SELECT jsonb_array_elements_text(${serialized}::jsonb))`;
+  }
   return sql`${value}`;
 }
 

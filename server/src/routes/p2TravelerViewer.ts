@@ -761,6 +761,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
         const dept = stepId ? stepIdToDept[stepId] : 'Unknown';
         return {
           id: `ttf-${f.id}`,
+          travelerTaskId: f.travelerTaskId,
           serializedItemId: serializedItem.id,
           department: dept,
           traceabilityType: f.fieldType || 'text',
@@ -946,6 +947,90 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
           });
         }
       }
+    }
+
+    // The traveler is an execution snapshot, while its part routing can be edited later.
+    // Keep completed material evidence visible when the current routing no longer contains
+    // the material row that originally generated the TRACE task.
+    const routedMaterialKeys = new Set(
+      materialUsage.map((mat: any) => `${mat.department}|${mat.partNumber || ''}`.toLowerCase()),
+    );
+    const materialTraceTasks = travelerTasksData.filter((task: any) =>
+      task.taskType === 'TRACE' && /^Material Traceability(?:\s*[—-]\s*#?.+)?$/i.test(task.title || ''),
+    );
+
+    for (const task of materialTraceTasks) {
+      const stepId = taskIdToStepId[task.id];
+      const department = stepId ? stepIdToDept[stepId] : 'Unknown';
+      const titleMatch = (task.title || '').match(/^Material Traceability\s*[—-]\s*#?(.+)$/i);
+      const partNumber = titleMatch?.[1]?.trim() || null;
+      const materialKey = `${department}|${partNumber || ''}`.toLowerCase();
+      if (routedMaterialKeys.has(materialKey)) continue;
+
+      const taskFields = travelerTaskFieldsData.filter((field: any) =>
+        field.travelerTaskId === task.id && field.value && field.value.trim() !== '',
+      );
+      if (taskFields.length === 0) continue;
+
+      let inventoryItem: any = null;
+      if (partNumber) {
+        inventoryItem = await db.query.inventoryItems.findFirst({
+          where: eq(inventoryItems.agPartNumber, partNumber),
+        });
+        if (!inventoryItem && /^\d+$/.test(partNumber)) {
+          inventoryItem = await db.query.inventoryItems.findFirst({
+            where: eq(inventoryItems.id, Number(partNumber)),
+          });
+        }
+      }
+
+      const fabricMatches: any[] = [];
+      const capturedTokens = taskFields.flatMap((field: any) =>
+        String(field.value).split(',').map((value: string) => value.trim()).filter(Boolean),
+      );
+      for (const value of capturedTokens) {
+        const fabric = await db.query.cuttingFabricInventory.findFirst({
+          where: or(
+            eq(cuttingFabricInventory.lotNumber, value),
+            eq(cuttingFabricInventory.rollNumber, value),
+            eq(cuttingFabricInventory.batchNumber, value),
+            eq(cuttingFabricInventory.barcode, value),
+            eq(cuttingFabricInventory.internalControlNumber, value),
+          ),
+        });
+        if (fabric && !fabricMatches.some((match: any) => match.id === fabric.id)) {
+          fabricMatches.push(fabric);
+        }
+      }
+
+      materialUsage.push({
+        department,
+        partId: inventoryItem?.id || null,
+        partNumber: partNumber || inventoryItem?.agPartNumber || null,
+        partName: inventoryItem?.name || task.title,
+        requiredFields: taskFields.map((field: any) => field.fieldLabel),
+        entryMethod: 'traveler_snapshot',
+        inventoryItem: inventoryItem ? {
+          id: inventoryItem.id,
+          name: inventoryItem.name,
+          agPartNumber: inventoryItem.agPartNumber,
+          source: inventoryItem.source,
+          supplierPartNumber: inventoryItem.supplierPartNumber,
+          category: inventoryItem.category,
+          location: inventoryItem.location,
+          isFabric: inventoryItem.isFabric,
+          traceabilityRequired: inventoryItem.traceabilityRequired,
+          traceabilityFields: inventoryItem.traceabilityFields,
+        } : null,
+        capturedValues: taskFields.map((field: any) => ({
+          field: field.fieldLabel,
+          value: field.value,
+          recordedBy: resolveName(field.recordedBy) || field.recordedBy,
+          recordedAt: field.recordedAt,
+        })),
+        fabricDetails: fabricMatches,
+      });
+      routedMaterialKeys.add(materialKey);
     }
 
     // Query cutting packets allocated to this serialized item

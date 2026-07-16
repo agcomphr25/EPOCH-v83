@@ -27,6 +27,16 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -42,6 +52,7 @@ import {
   DollarSign,
   Edit,
   QrCode,
+  Trash2,
   Truck,
   Factory,
 } from 'lucide-react';
@@ -99,6 +110,7 @@ export default function RTSPage() {
     item: RTSInventoryItem | null;
   }>({ isOpen: false, item: null });
   const [barcodeItem, setBarcodeItem] = useState<RTSInventoryItem | null>(null);
+  const [deleteItem, setDeleteItem] = useState<RTSInventoryItem | null>(null);
   const [salesDialogOpen, setSalesDialogOpen] = useState(false);
   const [newItem, setNewItem] = useState({
     stockModel: '',
@@ -213,6 +225,29 @@ export default function RTSPage() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to update RTS inventory item.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: async (item: RTSInventoryItem) => {
+      return apiRequest(`/api/rts-inventory/${item.id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: (_response, item) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory'] });
+      toast({
+        title: 'Item Removed',
+        description: `${item.rtsNumber} was removed from the Ready to Sell queue.`,
+      });
+      setDeleteItem(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Unable to Remove Item',
+        description: error.message || 'Failed to remove the RTS inventory item.',
         variant: 'destructive',
       });
     },
@@ -413,6 +448,16 @@ export default function RTSPage() {
                           >
                             <QrCode className="h-3 w-3" />
                             Barcode
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDeleteItem(item)}
+                            className="flex items-center gap-1 text-destructive hover:text-destructive"
+                            data-testid={`button-delete-${item.id}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Delete
                           </Button>
                         </div>
                       </TableCell>
@@ -778,6 +823,32 @@ export default function RTSPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteItem} onOpenChange={(open) => !open && setDeleteItem(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Ready to Sell Item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteItem
+                ? `Remove ${deleteItem.rtsNumber} (${deleteItem.stockModel}) from the Ready to Sell queue? Its history will be retained for audit purposes.`
+                : 'Remove this item from the Ready to Sell queue?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteItemMutation.isPending}>
+              Keep Item
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteItem && deleteItemMutation.mutate(deleteItem)}
+              disabled={!deleteItem || deleteItemMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-rts"
+            >
+              {deleteItemMutation.isPending ? 'Removing...' : 'Remove Item'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* RTS Sales Dialog */}
       <RTSSalesDialog

@@ -961,7 +961,7 @@ export const rtsInventory = pgTable('rts_inventory', {
   extras: text('extras'), // Order/identifier codes
   lastDepartment: text('last_department'), // Last completed production department before RTS
   price: real('price'), // Sale price for this item
-  status: text('status').notNull().default('AVAILABLE'), // AVAILABLE, SHIPPED, IN_PRODUCTION, SOLD
+  status: text('status').notNull().default('AVAILABLE'), // AVAILABLE, SHIPPED, IN_PRODUCTION, SOLD, REMOVED
   currentDepartment: text('current_department'), // If sent back to production
   returnReason: text('return_reason'), // Why sent back to production
   returnNotes: text('return_notes'), // Notes about changes needed

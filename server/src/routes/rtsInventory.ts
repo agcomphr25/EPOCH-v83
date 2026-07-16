@@ -372,17 +372,51 @@ router.post('/:id/send-to-production', async (req, res) => {
   }
 });
 
-// Delete an item
+// Remove an item from the sellable queue while preserving its audit history.
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const performedBy = req.user?.username || 'Unknown';
 
-    await db.delete(rtsInventory).where(eq(rtsInventory.id, id));
+    const [item] = await db
+      .select()
+      .from(rtsInventory)
+      .where(eq(rtsInventory.id, id));
 
-    res.json({ message: 'Item deleted successfully' });
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    if (item.status !== 'AVAILABLE') {
+      return res.status(400).json({ error: 'Only available RTS items can be removed' });
+    }
+
+    const removed = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(rtsInventory)
+        .set({
+          status: 'REMOVED',
+          updatedAt: new Date(),
+        })
+        .where(eq(rtsInventory.id, id))
+        .returning();
+
+      await tx.insert(rtsInventoryHistory).values({
+        rtsInventoryId: id,
+        action: 'REMOVED',
+        fromStatus: 'AVAILABLE',
+        toStatus: 'REMOVED',
+        performedBy,
+        notes: 'Removed from the Ready to Sell queue',
+      });
+
+      return updated;
+    });
+
+    res.json({ message: 'Item removed successfully', item: removed });
   } catch (error) {
-    console.error('Error deleting RTS inventory item:', error);
-    res.status(500).json({ error: 'Failed to delete item' });
+    console.error('Error removing RTS inventory item:', error);
+    res.status(500).json({ error: 'Failed to remove item' });
   }
 });
 

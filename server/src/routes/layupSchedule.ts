@@ -6,6 +6,7 @@ import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layu
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 import { deriveCanonicalMaterial } from '../utils/deriveCanonicalMaterial';
+import { parseP1POUnitOrderId } from '../utils/parseP1POUnitOrderId';
 
 function normalizeMaterial(raw: string): string {
   const lower = raw.toLowerCase().trim();
@@ -824,14 +825,10 @@ router.post('/save', async (req: Request, res: Response) => {
       const existingPOCounts = new Map<string, number>();
       for (const row of (Array.isArray(existingRows) ? existingRows : [])) {
         const orderId = row.order_id;
-        if (orderId.startsWith('PO-')) {
-          const parts = orderId.split('-');
-          if (parts.length >= 3) {
-            const poNumber = parts[1];
-            const itemId = parts[2];
-            const key = `${poNumber}-${itemId}`;
-            existingPOCounts.set(key, (existingPOCounts.get(key) || 0) + 1);
-          }
+        const parsedPOUnit = parseP1POUnitOrderId(orderId);
+        if (parsedPOUnit) {
+          const key = `${parsedPOUnit.poNumber}|${parsedPOUnit.poItemId}`;
+          existingPOCounts.set(key, (existingPOCounts.get(key) || 0) + 1);
         }
       }
       
@@ -839,7 +836,7 @@ router.post('/save', async (req: Request, res: Response) => {
       if (existingPOCounts.size > 0) {
         const poItemEntries = Array.from(existingPOCounts.entries());
         for (const [key, count] of poItemEntries) {
-          const [poNumber, itemId] = key.split('-');
+          const [, itemId] = key.split('|');
           await client.query(
             `
             UPDATE purchase_order_items
@@ -867,7 +864,8 @@ router.post('/save', async (req: Request, res: Response) => {
       let savedCount = 0;
       let progressedCount = 0;
       const orderIds: string[] = [];
-      const poItemCounts = new Map<string, number>(); // Track PO item counts: "poNumber-itemId" -> count
+      const poItemCounts = new Map<string, number>(); // Track PO item counts: "poNumber|itemId" -> count
+      const selectedPOOrderIds = new Set<string>();
 
       // Save schedule entries
       for (const entry of entries) {
@@ -926,14 +924,13 @@ router.post('/save', async (req: Request, res: Response) => {
         savedCount++;
         
         // Track PO items to update their order counts
-        if (orderId.startsWith('PO-')) {
-          // Parse PO item ID: PO-{poNumber}-{itemId}-{unitNumber}
-          const parts = orderId.split('-');
-          if (parts.length >= 3) {
-            const poNumber = parts[1];
-            const itemId = parts[2];
-            const key = `${poNumber}-${itemId}`;
+        const parsedPOUnit = parseP1POUnitOrderId(orderId);
+        if (parsedPOUnit) {
+            const { poNumber, poItemId } = parsedPOUnit;
+            const itemId = String(poItemId);
+            const key = `${poNumber}|${itemId}`;
             poItemCounts.set(key, (poItemCounts.get(key) || 0) + 1);
+            selectedPOOrderIds.add(orderId);
             
             // Create/update production_orders record for this PO unit
             // This ensures the item appears in the Layup/Plugging department queue
@@ -962,7 +959,7 @@ router.post('/save', async (req: Request, res: Response) => {
                 const stockModelForPO = derivedStockModel || poItem.stock_model_id || poItem.item_name || '';
                 
                 // Upsert production_orders record
-                await client.query(`
+                const progressionResult = await client.query(`
                   INSERT INTO production_orders (
                     order_id, po_id, po_item_id, customer_id, customer_name, 
                     po_number, item_type, item_id, item_name, 
@@ -973,6 +970,7 @@ router.post('/save', async (req: Request, res: Response) => {
                     item_id = COALESCE(NULLIF($8, ''), production_orders.item_id),
                     item_name = COALESCE(NULLIF($9, ''), production_orders.item_name),
                     updated_at = NOW()
+                  RETURNING order_id
                 `, [
                   orderId,
                   poItem.po_id,
@@ -988,13 +986,25 @@ router.post('/save', async (req: Request, res: Response) => {
                   'Layup/Plugging',
                   'PENDING'
                 ]);
+
+                if (progressionResult.rowCount !== 1) {
+                  throw new Error(
+                    `Expected to progress exactly one production order for ${orderId}, updated ${progressionResult.rowCount ?? 0}`
+                  );
+                }
+                progressedCount += 1;
                 
                 console.log(`📦 Created/updated production_orders record for ${orderId} with stock model: ${stockModelForPO}`);
+              } else {
+                throw new Error(
+                  `Purchase-order item ${itemId} could not be resolved for scheduled unit ${orderId}`
+                );
               }
             } catch (poError) {
+              // Keep schedule rows and production status changes atomic.
+              throw poError;
               console.log(`⚠️ Could not create production_orders for ${orderId}:`, poError);
             }
-          }
         } else {
           // Track regular order IDs
           orderIds.push(orderId);
@@ -1010,7 +1020,7 @@ router.post('/save', async (req: Request, res: Response) => {
       if (poItemCounts.size > 0) {
         const newPOItemEntries = Array.from(poItemCounts.entries());
         for (const [key, count] of newPOItemEntries) {
-          const [poNumber, itemId] = key.split('-');
+          const [poNumber, itemId] = key.split('|');
           await client.query(
             `
             UPDATE purchase_order_items
@@ -1097,14 +1107,14 @@ router.post('/save', async (req: Request, res: Response) => {
             UPDATE production_orders
             SET current_department = 'Layup/Plugging',
                 updated_at = NOW()
-            WHERE po_number = ANY($1::text[])
+            WHERE order_id = ANY($1::text[])
             AND current_department = 'P1 Production Queue'
           `,
-            [fullyScheduledPOs]
+            [Array.from(selectedPOOrderIds)]
           );
           
           const poProgressedCount = poUpdateResult.rowCount || 0;
-          progressedCount += poProgressedCount;
+          // Exact per-unit upserts above already contributed to progressedCount.
           console.log(`📦 Moved ${poProgressedCount} production orders to Layup/Plugging (all items complete): ${fullyScheduledPOs.join(', ')}`);
         } else {
           console.log(`📦 No production orders ready to move (items still pending)`);
@@ -1380,13 +1390,12 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
       const poMappings: Array<{ poNumber: string; poItemId: number }> = [];
       
       for (const poUnitId of poUnitIds) {
-        const parts = poUnitId.split('-');
-        if (parts.length >= 3) {
-          const poNumber = parts[1];
-          const poItemId = parseInt(parts[2]);
-          if (!isNaN(poItemId)) {
-            poMappings.push({ poNumber, poItemId });
-          }
+        const parsedPOUnit = parseP1POUnitOrderId(poUnitId);
+        if (parsedPOUnit) {
+          poMappings.push({
+            poNumber: parsedPOUnit.poNumber,
+            poItemId: parsedPOUnit.poItemId,
+          });
         }
       }
       
@@ -1442,6 +1451,17 @@ router.get('/weeks', async (req: Request, res: Response) => {
     console.log('📅 SCHEDULE WEEKS: Fetching list of weeks with schedules...');
     
     const weeks = await pool.query(`
+      WITH latest_day_states AS (
+        SELECT DISTINCT ON (source_schedule_id, layup_day)
+          source_schedule_id,
+          order_id,
+          layup_day,
+          created_at,
+          recorded_at
+        FROM layup_schedule_history
+        WHERE layup_day IS NOT NULL
+        ORDER BY source_schedule_id, layup_day, recorded_at DESC, history_id DESC
+      )
       SELECT 
         TO_CHAR(DATE_TRUNC('week', layup_day), 'YYYY-MM-DD') AS week_start,
         TO_CHAR(MIN(layup_day), 'YYYY-MM-DD') AS first_day,
@@ -1452,11 +1472,9 @@ router.get('/weeks', async (req: Request, res: Response) => {
         COUNT(DISTINCT CASE WHEN order_id NOT LIKE 'PO-%' THEN order_id END) AS regular_order_count,
         ARRAY_AGG(DISTINCT order_id ORDER BY order_id) AS order_ids,
         ARRAY_AGG(DISTINCT TO_CHAR(layup_day, 'YYYY-MM-DD') ORDER BY TO_CHAR(layup_day, 'YYYY-MM-DD')) AS schedule_days
-      FROM layup_schedule
-      WHERE layup_day IS NOT NULL
+      FROM latest_day_states
       GROUP BY DATE_TRUNC('week', layup_day)
       ORDER BY DATE_TRUNC('week', layup_day) DESC
-      LIMIT 52
     `);
     
     console.log(`✅ Found ${weeks.length} weeks with schedules`);
@@ -1487,17 +1505,30 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     // Get all schedule entries for this week
     const scheduleEntries = await pool.query(
       `
+      WITH latest_day_states AS (
+        SELECT DISTINCT ON (source_schedule_id, layup_day)
+          history_id,
+          order_id,
+          layup_day,
+          mold_id,
+          employee_assignments,
+          is_override,
+          created_at,
+          recorded_at
+        FROM layup_schedule_history
+        WHERE layup_day >= $1::date
+          AND layup_day < $2::date
+        ORDER BY source_schedule_id, layup_day, recorded_at DESC, history_id DESC
+      )
       SELECT 
-        ls.id,
+        ls.history_id AS id,
         ls.order_id,
         ls.layup_day AS scheduled_date,
         ls.mold_id,
         ls.employee_assignments,
         ls.is_override,
         ls.created_at
-      FROM layup_schedule ls
-      WHERE ls.layup_day >= $1::date 
-        AND ls.layup_day < $2::date
+      FROM latest_day_states ls
       ORDER BY ls.layup_day, ls.order_id
     `,
       [weekStart, weekEnd]

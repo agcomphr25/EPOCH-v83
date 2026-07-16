@@ -27,6 +27,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
+import { randomUUID } from 'crypto';
 
 const require = createRequire(import.meta.url);
 const TEMPLATE_UPLOAD_TABLES = new Set([
@@ -216,7 +217,7 @@ function normalizeTemplateField(field: any, index: number) {
     .replace(/[^a-z0-9]+/gi, '_')
     .replace(/^_+|_+$/g, '')
     .toLowerCase();
-  const allowedTypes = new Set(['text', 'number', 'date', 'signature', 'barcode', 'checkbox']);
+  const allowedTypes = new Set(['text', 'textarea', 'number', 'date', 'signature', 'barcode', 'checkbox', 'inventory_parts']);
 
   return {
     fieldName: rawName || `field_${index + 1}`,
@@ -228,6 +229,8 @@ function normalizeTemplateField(field: any, index: number) {
     sectionName: field?.sectionName || field?.department || null,
     sortOrder: Number.isFinite(Number(field?.sortOrder)) ? Number(field.sortOrder) : index,
     aiSuggested: true,
+    validationRules: field?.validationRules ?? (field?.fieldType === 'inventory_parts' ? { source: 'inventory_items', multiple: true } : null),
+    options: field?.options ?? null,
   };
 }
 
@@ -1434,9 +1437,11 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
     }, ['title', 'document_type']);
 
     const template = await insertPublicRowReturning('document_templates', {
+      id: randomUUID(),
       template_name: finalTitle,
       template_type: finalDocumentType,
       description: `Controlled template ${documentNumber} created from ${fileName}`,
+      source_document_ids: [routingDocument.id],
       learned_from_count: 1,
       structure: {
         source: 'pdf_upload',
@@ -1455,6 +1460,7 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
 
     for (const field of normalizedFields) {
       await insertPublicRowReturning('template_fields', {
+        id: randomUUID(),
         template_id: template.id,
         field_name: field.fieldName,
         field_label: field.fieldLabel,
@@ -1994,9 +2000,11 @@ Return a JSON object with:
     let template: any;
     try {
       template = await insertPublicRowReturning('document_templates', {
+        id: randomUUID(),
         template_name: templateName || 'Learned Template',
         template_type: templateType || 'mixed',
         description: description || 'Template learned from reference documents',
+        source_document_ids: referenceDocumentIds,
         learned_from_count: referenceDocumentIds.length,
         structure: {
           ...(learnedContent.structure || {}),
@@ -2012,7 +2020,10 @@ Return a JSON object with:
       }, ['template_name', 'template_type']);
     } catch (insertError) {
       console.error('Template insert error:', insertError);
-      return res.status(500).json({ error: 'Failed to insert template into database' });
+      return res.status(500).json({
+        error: 'Failed to insert template into database',
+        detail: insertError instanceof Error ? insertError.message : 'Unknown database error',
+      });
     }
     
     if (!template) {
@@ -2025,6 +2036,7 @@ Return a JSON object with:
       for (const field of learnedContent.defaultFields) {
         const normalizedField = normalizeTemplateField(field);
         await insertPublicRowReturning('template_fields', {
+          id: randomUUID(),
           template_id: template.id,
           field_name: normalizedField.fieldName,
           field_label: normalizedField.fieldLabel,
@@ -2744,9 +2756,11 @@ router.post('/spec-sheets/:id/create-template', async (req: Request, res: Respon
       }));
     const createdBy = (req as any).user?.username || 'system';
     const template = await insertPublicRowReturning('document_templates', {
+      id: randomUUID(),
       template_name: templateName,
       template_type: 'spec_sheet',
       description: `Reusable template created from spec sheet ${sheet.title}`,
+      source_document_ids: [sheet.id],
       learned_from_count: 1,
       structure: {
         source: 'spec_sheet',
@@ -2764,6 +2778,7 @@ router.post('/spec-sheets/:id/create-template', async (req: Request, res: Respon
 
     for (const field of templateFieldsForSheet) {
       await insertPublicRowReturning('template_fields', {
+        id: randomUUID(),
         template_id: template.id,
         field_name: field.fieldName,
         field_label: field.fieldLabel,
@@ -2887,35 +2902,51 @@ router.post('/templates', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Template name and type are required' });
     }
 
-    const [template] = await db.insert(documentTemplates).values({
-      templateName,
-      templateType,
+    const normalizedFields = Array.isArray(fields)
+      ? fields.map(normalizeTemplateField)
+      : [];
+    const template = await insertPublicRowReturning('document_templates', {
+      id: randomUUID(),
+      template_name: String(templateName).trim(),
+      template_type: String(templateType).trim(),
       description: description || null,
-      structure: structure || null,
+      source_document_ids: [],
+      learned_from_count: 0,
+      structure: structure || { source: 'manual_builder' },
       sections: sections || null,
-      defaultFields: defaultFields || null,
-      createdBy: user?.username || 'system',
-    }).returning();
+      default_fields: defaultFields || normalizedFields,
+      is_active: true,
+      created_by: user?.username || 'system',
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['id', 'template_name', 'template_type']);
 
-    if (fields && Array.isArray(fields) && fields.length > 0) {
-      const fieldValues = fields.map((field: any, index: number) => ({
-        templateId: template.id,
-        fieldName: field.fieldName,
-        fieldLabel: field.fieldLabel || field.fieldName,
-        fieldType: field.fieldType || 'text',
-        isRequired: field.isRequired || false,
-        defaultValue: field.defaultValue || null,
-        sectionName: field.sectionName || 'General',
-        sortOrder: field.sortOrder ?? index,
-      }));
-      
-      await db.insert(templateFields).values(fieldValues);
+    for (const field of normalizedFields) {
+      await insertPublicRowReturning('template_fields', {
+        id: randomUUID(),
+        template_id: template.id,
+        field_name: field.fieldName,
+        field_label: field.fieldLabel,
+        field_type: field.fieldType,
+        is_required: field.isRequired,
+        is_unique_per_serial: field.isUniquePerSerial,
+        default_value: field.defaultValue,
+        validation_rules: field.validationRules,
+        options: field.options,
+        section_name: field.sectionName || 'General',
+        sort_order: field.sortOrder,
+        ai_suggested: false,
+        created_at: new Date(),
+      }, ['id', 'template_id', 'field_name', 'field_label', 'field_type']);
     }
 
-    res.status(201).json(template);
+    res.status(201).json({ template, fields: normalizedFields });
   } catch (error) {
     console.error('Error creating template:', error);
-    res.status(500).json({ error: 'Failed to create template' });
+    res.status(500).json({
+      error: 'Failed to create template',
+      detail: error instanceof Error ? error.message : 'Unknown database error',
+    });
   }
 });
 

@@ -47,7 +47,7 @@ export interface SafetyCheckResult {
 const DESTRUCTIVE_PATTERNS: { name: string; re: RegExp }[] = [
   { name: 'DROP COLUMN',  re: /ALTER\s+TABLE\s+\S+\s+DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?\S+/i },
   { name: 'DROP TABLE',   re: /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?\S+/i },
-  { name: 'TRUNCATE',     re: /TRUNCATE\s+(?:TABLE\s+)?\S+/i },
+  { name: 'TRUNCATE',     re: /^\s*TRUNCATE\s+(?:TABLE\s+)?\S+/i },
   {
     name: 'DELETE without WHERE',
     // DELETE FROM table — no WHERE clause on the same line (simplistic guard)

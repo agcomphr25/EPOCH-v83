@@ -170,7 +170,7 @@ export default function DARLENEBTestDashboard() {
               <CardContent className="p-4 text-center">
                 <Truck className="w-8 h-8 text-teal-600 mx-auto mb-3" />
                 <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-                  RTS (Ready to Ship)
+                  RTS (Ready to Sell)
                 </h3>
                 <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   Manage shipments

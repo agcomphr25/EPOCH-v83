@@ -4,9 +4,20 @@ import { rtsInventory, rtsInventoryHistory, insertRtsInventorySchema } from '../
 import { eq, desc } from 'drizzle-orm';
 import XLSX from 'xlsx';
 import multer from 'multer';
+import { z } from 'zod';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const rtsLastDepartmentSchema = z.enum([
+  'Layup/Plugging',
+  'Barcode',
+  'CNC',
+  'Gunsmith',
+  'Finish',
+  'Finish QC',
+  'Paint',
+  'Shipping QC',
+]);
 
 // Get all RTS inventory items
 router.get('/', async (req, res) => {
@@ -77,8 +88,10 @@ router.get('/:id/history', async (req, res) => {
 // Create a new RTS inventory item manually
 router.post('/', async (req, res) => {
   try {
+    const lastDepartment = rtsLastDepartmentSchema.parse(req.body.lastDepartment);
     const validatedData = insertRtsInventorySchema.parse({
       ...req.body,
+      lastDepartment,
       status: 'AVAILABLE',
     });
 
@@ -95,8 +108,54 @@ router.post('/', async (req, res) => {
 
     res.json(inserted);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'A valid last department is required' });
+    }
     console.error('Error creating RTS inventory item:', error);
     res.status(500).json({ error: 'Failed to create item' });
+  }
+});
+
+// Update sellable-stock details and the saved production resume point.
+router.patch('/:id', async (req, res) => {
+  try {
+    const lastDepartment = rtsLastDepartmentSchema.parse(req.body.lastDepartment);
+    const price = req.body.price === '' || req.body.price == null
+      ? null
+      : Number(req.body.price);
+
+    if (price !== null && !Number.isFinite(price)) {
+      return res.status(400).json({ error: 'Price must be a valid number' });
+    }
+
+    const [updated] = await db
+      .update(rtsInventory)
+      .set({
+        stockModel: req.body.stockModel,
+        actionLength: req.body.actionLength || null,
+        action: req.body.action || null,
+        barrel: req.body.barrel || null,
+        bottomMetal: req.body.bottomMetal || null,
+        color: req.body.color || null,
+        extras: req.body.extras || null,
+        lastDepartment,
+        price,
+        updatedAt: new Date(),
+      })
+      .where(eq(rtsInventory.id, req.params.id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'A valid last department is required' });
+    }
+    console.error('Error updating RTS inventory item:', error);
+    res.status(500).json({ error: 'Failed to update item' });
   }
 });
 
@@ -115,6 +174,7 @@ router.post('/import', upload.single('file'), async (req, res) => {
     const insertedItems = [];
 
     for (const row of data) {
+      const lastDepartment = rtsLastDepartmentSchema.parse((row as any)['Last Department']);
       const item = {
         stockModel: (row as any)['Stock Model'] || '',
         actionLength: (row as any)['Action Length'] || null,
@@ -123,6 +183,7 @@ router.post('/import', upload.single('file'), async (req, res) => {
         bottomMetal: (row as any)['Bottom Metal'] || null,
         color: (row as any)['Color'] || null,
         extras: (row as any)['Extras'] || null,
+        lastDepartment,
         status: 'AVAILABLE',
       };
 
@@ -145,6 +206,11 @@ router.post('/import', upload.single('file'), async (req, res) => {
       items: insertedItems,
     });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: 'Every imported item requires a valid Last Department value',
+      });
+    }
     console.error('Error importing RTS inventory:', error);
     res.status(500).json({ error: 'Failed to import inventory' });
   }

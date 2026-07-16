@@ -945,9 +945,13 @@ export const partsRequestStatusHistory = pgTable('parts_request_status_history',
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// Ready to Ship (RTS) Inventory - Finished products on hand
+// Ready to Sell (RTS) Inventory - Finished products on hand
 export const rtsInventory = pgTable('rts_inventory', {
   id: uuid('id').defaultRandom().primaryKey(),
+  rtsNumber: text('rts_number')
+    .notNull()
+    .unique()
+    .default(sql`'RTS-I-' || to_char(CURRENT_DATE, 'YYYY') || '-' || lpad(nextval('rts_item_number_seq')::text, 6, '0')`),
   stockModel: text('stock_model').notNull(),
   actionLength: text('action_length'),
   action: text('action'),
@@ -955,6 +959,7 @@ export const rtsInventory = pgTable('rts_inventory', {
   bottomMetal: text('bottom_metal'),
   color: text('color'),
   extras: text('extras'), // Order/identifier codes
+  lastDepartment: text('last_department'), // Last completed production department before RTS
   price: real('price'), // Sale price for this item
   status: text('status').notNull().default('AVAILABLE'), // AVAILABLE, SHIPPED, IN_PRODUCTION, SOLD
   currentDepartment: text('current_department'), // If sent back to production

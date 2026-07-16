@@ -482,7 +482,7 @@ export function OrderActionsDrawer({
                 onCheckedChange={(checked) => setSendToRts(checked as boolean)}
               />
               <Label htmlFor="send-to-rts" className="text-sm">
-                Send stock to RTS (Ready-to-Ship) inventory
+                Send stock to RTS (Ready-to-Sell) inventory
               </Label>
             </div>
           </div>

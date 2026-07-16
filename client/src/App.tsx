@@ -1350,7 +1350,7 @@ function App() {
                     component={NonconformanceReport}
                   />
 
-                  {/* RTS (Ready to Ship) Page */}
+                  {/* RTS (Ready to Sell) Page */}
                   <Route path="/rts" component={RTSPage} />
 
                   {/* Reports */}

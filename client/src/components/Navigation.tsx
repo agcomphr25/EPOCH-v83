@@ -587,9 +587,9 @@ export default function Navigation() {
     },
     {
       path: '/rts',
-      label: 'RTS (Ready to Ship)',
-      icon: Truck,
-      description: 'View ready-to-ship orders and manage shipments',
+      label: 'RTS (Ready to Sell)',
+      icon: DollarSign,
+      description: 'View sellable finished stock and create RTS sales',
     },
   ];
 

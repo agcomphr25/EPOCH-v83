@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { createShipment } from '../utils/upsShipping';
 import { storage } from '../../storage';
 import { recordOrderCreatedEvent } from '../services/orderActivityService';
+import { getNextRtsDepartment } from '../lib/rtsProductionRouting';
 
 const router = Router();
 
@@ -67,7 +68,6 @@ const createSaleSchema = z.object({
     unitPrice: z.number(),
     quantity: z.number().default(1),
   })).min(1),
-  department: z.string().default('QC & Shipping'), // Department to send order to
   shipTo: z.object({
     name: z.string(),
     company: z.string().optional(),
@@ -118,6 +118,24 @@ router.post('/', async (req, res) => {
     if (selectedItems.length !== data.items.length) {
       return res.status(400).json({ error: 'Some selected items are not available' });
     }
+
+    const unroutableItem = selectedItems.find(item => !getNextRtsDepartment(item.lastDepartment));
+    if (unroutableItem) {
+      return res.status(400).json({
+        error: `${unroutableItem.rtsNumber} needs a valid last department before it can re-enter production`,
+      });
+    }
+
+    const nextDepartments = new Set(
+      selectedItems.map(item => getNextRtsDepartment(item.lastDepartment)),
+    );
+    if (nextDepartments.size !== 1) {
+      return res.status(400).json({
+        error: 'Selected RTS items resume in different departments. Create separate sales for each department flow.',
+      });
+    }
+    const nextDepartment = Array.from(nextDepartments)[0]!;
+    const lastDepartments = Array.from(new Set(selectedItems.map(item => item.lastDepartment)));
 
     // Calculate totals
     const subtotal = data.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
@@ -192,7 +210,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Create an order in allOrders that goes directly to Shipping QC
+    // Create a normal production order after the saved RTS completion point.
     // Generate unique order ID using atomic sequence (shared with regular orders)
     const newOrderId = await storage.generateNextOrderId();
 
@@ -205,13 +223,14 @@ router.post('/', async (req, res) => {
     const order = await db.transaction(async (tx) => {
       const [insertedOrder] = await tx.insert(allOrders).values({
         orderId: newOrderId,
+        barcode: `P1-${newOrderId}`,
         orderDate: new Date(),
         dueDate: new Date(), // Due today since it's ready to ship
         customerId: data.customerId,
         modelId: firstItem.stockModel, // Use stock model as modelId
         status: 'IN_PROGRESS',
-        currentDepartment: data.department, // Send to selected department
-        notes: `RTS Sale: ${saleNumber}. ${modelDescription}`,
+        currentDepartment: nextDepartment,
+        notes: `RTS Sale: ${saleNumber}. ${modelDescription}. Stock: ${selectedItems.map(item => item.rtsNumber).join(', ')}`,
         isRtsOrder: true, // Mark as RTS order
         rtsSaleId: sale.id, // Link to RTS sale
         priceOverride: subtotal, // Store RTS sale subtotal as price override for display in OrderEntry
@@ -242,10 +261,16 @@ router.post('/', async (req, res) => {
           source: 'rts_sales',
           sourceRoute: '/api/rts-sales',
           reasonCode: 'RTS_SALE',
-          reasonText: `RTS Sale ${saleNumber} — initial department: ${data.department}`,
+          reasonText: `RTS Sale ${saleNumber} — resumed after ${lastDepartments.join(', ')} in ${nextDepartment}`,
           relatedEntityType: 'rts_sale',
           relatedEntityId: String(sale.id),
-          metadata: { saleNumber, rtsSaleId: sale.id },
+          metadata: {
+            saleNumber,
+            rtsSaleId: sale.id,
+            rtsNumbers: selectedItems.map(item => item.rtsNumber),
+            lastDepartments,
+            resumedDepartment: nextDepartment,
+          },
         }
       );
 
@@ -325,7 +350,7 @@ router.post('/', async (req, res) => {
 
         res.json({
           sale: { ...sale, orderId: newOrderId, trackingNumber: labelResult.trackingNumber, shippingLabelUrl: labelData },
-          order: { orderId: newOrderId },
+          order: { orderId: newOrderId, barcode: `P1-${newOrderId}`, department: nextDepartment },
           label: labelResult,
           payment: paymentRecord,
         });
@@ -334,7 +359,7 @@ router.post('/', async (req, res) => {
         // Sale was created successfully, but label generation failed
         res.json({
           sale: { ...sale, orderId: newOrderId },
-          order: { orderId: newOrderId },
+          order: { orderId: newOrderId, barcode: `P1-${newOrderId}`, department: nextDepartment },
           labelError: labelError.message || 'Failed to generate shipping label',
           payment: paymentRecord,
         });
@@ -342,7 +367,7 @@ router.post('/', async (req, res) => {
     } else {
       res.json({ 
         sale: { ...sale, orderId: newOrderId },
-        order: { orderId: newOrderId },
+        order: { orderId: newOrderId, barcode: `P1-${newOrderId}`, department: nextDepartment },
         payment: paymentRecord,
       });
     }

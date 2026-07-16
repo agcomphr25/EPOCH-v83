@@ -18,6 +18,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -34,14 +41,17 @@ import {
   Plus,
   DollarSign,
   Edit,
+  QrCode,
   Truck,
   Factory,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import RTSSalesDialog from '@/components/RTSSalesDialog';
+import { BarcodeDisplay } from '@/components/BarcodeDisplay';
 
 interface RTSInventoryItem {
   id: string;
+  rtsNumber: string;
   stockModel: string;
   actionLength: string | null;
   action: string | null;
@@ -49,6 +59,7 @@ interface RTSInventoryItem {
   bottomMetal: string | null;
   color: string | null;
   extras: string | null;
+  lastDepartment: string | null;
   status: string;
   currentDepartment: string | null;
   returnReason: string | null;
@@ -58,6 +69,28 @@ interface RTSInventoryItem {
   price: number | null;
 }
 
+const RTS_LAST_DEPARTMENTS = [
+  'Layup/Plugging',
+  'Barcode',
+  'CNC',
+  'Gunsmith',
+  'Finish',
+  'Finish QC',
+  'Paint',
+  'Shipping QC',
+] as const;
+
+const RTS_NEXT_DEPARTMENT: Record<(typeof RTS_LAST_DEPARTMENTS)[number], string> = {
+  'Layup/Plugging': 'Barcode',
+  Barcode: 'CNC',
+  CNC: 'Gunsmith',
+  Gunsmith: 'Finish',
+  Finish: 'Finish QC',
+  'Finish QC': 'Paint',
+  Paint: 'Shipping QC',
+  'Shipping QC': 'Shipping',
+};
+
 export default function RTSPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [addItemDialog, setAddItemDialog] = useState(false);
@@ -65,6 +98,7 @@ export default function RTSPage() {
     isOpen: boolean;
     item: RTSInventoryItem | null;
   }>({ isOpen: false, item: null });
+  const [barcodeItem, setBarcodeItem] = useState<RTSInventoryItem | null>(null);
   const [salesDialogOpen, setSalesDialogOpen] = useState(false);
   const [newItem, setNewItem] = useState({
     stockModel: '',
@@ -74,6 +108,7 @@ export default function RTSPage() {
     bottomMetal: '',
     color: '',
     extras: '',
+    lastDepartment: '',
   });
   const [editItem, setEditItem] = useState({
     stockModel: '',
@@ -83,6 +118,7 @@ export default function RTSPage() {
     bottomMetal: '',
     color: '',
     extras: '',
+    lastDepartment: '',
     price: '',
   });
 
@@ -105,7 +141,8 @@ export default function RTSPage() {
       item.barrel?.toLowerCase().includes(searchLower) ||
       item.bottomMetal?.toLowerCase().includes(searchLower) ||
       item.color?.toLowerCase().includes(searchLower) ||
-      item.extras?.toLowerCase().includes(searchLower)
+      item.extras?.toLowerCase().includes(searchLower) ||
+      item.rtsNumber?.toLowerCase().includes(searchLower)
     );
   });
 
@@ -117,13 +154,14 @@ export default function RTSPage() {
         body: JSON.stringify(item),
       });
     },
-    onSuccess: () => {
+    onSuccess: (createdItem: RTSInventoryItem) => {
       queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory'] });
       toast({
         title: 'Item Added',
-        description: 'RTS inventory item has been added successfully.',
+        description: `${createdItem.rtsNumber} was added and is ready for a stock label.`,
       });
       setAddItemDialog(false);
+      setBarcodeItem(createdItem);
       setNewItem({
         stockModel: '',
         actionLength: '',
@@ -132,12 +170,13 @@ export default function RTSPage() {
         bottomMetal: '',
         color: '',
         extras: '',
+        lastDepartment: '',
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: 'Error',
-        description: 'Failed to add RTS inventory item.',
+        description: error.message || 'Failed to add RTS inventory item.',
         variant: 'destructive',
       });
     },
@@ -166,13 +205,14 @@ export default function RTSPage() {
         bottomMetal: '',
         color: '',
         extras: '',
+        lastDepartment: '',
         price: '',
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: 'Error',
-        description: 'Failed to update RTS inventory item.',
+        description: error.message || 'Failed to update RTS inventory item.',
         variant: 'destructive',
       });
     },
@@ -228,9 +268,9 @@ export default function RTSPage() {
         <div className="flex items-center gap-3">
           <Package className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold">Ready to Ship (RTS)</h1>
+            <h1 className="text-3xl font-bold">Ready to Sell (RTS)</h1>
             <p className="text-sm text-gray-600">
-              Finished stock inventory ready for shipment or production triage
+              Finished stock inventory available for sale or production re-entry
             </p>
           </div>
         </div>
@@ -268,7 +308,7 @@ export default function RTSPage() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search by stock model, action, barrel, color, etc..."
+                placeholder="Search by RTS number, stock model, action, barrel, color..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -304,6 +344,7 @@ export default function RTSPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>RTS Number</TableHead>
                     <TableHead>Stock Model</TableHead>
                     <TableHead>Action Length</TableHead>
                     <TableHead>Action</TableHead>
@@ -311,6 +352,7 @@ export default function RTSPage() {
                     <TableHead>Bottom Metal</TableHead>
                     <TableHead>Color</TableHead>
                     <TableHead>Extras</TableHead>
+                    <TableHead>Last Department</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -318,6 +360,7 @@ export default function RTSPage() {
                 <TableBody>
                   {availableInventory.map((item) => (
                     <TableRow key={item.id} data-testid={`row-rts-${item.id}`}>
+                      <TableCell className="font-mono font-semibold">{item.rtsNumber}</TableCell>
                       <TableCell className="font-medium" data-testid={`text-stock-model-${item.id}`}>
                         {item.stockModel}
                       </TableCell>
@@ -327,6 +370,14 @@ export default function RTSPage() {
                       <TableCell>{item.bottomMetal || 'N/A'}</TableCell>
                       <TableCell>{item.color || 'N/A'}</TableCell>
                       <TableCell>{item.extras || 'N/A'}</TableCell>
+                      <TableCell>
+                        <div>{item.lastDepartment || 'Not set'}</div>
+                        {item.lastDepartment && (
+                          <div className="text-xs text-muted-foreground">
+                            Resumes in {RTS_NEXT_DEPARTMENT[item.lastDepartment as keyof typeof RTS_NEXT_DEPARTMENT]}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>{getStatusBadge(item.status)}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
@@ -343,6 +394,7 @@ export default function RTSPage() {
                                 bottomMetal: item.bottomMetal || '',
                                 color: item.color || '',
                                 extras: item.extras || '',
+                                lastDepartment: item.lastDepartment || '',
                                 price: item.price?.toString() || '',
                               });
                             }}
@@ -351,6 +403,16 @@ export default function RTSPage() {
                           >
                             <Edit className="h-3 w-3" />
                             Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setBarcodeItem(item)}
+                            className="flex items-center gap-1"
+                            data-testid={`button-print-barcode-${item.id}`}
+                          >
+                            <QrCode className="h-3 w-3" />
+                            Barcode
                           </Button>
                         </div>
                       </TableCell>
@@ -460,6 +522,28 @@ export default function RTSPage() {
                 data-testid="input-extras"
               />
             </div>
+
+            <div>
+              <Label htmlFor="lastDepartment">Last Department Item Finished *</Label>
+              <Select
+                value={newItem.lastDepartment}
+                onValueChange={(lastDepartment) => setNewItem({ ...newItem, lastDepartment })}
+              >
+                <SelectTrigger id="lastDepartment" data-testid="select-last-department">
+                  <SelectValue placeholder="Select the last completed department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {RTS_LAST_DEPARTMENTS.map((department) => (
+                    <SelectItem key={department} value={department}>{department}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {newItem.lastDepartment
+                  ? `When purchased, the production order will enter ${RTS_NEXT_DEPARTMENT[newItem.lastDepartment as keyof typeof RTS_NEXT_DEPARTMENT]}.`
+                  : 'This determines where the item resumes as a regular production order.'}
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -474,6 +558,7 @@ export default function RTSPage() {
                   bottomMetal: '',
                   color: '',
                   extras: '',
+                  lastDepartment: '',
                 });
               }}
             >
@@ -481,7 +566,7 @@ export default function RTSPage() {
             </Button>
             <Button
               onClick={() => addItemMutation.mutate(newItem)}
-              disabled={addItemMutation.isPending || !newItem.stockModel.trim()}
+              disabled={addItemMutation.isPending || !newItem.stockModel.trim() || !newItem.lastDepartment}
               data-testid="button-confirm-add-item"
             >
               {addItemMutation.isPending ? 'Adding...' : 'Add Item'}
@@ -619,6 +704,23 @@ export default function RTSPage() {
                 data-testid="input-edit-price"
               />
             </div>
+
+            <div>
+              <Label htmlFor="edit-lastDepartment">Last Department Item Finished *</Label>
+              <Select
+                value={editItem.lastDepartment}
+                onValueChange={(lastDepartment) => setEditItem({ ...editItem, lastDepartment })}
+              >
+                <SelectTrigger id="edit-lastDepartment" data-testid="select-edit-last-department">
+                  <SelectValue placeholder="Select the last completed department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {RTS_LAST_DEPARTMENTS.map((department) => (
+                    <SelectItem key={department} value={department}>{department}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -633,6 +735,7 @@ export default function RTSPage() {
                   bottomMetal: '',
                   color: '',
                   extras: '',
+                  lastDepartment: '',
                   price: '',
                 });
               }}
@@ -648,12 +751,31 @@ export default function RTSPage() {
                   });
                 }
               }}
-              disabled={editItemMutation.isPending || !editItem.stockModel.trim()}
+              disabled={editItemMutation.isPending || !editItem.stockModel.trim() || !editItem.lastDepartment}
               data-testid="button-confirm-edit-item"
             >
               {editItemMutation.isPending ? 'Updating...' : 'Update Item'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!barcodeItem} onOpenChange={(open) => !open && setBarcodeItem(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>RTS Stock Barcode</DialogTitle>
+          </DialogHeader>
+          {barcodeItem && (
+            <BarcodeDisplay
+              orderId={barcodeItem.rtsNumber}
+              barcode={barcodeItem.rtsNumber}
+              stockModel={barcodeItem.stockModel}
+              actionLength={barcodeItem.actionLength || undefined}
+              color={barcodeItem.color || undefined}
+              titleLabel="Ready to Sell Item"
+              printHeaderLabel="RTS STOCK"
+            />
+          )}
         </DialogContent>
       </Dialog>
 

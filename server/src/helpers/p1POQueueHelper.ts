@@ -13,6 +13,7 @@ export interface ProductionOrderRow {
 
 export interface FulfillmentStats {
   total: number;
+  active: number;
   fulfilled: number;
   activeP1Queue: number;
 }
@@ -52,10 +53,13 @@ export function buildFulfillmentMap(
     const itemMap = poFulfillmentMap.get(poId)!;
 
     if (!itemMap.has(poItemId)) {
-      itemMap.set(poItemId, { total: 0, fulfilled: 0, activeP1Queue: 0 });
+      itemMap.set(poItemId, { total: 0, active: 0, fulfilled: 0, activeP1Queue: 0 });
     }
     const stats = itemMap.get(poItemId)!;
     stats.total++;
+    if ((row.production_status ?? '').toUpperCase() !== 'CANCELLED') {
+      stats.active++;
+    }
     if (isProductionOrderFulfilled(row)) {
       stats.fulfilled++;
     }
@@ -148,12 +152,16 @@ export function computeP1Queue(
           (specs.stockModel as string | null) ??
           (specs.stock_model as string | null) ??
           null;
-        const orderCount = item.orderCount ?? 0;
+        const cachedOrderCount = item.orderCount ?? 0;
         const fulfillmentStats = itemFulfillmentMap.get(item.id);
-        const remainingQuantity = Math.max(
-          item.quantity - orderCount,
-          fulfillmentStats?.activeP1Queue ?? 0,
-        );
+        // This list generates production orders that do not exist yet. Existing
+        // unit rows in P1 Production Queue belong in the production queue above,
+        // not back in this PO-demand list. Treating active queue rows as fresh
+        // demand allowed the same PO units to be generated more than once.
+        const existingOrderCount = fulfillmentStats
+          ? fulfillmentStats.active
+          : cachedOrderCount;
+        const remainingQuantity = Math.max(item.quantity - existingOrderCount, 0);
 
         return {
           id: item.id,

@@ -129,15 +129,15 @@ describe('buildFulfillmentMap', () => {
 
 describe('isPoItemFullyFulfilled', () => {
   it('returns true when all production orders are fulfilled', () => {
-    expect(isPoItemFullyFulfilled({ total: 3, fulfilled: 3 })).toBe(true);
+    expect(isPoItemFullyFulfilled({ total: 3, active: 3, fulfilled: 3, activeP1Queue: 0 })).toBe(true);
   });
 
   it('returns false when some production orders remain unfulfilled', () => {
-    expect(isPoItemFullyFulfilled({ total: 3, fulfilled: 2 })).toBe(false);
+    expect(isPoItemFullyFulfilled({ total: 3, active: 3, fulfilled: 2, activeP1Queue: 0 })).toBe(false);
   });
 
   it('returns false when there are no production orders', () => {
-    expect(isPoItemFullyFulfilled({ total: 0, fulfilled: 0 })).toBe(false);
+    expect(isPoItemFullyFulfilled({ total: 0, active: 0, fulfilled: 0, activeP1Queue: 0 })).toBe(false);
   });
 });
 
@@ -148,7 +148,7 @@ describe('isPoItemFullyFulfilled', () => {
 describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
   // RC-5 FIX: Items in Shipping QC are NOT fulfilled — they must remain in the
   // release queue so operators can re-release if QC rejects the unit.
-  it('keeps a PO in the queue when all production orders are in Shipping QC (RC-5)', () => {
+  it('does not regenerate production orders that already exist in Shipping QC', () => {
     const po = makePO();
     const item = makeItem();
     const itemsByPoId = new Map([[po.id, [item]]]);
@@ -159,12 +159,10 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
 
     const result = computeP1Queue([po], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].customerName).toBe('Acme Corp');
-    expect(result[0].purchaseOrders[0].poNumber).toBe('PO-001');
+    expect(result).toHaveLength(0);
   });
 
-  it('keeps a PO in the queue when only some production orders are in Shipping QC', () => {
+  it('does not regenerate production orders that already exist in production', () => {
     const po = makePO();
     const item = makeItem();
     const itemsByPoId = new Map([[po.id, [item]]]);
@@ -175,10 +173,7 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
 
     const result = computeP1Queue([po], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].customerName).toBe('Acme Corp');
-    expect(result[0].purchaseOrders[0].poNumber).toBe('PO-001');
-    expect(result[0].purchaseOrders[0].items).toHaveLength(1);
+    expect(result).toHaveLength(0);
   });
 
   it('excludes a PO when all production orders are Shipped or Completed (baseline)', () => {
@@ -229,7 +224,7 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
   });
 
   // RC-5 regression guard: items in Shipping QC must keep Alpha's PO in the queue
-  it('keeps both POs in queue when Shipping QC orders exist (RC-5 regression guard)', () => {
+  it('shows only units that do not already have production orders', () => {
     const poA = makePO({ id: 1, poNumber: 'PO-001', customerName: 'Alpha' });
     const poB = makePO({ id: 2, poNumber: 'PO-002', customerName: 'Beta', customerId: 200 });
     const itemA = makeItem({ id: 10 });
@@ -246,8 +241,8 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     const result = computeP1Queue([poA, poB], itemsByPoId, prodRows);
 
     expect(result).toHaveLength(2);
-    const customerNames = result.map((c) => c.customerName).sort();
-    expect(customerNames).toEqual(['Alpha', 'Beta']);
+    expect(result[0].purchaseOrders[0].items[0].quantity).toBe(1);
+    expect(result[1].purchaseOrders[0].items[0].quantity).toBe(1);
   });
 
   it('filters out items that are not stock_model type', () => {
@@ -270,7 +265,7 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('keeps released PO production orders that are still in P1 Production Queue visible', () => {
+  it('does not expose released PO production orders as new PO demand', () => {
     const po = makePO({ poNumber: 'P18261' });
     const item = makeItem({
       id: 18,
@@ -290,13 +285,17 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
 
     const result = computeP1Queue([po], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].purchaseOrders[0].poNumber).toBe('P18261');
-    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({
-      id: 18,
-      productName: 'AG-CRB-PV105-ER',
-      quantity: 1,
-    });
+    expect(result).toHaveLength(0);
+  });
+
+  it('uses real active production rows instead of a stale cached order count', () => {
+    const po = makePO();
+    const item = makeItem({ quantity: 3, orderCount: 3 });
+    const itemsByPoId = new Map([[po.id, [item]]]);
+
+    const result = computeP1Queue([po], itemsByPoId, [makeProdRow()]);
+
+    expect(result[0].purchaseOrders[0].items[0].quantity).toBe(2);
   });
 
   it('returns empty when given no POs', () => {

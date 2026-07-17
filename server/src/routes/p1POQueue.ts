@@ -719,7 +719,7 @@ router.post('/progress', async (req: Request, res: Response) => {
     for (const selection of selectionsToProgress) {
       try {
         const poItemId = selection.poProductId; // Actually purchase_order_items.id
-        const quantity = selection.quantity || 1;
+        const quantity = Number(selection.quantity || 1);
 
         // Get the purchase order item details
         const poItemQuery = `
@@ -737,54 +737,82 @@ router.post('/progress', async (req: Request, res: Response) => {
 
         const item = poItem[0];
         const specs = item.specifications || {};
-        
-        // Use a default due date if none is provided (30 days from now)
         const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        
-        // Create production orders for the selected quantity
-        for (let i = 0; i < quantity; i++) {
-          // CENTRALIZED: Use atomic order ID generator instead of inline pattern
-          const orderId = await storage.generateNextOrderId();
-          
-          const insertProdQuery = `
-            INSERT INTO production_orders (
-              order_id, po_id, po_item_id, customer_id, customer_name,
-              po_number, item_type, item_id, item_name, specifications,
-              order_date, due_date, production_status, current_department,
-              created_at, updated_at
-            ) VALUES (
-              $1, $2, $3, $4, $5, $6, 'stock', $7, $8, $9,
-              NOW(), $10, 'IN_PROGRESS', 'Barcode', NOW(), NOW()
-            )
-            ON CONFLICT (order_id) DO UPDATE
-            SET current_department = 'Barcode',
-                production_status = 'IN_PROGRESS',
-                updated_at = NOW()
-          `;
-          await pool.query(insertProdQuery, [
-            orderId,
-            item.po_id,
-            poItemId,
-            item.customer_id || '',
-            item.customer_name,
-            item.po_number,
-            item.item_id || '',
-            resolveItemDisplayName(item.item_name || ''),
-            JSON.stringify(specs),
-            dueDate,
-          ]);
 
-          progressedOrders.push(orderId);
+        // Serialize generation for a PO line and validate against real production
+        // rows. The cached order_count can drift, and returned P1 queue rows are
+        // existing units â€” they must never become permission to generate again.
+        const client = await pool.connect();
+        const lineOrderIds: string[] = [];
+        try {
+          await client.query('BEGIN');
+          const lockedItemResult = await client.query(
+            `SELECT quantity
+             FROM purchase_order_items
+             WHERE id = $1
+             FOR UPDATE`,
+            [poItemId],
+          );
+          const orderedQuantity = Number(lockedItemResult.rows[0]?.quantity ?? 0);
+          const activeCountResult = await client.query(
+            `SELECT COUNT(*)::int AS count
+             FROM production_orders
+             WHERE po_item_id = $1
+               AND UPPER(COALESCE(production_status, '')) != 'CANCELLED'`,
+            [poItemId],
+          );
+          const activeOrderCount = Number(activeCountResult.rows[0]?.count ?? 0);
+          const remainingQuantity = Math.max(orderedQuantity - activeOrderCount, 0);
+
+          if (!Number.isInteger(quantity) || quantity < 1 || quantity > remainingQuantity) {
+            throw new Error(
+              `Requested ${quantity} unit(s), but only ${remainingQuantity} unit(s) remain ungenerated ` +
+              `for PO item ${poItemId} (${activeOrderCount} of ${orderedQuantity} already exist)`,
+            );
+          }
+
+          for (let i = 0; i < quantity; i++) {
+            const orderId = await storage.generateNextOrderId();
+            await client.query(
+              `INSERT INTO production_orders (
+                order_id, po_id, po_item_id, customer_id, customer_name,
+                po_number, item_type, item_id, item_name, specifications,
+                order_date, due_date, production_status, current_department,
+                created_at, updated_at
+              ) VALUES (
+                $1, $2, $3, $4, $5, $6, 'stock', $7, $8, $9,
+                NOW(), $10, 'IN_PROGRESS', 'Barcode', NOW(), NOW()
+              )`,
+              [
+                orderId,
+                item.po_id,
+                poItemId,
+                item.customer_id || '',
+                item.customer_name,
+                item.po_number,
+                item.item_id || '',
+                resolveItemDisplayName(item.item_name || ''),
+                JSON.stringify(specs),
+                dueDate,
+              ],
+            );
+            lineOrderIds.push(orderId);
+          }
+
+          await client.query(
+            `UPDATE purchase_order_items
+             SET order_count = $1, updated_at = NOW()
+             WHERE id = $2`,
+            [activeOrderCount + lineOrderIds.length, poItemId],
+          );
+          await client.query('COMMIT');
+          progressedOrders.push(...lineOrderIds);
+        } catch (lineError) {
+          await client.query('ROLLBACK');
+          throw lineError;
+        } finally {
+          client.release();
         }
-
-        // Update the orderCount in purchase_order_items to reflect scheduled quantity
-        const newOrderCount = (item.order_count || 0) + quantity;
-        const updatePoQuery = `
-          UPDATE purchase_order_items
-          SET order_count = $1, updated_at = NOW()
-          WHERE id = $2
-        `;
-        await pool.query(updatePoQuery, [newOrderCount, poItemId]);
         
       } catch (error) {
         console.error(`Error progressing PO item ${selection.poProductId}:`, error);
@@ -795,14 +823,22 @@ router.post('/progress', async (req: Request, res: Response) => {
       }
     }
 
-    res.json({
-      success: true,
+    const requestedUnits = selectionsToProgress.reduce(
+      (sum: number, selection: { quantity?: number }) => sum + (selection.quantity || 1),
+      0,
+    );
+    const responseBody = {
+      success: errors.length === 0,
+      partialSuccess: progressedOrders.length > 0 && errors.length > 0,
       message: `Progressed ${progressedOrders.length} items to Barcode`,
+      requestedUnits,
+      requestedLines: selectionsToProgress.length,
       itemsProgressed: progressedOrders.length,
       targetDepartment: 'Barcode',
       orderIds: progressedOrders,
       errors: errors.length > 0 ? errors : undefined,
-    });
+    };
+    res.json(responseBody);
   } catch (error) {
     console.error('Error progressing orders:', error);
     res.status(500).json({

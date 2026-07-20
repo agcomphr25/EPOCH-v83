@@ -181,8 +181,9 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
   const shipped = productionOrders.filter((o: any) => getP1EffectiveStatus(o) === 'SHIPPED').length;
   const cancelled = productionOrders.filter((o: any) => getP1EffectiveStatus(o) === 'CANCELLED').length;
   const active = total - cancelled;
-  // Flag when orders outnumber the PO quantity — likely indicates duplicate generation
-  const hasDuplicates = totalPoQuantity > 0 && total > totalPoQuantity;
+  // Flag only active orders beyond PO quantity; cancelled rows remain as audit history.
+  const duplicateCount = Math.max(0, active - totalPoQuantity);
+  const hasDuplicates = totalPoQuantity > 0 && duplicateCount > 0;
 
   const filteredOrders = selectedFilter === null ? [] : selectedFilter === 'ALL'
     ? productionOrders
@@ -204,8 +205,8 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
       <div className="flex items-center gap-1 flex-wrap">
         {/* Duplicate warning */}
         {hasDuplicates && (
-          <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold" title={`${total} orders generated but PO only has ${totalPoQuantity} units — possible duplicate generation`}>
-            ⚠ {total - totalPoQuantity} Duplicate{total - totalPoQuantity !== 1 ? 's' : ''}
+          <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold" title={`${active} active orders but PO only has ${totalPoQuantity} units — possible duplicate generation`}>
+            ⚠ {duplicateCount} Duplicate{duplicateCount !== 1 ? 's' : ''}
           </Badge>
         )}
         {/* Overall total */}

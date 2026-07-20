@@ -742,18 +742,31 @@ router.post('/progress', async (req: Request, res: Response) => {
 
         const item = poItem.rows[0];
         const specs = item.specifications || {};
-        const currentOrderCount = Number(item.order_count || 0);
         const orderedQuantity = Number(item.quantity || 0);
-        if (currentOrderCount + quantity > orderedQuantity) {
-          throw new Error(`Selected ${quantity} unit(s) for PO item ${poItemId}, but only ${Math.max(0, orderedQuantity - currentOrderCount)} remain`);
+        // The cached order_count can drift. Count real rows while the PO item is
+        // locked so concurrent requests cannot both generate the same remaining units.
+        const productionCountsResult = await client.query(`
+          SELECT
+            COUNT(*)::int AS total_count,
+            COUNT(*) FILTER (
+              WHERE UPPER(COALESCE(production_status, '')) != 'CANCELLED'
+            )::int AS active_count
+          FROM production_orders
+          WHERE po_item_id = $1
+        `, [poItemId]);
+        const existingOrderCount = Number(productionCountsResult.rows[0]?.total_count || 0);
+        const activeOrderCount = Number(productionCountsResult.rows[0]?.active_count || 0);
+        const remainingQuantity = Math.max(orderedQuantity - activeOrderCount, 0);
+        if (quantity > remainingQuantity) {
+          throw new Error(`Selected ${quantity} unit(s) for PO item ${poItemId}, but only ${remainingQuantity} remain`);
         }
-        
+
         // Use a default due date if none is provided (30 days from now)
         const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        
+
         // Create production orders for the selected quantity
         for (let i = 0; i < quantity; i++) {
-          const sequence = currentOrderCount + i + 1;
+          const sequence = existingOrderCount + i + 1;
           const orderId = `PO-${item.po_number}-${poItemId}-${sequence}`;
           const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${sequence} of ${orderedQuantity})`;
           const features = JSON.stringify({
@@ -776,7 +789,7 @@ router.post('/progress', async (req: Request, res: Response) => {
             ON CONFLICT (order_id) DO UPDATE
             SET current_department = 'Barcode', status = 'IN_PROGRESS', updated_at = NOW()
           `, [orderId, dueDate, item.customer_id || item.customer_name, item.item_id || '', notes, features, item.po_id, poItemId]);
-          
+
           const insertProdQuery = `
             INSERT INTO production_orders (
               order_id, po_id, po_item_id, customer_id, customer_name,
@@ -804,12 +817,11 @@ router.post('/progress', async (req: Request, res: Response) => {
             JSON.stringify(specs),
             dueDate,
           ]);
-
           progressedOrders.push(orderId);
         }
 
         // Update the orderCount in purchase_order_items to reflect scheduled quantity
-        const newOrderCount = currentOrderCount + quantity;
+        const newOrderCount = activeOrderCount + quantity;
         const updatePoQuery = `
           UPDATE purchase_order_items
           SET order_count = $1, updated_at = NOW()
@@ -820,9 +832,16 @@ router.post('/progress', async (req: Request, res: Response) => {
 
     await client.query('COMMIT');
 
+    const requestedUnits = selectionsToProgress.reduce(
+      (sum: number, selection: { quantity?: number }) => sum + Number(selection.quantity || 1),
+      0,
+    );
+
     res.json({
       success: true,
       message: `Progressed ${progressedOrders.length} items to Barcode`,
+      requestedUnits,
+      requestedLines: selectionsToProgress.length,
       itemsProgressed: progressedOrders.length,
       targetDepartment: 'Barcode',
       orderIds: progressedOrders,

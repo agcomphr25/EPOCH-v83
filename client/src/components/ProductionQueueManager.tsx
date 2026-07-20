@@ -220,6 +220,7 @@ export default function ProductionQueueManager() {
   const [selectedPOItems, setSelectedPOItems] = useState<Map<string, Map<number, number>>>(
     new Map()
   );
+  const [isProgressingPOItems, setIsProgressingPOItems] = useState(false);
 
   // State for "Select Next N" for regular production queue
   const [selectNextQueueCount, setSelectNextQueueCount] = useState<string>('');
@@ -744,6 +745,7 @@ export default function ProductionQueueManager() {
       });
     });
 
+    setIsProgressingPOItems(true);
     try {
       const response = await apiRequest('/api/p1-po-queue/progress', {
         method: 'POST',
@@ -766,6 +768,7 @@ export default function ProductionQueueManager() {
 
       // Refetch data
       refetchPOs();
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
 
       // PO orders do not need labels printed when progressed to Barcode
       // Labels are only required for regular production orders
@@ -776,6 +779,8 @@ export default function ProductionQueueManager() {
         description: error?.message || 'Failed to progress items to Barcode',
         variant: 'destructive',
       });
+    } finally {
+      setIsProgressingPOItems(false);
     }
   };
 
@@ -1738,13 +1743,14 @@ export default function ProductionQueueManager() {
                         <Button
                           className="bg-green-600 hover:bg-green-700 text-white"
                           size="sm"
+                          disabled={isProgressingPOItems}
                           onClick={() => {
                             handleProgressToBarcode();
                           }}
                           data-testid="button-progress-to-barcode"
                         >
                           <ArrowRight className="w-4 h-4 mr-2" />
-                          Progress to Barcode
+                          {isProgressingPOItems ? 'Progressing...' : 'Progress to Barcode'}
                         </Button>
                       </div>
                     </div>

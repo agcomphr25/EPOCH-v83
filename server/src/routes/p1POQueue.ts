@@ -275,7 +275,10 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
     for (const selection of selections) {
       try {
         const poItemId = selection.poProductId;
-        const quantity = selection.quantity || 1;
+        const quantity = Number(selection.quantitySelected || 1);
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+          throw new Error(`Invalid demand quantity for purchase order item ${poItemId}`);
+        }
 
         // Get the purchase order item details
         const poItemQuery = `
@@ -376,13 +379,20 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
           [poItemId]
         );
         const realOrderCount = parseInt(realCountRows[0]?.cnt ?? '0', 10);
-        if (realOrderCount >= quantity) {
+        const orderedQuantity = Number(item.quantity || 0);
+        const remainingDemand = Math.max(orderedQuantity - realOrderCount, 0);
+        if (remainingDemand === 0) {
           console.warn(`⚠️  P1 PO Schedule: PO item ${poItemId} already fully released (${realOrderCount} active production orders >= quantity=${quantity}), skipping`);
           warnings.push({
             poProductId: poItemId,
             warning: `Already fully released (${realOrderCount} of ${quantity} orders exist)`,
           });
           continue;
+        }
+        if (quantity > remainingDemand) {
+          throw new Error(
+            `Requested ${quantity} unit(s) for PO item ${poItemId}, but only ${remainingDemand} unit(s) of ungenerated demand remain`,
+          );
         }
 
         const specs = item.specifications || {};
@@ -398,7 +408,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
 
           // Only create the orders that are still missing (quantity minus what already exists).
           // Start the sequence after the already-existing orders so IDs are deterministic.
-          const remainingToCreate = quantity - realOrderCount;
+          const remainingToCreate = quantity;
 
           // Detect metal accessories by item_name/item_id/item_type before inserting
           // Metal accessories must route to Shipping QC, not P1 Production Queue
@@ -416,7 +426,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
             // Sequence starts after existing orders so we never collide.
             const seqNum = realOrderCount + i + 1;
             const orderId = `PO-${item.po_number}-${poItemId}-${seqNum}`;
-            const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${i + 1} of ${quantity})`;
+            const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${seqNum} of ${orderedQuantity})`;
             const features = JSON.stringify({
               po_item_id: poItemId,
               po_number: item.po_number,

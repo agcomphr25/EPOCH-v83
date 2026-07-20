@@ -545,6 +545,13 @@ describe('isMetalAccessorySku — routing guard', () => {
 
   it('returns true when itemName starts with AGARCA prefix', () => {
     expect(isMetalAccessorySku('AGARCA-base', '', 'stock_model')).toBe(true);
+    expect(isMetalAccessorySku('AGARCA08', '', 'stock_model')).toBe(true);
+  });
+
+  it('recognizes the production SKUs shown on bottom-metal PO lines', () => {
+    expect(isMetalAccessorySku('AGMS5AA01', 'AGMS5AA01', 'stock_model')).toBe(true);
+    expect(isMetalAccessorySku('AGBDLSA01', 'AGBDLSA01', 'stock_model')).toBe(true);
+    expect(isMetalAccessorySku('AGARCA08', 'AGARCA08', 'stock_model')).toBe(true);
   });
 
   it('returns true when itemId (not itemName) starts with a metal prefix', () => {

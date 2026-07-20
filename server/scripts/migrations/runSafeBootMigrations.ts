@@ -214,10 +214,13 @@ export const safeMigrationFiles = [
   '0190_design_control_requirement_applicability.sql',
   '0191_engineering_releases.sql',
   '0192_engineering_packages.sql',
+  '0192_backfill_routed_timer_oven_cure_logs.sql',
+  '0193_rts_ready_to_sell_item_identity.sql',
   '0194_layup_schedule_history.sql',
   '0195_production_order_transition_history.sql',
   '0196_document_template_builder_tables.sql',
-  '0197_repair_p1_metal_accessory_classification.sql',
+  '0197_route_p1_metal_accessories_to_shipping_qc.sql',
+  '0198_repair_p1_metal_accessory_classification.sql',
   'investigation_308_order_duplication.sql',
 ];
 

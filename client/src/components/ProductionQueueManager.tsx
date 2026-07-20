@@ -220,7 +220,7 @@ export default function ProductionQueueManager() {
   const [selectedPOItems, setSelectedPOItems] = useState<Map<string, Map<number, number>>>(
     new Map()
   );
-  const [isProgressingPOItems, setIsProgressingPOItems] = useState(false);
+  const [isGeneratingPODemand, setIsGeneratingPODemand] = useState(false);
 
   // State for "Select Next N" for regular production queue
   const [selectNextQueueCount, setSelectNextQueueCount] = useState<string>('');
@@ -414,27 +414,6 @@ export default function ProductionQueueManager() {
   // Generate layup schedule mutation
   const generateScheduleMutation = useMutation({
     mutationFn: async () => {
-      // Prepare selected P1 PO items with their selected quantities
-      const selectedPOItemsArray: any[] = [];
-      safePurchaseOrders.forEach((customer) => {
-        customer.purchaseOrders.forEach((po) => {
-          const selectedItems = selectedPOItems.get(po.poNumber);
-          if (selectedItems) {
-            po.items.forEach((item) => {
-              const selectedQuantity = selectedItems.get(item.id);
-              if (selectedQuantity && selectedQuantity > 0) {
-                selectedPOItemsArray.push({
-                  poNumber: po.poNumber,
-                  itemId: item.id,
-                  stockModel: item.stockModel || '',
-                  quantity: selectedQuantity, // Use selected quantity instead of remaining
-                });
-              }
-            });
-          }
-        });
-      });
-
       // Calculate week start date based on selected week offset
       const today = new Date();
       const nextMonday = new Date(today);
@@ -445,7 +424,9 @@ export default function ProductionQueueManager() {
         method: 'POST',
         body: {
           selectedOrderIds: Array.from(selectedQueueOrders),
-          selectedPOItems: selectedPOItemsArray,
+          // PO demand must be generated into P1 Production Queue first. The
+          // scheduler accepts only existing production-order IDs from this UI.
+          selectedPOItems: [],
           workDays: selectedDays,
           weekStart: nextMonday.toISOString(),
         },
@@ -726,41 +707,42 @@ export default function ProductionQueueManager() {
     printWindow.document.close();
   };
 
-  // Handler for progressing P1 PO items to Barcode
-  const handleProgressToBarcode = async () => {
+  // PO items create demand in P1 Production Queue. Department progression is
+  // intentionally handled only by the existing production-order controls above.
+  const handleGeneratePODemand = async () => {
     if (selectedPOItems.size === 0) {
       toast({
         title: 'No Items Selected',
-        description: 'Please select items to progress to Barcode',
+        description: 'Please select purchase-order demand to generate',
         variant: 'destructive',
       });
       return;
     }
 
     // Convert selected PO items to the format expected by the API
-    const selections: Array<{ poProductId: number; quantity: number }> = [];
+    const selections: Array<{ poProductId: number; quantitySelected: number }> = [];
     selectedPOItems.forEach((itemMap, poNumber) => {
-      itemMap.forEach((quantity, itemId) => {
-        selections.push({ poProductId: itemId, quantity });
+      itemMap.forEach((quantitySelected, itemId) => {
+        selections.push({ poProductId: itemId, quantitySelected });
       });
     });
 
-    setIsProgressingPOItems(true);
+    setIsGeneratingPODemand(true);
     try {
-      const response = await apiRequest('/api/p1-po-queue/progress', {
+      const selectionBatch = await apiRequest('/api/p1-po-queue/select', {
         method: 'POST',
         body: JSON.stringify({ selections }),
         headers: { 'Content-Type': 'application/json' },
       });
-
-      const expectedUnits = selections.reduce((sum, selection) => sum + selection.quantity, 0);
-      if (response.itemsProgressed !== expectedUnits) {
-        throw new Error(`Barcode progression only confirmed ${response.itemsProgressed || 0} of ${expectedUnits} selected units`);
-      }
+      const response = await apiRequest('/api/p1-po-queue/schedule', {
+        method: 'POST',
+        body: JSON.stringify({ batchId: selectionBatch.batchId }),
+        headers: { 'Content-Type': 'application/json' },
+      });
 
       toast({
         title: 'Success',
-        description: `Progressed all ${expectedUnits} selected PO units to Barcode (no labels needed for PO orders)`,
+        description: response.message || 'Generated purchase-order demand in P1 Production Queue',
       });
 
       // Clear selections
@@ -773,14 +755,14 @@ export default function ProductionQueueManager() {
       // PO orders do not need labels printed when progressed to Barcode
       // Labels are only required for regular production orders
     } catch (error: any) {
-      console.error('Error progressing to Barcode:', error);
+      console.error('Error generating PO demand:', error);
       toast({
         title: 'Error',
-        description: error?.message || 'Failed to progress items to Barcode',
+        description: error?.message || 'Failed to generate production demand',
         variant: 'destructive',
       });
     } finally {
-      setIsProgressingPOItems(false);
+      setIsGeneratingPODemand(false);
     }
   };
 
@@ -856,7 +838,9 @@ export default function ProductionQueueManager() {
       const newMap = new Map(prev);
       const itemMap = newMap.get(poNumber) || new Map();
       // Filter out "no stock" items from selection
-      const eligibleItems = items.filter((item) => item.stockModel !== "no stock");
+      const eligibleItems = items.filter(
+        (item) => item.stockModel !== "no stock" && item.quantity > 0,
+      );
       const allSelected = eligibleItems.every((item) => itemMap.get(item.id) === item.quantity);
       
       if (allSelected) {
@@ -1510,15 +1494,28 @@ export default function ProductionQueueManager() {
                     Progress to Barcode ({selectedQueueOrders.size})
                   </Button>
                 )}
-                <Button
-                  onClick={() => setDaySelectionDialogOpen(true)}
-                  disabled={generateScheduleMutation.isPending}
-                  className="bg-purple-600 hover:bg-purple-700 text-white border-2 border-purple-400 font-medium shadow-lg flex items-center gap-2"
-                  data-testid="button-generate-schedule-sticky"
-                >
-                  <CalendarCheck className="w-5 h-5" />
-                  Generate Schedule
-                </Button>
+                {selectedQueueOrders.size > 0 && (
+                  <Button
+                    onClick={() => setDaySelectionDialogOpen(true)}
+                    disabled={generateScheduleMutation.isPending}
+                    className="bg-purple-600 hover:bg-purple-700 text-white border-2 border-purple-400 font-medium shadow-lg flex items-center gap-2"
+                    data-testid="button-generate-schedule-sticky"
+                  >
+                    <CalendarCheck className="w-5 h-5" />
+                    Generate Schedule
+                  </Button>
+                )}
+                {Array.from(selectedPOItems.values()).some((items) => items.size > 0) && (
+                  <Button
+                    onClick={handleGeneratePODemand}
+                    disabled={isGeneratingPODemand}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white border-2 border-emerald-400 font-medium shadow-lg flex items-center gap-2"
+                    data-testid="button-generate-production-demand-sticky"
+                  >
+                    <Package className="w-5 h-5" />
+                    {isGeneratingPODemand ? 'Generating...' : 'Generate Production Demand'}
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1783,14 +1780,14 @@ export default function ProductionQueueManager() {
                         <Button
                           className="bg-green-600 hover:bg-green-700 text-white"
                           size="sm"
-                          disabled={isProgressingPOItems}
+                          disabled={isGeneratingPODemand}
                           onClick={() => {
-                            handleProgressToBarcode();
+                            handleGeneratePODemand();
                           }}
-                          data-testid="button-progress-to-barcode"
+                          data-testid="button-generate-production-demand"
                         >
-                          <ArrowRight className="w-4 h-4 mr-2" />
-                          {isProgressingPOItems ? 'Progressing...' : 'Progress to Barcode'}
+                          <Package className="w-4 h-4 mr-2" />
+                          {isGeneratingPODemand ? 'Generating...' : 'Generate Production Demand'}
                         </Button>
                       </div>
                     </div>
@@ -1948,7 +1945,7 @@ export default function ProductionQueueManager() {
                                     <TableHead>Material</TableHead>
                                     <TableHead>Handedness</TableHead>
                                     <TableHead>Available Qty</TableHead>
-                                    <TableHead>Status</TableHead>
+                                    <TableHead>Production Status</TableHead>
                                     <TableHead>Notes</TableHead>
                                   </TableRow>
                                 </TableHeader>
@@ -2031,7 +2028,11 @@ export default function ProductionQueueManager() {
                                             'outline'
                                           }
                                         >
-                                          {item.status || 'pending'}
+                                          {Object.keys(item.departmentStatuses || {}).length > 0
+                                            ? Object.entries(item.departmentStatuses)
+                                                .map(([department, count]) => `${count} ${department}`)
+                                                .join(', ')
+                                            : 'Not generated'}
                                         </Badge>
                                       </TableCell>
                                       <TableCell className="text-sm text-gray-600 max-w-xs truncate">

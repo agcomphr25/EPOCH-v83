@@ -6,10 +6,11 @@ import { nanoid } from 'nanoid';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 import { idempotencyMiddleware, logIdempotencyEvent } from '../../middleware/idempotency';
 import { resolveItemDisplayName } from '../utils/resolveItemDisplayName';
+import { deriveCanonicalMaterial } from '../utils/deriveCanonicalMaterial';
 
 const router = Router();
 
-const METAL_ACCESSORY_PREFIXES = ['AGBM', 'AGBDL', 'AGM5', 'AGPIC', 'AGARCA'];
+const METAL_ACCESSORY_PREFIXES = ['AGBM', 'AGBDL', 'AGM5', 'AGMS5', 'AGPIC', 'AGARCA'];
 
 function normalizeSkuForMatch(sku: string): string {
   return sku.toUpperCase().replace(/[-_]/g, '');
@@ -275,7 +276,10 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
     for (const selection of selections) {
       try {
         const poItemId = selection.poProductId;
-        const quantity = selection.quantity || 1;
+        const quantity = Number(selection.quantitySelected || 1);
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+          throw new Error(`Invalid demand quantity for purchase order item ${poItemId}`);
+        }
 
         // Get the purchase order item details
         const poItemQuery = `
@@ -376,13 +380,20 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
           [poItemId]
         );
         const realOrderCount = parseInt(realCountRows[0]?.cnt ?? '0', 10);
-        if (realOrderCount >= quantity) {
+        const orderedQuantity = Number(item.quantity || 0);
+        const remainingDemand = Math.max(orderedQuantity - realOrderCount, 0);
+        if (remainingDemand === 0) {
           console.warn(`⚠️  P1 PO Schedule: PO item ${poItemId} already fully released (${realOrderCount} active production orders >= quantity=${quantity}), skipping`);
           warnings.push({
             poProductId: poItemId,
             warning: `Already fully released (${realOrderCount} of ${quantity} orders exist)`,
           });
           continue;
+        }
+        if (quantity > remainingDemand) {
+          throw new Error(
+            `Requested ${quantity} unit(s) for PO item ${poItemId}, but only ${remainingDemand} unit(s) of ungenerated demand remain`,
+          );
         }
 
         const specs = item.specifications || {};
@@ -398,7 +409,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
 
           // Only create the orders that are still missing (quantity minus what already exists).
           // Start the sequence after the already-existing orders so IDs are deterministic.
-          const remainingToCreate = quantity - realOrderCount;
+          const remainingToCreate = quantity;
 
           // Detect metal accessories by item_name/item_id/item_type before inserting
           // Metal accessories must route to Shipping QC, not P1 Production Queue
@@ -408,6 +419,10 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
             item.item_type || undefined
           );
           const targetDepartment = itemIsMetalAccessory ? 'Shipping QC' : 'P1 Production Queue';
+          const targetStatus = itemIsMetalAccessory ? 'IN_PROGRESS' : 'PENDING';
+          const materialCanonical = itemIsMetalAccessory
+            ? 'Metal Accessory'
+            : deriveCanonicalMaterial(item.item_id || item.item_name || '');
 
           // Create orders in all_orders table with appropriate department
           for (let i = 0; i < remainingToCreate; i++) {
@@ -416,7 +431,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
             // Sequence starts after existing orders so we never collide.
             const seqNum = realOrderCount + i + 1;
             const orderId = `PO-${item.po_number}-${poItemId}-${seqNum}`;
-            const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${i + 1} of ${quantity})`;
+            const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${seqNum} of ${orderedQuantity})`;
             const features = JSON.stringify({
               po_item_id: poItemId,
               po_number: item.po_number,
@@ -445,7 +460,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                 created_at,
                 updated_at
               ) VALUES (
-                $1, NOW(), $2, $3, $4, $9, 'IN_PROGRESS', $5, $6::jsonb,
+                $1, NOW(), $2, $3, $4, $9, $10, $5, $6::jsonb,
                 'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
               )
               ON CONFLICT (order_id) DO NOTHING
@@ -461,6 +476,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               item.po_id,
               poItemId,
               targetDepartment,
+              targetStatus,
             ]);
 
             // RC-3 FIX: Only proceed with downstream inserts/audit for rows that were actually
@@ -486,7 +502,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                 JSON.stringify({
                   order_id: orderId,
                   current_department: targetDepartment,
-                  status: 'IN_PROGRESS',
+                  status: targetStatus,
                   order_source: 'PO_RELEASE',
                   source_po_id: item.po_id,
                   source_po_item_id: poItemId,
@@ -517,16 +533,18 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                 due_date,
                 production_status,
                 current_department,
+                material_canonical,
                 department_history,
                 created_at,
                 updated_at
               ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW(), $11,
-                'PENDING', $12, '[]'::jsonb, NOW(), NOW()
+                $12, $13, $14, '[]'::jsonb, NOW(), NOW()
               )
               ON CONFLICT (order_id) DO UPDATE
-              SET current_department = $12,
-                  production_status = 'PENDING',
+              SET current_department = $13,
+                  production_status = $12,
+                  material_canonical = $14,
                   updated_at = NOW()
             `;
             await client.query(insertProductionOrderQuery, [
@@ -541,30 +559,35 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               resolveItemDisplayName(item.item_name || ''),
               JSON.stringify(specs),
               dueDate,
+              targetStatus,
               targetDepartment,
+              materialCanonical,
             ]);
 
-            // Also add to layup_schedule table for scheduler visibility
-            const scheduledDate = targetWeek
-              ? new Date(targetWeek)
-              : new Date(dueDate);
+            // Only manufactured stocks belong on the layup scheduler. Metal
+            // accessories skip manufacturing and go directly to Shipping QC.
+            if (!itemIsMetalAccessory) {
+              const scheduledDate = targetWeek
+                ? new Date(targetWeek)
+                : new Date(dueDate);
 
-            const insertScheduleQuery = `
-              INSERT INTO layup_schedule (
-                order_id,
-                scheduled_date,
-                priority_score,
-                is_locked,
-                created_at,
-                updated_at
-              ) VALUES (
-                $1, $2, 1500, false, NOW(), NOW()
-              )
-              ON CONFLICT (order_id) DO UPDATE
-              SET scheduled_date = $2,
-                  updated_at = NOW()
-            `;
-            await client.query(insertScheduleQuery, [orderId, scheduledDate.toISOString()]);
+              const insertScheduleQuery = `
+                INSERT INTO layup_schedule (
+                  order_id,
+                  scheduled_date,
+                  priority_score,
+                  is_locked,
+                  created_at,
+                  updated_at
+                ) VALUES (
+                  $1, $2, 1500, false, NOW(), NOW()
+                )
+                ON CONFLICT (order_id) DO UPDATE
+                SET scheduled_date = $2,
+                    updated_at = NOW()
+              `;
+              await client.query(insertScheduleQuery, [orderId, scheduledDate.toISOString()]);
+            }
 
             scheduledOrders.push(orderId);
           }
@@ -926,6 +949,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
         poi.id as poi_id,
         poi.item_id,
         poi.item_name,
+        poi.item_type,
         poi.specifications,
         poi.due_date,
         poi.order_count,
@@ -973,6 +997,11 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
         const specs = sel.specifications || {};
         const dueDate = sel.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
         const scheduledDate = targetWeek ? new Date(targetWeek) : new Date(dueDate);
+        const targetDepartment = isMetalAccessorySku(
+          sel.item_name || '',
+          sel.item_id || '',
+          sel.item_type || undefined,
+        ) ? 'Shipping QC' : 'P1 Production Queue';
 
         // Generate the same order IDs as /schedule (i+1, not currentOrderCount+i+1)
         for (let i = 0; i < quantity; i++) {
@@ -1003,7 +1032,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
                 current_department, status, notes, features, order_source,
                 source_po_id, source_po_item_id, department_history, created_at, updated_at
               ) VALUES (
-                $1, NOW(), $2, $3, $4, 'P1 Production Queue', 'IN_PROGRESS', $5, $6::jsonb,
+                $1, NOW(), $2, $3, $4, $9, 'IN_PROGRESS', $5, $6::jsonb,
                 'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
               )
             `, [
@@ -1015,6 +1044,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
               features,
               sel.purchase_order_id,
               poItemId,
+              targetDepartment,
             ]);
 
             await pool.query(
@@ -1028,7 +1058,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
                 JSON.stringify(null),
                 JSON.stringify({
                   order_id: orderId,
-                  current_department: 'P1 Production Queue',
+                  current_department: targetDepartment,
                   status: 'IN_PROGRESS',
                   order_source: 'PO_RELEASE',
                   source_po_id: sel.purchase_order_id,
@@ -1058,7 +1088,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
               department_history, created_at, updated_at
             ) VALUES (
               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW(), $11,
-              'PENDING', 'P1 Production Queue', '[]'::jsonb, NOW(), NOW()
+              $12, $13, '[]'::jsonb, NOW(), NOW()
             )
             ON CONFLICT (order_id) DO NOTHING
             RETURNING order_id
@@ -1074,18 +1104,22 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
             resolveItemDisplayName(sel.item_name || ''),
             JSON.stringify(specs),
             dueDate,
+            targetDepartment === 'Shipping QC' ? 'IN_PROGRESS' : 'PENDING',
+            targetDepartment,
           ]);
           const prodInsertRows = Array.isArray(prodInsertResult) ? prodInsertResult : (prodInsertResult as any).rows || [];
           const prodOrderCreated = prodInsertRows.length > 0;
 
           // layup_schedule — insert only if missing (DO NOTHING to preserve any
           // existing schedule date for orders already in flight)
-          await pool.query(`
-            INSERT INTO layup_schedule (
-              order_id, scheduled_date, priority_score, is_locked, created_at, updated_at
-            ) VALUES ($1, $2, 1500, false, NOW(), NOW())
-            ON CONFLICT (order_id) DO NOTHING
-          `, [orderId, scheduledDate.toISOString()]);
+          if (targetDepartment === 'P1 Production Queue') {
+            await pool.query(`
+              INSERT INTO layup_schedule (
+                order_id, scheduled_date, priority_score, is_locked, created_at, updated_at
+              ) VALUES ($1, $2, 1500, false, NOW(), NOW())
+              ON CONFLICT (order_id) DO NOTHING
+            `, [orderId, scheduledDate.toISOString()]);
+          }
 
           // Count as recovered only if the production_orders row was newly created
           if (prodOrderCreated) {

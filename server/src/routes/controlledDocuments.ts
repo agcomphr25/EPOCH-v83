@@ -13,7 +13,7 @@ import { requireStepUp } from '../../../server/middleware/auth';
 import { writeAccessLog } from './vault';
 import { fileURLToPath } from 'url';
 import { PDFDocument, PDFFont, StandardFonts, rgb } from 'pdf-lib';
-import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
+import { getFileStorageProvider, getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 
 const router = Router();
 
@@ -100,27 +100,8 @@ const requireDocumentEditor = async (req: Request, res: Response, next: any) => 
   next();
 };
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'server/src/assets/documents');
-    try {
-      await fs.mkdir(uploadDir, { recursive: true });
-      cb(null, uploadDir);
-    } catch (error) {
-      cb(error as Error, uploadDir);
-    }
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
-    cb(null, `${name}-${uniqueSuffix}${ext}`);
-  }
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
   fileFilter: (req, file, cb) => {
     const allowedTypes = /\.(pdf|docx?|xlsx?|txt|jpg|jpeg|png)$/i;
@@ -131,6 +112,15 @@ const upload = multer({
     }
   }
 });
+
+const persistControlledDocumentUpload = async (file: Express.Multer.File, entityId?: string) =>
+  getFileStorageProvider().uploadBuffer({
+    buffer: file.buffer,
+    fileName: file.originalname,
+    contentType: file.mimetype,
+    scope: 'controlled-documents',
+    entityId,
+  });
 
 // Separate multer configuration for CSV imports
 const csvUpload = multer({
@@ -419,7 +409,9 @@ router.post('/', requireDocumentEditor, upload.single('file'), async (req: Reque
     
     const createdBy = user.username; // Use authenticated user
 
-    const filePath = req.file ? `/assets/documents/${req.file.filename}` : null;
+    const filePath = req.file
+      ? await persistControlledDocumentUpload(req.file, documentNumber)
+      : null;
 
     // Calculate expiration date (1 year from now)
     const now = new Date();
@@ -530,7 +522,7 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
       newVersion = nextRevisionVersion(existingDoc.currentVersion);
 
       // Use the newly uploaded file
-      filePath = `/assets/documents/${req.file.filename}`;
+      filePath = await persistControlledDocumentUpload(req.file, existingDoc.id);
 
       // Calculate new expiration date (1 year from now)
       const now = new Date();
@@ -584,7 +576,7 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
     } else {
       // Just update metadata without versioning
       if (req.file) {
-        filePath = `/assets/documents/${req.file.filename}`;
+        filePath = await persistControlledDocumentUpload(req.file, existingDoc.id);
       }
 
       const [updatedDoc] = await db

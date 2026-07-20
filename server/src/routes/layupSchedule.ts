@@ -932,8 +932,8 @@ router.post('/save', async (req: Request, res: Response) => {
             poItemCounts.set(key, (poItemCounts.get(key) || 0) + 1);
             selectedPOOrderIds.add(orderId);
             
-            // Create/update production_orders record for this PO unit
-            // This ensures the item appears in the Layup/Plugging department queue
+            // Keep both queue records in sync. Barcode reads all_orders, while
+            // downstream PO routing also uses production_orders.
             try {
               // Get PO item details
               const poItemResult = await client.query(`
@@ -957,6 +957,28 @@ router.post('/save', async (req: Request, res: Response) => {
                 
                 // Use derived stock model or fall back to item name
                 const stockModelForPO = derivedStockModel || poItem.stock_model_id || poItem.item_name || '';
+
+                await client.query(`
+                  INSERT INTO all_orders (
+                    order_id, order_date, due_date, customer_id, model_id,
+                    current_department, status, notes, features, order_source,
+                    source_po_id, source_po_item_id, department_history, created_at, updated_at
+                  ) VALUES (
+                    $1, NOW(), $2, $3, $4, 'Barcode', 'IN_PROGRESS', $5, $6::jsonb,
+                    'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
+                  )
+                  ON CONFLICT (order_id) DO UPDATE
+                  SET current_department = 'Barcode', status = 'IN_PROGRESS', updated_at = NOW()
+                `, [
+                  orderId,
+                  poItem.due_date || processedScheduledDate,
+                  poItem.customer_id || poItem.customer_name,
+                  stockModelForPO,
+                  `PO Item: ${poItem.item_name || stockModelForPO} - PO #${poItem.po_number}`,
+                  JSON.stringify({ po_item_id: parseInt(itemId), po_number: poItem.po_number, po_id: poItem.po_id }),
+                  poItem.po_id,
+                  parseInt(itemId),
+                ]);
                 
                 // Upsert production_orders record
                 const progressionResult = await client.query(`
@@ -966,7 +988,7 @@ router.post('/save', async (req: Request, res: Response) => {
                     order_date, due_date, current_department, production_status
                   ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                   ON CONFLICT (order_id) DO UPDATE SET
-                    current_department = 'Layup/Plugging',
+                    current_department = 'Barcode',
                     item_id = COALESCE(NULLIF($8, ''), production_orders.item_id),
                     item_name = COALESCE(NULLIF($9, ''), production_orders.item_name),
                     updated_at = NOW()
@@ -983,7 +1005,7 @@ router.post('/save', async (req: Request, res: Response) => {
                   poItem.item_name || stockModelForPO,
                   new Date(),
                   poItem.due_date || processedScheduledDate,
-                  'Layup/Plugging',
+                  'Barcode',
                   'PENDING'
                 ]);
 
@@ -1066,7 +1088,7 @@ router.post('/save', async (req: Request, res: Response) => {
         console.log(`📦 Moved ${progressedCount} orders to Layup/Plugging department`);
       }
 
-      // Move production orders to Layup/Plugging department ONLY if ALL items are fully scheduled
+      // Confirm fully scheduled PO units remain synchronized in Barcode.
       if (productionOrderNumbers.size > 0) {
         const poNumbersArray = Array.from(productionOrderNumbers);
         
@@ -1105,19 +1127,19 @@ router.post('/save', async (req: Request, res: Response) => {
           const poUpdateResult = await client.query(
             `
             UPDATE production_orders
-            SET current_department = 'Layup/Plugging',
+            SET current_department = 'Barcode',
                 updated_at = NOW()
             WHERE order_id = ANY($1::text[])
-            AND current_department = 'P1 Production Queue'
+            AND current_department IN ('P1 Production Queue', 'Layup/Plugging', 'Barcode')
           `,
             [Array.from(selectedPOOrderIds)]
           );
           
           const poProgressedCount = poUpdateResult.rowCount || 0;
           // Exact per-unit upserts above already contributed to progressedCount.
-          console.log(`📦 Moved ${poProgressedCount} production orders to Layup/Plugging (all items complete): ${fullyScheduledPOs.join(', ')}`);
+          console.log(`📦 Confirmed ${poProgressedCount} production orders in Barcode (all items complete): ${fullyScheduledPOs.join(', ')}`);
         } else {
-          console.log(`📦 No production orders ready to move (items still pending)`);
+          console.log(`📦 No fully scheduled PO groups required a Barcode confirmation update`);
         }
       }
 

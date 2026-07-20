@@ -690,6 +690,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
 
 // Progress selected items to Barcode department
 router.post('/progress', async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const { batchId, selections } = req.body;
 
@@ -712,14 +713,18 @@ router.post('/progress', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No selections to progress' });
     }
 
-    // Process each purchase order item: update orderCount and create production orders
+    await client.query('BEGIN');
+
+    // Barcode reads all_orders. Keep it and production_orders in sync, and make
+    // the entire multi-PO selection atomic so a partial success is never hidden.
     const progressedOrders: string[] = [];
-    const errors: Array<{ poProductId: number; error: string }> = [];
 
     for (const selection of selectionsToProgress) {
-      try {
         const poItemId = selection.poProductId; // Actually purchase_order_items.id
-        const quantity = selection.quantity || 1;
+        const quantity = Number(selection.quantity || 1);
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+          throw new Error(`Invalid quantity for purchase order item ${poItemId}`);
+        }
 
         // Get the purchase order item details
         const poItemQuery = `
@@ -727,24 +732,50 @@ router.post('/progress', async (req: Request, res: Response) => {
           FROM purchase_order_items poi
           JOIN purchase_orders po ON poi.po_id = po.id
           WHERE poi.id = $1
+          FOR UPDATE
         `;
-        const poItem = await pool.query(poItemQuery, [poItemId]);
+        const poItem = await client.query(poItemQuery, [poItemId]);
 
-        if (!poItem || poItem.length === 0) {
-          errors.push({ poProductId: poItemId, error: 'Purchase order item not found' });
-          continue;
+        if (!poItem.rows || poItem.rows.length === 0) {
+          throw new Error(`Purchase order item ${poItemId} not found`);
         }
 
-        const item = poItem[0];
+        const item = poItem.rows[0];
         const specs = item.specifications || {};
+        const currentOrderCount = Number(item.order_count || 0);
+        const orderedQuantity = Number(item.quantity || 0);
+        if (currentOrderCount + quantity > orderedQuantity) {
+          throw new Error(`Selected ${quantity} unit(s) for PO item ${poItemId}, but only ${Math.max(0, orderedQuantity - currentOrderCount)} remain`);
+        }
         
         // Use a default due date if none is provided (30 days from now)
         const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
         
         // Create production orders for the selected quantity
         for (let i = 0; i < quantity; i++) {
-          // CENTRALIZED: Use atomic order ID generator instead of inline pattern
-          const orderId = await storage.generateNextOrderId();
+          const sequence = currentOrderCount + i + 1;
+          const orderId = `PO-${item.po_number}-${poItemId}-${sequence}`;
+          const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${sequence} of ${orderedQuantity})`;
+          const features = JSON.stringify({
+            po_item_id: poItemId,
+            po_number: item.po_number,
+            po_id: item.po_id,
+            specifications: specs,
+            action_length: specs.action_length || '',
+          });
+
+          await client.query(`
+            INSERT INTO all_orders (
+              order_id, order_date, due_date, customer_id, model_id,
+              current_department, status, notes, features, order_source,
+              source_po_id, source_po_item_id, department_history, created_at, updated_at
+            ) VALUES (
+              $1, NOW(), $2, $3, $4, 'Barcode', 'IN_PROGRESS', $5, $6::jsonb,
+              'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
+            )
+            ON CONFLICT (order_id) DO UPDATE
+            SET current_department = 'Barcode', status = 'IN_PROGRESS', updated_at = NOW()
+          `, [orderId, dueDate, item.customer_id || item.customer_name, item.item_id || '', notes, features, item.po_id, poItemId]);
           
           const insertProdQuery = `
             INSERT INTO production_orders (
@@ -761,7 +792,7 @@ router.post('/progress', async (req: Request, res: Response) => {
                 production_status = 'IN_PROGRESS',
                 updated_at = NOW()
           `;
-          await pool.query(insertProdQuery, [
+          await client.query(insertProdQuery, [
             orderId,
             item.po_id,
             poItemId,
@@ -778,22 +809,16 @@ router.post('/progress', async (req: Request, res: Response) => {
         }
 
         // Update the orderCount in purchase_order_items to reflect scheduled quantity
-        const newOrderCount = (item.order_count || 0) + quantity;
+        const newOrderCount = currentOrderCount + quantity;
         const updatePoQuery = `
           UPDATE purchase_order_items
           SET order_count = $1, updated_at = NOW()
           WHERE id = $2
         `;
-        await pool.query(updatePoQuery, [newOrderCount, poItemId]);
-        
-      } catch (error) {
-        console.error(`Error progressing PO item ${selection.poProductId}:`, error);
-        errors.push({
-          poProductId: selection.poProductId,
-          error: (error as Error).message,
-        });
-      }
+        await client.query(updatePoQuery, [newOrderCount, poItemId]);
     }
+
+    await client.query('COMMIT');
 
     res.json({
       success: true,
@@ -801,14 +826,16 @@ router.post('/progress', async (req: Request, res: Response) => {
       itemsProgressed: progressedOrders.length,
       targetDepartment: 'Barcode',
       orderIds: progressedOrders,
-      errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error progressing orders:', error);
     res.status(500).json({
       error: 'Failed to progress orders',
       details: (error as any).message,
     });
+  } finally {
+    client.release();
   }
 });
 

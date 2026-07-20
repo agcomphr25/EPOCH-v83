@@ -533,6 +533,7 @@ describe('isMetalAccessorySku — routing guard', () => {
 
   it('returns true when itemName starts with AGBDL prefix', () => {
     expect(isMetalAccessorySku('AGBDL-receiver', '', 'stock_model')).toBe(true);
+    expect(isMetalAccessorySku('AGBDLLA01', '', 'stock_model')).toBe(true);
   });
 
   it('returns true when itemName starts with AGM5 prefix', () => {

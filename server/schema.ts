@@ -7871,6 +7871,7 @@ export interface P1POQueueItem {
   texture: string | null;
   flatTop: boolean | null;
   quantity: number;
+  availableQuantity: number;
   status: string | null;
   notes: string | null;
   dueDate: string | null;

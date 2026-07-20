@@ -159,7 +159,12 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
 
     const result = computeP1Queue([po], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({
+      quantity: 2,
+      availableQuantity: 0,
+      status: 'Shipping QC',
+    });
   });
 
   it('does not regenerate production orders that already exist in production', () => {
@@ -173,7 +178,12 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
 
     const result = computeP1Queue([po], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({
+      quantity: 2,
+      availableQuantity: 0,
+      status: 'in production',
+    });
   });
 
   it('excludes a PO when all production orders are Shipped or Completed (baseline)', () => {
@@ -187,7 +197,12 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
 
     const result = computeP1Queue([po], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({
+      quantity: 2,
+      availableQuantity: 0,
+      status: 'completed',
+    });
   });
 
   it('includes a PO when there are no production orders yet', () => {
@@ -218,9 +233,9 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
 
     const result = computeP1Queue([poA, poB], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].customerName).toBe('Beta');
-    expect(result[0].purchaseOrders[0].poNumber).toBe('PO-002');
+    expect(result).toHaveLength(2);
+    expect(result[0].purchaseOrders[0].items[0].status).toBe('completed');
+    expect(result[1].purchaseOrders[0].items[0].status).toBe('partially released');
   });
 
   // RC-5 regression guard: items in Shipping QC must keep Alpha's PO in the queue
@@ -241,8 +256,8 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     const result = computeP1Queue([poA, poB], itemsByPoId, prodRows);
 
     expect(result).toHaveLength(2);
-    expect(result[0].purchaseOrders[0].items[0].quantity).toBe(1);
-    expect(result[1].purchaseOrders[0].items[0].quantity).toBe(1);
+    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({ quantity: 2, availableQuantity: 1 });
+    expect(result[1].purchaseOrders[0].items[0]).toMatchObject({ quantity: 2, availableQuantity: 1 });
   });
 
   it('filters out items that are not stock_model type', () => {
@@ -255,14 +270,18 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('filters out items with no remaining quantity', () => {
+  it('preserves items with no remaining quantity', () => {
     const po = makePO();
     const item = makeItem({ quantity: 2, orderCount: 2 });
     const itemsByPoId = new Map([[po.id, [item]]]);
 
     const result = computeP1Queue([po], itemsByPoId, []);
 
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({
+      quantity: 2,
+      availableQuantity: 0,
+    });
   });
 
   it('does not expose released PO production orders as new PO demand', () => {
@@ -285,7 +304,12 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
 
     const result = computeP1Queue([po], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({
+      quantity: 1,
+      availableQuantity: 0,
+      status: 'P1 Production Queue',
+    });
   });
 
   it('uses real active production rows instead of a stale cached order count', () => {
@@ -295,7 +319,26 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
 
     const result = computeP1Queue([po], itemsByPoId, [makeProdRow()]);
 
-    expect(result[0].purchaseOrders[0].items[0].quantity).toBe(2);
+    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({
+      quantity: 3,
+      availableQuantity: 2,
+      status: 'partially released',
+    });
+  });
+
+  it('changes only item status when an existing production unit is progressed', () => {
+    const po = makePO();
+    const item = makeItem({ quantity: 1, orderCount: 1 });
+    const itemsByPoId = new Map([[po.id, [item]]]);
+
+    const queued = computeP1Queue([po], itemsByPoId, [
+      makeProdRow({ current_department: 'P1 Production Queue' }),
+    ])[0].purchaseOrders[0].items[0];
+    const progressed = computeP1Queue([po], itemsByPoId, [
+      makeProdRow({ current_department: 'Barcode' }),
+    ])[0].purchaseOrders[0].items[0];
+
+    expect(progressed).toEqual({ ...queued, status: 'Barcode' });
   });
 
   it('returns empty when given no POs', () => {

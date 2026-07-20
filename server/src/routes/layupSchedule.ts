@@ -808,48 +808,6 @@ router.post('/save', async (req: Request, res: Response) => {
       console.log(`📅 Target layup days for this save: ${layupDays.join(', ')}`);
       console.log(`📋 Replacing ${orderIdsToReplace.length} specific orders (preserving all other orders on those days)`);
       
-      // Get existing schedule ONLY for the specific order IDs being replaced (to decrement PO item counts)
-      const existingResult = await client.query(
-        `
-        SELECT order_id 
-        FROM layup_schedule 
-        WHERE order_id = ANY($1::text[])
-      `,
-        [orderIdsToReplace]
-      );
-      
-      // Handle result - client.query returns { rows: [...] }
-      const existingRows = existingResult?.rows || [];
-      
-      // Decrement PO item counts for items being removed
-      const existingPOCounts = new Map<string, number>();
-      for (const row of (Array.isArray(existingRows) ? existingRows : [])) {
-        const orderId = row.order_id;
-        const parsedPOUnit = parseP1POUnitOrderId(orderId);
-        if (parsedPOUnit) {
-          const key = `${parsedPOUnit.poNumber}|${parsedPOUnit.poItemId}`;
-          existingPOCounts.set(key, (existingPOCounts.get(key) || 0) + 1);
-        }
-      }
-      
-      // Decrement counts before clearing
-      if (existingPOCounts.size > 0) {
-        const poItemEntries = Array.from(existingPOCounts.entries());
-        for (const [key, count] of poItemEntries) {
-          const [, itemId] = key.split('|');
-          await client.query(
-            `
-            UPDATE purchase_order_items
-            SET order_count = GREATEST(COALESCE(order_count, 0) - $1, 0),
-                updated_at = NOW()
-            WHERE id = $2
-          `,
-            [count, parseInt(itemId)]
-          );
-          console.log(`📦 Decremented PO item ${itemId}: removed ${count} from order_count`);
-        }
-      }
-      
       // Clear ONLY the specific order IDs being replaced (preserves other orders on those days)
       await client.query(
         `
@@ -864,8 +822,8 @@ router.post('/save', async (req: Request, res: Response) => {
       let savedCount = 0;
       let progressedCount = 0;
       const orderIds: string[] = [];
-      const poItemCounts = new Map<string, number>(); // Track PO item counts: "poNumber|itemId" -> count
       const selectedPOOrderIds = new Set<string>();
+      const productionOrderNumbers = new Set<string>();
 
       // Save schedule entries
       for (const entry of entries) {
@@ -928,9 +886,8 @@ router.post('/save', async (req: Request, res: Response) => {
         if (parsedPOUnit) {
             const { poNumber, poItemId } = parsedPOUnit;
             const itemId = String(poItemId);
-            const key = `${poNumber}|${itemId}`;
-            poItemCounts.set(key, (poItemCounts.get(key) || 0) + 1);
             selectedPOOrderIds.add(orderId);
+            productionOrderNumbers.add(poNumber);
             
             // Keep both queue records in sync. Barcode reads all_orders, while
             // downstream PO routing also uses production_orders.
@@ -1035,28 +992,6 @@ router.post('/save', async (req: Request, res: Response) => {
         console.log(
           `✅ Order ${orderId} scheduled for ${scheduledDate}`
         );
-      }
-
-      // Update PO item order counts and track production order numbers
-      const productionOrderNumbers = new Set<string>();
-      if (poItemCounts.size > 0) {
-        const newPOItemEntries = Array.from(poItemCounts.entries());
-        for (const [key, count] of newPOItemEntries) {
-          const [poNumber, itemId] = key.split('|');
-          await client.query(
-            `
-            UPDATE purchase_order_items
-            SET order_count = COALESCE(order_count, 0) + $1,
-                updated_at = NOW()
-            WHERE id = $2
-          `,
-            [count, parseInt(itemId)]
-          );
-          console.log(`📦 Updated PO item ${itemId}: added ${count} to order_count`);
-          
-          // Track the production order number for progression
-          productionOrderNumbers.add(poNumber);
-        }
       }
 
       // Move regular orders to Layup/Plugging department (not PO items)

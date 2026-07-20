@@ -16,6 +16,7 @@ export interface FulfillmentStats {
   active: number;
   fulfilled: number;
   activeP1Queue: number;
+  departments?: Set<string>;
 }
 
 /**
@@ -53,12 +54,13 @@ export function buildFulfillmentMap(
     const itemMap = poFulfillmentMap.get(poId)!;
 
     if (!itemMap.has(poItemId)) {
-      itemMap.set(poItemId, { total: 0, active: 0, fulfilled: 0, activeP1Queue: 0 });
+      itemMap.set(poItemId, { total: 0, active: 0, fulfilled: 0, activeP1Queue: 0, departments: new Set() });
     }
     const stats = itemMap.get(poItemId)!;
     stats.total++;
     if ((row.production_status ?? '').toUpperCase() !== 'CANCELLED') {
       stats.active++;
+      if (row.current_department) stats.departments?.add(row.current_department);
     }
     if (isProductionOrderFulfilled(row)) {
       stats.fulfilled++;
@@ -161,7 +163,17 @@ export function computeP1Queue(
         const existingOrderCount = fulfillmentStats
           ? fulfillmentStats.active
           : cachedOrderCount;
-        const remainingQuantity = Math.max(item.quantity - existingOrderCount, 0);
+        const availableQuantity = Math.max(item.quantity - existingOrderCount, 0);
+        const departments = Array.from(fulfillmentStats?.departments ?? []);
+        const displayStatus = !fulfillmentStats || fulfillmentStats.active === 0
+          ? item.stockStatus ?? 'pending'
+          : fulfillmentStats.fulfilled >= item.quantity
+            ? 'completed'
+            : fulfillmentStats.active < item.quantity
+              ? 'partially released'
+              : departments.length === 1
+                ? departments[0]
+                : 'in production';
 
         return {
           id: item.id,
@@ -203,8 +215,11 @@ export function computeP1Queue(
             (specs.flatTop as boolean | null) ??
             (specs.flat_top as boolean | null) ??
             null,
-          quantity: remainingQuantity,
-          status: item.stockStatus ?? 'pending',
+          // Preserve the purchased line and quantity in this UI. Releasing or
+          // progressing production units may only change availability/status.
+          quantity: item.quantity,
+          availableQuantity,
+          status: displayStatus,
           notes: item.notes ?? item.productionNotes ?? null,
           dueDate: item.dueDate?.toString() ?? null,
           linkedOrderId: null,
@@ -223,10 +238,6 @@ export function computeP1Queue(
           lowerStockModel !== 'no_stock' &&
           lowerStockModel !== 'unknown';
         if (!hasValidStockModel) {
-          return false;
-        }
-        const fulfillmentStats = itemFulfillmentMap.get(item.id);
-        if (fulfillmentStats && isPoItemFullyFulfilled(fulfillmentStats)) {
           return false;
         }
         return item.quantity > 0;

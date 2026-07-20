@@ -856,8 +856,11 @@ export default function ProductionQueueManager() {
       const newMap = new Map(prev);
       const itemMap = newMap.get(poNumber) || new Map();
       // Filter out "no stock" items from selection
-      const eligibleItems = items.filter((item) => item.stockModel !== "no stock");
-      const allSelected = eligibleItems.every((item) => itemMap.get(item.id) === item.quantity);
+      const eligibleItems = items.filter(
+        (item) => item.stockModel !== "no stock" && item.availableQuantity > 0,
+      );
+      const allSelected = eligibleItems.length > 0 &&
+        eligibleItems.every((item) => itemMap.get(item.id) === item.availableQuantity);
       
       if (allSelected) {
         // Deselect all
@@ -866,7 +869,7 @@ export default function ProductionQueueManager() {
         // Select all eligible items with their full quantities
         const newItemMap = new Map();
         eligibleItems.forEach((item) => {
-          newItemMap.set(item.id, item.quantity);
+          newItemMap.set(item.id, item.availableQuantity);
         });
         newMap.set(poNumber, newItemMap);
       }
@@ -926,7 +929,7 @@ export default function ProductionQueueManager() {
       customer.purchaseOrders.forEach((po) => {
         availableByPo.set(
           po.poNumber,
-          new Map(po.items.map((item) => [item.id, item.quantity])),
+          new Map(po.items.map((item) => [item.id, item.availableQuantity])),
         );
       });
     });
@@ -971,7 +974,7 @@ export default function ProductionQueueManager() {
       total +
       customer.purchaseOrders.reduce(
         (customerTotal, po) =>
-          customerTotal + po.items.filter(item => item.stockModel !== "no stock").reduce((sum, item) => sum + item.quantity, 0),
+          customerTotal + po.items.filter(item => item.stockModel !== "no stock").reduce((sum, item) => sum + item.availableQuantity, 0),
         0
       ),
     0
@@ -1915,7 +1918,8 @@ export default function ProductionQueueManager() {
                                   checked={
                                     po.items.length > 0 &&
                                     po.items.every((item) => 
-                                      (selectedPOItems.get(po.poNumber) || new Map()).get(item.id) === item.quantity
+                                      item.availableQuantity > 0 &&
+                                      (selectedPOItems.get(po.poNumber) || new Map()).get(item.id) === item.availableQuantity
                                     )
                                   }
                                   onCheckedChange={() => handleSelectAllPOItems(po.poNumber, po.items)}
@@ -1968,7 +1972,7 @@ export default function ProductionQueueManager() {
                                               variant="outline"
                                               size="sm"
                                               className="h-8 w-8 p-0"
-                                              onClick={() => handlePOItemQuantityChange(po.poNumber, item.id, selectedQty - 1, item.quantity)}
+                                              onClick={() => handlePOItemQuantityChange(po.poNumber, item.id, selectedQty - 1, item.availableQuantity)}
                                               disabled={selectedQty === 0}
                                               data-testid={`button-decrement-${item.id}`}
                                             >
@@ -1977,11 +1981,11 @@ export default function ProductionQueueManager() {
                                             <Input
                                               type="number"
                                               min="0"
-                                              max={item.quantity}
+                                              max={item.availableQuantity}
                                               value={selectedQty}
                                               onChange={(e) => {
                                                 const val = parseInt(e.target.value) || 0;
-                                                handlePOItemQuantityChange(po.poNumber, item.id, val, item.quantity);
+                                                handlePOItemQuantityChange(po.poNumber, item.id, val, item.availableQuantity);
                                               }}
                                               className="w-16 h-8 text-center"
                                               data-testid={`input-quantity-${item.id}`}
@@ -1990,14 +1994,14 @@ export default function ProductionQueueManager() {
                                               variant="outline"
                                               size="sm"
                                               className="h-8 w-8 p-0"
-                                              onClick={() => handlePOItemQuantityChange(po.poNumber, item.id, selectedQty + 1, item.quantity)}
-                                              disabled={selectedQty >= item.quantity}
+                                              onClick={() => handlePOItemQuantityChange(po.poNumber, item.id, selectedQty + 1, item.availableQuantity)}
+                                              disabled={selectedQty >= item.availableQuantity}
                                               data-testid={`button-increment-${item.id}`}
                                             >
                                               +
                                             </Button>
                                             <span className="text-xs text-gray-500 ml-1">
-                                              of {item.quantity}
+                                              of {item.availableQuantity}
                                             </span>
                                           </div>
                                         </TableCell>
@@ -2020,7 +2024,7 @@ export default function ProductionQueueManager() {
                                       </TableCell>
                                       <TableCell>
                                         <Badge className="bg-orange-500 text-white">
-                                          {item.quantity}
+                                          {item.availableQuantity}
                                         </Badge>
                                       </TableCell>
                                       <TableCell>

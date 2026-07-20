@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 import { idempotencyMiddleware, logIdempotencyEvent } from '../../middleware/idempotency';
 import { resolveItemDisplayName } from '../utils/resolveItemDisplayName';
+import { deriveCanonicalMaterial } from '../utils/deriveCanonicalMaterial';
 
 const router = Router();
 
@@ -418,6 +419,10 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
             item.item_type || undefined
           );
           const targetDepartment = itemIsMetalAccessory ? 'Shipping QC' : 'P1 Production Queue';
+          const targetStatus = itemIsMetalAccessory ? 'IN_PROGRESS' : 'PENDING';
+          const materialCanonical = itemIsMetalAccessory
+            ? 'Metal Accessory'
+            : deriveCanonicalMaterial(item.item_id || item.item_name || '');
 
           // Create orders in all_orders table with appropriate department
           for (let i = 0; i < remainingToCreate; i++) {
@@ -458,7 +463,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                 created_at,
                 updated_at
               ) VALUES (
-                $1, NOW(), $2, $3, $4, $9, 'IN_PROGRESS', $5, $6::jsonb,
+                $1, NOW(), $2, $3, $4, $9, $10, $5, $6::jsonb,
                 'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
               )
               ON CONFLICT (order_id) DO NOTHING
@@ -474,6 +479,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               item.po_id,
               poItemId,
               targetDepartment,
+              targetStatus,
             ]);
 
             // RC-3 FIX: Only proceed with downstream inserts/audit for rows that were actually
@@ -499,7 +505,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                 JSON.stringify({
                   order_id: orderId,
                   current_department: targetDepartment,
-                  status: 'IN_PROGRESS',
+                  status: targetStatus,
                   order_source: 'PO_RELEASE',
                   source_po_id: item.po_id,
                   source_po_item_id: poItemId,
@@ -530,16 +536,18 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                 due_date,
                 production_status,
                 current_department,
+                material_canonical,
                 department_history,
                 created_at,
                 updated_at
               ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW(), $11,
-                'PENDING', $12, '[]'::jsonb, NOW(), NOW()
+                $12, $13, $14, '[]'::jsonb, NOW(), NOW()
               )
               ON CONFLICT (order_id) DO UPDATE
-              SET current_department = $12,
-                  production_status = 'PENDING',
+              SET current_department = $13,
+                  production_status = $12,
+                  material_canonical = $14,
                   updated_at = NOW()
             `;
             await client.query(insertProductionOrderQuery, [
@@ -554,30 +562,35 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               resolveItemDisplayName(item.item_name || ''),
               JSON.stringify(specs),
               dueDate,
+              targetStatus,
               targetDepartment,
+              materialCanonical,
             ]);
 
-            // Also add to layup_schedule table for scheduler visibility
-            const scheduledDate = targetWeek
-              ? new Date(targetWeek)
-              : new Date(dueDate);
+            // Only manufactured stocks belong on the layup scheduler. Metal
+            // accessories skip manufacturing and go directly to Shipping QC.
+            if (!itemIsMetalAccessory) {
+              const scheduledDate = targetWeek
+                ? new Date(targetWeek)
+                : new Date(dueDate);
 
-            const insertScheduleQuery = `
-              INSERT INTO layup_schedule (
-                order_id,
-                scheduled_date,
-                priority_score,
-                is_locked,
-                created_at,
-                updated_at
-              ) VALUES (
-                $1, $2, 1500, false, NOW(), NOW()
-              )
-              ON CONFLICT (order_id) DO UPDATE
-              SET scheduled_date = $2,
-                  updated_at = NOW()
-            `;
-            await client.query(insertScheduleQuery, [orderId, scheduledDate.toISOString()]);
+              const insertScheduleQuery = `
+                INSERT INTO layup_schedule (
+                  order_id,
+                  scheduled_date,
+                  priority_score,
+                  is_locked,
+                  created_at,
+                  updated_at
+                ) VALUES (
+                  $1, $2, 1500, false, NOW(), NOW()
+                )
+                ON CONFLICT (order_id) DO UPDATE
+                SET scheduled_date = $2,
+                    updated_at = NOW()
+              `;
+              await client.query(insertScheduleQuery, [orderId, scheduledDate.toISOString()]);
+            }
 
             scheduledOrders.push(orderId);
           }

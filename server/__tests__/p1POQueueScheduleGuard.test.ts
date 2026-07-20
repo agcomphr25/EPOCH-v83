@@ -414,6 +414,45 @@ describe('POST /api/p1-po-queue/schedule — RC-4: order_count recompute guard',
     expect(updateCall![1][1]).toBe(PO_ITEM_ID);
   });
 
+  it('writes AGBDLLA01 as an in-progress metal accessory in Shipping QC without a layup row', async () => {
+    vi.mocked(storage.getPOProductSelections).mockResolvedValue([makeSelection()]);
+    mockPoolQuery
+      .mockResolvedValueOnce([
+        makePoItemRow({ item_name: 'AGBDLLA01', item_id: 'AGBDLLA01' }),
+      ])
+      .mockResolvedValueOnce([{ cnt: '0' }]);
+
+    mockClientQuery
+      .mockResolvedValueOnce(undefined) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: 999 }] }) // all_orders
+      .mockResolvedValueOnce(undefined) // audit
+      .mockResolvedValueOnce(undefined) // production_orders
+      .mockResolvedValueOnce({ rows: [{ cnt: '1' }] }) // recompute
+      .mockResolvedValueOnce(undefined) // update PO item
+      .mockResolvedValueOnce(undefined); // COMMIT
+
+    const res = await request(app)
+      .post('/api/p1-po-queue/schedule')
+      .send({ batchId: BATCH_ID, targetWeek: '2026-06-01' });
+
+    expect(res.status).toBe(200);
+    const productionInsert = mockClientQuery.mock.calls.find(
+      (args: unknown[]) =>
+        typeof args[0] === 'string' &&
+        args[0].includes('INSERT INTO production_orders')
+    );
+    expect(productionInsert).toBeDefined();
+    expect(productionInsert![1]).toEqual(
+      expect.arrayContaining(['IN_PROGRESS', 'Shipping QC', 'Metal Accessory'])
+    );
+    expect(
+      mockClientQuery.mock.calls.some(
+        (args: unknown[]) =>
+          typeof args[0] === 'string' && args[0].includes('INSERT INTO layup_schedule')
+      )
+    ).toBe(false);
+  });
+
   it('recomputes order_count from live COUNT on retry after a mid-transaction rollback, not from the stale cached value (RC-4)', async () => {
     // Simulate drift: purchase_order_items.order_count = 5 (stale).
     // The live pre-release COUNT from production_orders is 0 for both the first
@@ -533,6 +572,7 @@ describe('isMetalAccessorySku — routing guard', () => {
 
   it('returns true when itemName starts with AGBDL prefix', () => {
     expect(isMetalAccessorySku('AGBDL-receiver', '', 'stock_model')).toBe(true);
+    expect(isMetalAccessorySku('AGBDLLA01', '', 'stock_model')).toBe(true);
   });
 
   it('returns true when itemName starts with AGM5 prefix', () => {

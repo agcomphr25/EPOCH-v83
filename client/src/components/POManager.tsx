@@ -138,7 +138,12 @@ function isP1InProgressStatus(status?: string | null): boolean {
 
 function getP1EffectiveStatus(order: any): string {
   if (order?.isFulfilled) return 'SHIPPED';
-  return String(order?.productionStatus || '');
+  const rawStatus = String(order?.productionStatus || '').toUpperCase();
+  if (rawStatus === 'CANCELLED') return 'CANCELLED';
+  if (String(order?.currentDepartment || '').trim() === 'P1 Production Queue') {
+    return 'PENDING';
+  }
+  return rawStatus;
 }
 
 function getStatusLabel(filter: StatusFilter): string {

@@ -28,10 +28,8 @@ export interface FulfillmentStats {
  * PO item must remain releasable — so only terminal shipped/completed states count.
  */
 export function isProductionOrderFulfilled(row: ProductionOrderRow): boolean {
-  return (
-    row.production_status === 'Shipped' ||
-    row.production_status === 'Completed'
-  );
+  const status = String(row.production_status || '').trim().toUpperCase();
+  return status === 'SHIPPED' || status === 'COMPLETED';
 }
 
 /**
@@ -63,11 +61,11 @@ export function buildFulfillmentMap(
     if (isProductionOrderFulfilled(row)) {
       stats.fulfilled++;
     }
+    const department = String(row.current_department || '').trim().toLowerCase();
+    const status = String(row.production_status || '').trim().toUpperCase().replace(' ', '_');
     if (
-      row.current_department === 'P1 Production Queue' &&
-      ['PENDING', 'IN_PROGRESS', 'Pending', 'In Progress'].includes(
-        row.production_status ?? '',
-      )
+      department === 'p1 production queue' &&
+      ['PENDING', 'IN_PROGRESS', 'ACTIVE'].includes(status)
     ) {
       stats.activeP1Queue++;
     }
@@ -152,16 +150,11 @@ export function computeP1Queue(
           (specs.stockModel as string | null) ??
           (specs.stock_model as string | null) ??
           null;
-        const cachedOrderCount = item.orderCount ?? 0;
         const fulfillmentStats = itemFulfillmentMap.get(item.id);
-        // This list generates production orders that do not exist yet. Existing
-        // unit rows in P1 Production Queue belong in the production queue above,
-        // not back in this PO-demand list. Treating active queue rows as fresh
-        // demand allowed the same PO units to be generated more than once.
-        const existingOrderCount = fulfillmentStats
-          ? fulfillmentStats.active
-          : cachedOrderCount;
-        const remainingQuantity = Math.max(item.quantity - existingOrderCount, 0);
+        // This card is a read model of existing PENDING units waiting in the P1
+        // Production Queue. Progression moves those rows; it must not interpret
+        // them as permission to generate replacement production orders.
+        const pendingQueueQuantity = fulfillmentStats?.activeP1Queue ?? 0;
 
         return {
           id: item.id,
@@ -203,8 +196,8 @@ export function computeP1Queue(
             (specs.flatTop as boolean | null) ??
             (specs.flat_top as boolean | null) ??
             null,
-          quantity: remainingQuantity,
-          status: item.stockStatus ?? 'pending',
+          quantity: pendingQueueQuantity,
+          status: 'pending',
           notes: item.notes ?? item.productionNotes ?? null,
           dueDate: item.dueDate?.toString() ?? null,
           linkedOrderId: null,

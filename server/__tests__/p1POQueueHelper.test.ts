@@ -64,6 +64,11 @@ describe('isProductionOrderFulfilled', () => {
     expect(isProductionOrderFulfilled(makeProdRow({ production_status: 'Completed', current_department: null }))).toBe(true);
   });
 
+  it('normalizes uppercase database terminal statuses', () => {
+    expect(isProductionOrderFulfilled(makeProdRow({ production_status: 'SHIPPED' }))).toBe(true);
+    expect(isProductionOrderFulfilled(makeProdRow({ production_status: 'COMPLETED' }))).toBe(true);
+  });
+
   // RC-5 FIX: Shipping QC must NOT count as fulfilled — if QC rejects a unit
   // it goes back for rework and must remain releasable in the P1 queue.
   it('returns false when current_department is Shipping QC (RC-5)', () => {
@@ -190,15 +195,14 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('includes a PO when there are no production orders yet', () => {
+  it('does not show ungenerated demand as a pending production unit', () => {
     const po = makePO();
     const item = makeItem();
     const itemsByPoId = new Map([[po.id, [item]]]);
 
     const result = computeP1Queue([po], itemsByPoId, []);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].purchaseOrders[0].items[0].stockModel).toBe('M700');
+    expect(result).toHaveLength(0);
   });
 
   it('handles multiple POs — excludes only the fully fulfilled one', () => {
@@ -213,7 +217,7 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     const prodRows: ProductionOrderRow[] = [
       { po_id: 1, po_item_id: 10, production_status: 'Shipped', current_department: null },
       { po_id: 1, po_item_id: 10, production_status: 'Completed', current_department: null },
-      { po_id: 2, po_item_id: 20, production_status: 'In Progress', current_department: 'Assembly' },
+      { po_id: 2, po_item_id: 20, production_status: 'PENDING', current_department: 'P1 Production Queue' },
     ];
 
     const result = computeP1Queue([poA, poB], itemsByPoId, prodRows);
@@ -223,8 +227,7 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     expect(result[0].purchaseOrders[0].poNumber).toBe('PO-002');
   });
 
-  // RC-5 regression guard: items in Shipping QC must keep Alpha's PO in the queue
-  it('shows only units that do not already have production orders', () => {
+  it('shows only existing units waiting in P1 Production Queue', () => {
     const poA = makePO({ id: 1, poNumber: 'PO-001', customerName: 'Alpha' });
     const poB = makePO({ id: 2, poNumber: 'PO-002', customerName: 'Beta', customerId: 200 });
     const itemA = makeItem({ id: 10 });
@@ -234,8 +237,8 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
       [2, [itemB]],
     ]);
     const prodRows: ProductionOrderRow[] = [
-      { po_id: 1, po_item_id: 10, production_status: 'In Progress', current_department: 'Shipping QC' },
-      { po_id: 2, po_item_id: 20, production_status: 'In Progress', current_department: 'Assembly' },
+      { po_id: 1, po_item_id: 10, production_status: 'PENDING', current_department: 'P1 Production Queue' },
+      { po_id: 2, po_item_id: 20, production_status: 'PENDING', current_department: 'P1 Production Queue' },
     ];
 
     const result = computeP1Queue([poA, poB], itemsByPoId, prodRows);
@@ -265,7 +268,7 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('does not expose released PO production orders as new PO demand', () => {
+  it('exposes an existing pending PO production unit for progression', () => {
     const po = makePO({ poNumber: 'P18261' });
     const item = makeItem({
       id: 18,
@@ -285,17 +288,24 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
 
     const result = computeP1Queue([po], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({
+      id: 18,
+      quantity: 1,
+      status: 'pending',
+    });
   });
 
-  it('uses real active production rows instead of a stale cached order count', () => {
+  it('uses real pending queue rows instead of a stale cached order count', () => {
     const po = makePO();
     const item = makeItem({ quantity: 3, orderCount: 3 });
     const itemsByPoId = new Map([[po.id, [item]]]);
 
-    const result = computeP1Queue([po], itemsByPoId, [makeProdRow()]);
+    const result = computeP1Queue([po], itemsByPoId, [
+      makeProdRow({ production_status: 'PENDING', current_department: 'P1 Production Queue' }),
+    ]);
 
-    expect(result[0].purchaseOrders[0].items[0].quantity).toBe(2);
+    expect(result[0].purchaseOrders[0].items[0].quantity).toBe(1);
   });
 
   it('returns empty when given no POs', () => {

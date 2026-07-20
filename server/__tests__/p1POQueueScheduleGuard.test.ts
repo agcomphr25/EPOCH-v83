@@ -115,6 +115,7 @@ interface MockPoItemRow {
   specifications: Record<string, string>;
   due_date: string;
   order_count: number;
+  quantity: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,6 +151,7 @@ function makePoItemRow(overrides: Partial<MockPoItemRow> = {}): MockPoItemRow {
     specifications: { stockModel: 'M700' },
     due_date: '2026-12-31',
     order_count: 0,
+    quantity: QUANTITY,
     ...overrides,
   };
 }
@@ -265,6 +267,59 @@ describe('POST /api/p1-po-queue/schedule — RC-3: double-scheduling guard', () 
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Batch ID is required/i);
+  });
+});
+
+describe('POST /api/p1-po-queue/progress — progress existing pending units', () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    app = buildApp();
+    const p1POQueueRouter = (await import('../src/routes/p1POQueue')).default;
+    app.use('/api/p1-po-queue', p1POQueueRouter);
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it('moves the selected pending production row to Barcode without inserting a replacement', async () => {
+    mockClientQuery
+      .mockResolvedValueOnce(undefined) // BEGIN
+      .mockResolvedValueOnce({ rows: [makePoItemRow()] }) // locked PO item
+      .mockResolvedValueOnce({ rows: [{ order_id: 'PO-EXISTING-1' }] }) // pending unit
+      .mockResolvedValueOnce(undefined) // all_orders upsert
+      .mockResolvedValueOnce(undefined) // production_orders update
+      .mockResolvedValueOnce(undefined); // COMMIT
+
+    const res = await request(app)
+      .post('/api/p1-po-queue/progress')
+      .send({ selections: [{ poProductId: PO_ITEM_ID, quantity: 1 }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.orderIds).toEqual(['PO-EXISTING-1']);
+    expect(res.body.itemsProgressed).toBe(1);
+
+    const sqlCalls = mockClientQuery.mock.calls.map(([query]) => String(query));
+    expect(sqlCalls.some((query) => /UPDATE production_orders/.test(query))).toBe(true);
+    expect(sqlCalls.some((query) => /INSERT INTO production_orders/.test(query))).toBe(false);
+  });
+
+  it('rolls back when fewer pending units exist than the selected quantity', async () => {
+    mockClientQuery
+      .mockResolvedValueOnce(undefined) // BEGIN
+      .mockResolvedValueOnce({ rows: [makePoItemRow({ quantity: 2 })] })
+      .mockResolvedValueOnce({ rows: [{ order_id: 'PO-EXISTING-1' }] })
+      .mockResolvedValueOnce(undefined); // ROLLBACK
+
+    const res = await request(app)
+      .post('/api/p1-po-queue/progress')
+      .send({ selections: [{ poProductId: PO_ITEM_ID, quantity: 2 }] });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/only 1 pending unit/i);
+    expect(mockClientQuery.mock.calls.some(([query]) => String(query) === 'ROLLBACK')).toBe(true);
   });
 });
 

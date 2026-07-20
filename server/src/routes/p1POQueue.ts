@@ -742,33 +742,29 @@ router.post('/progress', async (req: Request, res: Response) => {
 
         const item = poItem.rows[0];
         const specs = item.specifications || {};
-        const orderedQuantity = Number(item.quantity || 0);
-        // The cached order_count can drift. Count real rows while the PO item is
-        // locked so concurrent requests cannot both generate the same remaining units.
-        const productionCountsResult = await client.query(`
-          SELECT
-            COUNT(*)::int AS total_count,
-            COUNT(*) FILTER (
-              WHERE UPPER(COALESCE(production_status, '')) != 'CANCELLED'
-            )::int AS active_count
-          FROM production_orders
-          WHERE po_item_id = $1
-        `, [poItemId]);
-        const existingOrderCount = Number(productionCountsResult.rows[0]?.total_count || 0);
-        const activeOrderCount = Number(productionCountsResult.rows[0]?.active_count || 0);
-        const remainingQuantity = Math.max(orderedQuantity - activeOrderCount, 0);
-        if (quantity > remainingQuantity) {
-          throw new Error(`Selected ${quantity} unit(s) for PO item ${poItemId}, but only ${remainingQuantity} remain`);
-        }
-
-        // Use a default due date if none is provided (30 days from now)
         const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-        // Create production orders for the selected quantity
-        for (let i = 0; i < quantity; i++) {
-          const sequence = existingOrderCount + i + 1;
-          const orderId = `PO-${item.po_number}-${poItemId}-${sequence}`;
-          const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${sequence} of ${orderedQuantity})`;
+        // Lock and progress the exact existing PENDING units. Creating rows here
+        // caused the duplicate-order bug because PO generation already created demand.
+        const pendingOrdersResult = await client.query(`
+          SELECT order_id
+          FROM production_orders
+          WHERE po_item_id = $1
+            AND current_department = 'P1 Production Queue'
+            AND UPPER(COALESCE(production_status, '')) IN ('PENDING', 'IN_PROGRESS', 'ACTIVE')
+          ORDER BY created_at ASC, id ASC
+          LIMIT $2
+          FOR UPDATE
+        `, [poItemId, quantity]);
+        if (pendingOrdersResult.rows.length !== quantity) {
+          throw new Error(
+            `Selected ${quantity} unit(s) for PO item ${poItemId}, but only ${pendingOrdersResult.rows.length} pending unit(s) remain in P1 Production Queue`
+          );
+        }
+
+        for (const pendingOrder of pendingOrdersResult.rows) {
+          const orderId = String(pendingOrder.order_id);
+          const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number}`;
           const features = JSON.stringify({
             po_item_id: poItemId,
             po_number: item.po_number,
@@ -790,44 +786,15 @@ router.post('/progress', async (req: Request, res: Response) => {
             SET current_department = 'Barcode', status = 'IN_PROGRESS', updated_at = NOW()
           `, [orderId, dueDate, item.customer_id || item.customer_name, item.item_id || '', notes, features, item.po_id, poItemId]);
 
-          const insertProdQuery = `
-            INSERT INTO production_orders (
-              order_id, po_id, po_item_id, customer_id, customer_name,
-              po_number, item_type, item_id, item_name, specifications,
-              order_date, due_date, production_status, current_department,
-              created_at, updated_at
-            ) VALUES (
-              $1, $2, $3, $4, $5, $6, 'stock', $7, $8, $9,
-              NOW(), $10, 'IN_PROGRESS', 'Barcode', NOW(), NOW()
-            )
-            ON CONFLICT (order_id) DO UPDATE
+          await client.query(`
+            UPDATE production_orders
             SET current_department = 'Barcode',
                 production_status = 'IN_PROGRESS',
                 updated_at = NOW()
-          `;
-          await client.query(insertProdQuery, [
-            orderId,
-            item.po_id,
-            poItemId,
-            item.customer_id || '',
-            item.customer_name,
-            item.po_number,
-            item.item_id || '',
-            resolveItemDisplayName(item.item_name || ''),
-            JSON.stringify(specs),
-            dueDate,
-          ]);
+            WHERE order_id = $1
+          `, [orderId]);
           progressedOrders.push(orderId);
         }
-
-        // Update the orderCount in purchase_order_items to reflect scheduled quantity
-        const newOrderCount = activeOrderCount + quantity;
-        const updatePoQuery = `
-          UPDATE purchase_order_items
-          SET order_count = $1, updated_at = NOW()
-          WHERE id = $2
-        `;
-        await client.query(updatePoQuery, [newOrderCount, poItemId]);
     }
 
     await client.query('COMMIT');
@@ -849,9 +816,11 @@ router.post('/progress', async (req: Request, res: Response) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error progressing orders:', error);
-    res.status(500).json({
-      error: 'Failed to progress orders',
-      details: (error as any).message,
+    const details = error instanceof Error ? error.message : 'Failed to progress orders';
+    const isQuantityConflict = /^Selected \d+ unit\(s\)/.test(details);
+    res.status(isQuantityConflict ? 409 : 500).json({
+      error: isQuantityConflict ? details : 'Failed to progress orders',
+      details,
     });
   } finally {
     client.release();

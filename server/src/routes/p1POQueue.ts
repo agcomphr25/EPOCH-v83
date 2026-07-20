@@ -849,9 +849,11 @@ router.post('/progress', async (req: Request, res: Response) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error progressing orders:', error);
-    res.status(500).json({
-      error: 'Failed to progress orders',
-      details: (error as any).message,
+    const details = error instanceof Error ? error.message : 'Failed to progress orders';
+    const isQuantityConflict = /^Selected \d+ unit\(s\)/.test(details);
+    res.status(isQuantityConflict ? 409 : 500).json({
+      error: isQuantityConflict ? details : 'Failed to progress orders',
+      details,
     });
   } finally {
     client.release();

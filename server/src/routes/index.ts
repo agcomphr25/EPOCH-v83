@@ -10085,6 +10085,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     return METAL_ACCESSORY_NORMALIZED_PREFIXES.some((p) => normalized.startsWith(p));
   };
 
+  const isPOItemMetalAccessory = (item: any): boolean => [
+    item.itemName,
+    item.stockModelName,
+    item.stockModelId,
+    item.itemId,
+  ].some((value) => isMetalAccessorySku(value || ''));
+
   // Returns a human-readable display name for known metal accessory SKU patterns.
   // Keeps the raw SKU in parentheses so operators can still identify the exact part.
   function deriveMetalAccessoryDisplayName(sku: string): string {
@@ -10102,15 +10109,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   }
 
   const isPOItemNonStock = (item: any): boolean => {
-    // Check metal accessory SKU prefixes per-field so ^ anchors work correctly
-    const fieldsToCheck = [
-      item.itemName,
-      item.stockModelName,
-      item.stockModelId,
-      item.itemId,
-    ];
-    if (fieldsToCheck.some(f => isMetalAccessorySku(f || ''))) return true;
-
     const allIdentifiers = `${item.itemName || item.stockModelName || ''} ${item.stockModelId || ''} ${item.itemId || ''}`;
     return PO_NON_STOCK_PATTERNS.some(pattern => pattern.test(allIdentifiers));
   };
@@ -10130,7 +10128,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   const isPOItemEligibleForProduction = (item: any): boolean => {
     const productId = getPOItemProductId(item);
-    return !!productId && !isPOItemNonStock(item);
+    // Known AG metal accessories are production children that route directly
+    // to Shipping QC. They remain eligible even when their description contains
+    // generic non-stock words such as "bottom metal" or "rail".
+    return !!productId && (
+      isPOItemMetalAccessory(item) || !isPOItemNonStock(item)
+    );
   };
 
   // Preview Production Orders (dry-run) from Purchase Order Items
@@ -10170,7 +10173,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           continue;
         }
 
-        if (isPOItemNonStock(item)) {
+        if (!isPOItemEligibleForProduction(item)) {
           willSkip.push({ name, quantity: item.quantity, reason: 'Non-stock / hardware part' });
           continue;
         }
@@ -10237,7 +10240,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           return false;
         }
         // Metal accessories are eligible — just get a different initial department
-        if (isMetalAccessorySku(productId)) {
+        if (isPOItemMetalAccessory(item)) {
           console.log(`🔩 Including metal accessory item ${item.id}: ${productId} (will route to Shipping QC)`);
           return true;
         }

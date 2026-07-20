@@ -432,7 +432,10 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               po_number: item.po_number,
               po_id: item.po_id,
               specifications: specs,
-              action_length: specs.action_length || '',
+              // PO specifications exist in both legacy snake_case and current
+              // camelCase shapes. Keep the queue-facing field normalized so
+              // newly generated pending units pass the P1 readiness filter.
+              action_length: specs.action_length || specs.actionLength || '',
             });
 
             // Insert into all_orders table with the correct department.

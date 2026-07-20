@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   FileText, 
   Upload, 
@@ -33,7 +35,8 @@ import {
   Trash2,
   MoreHorizontal,
   Plus,
-  X
+  X,
+  ChevronsUpDown
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -87,6 +90,8 @@ interface InventoryItem {
 
 interface ProjectOption {
   id: string;
+  projectName?: string | null;
+  project_name?: string | null;
   projectNumber?: string | null;
   project_number?: string | null;
   name?: string | null;
@@ -182,6 +187,12 @@ function typeLabel(value: string | null | undefined) {
     ?? value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function projectOptionLabel(project: ProjectOption) {
+  const name = project.projectName || project.project_name || project.name || project.title || 'Unnamed project';
+  const number = project.projectNumber || project.project_number;
+  return number && number !== name ? `${name} (${number})` : name;
+}
+
 export default function RoutingDocumentManagement() {
   const [activeTab, setActiveTab] = useState('documents');
   const [showUploadDialog, setShowUploadDialog] = useState(false);
@@ -224,6 +235,7 @@ export default function RoutingDocumentManagement() {
   const [showViewSpecSheetDialog, setShowViewSpecSheetDialog] = useState(false);
   const [showViewTemplateDialog, setShowViewTemplateDialog] = useState(false);
   const [showFillSpecSheetDialog, setShowFillSpecSheetDialog] = useState(false);
+  const [partsPickerOpen, setPartsPickerOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'document' | 'template' | 'spec_sheet'; id: string; title: string } | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
@@ -1872,7 +1884,7 @@ export default function RoutingDocumentManagement() {
                     <SelectItem value="none">Do not attach to a project</SelectItem>
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id}>
-                        {project.projectNumber || project.project_number || project.id} - {project.name || project.title || 'Project'}
+                        {projectOptionLabel(project)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1902,30 +1914,49 @@ export default function RoutingDocumentManagement() {
                           <Label>{field.fieldLabel || field.fieldName}</Label>
                           {isInventoryParts ? (
                             <div className="space-y-2">
-                              <Select
-                                value=""
-                                onValueChange={(inventoryItemId) => {
-                                  const item = inventoryItems.find((candidate) => String(candidate.id) === inventoryItemId);
-                                  if (!item) return;
-                                  const partNumber = item.agPartNumber || item.sku || String(item.id);
-                                  const newLine = `1 | ${partNumber} | ${item.name}`;
-                                  const existingLines = value.split('\n').map((line) => line.trim()).filter(Boolean);
-                                  if (!existingLines.some((line) => line.includes(`| ${partNumber} |`))) {
-                                    updateFillSpecSheetField(field.fieldName, [...existingLines, newLine].join('\n'));
-                                  }
-                                }}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Add an item from inventory" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {inventoryItems.map((item) => (
-                                    <SelectItem key={item.id} value={String(item.id)}>
-                                      {item.agPartNumber || item.sku || item.id} - {item.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <Popover open={partsPickerOpen} onOpenChange={setPartsPickerOpen}>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={partsPickerOpen}
+                                    className="w-full justify-between font-normal"
+                                  >
+                                    Type to search inventory parts
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                  <Command>
+                                    <CommandInput placeholder="Search by part number or name..." />
+                                    <CommandList>
+                                      <CommandEmpty>No inventory parts found.</CommandEmpty>
+                                      <CommandGroup>
+                                        {inventoryItems.map((item) => {
+                                          const partNumber = item.agPartNumber || item.sku || String(item.id);
+                                          return (
+                                            <CommandItem
+                                              key={item.id}
+                                              value={`${partNumber} ${item.name}`}
+                                              onSelect={() => {
+                                                const newLine = `1 | ${partNumber} | ${item.name}`;
+                                                const existingLines = value.split('\n').map((line) => line.trim()).filter(Boolean);
+                                                if (!existingLines.some((line) => line.includes(`| ${partNumber} |`))) {
+                                                  updateFillSpecSheetField(field.fieldName, [...existingLines, newLine].join('\n'));
+                                                }
+                                                setPartsPickerOpen(false);
+                                              }}
+                                            >
+                                              {partNumber} - {item.name}
+                                            </CommandItem>
+                                          );
+                                        })}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
                               <Textarea
                                 value={value}
                                 onChange={(e) => updateFillSpecSheetField(field.fieldName, e.target.value)}

@@ -753,16 +753,14 @@ export default function ProductionQueueManager() {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const requestedUnits = selections.reduce((sum, selection) => sum + selection.quantity, 0);
-      const progressedUnits = Number(response.itemsProgressed ?? 0);
-      const failedLines = Array.isArray(response.errors) ? response.errors.length : 0;
+      const expectedUnits = selections.reduce((sum, selection) => sum + selection.quantity, 0);
+      if (response.itemsProgressed !== expectedUnits) {
+        throw new Error(`Barcode progression only confirmed ${response.itemsProgressed || 0} of ${expectedUnits} selected units`);
+      }
 
       toast({
-        title: failedLines > 0 ? 'Partially Progressed' : 'Success',
-        description: failedLines > 0
-          ? `Progressed ${progressedUnits} of ${requestedUnits} units across ${selections.length} PO lines. ${failedLines} line(s) were blocked to prevent duplicate generation.`
-          : `Progressed ${progressedUnits} units across ${selections.length} PO lines to Barcode (no labels needed for PO orders)`,
-        variant: failedLines > 0 ? 'destructive' : undefined,
+        title: 'Success',
+        description: `Progressed all ${expectedUnits} selected PO units to Barcode (no labels needed for PO orders)`,
       });
 
       // Clear selections
@@ -774,11 +772,11 @@ export default function ProductionQueueManager() {
 
       // PO orders do not need labels printed when progressed to Barcode
       // Labels are only required for regular production orders
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error progressing to Barcode:', error);
       toast({
         title: 'Error',
-        description: 'Failed to progress items to Barcode',
+        description: error?.message || 'Failed to progress items to Barcode',
         variant: 'destructive',
       });
     } finally {

@@ -690,6 +690,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
 
 // Progress selected items to Barcode department
 router.post('/progress', async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const { batchId, selections } = req.body;
 
@@ -712,14 +713,18 @@ router.post('/progress', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No selections to progress' });
     }
 
-    // Process each purchase order item: update orderCount and create production orders
+    await client.query('BEGIN');
+
+    // Barcode reads all_orders. Keep it and production_orders in sync, and make
+    // the entire multi-PO selection atomic so a partial success is never hidden.
     const progressedOrders: string[] = [];
-    const errors: Array<{ poProductId: number; error: string }> = [];
 
     for (const selection of selectionsToProgress) {
-      try {
         const poItemId = selection.poProductId; // Actually purchase_order_items.id
         const quantity = Number(selection.quantity || 1);
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+          throw new Error(`Invalid quantity for purchase order item ${poItemId}`);
+        }
 
         // Get the purchase order item details
         const poItemQuery = `
@@ -727,124 +732,129 @@ router.post('/progress', async (req: Request, res: Response) => {
           FROM purchase_order_items poi
           JOIN purchase_orders po ON poi.po_id = po.id
           WHERE poi.id = $1
+          FOR UPDATE
         `;
-        const poItem = await pool.query(poItemQuery, [poItemId]);
+        const poItem = await client.query(poItemQuery, [poItemId]);
 
-        if (!poItem || poItem.length === 0) {
-          errors.push({ poProductId: poItemId, error: 'Purchase order item not found' });
-          continue;
+        if (!poItem.rows || poItem.rows.length === 0) {
+          throw new Error(`Purchase order item ${poItemId} not found`);
         }
 
-        const item = poItem[0];
+        const item = poItem.rows[0];
         const specs = item.specifications || {};
+        const orderedQuantity = Number(item.quantity || 0);
+        // The cached order_count can drift. Count real rows while the PO item is
+        // locked so concurrent requests cannot both generate the same remaining units.
+        const productionCountsResult = await client.query(`
+          SELECT
+            COUNT(*)::int AS total_count,
+            COUNT(*) FILTER (
+              WHERE UPPER(COALESCE(production_status, '')) != 'CANCELLED'
+            )::int AS active_count
+          FROM production_orders
+          WHERE po_item_id = $1
+        `, [poItemId]);
+        const existingOrderCount = Number(productionCountsResult.rows[0]?.total_count || 0);
+        const activeOrderCount = Number(productionCountsResult.rows[0]?.active_count || 0);
+        const remainingQuantity = Math.max(orderedQuantity - activeOrderCount, 0);
+        if (quantity > remainingQuantity) {
+          throw new Error(`Selected ${quantity} unit(s) for PO item ${poItemId}, but only ${remainingQuantity} remain`);
+        }
+
+        // Use a default due date if none is provided (30 days from now)
         const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-        // Serialize generation for a PO line and validate against real production
-        // rows. The cached order_count can drift, and returned P1 queue rows are
-        // existing units â€” they must never become permission to generate again.
-        const client = await pool.connect();
-        const lineOrderIds: string[] = [];
-        try {
-          await client.query('BEGIN');
-          const lockedItemResult = await client.query(
-            `SELECT quantity
-             FROM purchase_order_items
-             WHERE id = $1
-             FOR UPDATE`,
-            [poItemId],
-          );
-          const orderedQuantity = Number(lockedItemResult.rows[0]?.quantity ?? 0);
-          const activeCountResult = await client.query(
-            `SELECT COUNT(*)::int AS count
-             FROM production_orders
-             WHERE po_item_id = $1
-               AND UPPER(COALESCE(production_status, '')) != 'CANCELLED'`,
-            [poItemId],
-          );
-          const activeOrderCount = Number(activeCountResult.rows[0]?.count ?? 0);
-          const remainingQuantity = Math.max(orderedQuantity - activeOrderCount, 0);
+        // Create production orders for the selected quantity
+        for (let i = 0; i < quantity; i++) {
+          const sequence = existingOrderCount + i + 1;
+          const orderId = `PO-${item.po_number}-${poItemId}-${sequence}`;
+          const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${sequence} of ${orderedQuantity})`;
+          const features = JSON.stringify({
+            po_item_id: poItemId,
+            po_number: item.po_number,
+            po_id: item.po_id,
+            specifications: specs,
+            action_length: specs.action_length || '',
+          });
 
-          if (!Number.isInteger(quantity) || quantity < 1 || quantity > remainingQuantity) {
-            throw new Error(
-              `Requested ${quantity} unit(s), but only ${remainingQuantity} unit(s) remain ungenerated ` +
-              `for PO item ${poItemId} (${activeOrderCount} of ${orderedQuantity} already exist)`,
-            );
-          }
+          await client.query(`
+            INSERT INTO all_orders (
+              order_id, order_date, due_date, customer_id, model_id,
+              current_department, status, notes, features, order_source,
+              source_po_id, source_po_item_id, department_history, created_at, updated_at
+            ) VALUES (
+              $1, NOW(), $2, $3, $4, 'Barcode', 'IN_PROGRESS', $5, $6::jsonb,
+              'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
+            )
+            ON CONFLICT (order_id) DO UPDATE
+            SET current_department = 'Barcode', status = 'IN_PROGRESS', updated_at = NOW()
+          `, [orderId, dueDate, item.customer_id || item.customer_name, item.item_id || '', notes, features, item.po_id, poItemId]);
 
-          for (let i = 0; i < quantity; i++) {
-            const orderId = await storage.generateNextOrderId();
-            await client.query(
-              `INSERT INTO production_orders (
-                order_id, po_id, po_item_id, customer_id, customer_name,
-                po_number, item_type, item_id, item_name, specifications,
-                order_date, due_date, production_status, current_department,
-                created_at, updated_at
-              ) VALUES (
-                $1, $2, $3, $4, $5, $6, 'stock', $7, $8, $9,
-                NOW(), $10, 'IN_PROGRESS', 'Barcode', NOW(), NOW()
-              )`,
-              [
-                orderId,
-                item.po_id,
-                poItemId,
-                item.customer_id || '',
-                item.customer_name,
-                item.po_number,
-                item.item_id || '',
-                resolveItemDisplayName(item.item_name || ''),
-                JSON.stringify(specs),
-                dueDate,
-              ],
-            );
-            lineOrderIds.push(orderId);
-          }
-
-          await client.query(
-            `UPDATE purchase_order_items
-             SET order_count = $1, updated_at = NOW()
-             WHERE id = $2`,
-            [activeOrderCount + lineOrderIds.length, poItemId],
-          );
-          await client.query('COMMIT');
-          progressedOrders.push(...lineOrderIds);
-        } catch (lineError) {
-          await client.query('ROLLBACK');
-          throw lineError;
-        } finally {
-          client.release();
+          const insertProdQuery = `
+            INSERT INTO production_orders (
+              order_id, po_id, po_item_id, customer_id, customer_name,
+              po_number, item_type, item_id, item_name, specifications,
+              order_date, due_date, production_status, current_department,
+              created_at, updated_at
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, 'stock', $7, $8, $9,
+              NOW(), $10, 'IN_PROGRESS', 'Barcode', NOW(), NOW()
+            )
+            ON CONFLICT (order_id) DO UPDATE
+            SET current_department = 'Barcode',
+                production_status = 'IN_PROGRESS',
+                updated_at = NOW()
+          `;
+          await client.query(insertProdQuery, [
+            orderId,
+            item.po_id,
+            poItemId,
+            item.customer_id || '',
+            item.customer_name,
+            item.po_number,
+            item.item_id || '',
+            resolveItemDisplayName(item.item_name || ''),
+            JSON.stringify(specs),
+            dueDate,
+          ]);
+          progressedOrders.push(orderId);
         }
-        
-      } catch (error) {
-        console.error(`Error progressing PO item ${selection.poProductId}:`, error);
-        errors.push({
-          poProductId: selection.poProductId,
-          error: (error as Error).message,
-        });
-      }
+
+        // Update the orderCount in purchase_order_items to reflect scheduled quantity
+        const newOrderCount = activeOrderCount + quantity;
+        const updatePoQuery = `
+          UPDATE purchase_order_items
+          SET order_count = $1, updated_at = NOW()
+          WHERE id = $2
+        `;
+        await client.query(updatePoQuery, [newOrderCount, poItemId]);
     }
 
+    await client.query('COMMIT');
+
     const requestedUnits = selectionsToProgress.reduce(
-      (sum: number, selection: { quantity?: number }) => sum + (selection.quantity || 1),
+      (sum: number, selection: { quantity?: number }) => sum + Number(selection.quantity || 1),
       0,
     );
-    const responseBody = {
-      success: errors.length === 0,
-      partialSuccess: progressedOrders.length > 0 && errors.length > 0,
+
+    res.json({
+      success: true,
       message: `Progressed ${progressedOrders.length} items to Barcode`,
       requestedUnits,
       requestedLines: selectionsToProgress.length,
       itemsProgressed: progressedOrders.length,
       targetDepartment: 'Barcode',
       orderIds: progressedOrders,
-      errors: errors.length > 0 ? errors : undefined,
-    };
-    res.json(responseBody);
+    });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error progressing orders:', error);
     res.status(500).json({
       error: 'Failed to progress orders',
       details: (error as any).message,
     });
+  } finally {
+    client.release();
   }
 });
 

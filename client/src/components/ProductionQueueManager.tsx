@@ -751,9 +751,14 @@ export default function ProductionQueueManager() {
         headers: { 'Content-Type': 'application/json' },
       });
 
+      const expectedUnits = selections.reduce((sum, selection) => sum + selection.quantity, 0);
+      if (response.itemsProgressed !== expectedUnits) {
+        throw new Error(`Barcode progression only confirmed ${response.itemsProgressed || 0} of ${expectedUnits} selected units`);
+      }
+
       toast({
         title: 'Success',
-        description: `Progressed ${selections.length} items to Barcode (no labels needed for PO orders)`,
+        description: `Progressed all ${expectedUnits} selected PO units to Barcode (no labels needed for PO orders)`,
       });
 
       // Clear selections
@@ -764,11 +769,11 @@ export default function ProductionQueueManager() {
 
       // PO orders do not need labels printed when progressed to Barcode
       // Labels are only required for regular production orders
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error progressing to Barcode:', error);
       toast({
         title: 'Error',
-        description: 'Failed to progress items to Barcode',
+        description: error?.message || 'Failed to progress items to Barcode',
         variant: 'destructive',
       });
     }

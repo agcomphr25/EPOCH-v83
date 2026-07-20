@@ -7870,6 +7870,9 @@ export interface P1POQueueItem {
   paintOptions: string | null;
   texture: string | null;
   flatTop: boolean | null;
+  orderedQuantity: number;
+  availableQuantity: number;
+  departmentStatuses: Record<string, number>;
   quantity: number;
   status: string | null;
   notes: string | null;

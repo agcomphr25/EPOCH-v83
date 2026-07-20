@@ -16,6 +16,7 @@ export interface FulfillmentStats {
   active: number;
   fulfilled: number;
   activeP1Queue: number;
+  departmentStatuses?: Record<string, number>;
 }
 
 /**
@@ -51,7 +52,13 @@ export function buildFulfillmentMap(
     const itemMap = poFulfillmentMap.get(poId)!;
 
     if (!itemMap.has(poItemId)) {
-      itemMap.set(poItemId, { total: 0, active: 0, fulfilled: 0, activeP1Queue: 0 });
+      itemMap.set(poItemId, {
+        total: 0,
+        active: 0,
+        fulfilled: 0,
+        activeP1Queue: 0,
+        departmentStatuses: {},
+      });
     }
     const stats = itemMap.get(poItemId)!;
     stats.total++;
@@ -61,6 +68,10 @@ export function buildFulfillmentMap(
     if (isProductionOrderFulfilled(row)) {
       stats.fulfilled++;
     }
+    const displayDepartment = String(row.current_department || row.production_status || 'Not Started').trim();
+    const departmentStatuses = stats.departmentStatuses ?? (stats.departmentStatuses = {});
+    departmentStatuses[displayDepartment] =
+      (departmentStatuses[displayDepartment] || 0) + 1;
     const department = String(row.current_department || '').trim().toLowerCase();
     const status = String(row.production_status || '').trim().toUpperCase().replace(' ', '_');
     if (
@@ -151,10 +162,11 @@ export function computeP1Queue(
           (specs.stock_model as string | null) ??
           null;
         const fulfillmentStats = itemFulfillmentMap.get(item.id);
-        // This card is a read model of existing PENDING units waiting in the P1
-        // Production Queue. Progression moves those rows; it must not interpret
-        // them as permission to generate replacement production orders.
-        const pendingQueueQuantity = fulfillmentStats?.activeP1Queue ?? 0;
+        // The PO view is the demand source. Only the difference between ordered
+        // quantity and real non-cancelled production rows may be generated.
+        // Existing rows stay visible here as a read-only department/status summary.
+        const activeQuantity = fulfillmentStats?.active ?? 0;
+        const availableQuantity = Math.max(Number(item.quantity || 0) - activeQuantity, 0);
 
         return {
           id: item.id,
@@ -196,8 +208,11 @@ export function computeP1Queue(
             (specs.flatTop as boolean | null) ??
             (specs.flat_top as boolean | null) ??
             null,
-          quantity: pendingQueueQuantity,
-          status: 'pending',
+          orderedQuantity: Number(item.quantity || 0),
+          availableQuantity,
+          departmentStatuses: fulfillmentStats?.departmentStatuses ?? {},
+          quantity: availableQuantity,
+          status: activeQuantity > 0 ? 'generated' : 'not generated',
           notes: item.notes ?? item.productionNotes ?? null,
           dueDate: item.dueDate?.toString() ?? null,
           linkedOrderId: null,
@@ -222,7 +237,7 @@ export function computeP1Queue(
         if (fulfillmentStats && isPoItemFullyFulfilled(fulfillmentStats)) {
           return false;
         }
-        return item.quantity > 0;
+        return item.orderedQuantity > 0;
       });
 
     if (poItems.length > 0) {

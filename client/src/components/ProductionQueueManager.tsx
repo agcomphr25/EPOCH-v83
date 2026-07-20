@@ -916,6 +916,46 @@ export default function ProductionQueueManager() {
 
   // Ensure p1PurchaseOrders is always an array
   const safePurchaseOrders = Array.isArray(p1PurchaseOrders) ? p1PurchaseOrders : [];
+
+  // A refetch can remove or reduce PO demand after another operator releases it.
+  // Keep the selection state aligned with the currently visible, server-backed
+  // remaining quantities so an old checkbox cannot submit duplicate demand.
+  useEffect(() => {
+    const availableByPo = new Map<string, Map<number, number>>();
+    safePurchaseOrders.forEach((customer) => {
+      customer.purchaseOrders.forEach((po) => {
+        availableByPo.set(
+          po.poNumber,
+          new Map(po.items.map((item) => [item.id, item.quantity])),
+        );
+      });
+    });
+
+    setSelectedPOItems((previous) => {
+      const next = new Map<string, Map<number, number>>();
+      previous.forEach((items, poNumber) => {
+        const availableItems = availableByPo.get(poNumber);
+        if (!availableItems) return;
+
+        const validItems = new Map<number, number>();
+        items.forEach((selectedQuantity, itemId) => {
+          const availableQuantity = availableItems.get(itemId) ?? 0;
+          const validQuantity = Math.min(selectedQuantity, availableQuantity);
+          if (validQuantity > 0) validItems.set(itemId, validQuantity);
+        });
+        if (validItems.size > 0) next.set(poNumber, validItems);
+      });
+
+      const unchanged =
+        next.size === previous.size &&
+        Array.from(next).every(([poNumber, items]) => {
+          const oldItems = previous.get(poNumber);
+          return oldItems?.size === items.size &&
+            Array.from(items).every(([itemId, quantity]) => oldItems.get(itemId) === quantity);
+        });
+      return unchanged ? previous : next;
+    });
+  }, [p1PurchaseOrders]);
   
   // Debug: Log what's being received from API
   console.log('🛒 P1 Purchase Orders received:', {

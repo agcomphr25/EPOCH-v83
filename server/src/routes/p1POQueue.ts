@@ -9,7 +9,7 @@ import { resolveItemDisplayName } from '../utils/resolveItemDisplayName';
 
 const router = Router();
 
-const METAL_ACCESSORY_PREFIXES = ['AGBM', 'AGBDL', 'AGM5', 'AGPIC', 'AGARCA'];
+const METAL_ACCESSORY_PREFIXES = ['AGBM', 'AGBDL', 'AGM5', 'AGMS5', 'AGPIC', 'AGARCA'];
 
 function normalizeSkuForMatch(sku: string): string {
   return sku.toUpperCase().replace(/[-_]/g, '');
@@ -936,6 +936,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
         poi.id as poi_id,
         poi.item_id,
         poi.item_name,
+        poi.item_type,
         poi.specifications,
         poi.due_date,
         poi.order_count,
@@ -983,6 +984,11 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
         const specs = sel.specifications || {};
         const dueDate = sel.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
         const scheduledDate = targetWeek ? new Date(targetWeek) : new Date(dueDate);
+        const targetDepartment = isMetalAccessorySku(
+          sel.item_name || '',
+          sel.item_id || '',
+          sel.item_type || undefined,
+        ) ? 'Shipping QC' : 'P1 Production Queue';
 
         // Generate the same order IDs as /schedule (i+1, not currentOrderCount+i+1)
         for (let i = 0; i < quantity; i++) {
@@ -1013,7 +1019,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
                 current_department, status, notes, features, order_source,
                 source_po_id, source_po_item_id, department_history, created_at, updated_at
               ) VALUES (
-                $1, NOW(), $2, $3, $4, 'P1 Production Queue', 'IN_PROGRESS', $5, $6::jsonb,
+                $1, NOW(), $2, $3, $4, $9, 'IN_PROGRESS', $5, $6::jsonb,
                 'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
               )
             `, [
@@ -1025,6 +1031,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
               features,
               sel.purchase_order_id,
               poItemId,
+              targetDepartment,
             ]);
 
             await pool.query(
@@ -1038,7 +1045,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
                 JSON.stringify(null),
                 JSON.stringify({
                   order_id: orderId,
-                  current_department: 'P1 Production Queue',
+                  current_department: targetDepartment,
                   status: 'IN_PROGRESS',
                   order_source: 'PO_RELEASE',
                   source_po_id: sel.purchase_order_id,
@@ -1068,7 +1075,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
               department_history, created_at, updated_at
             ) VALUES (
               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW(), $11,
-              'PENDING', 'P1 Production Queue', '[]'::jsonb, NOW(), NOW()
+              $12, $13, '[]'::jsonb, NOW(), NOW()
             )
             ON CONFLICT (order_id) DO NOTHING
             RETURNING order_id
@@ -1084,18 +1091,22 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
             resolveItemDisplayName(sel.item_name || ''),
             JSON.stringify(specs),
             dueDate,
+            targetDepartment === 'Shipping QC' ? 'IN_PROGRESS' : 'PENDING',
+            targetDepartment,
           ]);
           const prodInsertRows = Array.isArray(prodInsertResult) ? prodInsertResult : (prodInsertResult as any).rows || [];
           const prodOrderCreated = prodInsertRows.length > 0;
 
           // layup_schedule — insert only if missing (DO NOTHING to preserve any
           // existing schedule date for orders already in flight)
-          await pool.query(`
-            INSERT INTO layup_schedule (
-              order_id, scheduled_date, priority_score, is_locked, created_at, updated_at
-            ) VALUES ($1, $2, 1500, false, NOW(), NOW())
-            ON CONFLICT (order_id) DO NOTHING
-          `, [orderId, scheduledDate.toISOString()]);
+          if (targetDepartment === 'P1 Production Queue') {
+            await pool.query(`
+              INSERT INTO layup_schedule (
+                order_id, scheduled_date, priority_score, is_locked, created_at, updated_at
+              ) VALUES ($1, $2, 1500, false, NOW(), NOW())
+              ON CONFLICT (order_id) DO NOTHING
+            `, [orderId, scheduledDate.toISOString()]);
+          }
 
           // Count as recovered only if the production_orders row was newly created
           if (prodOrderCreated) {

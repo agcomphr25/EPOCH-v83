@@ -10077,7 +10077,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Metal accessory prefixes — normalize hyphens/underscores before testing so both
   // hyphenated (AG-M5-*) and non-hyphenated (AGM5*) formats are detected.
-  const METAL_ACCESSORY_NORMALIZED_PREFIXES = ['AGM5', 'AGBDL', 'AGBM', 'AGPIC', 'AGARCA'];
+  const METAL_ACCESSORY_NORMALIZED_PREFIXES = ['AGM5', 'AGMS5', 'AGBDL', 'AGBM', 'AGPIC', 'AGARCA'];
 
   const isMetalAccessorySku = (value: string): boolean => {
     if (!value) return false;
@@ -10283,11 +10283,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           // Metal accessories skip manufacturing and ship directly; all others enter P1 queue.
           const initialDepartment = isMetal ? 'Shipping QC' : 'P1 Production Queue';
 
-          // Use a descriptive display name for metal accessories when no stock model name is available.
+          // Preserve the exact PO line identity. stockModelName can be stale after a line's
+          // product code changes, which made the production child display another product.
           const resolvedItemName =
-            item.stockModelName ||
-            (isMetal ? deriveMetalAccessoryDisplayName(stockModelForOrder) : null) ||
             item.itemName ||
+            item.itemId ||
+            (isMetal ? deriveMetalAccessoryDisplayName(stockModelForOrder) : null) ||
+            item.stockModelName ||
             stockModelForOrder;
 
           const sourceSnapshot = {
@@ -10379,7 +10381,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { sql } = await import('drizzle-orm');
 
       const METAL_ACCESSORY_PATTERNS = [
-        'AGM5%', 'AGBDL%', 'AGBM%', 'AGPIC%', 'AGARCA%',
+        'AGM5%', 'AGMS5%', 'AGBDL%', 'AGBM%', 'AGPIC%', 'AGARCA%',
         'AG-M5-%', 'AG-BDL-%', 'AG-BM-%', 'AG-PIC-%', 'AG-ARCA-%',
       ];
 

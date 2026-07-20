@@ -13506,7 +13506,7 @@ export class DatabaseStorage implements IStorage {
         const inv = inventoryMatch[0];
 
         // Check if item is a metal accessory by SKU prefix (itemName or itemId take priority over stockModelId)
-        const metalSkuPrefixes = ['AGBM', 'AGBDL', 'AGM5', 'AGPIC', 'AGARCA'];
+        const metalSkuPrefixes = ['AGBM', 'AGBDL', 'AGM5', 'AGMS5', 'AGPIC', 'AGARCA'];
         const normalizeSkuForMetal = (s: string) => s.toUpperCase().replace(/[-_]/g, '');
         const isMetalSkuByName =
           metalSkuPrefixes.some((p) => normalizeSkuForMetal(item.itemName || '').startsWith(p)) ||

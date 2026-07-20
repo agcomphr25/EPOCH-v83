@@ -499,7 +499,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     },
   });
 
-  const METAL_ACCESSORY_PREFIXES = ['AGM5', 'AGBDL', 'AGBM', 'AGPIC', 'AGARCA'];
+  const METAL_ACCESSORY_PREFIXES = ['AGM5', 'AGMS5', 'AGBDL', 'AGBM', 'AGPIC', 'AGARCA'];
   const hasMetalAccessoryOrders = (productionOrders as any[]).some((o: any) => {
     const id = (o.itemId || o.itemName || '').toUpperCase();
     return METAL_ACCESSORY_PREFIXES.some(p => id.startsWith(p));

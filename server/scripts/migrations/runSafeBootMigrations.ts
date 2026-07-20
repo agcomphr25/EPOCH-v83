@@ -219,6 +219,7 @@ export const safeMigrationFiles = [
   '0194_layup_schedule_history.sql',
   '0195_production_order_transition_history.sql',
   '0196_document_template_builder_tables.sql',
+  '0197_route_p1_metal_accessories_to_shipping_qc.sql',
   'investigation_308_order_duplication.sql',
 ];
 

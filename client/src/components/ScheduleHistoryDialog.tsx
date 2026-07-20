@@ -201,6 +201,7 @@ export function ScheduleHistoryDialog({ open, onClose }: ScheduleHistoryDialogPr
             handleCloseReprint();
           }}
           isApproving={false}
+          isHistoricalReprint
         />
       )}
     </>

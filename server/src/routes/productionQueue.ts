@@ -347,7 +347,13 @@ router.get('/reconciliation', async (req: Request, res: Response) => {
             AND LOWER(model_id) != 'no stock'
             AND LOWER(model_id) != 'no_stock'
             AND (
-              (features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null')
+              LOWER(COALESCE(
+                features->>'action_length',
+                features->>'actionLength',
+                features->'specifications'->>'action_length',
+                features->'specifications'->>'actionLength',
+                ''
+              )) NOT IN ('', 'null')
               OR LOWER(model_id) LIKE '%m1a%'
               OR LOWER(model_id) LIKE '%tikka%'
               OR is_flattop = true
@@ -365,7 +371,13 @@ router.get('/reconciliation', async (req: Request, res: Response) => {
             AND (
               (model_id IS NULL OR model_id = '' OR model_id = 'None') OR
               (
-                (features->>'action_length' IS NULL OR features->>'action_length' = '' OR features->>'action_length' = 'null')
+                LOWER(COALESCE(
+                  features->>'action_length',
+                  features->>'actionLength',
+                  features->'specifications'->>'action_length',
+                  features->'specifications'->>'actionLength',
+                  ''
+                )) IN ('', 'null')
                 AND (
                   model_id IS NULL
                   OR (
@@ -419,14 +431,26 @@ router.get('/prioritized', async (req: Request, res: Response) => {
           COUNT(*) FILTER (WHERE status IN ('FINALIZED', 'Active', 'IN_PROGRESS')) as valid_status,
           COUNT(*) FILTER (WHERE is_cancelled IS NULL OR is_cancelled = false) as not_cancelled,
           COUNT(*) FILTER (WHERE model_id IS NOT NULL AND model_id != '' AND model_id != 'None') as has_model,
-          COUNT(*) FILTER (WHERE features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null') as has_action_length,
+          COUNT(*) FILTER (WHERE LOWER(COALESCE(
+            features->>'action_length',
+            features->>'actionLength',
+            features->'specifications'->>'action_length',
+            features->'specifications'->>'actionLength',
+            ''
+          )) NOT IN ('', 'null')) as has_action_length,
           COUNT(*) FILTER (
             WHERE status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
             AND (is_cancelled IS NULL OR is_cancelled = false)
             AND model_id IS NOT NULL AND model_id != '' AND model_id != 'None'
             AND LOWER(model_id) NOT IN ('no stock', 'no_stock')
             AND (
-              features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null'
+              LOWER(COALESCE(
+                features->>'action_length',
+                features->>'actionLength',
+                features->'specifications'->>'action_length',
+                features->'specifications'->>'actionLength',
+                ''
+              )) NOT IN ('', 'null')
               OR LOWER(model_id) LIKE '%m1a%'
               OR LOWER(model_id) LIKE '%tikka%'
               OR is_flattop = true
@@ -483,7 +507,13 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND LOWER(o.model_id) != 'no stock'
         AND LOWER(o.model_id) != 'no_stock'
         AND (
-          (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
+          LOWER(COALESCE(
+            o.features->>'action_length',
+            o.features->>'actionLength',
+            o.features->'specifications'->>'action_length',
+            o.features->'specifications'->>'actionLength',
+            ''
+          )) NOT IN ('', 'null')
           OR LOWER(o.model_id) LIKE '%m1a%'
           OR LOWER(o.model_id) LIKE '%tikka%'
           OR o.is_flattop = true
@@ -1312,7 +1342,13 @@ router.get('/attention', async (req: Request, res: Response) => {
         AND (
           (o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None') OR
           (
-            (o.features->>'action_length' IS NULL OR o.features->>'action_length' = '' OR o.features->>'action_length' = 'null')
+            LOWER(COALESCE(
+              o.features->>'action_length',
+              o.features->>'actionLength',
+              o.features->'specifications'->>'action_length',
+              o.features->'specifications'->>'actionLength',
+              ''
+            )) IN ('', 'null')
             AND (
               o.model_id IS NULL
               OR (

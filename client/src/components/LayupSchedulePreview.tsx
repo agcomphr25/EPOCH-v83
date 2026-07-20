@@ -41,8 +41,9 @@ interface LayupSchedulePreviewProps {
   overflowItems: OverflowItem[];
   weekStart: string;
   totalItems: number;
-  onApprove: () => void;
+  onApprove: () => void | Promise<unknown>;
   isApproving: boolean;
+  isHistoricalReprint?: boolean;
 }
 
 export function LayupSchedulePreview({
@@ -54,6 +55,7 @@ export function LayupSchedulePreview({
   totalItems,
   onApprove,
   isApproving,
+  isHistoricalReprint = false,
 }: LayupSchedulePreviewProps) {
   const barcodeRef = useRef<SVGSVGElement>(null);
   const printContentRef = useRef<HTMLDivElement>(null);
@@ -122,13 +124,6 @@ export function LayupSchedulePreview({
     // Wait a bit to ensure SVG is fully rendered
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Open a new window with just the schedule content
-    const printWindow = window.open('', '_blank', 'width=1200,height=800');
-    if (!printWindow) {
-      alert('Please allow popups to print the schedule');
-      return;
-    }
-
     // Convert SVG barcode to data URL
     let barcodeDataURL = '';
     try {
@@ -154,13 +149,34 @@ export function LayupSchedulePreview({
     } catch (error) {
       console.error('❌ Error converting barcode:', error);
       alert('Error generating barcode for printing. Please try again.');
-      printWindow.close();
       return;
     }
     
     // Generate the HTML content
     const printHTML = generatePrintHTML(barcodeDataURL);
+
+    // Open the window during the user's click so popup blockers allow it. A
+    // newly generated schedule must be committed before anything is printed;
+    // otherwise the paper schedule has no durable history record.
+    const printWindow = window.open('', '_blank', 'width=1200,height=800');
+    if (!printWindow) {
+      alert('Please allow popups to print the schedule');
+      return;
+    }
+
+    if (!isHistoricalReprint) {
+      printWindow.document.write('<p style="font-family: sans-serif; padding: 24px">Saving schedule before printing...</p>');
+
+      try {
+        await onApprove();
+      } catch (error) {
+        console.error('Failed to save schedule before printing:', error);
+        printWindow.close();
+        return;
+      }
+    }
     
+    printWindow.document.open();
     printWindow.document.write(printHTML);
     printWindow.document.close();
     
@@ -756,10 +772,11 @@ export function LayupSchedulePreview({
           <Button
             variant="outline"
             onClick={handlePrint}
+            disabled={isApproving}
             data-testid="button-print-schedule"
           >
             <Printer className="w-4 h-4 mr-2" />
-            Print Schedule
+            {isHistoricalReprint ? 'Print Schedule' : isApproving ? 'Saving...' : 'Approve, Save & Print'}
           </Button>
           <Button
             variant="outline"
@@ -768,13 +785,15 @@ export function LayupSchedulePreview({
           >
             Cancel
           </Button>
-          <Button
-            onClick={onApprove}
-            disabled={isApproving}
-            data-testid="button-approve-schedule"
-          >
-            {isApproving ? 'Approving...' : 'Approve & Progress Orders'}
-          </Button>
+          {!isHistoricalReprint && (
+            <Button
+              onClick={onApprove}
+              disabled={isApproving}
+              data-testid="button-approve-schedule"
+            >
+              {isApproving ? 'Approving...' : 'Approve & Progress Orders'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

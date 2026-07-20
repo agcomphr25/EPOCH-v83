@@ -2723,7 +2723,7 @@ export default function ProductionQueueManager() {
           overflowItems={generatedSchedule.overflowItems}
           weekStart={generatedSchedule.weekStart}
           totalItems={generatedSchedule.totalItems}
-          onApprove={() => approveScheduleMutation.mutate()}
+          onApprove={() => approveScheduleMutation.mutateAsync()}
           isApproving={approveScheduleMutation.isPending}
         />
       )}

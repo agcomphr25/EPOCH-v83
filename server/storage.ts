@@ -5555,6 +5555,11 @@ export class DatabaseStorage implements IStorage {
       sql`${allOrders.orderId} NOT LIKE 'PO%'`,
       sql`${allOrders.orderId} != 'AG1'`,
       sql`${allOrders.orderId} NOT LIKE '%PO%'`,
+      // PO-generated units can have ordinary-looking FG/FD order IDs and stale
+      // order_source values. The persisted PO links are the authoritative
+      // boundary for keeping them out of the regular All Orders payment list.
+      isNull(allOrders.sourcePoId),
+      isNull(allOrders.sourcePoItemId),
       // Exclude Production-Only Orders (PO_RELEASE) from customer-facing payment views
       sql`(${allOrders.orderSource} = 'SALES' OR ${allOrders.orderSource} = 'main_orders' OR ${allOrders.orderSource} IS NULL)`,
     ];
@@ -5929,6 +5934,8 @@ export class DatabaseStorage implements IStorage {
       sql`${allOrders.orderId} NOT LIKE 'PO%'`,
       sql`${allOrders.orderId} != 'AG1'`,
       sql`${allOrders.orderId} NOT LIKE '%PO%'`,
+      isNull(allOrders.sourcePoId),
+      isNull(allOrders.sourcePoItemId),
       sql`(${allOrders.orderSource} = 'SALES' OR ${allOrders.orderSource} = 'main_orders' OR ${allOrders.orderSource} IS NULL)`,
     ];
 

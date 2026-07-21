@@ -397,6 +397,10 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
         }
 
         const specs = item.specifications || {};
+        const normalizedSpecs = {
+          ...specs,
+          action_length: specs.action_length || specs.actionLength || '',
+        };
         const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
         // Wrap all inserts and the order_count update for this item in a transaction
@@ -431,95 +435,9 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
             // Sequence starts after existing orders so we never collide.
             const seqNum = realOrderCount + i + 1;
             const orderId = `PO-${item.po_number}-${poItemId}-${seqNum}`;
-            const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${seqNum} of ${orderedQuantity})`;
-            const features = JSON.stringify({
-              po_item_id: poItemId,
-              po_number: item.po_number,
-              po_id: item.po_id,
-              specifications: specs,
-              // PO specifications exist in both legacy snake_case and current
-              // camelCase shapes. Keep the queue-facing field normalized so
-              // newly generated pending units pass the P1 readiness filter.
-              action_length: specs.action_length || specs.actionLength || '',
-            });
-
-            // Insert into all_orders table with the correct department.
-            // ON CONFLICT DO NOTHING ensures idempotency now that a unique index exists on order_id.
-            const insertOrderQuery = `
-              INSERT INTO all_orders (
-                order_id,
-                order_date,
-                due_date,
-                customer_id,
-                model_id,
-                current_department,
-                status,
-                notes,
-                features,
-                order_source,
-                source_po_id,
-                source_po_item_id,
-                department_history,
-                created_at,
-                updated_at
-              ) VALUES (
-                $1, NOW(), $2, $3, $4, $9, $10, $5, $6::jsonb,
-                'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
-              )
-              ON CONFLICT (order_id) DO NOTHING
-              RETURNING id
-            `;
-            const allOrderResult = await client.query(insertOrderQuery, [
-              orderId,
-              dueDate,
-              item.customer_id || item.customer_name,
-              item.item_id || '',
-              notes,
-              features,
-              item.po_id,
-              poItemId,
-              targetDepartment,
-              targetStatus,
-            ]);
-
-            // RC-3 FIX: Only proceed with downstream inserts/audit for rows that were actually
-            // inserted. When ON CONFLICT DO NOTHING fires (order already exists), track the
-            // skip explicitly so operators see an accurate count in the API response.
-            if (!allOrderResult.rows || allOrderResult.rows.length === 0) {
-              console.warn(`⚠️  P1 PO Schedule: order ${orderId} already exists in all_orders, skipping`);
-              skippedOrders.push({ orderId, reason: 'already_exists' });
-              continue;
-            }
-
-            insertedCount++;
-
-            await client.query(
-              `INSERT INTO admin_audit_log
-                 (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
-               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
-              [
-                orderId,
-                'ORDER_CREATED',
-                'Order Created',
-                JSON.stringify(null),
-                JSON.stringify({
-                  order_id: orderId,
-                  current_department: targetDepartment,
-                  status: targetStatus,
-                  order_source: 'PO_RELEASE',
-                  source_po_id: item.po_id,
-                  source_po_item_id: poItemId,
-                }),
-                (req as any).user?.username || 'SYSTEM',
-                (req as any).user?.role || 'SYSTEM',
-                'ORDER_CREATE',
-                `Order created from PO release: PO #${item.po_number}`,
-                req.ip ?? null,
-                req.headers['user-agent'] ?? null,
-              ]
-            );
-
-            // Also create a production_orders record for queue visibility
+            // PO demand belongs only to production_orders while it is in P1.
+            // Barcode progression creates/updates the all_orders mirror only
+            // when the exact production unit actually leaves this queue.
             const insertProductionOrderQuery = `
               INSERT INTO production_orders (
                 order_id,
@@ -544,13 +462,10 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW(), $11,
                 $12, $13, $14, '[]'::jsonb, NOW(), NOW()
               )
-              ON CONFLICT (order_id) DO UPDATE
-              SET current_department = $13,
-                  production_status = $12,
-                  material_canonical = $14,
-                  updated_at = NOW()
+              ON CONFLICT (order_id) DO NOTHING
+              RETURNING id
             `;
-            await client.query(insertProductionOrderQuery, [
+            const productionOrderResult = await client.query(insertProductionOrderQuery, [
               orderId,
               item.po_id,
               poItemId,
@@ -560,12 +475,46 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               specs.item_type || 'Stock',
               item.item_id || '',
               resolveItemDisplayName(item.item_name || ''),
-              JSON.stringify(specs),
+              JSON.stringify(normalizedSpecs),
               dueDate,
               targetStatus,
               targetDepartment,
               materialCanonical,
             ]);
+
+            if (!productionOrderResult.rows || productionOrderResult.rows.length === 0) {
+              console.warn(`P1 PO Schedule: production order ${orderId} already exists, skipping`);
+              skippedOrders.push({ orderId, reason: 'already_exists' });
+              continue;
+            }
+
+            insertedCount++;
+
+            await client.query(
+              `INSERT INTO admin_audit_log
+                 (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+              [
+                orderId,
+                'ORDER_CREATED',
+                'Production Order Created',
+                JSON.stringify(null),
+                JSON.stringify({
+                  order_id: orderId,
+                  current_department: targetDepartment,
+                  production_status: targetStatus,
+                  record_source: 'production_orders',
+                  source_po_id: item.po_id,
+                  source_po_item_id: poItemId,
+                }),
+                (req as any).user?.username || 'SYSTEM',
+                (req as any).user?.role || 'SYSTEM',
+                'ORDER_CREATE',
+                `Production order created from PO release: PO #${item.po_number}`,
+                req.ip ?? null,
+                req.headers['user-agent'] ?? null,
+              ]
+            );
 
             // Only manufactured stocks belong on the layup scheduler. Metal
             // accessories skip manufacturing and go directly to Shipping QC.
@@ -1009,80 +958,9 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
         // Generate the same order IDs as /schedule (i+1, not currentOrderCount+i+1)
         for (let i = 0; i < quantity; i++) {
           const orderId = `PO-${sel.po_number}-${poItemId}-${i + 1}`;
-          const notes = `PO Item: ${sel.item_name || ''} - PO #${sel.po_number} (Unit ${i + 1} of ${quantity}) [RETRIED]`;
-          const features = JSON.stringify({
-            po_item_id: poItemId,
-            po_number: sel.po_number,
-            po_id: sel.purchase_order_id,
-            specifications: specs,
-            action_length: specs.action_length || '',
-          });
-
-          // Check each table independently for per-table idempotency.
-          // A partial failure (e.g., all_orders OK, production_orders failed) is
-          // repaired by inserting only the missing rows.
-
-          // all_orders — insert only if missing
-          const allOrdersExists = await pool.query(
-            `SELECT id FROM all_orders WHERE order_id = $1 LIMIT 1`,
-            [orderId]
-          );
-          const allOrdersExistsRows = Array.isArray(allOrdersExists) ? allOrdersExists : (allOrdersExists as any).rows || [];
-          if (allOrdersExistsRows.length === 0) {
-            await pool.query(`
-              INSERT INTO all_orders (
-                order_id, order_date, due_date, customer_id, model_id,
-                current_department, status, notes, features, order_source,
-                source_po_id, source_po_item_id, department_history, created_at, updated_at
-              ) VALUES (
-                $1, NOW(), $2, $3, $4, $9, 'IN_PROGRESS', $5, $6::jsonb,
-                'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
-              )
-            `, [
-              orderId,
-              dueDate,
-              sel.customer_id || sel.customer_name,
-              sel.item_id || '',
-              notes,
-              features,
-              sel.purchase_order_id,
-              poItemId,
-              targetDepartment,
-            ]);
-
-            await pool.query(
-              `INSERT INTO admin_audit_log
-                 (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
-               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
-              [
-                orderId,
-                'ORDER_CREATED',
-                'Order Created',
-                JSON.stringify(null),
-                JSON.stringify({
-                  order_id: orderId,
-                  current_department: targetDepartment,
-                  status: 'IN_PROGRESS',
-                  order_source: 'PO_RELEASE',
-                  source_po_id: sel.purchase_order_id,
-                  source_po_item_id: poItemId,
-                  retry: true,
-                  selection_id: sel.selection_id,
-                }),
-                (req as any).user?.username || 'SYSTEM',
-                (req as any).user?.role || 'SYSTEM',
-                'ORDER_CREATE',
-                `Order created via retry for stuck batch selection (PO #${sel.po_number})`,
-                req.ip ?? null,
-                req.headers['user-agent'] ?? null,
-              ]
-            );
-          } else {
-            console.log(`🔄 Retry: all_orders already has ${orderId}, skipping insert`);
-          }
-
-          // production_orders — insert only if missing (DO NOTHING avoids resetting
-          // progress for orders that have already advanced through departments)
+          // Retry repairs only the missing P1 production record. It must not
+          // create a regular all_orders row before Barcode progression.
+          // DO NOTHING also avoids resetting units that already advanced.
           const prodInsertResult = await pool.query(`
             INSERT INTO production_orders (
               order_id, po_id, po_item_id, customer_id, customer_name,

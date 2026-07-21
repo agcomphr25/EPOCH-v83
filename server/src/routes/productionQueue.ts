@@ -470,109 +470,55 @@ router.get('/prioritized', async (req: Request, res: Response) => {
     console.log('🧹 CLEANUP: Processing orders that need attention...');
     await autoMoveInvalidStockModelOrders(storage);
 
-    // Unified read model: sales orders live in all_orders, while Purchase Order
-    // Management creates its production children in production_orders. Include
-    // both sources so generated PO demand is actually actionable in this queue.
-    // The NOT EXISTS guard prevents duplicate display when another release path
-    // has already mirrored the production order into all_orders.
+    // This is the regular sales-order queue. Purchase Order Management demand
+    // remains in production_orders until it is explicitly progressed to Barcode.
+    // Exclude historical PO_RELEASE mirrors so they do not leak back into P1.
     const queueQuery = `
-      WITH queue_orders AS (
-        SELECT
-          o.order_id as orderId,
-          o.fb_order_number as fbOrderNumber,
-          o.model_id as modelId,
-          o.model_id as stockModelId,
-          o.due_date as dueDate,
-          o.order_date as orderDate,
-          o.current_department as currentDepartment,
-          o.status,
-          o.customer_id as customerId,
-          o.features,
-          o.urgency,
-          o.is_manual_urgency as isManualUrgency,
-          NULL as manual_priority_override,
-          NULL as prioritySource,
-          'ready' as productionReadinessStatus,
-          0 as queuePosition,
-          o.created_at as createdAt,
-          COALESCE(c.name, 'Customer ' || o.customer_id) as customerName,
-          'SALES' as orderSource,
-          o.is_flattop as "isFlattop"
-        FROM all_orders o
-        LEFT JOIN customers c ON o.customer_id ~ '^[0-9]+$' AND CAST(o.customer_id AS INTEGER) = c.id
-        WHERE o.current_department = 'P1 Production Queue'
-          AND o.status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
-          AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
-          AND o.model_id IS NOT NULL
-          AND o.model_id != ''
-          AND o.model_id != 'None'
-          AND LOWER(o.model_id) != 'no stock'
-          AND LOWER(o.model_id) != 'no_stock'
-          AND (
-            LOWER(COALESCE(
-              o.features->>'action_length',
-              o.features->>'actionLength',
-              o.features->'specifications'->>'action_length',
-              o.features->'specifications'->>'actionLength',
-              ''
-            )) NOT IN ('', 'null')
-            OR LOWER(o.model_id) LIKE '%m1a%'
-            OR LOWER(o.model_id) LIKE '%tikka%'
-            OR o.is_flattop = true
-          )
-
-        UNION ALL
-
-        SELECT
-          p.order_id as orderId,
-          NULL::text as fbOrderNumber,
-          p.item_id as modelId,
-          p.item_id as stockModelId,
-          p.due_date as dueDate,
-          p.order_date as orderDate,
-          p.current_department as currentDepartment,
-          p.production_status as status,
-          p.customer_id as customerId,
-          p.specifications as features,
-          NULL::text as urgency,
-          false as isManualUrgency,
-          NULL as manual_priority_override,
-          NULL as prioritySource,
-          'ready' as productionReadinessStatus,
-          0 as queuePosition,
-          p.created_at as createdAt,
-          COALESCE(NULLIF(p.customer_name, ''), 'Customer ' || p.customer_id) as customerName,
-          'PO_RELEASE' as orderSource,
-          false as "isFlattop"
-        FROM production_orders p
-        WHERE p.current_department = 'P1 Production Queue'
-          AND UPPER(COALESCE(p.production_status, '')) IN ('PENDING', 'IN_PROGRESS', 'ACTIVE')
-          AND p.item_id IS NOT NULL
-          AND p.item_id != ''
-          AND LOWER(p.item_id) NOT IN ('none', 'no stock', 'no_stock')
-          AND (
-            LOWER(COALESCE(
-              p.specifications->>'action_length',
-              p.specifications->>'actionLength',
-              ''
-            )) NOT IN ('', 'null')
-            OR LOWER(p.item_id) LIKE '%m1a%'
-            OR LOWER(p.item_id) LIKE '%tikka%'
-            OR LOWER(COALESCE(
-              p.specifications->>'flat_top',
-              p.specifications->>'flatTop',
-              'false'
-            )) IN ('true', '1', 'yes')
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM all_orders mirrored
-            WHERE mirrored.order_id = p.order_id
-          )
-      )
-      SELECT *
-      FROM queue_orders
-      ORDER BY dueDate ASC, createdAt ASC
+      SELECT
+        o.order_id as orderId,
+        o.fb_order_number as fbOrderNumber,
+        o.model_id as modelId,
+        o.model_id as stockModelId,
+        o.due_date as dueDate,
+        o.order_date as orderDate,
+        o.current_department as currentDepartment,
+        o.status,
+        o.customer_id as customerId,
+        o.features,
+        o.urgency,
+        o.is_manual_urgency as isManualUrgency,
+        NULL as manual_priority_override,
+        NULL as prioritySource,
+        'ready' as productionReadinessStatus,
+        0 as queuePosition,
+        o.created_at as createdAt,
+        COALESCE(c.name, 'Customer ' || o.customer_id) as customerName,
+        'SALES' as orderSource,
+        o.is_flattop as "isFlattop"
+      FROM all_orders o
+      LEFT JOIN customers c ON o.customer_id ~ '^[0-9]+$' AND CAST(o.customer_id AS INTEGER) = c.id
+      WHERE o.current_department = 'P1 Production Queue'
+        AND COALESCE(o.order_source, 'SALES') <> 'PO_RELEASE'
+        AND o.status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
+        AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
+        AND o.model_id IS NOT NULL
+        AND o.model_id != ''
+        AND o.model_id != 'None'
+        AND LOWER(o.model_id) != 'no stock'
+        AND LOWER(o.model_id) != 'no_stock'
+        AND (
+          LOWER(COALESCE(
+            o.features->>'action_length',
+            o.features->>'actionLength',
+            o.features->'specifications'->>'action_length',
+            o.features->'specifications'->>'actionLength',
+            ''
+          )) NOT IN ('', 'null')
+          OR LOWER(o.model_id) LIKE '%m1a%'
+          OR LOWER(o.model_id) LIKE '%tikka%'
+          OR o.is_flattop = true
+        )
+      ORDER BY o.due_date ASC, o.created_at ASC
     `;
 
     const queueResult = await pool.query(queueQuery);

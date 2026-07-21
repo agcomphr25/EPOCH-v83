@@ -481,8 +481,11 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               targetDepartment,
               materialCanonical,
             ]);
+            const productionOrderRows = Array.isArray(productionOrderResult)
+              ? productionOrderResult
+              : productionOrderResult?.rows || [];
 
-            if (!productionOrderResult.rows || productionOrderResult.rows.length === 0) {
+            if (productionOrderRows.length === 0) {
               console.warn(`P1 PO Schedule: production order ${orderId} already exists, skipping`);
               skippedOrders.push({ orderId, reason: 'already_exists' });
               continue;
@@ -555,7 +558,10 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                AND production_status != 'CANCELLED'`,
             [poItemId]
           );
-          const recomputedCount = parseInt(recomputedCountRow.rows?.[0]?.cnt ?? '0', 10);
+          const recomputedCountRows = Array.isArray(recomputedCountRow)
+            ? recomputedCountRow
+            : recomputedCountRow?.rows || [];
+          const recomputedCount = parseInt(recomputedCountRows[0]?.cnt ?? '0', 10);
           await client.query(
             `UPDATE purchase_order_items
              SET order_count = $1, updated_at = NOW()

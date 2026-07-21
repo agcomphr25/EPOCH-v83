@@ -10523,7 +10523,71 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.get('/api/production-orders/by-po/:poId', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
+      const { pool } = await import('../../db');
       const poId = parseInt(req.params.poId);
+
+      if (!Number.isInteger(poId)) {
+        return res.status(400).json({ _error: 'Invalid purchase order ID' });
+      }
+
+      // Existing PO production children may predate the metal-accessory routing
+      // rules or may contain a stale fiberglass fallback. Reconcile active rows
+      // from their linked PO line before returning this operational read model.
+      // Terminal and cancelled history is intentionally left unchanged.
+      const repairResult = await pool.query(`
+        WITH repaired AS (
+          UPDATE production_orders AS production
+          SET item_id = COALESCE(
+                NULLIF(TRIM(line.item_id), ''),
+                NULLIF(TRIM(line.item_name), ''),
+                production.item_id
+              ),
+              item_name = COALESCE(
+                NULLIF(TRIM(line.item_name), ''),
+                NULLIF(TRIM(line.item_id), ''),
+                production.item_name
+              ),
+              material_canonical = 'Metal Accessory',
+              current_department = 'Shipping QC',
+              production_status = 'IN_PROGRESS',
+              updated_at = NOW()
+          FROM purchase_order_items AS line
+          WHERE production.po_id = $1
+            AND production.po_item_id = line.id
+            AND production.current_department = 'P1 Production Queue'
+            AND UPPER(COALESCE(production.production_status, '')) IN ('PENDING', 'ACTIVE', 'IN_PROGRESS')
+            AND (
+              REGEXP_REPLACE(UPPER(COALESCE(line.item_id, '')), '[-_[:space:]]', '', 'g')
+                ~ '^(AGM5|AGMS5|AGBDL|AGBM|AGPIC|AGARCA)'
+              OR REGEXP_REPLACE(UPPER(COALESCE(line.item_name, '')), '[-_[:space:]]', '', 'g')
+                ~ '^(AGM5|AGMS5|AGBDL|AGBM|AGPIC|AGARCA)'
+              OR REGEXP_REPLACE(UPPER(COALESCE(production.item_id, '')), '[-_[:space:]]', '', 'g')
+                ~ '^(AGM5|AGMS5|AGBDL|AGBM|AGPIC|AGARCA)'
+              OR REGEXP_REPLACE(UPPER(COALESCE(production.item_name, '')), '[-_[:space:]]', '', 'g')
+                ~ '^(AGM5|AGMS5|AGBDL|AGBM|AGPIC|AGARCA)'
+            )
+          RETURNING production.order_id
+        ), mirrored AS (
+          UPDATE all_orders AS orders
+          SET current_department = 'Shipping QC',
+              status = 'IN_PROGRESS',
+              updated_at = NOW()
+          WHERE orders.current_department = 'P1 Production Queue'
+            AND UPPER(COALESCE(orders.status, '')) NOT IN ('CANCELLED', 'SHIPPED', 'COMPLETED')
+            AND orders.order_id IN (SELECT order_id FROM repaired)
+          RETURNING orders.order_id
+        )
+        SELECT
+          (SELECT COUNT(*)::int FROM repaired) AS repaired_count,
+          (SELECT COUNT(*)::int FROM mirrored) AS mirrored_count
+      `, [poId]);
+
+      const repairedCount = Number(repairResult.rows?.[0]?.repaired_count || 0);
+      if (repairedCount > 0) {
+        console.log(
+          `[production-orders/by-po] Routed ${repairedCount} active metal accessory order(s) for PO ${poId} to Shipping QC`,
+        );
+      }
 
       const productionOrders = await storage.getProductionOrdersByPoId(poId);
 

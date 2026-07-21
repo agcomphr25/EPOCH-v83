@@ -365,18 +365,16 @@ describe('POST /api/p1-po-queue/schedule — RC-4: order_count recompute guard',
 
     // Transaction client calls (full happy path, 1 new order):
     //   BEGIN
-    //   INSERT all_orders RETURNING id    → new row
+    //   INSERT production_orders RETURNING id → new row
     //   INSERT admin_audit_log            → ok
-    //   INSERT production_orders          → ok
     //   INSERT layup_schedule             → ok
     //   SELECT COUNT(*) recompute         → cnt = 1  (just the row we inserted)
     //   UPDATE purchase_order_items       → ok
     //   COMMIT
     mockClientQuery
       .mockResolvedValueOnce(undefined)                      // BEGIN
-      .mockResolvedValueOnce({ rows: [{ id: 999 }] })        // INSERT all_orders → new row
+      .mockResolvedValueOnce({ rows: [{ id: 999 }] })        // INSERT production_orders → new row
       .mockResolvedValueOnce(undefined)                      // INSERT admin_audit_log
-      .mockResolvedValueOnce(undefined)                      // INSERT production_orders
       .mockResolvedValueOnce(undefined)                      // INSERT layup_schedule
       .mockResolvedValueOnce({ rows: [{ cnt: '1' }] })       // SELECT COUNT(*) recompute
       .mockResolvedValueOnce(undefined)                      // UPDATE purchase_order_items
@@ -424,9 +422,8 @@ describe('POST /api/p1-po-queue/schedule — RC-4: order_count recompute guard',
 
     mockClientQuery
       .mockResolvedValueOnce(undefined) // BEGIN
-      .mockResolvedValueOnce({ rows: [{ id: 999 }] }) // all_orders
+      .mockResolvedValueOnce({ rows: [{ id: 999 }] }) // production_orders
       .mockResolvedValueOnce(undefined) // audit
-      .mockResolvedValueOnce(undefined) // production_orders
       .mockResolvedValueOnce({ rows: [{ cnt: '1' }] }) // recompute
       .mockResolvedValueOnce(undefined) // update PO item
       .mockResolvedValueOnce(undefined); // COMMIT
@@ -473,8 +470,6 @@ describe('POST /api/p1-po-queue/schedule — RC-4: order_count recompute guard',
     // The ROLLBACK means order_count stays at 5 (stale) in the real DB.
     mockClientQuery
       .mockResolvedValueOnce(undefined)                             // BEGIN
-      .mockResolvedValueOnce({ rows: [{ id: 100 }] })              // INSERT all_orders → row
-      .mockResolvedValueOnce(undefined)                             // INSERT admin_audit_log
       .mockRejectedValueOnce(new Error('production_orders_fail'))  // INSERT production_orders throws
       .mockResolvedValueOnce(undefined);                            // ROLLBACK
 
@@ -506,9 +501,8 @@ describe('POST /api/p1-po-queue/schedule — RC-4: order_count recompute guard',
     // Recompute COUNT returns 1 (the one row inserted in this transaction).
     mockClientQuery
       .mockResolvedValueOnce(undefined)                      // BEGIN
-      .mockResolvedValueOnce({ rows: [{ id: 101 }] })        // INSERT all_orders → new row
+      .mockResolvedValueOnce({ rows: [{ id: 101 }] })        // INSERT production_orders → new row
       .mockResolvedValueOnce(undefined)                      // INSERT admin_audit_log
-      .mockResolvedValueOnce(undefined)                      // INSERT production_orders
       .mockResolvedValueOnce(undefined)                      // INSERT layup_schedule
       .mockResolvedValueOnce({ rows: [{ cnt: '1' }] })       // SELECT COUNT(*) recompute
       .mockResolvedValueOnce(undefined)                      // UPDATE purchase_order_items

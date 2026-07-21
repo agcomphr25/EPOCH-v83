@@ -220,7 +220,7 @@ export default function ProductionQueueManager() {
   const [selectedPOItems, setSelectedPOItems] = useState<Map<string, Map<number, number>>>(
     new Map()
   );
-  const [isGeneratingPODemand, setIsGeneratingPODemand] = useState(false);
+  const [isProgressingPOItems, setIsProgressingPOItems] = useState(false);
 
   // State for "Select Next N" for regular production queue
   const [selectNextQueueCount, setSelectNextQueueCount] = useState<string>('');
@@ -707,13 +707,13 @@ export default function ProductionQueueManager() {
     printWindow.document.close();
   };
 
-  // PO items create demand in P1 Production Queue. Department progression is
-  // intentionally handled only by the existing production-order controls above.
-  const handleGeneratePODemand = async () => {
+  // Progress exact existing PO production units from P1 to Barcode. Demand is
+  // created in PO Management and must never be regenerated from this queue.
+  const handleProgressSelectedPOToBarcode = async () => {
     if (selectedPOItems.size === 0) {
       toast({
         title: 'No Items Selected',
-        description: 'Please select purchase-order demand to generate',
+        description: 'Please select P1 purchase-order units to progress',
         variant: 'destructive',
       });
       return;
@@ -727,22 +727,22 @@ export default function ProductionQueueManager() {
       });
     });
 
-    setIsGeneratingPODemand(true);
+    setIsProgressingPOItems(true);
     try {
-      const selectionBatch = await apiRequest('/api/p1-po-queue/select', {
+      const response = await apiRequest('/api/p1-po-queue/progress', {
         method: 'POST',
-        body: JSON.stringify({ selections }),
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const response = await apiRequest('/api/p1-po-queue/schedule', {
-        method: 'POST',
-        body: JSON.stringify({ batchId: selectionBatch.batchId }),
+        body: JSON.stringify({
+          selections: selections.map(({ poProductId, quantitySelected }) => ({
+            poProductId,
+            quantity: quantitySelected,
+          })),
+        }),
         headers: { 'Content-Type': 'application/json' },
       });
 
       toast({
         title: 'Success',
-        description: response.message || 'Generated purchase-order demand in P1 Production Queue',
+        description: response.message || 'Progressed purchase-order units to Barcode',
       });
 
       // Clear selections
@@ -751,18 +751,16 @@ export default function ProductionQueueManager() {
       // Refetch data
       refetchPOs();
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
-
-      // PO orders do not need labels printed when progressed to Barcode
-      // Labels are only required for regular production orders
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     } catch (error: any) {
-      console.error('Error generating PO demand:', error);
+      console.error('Error progressing PO units:', error);
       toast({
         title: 'Error',
-        description: error?.message || 'Failed to generate production demand',
+        description: error?.message || 'Failed to progress purchase-order units',
         variant: 'destructive',
       });
     } finally {
-      setIsGeneratingPODemand(false);
+      setIsProgressingPOItems(false);
     }
   };
 
@@ -949,8 +947,8 @@ export default function ProductionQueueManager() {
     data: safePurchaseOrders.slice(0, 2)
   });
 
-  // Filter out "no stock" items and calculate total items needing layup
-  const totalPOItemsNeedingLayup = safePurchaseOrders.reduce(
+  // Count exact existing PO production units still waiting in P1.
+  const totalPOItemsReadyToProgress = safePurchaseOrders.reduce(
     (total, customer) =>
       total +
       customer.purchaseOrders.reduce(
@@ -1507,13 +1505,13 @@ export default function ProductionQueueManager() {
                 )}
                 {Array.from(selectedPOItems.values()).some((items) => items.size > 0) && (
                   <Button
-                    onClick={handleGeneratePODemand}
-                    disabled={isGeneratingPODemand}
+                    onClick={handleProgressSelectedPOToBarcode}
+                    disabled={isProgressingPOItems}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white border-2 border-emerald-400 font-medium shadow-lg flex items-center gap-2"
                     data-testid="button-generate-production-demand-sticky"
                   >
                     <Package className="w-5 h-5" />
-                    {isGeneratingPODemand ? 'Generating...' : 'Generate Production Demand'}
+                    {isProgressingPOItems ? 'Progressing...' : 'Progress to Barcode'}
                   </Button>
                 )}
               </div>
@@ -1745,10 +1743,10 @@ export default function ProductionQueueManager() {
               <CardHeader className="p-0">
                 <CardTitle className="flex items-center gap-2">
                   <ShoppingCart className="w-5 h-5 text-blue-600" />
-                  P1 Purchase Orders ({totalPOItemsNeedingLayup} items need layup)
+                  P1 Purchase Orders ({totalPOItemsReadyToProgress} items ready for Barcode)
                 </CardTitle>
                 <p className="text-sm text-gray-500 text-left">
-                  Open purchase orders with stock items that need to be laid up
+                  Existing PO production units waiting to progress from P1 to Barcode
                 </p>
               </CardHeader>
             </AccordionTrigger>
@@ -1780,14 +1778,14 @@ export default function ProductionQueueManager() {
                         <Button
                           className="bg-green-600 hover:bg-green-700 text-white"
                           size="sm"
-                          disabled={isGeneratingPODemand}
+                          disabled={isProgressingPOItems}
                           onClick={() => {
-                            handleGeneratePODemand();
+                            handleProgressSelectedPOToBarcode();
                           }}
                           data-testid="button-generate-production-demand"
                         >
                           <Package className="w-4 h-4 mr-2" />
-                          {isGeneratingPODemand ? 'Generating...' : 'Generate Production Demand'}
+                          {isProgressingPOItems ? 'Progressing...' : 'Progress to Barcode'}
                         </Button>
                       </div>
                     </div>
@@ -1938,7 +1936,7 @@ export default function ProductionQueueManager() {
                               <Table data-testid={`table-po-items-${po.poNumber}`}>
                                 <TableHeader>
                                   <TableRow>
-                                    <TableHead className="w-40">Quantity to Schedule</TableHead>
+                                    <TableHead className="w-40">Quantity to Progress</TableHead>
                                     <TableHead>Product Name</TableHead>
                                     <TableHead>Stock Model</TableHead>
                                     <TableHead>Action Length</TableHead>

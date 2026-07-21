@@ -233,11 +233,10 @@ export function computeP1Queue(
         if (!hasValidStockModel) {
           return false;
         }
-        const fulfillmentStats = itemFulfillmentMap.get(item.id);
-        if (fulfillmentStats && isPoItemFullyFulfilled(fulfillmentStats)) {
-          return false;
-        }
-        return item.orderedQuantity > 0;
+        // An operational P1 queue contains only lines with at least one exact
+        // unit still waiting in P1. Downstream-only and ungenerated lines do
+        // not belong here, although their history remains stored.
+        return item.availableQuantity > 0;
       });
 
     if (poItems.length > 0) {

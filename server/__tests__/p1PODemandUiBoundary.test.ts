@@ -7,13 +7,14 @@ const componentPath = fileURLToPath(
 );
 
 describe('P1 PO demand and production progression boundary', () => {
-  it('never sends PO-line selections through progression or scheduling', () => {
+  it('progresses existing PO production units without generating new demand', () => {
     const source = readFileSync(componentPath, 'utf8');
 
-    expect(source).not.toContain("apiRequest('/api/p1-po-queue/progress'");
-    expect(source).toContain("apiRequest('/api/p1-po-queue/select'");
-    expect(source).toContain("apiRequest('/api/p1-po-queue/schedule'");
+    expect(source).toContain("apiRequest('/api/p1-po-queue/progress'");
+    expect(source).not.toContain("apiRequest('/api/p1-po-queue/select'");
+    expect(source).not.toContain("apiRequest('/api/p1-po-queue/schedule'");
     expect(source).toContain('selectedPOItems: []');
-    expect(source).toContain('Generate Production Demand');
+    expect(source).toContain('Progress to Barcode');
+    expect(source).toContain('Quantity to Progress');
   });
 });

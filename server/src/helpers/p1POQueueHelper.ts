@@ -162,11 +162,11 @@ export function computeP1Queue(
           (specs.stock_model as string | null) ??
           null;
         const fulfillmentStats = itemFulfillmentMap.get(item.id);
-        // The PO view is the demand source. Only the difference between ordered
-        // quantity and real non-cancelled production rows may be generated.
-        // Existing rows stay visible here as a read-only department/status summary.
+        // This is the operational P1 queue, so selectable quantity means exact
+        // existing units that can progress from P1 to Barcode. PO Management is
+        // the separate demand-generation boundary.
         const activeQuantity = fulfillmentStats?.active ?? 0;
-        const availableQuantity = Math.max(Number(item.quantity || 0) - activeQuantity, 0);
+        const availableQuantity = fulfillmentStats?.activeP1Queue ?? 0;
 
         return {
           id: item.id,

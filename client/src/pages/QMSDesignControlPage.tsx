@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'wouter';
 import {
   AlertTriangle,
   ArrowRight,
@@ -197,9 +198,11 @@ type EngineeringReleasePreview = {
   } | null;
 };
 
-const lifecycleTabs = [
-  { value: 'overview', label: 'Overview' },
+export const DESIGN_CONTROL_DEFAULT_TAB = 'projects';
+
+export const lifecycleTabs = [
   { value: 'projects', label: 'Design Projects' },
+  { value: 'overview', label: 'Overview' },
   { value: 'inputs', label: 'Inputs' },
   { value: 'outputs', label: 'Outputs' },
   { value: 'reviews', label: 'Reviews' },
@@ -958,16 +961,18 @@ function RegisterTable({
   );
 }
 
-function SectionHeader({
+export function SectionHeader({
   icon: Icon,
   title,
   description,
   action,
+  actionHref,
 }: {
   icon: typeof Route;
   title: string;
   description: string;
   action?: string;
+  actionHref?: string;
 }) {
   return (
     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -979,10 +984,19 @@ function SectionHeader({
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{description}</p>
       </div>
       {action && (
-        <Button className="gap-2 self-start">
-          <Plus className="h-4 w-4" />
-          {action}
-        </Button>
+        actionHref ? (
+          <Button asChild className="gap-2 self-start">
+            <Link href={actionHref}>
+              <Plus className="h-4 w-4" />
+              {action}
+            </Link>
+          </Button>
+        ) : (
+          <Button className="gap-2 self-start">
+            <Plus className="h-4 w-4" />
+            {action}
+          </Button>
+        )
       )}
     </div>
   );
@@ -1675,7 +1689,7 @@ export default function QMSDesignControlPage() {
           </div>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs defaultValue={DESIGN_CONTROL_DEFAULT_TAB} className="space-y-4">
           <div className="overflow-x-auto rounded-md border bg-white p-1">
             <TabsList className="h-auto min-w-max justify-start bg-transparent">
               {lifecycleTabs.map((tab) => (
@@ -1727,6 +1741,7 @@ export default function QMSDesignControlPage() {
               title="Design Projects"
               description="Controlled design projects that can align with the existing Design and R&D project folders."
               action="Open Design Project"
+              actionHref="/design/rd-projects"
             />
             <div className="grid gap-4 lg:grid-cols-3">
               {designProjects.map((project) => (

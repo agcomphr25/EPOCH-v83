@@ -77,6 +77,7 @@ const { store, dbMock, poolQueryMock, refreshSchemaMaps } = vi.hoisted(() => {
     p2ProductionOrders: AnyRow[];
     p2PurchaseOrders: AnyRow[];
     p2SerializedItems: AnyRow[];
+    partRoutings: AnyRow[];
     reset: () => void;
   }
 
@@ -88,6 +89,7 @@ const { store, dbMock, poolQueryMock, refreshSchemaMaps } = vi.hoisted(() => {
     p2ProductionOrders: [],
     p2PurchaseOrders: [],
     p2SerializedItems: [],
+    partRoutings: [],
   });
 
   const store = Object.assign(initial(), {
@@ -110,6 +112,7 @@ const { store, dbMock, poolQueryMock, refreshSchemaMaps } = vi.hoisted(() => {
       [schema.p2ProductionOrders, 'p2ProductionOrders'],
       [schema.p2PurchaseOrders, 'p2PurchaseOrders'],
       [schema.p2SerializedItems, 'p2SerializedItems'],
+      [schema.partRoutings, 'partRoutings'],
     ];
     for (const [table, key] of mappings) {
       tableMap.set(table, key);
@@ -188,8 +191,7 @@ const { store, dbMock, poolQueryMock, refreshSchemaMaps } = vi.hoisted(() => {
     const chain = {
       then<TResult1 = AnyRow[], TResult2 = never>(
         resolve?:
-          | ((value: AnyRow[]) => TResult1 | PromiseLike<TResult1>)
-          | null,
+          ((value: AnyRow[]) => TResult1 | PromiseLike<TResult1>) | null,
         reject?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
       ): Promise<TResult1 | TResult2> {
         return exec().then(resolve as never, reject as never);
@@ -468,6 +470,30 @@ const seedFixtures = (): void => {
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 describe('Cutting work order grouping — endpoint integration (Done #2)', () => {
+  it('schedules an Assembly-first part into Assembly instead of Layup', async () => {
+    store.partRoutings.push({
+      id: 'routing-26247',
+      partNumber: '26247',
+      departmentSequence: ['Assembly', 'Final QC'],
+    });
+    store.p2SerializedItems.push({
+      id: 'serialized-26247',
+      poId: 26247,
+      partNumber: '26247',
+      partRoutingId: 'routing-26247',
+      status: 'ACTIVE',
+      currentDepartment: 'Pending Layup',
+    });
+
+    const response = await request(app)
+      .post('/api/p2/schedule-items')
+      .send({ itemIds: ['serialized-26247'] });
+
+    expect(response.status).toBe(200);
+    expect(response.body.scheduled).toBe(1);
+    expect(store.p2SerializedItems[0].currentDepartment).toBe('Assembly');
+  });
+
   it('all four scheduling endpoints converge to one PENDING row per packet+bucket', async () => {
     seedFixtures();
 

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { db, pool } from '../../db';
@@ -17,6 +17,10 @@ import {
   ProjectWorkflowVersionError,
   serializeProjectWorkflowVersion,
 } from '../services/projectWorkflowVersionService';
+import {
+  getInitializableProjectWorkflowSteps,
+  isLegacyProjectWorkflow,
+} from '../services/projectWorkflowRegistry';
 import { ensureProjectHasWAD } from '../lib/wadHelper';
 import { evaluateDocumentationRequirements } from '../lib/documentationRequirementsEngine';
 import { cancelWadWorkOrdersSupersededByP2 } from '../services/wadSupersedeService';
@@ -473,13 +477,27 @@ router.use(async (_req, res, next) => {
   }
 });
 
-const PROJECT_STEP_TYPES = [
-  { type: 'rfq_risk_assessment', order: 1, label: 'RFQ Risk Assessment', route: '/rfq-risk-assessment' },
-  { type: 'quote', order: 2, label: 'Quote', route: '/p2-quote-form' },
-  { type: 'purchase_review_checklist', order: 3, label: 'Purchase Review Checklist', route: '/purchase-review-checklist' },
-  { type: 'preproduction_checklist', order: 4, label: 'Pre-production Checklist', route: '/preproduction-checklists' },
-  { type: 'p2_order', order: 5, label: 'P2 Order', route: '/p2-control-center' },
-];
+const PROJECT_STEP_TYPES = getInitializableProjectWorkflowSteps('legacy_v1');
+
+async function rejectNonLegacyStepMutation(
+  projectId: string,
+  res: Response
+): Promise<boolean> {
+  const project = await storage.getProject(projectId);
+  if (!project) {
+    res.status(404).json({ message: 'Project not found' });
+    return true;
+  }
+  if (!isLegacyProjectWorkflow(project.workflowVersion)) {
+    res.status(409).json({
+      error: 'PROJECT_WORKFLOW_ACTION_UNAVAILABLE',
+      message: 'Legacy project step actions are unavailable for this workflow version',
+      workflowVersion: project.workflowVersion,
+    });
+    return true;
+  }
+  return false;
+}
 
 const createProjectRequestSchema = z.object({
   projectName: z.string().min(1, 'Project name is required'),
@@ -1580,8 +1598,8 @@ router.post('/', async (req, res) => {
         projectId: project.id,
         stepType: stepType.type as any,
         stepOrder: stepType.order,
-        status: stepType.order === 1 ? 'in_progress' : 'pending',
-        startedAt: stepType.order === 1 ? new Date() : null,
+        status: stepType.initialStatus,
+        startedAt: stepType.initialStatus === 'in_progress' ? new Date() : null,
         ...(isQuoteStep && quoteId ? { linkedQuoteId: quoteId, status: 'completed', completedAt: new Date() } : {}),
       });
     }
@@ -1758,6 +1776,7 @@ router.get('/:projectId/steps', async (req, res) => {
 router.patch('/:projectId/steps/:stepId', async (req, res) => {
   try {
     const { projectId, stepId } = req.params;
+    if (await rejectNonLegacyStepMutation(projectId, res)) return;
     
     const validationResult = updateStepRequestSchema.safeParse(req.body);
     if (!validationResult.success) {
@@ -1914,6 +1933,9 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
     
     res.json(step);
   } catch (error) {
+    if (error instanceof ProjectWorkflowVersionError) {
+      return res.status(500).json(error.toJSON());
+    }
     console.error('Error updating project step:', error);
     res.status(500).json({ message: 'Failed to update project step' });
   }
@@ -1933,6 +1955,7 @@ router.get('/:projectId/activity', async (req, res) => {
 router.patch('/:projectId/steps/:stepId/skip', async (req, res) => {
   try {
     const { projectId, stepId } = req.params;
+    if (await rejectNonLegacyStepMutation(projectId, res)) return;
     const { reason } = req.body;
 
     if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
@@ -1965,6 +1988,9 @@ router.patch('/:projectId/steps/:stepId/skip', async (req, res) => {
 
     res.json(updatedStep);
   } catch (error) {
+    if (error instanceof ProjectWorkflowVersionError) {
+      return res.status(500).json(error.toJSON());
+    }
     console.error('Error skipping project step:', error);
     res.status(500).json({ message: 'Failed to skip project step' });
   }
@@ -1973,6 +1999,7 @@ router.patch('/:projectId/steps/:stepId/skip', async (req, res) => {
 router.patch('/:projectId/steps/:stepId/reopen', async (req, res) => {
   try {
     const { projectId, stepId } = req.params;
+    if (await rejectNonLegacyStepMutation(projectId, res)) return;
 
     const allSteps = await storage.getProjectSteps(projectId);
     const step = allSteps.find(s => s.id === stepId);
@@ -2014,6 +2041,9 @@ router.patch('/:projectId/steps/:stepId/reopen', async (req, res) => {
 
     res.json(updatedStep);
   } catch (error) {
+    if (error instanceof ProjectWorkflowVersionError) {
+      return res.status(500).json(error.toJSON());
+    }
     console.error('Error reopening project step:', error);
     res.status(500).json({ message: 'Failed to reopen project step' });
   }

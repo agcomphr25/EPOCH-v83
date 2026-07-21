@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db, pool } from '../../db';
-import { quotes, quoteLineItems, projectSteps, projects, productionWorkOrders, projectStepTypeEnum, insertQuoteSchema, insertQuoteLineItemSchema, customers, type QuoteExecutionFeedback } from '../../schema';
+import { quotes, quoteLineItems, projectSteps, projects, productionWorkOrders, insertQuoteSchema, insertQuoteLineItemSchema, customers, type QuoteExecutionFeedback } from '../../schema';
 import { eq, desc, max } from 'drizzle-orm';
 import { resolveCustomersIntegerId } from '../lib/customerResolver';
 
@@ -51,16 +51,9 @@ import { z } from 'zod';
 import { storage } from '../../storage';
 import { createQuoteSnapshot } from '../services/quoteContractService';
 import { getWorkflowVersionForNewProject } from '../services/projectWorkflowVersionService';
+import { getInitializableProjectWorkflowSteps } from '../services/projectWorkflowRegistry';
 
-type ProjectStepTypeValue = typeof projectStepTypeEnum.enumValues[number];
-
-const PROJECT_STEP_TYPES: Array<{ type: ProjectStepTypeValue; order: number }> = [
-  { type: 'rfq_risk_assessment', order: 1 },
-  { type: 'quote', order: 2 },
-  { type: 'purchase_review_checklist', order: 3 },
-  { type: 'preproduction_checklist', order: 4 },
-  { type: 'p2_order', order: 5 },
-];
+const PROJECT_STEP_TYPES = getInitializableProjectWorkflowSteps('legacy_v1');
 
 const router = Router();
 
@@ -725,8 +718,8 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
             projectId,
             stepType: stepDef.type,
             stepOrder: stepDef.order,
-            status: stepDef.order === 1 ? 'in_progress' : 'pending',
-            startedAt: stepDef.order === 1 ? new Date() : null,
+            status: stepDef.initialStatus,
+            startedAt: stepDef.initialStatus === 'in_progress' ? new Date() : null,
             linkedQuoteId: stepDef.type === 'quote' ? quoteId : null,
           });
         }

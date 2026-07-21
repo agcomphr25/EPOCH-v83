@@ -5195,7 +5195,8 @@ async function initializeBackgroundServices() {
         const projectsMissingSteps = await pool.query<{ id: string; project_code: string }>(
           `SELECT p.id, p.project_code
            FROM projects p
-           WHERE (SELECT COUNT(*) FROM project_steps ps WHERE ps.project_id = p.id) < 5`
+           WHERE COALESCE(p.workflow_version, 'legacy_v1') = 'legacy_v1'
+             AND (SELECT COUNT(*) FROM project_steps ps WHERE ps.project_id = p.id) < 5`
         );
 
         let repairedCount = 0;

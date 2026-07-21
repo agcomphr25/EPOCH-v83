@@ -12,6 +12,11 @@ import {
 } from '../../schema';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosingValidation';
+import {
+  getWorkflowVersionForNewProject,
+  ProjectWorkflowVersionError,
+  serializeProjectWorkflowVersion,
+} from '../services/projectWorkflowVersionService';
 import { ensureProjectHasWAD } from '../lib/wadHelper';
 import { evaluateDocumentationRequirements } from '../lib/documentationRequirementsEngine';
 import { cancelWadWorkOrdersSupersededByP2 } from '../services/wadSupersedeService';
@@ -574,6 +579,7 @@ router.get('/', async (req, res) => {
           
           return {
             ...project,
+            ...serializeProjectWorkflowVersion(project),
             steps,
             customer,
             projectManager,
@@ -582,9 +588,11 @@ router.get('/', async (req, res) => {
             linkedRfqNumber,
           };
         } catch (enrichErr) {
+          if (enrichErr instanceof ProjectWorkflowVersionError) throw enrichErr;
           console.error(`Error enriching project ${project.id}:`, enrichErr);
           return {
             ...project,
+            ...serializeProjectWorkflowVersion(project),
             steps: [],
             customer: null,
             projectManager: null,
@@ -597,6 +605,9 @@ router.get('/', async (req, res) => {
     
     res.json(projectsWithSteps);
   } catch (error) {
+    if (error instanceof ProjectWorkflowVersionError) {
+      return res.status(500).json(error.toJSON());
+    }
     console.error('Error fetching projects:', error);
     res.status(500).json({ message: 'Failed to fetch projects' });
   }
@@ -1519,6 +1530,7 @@ router.get('/:id', async (req, res) => {
     
     res.json({
       ...project,
+      ...serializeProjectWorkflowVersion(project),
       steps,
       customer,
       projectManager,
@@ -1526,6 +1538,9 @@ router.get('/:id', async (req, res) => {
       closingStatus: deriveClosingStatus(closing),
     });
   } catch (error) {
+    if (error instanceof ProjectWorkflowVersionError) {
+      return res.status(500).json(error.toJSON());
+    }
     console.error('Error fetching project:', error);
     res.status(500).json({ message: 'Failed to fetch project' });
   }
@@ -1552,6 +1567,7 @@ router.post('/', async (req, res) => {
     const projectData = {
       ...projectFields,
       projectCode: nextCode,
+      workflowVersion: getWorkflowVersionForNewProject(),
       customersIntegerId,
       ...(customerNameSnapshot ? { customerNameSnapshot } : {}),
     };

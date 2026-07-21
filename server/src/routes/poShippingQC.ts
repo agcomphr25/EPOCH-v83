@@ -3897,6 +3897,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
     // 9. UPDATE ORDER/ITEM STATUSES TO SHIPPED
     const mainShipPoIds = new Set<number>();
+    const fulfillmentUpdateFailures: Array<{ orderId: string; error: string }> = [];
     for (const detail of orderDetails) {
       try {
         if (detail.order.isNonStock) {
@@ -3923,7 +3924,18 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           `⚠️ Failed to update order ${detail.order.orderId}:`,
           updateError.message
         );
+        fulfillmentUpdateFailures.push({
+          orderId: detail.order.orderId,
+          error: updateError.message,
+        });
       }
+    }
+
+    if (fulfillmentUpdateFailures.length > 0) {
+      throw new Error(
+        `Shipment persisted, but ${fulfillmentUpdateFailures.length} item(s) failed P1 fulfillment reconciliation: ` +
+          fulfillmentUpdateFailures.map((failure) => `${failure.orderId}: ${failure.error}`).join('; '),
+      );
     }
 
     // Auto-close any POs where all active production orders are now SHIPPED

@@ -195,7 +195,7 @@ function validateOrderedItems(
     throw new ProjectWorkflowDefinitionValidationError(
       `${version} has an empty ${kind} label`
     );
-  const sortedOrders = [...orders].sort((a, b) => a - b);
+  const sortedOrders = Array.from(orders).sort((a, b) => a - b);
   if (sortedOrders.some((order, index) => order !== index + 1))
     throw new ProjectWorkflowDefinitionValidationError(
       `${version} ${kind} orders must be contiguous from 1`

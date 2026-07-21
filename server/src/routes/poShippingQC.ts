@@ -36,7 +36,11 @@ async function autoClosePOIfFullyShipped(poId: number): Promise<void> {
        WHERE po_id = $1`,
       [poId]
     );
-    const row = rows[0];
+    const row = rowsOf<{
+      total: string;
+      shipped: string;
+      cancelled: string;
+    }>(rows)[0];
     if (!row) return;
     const total = parseInt(row.total, 10);
     const shipped = parseInt(row.shipped, 10);

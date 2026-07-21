@@ -7,6 +7,36 @@ vi.mock('../storage', () => ({
   },
 }));
 
+vi.mock('../db', () => ({ db: {}, pool: { query: vi.fn() } }));
+vi.mock('../schema', () => ({
+  productionWorkOrders: {
+    id: {},
+    workOrderNumber: {},
+    projectId: {},
+    partNumber: {},
+    description: {},
+    quantity: {},
+    status: {},
+    departmentBudgets: {},
+    totalBudgetHours: {},
+    materialBudgetAmount: {},
+    startDate: {},
+    dueDate: {},
+    warningThreshold: {},
+    blockedThreshold: {},
+    defaultChargeCodeId: {},
+    dashboardType: {},
+    queueType: {},
+    assignedDepartment: {},
+    assignedDashboardRoute: {},
+    manufacturingQueueId: {},
+    wadStatus: {},
+    wizardData: {},
+    createdAt: {},
+    updatedAt: {},
+  },
+}));
+
 import { ensureProjectHasWAD } from '../src/lib/wadHelper';
 import { storage } from '../storage';
 
@@ -19,12 +49,16 @@ describe('ensureProjectHasWAD', () => {
 
   it('creates a WAD with status PLANNED when none exist', async () => {
     vi.mocked(storage.getWorkOrdersByProject).mockResolvedValue([]);
-    vi.mocked(storage.createProductionWorkOrder).mockResolvedValue({ id: 'wad-1', status: 'PLANNED' });
+    vi.mocked(storage.createProductionWorkOrder).mockResolvedValue({
+      id: 'wad-1',
+      status: 'PLANNED',
+    });
 
     await ensureProjectHasWAD(PROJECT_ID, { projectName: 'Test Project' });
 
     expect(storage.createProductionWorkOrder).toHaveBeenCalledOnce();
-    const callArg = vi.mocked(storage.createProductionWorkOrder).mock.calls[0][0] as Record<string, unknown>;
+    const callArg = vi.mocked(storage.createProductionWorkOrder).mock
+      .calls[0][0] as Record<string, unknown>;
     expect(callArg.status).toBe('PLANNED');
     expect(callArg.projectId).toBe(PROJECT_ID);
     expect(callArg.partNumber).toBe('TBD');
@@ -35,16 +69,22 @@ describe('ensureProjectHasWAD', () => {
 
   it('includes the project name in the description when provided', async () => {
     vi.mocked(storage.getWorkOrdersByProject).mockResolvedValue([]);
-    vi.mocked(storage.createProductionWorkOrder).mockResolvedValue({ id: 'wad-1', status: 'PLANNED' });
+    vi.mocked(storage.createProductionWorkOrder).mockResolvedValue({
+      id: 'wad-1',
+      status: 'PLANNED',
+    });
 
     await ensureProjectHasWAD(PROJECT_ID, { projectName: 'Acme Widget' });
 
-    const callArg = vi.mocked(storage.createProductionWorkOrder).mock.calls[0][0] as Record<string, unknown>;
+    const callArg = vi.mocked(storage.createProductionWorkOrder).mock
+      .calls[0][0] as Record<string, unknown>;
     expect(String(callArg.description)).toContain('Acme Widget');
   });
 
   it('skips creation (duplicate guard) when a WAD already exists for the same projectId', async () => {
-    vi.mocked(storage.getWorkOrdersByProject).mockResolvedValue([{ id: 'wad-existing', status: 'PLANNED' }]);
+    vi.mocked(storage.getWorkOrdersByProject).mockResolvedValue([
+      { id: 'wad-existing', status: 'PLANNED' },
+    ]);
 
     await ensureProjectHasWAD(PROJECT_ID, { projectName: 'Test Project' });
 
@@ -55,7 +95,10 @@ describe('ensureProjectHasWAD', () => {
     vi.mocked(storage.getWorkOrdersByProject)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ id: 'wad-1', status: 'PLANNED' }]);
-    vi.mocked(storage.createProductionWorkOrder).mockResolvedValue({ id: 'wad-1', status: 'PLANNED' });
+    vi.mocked(storage.createProductionWorkOrder).mockResolvedValue({
+      id: 'wad-1',
+      status: 'PLANNED',
+    });
 
     await ensureProjectHasWAD(PROJECT_ID, { projectName: 'Test Project' });
     await ensureProjectHasWAD(PROJECT_ID, { projectName: 'Test Project' });

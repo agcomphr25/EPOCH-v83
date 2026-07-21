@@ -5,7 +5,8 @@
  * independently in tests (without spinning up the full registerRoutes graph).
  *
  * Responsibilities:
- *   1. Move the requested P2 serialized items from "Pending Layup" to "Layup".
+ *   1. Move requested P2 serialized items from "Pending Layup" to the first
+ *      department in their stamped part routing (falling back to Layup).
  *   2. Auto-sync cutting-table packet demand for the affected POs into
  *      grouped manufacturing_queue rows via `upsertGroupedCuttingQueueEntry`.
  *
@@ -24,13 +25,15 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Item IDs array is required' });
     }
 
-    const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+    const { ensureProductionWorkflowReadSchema } =
+      await import('../lib/productionWorkflowReadiness');
     await ensureProductionWorkflowReadSchema();
     const { db } = await import('../../db');
     const {
       p2SerializedItems,
       p2ProductionOrders,
       p2PurchaseOrders,
+      partRoutings,
       inventoryItems,
       cuttingPacketBOMs,
     } = await import('../../schema');
@@ -43,50 +46,116 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
       ...new Set(
         itemIds
           .map((id: unknown) => {
-            const match = typeof id === 'string'
-              ? id.match(/^legacy-p2-production-order-(\d+)(?:-\d+)?$/)
-              : null;
+            const match =
+              typeof id === 'string'
+                ? id.match(/^legacy-p2-production-order-(\d+)(?:-\d+)?$/)
+                : null;
             return match ? Number(match[1]) : null;
           })
           .filter((id: number | null): id is number => Number.isInteger(id))
       ),
     ];
 
-    // Update all items to move to Layup department (scheduled for production)
-    const result = serializedItemIds.length > 0
-      ? await db
+    const schedulableItems =
+      serializedItemIds.length > 0
+        ? await db
+            .select({
+              id: p2SerializedItems.id,
+              poId: p2SerializedItems.poId,
+              partRoutingId: p2SerializedItems.partRoutingId,
+            })
+            .from(p2SerializedItems)
+            .where(
+              and(
+                inArray(p2SerializedItems.id, serializedItemIds),
+                eq(p2SerializedItems.status, 'ACTIVE'),
+                eq(p2SerializedItems.currentDepartment, 'Pending Layup')
+              )
+            )
+        : [];
+
+    const routingIds = [
+      ...new Set(
+        schedulableItems
+          .map((item) => item.partRoutingId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      ),
+    ];
+    const routingRows =
+      routingIds.length > 0
+        ? await db
+            .select({
+              id: partRoutings.id,
+              departmentSequence: partRoutings.departmentSequence,
+            })
+            .from(partRoutings)
+            .where(inArray(partRoutings.id, routingIds))
+        : [];
+    const firstDepartmentByRoutingId = new Map(
+      routingRows.map((routing) => {
+        const sequence = Array.isArray(routing.departmentSequence)
+          ? routing.departmentSequence
+          : [];
+        const firstDepartment = sequence.find(
+          (department): department is string =>
+            typeof department === 'string' && department.trim().length > 0
+        );
+        return [routing.id, firstDepartment?.trim() || 'Layup'] as const;
+      })
+    );
+    const itemIdsByDepartment = new Map<string, string[]>();
+    for (const item of schedulableItems) {
+      const department = item.partRoutingId
+        ? firstDepartmentByRoutingId.get(item.partRoutingId) || 'Layup'
+        : 'Layup';
+      const ids = itemIdsByDepartment.get(department) || [];
+      ids.push(item.id);
+      itemIdsByDepartment.set(department, ids);
+    }
+
+    const result: Array<{ id: string; poId: number }> = [];
+    for (const [department, ids] of itemIdsByDepartment) {
+      const updated = await db
         .update(p2SerializedItems)
         .set({
-          currentDepartment: 'Layup',
+          currentDepartment: department,
+          currentStageIndex: 0,
           updatedAt: new Date(),
         })
         .where(
           and(
-            inArray(p2SerializedItems.id, serializedItemIds),
+            inArray(p2SerializedItems.id, ids),
             eq(p2SerializedItems.status, 'ACTIVE'),
             eq(p2SerializedItems.currentDepartment, 'Pending Layup')
           )
         )
-        .returning({ id: p2SerializedItems.id, poId: p2SerializedItems.poId })
-      : [];
+        .returning({ id: p2SerializedItems.id, poId: p2SerializedItems.poId });
+      result.push(...updated);
+    }
 
-    const legacyResult = legacyProductionOrderIds.length > 0
-      ? await db
-        .update(p2ProductionOrders)
-        .set({
-          scheduledLayupDate: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            inArray(p2ProductionOrders.id, legacyProductionOrderIds),
-            eq(p2ProductionOrders.status, 'PENDING')
-          )
-        )
-        .returning({ id: p2ProductionOrders.id, poId: p2ProductionOrders.p2PoId })
-      : [];
+    const legacyResult =
+      legacyProductionOrderIds.length > 0
+        ? await db
+            .update(p2ProductionOrders)
+            .set({
+              scheduledLayupDate: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                inArray(p2ProductionOrders.id, legacyProductionOrderIds),
+                eq(p2ProductionOrders.status, 'PENDING')
+              )
+            )
+            .returning({
+              id: p2ProductionOrders.id,
+              poId: p2ProductionOrders.p2PoId,
+            })
+        : [];
 
-    console.log(`Scheduled ${result.length + legacyResult.length} items for production`);
+    console.log(
+      `Scheduled ${result.length + legacyResult.length} items for production`
+    );
 
     // Auto-sync P2 cutting table demands for the affected POs.
     // All cutting orders for the affected POs are resolved to their actual packet
@@ -99,13 +168,14 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
     let cuttingTableSynced = 0;
     try {
       const { ilike, or } = await import('drizzle-orm');
-      const { upsertGroupedCuttingQueueEntry } = await import(
-        '../utils/cuttingQueueGroupingHelper'
-      );
-      const affectedPoIds = [...new Set([
-        ...result.map((r) => r.poId),
-        ...legacyResult.map((r) => r.poId),
-      ])];
+      const { upsertGroupedCuttingQueueEntry } =
+        await import('../utils/cuttingQueueGroupingHelper');
+      const affectedPoIds = [
+        ...new Set([
+          ...result.map((r) => r.poId),
+          ...legacyResult.map((r) => r.poId),
+        ]),
+      ];
 
       // CF/FG packet items used as fallback when SKU lookup misses
       const cfPacketItem = await db

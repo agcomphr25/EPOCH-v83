@@ -11743,6 +11743,7 @@ export const projects = pgTable('projects', {
   customerId: text('customer_id').notNull(), // Reference to customer
   description: text('description'),
   status: projectStatusEnum('status').default('active'),
+  workflowVersion: text('workflow_version'),
   currentStepType: projectStepTypeEnum('current_step_type').default('rfq_risk_assessment'),
   targetShipDate: date('target_ship_date'),
   actualShipDate: date('actual_ship_date'),

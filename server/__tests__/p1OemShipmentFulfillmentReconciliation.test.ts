@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { safeMigrationFiles } from '../scripts/migrations/runSafeBootMigrations';
 
 describe('P1 OEM shipment fulfillment reconciliation', () => {
-  const migrationName = '0199_reconcile_oem_shipment_fulfillment.sql';
+  const migrationName = '0200_reconcile_oem_shipment_fulfillment.sql';
   const migration = readFileSync(join(process.cwd(), 'migrations', migrationName), 'utf8');
   const route = readFileSync(join(process.cwd(), 'server/src/routes/poShippingQC.ts'), 'utf8');
 

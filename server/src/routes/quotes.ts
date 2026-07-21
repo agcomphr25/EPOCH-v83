@@ -50,6 +50,7 @@ import fs from 'fs';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { createQuoteSnapshot } from '../services/quoteContractService';
+import { getWorkflowVersionForNewProject } from '../services/projectWorkflowVersionService';
 
 type ProjectStepTypeValue = typeof projectStepTypeEnum.enumValues[number];
 
@@ -709,6 +710,7 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
             customerId: lockedQuote.customerId,
             description: lockedQuote.description ?? null,
             status: 'active',
+            workflowVersion: getWorkflowVersionForNewProject(),
             // Carry the bridge FK from the quote so the project retains a resolvable
             // integer FK to the master customers table even though customerId is text.
             customersIntegerId: lockedQuote.customersIntegerId ?? null,

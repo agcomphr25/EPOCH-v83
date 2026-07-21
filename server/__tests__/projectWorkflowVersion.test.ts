@@ -87,13 +87,6 @@ describe('Phase 1 additive migration and repair guards', () => {
 describe('legacy creation and response compatibility guards', () => {
   const projectsRoute = read('server/src/routes/projects.ts');
   const quotesRoute = read('server/src/routes/quotes.ts');
-  const legacyStepOrder = [
-    'rfq_risk_assessment',
-    'quote',
-    'purchase_review_checklist',
-    'preproduction_checklist',
-    'p2_order',
-  ];
 
   it.each([
     ['manual', projectsRoute],
@@ -110,27 +103,18 @@ describe('legacy creation and response compatibility guards', () => {
   it.each([
     ['manual', projectsRoute],
     ['accepted quote', quotesRoute],
-  ])(
-    '%s creation retains the exact five legacy step definitions',
-    (_name, source) => {
-      const positions = legacyStepOrder.map((step) =>
-        source.indexOf(`type: '${step}'`)
-      );
-      expect(positions.every((position) => position >= 0)).toBe(true);
-      expect(positions).toEqual([...positions].sort((a, b) => a - b));
-    }
-  );
+  ])('%s creation uses the centralized legacy definition', (_name, source) => {
+    expect(source).toContain(
+      "getInitializableProjectWorkflowSteps('legacy_v1')"
+    );
+  });
 
   it('preserves the two existing initial-status expressions', () => {
-    expect(projectsRoute).toContain(
-      "status: stepType.order === 1 ? 'in_progress' : 'pending'"
-    );
+    expect(projectsRoute).toContain('status: stepType.initialStatus');
     expect(projectsRoute).toContain(
       "isQuoteStep && quoteId ? { linkedQuoteId: quoteId, status: 'completed'"
     );
-    expect(quotesRoute).toContain(
-      "status: stepDef.order === 1 ? 'in_progress' : 'pending'"
-    );
+    expect(quotesRoute).toContain('status: stepDef.initialStatus');
   });
 
   it('adds version serialization without replacing existing project response fields', () => {

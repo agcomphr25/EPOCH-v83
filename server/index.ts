@@ -31,6 +31,7 @@ import {
   getLegacyStartupDbMaintenanceSkipMessage,
   shouldRunLegacyStartupDbMaintenance,
 } from './bootstrap/startupMaintenance';
+import { LEGACY_STARTUP_REPAIR_STEPS } from './src/services/projectWorkflowRegistry';
 
 // Build version marker - change this to verify deployment updates
 const BUILD_VERSION = '2026-01-27-v2';
@@ -5184,13 +5185,7 @@ async function initializeBackgroundServices() {
       // Backfill missing workflow steps for projects that have fewer than 5 steps
       // (repairs projects created before step-init was reliable, e.g. PRJ-007)
       try {
-        const STEP_TYPES = [
-          { type: 'rfq_risk_assessment', order: 1 },
-          { type: 'quote',               order: 2 },
-          { type: 'purchase_review_checklist', order: 3 },
-          { type: 'preproduction_checklist',   order: 4 },
-          { type: 'p2_order',            order: 5 },
-        ];
+        const STEP_TYPES = LEGACY_STARTUP_REPAIR_STEPS;
 
         const projectsMissingSteps = await pool.query<{ id: string; project_code: string }>(
           `SELECT p.id, p.project_code
@@ -5213,8 +5208,8 @@ async function initializeBackgroundServices() {
                 `INSERT INTO project_steps (id, project_id, step_type, step_order, status, started_at, created_at, updated_at)
                  VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW(), NOW())`,
                 [proj.id, st.type, st.order,
-                 st.order === 1 ? 'in_progress' : 'pending',
-                 st.order === 1 ? new Date() : null]
+                 st.initialStatus,
+                 st.initialStatus === 'in_progress' ? new Date() : null]
               );
               repairedCount++;
             }

@@ -592,4 +592,30 @@ describe('legacy step transitions remain unchanged', () => {
       expect.objectContaining({ status: 'in_progress', completedAt: null })
     );
   });
+  it.each([
+    [
+      'update',
+      `/api/projects/${PROJECT_ID}/steps/s1`,
+      { status: 'in_progress' },
+    ],
+    [
+      'skip',
+      `/api/projects/${PROJECT_ID}/steps/s1/skip`,
+      { reason: 'Not applicable' },
+    ],
+    ['reopen', `/api/projects/${PROJECT_ID}/steps/s1/reopen`, {}],
+  ])('rejects p2_v2 legacy step %s actions', async (_action, url, body) => {
+    vi.mocked(storage.getProject).mockResolvedValue(
+      makeProject({ workflowVersion: 'p2_v2' })
+    );
+    const r = await request(app).patch(url).send(body);
+    expect(r.status).toBe(409);
+    expect(r.body).toEqual(
+      expect.objectContaining({
+        error: 'PROJECT_WORKFLOW_ACTION_UNAVAILABLE',
+        workflowVersion: 'p2_v2',
+      })
+    );
+    expect(storage.updateProjectStep).not.toHaveBeenCalled();
+  });
 });

@@ -33,6 +33,8 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 import { buildProjectBomAssemblyTree, type ProjectBomAssemblyRow } from '../services/projectBomAssembly';
+import { getActiveWorkflowInstanceForProject, getWorkflowReadModel } from '../services/projectWorkflowInstanceService';
+import { buildP2V2WorkflowResponse, buildUninitializedP2V2Response } from '../services/projectWorkflowV2ReadModel';
 
 // ── Project document upload setup ──────────────────────────────────────────
 const projectDocsDir = path.join(process.cwd(), 'uploads', 'project-documents');
@@ -1511,6 +1513,31 @@ router.patch('/:id/clins/:clinId', async (req, res) => {
     }
     console.error('Update project CLIN error:', error);
     res.status(500).json({ error: 'Failed to update project CLIN' });
+  }
+});
+
+router.get('/:id/workflow-v2', async (req, res) => {
+  try {
+    const project = await storage.getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: 'PROJECT_NOT_FOUND', message: 'Project not found' });
+    const effectiveVersion = resolveProjectWorkflowVersion(project.workflowVersion);
+    if (effectiveVersion !== 'p2_v2') {
+      return res.status(409).json({
+        error: 'WORKFLOW_VERSION_MISMATCH',
+        message: 'The V2 workflow endpoint is available only for p2_v2 projects.',
+        projectId: project.id,
+        workflowVersion: project.workflowVersion ?? null,
+        effectiveWorkflowVersion: effectiveVersion,
+      });
+    }
+    const instance = await getActiveWorkflowInstanceForProject(project.id);
+    if (!instance) return res.json(buildUninitializedP2V2Response(project.id));
+    const model = await getWorkflowReadModel(String(instance.id));
+    return res.json(buildP2V2WorkflowResponse(project.id, model));
+  } catch (error) {
+    if (error instanceof ProjectWorkflowVersionError) return res.status(409).json(error.toJSON());
+    console.error('Error fetching P2 V2 workflow:', error);
+    return res.status(500).json({ error: 'P2_V2_WORKFLOW_READ_FAILED', message: 'Failed to load P2 V2 workflow' });
   }
 });
 

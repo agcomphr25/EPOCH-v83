@@ -1641,27 +1641,7 @@ router.get('/:id/workflow-v2', async (req, res) => {
     const instance = await getActiveWorkflowInstanceForProject(project.id);
     if (!instance) return res.json(buildUninitializedP2V2Response(project.id));
     const model = await getWorkflowReadModel(String(instance.id));
-    const response = buildP2V2WorkflowResponse(project.id, model);
-    const design = await getCurrentDesignApplicability(project.id);
-    if (
-      design.decision?.status === 'APPROVED' &&
-      design.decision.responsibility_type !== 'CUSTOMER_BUILD_TO_PRINT' &&
-      !design.release.released
-    ) {
-      response.stages = response.stages.map((stage) =>
-        stage.stepType === 'design_applicability'
-          ? {
-              ...stage,
-              status: 'BLOCKED',
-              blockedReason: design.release.blockers.join(' '),
-            }
-          : stage
-      );
-      response.blockedStages = response.stages.filter(
-        (stage) => stage.status === 'BLOCKED'
-      ).length;
-    }
-    return res.json(response);
+    return res.json(buildP2V2WorkflowResponse(project.id, model));
   } catch (error) {
     if (error instanceof ProjectWorkflowVersionError) return res.status(409).json(error.toJSON());
     console.error('Error fetching P2 V2 workflow:', error);

@@ -158,13 +158,10 @@ async function releaseState(
       AND lower(status) NOT IN ('approved','complete','completed','closed','not_applicable','not applicable')`)
   );
   const blockers: string[] = [];
-  const rdReleased = ['released', 'engineering_released'].includes(
-    String(designProject.engineering_status ?? '').toLowerCase()
-  );
   if (
     !release ||
     designProject.design_control_status !== 'engineering_released' ||
-    !rdReleased
+    designProject.engineering_status !== 'engineering_released'
   )
     blockers.push(
       'The linked Design Project has not reached formal Engineering Release or has been reopened.'
@@ -178,7 +175,7 @@ async function releaseState(
     released:
       Boolean(release) &&
       designProject.design_control_status === 'engineering_released' &&
-      rdReleased &&
+      designProject.engineering_status === 'engineering_released' &&
       openReviews.length === 0,
     blockers,
     designProject,

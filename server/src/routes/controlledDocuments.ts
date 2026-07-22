@@ -211,6 +211,27 @@ const resolveControlledDocumentFile = (filePath: string | null | undefined) => {
   const trimmed = String(filePath || '').trim();
   if (!trimmed) return null;
 
+  const centralMediaRoot = path.resolve(process.cwd(), 'uploads', 'media-library');
+  if (trimmed.startsWith('/api/media/file/')) {
+    try {
+      const fileName = decodeURIComponent(trimmed.slice('/api/media/file/'.length));
+      if (!fileName || path.basename(fileName) !== fileName) return null;
+      return path.join(centralMediaRoot, fileName);
+    } catch {
+      return null;
+    }
+  }
+
+  const normalizedMediaPath = trimmed.replace(/\\/g, '/').replace(/^\//, '');
+  if (normalizedMediaPath.startsWith('uploads/media-library/')) {
+    const relativeMediaPath = normalizedMediaPath.slice('uploads/media-library/'.length);
+    const resolvedMediaPath = path.resolve(centralMediaRoot, relativeMediaPath);
+    if (resolvedMediaPath !== centralMediaRoot && resolvedMediaPath.startsWith(`${centralMediaRoot}${path.sep}`)) {
+      return resolvedMediaPath;
+    }
+    return null;
+  }
+
   if (trimmed.startsWith('/assets/documents/') || trimmed.startsWith('assets/documents/')) {
     const relativePath = trimmed.replace(/^\//, '');
     return path.join(process.cwd(), 'server/src', relativePath);

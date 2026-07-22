@@ -38,6 +38,7 @@ const TEMPLATE_UPLOAD_TABLES = new Set([
   'controlled_documents',
   'document_version_history',
   'project_documents',
+  'media_library',
 ]);
 
 async function getPublicTableColumns(tableName: string) {
@@ -550,6 +551,30 @@ async function renderSpecSheetPdf(input: {
 async function saveSpecSheetPdfFile(fileName: string, fileBuffer: Buffer) {
   const storedFileName = normalizeSpecSheetFileName(fileName, null);
   return saveControlledDocumentFile(storedFileName, fileBuffer);
+}
+
+async function saveGeneratedTemplatePdf(fileName: string, fileBuffer: Buffer) {
+  try {
+    const fileUrl = await saveSpecSheetPdfFile(fileName, fileBuffer);
+    return { fileUrl, storagePath: fileUrl, storageWarning: null };
+  } catch (error) {
+    const { reason, message } = getStorageErrorResponse(error);
+    const storedFileName = sanitizeFileName(fileName);
+    const relativePath = path.posix.join('uploads', 'media-library', storedFileName);
+    const absoluteDirectory = path.join(process.cwd(), 'uploads', 'media-library');
+    await fs.promises.mkdir(absoluteDirectory, { recursive: true });
+    await fs.promises.writeFile(path.join(absoluteDirectory, storedFileName), fileBuffer);
+    console.warn('Generated template PDF used central-storage local fallback', {
+      fileName: storedFileName,
+      reason,
+      message,
+    });
+    return {
+      fileUrl: `/api/media/file/${encodeURIComponent(storedFileName)}`,
+      storagePath: relativePath,
+      storageWarning: message,
+    };
+  }
 }
 
 // Helper to format UUID bytes to string if needed
@@ -2138,6 +2163,7 @@ router.post('/spec-sheets/complete-upload', async (req: Request, res: Response) 
 // Fill any reusable template, save the finished PDF in central storage, register it in MDR,
 // and optionally attach it directly to a project.
 const createDocumentFromTemplate = async (req: Request, res: Response) => {
+  let creationStage = 'validating request';
   try {
     const {
       templateId,
@@ -2157,6 +2183,7 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Template is required' });
     }
 
+    creationStage = 'loading template';
     const templateResult = await db.execute(sql`SELECT * FROM document_templates WHERE id = ${templateId} AND is_active = true LIMIT 1`);
     const templateRows = ((templateResult as any)?.rows || templateResult || []) as any[];
     const template = templateRows[0];
@@ -2216,6 +2243,7 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
     const documentNumber = templateType === 'spec_sheet' || templateType === 'specification'
       ? await generateSpecSheetDocumentNumber()
       : await generateControlledTemplateNumber();
+    creationStage = 'rendering PDF';
     const pdfBuffer = await renderSpecSheetPdf({
       title: resolvedTitle,
       sku: resolvedSku,
@@ -2228,7 +2256,8 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       documentNumber,
     });
     const fileName = normalizeSpecSheetFileName(resolvedTitle, resolvedPartNumber || templateType);
-    const fileUrl = await saveSpecSheetPdfFile(fileName, pdfBuffer);
+    creationStage = 'saving PDF to central storage';
+    const { fileUrl, storagePath, storageWarning } = await saveGeneratedTemplatePdf(fileName, pdfBuffer);
     const specifications = {
       templateId,
       templateName: template.template_name ?? template.templateName,
@@ -2243,6 +2272,22 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       controlledDocumentNumber: documentNumber,
     };
 
+    creationStage = 'registering central storage record';
+    const centralStorageDocument = await insertPublicRowReturning('media_library', {
+      filename: path.basename(decodeURIComponent(fileUrl)),
+      storage_path: storagePath,
+      mime_type: 'application/pdf',
+      file_size: pdfBuffer.length,
+      captured_by_name: createdBy,
+      title: resolvedTitle,
+      notes: `Generated from reusable template ${template.template_name ?? template.templateName}`,
+      tags: ['form_document_builder', templateType],
+      category: 'document',
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['filename', 'storage_path', 'mime_type']);
+
+    creationStage = 'registering generated document';
     const routingDocument = await insertPublicRowReturning('routing_documents', {
       part_number: resolvedPartNumber,
       title: resolvedTitle,
@@ -2287,6 +2332,7 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
 
     const expirationDate = new Date();
     expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+    creationStage = 'queueing Master Document record';
     const controlledDocument = await insertPublicRowReturning('controlled_documents', {
       document_number: documentNumber,
       document_name: resolvedTitle,
@@ -2317,34 +2363,47 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       created_at: new Date(),
     }, ['document_id', 'version_number', 'status', 'created_by']);
 
+    creationStage = 'attaching document to project';
     let projectDocument = null;
+    let projectAttachmentWarning = null;
     if (projectId) {
-      projectDocument = await insertPublicRowReturning('project_documents', {
-        project_id: projectId,
-        label: resolvedTitle,
-        original_file_name: path.basename(fileUrl),
-        file_name: path.basename(fileUrl),
-        file_path: fileUrl,
-        mime_type: 'application/pdf',
-        file_size: pdfBuffer.length,
-        uploaded_by: createdBy,
-        created_at: new Date(),
-      }, ['project_id']);
+      try {
+        projectDocument = await insertPublicRowReturning('project_documents', {
+          project_id: projectId,
+          label: resolvedTitle,
+          original_file_name: path.basename(fileUrl),
+          file_name: path.basename(fileUrl),
+          file_path: fileUrl,
+          mime_type: 'application/pdf',
+          file_size: pdfBuffer.length,
+          uploaded_by: createdBy,
+          created_at: new Date(),
+        }, ['project_id']);
+      } catch (error) {
+        projectAttachmentWarning = error instanceof Error ? error.message : String(error);
+        console.warn('Optional project attachment failed after template document save:', error);
+      }
     }
 
     res.status(201).json({
       document: routingDocument,
       specSheet,
       controlledDocument,
+      centralStorageDocument,
       projectDocument,
+      projectAttachmentWarning,
       fileUrl,
       documentNumber,
+      storageWarning,
     });
   } catch (error) {
-    console.error('Error creating document from template:', error);
-    res.status(500).json({
+    const { status, reason, message } = getStorageErrorResponse(error);
+    console.error('Error creating document from template:', { stage: creationStage, reason, message, error });
+    res.status(status).json({
       error: 'Failed to create document from template',
-      details: error instanceof Error ? error.message : String(error),
+      stage: creationStage,
+      reason,
+      details: message,
     });
   }
 };

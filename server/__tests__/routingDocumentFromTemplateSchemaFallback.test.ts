@@ -18,7 +18,9 @@ describe('document-from-template production schema fallback', () => {
   });
 
   it('returns the production failure detail to the client', () => {
-    expect(handler).toContain('details: error instanceof Error ? error.message : String(error)');
+    expect(handler).toContain('const { status, reason, message } = getStorageErrorResponse(error)');
+    expect(handler).toContain('stage: creationStage');
+    expect(handler).toContain('details: message');
   });
 
   it('stores the finished PDF centrally and queues it for MDR acceptance', () => {

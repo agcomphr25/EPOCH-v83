@@ -15,6 +15,7 @@ import {
   engineeringReleaseBaselineItems,
   engineeringReleaseBaselines,
   engineeringReleases,
+  projects,
   rdProjects,
 } from '../../schema';
 import {
@@ -668,6 +669,20 @@ export async function submitEngineeringRelease(input: {
       .update(rdProjects)
       .set({ status: 'released', engineeringStatus: 'RELEASED', updatedAt: now })
       .where(eq(rdProjects.id, context.record.rdProjectId));
+
+    if (context.record.projectId) {
+      const [linkedProject] = await tx
+        .select({ workflowVersion: projects.workflowVersion })
+        .from(projects)
+        .where(eq(projects.id, context.record.projectId))
+        .limit(1);
+      if (linkedProject?.workflowVersion === 'p2_v2') {
+        const { synchronizeDesignStageStatus } = await import(
+          './projectDesignApplicabilityService'
+        );
+        await synchronizeDesignStageStatus(context.record.projectId, tx);
+      }
+    }
 
     return {
       status: 'created' as const,

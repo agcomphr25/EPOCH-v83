@@ -6,7 +6,7 @@ import P2V2ProjectWorkflow from '../components/projects/P2V2ProjectWorkflow';
 
 const stages = Array.from({ length: 10 }, (_, index) => ({
   id: `step-${index + 1}`,
-  stepType: `stage_${index + 1}`,
+  stepType: index === 3 ? 'design_applicability' : `stage_${index + 1}`,
   stepOrder: index + 1,
   label: `Stage ${index + 1}`,
   description: `Description ${index + 1}`,
@@ -128,6 +128,17 @@ describe('P2V2ProjectWorkflow', () => {
     expect(screen.getByTestId('v2-active-link')).toHaveTextContent('Q-1');
     expect(screen.getByTestId('v2-superseded-link')).toHaveTextContent('Q-0');
     expect(screen.getByTestId('v2-approval')).toHaveTextContent('REJECTED');
+  });
+
+  it('makes only Design Applicability writable from the ten-stage summary', async () => {
+    renderWorkflow(initialized);
+    expect(
+      await screen.findByTestId('open-design-applicability')
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: 'Open Design Applicability' })
+    ).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Details' })).toHaveLength(10);
   });
 
   it('shows an explicit not-initialized state without an initialize action', async () => {

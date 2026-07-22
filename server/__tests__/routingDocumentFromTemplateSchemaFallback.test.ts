@@ -20,4 +20,11 @@ describe('document-from-template production schema fallback', () => {
   it('returns the production failure detail to the client', () => {
     expect(handler).toContain('details: error instanceof Error ? error.message : String(error)');
   });
+
+  it('stores the finished PDF centrally and queues it for MDR acceptance', () => {
+    expect(route).toContain('return saveControlledDocumentFile(storedFileName, fileBuffer);');
+    expect(handler).toContain("insertPublicRowReturning('controlled_documents'");
+    expect(handler).toContain("status: 'pending'");
+    expect(handler).toContain('file_path: fileUrl');
+  });
 });

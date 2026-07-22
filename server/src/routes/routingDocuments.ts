@@ -549,12 +549,7 @@ async function renderSpecSheetPdf(input: {
 
 async function saveSpecSheetPdfFile(fileName: string, fileBuffer: Buffer) {
   const storedFileName = normalizeSpecSheetFileName(fileName, null);
-  return getFileStorageProvider().uploadBuffer({
-    fileName: storedFileName,
-    contentType: 'application/pdf',
-    scope: 'form-document-builder',
-    buffer: fileBuffer,
-  });
+  return saveControlledDocumentFile(storedFileName, fileBuffer);
 }
 
 // Helper to format UUID bytes to string if needed

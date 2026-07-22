@@ -1,4 +1,4 @@
-import { Router, type Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { db, pool } from '../../db';
@@ -15,6 +15,7 @@ import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosi
 import {
   getWorkflowVersionForNewProject,
   ProjectWorkflowVersionError,
+  resolveProjectWorkflowVersion,
   serializeProjectWorkflowVersion,
 } from '../services/projectWorkflowVersionService';
 import {
@@ -35,6 +36,18 @@ import { getFileStorageProviderForObjectPath } from '../services/fileStorageProv
 import { buildProjectBomAssemblyTree, type ProjectBomAssemblyRow } from '../services/projectBomAssembly';
 import { getActiveWorkflowInstanceForProject, getWorkflowReadModel } from '../services/projectWorkflowInstanceService';
 import { buildP2V2WorkflowResponse, buildUninitializedP2V2Response } from '../services/projectWorkflowV2ReadModel';
+import { getUserPermissions } from '../services/permissionService';
+import {
+  createDraft as createDesignApplicabilityDraft,
+  getCurrentDesignApplicability,
+  ProjectDesignApplicabilityError,
+  recordEngineeringDecision,
+  recordQualityDecision,
+  reviseDecision as reviseDesignApplicabilityDecision,
+  submitForApproval as submitDesignApplicability,
+  updateDraft as updateDesignApplicabilityDraft,
+  type DesignActor,
+} from '../services/projectDesignApplicabilityService';
 
 // ── Project document upload setup ──────────────────────────────────────────
 const projectDocsDir = path.join(process.cwd(), 'uploads', 'project-documents');
@@ -1514,6 +1527,101 @@ router.patch('/:id/clins/:clinId', async (req, res) => {
     console.error('Update project CLIN error:', error);
     res.status(500).json({ error: 'Failed to update project CLIN' });
   }
+});
+
+const designApplicabilityInputSchema = z.object({
+  responsibilityType: z.enum(['CUSTOMER_BUILD_TO_PRINT', 'AG_DESIGN_RESPONSIBLE', 'SHARED_DESIGN_RESPONSIBILITY']),
+  agDesignScope: z.string().nullable().optional(),
+  customerDesignScope: z.string().nullable().optional(),
+  responsibilityBoundary: z.string().nullable().optional(),
+  requirementSource: z.string(),
+  customerDrawingNumber: z.string().nullable().optional(),
+  customerDrawingRevision: z.string().nullable().optional(),
+  customerSpecifications: z.array(z.unknown()).optional(),
+  linkedDesignProjectId: z.string().nullable().optional(),
+  justification: z.string(),
+});
+const designApprovalSchema = z.object({
+  decision: z.enum(['APPROVED', 'REJECTED', 'RETURNED']),
+  signatureMeaning: z.string().min(1),
+  reason: z.string().optional().default(''),
+});
+
+function designActor(req: Request): DesignActor {
+  if (!req.user?.id || !req.user?.username || !req.user?.role) {
+    throw new ProjectDesignApplicabilityError(
+      'ACTOR_REQUIRED',
+      'An authenticated actor identity is required.',
+      401
+    );
+  }
+  return {
+    userId: req.user.id,
+    employeeId: req.user.employeeId ?? null,
+    username: req.user.username,
+    displayName: req.user.username,
+    role: req.user.role,
+  };
+}
+async function requireDesignCapability(req: Request, capability: string) {
+  const actor = designActor(req);
+  const { permissionSet } = await getUserPermissions(actor.userId, actor.role);
+  if (!permissionSet.has(capability)) throw new ProjectDesignApplicabilityError('FORBIDDEN', `The ${capability} capability is required.`, 403);
+  return actor;
+}
+function sendDesignError(res: Response, error: unknown) {
+  if (error instanceof ProjectDesignApplicabilityError) return res.status(error.status).json({ error: error.code, message: error.message, ...error.details });
+  if (error instanceof ProjectWorkflowVersionError) return res.status(409).json(error.toJSON());
+  console.error('P2 V2 Design Applicability error:', error);
+  return res.status(500).json({ error: 'DESIGN_APPLICABILITY_FAILED', message: 'The Design Applicability action failed.' });
+}
+
+router.get('/:id/workflow-v2/design-applicability', async (req, res) => {
+  try {
+    const model = await getCurrentDesignApplicability(req.params.id);
+    res.json(model);
+  } catch (error) { sendDesignError(res, error); }
+});
+router.post('/:id/workflow-v2/design-applicability', async (req, res) => {
+  try {
+    const actor = await requireDesignCapability(req, 'projects.design_applicability.manage');
+    const input = designApplicabilityInputSchema.parse(req.body);
+    res.status(201).json(await createDesignApplicabilityDraft(req.params.id, input, actor));
+  } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ error: 'INVALID_INPUT', details: error.flatten() }); sendDesignError(res, error); }
+});
+router.patch('/:id/workflow-v2/design-applicability/:decisionId', async (req, res) => {
+  try {
+    const actor = await requireDesignCapability(req, 'projects.design_applicability.manage');
+    const input = designApplicabilityInputSchema.parse(req.body);
+    res.json(await updateDesignApplicabilityDraft(req.params.id, req.params.decisionId, input, actor));
+  } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ error: 'INVALID_INPUT', details: error.flatten() }); sendDesignError(res, error); }
+});
+router.post('/:id/workflow-v2/design-applicability/:decisionId/submit', async (req, res) => {
+  try {
+    const actor = await requireDesignCapability(req, 'projects.design_applicability.manage');
+    res.json(await submitDesignApplicability(req.params.id, req.params.decisionId, actor));
+  } catch (error) { sendDesignError(res, error); }
+});
+router.post('/:id/workflow-v2/design-applicability/:decisionId/engineering-decision', async (req, res) => {
+  try {
+    const actor = await requireDesignCapability(req, 'projects.design_applicability.engineering_decide');
+    const body = designApprovalSchema.parse(req.body);
+    res.json(await recordEngineeringDecision(req.params.id, req.params.decisionId, body.decision, body.signatureMeaning, body.reason, actor));
+  } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ error: 'INVALID_INPUT', details: error.flatten() }); sendDesignError(res, error); }
+});
+router.post('/:id/workflow-v2/design-applicability/:decisionId/quality-decision', async (req, res) => {
+  try {
+    const actor = await requireDesignCapability(req, 'projects.design_applicability.quality_decide');
+    const body = designApprovalSchema.parse(req.body);
+    res.json(await recordQualityDecision(req.params.id, req.params.decisionId, body.decision, body.signatureMeaning, body.reason, actor));
+  } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ error: 'INVALID_INPUT', details: error.flatten() }); sendDesignError(res, error); }
+});
+router.post('/:id/workflow-v2/design-applicability/:decisionId/revise', async (req, res) => {
+  try {
+    const actor = await requireDesignCapability(req, 'projects.design_applicability.manage');
+    const input = designApplicabilityInputSchema.parse(req.body);
+    res.status(201).json(await reviseDesignApplicabilityDecision(req.params.id, req.params.decisionId, input, actor));
+  } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ error: 'INVALID_INPUT', details: error.flatten() }); sendDesignError(res, error); }
 });
 
 router.get('/:id/workflow-v2', async (req, res) => {

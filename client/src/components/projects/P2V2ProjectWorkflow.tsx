@@ -10,6 +10,8 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 
+import P2V2DesignApplicability from './P2V2DesignApplicability';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -365,6 +367,11 @@ export default function P2V2ProjectWorkflow({
                 <Eye className="mr-1 h-4 w-4" />
                 Details
               </Button>
+              {stage.stepType === 'design_applicability' && (
+                <div className="mt-3">
+                  <P2V2DesignApplicability projectId={projectId} />
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}

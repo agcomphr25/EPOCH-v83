@@ -2530,7 +2530,7 @@ router.get('/:id/p2-hub', async (req, res) => {
       }
     };
 
-    const [steps, projectRevisions, activityLog, workOrders, manualDocuments] = await Promise.all([
+    const [steps, projectRevisions, activityLog, workOrders, manualDocuments, manufacturingDocuments] = await Promise.all([
       storage.getProjectSteps(id).catch(() => []),
       storage.getProjectRevisions(id).catch(() => []),
       storage.getProjectActivityLog(id).catch(() => []),
@@ -2544,6 +2544,7 @@ router.get('/:id/p2-hub', async (req, res) => {
          ORDER BY created_at DESC`,
         [id],
       ),
+      getProjectManufacturingDocumentRefs(id).catch(() => []),
     ]);
 
     const linkedPoFamily = project.poId
@@ -3059,7 +3060,13 @@ router.get('/:id/p2-hub', async (req, res) => {
     const partsMissingRoutings = activePoPartNumbers.filter((partNumber: string) => (
       !routeByPartNumber.has(String(partNumber).trim().toLowerCase())
     ));
+    const builderDocumentParts = new Set(
+      manufacturingDocuments
+        .map((document: any) => String(document.part_number ?? '').trim().toLowerCase())
+        .filter(Boolean),
+    );
     const partsMissingInstructions = activePoPartNumbers.filter((partNumber: string) => {
+      if (builderDocumentParts.has(String(partNumber).trim().toLowerCase())) return false;
       const routing = routeByPartNumber.get(String(partNumber).trim().toLowerCase()) as any;
       if (!routing) return true;
       const operationSummary = routingOperationSummaryById.get(String(routing.id)) as any;
@@ -3116,15 +3123,15 @@ router.get('/:id/p2-hub', async (req, res) => {
       },
       {
         key: 'work_instructions',
-        label: 'Work Instructions',
+        label: 'Work Instructions / Spec Sheet',
         status: activePoPartNumbers.length > 0 && partsMissingInstructions.length === 0 ? 'covered_by_project_data' : 'needs_setup',
-        source: 'Part routing instruction packs',
+        source: 'Form & Document Builder',
         detail: activePoPartNumbers.length === 0
           ? 'No PO parts are linked yet.'
           : partsMissingInstructions.length === 0
-            ? 'Every PO part has routing instruction evidence.'
-            : `${partsMissingInstructions.length} PO part(s) need work instruction setup.`,
-        route: `/p2-control-center?tab=routing&projectId=${encodeURIComponent(id)}`,
+            ? 'Every PO part has work instruction or spec sheet coverage.'
+            : `${partsMissingInstructions.length} PO part(s) need a work instruction or spec sheet.`,
+        route: `/forms/document-builder?projectId=${encodeURIComponent(id)}`,
         relatedCount: Math.max(activePoPartNumbers.length - partsMissingInstructions.length, 0),
         missingParts: partsMissingInstructions,
       },

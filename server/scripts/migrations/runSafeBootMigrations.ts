@@ -223,6 +223,7 @@ export const safeMigrationFiles = [
   '0198_repair_p1_metal_accessory_classification.sql',
   '0199_project_workflow_version.sql',
   '0200_reconcile_oem_shipment_fulfillment.sql',
+  '0201_close_fully_shipped_p1_purchase_orders.sql',
   'investigation_308_order_duplication.sql',
 ];
 

@@ -90,6 +90,12 @@ type AssetRow = {
   locationName: string | null;
 };
 
+type VendorOption = {
+  id: number;
+  name: string;
+  isActive?: boolean;
+};
+
 type TreeNode = AssetCategory & { children: TreeNode[] };
 
 function buildTree(categories: AssetCategory[]): TreeNode[] {
@@ -263,6 +269,15 @@ export default function AssetsPage() {
     queryKey: ['/api/inventory/departments'],
     enabled: isAdmin,
   });
+
+  const { data: vendorsResponse, isLoading: vendorsLoading } = useQuery<{
+    data: VendorOption[];
+  }>({
+    queryKey: ['/api/vendors', 'asset-form-select'],
+    queryFn: () =>
+      apiRequest('/api/vendors?pageSize=10000&approved=any&sort=name:asc'),
+  });
+  const vendors = vendorsResponse?.data ?? [];
 
   const submitRequestMutation = useMutation({
     mutationFn: (data: any) =>
@@ -738,7 +753,28 @@ export default function AssetsPage() {
             </div>
             <div>
               <Label>Vendor</Label>
-              <Input value={formData.vendorName} onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })} />
+              <Select
+                value={formData.vendorName || '__none__'}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, vendorName: value === '__none__' ? '' : value })
+                }
+                disabled={vendorsLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={vendorsLoading ? 'Loading vendors...' : 'Select vendor'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No vendor</SelectItem>
+                  {formData.vendorName && !vendors.some((vendor) => vendor.name === formData.vendorName) && (
+                    <SelectItem value={formData.vendorName}>{formData.vendorName}</SelectItem>
+                  )}
+                  {vendors.map((vendor) => (
+                    <SelectItem key={vendor.id} value={vendor.name}>
+                      {vendor.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Warranty Expiration</Label>

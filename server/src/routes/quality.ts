@@ -8,9 +8,10 @@ import {
   insertQcSubmissionSchema,
   insertMaintenanceScheduleSchema,
   insertMaintenanceLogSchema,
+  insertFreezerTemperatureLocationSchema,
   insertFreezerTemperatureLogSchema,
 } from '@shared/schema';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../db';
 import {
@@ -24,7 +25,9 @@ import {
   insertCalibrationEventSchema,
   maintenanceLogs,
   maintenanceSchedules,
+  freezerTemperatureLocations,
   freezerTemperatureLogs,
+  freezerTemperatureReadings,
   nonconformanceRecords,
 } from '../../schema';
 import { storage } from '../../storage';
@@ -505,6 +508,104 @@ router.post('/maintenance/logs', async (req: Request, res: Response) => {
   }
 });
 
+// Freezer temperature location configuration
+router.get('/freezer-temperature-locations', async (req: Request, res: Response) => {
+  try {
+    const includeInactive = String(req.query.includeInactive ?? '') === 'true';
+    const query = db
+      .select()
+      .from(freezerTemperatureLocations)
+      .$dynamic()
+      .orderBy(
+        asc(freezerTemperatureLocations.sortOrder),
+        asc(freezerTemperatureLocations.name)
+      );
+    const locations = includeInactive
+      ? await query
+      : await query.where(eq(freezerTemperatureLocations.isActive, true));
+    res.json(locations);
+  } catch (error) {
+    console.error('Get freezer temperature locations error:', error);
+    res.status(500).json({ error: 'Failed to fetch freezer temperature locations' });
+  }
+});
+
+router.post('/freezer-temperature-locations', async (req: Request, res: Response) => {
+  try {
+    const parsed = insertFreezerTemperatureLocationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid location', issues: parsed.error.issues });
+    }
+    const [location] = await db
+      .insert(freezerTemperatureLocations)
+      .values(parsed.data)
+      .returning();
+    res.status(201).json(location);
+  } catch (error: any) {
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'A temperature location with that name already exists' });
+    }
+    console.error('Create freezer temperature location error:', error);
+    res.status(500).json({ error: 'Failed to create freezer temperature location' });
+  }
+});
+
+router.put('/freezer-temperature-locations/:id', async (req: Request, res: Response) => {
+  try {
+    const parsed = insertFreezerTemperatureLocationSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid location', issues: parsed.error.issues });
+    }
+    const [location] = await db
+      .update(freezerTemperatureLocations)
+      .set({ ...parsed.data, updatedAt: new Date() })
+      .where(eq(freezerTemperatureLocations.id, req.params.id))
+      .returning();
+    if (!location) return res.status(404).json({ error: 'Temperature location not found' });
+    res.json(location);
+  } catch (error: any) {
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'A temperature location with that name already exists' });
+    }
+    console.error('Update freezer temperature location error:', error);
+    res.status(500).json({ error: 'Failed to update freezer temperature location' });
+  }
+});
+
+router.delete('/freezer-temperature-locations/:id', async (req: Request, res: Response) => {
+  try {
+    const [location] = await db
+      .select()
+      .from(freezerTemperatureLocations)
+      .where(eq(freezerTemperatureLocations.id, req.params.id))
+      .limit(1);
+    if (!location) return res.status(404).json({ error: 'Temperature location not found' });
+
+    const [reading] = await db
+      .select({ id: freezerTemperatureReadings.id })
+      .from(freezerTemperatureReadings)
+      .where(eq(freezerTemperatureReadings.locationId, req.params.id))
+      .limit(1);
+
+    if (reading) {
+      const [archived] = await db
+        .update(freezerTemperatureLocations)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(freezerTemperatureLocations.id, req.params.id))
+        .returning();
+      return res.json({ ...archived, archived: true });
+    }
+
+    await db
+      .delete(freezerTemperatureLocations)
+      .where(eq(freezerTemperatureLocations.id, req.params.id));
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete freezer temperature location error:', error);
+    res.status(500).json({ error: 'Failed to delete freezer temperature location' });
+  }
+});
+
 // Freezer temperature logs
 router.get('/freezer-temperature-logs', async (req: Request, res: Response) => {
   try {
@@ -517,13 +618,6 @@ router.get('/freezer-temperature-logs', async (req: Request, res: Response) => {
       .select({
         id: freezerTemperatureLogs.id,
         recordedAt: freezerTemperatureLogs.recordedAt,
-        freezer1Temperature: freezerTemperatureLogs.freezer1Temperature,
-        freezer2Temperature: freezerTemperatureLogs.freezer2Temperature,
-        freezer3Temperature: freezerTemperatureLogs.freezer3Temperature,
-        freezer4Temperature: freezerTemperatureLogs.freezer4Temperature,
-        layupRoomTemperature: freezerTemperatureLogs.layupRoomTemperature,
-        refrigeratorContainerTemperature:
-          freezerTemperatureLogs.refrigeratorContainerTemperature,
         notes: freezerTemperatureLogs.notes,
         recordedByDisplayName: freezerTemperatureLogs.recordedByDisplayName,
         createdAt: freezerTemperatureLogs.createdAt,
@@ -532,7 +626,31 @@ router.get('/freezer-temperature-logs', async (req: Request, res: Response) => {
       .orderBy(desc(freezerTemperatureLogs.recordedAt))
       .limit(limit);
 
-    res.json(logs);
+    if (logs.length === 0) return res.json([]);
+
+    const readings = await db
+      .select({
+        logId: freezerTemperatureReadings.logId,
+        locationId: freezerTemperatureReadings.locationId,
+        locationName: freezerTemperatureReadings.locationNameSnapshot,
+        sortOrder: freezerTemperatureReadings.locationSortOrderSnapshot,
+        temperature: freezerTemperatureReadings.temperature,
+      })
+      .from(freezerTemperatureReadings)
+      .where(inArray(freezerTemperatureReadings.logId, logs.map((log) => log.id)))
+      .orderBy(
+        asc(freezerTemperatureReadings.locationSortOrderSnapshot),
+        asc(freezerTemperatureReadings.locationNameSnapshot)
+      );
+
+    const readingsByLog = new Map<number, typeof readings>();
+    for (const reading of readings) {
+      const list = readingsByLog.get(reading.logId) ?? [];
+      list.push(reading);
+      readingsByLog.set(reading.logId, list);
+    }
+
+    res.json(logs.map((log) => ({ ...log, readings: readingsByLog.get(log.id) ?? [] })));
   } catch (error) {
     console.error('Get freezer temperature logs error:', error);
     res.status(500).json({ error: 'Failed to fetch freezer temperature logs' });
@@ -552,27 +670,54 @@ router.post('/freezer-temperature-logs', async (req: Request, res: Response) => 
         issues: parsed.error.issues,
       });
     }
-    const data = parsed.data;
-    const actor = await resolveUserSnapshot(req.user.id);
-    const [log] = await db
-      .insert(freezerTemperatureLogs)
-      .values({
-        recordedAt: data.recordedAt,
-        freezer1Temperature: String(data.freezer1Temperature),
-        freezer2Temperature: String(data.freezer2Temperature),
-        freezer3Temperature: String(data.freezer3Temperature),
-        freezer4Temperature: String(data.freezer4Temperature),
-        layupRoomTemperature: String(data.layupRoomTemperature),
-        refrigeratorContainerTemperature: String(data.refrigeratorContainerTemperature),
-        notes: data.notes || null,
-        recordedByUserId: actor.userId,
-        recordedByDisplayName: actor.displayName,
-      })
-      .returning({
-        id: freezerTemperatureLogs.id,
-        recordedAt: freezerTemperatureLogs.recordedAt,
-        recordedByDisplayName: freezerTemperatureLogs.recordedByDisplayName,
+
+    const activeLocations = await db
+      .select()
+      .from(freezerTemperatureLocations)
+      .where(eq(freezerTemperatureLocations.isActive, true))
+      .orderBy(
+        asc(freezerTemperatureLocations.sortOrder),
+        asc(freezerTemperatureLocations.name)
+      );
+    if (activeLocations.length === 0) {
+      return res.status(400).json({ error: 'Add at least one active temperature location first' });
+    }
+
+    const submitted = new Map(
+      parsed.data.readings.map((reading) => [reading.locationId, reading.temperature])
+    );
+    if (
+      submitted.size !== activeLocations.length ||
+      activeLocations.some((location) => !submitted.has(location.id))
+    ) {
+      return res.status(400).json({
+        error: 'A reading is required for every active temperature location',
       });
+    }
+
+    const actor = await resolveUserSnapshot(req.user.id);
+    const log = await db.transaction(async (tx) => {
+      const [createdLog] = await tx
+        .insert(freezerTemperatureLogs)
+        .values({
+          recordedAt: parsed.data.recordedAt,
+          notes: parsed.data.notes || null,
+          recordedByUserId: actor.userId,
+          recordedByDisplayName: actor.displayName,
+        })
+        .returning();
+
+      await tx.insert(freezerTemperatureReadings).values(
+        activeLocations.map((location) => ({
+          logId: createdLog.id,
+          locationId: location.id,
+          locationNameSnapshot: location.name,
+          locationSortOrderSnapshot: location.sortOrder,
+          temperature: String(submitted.get(location.id)),
+        }))
+      );
+      return createdLog;
+    });
 
     res.status(201).json(log);
   } catch (error) {

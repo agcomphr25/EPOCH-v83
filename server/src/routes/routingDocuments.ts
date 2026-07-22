@@ -32,6 +32,7 @@ import { randomUUID } from 'crypto';
 const require = createRequire(import.meta.url);
 const TEMPLATE_UPLOAD_TABLES = new Set([
   'routing_documents',
+  'spec_sheets',
   'document_templates',
   'template_fields',
   'controlled_documents',
@@ -2247,70 +2248,79 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       controlledDocumentNumber: documentNumber,
     };
 
-    const [routingDocument] = await db.insert(routingDocuments).values({
-      partNumber: resolvedPartNumber,
+    const routingDocument = await insertPublicRowReturning('routing_documents', {
+      part_number: resolvedPartNumber,
       title: resolvedTitle,
       version: 1,
       description: description || `Filled ${humanizeDocumentType(templateType)} from template ${template.template_name ?? template.templateName}`,
-      departmentName: finalDepartment,
-      documentType: templateType,
-      sourceType: 'generated',
-      fileUrl,
-      fileName: path.basename(fileUrl),
-      fileType: 'application/pdf',
-      fileSize: pdfBuffer.length,
-      aiExtractedContent: specifications,
-      aiExtractedFields: templateFields,
-      isTemplate: false,
-      createdBy,
-    }).returning();
+      department_name: finalDepartment,
+      document_type: templateType,
+      source_type: 'generated',
+      file_url: fileUrl,
+      file_name: path.basename(fileUrl),
+      file_type: 'application/pdf',
+      file_size: pdfBuffer.length,
+      ai_extracted_content: specifications,
+      ai_extracted_fields: templateFields,
+      is_template: false,
+      is_active: true,
+      created_by: createdBy,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['title', 'document_type']);
 
     let specSheet = null;
     if (templateType === 'spec_sheet' || templateType === 'specification') {
-      [specSheet] = await db.insert(specSheets).values({
-        partNumber: resolvedPartNumber,
+      specSheet = await insertPublicRowReturning('spec_sheets', {
+        part_number: resolvedPartNumber,
         title: resolvedTitle,
         version: 1,
         description: description || `Filled spec sheet from template ${template.template_name ?? template.templateName}`,
         specifications,
-        sourceType: 'generated',
-        fileUrl,
-        fileName: path.basename(fileUrl),
-        fileType: 'application/pdf',
-        fileSize: pdfBuffer.length,
-        isTemplate: false,
-        createdBy,
-      }).returning();
+        source_type: 'generated',
+        file_url: fileUrl,
+        file_name: path.basename(fileUrl),
+        file_type: 'application/pdf',
+        file_size: pdfBuffer.length,
+        is_template: false,
+        is_active: true,
+        created_by: createdBy,
+        created_at: new Date(),
+        updated_at: new Date(),
+      }, ['title']);
     }
 
     const expirationDate = new Date();
     expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-    const [controlledDocument] = await db.insert(controlledDocuments).values({
-      documentNumber,
-      documentName: resolvedTitle,
-      documentType: templateType,
+    const controlledDocument = await insertPublicRowReturning('controlled_documents', {
+      document_number: documentNumber,
+      document_name: resolvedTitle,
+      document_type: templateType,
       department: finalDepartment,
       category: templateType === 'spec_sheet' ? 'Spec Sheet' : 'Form & Document Builder',
       description: description || `${humanizeDocumentType(templateType)} created from reusable template${resolvedPartNumber ? ` for ${resolvedPartNumber}` : ''}`,
-      currentVersion: '1.0',
+      current_version: '1.0',
       status: 'pending',
-      retentionLength: 'controlled',
-      documentOwner: createdBy,
-      filePath: fileUrl,
-      createdBy,
-      expirationDate: expirationDate.toISOString().split('T')[0],
-    }).returning();
+      retention_length: 'controlled',
+      document_owner: createdBy,
+      file_path: fileUrl,
+      created_by: createdBy,
+      expiration_date: expirationDate.toISOString().split('T')[0],
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['document_number', 'document_name', 'document_type', 'department', 'current_version', 'status', 'created_by']);
 
-    await db.insert(documentVersionHistory).values({
-      documentId: controlledDocument.id,
-      versionNumber: '1.0',
-      changeDescription: `Initial ${humanizeDocumentType(templateType)} created from reusable Form & Document Builder template`,
-      changeType: 'major',
-      filePath: fileUrl,
+    await insertPublicRowReturning('document_version_history', {
+      document_id: controlledDocument.id,
+      version_number: '1.0',
+      change_description: `Initial ${humanizeDocumentType(templateType)} created from reusable Form & Document Builder template`,
+      change_type: 'major',
+      file_path: fileUrl,
       status: 'pending',
-      createdBy,
-      expirationDate: expirationDate.toISOString().split('T')[0],
-    });
+      created_by: createdBy,
+      expiration_date: expirationDate.toISOString().split('T')[0],
+      created_at: new Date(),
+    }, ['document_id', 'version_number', 'status', 'created_by']);
 
     let projectDocument = null;
     if (projectId) {
@@ -2337,7 +2347,10 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error creating document from template:', error);
-    res.status(500).json({ error: 'Failed to create document from template' });
+    res.status(500).json({
+      error: 'Failed to create document from template',
+      details: error instanceof Error ? error.message : String(error),
+    });
   }
 };
 

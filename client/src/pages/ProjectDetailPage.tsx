@@ -72,6 +72,37 @@ import { format, formatDistanceToNow } from 'date-fns';
 
 const DRAFT_TAB_HANDOFF_KEY = 'epoch:draft-builder-tab-handoff';
 
+function BomAssemblyTreeNode({ node, isRoot = false }: { node: any; isRoot?: boolean }) {
+  return (
+    <div className={isRoot ? '' : 'ml-4 border-l pl-4'}>
+      <div className="rounded-md border bg-background p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-mono text-sm font-semibold">{node.partNumber}</p>
+            <p className="truncate text-xs text-muted-foreground">{node.partName || 'No part description'}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {!isRoot && <Badge variant="outline">Qty {Number(node.quantityPerParent ?? 1).toLocaleString()}</Badge>}
+            <Badge variant={node.isManufactured ? 'default' : 'secondary'}>
+              {node.isManufactured ? 'Manufactured' : 'Component'}
+            </Badge>
+            {node.hasBom && (
+              <Badge variant="outline">BOM{node.revisionCode ? ` Rev ${node.revisionCode}` : ''}</Badge>
+            )}
+          </div>
+        </div>
+      </div>
+      {Array.isArray(node.children) && node.children.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {node.children.map((child: any) => (
+            <BomAssemblyTreeNode key={child.key} node={child} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const ROM_CATEGORY_CONFIG = [
   { key: 'labor', label: 'Labor', field: 'quotedHours', kind: 'hours', detail: 'Direct labor estimate from ROM/quote feedback' },
   { key: 'material', label: 'Material', field: 'budgetAmount', kind: 'currency', detail: 'Material budget that will seed the WAD' },
@@ -886,6 +917,7 @@ export default function ProjectDetailPage() {
   const hubBomRouting = hubTabs.bomRouting ?? {};
   const bomRoutingSummary = hubBomRouting.summary ?? {};
   const bomRoutingRecords = Array.isArray(hubBomRouting.bomRecords) ? hubBomRouting.bomRecords : [];
+  const bomAssemblyTree = Array.isArray(hubBomRouting.assemblyTree) ? hubBomRouting.assemblyTree : [];
   const assemblyBomRecords = Array.isArray(productionAssemblyTree.bomRecords) ? productionAssemblyTree.bomRecords : bomRoutingRecords;
   const bomRoutingRoutings = Array.isArray(hubBomRouting.routings) ? hubBomRouting.routings : [];
   const bomRoutingSourceParts = Array.isArray(hubBomRouting.sourceParts) ? hubBomRouting.sourceParts : [];
@@ -3257,7 +3289,7 @@ export default function ProjectDetailPage() {
                   BOM Records
                 </CardTitle>
                 <CardDescription>
-                  BOMs found for manufactured parts on the linked PO family.
+                  BOMs for the manufactured PO part and every manufactured child assembly.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -3288,6 +3320,27 @@ export default function ProjectDetailPage() {
                     ))}
                   </div>
                 )}
+
+                <Separator />
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="font-medium">Assembly Tree</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Build flow from each PO assembly through manufactured children and component parts.
+                    </p>
+                  </div>
+                  {bomAssemblyTree.length === 0 ? (
+                    <div className="rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground">
+                      No assembly structure is available for the linked PO parts yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-4 rounded-md bg-muted/30 p-3">
+                      {bomAssemblyTree.map((root: any) => (
+                        <BomAssemblyTreeNode key={root.key} node={root} isRoot />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 

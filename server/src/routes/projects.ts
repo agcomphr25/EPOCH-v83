@@ -32,6 +32,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
+import { buildProjectBomAssemblyTree, type ProjectBomAssemblyRow } from '../services/projectBomAssembly';
 
 // ── Project document upload setup ──────────────────────────────────────────
 const projectDocsDir = path.join(process.cwd(), 'uploads', 'project-documents');
@@ -2621,6 +2622,10 @@ router.get('/:id/p2-hub', async (req, res) => {
         .map((item: any) => poInventoryPartById.get(Number(item.inventory_item_id)))
         .filter(Boolean),
     ]));
+    const assemblySourceItems = activePoId ? poItems.filter((item: any) => item.po_id === activePoId) : poItems;
+    const assemblyRootPartNumbers = Array.from(new Set(assemblySourceItems
+      .map((item: any) => poInventoryPartById.get(Number(item.inventory_item_id)) || item.part_number)
+      .filter(Boolean)));
 
     const [
       productionOrders,
@@ -2836,6 +2841,89 @@ router.get('/:id/p2-hub', async (req, res) => {
         [id],
       ),
     ]);
+
+    const assemblyRows = assemblyRootPartNumbers.length > 0
+      ? await optionalHubQuery<ProjectBomAssemblyRow>(
+          'BOM assembly tree',
+          `WITH RECURSIVE ranked_boms AS (
+             SELECT b.id AS bom_id, b.parent_part_ag_number, b.code AS bom_code,
+                    b.description AS bom_description, b.is_active AS bom_is_active,
+                    br.id AS latest_revision_id, br.rev_code AS latest_rev_code,
+                    br.created_at AS latest_rev_created_at,
+                    COUNT(bl.id)::int AS line_count,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY b.parent_part_ag_number
+                      ORDER BY b.is_active DESC, br.created_at DESC NULLS LAST, b.created_at DESC
+                    ) AS bom_rank
+             FROM boms b
+             LEFT JOIN LATERAL (
+               SELECT id, rev_code, created_at
+               FROM bom_revisions
+               WHERE bom_id = b.id
+               ORDER BY created_at DESC
+               LIMIT 1
+             ) br ON true
+             LEFT JOIN bom_lines bl ON bl.revision_id = br.id
+             GROUP BY b.id, br.id, br.rev_code, br.created_at
+           ), selected_boms AS (
+             SELECT * FROM ranked_boms WHERE bom_rank = 1
+           ), assembly_tree AS (
+             SELECT ARRAY['root:' || root.part_number]::text[] AS node_key,
+                    NULL::text[] AS parent_key,
+                    root.part_number AS root_part_number,
+                    root.part_number AS part_number,
+                    inventory.name AS part_name,
+                    COALESCE(inventory.item_type::text, inventory.type) AS item_type,
+                    1::numeric AS qty_per, NULL::int AS operation_seq, 0 AS depth,
+                    ARRAY[root.part_number]::text[] AS part_path,
+                    sb.bom_id, sb.bom_code, sb.bom_description, sb.bom_is_active,
+                    sb.latest_revision_id, sb.latest_rev_code, sb.latest_rev_created_at, sb.line_count
+             FROM unnest($1::text[]) AS root(part_number)
+             LEFT JOIN inventory_items inventory ON inventory.ag_part_number = root.part_number
+             LEFT JOIN selected_boms sb ON sb.parent_part_ag_number = root.part_number
+             UNION ALL
+             SELECT tree.node_key || ('line:' || line.id::text), tree.node_key,
+                    tree.root_part_number, line.child_part_ag_number,
+                    inventory.name,
+                    COALESCE(inventory.item_type::text, inventory.type),
+                    line.qty_per, line.operation_seq, tree.depth + 1,
+                    tree.part_path || line.child_part_ag_number,
+                    child_bom.bom_id, child_bom.bom_code, child_bom.bom_description,
+                    child_bom.bom_is_active, child_bom.latest_revision_id,
+                    child_bom.latest_rev_code, child_bom.latest_rev_created_at, child_bom.line_count
+             FROM assembly_tree tree
+             JOIN bom_lines line ON line.revision_id = tree.latest_revision_id
+             LEFT JOIN inventory_items inventory ON inventory.ag_part_number = line.child_part_ag_number
+             LEFT JOIN selected_boms child_bom ON child_bom.parent_part_ag_number = line.child_part_ag_number
+             WHERE NOT line.child_part_ag_number = ANY(tree.part_path)
+           )
+           SELECT node_key, parent_key, root_part_number, part_number, part_name, item_type,
+                  qty_per, operation_seq, depth, bom_id, bom_code, bom_description,
+                  bom_is_active, latest_revision_id, latest_rev_code,
+                  latest_rev_created_at, line_count
+           FROM assembly_tree
+           ORDER BY root_part_number, node_key`,
+          [assemblyRootPartNumbers],
+        )
+      : [];
+    const assemblyTree = buildProjectBomAssemblyTree(assemblyRows);
+    const recursiveBomRecords = Array.from(new Map(assemblyRows
+      .filter((row) => row.bom_id)
+      .map((row) => [row.bom_id, {
+        id: row.bom_id,
+        parent_part_ag_number: row.part_number,
+        code: row.bom_code,
+        description: row.bom_description,
+        is_active: row.bom_is_active,
+        latest_revision_id: row.latest_revision_id,
+        latest_rev_code: row.latest_rev_code,
+        latest_rev_created_at: row.latest_rev_created_at,
+        line_count: row.line_count,
+      }])).values());
+    const allBomRecords = Array.from(new Map([
+      ...bomRecords.map((bom: any) => [bom.id, bom] as const),
+      ...recursiveBomRecords.map((bom: any) => [bom.id, bom] as const),
+    ]).values());
 
     const routingIds = projectRoutings.map((routing: any) => routing.id).filter(Boolean);
     const routingOperationSummaries = routingIds.length > 0
@@ -3275,11 +3363,12 @@ router.get('/:id/p2-hub', async (req, res) => {
         },
         bomRouting: {
           summary: {
-            bomCount: bomRecords.length,
+            bomCount: allBomRecords.length,
             routingCount: projectRoutings.length,
             manufacturedLineCount: poItems.length,
           },
-          bomRecords,
+          bomRecords: allBomRecords,
+          assemblyTree,
           routings: projectRoutings,
           sourcePartNumbers: partNumbers,
           sourceParts,

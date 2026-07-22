@@ -140,6 +140,23 @@ export async function getWorkflowInstanceForProject(
   return found[0] ?? null;
 }
 
+export async function getActiveWorkflowInstanceForProject(
+  projectId: string,
+  tx: Executor = db
+) {
+  const active = rows(
+    await tx.execute(
+      sql`SELECT * FROM project_workflow_instances WHERE project_id = ${projectId} AND workflow_version = 'p2_v2' AND status NOT IN ('SUPERSEDED','CANCELLED') ORDER BY created_at DESC`
+    )
+  );
+  if (active.length > 1)
+    throw new ProjectWorkflowInstanceError(
+      'DUPLICATE_ACTIVE_INSTANCES',
+      'Multiple active p2_v2 instances exist.'
+    );
+  return active[0] ?? null;
+}
+
 export async function getWorkflowStepInstances(
   workflowInstanceId: string,
   tx: Executor = db

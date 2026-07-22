@@ -18,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
+import P2V2ProjectWorkflow from '@/components/projects/P2V2ProjectWorkflow';
 import { 
   ArrowLeft, 
   CheckCircle2, 
@@ -181,6 +182,8 @@ interface Project {
   projectManager?: { id: number; name: string };
   activityLog: ActivityLog[];
   closingStatus: 'MISSING' | 'INCOMPLETE' | 'COMPLETE' | 'APPROVED';
+  workflowVersion?: string | null;
+  effectiveWorkflowVersion?: string;
 }
 
 interface Employee {
@@ -552,6 +555,10 @@ export default function ProjectDetailPage() {
     queryKey: ['/api/projects', id],
     enabled: !!id,
   });
+  const effectiveWorkflowVersion = project?.effectiveWorkflowVersion;
+  const isP2V2Workflow = effectiveWorkflowVersion === 'p2_v2';
+  const isLegacyWorkflow = !effectiveWorkflowVersion || effectiveWorkflowVersion === 'legacy_v1';
+  const hasUnknownWorkflowVersion = Boolean(project && !isP2V2Workflow && !isLegacyWorkflow);
 
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
@@ -857,7 +864,7 @@ export default function ProjectDetailPage() {
       if (!response.ok) throw new Error('Failed to fetch P2 gate status');
       return response.json();
     },
-    enabled: !!id && !!project && ['po_received', 'p2_release', 'purchase_review'].includes(project.currentStage || ''),
+    enabled: !!id && !!project && isLegacyWorkflow && ['po_received', 'p2_release', 'purchase_review'].includes(project.currentStage || ''),
   });
   const projectSteps = Array.isArray(project?.steps) ? project.steps : [];
   const allProjectStepAttachments = Array.isArray(allStepAttachments) ? allStepAttachments : [];
@@ -1982,6 +1989,7 @@ export default function ProjectDetailPage() {
         </div>
       ) : null}
 
+      {isLegacyWorkflow && <>
       <div className="space-y-2">
         <div className="flex justify-between text-sm">
           <span className="font-medium">Overall Progress</span>
@@ -2066,7 +2074,8 @@ export default function ProjectDetailPage() {
       })()}
 
       {/* P2 Release Gate Card — shown when project is approaching or at the release gate */}
-      {project && ['purchase_review', 'po_received', 'p2_release'].includes(project.currentStage || '') && (
+      </>}
+      {isLegacyWorkflow && project && ['purchase_review', 'po_received', 'p2_release'].includes(project.currentStage || '') && (
         <Card className={`border-2 ${project.currentStage === 'p2_release' ? 'border-green-400 bg-green-50 dark:bg-green-950/20' : 'border-amber-300 bg-amber-50 dark:bg-amber-950/20'}`}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -2165,6 +2174,14 @@ export default function ProjectDetailPage() {
         </Card>
       )}
 
+      {isP2V2Workflow && (
+        <Card className="border-blue-200 bg-blue-50/60" data-testid="v2-release-gate-future">
+          <CardContent className="p-4 text-sm text-blue-800">
+            P2 V2 production release is read-only in this phase. The V2 release gate will be enabled in a later controlled phase.
+          </CardContent>
+        </Card>
+      )}
+
       {/* Similar Past Projects widget */}
       {(isLoadingSimilar || similarClosings.length > 0) && (
         <div className="border rounded-lg overflow-hidden">
@@ -2235,6 +2252,17 @@ export default function ProjectDetailPage() {
         </TabsList>
 
         <TabsContent value="workflow" className="space-y-4">
+          {isP2V2Workflow ? (
+            <P2V2ProjectWorkflow projectId={project.id} />
+          ) : hasUnknownWorkflowVersion ? (
+            <Card className="border-red-300" data-testid="workflow-version-configuration-error">
+              <CardHeader><CardTitle>Workflow configuration error</CardTitle></CardHeader>
+              <CardContent className="text-sm text-red-700">
+                This project has an unsupported workflow version. Legacy workflow controls are disabled.
+              </CardContent>
+            </Card>
+          ) : (
+          <>
           {/* Inline Workflow Action Cards */}
           {(() => {
             const purchaseStep = projectSteps.find(s => s.stepType === 'purchase_review_checklist');
@@ -2949,6 +2977,8 @@ export default function ProjectDetailPage() {
               )}
             </CardContent>
           </Card>
+          </>
+          )}
         </TabsContent>
 
         <TabsContent value="document-coverage" className="space-y-4">

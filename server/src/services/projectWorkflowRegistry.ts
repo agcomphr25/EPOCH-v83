@@ -40,6 +40,7 @@ export type ProjectWorkflowStageDefinition = Readonly<{
   type: string;
   order: number;
   label: string;
+  description: string;
 }>;
 
 export type ProjectWorkflowDefinition = Readonly<{
@@ -139,21 +140,75 @@ const LEGACY_V1_STEPS = freezeItems<ProjectWorkflowStepDefinition>([
 ]);
 
 const P2_V2_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
-  { type: 'rfq_risk_assessment', order: 1, label: 'RFQ & Risk' },
-  { type: 'estimate_quote', order: 2, label: 'Estimate & Quote' },
-  { type: 'contract_review', order: 3, label: 'PO & Contract Review' },
-  { type: 'design_applicability', order: 4, label: 'Design Applicability' },
-  { type: 'production_planning', order: 5, label: 'Production Planning' },
-  { type: 'wad_authorization', order: 6, label: 'WAD Authorization' },
-  { type: 'preproduction_release', order: 7, label: 'Preproduction & Release' },
-  { type: 'production_quality', order: 8, label: 'Production & Quality' },
+  {
+    type: 'rfq_risk_assessment',
+    order: 1,
+    label: 'RFQ & Risk',
+    description: 'Capture RFQ scope and risk evidence.',
+  },
+  {
+    type: 'estimate_quote',
+    order: 2,
+    label: 'Estimate & Quote',
+    description: 'Develop and approve the estimate and quote.',
+  },
+  {
+    type: 'contract_review',
+    order: 3,
+    label: 'PO & Contract Review',
+    description: 'Review customer order and contract requirements.',
+  },
+  {
+    type: 'design_applicability',
+    order: 4,
+    label: 'Design Applicability',
+    description: 'Determine and document design-control applicability.',
+  },
+  {
+    type: 'production_planning',
+    order: 5,
+    label: 'Production Planning',
+    description: 'Establish BOM, routing, material, and production plans.',
+  },
+  {
+    type: 'wad_authorization',
+    order: 6,
+    label: 'WAD Authorization',
+    description: 'Authorize work through controlled WAD evidence.',
+  },
+  {
+    type: 'preproduction_release',
+    order: 7,
+    label: 'Preproduction & Release',
+    description: 'Complete preproduction readiness and release evidence.',
+  },
+  {
+    type: 'production_quality',
+    order: 8,
+    label: 'Production & Quality',
+    description: 'Execute production and quality controls.',
+  },
   {
     type: 'final_release_shipping',
     order: 9,
     label: 'Final Release & Shipping',
+    description: 'Complete final release, shipment, and delivery evidence.',
   },
-  { type: 'project_closing', order: 10, label: 'Project Closing' },
+  {
+    type: 'project_closing',
+    order: 10,
+    label: 'Project Closing',
+    description: 'Verify completion and close the controlled project record.',
+  },
 ]);
+
+export const P2_V2_DEFINITION_VERSION = 1;
+
+// Internal-only snapshot source for Phase 3. This does not make p2_v2 active
+// or available to normal project creation.
+export function getInternalP2V2InitializationStages(): readonly ProjectWorkflowStageDefinition[] {
+  return getProjectWorkflowDefinition('p2_v2').stages;
+}
 
 const DEFINITIONS: Readonly<
   Record<ProjectWorkflowVersion, ProjectWorkflowDefinition>

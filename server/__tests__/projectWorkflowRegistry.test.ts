@@ -109,6 +109,32 @@ describe('project workflow registry', () => {
     ).not.toThrow();
   });
 
+  it('rejects duplicate step orders', () => {
+    const legacy = getProjectWorkflowDefinition('legacy_v1');
+    expect(() =>
+      validateProjectWorkflowDefinition({
+        ...legacy,
+        steps: legacy.steps.map((step, index) => ({
+          ...step,
+          order: index === 1 ? 1 : step.order,
+        })),
+      })
+    ).toThrow('legacy_v1 has duplicate step orders');
+  });
+
+  it('rejects non-contiguous step orders', () => {
+    const legacy = getProjectWorkflowDefinition('legacy_v1');
+    expect(() =>
+      validateProjectWorkflowDefinition({
+        ...legacy,
+        steps: legacy.steps.map((step, index) => ({
+          ...step,
+          order: index === legacy.steps.length - 1 ? 6 : step.order,
+        })),
+      })
+    ).toThrow('legacy_v1 step orders must be contiguous from 1');
+  });
+
   it('keeps legacy types exactly equivalent to the PostgreSQL enum', () => {
     expect(
       getOrderedProjectWorkflowSteps('legacy_v1').map((step) => step.type)

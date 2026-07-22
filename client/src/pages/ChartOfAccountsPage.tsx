@@ -12,6 +12,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -126,6 +132,14 @@ type AuditEvent = {
   sequenceNumber: number | null;
 };
 
+type BalanceSource = NonNullable<NonNullable<CoaAccount['balanceAudit']>['sources']>[number];
+
+type BalanceSourceMonthGroup = {
+  key: string;
+  label: string;
+  sources: BalanceSource[];
+};
+
 const ACCOUNT_TYPES = [
   'ASSET',
   'LIABILITY',
@@ -186,6 +200,51 @@ function accountingJournalHref(source: NonNullable<NonNullable<CoaAccount['balan
   }
   params.set('source', source.label);
   return `/finance/accounting?${params.toString()}`;
+}
+
+function getEffectiveMonth(source: BalanceSource) {
+  if (!source.effectiveDate) {
+    return { key: 'undated', label: 'No effective date', sortValue: Number.NEGATIVE_INFINITY };
+  }
+
+  const date = new Date(source.effectiveDate);
+  if (Number.isNaN(date.getTime())) {
+    return { key: 'undated', label: 'No effective date', sortValue: Number.NEGATIVE_INFINITY };
+  }
+
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  return {
+    key: `${year}-${String(month + 1).padStart(2, '0')}`,
+    label: new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      timeZone: 'UTC',
+    }).format(date),
+    sortValue: year * 12 + month,
+  };
+}
+
+function groupBalanceSourcesByMonth(sources: BalanceSource[]): BalanceSourceMonthGroup[] {
+  const groups = new Map<string, BalanceSourceMonthGroup & { sortValue: number }>();
+
+  for (const source of sources) {
+    const month = getEffectiveMonth(source);
+    const existing = groups.get(month.key);
+    if (existing) {
+      existing.sources.push(source);
+    } else {
+      groups.set(month.key, {
+        key: month.key,
+        label: month.label,
+        sortValue: month.sortValue,
+        sources: [source],
+      });
+    }
+  }
+
+  return Array.from(groups.values())
+    .sort((a, b) => b.sortValue - a.sortValue)
+    .map(({ sortValue: _sortValue, ...group }) => group);
 }
 
 function accountToForm(account: CoaAccount): CoaEditForm {
@@ -453,6 +512,7 @@ export default function ChartOfAccountsPage() {
                   const isExpanded = expandedAccountId === account.id;
                   const audit = account.balanceAudit;
                   const sources = audit?.sources ?? [];
+                  const sourceMonthGroups = groupBalanceSourcesByMonth(sources);
                   const currentBalance = account.currentBalance ?? 0;
 
                   return (
@@ -574,30 +634,45 @@ export default function ChartOfAccountsPage() {
                               <div className="text-xs font-medium uppercase text-muted-foreground">
                                 Balance Sources
                               </div>
-                              {sources.length > 0 ? (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {sources.map((source) => (
-                                    <a
-                                      key={`${source.journalEntryId}-${source.referenceType}-${source.referenceId}`}
-                                      href={accountingJournalHref(source)}
-                                      className="inline-flex items-center gap-2 rounded-full border border-input bg-background px-2.5 py-0.5 font-mono text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                      title={`Debit ${formatCurrency(source.debitAmount)} / Credit ${formatCurrency(source.creditAmount)}${source.lineCount > 1 ? ` across ${source.lineCount} posted lines` : ''}`}
+                              {sourceMonthGroups.length > 0 ? (
+                                <Accordion type="multiple" className="mt-2 space-y-2">
+                                  {sourceMonthGroups.map((group) => (
+                                    <AccordionItem
+                                      key={`${account.id}-${group.key}`}
+                                      value={`${account.id}-${group.key}`}
+                                      className="rounded-md border bg-background px-3"
                                     >
-                                      <span>{source.label}</span>
-                                      <span
-                                        className={
-                                          source.amount < 0
-                                            ? 'text-red-600'
-                                            : source.amount > 0
-                                              ? 'text-green-700'
-                                              : 'text-muted-foreground'
-                                        }
-                                      >
-                                        {formatSignedCurrency(source.amount)}
-                                      </span>
-                                    </a>
+                                      <AccordionTrigger className="py-2 text-sm font-medium hover:no-underline">
+                                        {group.label}
+                                      </AccordionTrigger>
+                                      <AccordionContent className="pb-3">
+                                        <div className="flex flex-wrap gap-2">
+                                          {group.sources.map((source, index) => (
+                                            <a
+                                              key={`${source.journalEntryId}-${source.referenceType}-${source.referenceId}-${source.label}-${index}`}
+                                              href={accountingJournalHref(source)}
+                                              className="inline-flex items-center gap-2 rounded-full border border-input bg-background px-2.5 py-0.5 font-mono text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                              title={`Debit ${formatCurrency(source.debitAmount)} / Credit ${formatCurrency(source.creditAmount)}${source.lineCount > 1 ? ` across ${source.lineCount} posted lines` : ''}`}
+                                            >
+                                              <span>{source.label}</span>
+                                              <span
+                                                className={
+                                                  source.amount < 0
+                                                    ? 'text-red-600'
+                                                    : source.amount > 0
+                                                      ? 'text-green-700'
+                                                      : 'text-muted-foreground'
+                                                }
+                                              >
+                                                {formatSignedCurrency(source.amount)}
+                                              </span>
+                                            </a>
+                                          ))}
+                                        </div>
+                                      </AccordionContent>
+                                    </AccordionItem>
                                   ))}
-                                </div>
+                                </Accordion>
                               ) : (
                                 <div className="mt-1 text-sm text-muted-foreground">
                                   No posted source documents found.

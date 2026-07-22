@@ -651,14 +651,14 @@ export default function InvoiceDetailPage() {
               {postInvoiceMutation.isPending ? 'Posting...' : 'Post'}
             </Button>
           )}
-          {['REVIEW', 'POSTED'].includes(invoice.status) && (
+          {['REVIEW', 'POSTED', 'SENT'].includes(invoice.status) && (
             <Button
               onClick={handleOpenSendDialog}
               disabled={sendInvoiceMutation.isPending || invoice.pricingMismatch || invoice.pricingAmbiguous}
-              title={invoice.pricingMismatch || invoice.pricingAmbiguous ? 'Resolve pricing before sending' : 'Send invoice'}
+              title={invoice.pricingMismatch || invoice.pricingAmbiguous ? 'Resolve pricing before sending' : invoice.status === 'SENT' ? 'Resend invoice' : 'Send invoice'}
             >
               <Send className="mr-2 h-4 w-4" />
-              {sendInvoiceMutation.isPending ? 'Sending...' : 'Send'}
+              {sendInvoiceMutation.isPending ? 'Sending...' : invoice.status === 'SENT' ? 'Resend' : 'Send'}
             </Button>
           )}
           {invoice.status !== 'PAID' && invoice.status !== 'VOID' && (

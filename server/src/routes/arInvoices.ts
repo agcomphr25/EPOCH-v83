@@ -1901,7 +1901,7 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
     if (!invoice) {
       return res.status(404).json({ error: 'Invoice not found' });
     }
-    if (!['REVIEW', 'POSTED'].includes(invoice.status)) {
+    if (!['REVIEW', 'POSTED', 'SENT'].includes(invoice.status)) {
       return res.status(409).json({ error: `Cannot send invoice with status ${invoice.status}` });
     }
     if (invoice.pricingMismatch || invoice.pricingAmbiguous) {

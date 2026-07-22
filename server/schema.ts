@@ -1859,6 +1859,27 @@ export const maintenanceLogs = pgTable('maintenance_logs', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const freezerTemperatureLogs = pgTable(
+  'freezer_temperature_logs',
+  {
+    id: serial('id').primaryKey(),
+    recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull(),
+    freezer1Temperature: numeric('freezer_1_temperature', { precision: 6, scale: 2 }).notNull(),
+    freezer2Temperature: numeric('freezer_2_temperature', { precision: 6, scale: 2 }).notNull(),
+    freezer3Temperature: numeric('freezer_3_temperature', { precision: 6, scale: 2 }).notNull(),
+    freezer4Temperature: numeric('freezer_4_temperature', { precision: 6, scale: 2 }).notNull(),
+    layupRoomTemperature: numeric('layup_room_temperature', { precision: 6, scale: 2 }).notNull(),
+    refrigeratorContainerTemperature: numeric('refrigerator_container_temperature', { precision: 6, scale: 2 }).notNull(),
+    notes: text('notes'),
+    recordedByUserId: integer('recorded_by_user_id').references(() => users.id).notNull(),
+    recordedByDisplayName: text('recorded_by_display_name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    recordedAtIdx: index('freezer_temperature_logs_recorded_at_idx').on(table.recordedAt),
+  })
+);
+
 // Employee Portal & Time Keeping Tables
 export const timeClockEntries = pgTable('time_clock_entries', {
   id: serial('id').primaryKey(),
@@ -2968,6 +2989,31 @@ export const insertMaintenanceLogSchema = createInsertSchema(maintenanceLogs)
     nextDueDate: z.coerce.date().optional().nullable(),
   });
 
+const freezerTemperatureValueSchema = z.coerce
+  .number()
+  .min(-200, 'Temperature must be at least -200')
+  .max(200, 'Temperature must be no more than 200');
+
+export const insertFreezerTemperatureLogSchema = createInsertSchema(
+  freezerTemperatureLogs
+)
+  .omit({
+    id: true,
+    recordedByUserId: true,
+    recordedByDisplayName: true,
+    createdAt: true,
+  })
+  .extend({
+    recordedAt: z.coerce.date(),
+    freezer1Temperature: freezerTemperatureValueSchema,
+    freezer2Temperature: freezerTemperatureValueSchema,
+    freezer3Temperature: freezerTemperatureValueSchema,
+    freezer4Temperature: freezerTemperatureValueSchema,
+    layupRoomTemperature: freezerTemperatureValueSchema,
+    refrigeratorContainerTemperature: freezerTemperatureValueSchema,
+    notes: z.string().trim().max(2000).optional().nullable(),
+  });
+
 export const insertTimeClockEntrySchema = createInsertSchema(timeClockEntries)
   .omit({
     id: true,
@@ -3304,6 +3350,10 @@ export type InsertMaintenanceSchedule = z.infer<
 export type MaintenanceSchedule = typeof maintenanceSchedules.$inferSelect;
 export type InsertMaintenanceLog = z.infer<typeof insertMaintenanceLogSchema>;
 export type MaintenanceLog = typeof maintenanceLogs.$inferSelect;
+export type InsertFreezerTemperatureLog = z.infer<
+  typeof insertFreezerTemperatureLogSchema
+>;
+export type FreezerTemperatureLog = typeof freezerTemperatureLogs.$inferSelect;
 export type InsertTimeClockEntry = z.infer<typeof insertTimeClockEntrySchema>;
 export type TimeClockEntry = typeof timeClockEntries.$inferSelect;
 export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;

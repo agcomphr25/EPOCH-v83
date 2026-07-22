@@ -71,6 +71,9 @@ const TicketsPage = React.lazy(() => import('./pages/TicketsPage'));
 const TicketsCommandCenter = React.lazy(() => import('./pages/TicketsCommandCenter'));
 const PDFSignatureTool = React.lazy(() => import('./pages/PDFSignatureTool'));
 const MaintenancePage = React.lazy(() => import('./pages/MaintenancePage'));
+const FreezerTemperatureLogPage = React.lazy(
+  () => import('./pages/FreezerTemperatureLogPage')
+);
 const MaintenanceEventsPage = React.lazy(() => import('./pages/MaintenanceEventsPage'));
 const WorkOrderDetailPage = React.lazy(() => import('./pages/WorkOrderDetailPage'));
 const ProductionWorkOrderDetailPage = React.lazy(() => import('./pages/ProductionWorkOrderDetailPage'));
@@ -873,6 +876,10 @@ function App() {
                   {/* QC and Maintenance Routes */}
                   <Route path="/qc" component={QCPage} />
                   <Route path="/maintenance" component={MaintenancePage} />
+                  <Route
+                    path="/freezer-temperature-log"
+                    component={FreezerTemperatureLogPage}
+                  />
                   <Route path="/maintenance-events" component={MaintenanceEventsPage} />
                   <Route path="/maintenance-events/:id">
                     {(params) => <WorkOrderDetailPage params={params} />}

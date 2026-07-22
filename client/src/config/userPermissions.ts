@@ -39,7 +39,7 @@ export function getRequiredCapability(route: string): string | string[] | undefi
 export const DEFAULT_USER_ROUTES: string[] = ['/employee-portal'];
 
 // Universal routes that ALL authenticated users can access regardless of permissions
-export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/employee-portal', '/badge-scanner', '/help', '/pdf-signature-tool', '/routing-document-management', '/forms/document-builder', '/tickets', '/tickets-command-center', '/quick-notes', '/training', '/training/my-training', '/policies', '/approvals', '/pto-command-center'];
+export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/employee-portal', '/badge-scanner', '/help', '/pdf-signature-tool', '/routing-document-management', '/forms/document-builder', '/tickets', '/tickets-command-center', '/quick-notes', '/training', '/training/my-training', '/policies', '/approvals', '/pto-command-center', '/freezer-temperature-log'];
 
 // All valid navbar routes for reference (from Navigation.tsx)
 // This helps ensure permissions use correct paths
@@ -148,6 +148,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/inventory/scanner',
   '/kickback-tracking',
   '/maintenance',
+  '/freezer-temperature-log',
   '/maintenance-events',
   '/qms',
   '/qms/change-control',

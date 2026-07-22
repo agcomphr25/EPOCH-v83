@@ -23,6 +23,7 @@ const UNIVERSAL_ACCESS_ROUTES: string[] = [
   '/tickets-command-center',
   '/quick-notes',
   '/training',
+  '/freezer-temperature-log',
 ];
 
 const USER_PERMISSIONS: Record<string, UserPermissions> = {

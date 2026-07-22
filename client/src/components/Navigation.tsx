@@ -82,6 +82,7 @@ import {
   FlaskConical,
   Tag,
   HandCoins,
+  Thermometer,
 } from 'lucide-react';
 
 interface NavItemDef {
@@ -921,6 +922,12 @@ export default function Navigation() {
       label: 'Preventive Maintenance',
       icon: Calendar,
       description: 'Preventive maintenance schedules',
+    },
+    {
+      path: '/freezer-temperature-log',
+      label: 'Freezer Temperature Log',
+      icon: Thermometer,
+      description: 'Record and review freezer temperature checks',
     },
     {
       path: '/maintenance-events',

@@ -8,6 +8,7 @@ import {
   insertQcSubmissionSchema,
   insertMaintenanceScheduleSchema,
   insertMaintenanceLogSchema,
+  insertFreezerTemperatureLogSchema,
 } from '@shared/schema';
 import { and, desc, eq, sql } from 'drizzle-orm';
 
@@ -23,10 +24,12 @@ import {
   insertCalibrationEventSchema,
   maintenanceLogs,
   maintenanceSchedules,
+  freezerTemperatureLogs,
   nonconformanceRecords,
 } from '../../schema';
 import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
+import { resolveUserSnapshot } from '../../utils/userSnapshot';
 
 const router = Router();
 const qmsEvidenceUploadDir = path.join(process.cwd(), 'uploads', 'qms-calibration-evidence');
@@ -499,6 +502,82 @@ router.post('/maintenance/logs', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Create maintenance log error:', error);
     res.status(500).json({ error: 'Failed to create maintenance log' });
+  }
+});
+
+// Freezer temperature logs
+router.get('/freezer-temperature-logs', async (req: Request, res: Response) => {
+  try {
+    const requestedLimit = Number.parseInt(String(req.query.limit ?? '100'), 10);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 500)
+      : 100;
+
+    const logs = await db
+      .select({
+        id: freezerTemperatureLogs.id,
+        recordedAt: freezerTemperatureLogs.recordedAt,
+        freezer1Temperature: freezerTemperatureLogs.freezer1Temperature,
+        freezer2Temperature: freezerTemperatureLogs.freezer2Temperature,
+        freezer3Temperature: freezerTemperatureLogs.freezer3Temperature,
+        freezer4Temperature: freezerTemperatureLogs.freezer4Temperature,
+        layupRoomTemperature: freezerTemperatureLogs.layupRoomTemperature,
+        refrigeratorContainerTemperature:
+          freezerTemperatureLogs.refrigeratorContainerTemperature,
+        notes: freezerTemperatureLogs.notes,
+        recordedByDisplayName: freezerTemperatureLogs.recordedByDisplayName,
+        createdAt: freezerTemperatureLogs.createdAt,
+      })
+      .from(freezerTemperatureLogs)
+      .orderBy(desc(freezerTemperatureLogs.recordedAt))
+      .limit(limit);
+
+    res.json(logs);
+  } catch (error) {
+    console.error('Get freezer temperature logs error:', error);
+    res.status(500).json({ error: 'Failed to fetch freezer temperature logs' });
+  }
+});
+
+router.post('/freezer-temperature-logs', async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Authentication is required' });
+    }
+
+    const parsed = insertFreezerTemperatureLogSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid freezer temperature entry',
+        issues: parsed.error.issues,
+      });
+    }
+    const data = parsed.data;
+    const actor = await resolveUserSnapshot(req.user.id);
+    const [log] = await db
+      .insert(freezerTemperatureLogs)
+      .values({
+        recordedAt: data.recordedAt,
+        freezer1Temperature: String(data.freezer1Temperature),
+        freezer2Temperature: String(data.freezer2Temperature),
+        freezer3Temperature: String(data.freezer3Temperature),
+        freezer4Temperature: String(data.freezer4Temperature),
+        layupRoomTemperature: String(data.layupRoomTemperature),
+        refrigeratorContainerTemperature: String(data.refrigeratorContainerTemperature),
+        notes: data.notes || null,
+        recordedByUserId: actor.userId,
+        recordedByDisplayName: actor.displayName,
+      })
+      .returning({
+        id: freezerTemperatureLogs.id,
+        recordedAt: freezerTemperatureLogs.recordedAt,
+        recordedByDisplayName: freezerTemperatureLogs.recordedByDisplayName,
+      });
+
+    res.status(201).json(log);
+  } catch (error) {
+    console.error('Create freezer temperature log error:', error);
+    res.status(500).json({ error: 'Failed to create freezer temperature log' });
   }
 });
 

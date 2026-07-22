@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+
 import { and, desc, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../db';
@@ -15,6 +16,7 @@ import {
   engineeringReleaseBaselineItems,
   engineeringReleaseBaselines,
   engineeringReleases,
+  projects,
   rdProjects,
 } from '../../schema';
 import {
@@ -63,8 +65,18 @@ export type EngineeringReleasePreview = {
   finalDesignReviewStatus: string;
   engineeringChangeStatus: string;
   manufacturingEvidenceStatus: string;
-  requiredApprovals: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
-  completedApprovals: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
+  requiredApprovals: Array<{
+    role: string;
+    approved: boolean;
+    approvedBy?: string | null;
+    approvedAt?: string | null;
+  }>;
+  completedApprovals: Array<{
+    role: string;
+    approved: boolean;
+    approvedBy?: string | null;
+    approvedAt?: string | null;
+  }>;
   missingEvidence: string[];
   baselineItems: EngineeringBaselineItemPreview[];
   changedSinceReleaseWarnings: string[];
@@ -141,7 +153,9 @@ function jsonRecord(value: unknown): Record<string, unknown> {
 function canonicalValue(values: unknown, label: string) {
   const record = jsonRecord(values);
   const target = normalizeKey(label);
-  const found = Object.entries(record).find(([key]) => normalizeKey(key) === target);
+  const found = Object.entries(record).find(
+    ([key]) => normalizeKey(key) === target
+  );
   return found?.[1];
 }
 
@@ -162,7 +176,10 @@ function stableStringify(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
   if (value instanceof Date) return JSON.stringify(value.toISOString());
   if (!isRecord(value)) return JSON.stringify(value);
-  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(',')}}`;
 }
 
 function stableHash(value: unknown) {
@@ -171,39 +188,67 @@ function stableHash(value: unknown) {
 
 function sourceTableFor(source: ManufacturingEvidenceSource) {
   if (source.key === 'released_bom') return 'draft_bom_drafts';
-  if (source.sourceModule.includes('Engineering Controlled Revisions')) return 'engineering_controlled_revisions';
+  if (source.sourceModule.includes('Engineering Controlled Revisions'))
+    return 'engineering_controlled_revisions';
   return null;
 }
 
 function statusIsOpen(status: string | null | undefined) {
   const normalized = normalizeKey(status ?? '');
-  return !['approved', 'closed', 'complete', 'completed', 'accepted', 'released', 'not applicable', 'resolved'].includes(normalized);
+  return ![
+    'approved',
+    'closed',
+    'complete',
+    'completed',
+    'accepted',
+    'released',
+    'not applicable',
+    'resolved',
+  ].includes(normalized);
 }
 
 function severityIsHigh(value: unknown) {
   const normalized = normalizeKey(String(value ?? ''));
-  return normalized.includes('high') || normalized.includes('critical') || normalized.includes('severe');
+  return (
+    normalized.includes('high') ||
+    normalized.includes('critical') ||
+    normalized.includes('severe')
+  );
 }
 
 function riskIsBlocking(risk: typeof designControlRisks.$inferSelect) {
   const formData = jsonRecord(risk.formData);
   const metadata = jsonRecord(risk.metadata);
-  const severity = formData.severity ?? formData.Severity ?? metadata.severity ?? metadata.Severity;
+  const severity =
+    formData.severity ??
+    formData.Severity ??
+    metadata.severity ??
+    metadata.Severity;
   return severityIsHigh(severity) && statusIsOpen(risk.status);
 }
 
 function manufacturingEvidenceScopeErrors(context: ReleaseContext) {
   const errors: string[] = [];
-  if (context.manufacturingEvidence.designControlRecordId !== context.record.id) {
-    errors.push('manufacturing-source evidence belongs to a different Design Control record');
+  if (
+    context.manufacturingEvidence.designControlRecordId !== context.record.id
+  ) {
+    errors.push(
+      'manufacturing-source evidence belongs to a different Design Control record'
+    );
   }
-  if (context.manufacturingEvidence.rdProjectId !== context.record.rdProjectId) {
-    errors.push('manufacturing-source evidence belongs to a different R&D project');
+  if (
+    context.manufacturingEvidence.rdProjectId !== context.record.rdProjectId
+  ) {
+    errors.push(
+      'manufacturing-source evidence belongs to a different R&D project'
+    );
   }
   return errors;
 }
 
-function sourceBaselineItem(source: ManufacturingEvidenceSource): EngineeringBaselineItemPreview {
+function sourceBaselineItem(
+  source: ManufacturingEvidenceSource
+): EngineeringBaselineItemPreview {
   const capturedAt = new Date().toISOString();
   const metadata = {
     key: source.key,
@@ -249,25 +294,44 @@ function collectApprovers(step12: DesignControlStep | undefined) {
   return releaseApprovalLabels.map((label) => ({
     role: label,
     approved: approved(approvals, label),
-    approvedBy: textValue(step12?.metadata, [`${label} by`, 'approvedBy']) ?? null,
+    approvedBy:
+      textValue(step12?.metadata, [`${label} by`, 'approvedBy']) ?? null,
     approvedAt: step12?.approvedAt ? step12.approvedAt.toISOString() : null,
   }));
 }
 
-function proposedRevision(record: DesignControlRecord, step12: DesignControlStep | undefined) {
-  return textValue(step12?.formData, ['Release revision', 'Locked design revision baseline', 'Configuration baseline'])
-    ?? textValue(record.metadata, ['releaseRevision', 'release_revision'])
-    ?? 'A';
+function proposedRevision(
+  record: DesignControlRecord,
+  step12: DesignControlStep | undefined
+) {
+  return (
+    textValue(step12?.formData, [
+      'Release revision',
+      'Locked design revision baseline',
+      'Configuration baseline',
+    ]) ??
+    textValue(record.metadata, ['releaseRevision', 'release_revision']) ??
+    'A'
+  );
 }
 
-function productName(record: DesignControlRecord, rdProject: RdProject | null, step1?: DesignControlStep, step12?: DesignControlStep) {
-  return textValue(step1?.formData, ['Product name'])
-    ?? textValue(step12?.formData, ['Product name'])
-    ?? rdProject?.projectName
-    ?? record.title;
+function productName(
+  record: DesignControlRecord,
+  rdProject: RdProject | null,
+  step1?: DesignControlStep,
+  step12?: DesignControlStep
+) {
+  return (
+    textValue(step1?.formData, ['Product name']) ??
+    textValue(step12?.formData, ['Product name']) ??
+    rdProject?.projectName ??
+    record.title
+  );
 }
 
-function buildBaselineItems(context: ReleaseContext): EngineeringBaselineItemPreview[] {
+function buildBaselineItems(
+  context: ReleaseContext
+): EngineeringBaselineItemPreview[] {
   const stepItems = context.steps.map((step) => {
     const capturedAt = new Date().toISOString();
     const snapshot = {
@@ -297,12 +361,36 @@ function buildBaselineItems(context: ReleaseContext): EngineeringBaselineItemPre
   });
 
   const registerItems = [
-    { category: 'requirements', sourceTable: 'design_control_requirements', records: context.requirements },
-    { category: 'risks', sourceTable: 'design_control_risks', records: context.risks },
-    { category: 'design_reviews', sourceTable: 'design_control_reviews', records: context.reviews },
-    { category: 'verification', sourceTable: 'design_control_verification', records: context.verification },
-    { category: 'validation', sourceTable: 'design_control_validation', records: context.validation },
-    { category: 'engineering_changes', sourceTable: 'design_control_changes', records: context.changes },
+    {
+      category: 'requirements',
+      sourceTable: 'design_control_requirements',
+      records: context.requirements,
+    },
+    {
+      category: 'risks',
+      sourceTable: 'design_control_risks',
+      records: context.risks,
+    },
+    {
+      category: 'design_reviews',
+      sourceTable: 'design_control_reviews',
+      records: context.reviews,
+    },
+    {
+      category: 'verification',
+      sourceTable: 'design_control_verification',
+      records: context.verification,
+    },
+    {
+      category: 'validation',
+      sourceTable: 'design_control_validation',
+      records: context.validation,
+    },
+    {
+      category: 'engineering_changes',
+      sourceTable: 'design_control_changes',
+      records: context.changes,
+    },
   ].map(({ category, sourceTable, records }) => {
     const capturedAt = new Date().toISOString();
     const snapshot = {
@@ -312,7 +400,14 @@ function buildBaselineItems(context: ReleaseContext): EngineeringBaselineItemPre
         title: record.title ?? null,
         status: record.status ?? null,
         updatedAt: record.updatedAt ?? null,
-        key: record.requirementKey ?? record.riskKey ?? record.reviewType ?? record.verificationKey ?? record.validationKey ?? record.changeKey ?? null,
+        key:
+          record.requirementKey ??
+          record.riskKey ??
+          record.reviewType ??
+          record.verificationKey ??
+          record.validationKey ??
+          record.changeKey ??
+          null,
       })),
       capturedAt,
     };
@@ -323,7 +418,9 @@ function buildBaselineItems(context: ReleaseContext): EngineeringBaselineItemPre
       sourceModule: 'Design Control',
       sourceRecordId: context.record.id,
       sourceRevision: null,
-      sourceStatus: records.some((record: any) => statusIsOpen(record.status)) ? 'OPEN' : 'CONTROLLED',
+      sourceStatus: records.some((record: any) => statusIsOpen(record.status))
+        ? 'OPEN'
+        : 'CONTROLLED',
       capturedAt,
       immutableSnapshot: snapshot,
       sourceChecksum: checksum,
@@ -349,7 +446,10 @@ function buildBaselineItems(context: ReleaseContext): EngineeringBaselineItemPre
       sourceModule: 'R&D Project',
       sourceRecordId: context.rdProject?.id ?? context.record.rdProjectId,
       sourceRevision: null,
-      sourceStatus: context.rdProject?.engineeringStatus ?? context.rdProject?.status ?? null,
+      sourceStatus:
+        context.rdProject?.engineeringStatus ??
+        context.rdProject?.status ??
+        null,
       capturedAt: projectCapturedAt,
       immutableSnapshot: projectSnapshot,
       sourceChecksum: projectChecksum,
@@ -366,31 +466,55 @@ function changedWarningsFromRelease(
   release: EngineeringRelease | null,
   currentBaselineItems: EngineeringBaselineItemPreview[]
 ) {
-  const previousItems = Array.isArray(release?.sourceEvidenceSnapshot?.baselineItems)
-    ? release!.sourceEvidenceSnapshot.baselineItems as EngineeringBaselineItemPreview[]
+  const previousItems = Array.isArray(
+    release?.sourceEvidenceSnapshot?.baselineItems
+  )
+    ? (release!.sourceEvidenceSnapshot
+        .baselineItems as EngineeringBaselineItemPreview[])
     : [];
-  const previousByCategory = new Map(previousItems.map((item) => [item.baselineCategory, item]));
+  const previousByCategory = new Map(
+    previousItems.map((item) => [item.baselineCategory, item])
+  );
   return currentBaselineItems.flatMap((item) => {
     const previous = previousByCategory.get(item.baselineCategory);
-    if (!previous) return `${item.baselineCategory}: baseline source record was removed or no longer resolves`;
+    if (!previous)
+      return `${item.baselineCategory}: baseline source record was removed or no longer resolves`;
     if (previous.sourceChecksum === item.sourceChecksum) return [];
-    if (item.baselineCategory === 'released_bom') return 'BOM revision changed since Engineering Release';
-    if (item.baselineCategory === 'released_drawings') return 'Controlled drawing revision changed since Engineering Release';
-    if (item.baselineCategory === 'released_cad') return 'CAD revision changed since Engineering Release';
-    if (item.baselineCategory === 'verification') return 'Verification evidence changed since Engineering Release';
-    if (item.baselineCategory === 'validation') return 'Validation evidence changed since Engineering Release';
-    if (item.baselineCategory === 'design_step_12') return 'Engineering Release approval state changed since release';
-    if (item.baselineCategory === 'engineering_changes') return 'Engineering Change state changed since release';
+    if (item.baselineCategory === 'released_bom')
+      return 'BOM revision changed since Engineering Release';
+    if (item.baselineCategory === 'released_drawings')
+      return 'Controlled drawing revision changed since Engineering Release';
+    if (item.baselineCategory === 'released_cad')
+      return 'CAD revision changed since Engineering Release';
+    if (item.baselineCategory === 'verification')
+      return 'Verification evidence changed since Engineering Release';
+    if (item.baselineCategory === 'validation')
+      return 'Validation evidence changed since Engineering Release';
+    if (item.baselineCategory === 'design_step_12')
+      return 'Engineering Release approval state changed since release';
+    if (item.baselineCategory === 'engineering_changes')
+      return 'Engineering Change state changed since release';
     return `${item.baselineCategory}: Changed since release`;
   });
 }
 
-async function loadContext(recordId: string, client: DbClient = db): Promise<ReleaseContext | null> {
-  const [record] = await client.select().from(designControlRecords).where(eq(designControlRecords.id, recordId)).limit(1);
+async function loadContext(
+  recordId: string,
+  client: DbClient = db
+): Promise<ReleaseContext | null> {
+  const [record] = await client
+    .select()
+    .from(designControlRecords)
+    .where(eq(designControlRecords.id, recordId))
+    .limit(1);
   if (!record) return null;
 
   const [rdProject] = record.rdProjectId
-    ? await client.select().from(rdProjects).where(eq(rdProjects.id, record.rdProjectId)).limit(1)
+    ? await client
+        .select()
+        .from(rdProjects)
+        .where(eq(rdProjects.id, record.rdProjectId))
+        .limit(1)
     : [];
 
   const [
@@ -403,14 +527,38 @@ async function loadContext(recordId: string, client: DbClient = db): Promise<Rel
     changes,
     manufacturingEvidence,
   ] = await Promise.all([
-    client.select().from(designControlSteps).where(eq(designControlSteps.recordId, record.id)),
-    client.select().from(designControlRequirements).where(eq(designControlRequirements.recordId, record.id)),
-    client.select().from(designControlRisks).where(eq(designControlRisks.recordId, record.id)),
-    client.select().from(designControlReviews).where(eq(designControlReviews.recordId, record.id)),
-    client.select().from(designControlVerification).where(eq(designControlVerification.recordId, record.id)),
-    client.select().from(designControlValidation).where(eq(designControlValidation.recordId, record.id)),
-    client.select().from(designControlChanges).where(eq(designControlChanges.recordId, record.id)),
-    getDesignManufacturingEvidence({ rdProjectId: record.rdProjectId, designControlRecordId: record.id }, client),
+    client
+      .select()
+      .from(designControlSteps)
+      .where(eq(designControlSteps.recordId, record.id)),
+    client
+      .select()
+      .from(designControlRequirements)
+      .where(eq(designControlRequirements.recordId, record.id)),
+    client
+      .select()
+      .from(designControlRisks)
+      .where(eq(designControlRisks.recordId, record.id)),
+    client
+      .select()
+      .from(designControlReviews)
+      .where(eq(designControlReviews.recordId, record.id)),
+    client
+      .select()
+      .from(designControlVerification)
+      .where(eq(designControlVerification.recordId, record.id)),
+    client
+      .select()
+      .from(designControlValidation)
+      .where(eq(designControlValidation.recordId, record.id)),
+    client
+      .select()
+      .from(designControlChanges)
+      .where(eq(designControlChanges.recordId, record.id)),
+    getDesignManufacturingEvidence(
+      { rdProjectId: record.rdProjectId, designControlRecordId: record.id },
+      client
+    ),
   ]);
 
   return {
@@ -444,33 +592,56 @@ export function buildEngineeringReleasePreviewFromContext(
 
   const blockingRisks = context.risks.filter(riskIsBlocking);
   if (blockingRisks.length > 0) {
-    missingEvidence.push(`open high risk: ${blockingRisks.map((risk) => risk.title ?? risk.riskKey ?? risk.id).join(', ')}`);
+    missingEvidence.push(
+      `open high risk: ${blockingRisks.map((risk) => risk.title ?? risk.riskKey ?? risk.id).join(', ')}`
+    );
   }
 
-  const openChanges = context.changes.filter((change) => statusIsOpen(change.status));
+  const openChanges = context.changes.filter((change) =>
+    statusIsOpen(change.status)
+  );
   if (openChanges.length > 0) {
-    missingEvidence.push(`engineering changes not dispositioned: ${openChanges.map((change) => change.title ?? change.changeKey ?? change.id).join(', ')}`);
+    missingEvidence.push(
+      `engineering changes not dispositioned: ${openChanges.map((change) => change.title ?? change.changeKey ?? change.id).join(', ')}`
+    );
   }
 
   if (!context.manufacturingEvidence.ready) {
-    missingEvidence.push(...context.manufacturingEvidence.missingItems.map((item) => `manufacturing-source evidence: ${item}`));
+    missingEvidence.push(
+      ...context.manufacturingEvidence.missingItems.map(
+        (item) => `manufacturing-source evidence: ${item}`
+      )
+    );
   }
   missingEvidence.push(...manufacturingEvidenceScopeErrors(context));
 
-  const baselineLocked = context.manufacturingEvidence.sources.some((source) => (
-    source.key === 'design_revision_baseline_locked' && source.ready
-  )) || Boolean(textValue(step12?.formData, ['Locked design revision baseline']));
+  const baselineLocked =
+    context.manufacturingEvidence.sources.some(
+      (source) =>
+        source.key === 'design_revision_baseline_locked' && source.ready
+    ) ||
+    Boolean(textValue(step12?.formData, ['Locked design revision baseline']));
   if (!baselineLocked) {
     missingEvidence.push('locked configuration baseline');
   }
 
   const approvers = collectApprovers(step12);
-  missingEvidence.push(...approvers.filter((approval) => !approval.approved).map((approval) => approval.role));
+  missingEvidence.push(
+    ...approvers
+      .filter((approval) => !approval.approved)
+      .map((approval) => approval.role)
+  );
 
   const baselineItems = buildBaselineItems(context);
-  const releasedBom = context.manufacturingEvidence.sources.find((source) => source.key === 'released_bom');
-  const drawings = context.manufacturingEvidence.sources.filter((source) => source.key === 'released_drawings' && source.revision);
-  const cad = context.manufacturingEvidence.sources.find((source) => source.key === 'released_cad');
+  const releasedBom = context.manufacturingEvidence.sources.find(
+    (source) => source.key === 'released_bom'
+  );
+  const drawings = context.manufacturingEvidence.sources.filter(
+    (source) => source.key === 'released_drawings' && source.revision
+  );
+  const cad = context.manufacturingEvidence.sources.find(
+    (source) => source.key === 'released_cad'
+  );
   const proposedReleaseRevision = proposedRevision(context.record, step12);
   const proposedReleaseNumber = `ER-${context.record.rdProjectId ?? context.record.id}-${proposedReleaseRevision}`;
   const history = releaseHistory.map((release) => ({
@@ -487,7 +658,12 @@ export function buildEngineeringReleasePreviewFromContext(
     rdProjectId: context.record.rdProjectId,
     rdProjectName: context.rdProject?.projectName ?? null,
     designControlRecordId: context.record.id,
-    productName: productName(context.record, context.rdProject, byStep.get('1'), step12),
+    productName: productName(
+      context.record,
+      context.rdProject,
+      byStep.get('1'),
+      step12
+    ),
     proposedReleaseNumber,
     proposedReleaseRevision,
     effectiveDate: new Date().toISOString().slice(0, 10),
@@ -497,66 +673,105 @@ export function buildEngineeringReleasePreviewFromContext(
       status: byStep.get(stepKey)?.status ?? 'missing',
     })),
     requirementsSummary: `${context.requirements.length} persisted requirement record(s); step 3 is ${byStep.get('3')?.status ?? 'missing'}.`,
-    riskSummary: blockingRisks.length > 0 ? `${blockingRisks.length} open high risk item(s)` : 'No open high risk items detected.',
-    prototypeIdentifier: textValue(byStep.get('8')?.formData, ['Prototype serial number', 'Prototype identifier']),
+    riskSummary:
+      blockingRisks.length > 0
+        ? `${blockingRisks.length} open high risk item(s)`
+        : 'No open high risk items detected.',
+    prototypeIdentifier: textValue(byStep.get('8')?.formData, [
+      'Prototype serial number',
+      'Prototype identifier',
+    ]),
     bomRevision: releasedBom?.revision ?? null,
-    drawingRevisions: drawings.map((source) => source.revision!).filter(Boolean),
+    drawingRevisions: drawings
+      .map((source) => source.revision!)
+      .filter(Boolean),
     cadRevision: cad?.revision ?? null,
     verificationStatus: byStep.get('9')?.status ?? 'missing',
     validationStatus: byStep.get('10')?.status ?? 'missing',
     finalDesignReviewStatus: byStep.get('11')?.status ?? 'missing',
-    engineeringChangeStatus: openChanges.length > 0 ? 'open_changes' : 'dispositioned',
+    engineeringChangeStatus:
+      openChanges.length > 0 ? 'open_changes' : 'dispositioned',
     manufacturingEvidenceStatus: context.manufacturingEvidence.overallStatus,
     requiredApprovals: approvers,
     completedApprovals: approvers.filter((approval) => approval.approved),
     missingEvidence,
     baselineItems,
-    changedSinceReleaseWarnings: changedWarningsFromRelease(existingRelease, baselineItems),
+    changedSinceReleaseWarnings: changedWarningsFromRelease(
+      existingRelease,
+      baselineItems
+    ),
     releaseHistory: history,
     existingRelease: existingRelease
       ? {
-        id: existingRelease.id,
-        releaseNumber: existingRelease.releaseNumber,
-        releaseRevision: existingRelease.releaseRevision,
-        releaseStatus: existingRelease.releaseStatus,
-        releasedBy: existingRelease.releasedBy,
-        releasedAt: existingRelease.releasedAt ? existingRelease.releasedAt.toISOString() : null,
-      }
+          id: existingRelease.id,
+          releaseNumber: existingRelease.releaseNumber,
+          releaseRevision: existingRelease.releaseRevision,
+          releaseStatus: existingRelease.releaseStatus,
+          releasedBy: existingRelease.releasedBy,
+          releasedAt: existingRelease.releasedAt
+            ? existingRelease.releasedAt.toISOString()
+            : null,
+        }
       : null,
   };
 }
 
-export async function getEngineeringReleasePreview(recordId: string, client: DbClient = db) {
+export async function getEngineeringReleasePreview(
+  recordId: string,
+  client: DbClient = db
+) {
   const context = await loadContext(recordId, client);
   if (!context) return null;
-  const releaseRevision = proposedRevision(context.record, context.steps.find((step) => step.stepKey === '12'));
+  const releaseRevision = proposedRevision(
+    context.record,
+    context.steps.find((step) => step.stepKey === '12')
+  );
   const releaseHistory = context.record.rdProjectId
     ? await client
-      .select()
-      .from(engineeringReleases)
-      .where(and(
-        eq(engineeringReleases.rdProjectId, context.record.rdProjectId),
-        eq(engineeringReleases.designControlRecordId, context.record.id)
-      ))
-      .orderBy(desc(engineeringReleases.releasedAt), desc(engineeringReleases.createdAt))
+        .select()
+        .from(engineeringReleases)
+        .where(
+          and(
+            eq(engineeringReleases.rdProjectId, context.record.rdProjectId),
+            eq(engineeringReleases.designControlRecordId, context.record.id)
+          )
+        )
+        .orderBy(
+          desc(engineeringReleases.releasedAt),
+          desc(engineeringReleases.createdAt)
+        )
     : [];
-  const existingRelease = releaseHistory.find((release) => release.releaseRevision === releaseRevision) ?? null;
-  return buildEngineeringReleasePreviewFromContext(context, existingRelease, releaseHistory);
+  const existingRelease =
+    releaseHistory.find(
+      (release) => release.releaseRevision === releaseRevision
+    ) ?? null;
+  return buildEngineeringReleasePreviewFromContext(
+    context,
+    existingRelease,
+    releaseHistory
+  );
 }
 
-export async function submitEngineeringRelease(input: {
-  recordId: string;
-  actor: string;
-  effectiveDate?: string | null;
-}, client: DbClient = db) {
+export async function submitEngineeringRelease(
+  input: {
+    recordId: string;
+    actor: string;
+    effectiveDate?: string | null;
+  },
+  client: DbClient = db
+) {
   return client.transaction(async (tx) => {
-    await tx.execute(sql`SELECT id FROM design_control_records WHERE id = ${input.recordId} FOR UPDATE`);
+    await tx.execute(
+      sql`SELECT id FROM design_control_records WHERE id = ${input.recordId} FOR UPDATE`
+    );
     const context = await loadContext(input.recordId, tx as DbClient);
     if (!context) return { status: 'not_found' as const };
     if (!context.record.rdProjectId) {
       return {
         status: 'blocked' as const,
-        missingEvidence: ['Design Control record is not linked to an R&D project'],
+        missingEvidence: [
+          'Design Control record is not linked to an R&D project',
+        ],
       };
     }
 
@@ -564,18 +779,27 @@ export async function submitEngineeringRelease(input: {
     const [existingRelease] = await tx
       .select()
       .from(engineeringReleases)
-      .where(and(
-        eq(engineeringReleases.rdProjectId, context.record.rdProjectId),
-        eq(engineeringReleases.designControlRecordId, context.record.id),
-        eq(engineeringReleases.releaseRevision, preview.proposedReleaseRevision)
-      ))
+      .where(
+        and(
+          eq(engineeringReleases.rdProjectId, context.record.rdProjectId),
+          eq(engineeringReleases.designControlRecordId, context.record.id),
+          eq(
+            engineeringReleases.releaseRevision,
+            preview.proposedReleaseRevision
+          )
+        )
+      )
       .limit(1);
 
     if (existingRelease) {
       return {
         status: 'existing' as const,
         release: existingRelease,
-        preview: buildEngineeringReleasePreviewFromContext(context, existingRelease, [existingRelease]),
+        preview: buildEngineeringReleasePreviewFromContext(
+          context,
+          existingRelease,
+          [existingRelease]
+        ),
       };
     }
 
@@ -588,42 +812,50 @@ export async function submitEngineeringRelease(input: {
     }
 
     const now = new Date();
-    const effectiveDate = input.effectiveDate ? new Date(input.effectiveDate) : now;
-    const [release] = await tx.insert(engineeringReleases).values({
-      rdProjectId: context.record.rdProjectId,
-      designControlRecordId: context.record.id,
-      releaseNumber: preview.proposedReleaseNumber,
-      releaseRevision: preview.proposedReleaseRevision,
-      releaseStatus: 'RELEASED',
-      productName: preview.productName,
-      effectiveDate,
-      releasedBy: input.actor,
-      releasedAt: now,
-      readinessSnapshot: preview as unknown as Record<string, unknown>,
-      sourceEvidenceSnapshot: {
-        manufacturingEvidence: context.manufacturingEvidence,
-        baselineItems: preview.baselineItems,
-      },
-      approvalSnapshot: { approvers: preview.requiredApprovals },
-      metadata: {
-        source: 'engineering-release-gate',
-        nextAction: 'Create Manufactured Inventory Item',
-      },
-    }).returning();
+    const effectiveDate = input.effectiveDate
+      ? new Date(input.effectiveDate)
+      : now;
+    const [release] = await tx
+      .insert(engineeringReleases)
+      .values({
+        rdProjectId: context.record.rdProjectId,
+        designControlRecordId: context.record.id,
+        releaseNumber: preview.proposedReleaseNumber,
+        releaseRevision: preview.proposedReleaseRevision,
+        releaseStatus: 'RELEASED',
+        productName: preview.productName,
+        effectiveDate,
+        releasedBy: input.actor,
+        releasedAt: now,
+        readinessSnapshot: preview as unknown as Record<string, unknown>,
+        sourceEvidenceSnapshot: {
+          manufacturingEvidence: context.manufacturingEvidence,
+          baselineItems: preview.baselineItems,
+        },
+        approvalSnapshot: { approvers: preview.requiredApprovals },
+        metadata: {
+          source: 'engineering-release-gate',
+          nextAction: 'Create Manufactured Inventory Item',
+        },
+      })
+      .returning();
 
-    const [baseline] = await tx.insert(engineeringReleaseBaselines).values({
-      engineeringReleaseId: release.id,
-      rdProjectId: context.record.rdProjectId,
-      designControlRecordId: context.record.id,
-      baselineStatus: 'LOCKED',
-      baselineRevision: preview.proposedReleaseRevision,
-      lockedAt: now,
-      lockedBy: input.actor,
-      metadata: {
-        releaseNumber: release.releaseNumber,
-        immutable: true,
-      },
-    }).returning();
+    const [baseline] = await tx
+      .insert(engineeringReleaseBaselines)
+      .values({
+        engineeringReleaseId: release.id,
+        rdProjectId: context.record.rdProjectId,
+        designControlRecordId: context.record.id,
+        baselineStatus: 'LOCKED',
+        baselineRevision: preview.proposedReleaseRevision,
+        lockedAt: now,
+        lockedBy: input.actor,
+        metadata: {
+          releaseNumber: release.releaseNumber,
+          immutable: true,
+        },
+      })
+      .returning();
 
     for (const item of preview.baselineItems) {
       await tx.insert(engineeringReleaseBaselineItems).values({
@@ -644,20 +876,28 @@ export async function submitEngineeringRelease(input: {
     }
 
     for (const approval of preview.requiredApprovals) {
-      await tx.insert(engineeringReleaseApprovals).values({
-        engineeringReleaseId: release.id,
-        approvalRole: approval.role,
-        approvedBy: approval.approvedBy ?? input.actor,
-        approvedAt: approval.approvedAt ? new Date(approval.approvedAt) : now,
-        approvalStatus: 'APPROVED',
-        metadata: approval,
-      }).onConflictDoNothing();
+      await tx
+        .insert(engineeringReleaseApprovals)
+        .values({
+          engineeringReleaseId: release.id,
+          approvalRole: approval.role,
+          approvedBy: approval.approvedBy ?? input.actor,
+          approvedAt: approval.approvedAt ? new Date(approval.approvedAt) : now,
+          approvalStatus: 'APPROVED',
+          metadata: approval,
+        })
+        .onConflictDoNothing();
     }
 
     await tx
       .update(designControlSteps)
       .set({ status: 'approved', approvedAt: now, updatedAt: now })
-      .where(and(eq(designControlSteps.recordId, context.record.id), eq(designControlSteps.stepKey, '12')));
+      .where(
+        and(
+          eq(designControlSteps.recordId, context.record.id),
+          eq(designControlSteps.stepKey, '12')
+        )
+      );
 
     await tx
       .update(designControlRecords)
@@ -666,8 +906,25 @@ export async function submitEngineeringRelease(input: {
 
     await tx
       .update(rdProjects)
-      .set({ status: 'released', engineeringStatus: 'RELEASED', updatedAt: now })
+      .set({
+        status: 'released',
+        engineeringStatus: 'RELEASED',
+        updatedAt: now,
+      })
       .where(eq(rdProjects.id, context.record.rdProjectId));
+
+    if (context.record.projectId) {
+      const [linkedProject] = await tx
+        .select({ workflowVersion: projects.workflowVersion })
+        .from(projects)
+        .where(eq(projects.id, context.record.projectId))
+        .limit(1);
+      if (linkedProject?.workflowVersion === 'p2_v2') {
+        const { synchronizeDesignStageStatus } =
+          await import('./projectDesignApplicabilityService');
+        await synchronizeDesignStageStatus(context.record.projectId, tx);
+      }
+    }
 
     return {
       status: 'created' as const,
@@ -681,10 +938,16 @@ export async function submitEngineeringRelease(input: {
   });
 }
 
-export async function listEngineeringReleasesForRdProject(rdProjectId: string, client: DbClient = db) {
+export async function listEngineeringReleasesForRdProject(
+  rdProjectId: string,
+  client: DbClient = db
+) {
   return client
     .select()
     .from(engineeringReleases)
     .where(eq(engineeringReleases.rdProjectId, rdProjectId))
-    .orderBy(desc(engineeringReleases.releasedAt), desc(engineeringReleases.createdAt));
+    .orderBy(
+      desc(engineeringReleases.releasedAt),
+      desc(engineeringReleases.createdAt)
+    );
 }

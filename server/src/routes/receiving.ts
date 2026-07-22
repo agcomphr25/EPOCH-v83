@@ -19,6 +19,7 @@ import {
   updateReceivingInspectionPlanSchema,
   materialLots,
   materialLotTransactions,
+  inventoryTransactions,
   inventoryTransactionLedger,
   mediaLibrary,
   mediaFolders,
@@ -1787,11 +1788,6 @@ function receivedUnitExpirationStatus(expirationDate: string | null | undefined)
 // ── Helper: auto-create material_lot for accepted units ───────────────────────
 async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: AuthUser): Promise<void> {
   try {
-    // Idempotency guard: if this unit already has a material lot, do not create another
-    if (unit.materialLotId) {
-      return;
-    }
-
     const displayName = actorName(user);
 
     const [line] = await db.select().from(receiptLines).where(eq(receiptLines.id, unit.receiptLineId));
@@ -1881,7 +1877,19 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
     // Atomic block: ICN reservation, material_lot insert, received_unit link,
     // material_lot_transactions insert, and inventory_transaction_ledger write
     // succeed or fail together. If any step throws, none of them persist.
-    const { lot, icn } = await db.transaction(async (tx) => {
+    let lot: typeof materialLots.$inferSelect;
+    let icn: string;
+
+    if (unit.materialLotId) {
+      const [existingLot] = await db.select().from(materialLots)
+        .where(eq(materialLots.id, unit.materialLotId)).limit(1);
+      if (!existingLot) {
+        throw new Error(`Received unit ${unit.id} references missing material lot ${unit.materialLotId}`);
+      }
+      lot = existingLot;
+      icn = existingLot.internalControlNumber;
+    } else {
+      const created = await db.transaction(async (tx) => {
       // Generate ICN inside the transaction to reduce race-condition window
       const today = new Date();
       const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
@@ -1970,10 +1978,23 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
         },
       }, tx);
 
-      return { lot, icn };
-    });
+        return { lot, icn };
+      });
+      lot = created.lot;
+      icn = created.icn;
+    }
 
-    await createInventoryEvent({
+    // Reconcile downstream writes after a partial acceptance instead of treating
+    // materialLotId alone as proof that inventory processing completed.
+    const [existingInventoryEvent] = await db.select({ id: inventoryTransactions.id })
+      .from(inventoryTransactions)
+      .where(and(
+        eq(inventoryTransactions.transactionType, 'receipt'),
+        eq(inventoryTransactions.referenceType, 'RECEIVED_UNIT'),
+        eq(inventoryTransactions.referenceId, String(unit.id)),
+      )).limit(1);
+
+    if (!existingInventoryEvent) await createInventoryEvent({
       agPartNumber: line.agPartNumber,
       eventType: 'receipt',
       quantity: receivedQty,
@@ -2004,7 +2025,12 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       const qty = Number(unit.quantity);
       const qtyForFabric = Number.isFinite(qty) && qty > 0 ? qty : 0;
       const receivedDate = toDateOnly(receipt.receivedAt ?? receipt.receiptDate ?? new Date());
-      const [fabricInventory] = await db.insert(cuttingFabricInventory).values({
+      const [existingFabricInventory] = await db.select({ id: cuttingFabricInventory.id })
+        .from(cuttingFabricInventory)
+        .where(eq(cuttingFabricInventory.internalControlNumber, icn)).limit(1);
+
+      if (!existingFabricInventory) await db.transaction(async (tx) => {
+      const [fabricInventory] = await tx.insert(cuttingFabricInventory).values({
         inventoryItemId: invItem.id,
         source: receipt.vendorName ?? null,
         fabric: invItem.name ?? line.description ?? line.agPartNumber,
@@ -2028,7 +2054,7 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       }).returning();
 
       if (fabricInventory?.id && qtyForFabric > 0) {
-        await db.insert(cuttingFabricInventoryTransactions).values({
+        await tx.insert(cuttingFabricInventoryTransactions).values({
           fabricInventoryId: fabricInventory.id,
           changeType: 'RECEIPT',
           quantityDelta: nonZeroInventoryDelta(qtyForFabric),
@@ -2036,6 +2062,7 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
           notes: `Receipt ${receipt.receiptNumber}: received unit ${unit.barcode} into cutting fabric inventory`,
         });
       }
+      });
     }
 
   } catch (err: any) {

@@ -399,13 +399,21 @@ export default function POOrderEntry({
       unitPrice: basePrice + featuresPrice,
       totalPrice: totalPrice,
       specifications: {
-        features: features,
+        features: {
+          ...features,
+          isFlattop,
+          flatTop: isFlattop,
+          flat_top: isFlattop,
+          flattop: isFlattop,
+        },
         basePrice: basePrice,
         featuresPrice: featuresPrice,
         priceOverride: priceOverride,
         discountCode: discountCode,
         discountAmount: discountAmount,
         isFlattop: isFlattop,
+        flatTop: isFlattop,
+        flat_top: isFlattop,
       },
       notes: notes,
     };
@@ -423,6 +431,7 @@ export default function POOrderEntry({
         const isRestrictedForFlattop =
           isFlattop &&
           [
+            'handedness',
             'action_length',
             'action_inlet',
             'bottom_metal',
@@ -614,6 +623,7 @@ export default function POOrderEntry({
                   // Clear features that are not available for flattop
                   setFeatures((prev) => ({
                     ...prev,
+                    handedness: undefined,
                     action_length: undefined,
                     action_inlet: undefined,
                     bottom_metal: undefined,

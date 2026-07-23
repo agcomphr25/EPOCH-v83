@@ -4,6 +4,7 @@ import { db } from '../../db';
 import { recordAuditEvent, type AuditLedgerTx } from './auditLedgerService';
 import { resolveProjectWorkflowVersion } from './projectWorkflowVersionService';
 import { validateWorkflowInstanceIntegrity } from './projectWorkflowInstanceIntegrity';
+import { evaluateCommercialBaseline } from './projectCommercialReviewService';
 import {
   ProjectDesignApplicabilityError,
   validateDesignApplicabilityInput,
@@ -223,6 +224,8 @@ async function readModel(projectId: string, tx: Executor) {
     tx
   );
   const blockers: string[] = [];
+  const commercial = await evaluateCommercialBaseline(projectId, tx);
+  blockers.push(...commercial.blockers);
   if (!decision) blockers.push('Create a Design Applicability decision.');
   else {
     if (decision.status !== 'APPROVED')

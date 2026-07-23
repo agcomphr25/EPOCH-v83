@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { recordAuditEvent, type AuditLedgerTx } from './auditLedgerService';
 import { getCurrentProductionPlan } from './projectProductionPlanningService';
+import { evaluateCommercialBaseline } from './projectCommercialReviewService';
 import { resolveProjectWorkflowVersion } from './projectWorkflowVersionService';
 import { validateWorkflowInstanceIntegrity } from './projectWorkflowInstanceIntegrity';
 import {
@@ -234,6 +235,9 @@ async function readiness(
 ) {
   const blockers: string[] = [];
   const differences: string[] = [];
+  const commercial = await evaluateCommercialBaseline(projectId, tx);
+  blockers.push(...commercial.blockers);
+  differences.push(...commercial.differences);
   if (!authorization)
     return {
       ready: false,

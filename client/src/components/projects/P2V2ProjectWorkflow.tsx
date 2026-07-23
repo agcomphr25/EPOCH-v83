@@ -13,6 +13,7 @@ import {
 import P2V2DesignApplicability from './P2V2DesignApplicability';
 import P2V2ProductionPlanning from './P2V2ProductionPlanning';
 import P2V2WadAuthorization from './P2V2WadAuthorization';
+import P2V2CommercialReview from './P2V2CommercialReview';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -369,6 +370,30 @@ export default function P2V2ProjectWorkflow({
                 <Eye className="mr-1 h-4 w-4" />
                 Details
               </Button>
+              {(
+                [
+                  'rfq_risk_assessment',
+                  'estimate_quote',
+                  'contract_review',
+                ] as const
+              ).includes(
+                stage.stepType as
+                  | 'rfq_risk_assessment'
+                  | 'estimate_quote'
+                  | 'contract_review'
+              ) && (
+                <div className="mt-3">
+                  <P2V2CommercialReview
+                    projectId={projectId}
+                    stage={
+                      stage.stepType as
+                        | 'rfq_risk_assessment'
+                        | 'estimate_quote'
+                        | 'contract_review'
+                    }
+                  />
+                </div>
+              )}
               {stage.stepType === 'design_applicability' && (
                 <div className="mt-3">
                   <P2V2DesignApplicability projectId={projectId} />

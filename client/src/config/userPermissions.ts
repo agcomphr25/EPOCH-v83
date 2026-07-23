@@ -24,6 +24,11 @@ export const CAPABILITY_GATED_ROUTES: Record<string, string | string[]> = {
   '/finance/bulk-payment-history': 'finance.view',
   '/inventory/cycle-counts': 'inventory.cycleCount.view',
   '/inventory/consolidated-needs': 'purchasing.view_requisitions',
+  '/qms/design-control': [
+    'design.control.edit',
+    'design.control.submit',
+    'design.control.approve',
+  ],
 };
 
 export function getRequiredCapability(route: string): string | string[] | undefined {

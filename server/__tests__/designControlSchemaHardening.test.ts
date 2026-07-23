@@ -29,6 +29,7 @@ const migrationFiles = [
   'migrations/0191_engineering_releases.sql',
   'migrations/0192_engineering_packages.sql',
   'migrations/0207_design_control_authority_foundation.sql',
+  'migrations/0208_design_control_authenticated_approvals.sql',
 ];
 
 const originalDatabaseUrl = process.env.DATABASE_URL;
@@ -159,12 +160,30 @@ describe('Design Control schema hardening', () => {
             { conname: 'design_control_records_superseded_by_record_fk' },
           ];
         }
+        if (callNumber === requiredDesignControlTables.length + 4) {
+          return [
+            { column_name: 'current_content_version_id' },
+            { column_name: 'content_version' },
+            { column_name: 'approval_mode' },
+            { column_name: 'submitted_at' },
+            { column_name: 'submitted_by_user_id' },
+            { column_name: 'submitted_by_snapshot' },
+          ];
+        }
+        if (callNumber === requiredDesignControlTables.length + 5) {
+          return [
+            { object_name: 'design_control_step_content_versions_step_version_unique' },
+            { object_name: 'design_control_step_approvals_valid_slot_unique' },
+            { object_name: 'prevent_design_control_step_version_delete' },
+            { object_name: 'prevent_design_control_step_approval_delete' },
+          ];
+        }
         return [];
       },
     };
 
     await expect(assertDesignControlSchemaReady(client)).resolves.toBeUndefined();
-    expect(calls).toHaveLength(requiredDesignControlTables.length + 3);
+    expect(calls).toHaveLength(requiredDesignControlTables.length + 5);
   });
 
   it('surfaces safe-boot migration startup failures clearly', async () => {

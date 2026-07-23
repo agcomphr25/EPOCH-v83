@@ -24,6 +24,10 @@ import {
   type DesignManufacturingEvidence,
   type ManufacturingEvidenceSource,
 } from './designManufacturingEvidenceService';
+import {
+  getRecordAuthenticatedApprovalEvidence,
+  getRecordAuthenticatedApprovalReadiness,
+} from './designControlApprovalService';
 
 type DbClient = typeof db;
 type DesignControlRecord = typeof designControlRecords.$inferSelect;
@@ -67,6 +71,7 @@ export type EngineeringReleasePreview = {
   manufacturingEvidenceStatus: string;
   requiredApprovals: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
   completedApprovals: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
+  approvalProvenance?: 'AUTHENTICATED_VERSION_BOUND' | 'LEGACY_UNVERIFIED_APPROVAL_EVIDENCE';
   missingEvidence: string[];
   baselineItems: EngineeringBaselineItemPreview[];
   changedSinceReleaseWarnings: string[];
@@ -543,7 +548,25 @@ export async function getEngineeringReleasePreview(recordId: string, client: DbC
       .orderBy(desc(engineeringReleases.releasedAt), desc(engineeringReleases.createdAt))
     : [];
   const existingRelease = releaseHistory.find((release) => release.releaseRevision === releaseRevision) ?? null;
-  return buildEngineeringReleasePreviewFromContext(context, existingRelease, releaseHistory);
+  const preview = buildEngineeringReleasePreviewFromContext(context, existingRelease, releaseHistory);
+  if (existingRelease) {
+    const provenance =
+      (existingRelease.approvalSnapshot as Record<string, unknown> | null)?.provenance ===
+      'AUTHENTICATED_VERSION_BOUND'
+        ? 'AUTHENTICATED_VERSION_BOUND'
+        : 'LEGACY_UNVERIFIED_APPROVAL_EVIDENCE';
+    return {
+      ...preview,
+      approvalProvenance: provenance,
+    };
+  }
+  const authenticated = await getRecordAuthenticatedApprovalReadiness(recordId, client);
+  return {
+    ...preview,
+    ready: preview.ready && authenticated.ready,
+    missingEvidence: [...preview.missingEvidence, ...authenticated.missingItems],
+    approvalProvenance: 'AUTHENTICATED_VERSION_BOUND' as const,
+  };
 }
 
 export async function submitEngineeringRelease(input: {
@@ -591,6 +614,23 @@ export async function submitEngineeringRelease(input: {
       };
     }
 
+    const authenticated = await getRecordAuthenticatedApprovalReadiness(
+      context.record.id,
+      tx as DbClient
+    );
+    if (!authenticated.ready) {
+      return {
+        status: 'blocked' as const,
+        missingEvidence: authenticated.missingItems,
+        preview: {
+          ...preview,
+          ready: false,
+          missingEvidence: [...preview.missingEvidence, ...authenticated.missingItems],
+          approvalProvenance: 'AUTHENTICATED_VERSION_BOUND' as const,
+        },
+      };
+    }
+
     if (!preview.ready) {
       return {
         status: 'blocked' as const,
@@ -601,6 +641,10 @@ export async function submitEngineeringRelease(input: {
 
     const now = new Date();
     const effectiveDate = input.effectiveDate ? new Date(input.effectiveDate) : now;
+    const authenticatedApprovals = await getRecordAuthenticatedApprovalEvidence(
+      context.record.id,
+      tx as DbClient
+    );
     const [release] = await tx.insert(engineeringReleases).values({
       rdProjectId: context.record.rdProjectId,
       designControlRecordId: context.record.id,
@@ -616,7 +660,10 @@ export async function submitEngineeringRelease(input: {
         manufacturingEvidence: context.manufacturingEvidence,
         baselineItems: preview.baselineItems,
       },
-      approvalSnapshot: { approvers: preview.requiredApprovals },
+      approvalSnapshot: {
+        provenance: 'AUTHENTICATED_VERSION_BOUND',
+        approvals: authenticatedApprovals,
+      },
       metadata: {
         source: 'engineering-release-gate',
         nextAction: 'Create Manufactured Inventory Item',
@@ -655,14 +702,21 @@ export async function submitEngineeringRelease(input: {
       });
     }
 
-    for (const approval of preview.requiredApprovals) {
+    for (const approval of authenticatedApprovals.filter((entry) => entry.stepKey === '12')) {
       await tx.insert(engineeringReleaseApprovals).values({
         engineeringReleaseId: release.id,
-        approvalRole: approval.role,
-        approvedBy: approval.approvedBy ?? input.actor,
-        approvedAt: approval.approvedAt ? new Date(approval.approvedAt) : now,
+        approvalRole: approval.approvalKey,
+        approvedBy: approval.actorDisplayNameSnapshot,
+        approvedAt: approval.signedAt,
         approvalStatus: 'APPROVED',
-        metadata: approval,
+        metadata: {
+          provenance: 'AUTHENTICATED_VERSION_BOUND',
+          stepContentVersionId: approval.stepContentVersionId,
+          contentChecksum: approval.approvedContentChecksum,
+          actorUserId: approval.actorUserId,
+          actorRole: approval.actorRoleSnapshot,
+          signatureMeaning: approval.signatureMeaning,
+        },
       }).onConflictDoNothing();
     }
 

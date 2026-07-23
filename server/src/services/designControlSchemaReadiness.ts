@@ -8,11 +8,14 @@ export const requiredDesignControlMigrations = [
   '0191_engineering_releases.sql',
   '0192_engineering_packages.sql',
   '0207_design_control_authority_foundation.sql',
+  '0208_design_control_authenticated_approvals.sql',
 ] as const;
 
 export const requiredDesignControlTables = [
   'design_control_records',
   'design_control_steps',
+  'design_control_step_content_versions',
+  'design_control_step_approvals',
   'design_control_requirements',
   'design_control_risks',
   'design_control_reviews',
@@ -141,6 +144,65 @@ export async function assertDesignControlSchemaReady(client: ReadinessClient = d
     const missingConstraints = requiredConstraints.filter((name) => !presentConstraints.has(name));
     if (missingConstraints.length > 0) {
       throw new DesignControlSchemaNotReadyError(missingConstraints);
+    }
+
+    const approvalColumns = await client.execute(sql`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'design_control_steps'
+        AND column_name IN (
+          'current_content_version_id', 'content_version', 'approval_mode',
+          'submitted_at', 'submitted_by_user_id', 'submitted_by_snapshot'
+        )
+    `);
+    const approvalColumnRows = ((approvalColumns as any)?.rows ?? approvalColumns) as Array<{ column_name?: string }>;
+    const presentApprovalColumns = new Set(
+      Array.isArray(approvalColumnRows) ? approvalColumnRows.map((row) => row.column_name) : []
+    );
+    const requiredApprovalColumns = [
+      'current_content_version_id', 'content_version', 'approval_mode',
+      'submitted_at', 'submitted_by_user_id', 'submitted_by_snapshot',
+    ];
+    const missingApprovalColumns = requiredApprovalColumns.filter(
+      (column) => !presentApprovalColumns.has(column)
+    );
+    if (missingApprovalColumns.length > 0) {
+      throw new DesignControlSchemaNotReadyError(
+        missingApprovalColumns.map((column) => `design_control_steps.${column}`)
+      );
+    }
+
+    const approvalStructures = await client.execute(sql`
+      SELECT indexname AS object_name
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname IN (
+          'design_control_step_content_versions_step_version_unique',
+          'design_control_step_approvals_valid_slot_unique'
+        )
+      UNION ALL
+      SELECT tgname AS object_name
+      FROM pg_trigger
+      WHERE NOT tgisinternal
+        AND tgname IN (
+          'prevent_design_control_step_version_delete',
+          'prevent_design_control_step_approval_delete'
+        )
+    `);
+    const structureRows = ((approvalStructures as any)?.rows ?? approvalStructures) as Array<{ object_name?: string }>;
+    const presentStructures = new Set(
+      Array.isArray(structureRows) ? structureRows.map((row) => row.object_name) : []
+    );
+    const requiredStructures = [
+      'design_control_step_content_versions_step_version_unique',
+      'design_control_step_approvals_valid_slot_unique',
+      'prevent_design_control_step_version_delete',
+      'prevent_design_control_step_approval_delete',
+    ];
+    const missingStructures = requiredStructures.filter((name) => !presentStructures.has(name));
+    if (missingStructures.length > 0) {
+      throw new DesignControlSchemaNotReadyError(missingStructures);
     }
 
     if (client === db) {

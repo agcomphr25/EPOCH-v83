@@ -35,6 +35,15 @@ import {
   initializeDesignControlForProject,
   resolveDesignControlAuthority,
 } from '../services/designControlAuthorityService';
+import {
+  decideDesignControlStepApproval,
+  DesignControlApprovalError,
+  getDesignControlStepApprovalState,
+  reopenDesignControlStep,
+  saveDesignControlStepDraft,
+  submitDesignControlStep,
+  type DesignControlApprovalActor,
+} from '../services/designControlApprovalService';
 
 const router = Router();
 
@@ -320,6 +329,39 @@ function actorFromRequest(req: Request) {
   return user?.username || user?.email || user?.displayName || 'system';
 }
 
+function approvalActorFromRequest(req: Request): DesignControlApprovalActor {
+  const user = (req as any).user;
+  if (!Number.isInteger(user?.id) || user.id <= 0) {
+    throw new DesignControlApprovalError(
+      401,
+      'AUTHENTICATION_REQUIRED',
+      'Authenticated user identity is required'
+    );
+  }
+  return {
+    id: user.id,
+    username: user.username ?? user.email ?? user.displayName ?? `user-${user.id}`,
+    role: user.role ?? 'EMPLOYEE',
+  };
+}
+
+function requestMetadata(req: Request) {
+  return { ipAddress: req.ip, userAgent: req.get('user-agent') ?? null };
+}
+
+function sendApprovalError(res: Response, error: unknown, fallback: string) {
+  if (error instanceof DesignControlApprovalError) {
+    res.status(error.statusCode).json({
+      error: error.code,
+      message: error.message,
+      ...(error.details ?? {}),
+    });
+    return;
+  }
+  console.error(`[qms-design-control] ${fallback}`, error);
+  res.status(500).json({ message: fallback });
+}
+
 async function upsertReleaseGate(
   record: typeof designControlRecords.$inferSelect,
   payload: StepPayload,
@@ -495,204 +537,129 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id/steps/:stepKey', authenticateToken, async (req: Request, res: Response) => {
+router.patch('/:id/steps/:stepKey', authenticateToken, requirePermission('design.control.edit'), async (req: Request, res: Response) => {
   try {
-    const record = await getRecord(req.params.id);
-    if (!record) {
-      res.status(404).json({ message: 'Design control record not found' });
-      return;
-    }
-    if (record.rdProjectId && record.authorityStatus !== 'authoritative') {
-      res.status(409).json({
-        message: 'Historical Design Control records are read-only. Designate an authoritative record before editing.',
-        authorityStatus: record.authorityStatus,
-      });
-      return;
-    }
-
-    const step = workflowSteps.find((item) => item.key === req.params.stepKey);
-    if (!step) {
-      res.status(400).json({
-        error: 'Invalid design control step',
-        stepKey: req.params.stepKey,
-        validStepKeys: workflowSteps.map((item) => item.key),
-      });
-      return;
-    }
-
-    await ensureWorkflowSteps(record);
-
-    const payload: StepPayload = {
-      formData: normalizeJsonObject(req.body?.formData),
-      checklist: normalizeJsonObject(req.body?.checklist),
-      approvals: normalizeJsonObject(req.body?.approvals),
-      attachments: normalizeAttachments(req.body?.attachments),
-      metadata: normalizeJsonObject(req.body?.metadata),
-      status: req.body?.status,
-    };
-    const derived = deriveStatus(step, payload, { includeChecklist: step.key !== '12' });
-    const requestedStatus = typeof req.body?.status === 'string' ? req.body.status.trim().toLowerCase() : '';
-    let status = derived.status;
-
-    if (derived.rejectedApproval) {
-      res.status(400).json({
-        message: `Step ${step.key} cannot be approved until required evidence is complete`,
-        ...formatStepRequirementError(step, derived.missing),
-      });
-      return;
-    }
-
-    if (step.key === '12' && status === 'approved') {
-      const approvedSteps = await db
-        .select({ stepKey: designControlSteps.stepKey })
-        .from(designControlSteps)
-        .where(and(
-          eq(designControlSteps.recordId, record.id),
-          inArray(designControlSteps.stepKey, requiredStepKeys),
-          eq(designControlSteps.status, 'approved')
-        ));
-
-      if (approvedSteps.length < requiredStepKeys.length) {
-        const readiness = await buildReadiness(record.id);
-        if (requestedStatus === 'approved') {
-          res.status(422).json({
-            message: 'Step 12 cannot be approved until steps 1-11 are approved',
-            missingItems: readiness.missingItems,
-          });
-          return;
-        }
-
-        status = 'needs_approval';
-      }
-    }
-
-    if (step.key === '12' && status === 'approved') {
-      const manufacturingEvidence = await getDesignManufacturingEvidence({
-        rdProjectId: record.rdProjectId,
-        designControlRecordId: record.id,
-      });
-      if (!manufacturingEvidence.ready) {
-        res.status(422).json({
-          message: 'Step 12 cannot be approved until manufacturing source evidence is ready',
-          missingItems: manufacturingEvidence.missingItems,
-          manufacturingEvidence,
-        });
-        return;
-      }
-    }
-
-    const values = {
-      recordId: record.id,
-      stepKey: step.key,
-      title: step.title,
-      status,
-      rdProjectId: record.rdProjectId,
-      projectId: record.projectId,
-      productionWorkOrderId: record.productionWorkOrderId,
-      p2PurchaseOrderId: record.p2PurchaseOrderId,
-      formData: payload.formData ?? {},
-      checklist: payload.checklist ?? {},
-      approvals: payload.approvals ?? {},
-      attachments: payload.attachments ?? [],
-      metadata: payload.metadata ?? {},
-      approvedAt: status === 'approved' ? new Date() : null,
-      updatedAt: new Date(),
-    };
-
-    const [updatedStep] = await db
-      .insert(designControlSteps)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [designControlSteps.recordId, designControlSteps.stepKey],
-        set: values,
-      })
-      .returning();
-
-    if (step.key === '12') {
-      await upsertReleaseGate(record, payload, status === 'approved' ? 'ready' : 'not_ready');
-    }
-
-    await db
-      .update(designControlRecords)
-      .set({
-        status: status === 'approved' && step.key === '12' ? 'release_ready' : 'active',
-        updatedAt: sql`now()`,
-      })
-      .where(eq(designControlRecords.id, record.id));
-
-    const readiness = await buildReadiness(record.id);
-    res.json({ step: updatedStep, readiness });
+    const result = await saveDesignControlStepDraft({
+      recordId: req.params.id,
+      stepKey: req.params.stepKey,
+      formData: req.body?.formData,
+      checklist: req.body?.checklist,
+      attachments: req.body?.attachments,
+      metadata: req.body?.metadata,
+      changeReason: typeof req.body?.changeReason === 'string' && req.body.changeReason.trim()
+        ? req.body.changeReason.trim()
+        : 'Design Control step draft saved',
+      actor: approvalActorFromRequest(req),
+      requestMetadata: requestMetadata(req),
+    });
+    res.json(result);
+    return;
   } catch (error) {
-    console.error('[qms-design-control] Failed to patch step', error);
-    res.status(500).json({ message: 'Failed to save design control step' });
+    sendApprovalError(res, error, 'Failed to save Design Control step draft');
   }
 });
 
-router.post('/:id/submit-release', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const record = await getRecord(req.params.id);
-    if (!record) {
-      res.status(404).json({ message: 'Design control record not found' });
-      return;
-    }
-    if (record.rdProjectId && record.authorityStatus !== 'authoritative') {
-      res.status(409).json({
-        message: 'Historical Design Control records cannot be submitted for release.',
-        authorityStatus: record.authorityStatus,
+router.post(
+  '/:id/steps/:stepKey/submit',
+  authenticateToken,
+  requirePermission('design.control.submit'),
+  async (req: Request, res: Response) => {
+    try {
+      const result = await submitDesignControlStep({
+        recordId: req.params.id,
+        stepKey: req.params.stepKey,
+        expectedContentVersionId:
+          typeof req.body?.contentVersionId === 'string'
+            ? req.body.contentVersionId
+            : undefined,
+        actor: approvalActorFromRequest(req),
+        requestMetadata: requestMetadata(req),
       });
-      return;
+      res.json(result);
+    } catch (error) {
+      sendApprovalError(res, error, 'Failed to submit Design Control step');
     }
-
-    await ensureWorkflowSteps(record);
-    const readiness = await buildReadiness(record.id);
-    if (!readiness.ready) {
-      res.status(422).json({
-        message: 'Engineering Release Gate is not ready',
-        missingItems: readiness.missingItems,
-      });
-      return;
-    }
-
-    const now = new Date();
-    const [releaseStep] = await db
-      .select()
-      .from(designControlSteps)
-      .where(and(eq(designControlSteps.recordId, record.id), eq(designControlSteps.stepKey, '12')))
-      .limit(1);
-
-    const updatedRecord = await db.transaction(async (tx) => {
-      await tx
-        .update(designControlSteps)
-        .set({ status: 'approved', approvedAt: now, updatedAt: now })
-        .where(and(eq(designControlSteps.recordId, record.id), eq(designControlSteps.stepKey, '12')));
-
-      await upsertReleaseGate(
-        record,
-        {
-          formData: normalizeJsonObject(releaseStep?.formData),
-          checklist: normalizeJsonObject(releaseStep?.checklist),
-          approvals: normalizeJsonObject(releaseStep?.approvals),
-          attachments: normalizeAttachments(releaseStep?.attachments),
-          metadata: normalizeJsonObject(releaseStep?.metadata),
-        },
-        'approved',
-        tx as typeof db,
-        { submittedAt: now, releasedAt: now }
-      );
-
-      const [updated] = await tx
-        .update(designControlRecords)
-        .set({ status: 'release_ready', submittedAt: now, releasedAt: now, updatedAt: now })
-        .where(eq(designControlRecords.id, record.id))
-        .returning();
-      return updated;
-    });
-
-    res.json({ record: updatedRecord, readiness: await buildReadiness(record.id) });
-  } catch (error) {
-    console.error('[qms-design-control] Failed to submit release gate', error);
-    res.status(500).json({ message: 'Failed to submit engineering release gate' });
   }
+);
+
+router.post(
+  '/:id/steps/:stepKey/decision',
+  authenticateToken,
+  requirePermission('design.control.approve'),
+  async (req: Request, res: Response) => {
+    try {
+      const decision = req.body?.decision;
+      if (!['APPROVED', 'REJECTED', 'RETURNED_FOR_REVISION'].includes(decision)) {
+        res.status(400).json({ error: 'INVALID_DECISION' });
+        return;
+      }
+      if (typeof req.body?.contentVersionId !== 'string' || typeof req.body?.approvalKey !== 'string') {
+        res.status(400).json({ error: 'CONTENT_VERSION_AND_APPROVAL_KEY_REQUIRED' });
+        return;
+      }
+      const result = await decideDesignControlStepApproval({
+        recordId: req.params.id,
+        stepKey: req.params.stepKey,
+        contentVersionId: req.body.contentVersionId,
+        approvalKey: req.body.approvalKey,
+        decision,
+        comment: typeof req.body?.comment === 'string' ? req.body.comment : undefined,
+        actor: approvalActorFromRequest(req),
+        requestMetadata: requestMetadata(req),
+      });
+      res.json(result);
+    } catch (error) {
+      sendApprovalError(res, error, 'Failed to record Design Control approval decision');
+    }
+  }
+);
+
+router.get('/:id/steps/:stepKey/approvals', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    res.json(await getDesignControlStepApprovalState(req.params.id, req.params.stepKey));
+  } catch (error) {
+    sendApprovalError(res, error, 'Failed to load Design Control approvals');
+  }
+});
+
+router.get('/:id/steps/:stepKey/versions', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const state = await getDesignControlStepApprovalState(req.params.id, req.params.stepKey);
+    res.json({ currentContentVersion: state.currentContentVersion, versions: state.versions });
+  } catch (error) {
+    sendApprovalError(res, error, 'Failed to load Design Control versions');
+  }
+});
+
+router.post(
+  '/:id/steps/:stepKey/reopen',
+  authenticateToken,
+  requirePermission('design.control.edit'),
+  async (req: Request, res: Response) => {
+    try {
+      const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+      if (!reason) {
+        res.status(400).json({ error: 'REOPEN_REASON_REQUIRED' });
+        return;
+      }
+      res.json(await reopenDesignControlStep({
+        recordId: req.params.id,
+        stepKey: req.params.stepKey,
+        reason,
+        actor: approvalActorFromRequest(req),
+        requestMetadata: requestMetadata(req),
+      }));
+    } catch (error) {
+      sendApprovalError(res, error, 'Failed to reopen Design Control step');
+    }
+  }
+);
+
+router.post('/:id/submit-release', authenticateToken, async (req: Request, res: Response) => {
+  res.status(410).json({
+    error: 'AUTHENTICATED_APPROVAL_REQUIRED',
+    message: 'The legacy release submission path is retired. Submit Step 12 and record its authenticated approval decisions.',
+  });
 });
 
 router.get('/:id/manufacturing-evidence', async (req: Request, res: Response) => {
@@ -728,11 +695,11 @@ router.get('/:id/engineering-release-preview', async (req: Request, res: Respons
   }
 });
 
-router.post('/:id/engineering-release', authenticateToken, async (req: Request, res: Response) => {
+router.post('/:id/engineering-release', authenticateToken, requirePermission('design.release'), async (req: Request, res: Response) => {
   try {
     const result = await submitEngineeringRelease({
       recordId: req.params.id,
-      actor: actorFromRequest(req),
+      actor: approvalActorFromRequest(req).username,
       effectiveDate: typeof req.body?.effectiveDate === 'string' ? req.body.effectiveDate : null,
     });
 

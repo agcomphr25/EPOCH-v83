@@ -17512,6 +17512,12 @@ export const designControlSteps = pgTable('design_control_steps', {
   stepKey: text('step_key').notNull(),
   title: text('title').notNull(),
   status: text('status').notNull().default('incomplete'),
+  currentContentVersionId: uuid('current_content_version_id'),
+  contentVersion: integer('content_version').notNull().default(0),
+  approvalMode: text('approval_mode').notNull().default('LEGACY_BOOLEAN'),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }),
+  submittedByUserId: integer('submitted_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+  submittedBySnapshot: jsonb('submitted_by_snapshot').$type<Record<string, unknown>>(),
   ...designControlTraceabilityColumns(),
   ...designControlJsonColumns(),
   approvedAt: timestamp('approved_at'),
@@ -17526,6 +17532,77 @@ export const designControlSteps = pgTable('design_control_steps', {
   productionWorkOrderIdx: index('design_control_steps_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_steps_p2_po_id_idx').on(table.p2PurchaseOrderId),
 }));
+
+export const designControlStepContentVersions = pgTable('design_control_step_content_versions', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  rdProjectId: text('rd_project_id').notNull().references(() => rdProjects.id, { onDelete: 'restrict' }),
+  designControlRecordId: uuid('design_control_record_id').notNull().references(() => designControlRecords.id, { onDelete: 'restrict' }),
+  designControlStepId: uuid('design_control_step_id').notNull().references(() => designControlSteps.id, { onDelete: 'restrict' }),
+  stepKey: text('step_key').notNull(),
+  contentVersion: integer('content_version').notNull(),
+  contentChecksum: text('content_checksum').notNull(),
+  contentSnapshot: jsonb('content_snapshot').$type<Record<string, unknown>>().notNull(),
+  status: text('status').notNull().default('DRAFT'),
+  createdByUserId: integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  createdBySnapshot: jsonb('created_by_snapshot').$type<Record<string, unknown>>().notNull(),
+  changeReason: text('change_reason').notNull(),
+  supersededByVersionId: uuid('superseded_by_version_id'),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }),
+  submittedByUserId: integer('submitted_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+  submittedBySnapshot: jsonb('submitted_by_snapshot').$type<Record<string, unknown>>(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  stepVersionUnique: uniqueIndex('design_control_step_content_versions_step_version_unique')
+    .on(table.designControlStepId, table.contentVersion),
+  stepChecksumIdx: index('design_control_step_content_versions_step_checksum_idx')
+    .on(table.designControlStepId, table.contentChecksum),
+  recordIdx: index('design_control_step_content_versions_record_idx').on(table.designControlRecordId),
+  projectIdx: index('design_control_step_content_versions_project_idx').on(table.rdProjectId),
+}));
+
+export const designControlStepApprovals = pgTable('design_control_step_approvals', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  rdProjectId: text('rd_project_id').notNull().references(() => rdProjects.id, { onDelete: 'restrict' }),
+  designControlRecordId: uuid('design_control_record_id').notNull().references(() => designControlRecords.id, { onDelete: 'restrict' }),
+  designControlStepId: uuid('design_control_step_id').notNull().references(() => designControlSteps.id, { onDelete: 'restrict' }),
+  stepKey: text('step_key').notNull(),
+  stepContentVersionId: uuid('step_content_version_id').notNull().references(() => designControlStepContentVersions.id, { onDelete: 'restrict' }),
+  approvedContentChecksum: text('approved_content_checksum').notNull(),
+  approvalKey: text('approval_key').notNull(),
+  approvalLabelSnapshot: text('approval_label_snapshot').notNull(),
+  requiredCapabilitySnapshot: text('required_capability_snapshot').notNull(),
+  requiredRolesSnapshot: jsonb('required_roles_snapshot').$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
+  decision: text('decision').notNull(),
+  signatureMeaning: text('signature_meaning').notNull(),
+  decisionComment: text('decision_comment'),
+  actorUserId: integer('actor_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  actorUsernameSnapshot: text('actor_username_snapshot').notNull(),
+  actorDisplayNameSnapshot: text('actor_display_name_snapshot').notNull(),
+  actorRoleSnapshot: text('actor_role_snapshot').notNull(),
+  actorCapabilitiesSnapshot: jsonb('actor_capabilities_snapshot').$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
+  signedAt: timestamp('signed_at', { withTimezone: true }).defaultNow().notNull(),
+  status: text('status').notNull().default('VALID'),
+  invalidatedAt: timestamp('invalidated_at', { withTimezone: true }),
+  invalidatedByUserId: integer('invalidated_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+  invalidatedBySnapshot: jsonb('invalidated_by_snapshot').$type<Record<string, unknown>>(),
+  invalidationReason: text('invalidation_reason'),
+  supersedingContentVersionId: uuid('superseding_content_version_id').references(() => designControlStepContentVersions.id, { onDelete: 'restrict' }),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  versionApprovalActorDecisionUnique: uniqueIndex('design_control_step_approvals_version_slot_actor_decision_unique')
+    .on(table.stepContentVersionId, table.approvalKey, table.actorUserId, table.decision),
+  validApprovalSlotUnique: uniqueIndex('design_control_step_approvals_valid_slot_unique')
+    .on(table.stepContentVersionId, table.approvalKey)
+    .where(sql`${table.status} = 'VALID' AND ${table.decision} = 'APPROVED'`),
+  versionIdx: index('design_control_step_approvals_version_idx').on(table.stepContentVersionId),
+  stepIdx: index('design_control_step_approvals_step_idx').on(table.designControlStepId),
+  projectIdx: index('design_control_step_approvals_project_idx').on(table.rdProjectId),
+}));
+
+export type DesignControlStepContentVersion = typeof designControlStepContentVersions.$inferSelect;
+export type DesignControlStepApproval = typeof designControlStepApprovals.$inferSelect;
 
 export const designControlRequirements = pgTable('design_control_requirements', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),

@@ -2,6 +2,12 @@ export type DesignControlWorkflowItem = {
   key: string;
   label: string;
   legacyLabels?: readonly string[];
+  requiredCapability?: string;
+  allowedRoles?: readonly string[];
+  signatureMeaning?: string;
+  requiresIndependentReviewer?: boolean;
+  incompatibleRoleGroup?: string;
+  allowNotApplicable?: boolean;
 };
 
 export type DesignControlWorkflowStep = {
@@ -25,7 +31,203 @@ const item = (
   label,
   legacyLabels,
 });
-const items = (labels: readonly string[]) => labels.map((label) => item(label));
+
+type ApprovalSlotPolicy = Required<
+  Pick<
+    DesignControlWorkflowItem,
+    'key' | 'requiredCapability' | 'signatureMeaning'
+  >
+> &
+  Pick<
+    DesignControlWorkflowItem,
+    | 'allowedRoles'
+    | 'requiresIndependentReviewer'
+    | 'incompatibleRoleGroup'
+    | 'allowNotApplicable'
+  >;
+
+const approvalPolicy = (
+  key: string,
+  requiredCapability: string,
+  allowedRoles: readonly string[],
+  options: Partial<ApprovalSlotPolicy> = {}
+): ApprovalSlotPolicy => ({
+  key,
+  requiredCapability,
+  allowedRoles,
+  signatureMeaning: 'I reviewed this exact Design Control step version and approve it for its stated purpose.',
+  requiresIndependentReviewer: true,
+  ...options,
+});
+
+export const DESIGN_CONTROL_APPROVAL_SLOT_POLICIES: Readonly<
+  Record<string, ApprovalSlotPolicy>
+> = {
+  'Engineering intake approval': approvalPolicy(
+    'engineering_intake_approval',
+    'design.control.approve',
+    ['ENGINEERING', 'ENGINEER', 'ADMIN', 'OWNER']
+  ),
+  'Quality intake approval': approvalPolicy(
+    'quality_intake_approval',
+    'design.control.approve',
+    ['QUALITY', 'QUALITY_MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Engineering planning approval': approvalPolicy(
+    'engineering_planning_approval',
+    'design.control.approve',
+    ['ENGINEERING', 'ENGINEER', 'ADMIN', 'OWNER']
+  ),
+  'Quality planning approval': approvalPolicy(
+    'quality_planning_approval',
+    'design.control.approve',
+    ['QUALITY', 'QUALITY_MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Manufacturing planning approval': approvalPolicy(
+    'manufacturing_planning_approval',
+    'design.control.approve',
+    ['MANUFACTURING', 'MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Requirements owner approval': approvalPolicy(
+    'requirements_owner_approval',
+    'design.requirement.approve',
+    ['ENGINEERING', 'ENGINEER', 'QUALITY', 'ADMIN', 'OWNER']
+  ),
+  'Engineering approval': approvalPolicy(
+    'engineering_requirements_review_approval',
+    'design.requirement.approve',
+    ['ENGINEERING', 'ENGINEER', 'ADMIN', 'OWNER']
+  ),
+  'Quality approval': approvalPolicy(
+    'quality_requirements_review_approval',
+    'design.requirement.approve',
+    ['QUALITY', 'QUALITY_MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Engineering risk approval': approvalPolicy(
+    'engineering_risk_approval',
+    'design.risk.accept',
+    ['ENGINEERING', 'ENGINEER', 'ADMIN', 'OWNER']
+  ),
+  'Quality risk approval': approvalPolicy(
+    'quality_risk_approval',
+    'design.risk.accept',
+    ['QUALITY', 'QUALITY_MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Engineering concept approval': approvalPolicy(
+    'engineering_concept_approval',
+    'design.control.approve',
+    ['ENGINEERING', 'ENGINEER', 'ADMIN', 'OWNER']
+  ),
+  'Quality concept approval': approvalPolicy(
+    'quality_concept_approval',
+    'design.control.approve',
+    ['QUALITY', 'QUALITY_MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Manufacturing concept approval': approvalPolicy(
+    'manufacturing_concept_approval',
+    'design.control.approve',
+    ['MANUFACTURING', 'MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Engineering output approval': approvalPolicy(
+    'engineering_output_approval',
+    'design.control.approve',
+    ['ENGINEERING', 'ENGINEER', 'ADMIN', 'OWNER']
+  ),
+  'Document control approval': approvalPolicy(
+    'document_control_approval',
+    'design.control.approve',
+    ['DOCUMENT_MANAGER', 'QUALITY', 'ADMIN', 'OWNER']
+  ),
+  'Engineering build approval': approvalPolicy(
+    'engineering_build_approval',
+    'design.control.approve',
+    ['ENGINEERING', 'ENGINEER', 'ADMIN', 'OWNER']
+  ),
+  'Quality build approval': approvalPolicy(
+    'quality_build_approval',
+    'design.control.approve',
+    ['QUALITY', 'QUALITY_MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Verification approval': approvalPolicy(
+    'verification_approval',
+    'design.verify',
+    ['ENGINEERING', 'QUALITY', 'QUALITY_MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Engineering validation approval': approvalPolicy(
+    'engineering_validation_approval',
+    'design.validate',
+    ['ENGINEERING', 'ENGINEER', 'ADMIN', 'OWNER']
+  ),
+  'Quality validation approval': approvalPolicy(
+    'quality_validation_approval',
+    'design.validate',
+    ['QUALITY', 'QUALITY_MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Customer/program validation approval': approvalPolicy(
+    'program_validation_approval',
+    'design.validate',
+    ['PROGRAM_MANAGER', 'MANAGER', 'ADMIN', 'OWNER'],
+    { allowNotApplicable: true }
+  ),
+  Engineering: approvalPolicy(
+    'engineering_final_review_approval',
+    'design.control.approve',
+    ['ENGINEERING', 'ENGINEER', 'ADMIN', 'OWNER']
+  ),
+  Quality: approvalPolicy(
+    'quality_final_review_approval',
+    'design.control.approve',
+    ['QUALITY', 'QUALITY_MANAGER', 'ADMIN', 'OWNER']
+  ),
+  Manufacturing: approvalPolicy(
+    'manufacturing_final_review_approval',
+    'design.control.approve',
+    ['MANUFACTURING', 'MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Program Manager': approvalPolicy(
+    'program_manager_final_review_approval',
+    'design.control.approve',
+    ['PROGRAM_MANAGER', 'MANAGER', 'ADMIN', 'OWNER']
+  ),
+  'Engineering release approval': approvalPolicy(
+    'engineering_release_approval',
+    'design.release',
+    ['ENGINEERING', 'ENGINEER', 'ADMIN', 'OWNER'],
+    { incompatibleRoleGroup: 'release' }
+  ),
+  'Quality release approval': approvalPolicy(
+    'quality_release_approval',
+    'design.release',
+    ['QUALITY', 'QUALITY_MANAGER', 'ADMIN', 'OWNER'],
+    { incompatibleRoleGroup: 'release' }
+  ),
+  'Manufacturing release approval': approvalPolicy(
+    'manufacturing_release_approval',
+    'design.release',
+    ['MANUFACTURING', 'MANAGER', 'ADMIN', 'OWNER'],
+    { incompatibleRoleGroup: 'release' }
+  ),
+  'Program Manager release approval': approvalPolicy(
+    'program_manager_release_approval',
+    'design.release',
+    ['PROGRAM_MANAGER', 'MANAGER', 'ADMIN', 'OWNER'],
+    { incompatibleRoleGroup: 'release', allowNotApplicable: true }
+  ),
+};
+
+const items = (labels: readonly string[]) =>
+  labels.map((label) => {
+    const policy = DESIGN_CONTROL_APPROVAL_SLOT_POLICIES[label];
+    return policy
+      ? { ...item(label, policy.key, [label]), ...policy }
+      : item(label);
+  });
+
+const approvalSlot = (label: string): DesignControlWorkflowItem => {
+  const policy = DESIGN_CONTROL_APPROVAL_SLOT_POLICIES[label];
+  if (!policy) throw new Error(`Missing Design Control approval policy for ${label}`);
+  return { ...item(label, policy.key, [label]), ...policy };
+};
 
 export const DESIGN_CONTROL_WORKFLOW = [
   {
@@ -383,14 +585,10 @@ export const DESIGN_CONTROL_WORKFLOW = [
       ),
     ],
     approvals: [
-      item('Engineering release approval', 'engineering release approval'),
-      item('Quality release approval', 'quality release approval'),
-      item('Manufacturing release approval', 'manufacturing release approval'),
-      item(
-        'Program Manager release approval',
-        'program manager release approval',
-        ['Program Manager release approval']
-      ),
+      approvalSlot('Engineering release approval'),
+      approvalSlot('Quality release approval'),
+      approvalSlot('Manufacturing release approval'),
+      approvalSlot('Program Manager release approval'),
     ],
   },
 ] as const satisfies readonly DesignControlWorkflowStep[];

@@ -50,6 +50,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { apiRequest } from '@/lib/queryClient';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type StatusTone = 'draft' | 'active' | 'review' | 'approved' | 'blocked' | 'released';
 
@@ -122,6 +123,37 @@ type DesignControlStepRecord = {
   approvals?: Record<string, unknown> | null;
   attachments?: unknown[] | null;
   metadata?: Record<string, unknown> | null;
+};
+
+type ApprovalDecision = {
+  id: string;
+  approvalKey: string;
+  decision: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_REVISION';
+  actorDisplayNameSnapshot: string;
+  actorRoleSnapshot: string;
+  comment?: string | null;
+  createdAt: string;
+  status: string;
+};
+
+type StepApprovalState = {
+  step: DesignControlStepRecord & {
+    currentContentVersionId?: string | null;
+    contentVersion?: number;
+    status: string;
+  };
+  currentContentVersion: { id: string; contentVersion: number; contentChecksum: string; status: string } | null;
+  versions: Array<{ id: string; contentVersion: number; contentChecksum: string; status: string; createdAt: string }>;
+  approvals: ApprovalDecision[];
+  approvalSlots: Array<{
+    key: string;
+    label: string;
+    requiredCapability: string;
+    signatureMeaning: string;
+    status: 'APPROVED' | 'PENDING';
+    decision: ApprovalDecision | null;
+  }>;
+  legacyEvidence: { provenance: string; values: Record<string, unknown>; satisfiesAuthenticatedGate: false };
 };
 
 type ManufacturingEvidenceStatus =
@@ -745,6 +777,7 @@ export function SectionHeader({
 }
 
 export default function QMSDesignControlPage() {
+  const { can } = usePermissions();
   const routeParams = new URLSearchParams(window.location.search);
   const rdProjectIdParam = routeParams.get('rdProjectId');
   const rdProjectNameParam = routeParams.get('rdProjectName');
@@ -767,6 +800,9 @@ export default function QMSDesignControlPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSavedStep, setLastSavedStep] = useState<string | null>(null);
   const [engineeringReleasePreview, setEngineeringReleasePreview] = useState<EngineeringReleasePreview | null>(null);
+  const [approvalState, setApprovalState] = useState<StepApprovalState | null>(null);
+  const [showApprovalHistory, setShowApprovalHistory] = useState(false);
+  const [isApprovalActionPending, setIsApprovalActionPending] = useState(false);
 
   const gateProgress = useMemo(() => {
     const allRows = [...inputs, ...outputs, ...reviews, ...verification, ...validation, ...changes, ...releases, ...dhf];
@@ -868,6 +904,24 @@ export default function QMSDesignControlPage() {
     };
   }, [activeDesignControlRecordId]);
 
+  useEffect(() => {
+    if (!activeDesignControlRecordId) {
+      setApprovalState(null);
+      return;
+    }
+    let cancelled = false;
+    apiRequest(`/api/qms/design-control/${activeDesignControlRecordId}/steps/${selectedWorkflowStepId}/approvals`)
+      .then((state) => {
+        if (!cancelled) setApprovalState(state as StepApprovalState);
+      })
+      .catch((error: any) => {
+        if (!cancelled) setSaveError(error.message || 'Failed to load approval evidence.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDesignControlRecordId, selectedWorkflowStepId]);
+
   const createDesignControlRecord = async (title?: string) => {
     setIsCreatingRecord(true);
     setSaveError(null);
@@ -911,10 +965,9 @@ export default function QMSDesignControlPage() {
       const response = await apiRequest(`/api/qms/design-control/${activeDesignControlRecordId}/steps/${step.id}`, {
         method: 'PATCH',
         body: {
-          status: workflowStatuses[step.id],
           formData: data.fields,
           checklist: step.id === '12' ? {} : data.checklist,
-          approvals: data.approvals,
+          changeReason: 'Design Control draft updated',
           metadata: {
             title: step.title,
             purpose: step.purpose,
@@ -924,9 +977,14 @@ export default function QMSDesignControlPage() {
               : undefined,
           },
         },
-      }) as { readiness: DesignControlReadiness };
-      setServerReadiness(response.readiness);
-      setLastSavedStep(`Step ${step.id} saved`);
+      });
+      const [readiness, state] = await Promise.all([
+        apiRequest(`/api/qms/design-control/${activeDesignControlRecordId}/readiness`) as Promise<DesignControlReadiness>,
+        apiRequest(`/api/qms/design-control/${activeDesignControlRecordId}/steps/${step.id}/approvals`) as Promise<StepApprovalState>,
+      ]);
+      setServerReadiness(readiness);
+      setApprovalState(state);
+      setLastSavedStep(`Step ${step.id} draft saved`);
     } catch (error: any) {
       setSaveError(error.message || 'Failed to save design control step.');
       if (error.responseData?.missingItems) {
@@ -968,17 +1026,54 @@ export default function QMSDesignControlPage() {
     }));
   };
 
-  const updateWorkflowApproval = (stepId: string, approval: string, checked: boolean) => {
-    setWorkflowData((current) => ({
-      ...current,
-      [stepId]: {
-        ...current[stepId],
-        approvals: {
-          ...current[stepId].approvals,
-          [approval]: checked,
-        },
-      },
-    }));
+  const submitWorkflowStep = async () => {
+    if (!activeDesignControlRecordId || !approvalState?.currentContentVersion?.id) return;
+    setIsApprovalActionPending(true);
+    setSaveError(null);
+    try {
+      const state = await apiRequest(
+        `/api/qms/design-control/${activeDesignControlRecordId}/steps/${selectedWorkflowStep.id}/submit`,
+        { method: 'POST', body: { contentVersionId: approvalState.currentContentVersion.id } }
+      ) as StepApprovalState;
+      setApprovalState(state);
+      setLastSavedStep(`Step ${selectedWorkflowStep.id} submitted as version ${state.currentContentVersion?.contentVersion}`);
+    } catch (error: any) {
+      setSaveError(error.message || 'Failed to submit this step.');
+    } finally {
+      setIsApprovalActionPending(false);
+    }
+  };
+
+  const decideWorkflowApproval = async (
+    approvalKey: string,
+    decision: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_REVISION'
+  ) => {
+    if (!activeDesignControlRecordId || !approvalState?.currentContentVersion?.id) return;
+    const comment = window.prompt(
+      decision === 'APPROVED' ? 'Optional approval comment' : 'Decision comment (required)'
+    );
+    if (comment === null || (decision !== 'APPROVED' && !comment.trim())) return;
+    setIsApprovalActionPending(true);
+    setSaveError(null);
+    try {
+      const state = await apiRequest(
+        `/api/qms/design-control/${activeDesignControlRecordId}/steps/${selectedWorkflowStep.id}/decision`,
+        {
+          method: 'POST',
+          body: {
+            contentVersionId: approvalState.currentContentVersion.id,
+            approvalKey,
+            decision,
+            comment: comment.trim() || undefined,
+          },
+        }
+      ) as StepApprovalState;
+      setApprovalState(state);
+    } catch (error: any) {
+      setSaveError(error.message || 'Approval decision failed. Refresh to verify the current version.');
+    } finally {
+      setIsApprovalActionPending(false);
+    }
   };
 
   return (
@@ -1181,11 +1276,27 @@ export default function QMSDesignControlPage() {
                       size="sm"
                       className="gap-2"
                       onClick={saveWorkflowStep}
-                      disabled={isSavingStep || isLoadingRecord || !activeDesignControlRecordId}
+                      disabled={
+                        isSavingStep ||
+                        isLoadingRecord ||
+                        !activeDesignControlRecordId ||
+                        approvalState?.step.status === 'submitted_for_approval' ||
+                        !can('design.control.edit')
+                      }
                     >
                       <FileCheck2 className="h-4 w-4" />
-                      {isSavingStep ? 'Saving...' : 'Save Step'}
+                      {isSavingStep ? 'Saving...' : 'Save Draft'}
                     </Button>
+                    {can('design.control.submit') && approvalState?.step.status !== 'submitted_for_approval' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={submitWorkflowStep}
+                        disabled={isApprovalActionPending || !approvalState?.currentContentVersion}
+                      >
+                        Submit for Approval
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -1209,6 +1320,7 @@ export default function QMSDesignControlPage() {
                             value={selectedWorkflowData.fields[field] ?? ''}
                             onChange={(event) => updateWorkflowField(selectedWorkflowStep.id, field, event.target.value)}
                             placeholder={`Enter ${field.toLowerCase()}`}
+                            disabled={approvalState?.step.status === 'submitted_for_approval'}
                           />
                         ) : (
                           <Input
@@ -1216,6 +1328,7 @@ export default function QMSDesignControlPage() {
                             value={selectedWorkflowData.fields[field] ?? ''}
                             onChange={(event) => updateWorkflowField(selectedWorkflowStep.id, field, event.target.value)}
                             placeholder={`Enter ${field.toLowerCase()}`}
+                            disabled={approvalState?.step.status === 'submitted_for_approval'}
                           />
                         )}
                       </div>
@@ -1311,6 +1424,7 @@ export default function QMSDesignControlPage() {
                           <Checkbox
                             checked={selectedWorkflowData.checklist[item] === true}
                             onCheckedChange={(checked) => updateWorkflowChecklist(selectedWorkflowStep.id, item, checked === true)}
+                            disabled={approvalState?.step.status === 'submitted_for_approval'}
                           />
                           <span>{item}</span>
                         </label>
@@ -1321,19 +1435,74 @@ export default function QMSDesignControlPage() {
 
                 {selectedWorkflowStep.approvals && selectedWorkflowStep.approvals.length > 0 && (
                   <div className="space-y-3">
-                    <div className="text-sm font-medium">Required approvals</div>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      {selectedWorkflowStep.approvals.map((approval) => (
-                        <label key={approval} className="flex cursor-pointer items-start gap-3 rounded-md border bg-white px-3 py-2 text-sm hover:bg-gray-50">
-                          <Checkbox
-                            checked={selectedWorkflowData.approvals[approval] === true}
-                            disabled={selectedWorkflowStep.id === '12' && workflowStatuses[selectedWorkflowStep.id] === 'blocked'}
-                            onCheckedChange={(checked) => updateWorkflowApproval(selectedWorkflowStep.id, approval, checked === true)}
-                          />
-                          <span>{approval}</span>
-                        </label>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium">Authenticated approvals</div>
+                        <div className="text-xs text-muted-foreground">
+                          {approvalState?.currentContentVersion
+                            ? `Content version ${approvalState.currentContentVersion.contentVersion} · ${approvalState.currentContentVersion.contentChecksum.slice(0, 12)}`
+                            : 'Save a draft to create the first content version.'}
+                        </div>
+                      </div>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setShowApprovalHistory((current) => !current)}>
+                        <History className="mr-2 h-4 w-4" />
+                        {showApprovalHistory ? 'Hide History' : 'Version History'}
+                      </Button>
+                    </div>
+                    {Object.values(approvalState?.legacyEvidence.values ?? {}).some(Boolean) && (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        Legacy checkbox evidence is retained for history but does not satisfy an authenticated approval gate.
+                      </div>
+                    )}
+                    <div className="grid gap-3">
+                      {(approvalState?.approvalSlots ?? []).map((slot) => (
+                        <div key={slot.key} className="rounded-md border bg-white p-3 text-sm">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="font-medium">{slot.label}</div>
+                              <div className="mt-1 text-xs text-muted-foreground">{slot.signatureMeaning}</div>
+                              {slot.decision && (
+                                <div className="mt-2 text-xs">
+                                  {slot.decision.decision} by {slot.decision.actorDisplayNameSnapshot} ({slot.decision.actorRoleSnapshot}) ·{' '}
+                                  {new Date(slot.decision.createdAt).toLocaleString()}
+                                  {slot.decision.comment ? ` · ${slot.decision.comment}` : ''}
+                                </div>
+                              )}
+                            </div>
+                            <Badge variant="outline">{slot.status}</Badge>
+                          </div>
+                          {approvalState?.step.status === 'submitted_for_approval' &&
+                            slot.status === 'PENDING' &&
+                            can('design.control.approve') &&
+                            can(slot.requiredCapability) && (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <Button size="sm" onClick={() => decideWorkflowApproval(slot.key, 'APPROVED')} disabled={isApprovalActionPending}>
+                                  Approve
+                                </Button>
+                                <Button size="sm" variant="destructive" onClick={() => decideWorkflowApproval(slot.key, 'REJECTED')} disabled={isApprovalActionPending}>
+                                  Reject
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => decideWorkflowApproval(slot.key, 'RETURNED_FOR_REVISION')} disabled={isApprovalActionPending}>
+                                  Return for Revision
+                                </Button>
+                              </div>
+                            )}
+                        </div>
                       ))}
                     </div>
+                    {showApprovalHistory && (
+                      <div className="rounded-md border bg-muted/20 p-3 text-xs">
+                        <div className="font-medium">Immutable content versions</div>
+                        <div className="mt-2 space-y-1">
+                          {(approvalState?.versions ?? []).map((version) => (
+                            <div key={version.id}>
+                              Version {version.contentVersion} · {version.status} · {version.contentChecksum.slice(0, 12)} ·{' '}
+                              {new Date(version.createdAt).toLocaleString()}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>

@@ -44,6 +44,14 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
 
   // Controlled documents
   'documents.approve',
+  'design.control.edit',
+  'design.control.submit',
+  'design.control.approve',
+  'design.requirement.approve',
+  'design.risk.accept',
+  'design.verify',
+  'design.validate',
+  'design.release',
 
   // Employee qualifications
   'employees.manage_qualifications',

@@ -7,6 +7,7 @@ export const requiredDesignControlMigrations = [
   '0190_design_control_requirement_applicability.sql',
   '0191_engineering_releases.sql',
   '0192_engineering_packages.sql',
+  '0207_design_control_authority_foundation.sql',
 ] as const;
 
 export const requiredDesignControlTables = [
@@ -85,6 +86,61 @@ export async function assertDesignControlSchemaReady(client: ReadinessClient = d
         }
         throw error;
       }
+    }
+
+    const authorityColumns = await client.execute(sql`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'design_control_records'
+        AND column_name IN (
+          'authority_status', 'designated_authoritative_at', 'designated_authoritative_by',
+          'superseded_at', 'superseded_by', 'supersession_reason',
+          'superseded_by_record_id', 'record_version'
+        )
+    `);
+    const columnRows = ((authorityColumns as any)?.rows ?? authorityColumns) as Array<{ column_name?: string }>;
+    const presentColumns = new Set(Array.isArray(columnRows) ? columnRows.map((row) => row.column_name) : []);
+    const requiredColumns = [
+      'authority_status', 'designated_authoritative_at', 'designated_authoritative_by',
+      'superseded_at', 'superseded_by', 'supersession_reason',
+      'superseded_by_record_id', 'record_version',
+    ];
+    const missingColumns = requiredColumns.filter((column) => !presentColumns.has(column));
+    if (missingColumns.length > 0) {
+      throw new DesignControlSchemaNotReadyError(missingColumns.map((column) => `design_control_records.${column}`));
+    }
+
+    const authorityIndex = await client.execute(sql`
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'design_control_records'
+        AND indexname = 'design_control_records_authoritative_rd_project_unique'
+      LIMIT 1
+    `);
+    const indexRows = (authorityIndex as any)?.rows ?? authorityIndex;
+    if (!Array.isArray(indexRows) || indexRows.length === 0) {
+      throw new DesignControlSchemaNotReadyError(['design_control_records_authoritative_rd_project_unique']);
+    }
+
+    const authorityConstraints = await client.execute(sql`
+      SELECT conname
+      FROM pg_constraint
+      WHERE conname IN (
+        'design_control_records_authority_status_check',
+        'design_control_records_superseded_by_record_fk'
+      )
+    `);
+    const constraintRows = ((authorityConstraints as any)?.rows ?? authorityConstraints) as Array<{ conname?: string }>;
+    const presentConstraints = new Set(Array.isArray(constraintRows) ? constraintRows.map((row) => row.conname) : []);
+    const requiredConstraints = [
+      'design_control_records_authority_status_check',
+      'design_control_records_superseded_by_record_fk',
+    ];
+    const missingConstraints = requiredConstraints.filter((name) => !presentConstraints.has(name));
+    if (missingConstraints.length > 0) {
+      throw new DesignControlSchemaNotReadyError(missingConstraints);
     }
 
     if (client === db) {

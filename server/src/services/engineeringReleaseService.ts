@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+
 import { and, desc, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../db';
@@ -577,6 +578,16 @@ export async function submitEngineeringRelease(input: {
         status: 'existing' as const,
         release: existingRelease,
         preview: buildEngineeringReleasePreviewFromContext(context, existingRelease, [existingRelease]),
+      };
+    }
+
+    if (context.record.authorityStatus !== 'authoritative') {
+      return {
+        status: 'blocked' as const,
+        missingEvidence: [
+          `Design Control record is ${context.record.authorityStatus}; new Engineering Releases require the project's authoritative record`,
+        ],
+        preview,
       };
     }
 

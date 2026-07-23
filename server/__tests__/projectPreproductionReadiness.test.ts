@@ -67,6 +67,30 @@ describe('P2 V2 Preproduction Readiness rules', () => {
     ).toEqual([]);
   });
 
+  it.each([
+    ['risks-controlled', 'Applicable risks have owners and controls'],
+    [
+      'qualified-resources',
+      'Required employee qualifications and calibrated equipment are current',
+    ],
+    [
+      'safety-controls',
+      'Applicable safety, FOD, and environmental controls are identified',
+    ],
+  ])(
+    'keeps manually evidenced requirement %s fail-closed by default',
+    (key, label) => {
+      const item = {
+        key,
+        category: 'Safety gate',
+        label,
+        applicability: 'REQUIRED' as const,
+        satisfied: false,
+      };
+      expect(checklistBlockers([item])).toEqual([`Safety gate: ${label}`]);
+    }
+  );
+
   it('always requires four independent core functions', () => {
     expect(
       requiredPreproductionRoles({
@@ -233,6 +257,8 @@ describe('Phase 8C integration safety contract', () => {
     expect(transaction).toContain('validateRelease(projectId, tx)');
     expect(transaction).toContain('PREEXISTING_PRODUCTION_RECORDS');
     expect(transaction).toContain('PREEXISTING_SERIALIZED_RECORDS');
+    expect(transaction).toContain('RELEASED_ROUTING_STALE');
+    expect(transaction).toContain('FOR SHARE OF ppi,pr,pct');
     expect(transaction).toContain('assertProductionCountsMatchPlan');
     expect(transaction).toMatch(
       /generateP2ProductionOrders\(\s*poId,\s*undefined,\s*tx\s*\)/
@@ -243,6 +269,8 @@ describe('Phase 8C integration safety contract', () => {
     expect(launch).toMatch(
       /\}\s*catch \(error\) \{\s*try \{\s*await recordAuditEvent\(\{\s*eventType: 'P2_V2_PRODUCTION_LAUNCH_FAILED'/
     );
+    expect(launch).toContain('idempotencyKeyPresent');
+    expect(launch).not.toContain('idempotencyKey,\n          errorCode');
   });
 
   it('keeps authoritative generator reads and sequence allocation on the supplied transaction', () => {

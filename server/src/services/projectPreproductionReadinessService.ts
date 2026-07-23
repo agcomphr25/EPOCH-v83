@@ -236,7 +236,7 @@ function recommendedChecklist(source: Awaited<ReturnType<typeof sourceState>>) {
       'risks-controlled',
       'Project and contract',
       'Applicable risks have owners and controls',
-      true,
+      false,
     ],
     [
       'technical-released',
@@ -324,7 +324,7 @@ function recommendedChecklist(source: Awaited<ReturnType<typeof sourceState>>) {
       'qualified-resources',
       'Resources',
       'Required employee qualifications and calibrated equipment are current',
-      true,
+      false,
     ],
     [
       'budgets-active',
@@ -336,7 +336,7 @@ function recommendedChecklist(source: Awaited<ReturnType<typeof sourceState>>) {
       'safety-controls',
       'Resources',
       'Applicable safety, FOD, and environmental controls are identified',
-      true,
+      false,
     ],
     [
       'wad-current',
@@ -1064,20 +1064,37 @@ export async function launchProduction(
         );
       const planItems = resultRows(
         await tx.execute(sql`
-          SELECT ppi.*,pr.department_sequence
+          SELECT ppi.*,pr.department_sequence,
+                 pr.routing_revision live_routing_revision,
+                 pr.is_active live_routing_is_active,
+                 pct.approval_status live_routing_approval_status
           FROM project_production_plan_items ppi
-          LEFT JOIN part_routings pr ON pr.id=ppi.routing_id
+          JOIN part_routings pr ON pr.id=ppi.routing_id
+          JOIN production_control_templates pct ON pct.id=pr.created_from_template_id
           WHERE ppi.production_plan_id=${release.production_plan_id}
             AND ppi.project_id=${projectId}
             AND ppi.is_manufactured=true
             AND ppi.make_buy='MAKE'
           ORDER BY ppi.assembly_path
-          FOR SHARE OF ppi`)
+          FOR SHARE OF ppi,pr,pct`)
       );
       if (!planItems.length)
         throw new ProjectPreproductionError(
           'MANUFACTURED_PLAN_REQUIRED',
           'The released Production Plan has no manufactured items.',
+          409
+        );
+      const changedRouting = planItems.find(
+        (item) =>
+          !item.live_routing_is_active ||
+          item.live_routing_approval_status !== 'APPROVED' ||
+          String(item.live_routing_revision ?? '') !==
+            String(item.routing_revision ?? '')
+      );
+      if (changedRouting)
+        throw new ProjectPreproductionError(
+          'RELEASED_ROUTING_STALE',
+          `${changedRouting.part_number} routing changed after production release.`,
           409
         );
       let plannedCounts: Map<string, number>;

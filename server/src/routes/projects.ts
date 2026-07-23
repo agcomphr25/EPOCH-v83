@@ -38,6 +38,8 @@ import { getActiveWorkflowInstanceForProject, getWorkflowReadModel } from '../se
 import { buildP2V2WorkflowResponse, buildUninitializedP2V2Response } from '../services/projectWorkflowV2ReadModel';
 import projectProductionPlanningRoutes from './projectProductionPlanning';
 import { getCurrentProductionPlan } from '../services/projectProductionPlanningService';
+import projectWadAuthorizationRoutes from './projectWadAuthorization';
+import { getCurrentWadAuthorization } from '../services/projectWadAuthorizationService';
 import { getUserPermissions } from '../services/permissionService';
 import {
   createDraft as createDesignApplicabilityDraft,
@@ -1579,6 +1581,7 @@ function sendDesignError(res: Response, error: unknown) {
 }
 
 router.use('/:id/workflow-v2/production-planning', projectProductionPlanningRoutes);
+router.use('/:id/workflow-v2/wad-authorization', projectWadAuthorizationRoutes);
 
 router.get('/:id/workflow-v2/design-applicability', async (req, res) => {
   try {
@@ -1680,6 +1683,51 @@ router.get('/:id/workflow-v2', async (req, res) => {
                 ...stage,
                 status: 'BLOCKED',
                 blockedReason: productionPlan.readiness.differences.join(' '),
+              }
+            : stage
+        );
+        response.blockedStages = response.stages.filter(
+          (stage) => stage.status === 'BLOCKED'
+        ).length;
+      }
+    }
+    const planningStage = response.stages.find(
+      (stage) => stage.stepType === 'production_planning'
+    );
+    const wadStage = response.stages.find(
+      (stage) => stage.stepType === 'wad_authorization'
+    );
+    if (wadStage?.status === 'COMPLETE' && planningStage?.status !== 'COMPLETE') {
+      response.stages = response.stages.map((stage) =>
+        stage.stepType === 'wad_authorization'
+          ? {
+              ...stage,
+              status: 'BLOCKED',
+              blockedReason:
+                'The released Production Planning baseline is no longer current.',
+            }
+          : stage
+      );
+      response.blockedStages = response.stages.filter(
+        (stage) => stage.status === 'BLOCKED'
+      ).length;
+    }
+    if (
+      planningStage?.status === 'COMPLETE' &&
+      ['COMPLETE', 'NOT_APPLICABLE'].includes(designStage?.status ?? '')
+    ) {
+      const wadAuthorization = await getCurrentWadAuthorization(project.id);
+      if (
+        wadAuthorization.authorization?.status === 'RELEASED' &&
+        wadAuthorization.readiness.stale
+      ) {
+        response.stages = response.stages.map((stage) =>
+          stage.stepType === 'wad_authorization'
+            ? {
+                ...stage,
+                status: 'BLOCKED',
+                blockedReason:
+                  wadAuthorization.readiness.differences.join(' '),
               }
             : stage
         );

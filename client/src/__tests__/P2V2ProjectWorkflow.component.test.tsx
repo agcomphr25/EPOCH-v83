@@ -14,7 +14,7 @@ const stages = Array.from({ length: 10 }, (_, index) => ({
         : index === 2
           ? 'contract_review'
           : index === 3
-            ? 'design_applicability'
+            ? 'technical_configuration_review'
             : index === 4
               ? 'production_planning'
               : index === 5
@@ -154,10 +154,17 @@ describe('P2V2ProjectWorkflow', () => {
     expect(
       screen.getByTestId('open-commercial-review-contract_review')
     ).toBeInTheDocument();
-    expect(screen.getByTestId('open-design-applicability')).toBeInTheDocument();
     expect(
-      screen.getAllByRole('button', { name: 'Open Design Applicability' })
+      screen.getByTestId('open-technical-configuration-review')
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', {
+        name: 'Open Technical & Configuration Review',
+      })
     ).toHaveLength(1);
+    expect(
+      screen.queryByRole('button', { name: 'Open Design Applicability' })
+    ).not.toBeInTheDocument();
     expect(
       screen.getAllByRole('button', { name: 'Open Production Planning' })
     ).toHaveLength(1);

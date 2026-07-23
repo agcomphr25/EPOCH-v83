@@ -9,6 +9,7 @@ import {
   getOrderedProjectWorkflowSteps,
   getProjectWorkflowDefinition,
   getProjectWorkflowStepDefinition,
+  getP2V2StagesForDefinitionVersion,
   isLegacyProjectWorkflow,
   LEGACY_STARTUP_REPAIR_STEPS,
   validateProjectWorkflowDefinition,
@@ -51,7 +52,7 @@ describe('project workflow registry', () => {
     expect(isLegacyProjectWorkflow('legacy_v1')).toBe(true);
   });
 
-  it('defines p2_v2 as ten inactive metadata stages with no database steps', () => {
+  it('defines p2_v2 as ten inactive customer-PO workflow stages with no database steps', () => {
     const definition = getProjectWorkflowDefinition('p2_v2');
     expect(definition).toMatchObject({
       version: 'p2_v2',
@@ -62,16 +63,22 @@ describe('project workflow registry', () => {
     expect(
       definition.stages.map(({ type, label }) => ({ type, label }))
     ).toEqual([
-      { type: 'rfq_risk_assessment', label: 'RFQ & Risk' },
+      { type: 'rfq_risk_assessment', label: 'RFQ Review' },
       { type: 'estimate_quote', label: 'Estimate & Quote' },
-      { type: 'contract_review', label: 'PO & Contract Review' },
-      { type: 'design_applicability', label: 'Design Applicability' },
+      { type: 'contract_review', label: 'Contract Review' },
+      {
+        type: 'technical_configuration_review',
+        label: 'Technical & Configuration Review',
+      },
       { type: 'production_planning', label: 'Production Planning' },
       { type: 'wad_authorization', label: 'WAD Authorization' },
-      { type: 'preproduction_release', label: 'Preproduction & Release' },
-      { type: 'production_quality', label: 'Production & Quality' },
-      { type: 'final_release_shipping', label: 'Final Release & Shipping' },
-      { type: 'project_closing', label: 'Project Closing' },
+      { type: 'preproduction_release', label: 'Preproduction Readiness' },
+      { type: 'production_quality', label: 'Production' },
+      {
+        type: 'final_release_shipping',
+        label: 'Quality & Product Release',
+      },
+      { type: 'project_closing', label: 'Shipping & Project Closing' },
     ]);
     expect(definition.stages.map((stage) => stage.order)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
@@ -79,6 +86,26 @@ describe('project workflow registry', () => {
     expect(isLegacyProjectWorkflow('p2_v2')).toBe(false);
     expect(() => getInitializableProjectWorkflowSteps('p2_v2')).toThrow(
       'p2_v2 workflow initialization is not available'
+    );
+  });
+
+  it('retains the definition-version-1 snapshot without converting existing instances', () => {
+    expect(
+      getP2V2StagesForDefinitionVersion(1).map(({ type, label }) => ({
+        type,
+        label,
+      }))
+    ).toContainEqual({
+      type: 'design_applicability',
+      label: 'Design Applicability',
+    });
+    expect(
+      getP2V2StagesForDefinitionVersion(1).some(
+        (stage) => stage.type === 'technical_configuration_review'
+      )
+    ).toBe(false);
+    expect(() => getP2V2StagesForDefinitionVersion(999)).toThrow(
+      'Unknown p2_v2 definition version 999'
     );
   });
 

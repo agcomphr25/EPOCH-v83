@@ -12,6 +12,7 @@ import {
 
 import P2V2DesignApplicability from './P2V2DesignApplicability';
 import P2V2ProductionPlanning from './P2V2ProductionPlanning';
+import P2V2TechnicalConfigurationReview from './P2V2TechnicalConfigurationReview';
 import P2V2WadAuthorization from './P2V2WadAuthorization';
 import P2V2CommercialReview from './P2V2CommercialReview';
 
@@ -397,6 +398,11 @@ export default function P2V2ProjectWorkflow({
               {stage.stepType === 'design_applicability' && (
                 <div className="mt-3">
                   <P2V2DesignApplicability projectId={projectId} />
+                </div>
+              )}
+              {stage.stepType === 'technical_configuration_review' && (
+                <div className="mt-3">
+                  <P2V2TechnicalConfigurationReview projectId={projectId} />
                 </div>
               )}
               {stage.stepType === 'production_planning' && (

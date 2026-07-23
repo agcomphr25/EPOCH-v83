@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getInternalP2V2InitializationStages,
+  getP2V2StagesForDefinitionVersion,
   P2_V2_DEFINITION_VERSION,
 } from '../src/services/projectWorkflowRegistry';
 import { validateWorkflowInstanceIntegrity } from '../src/services/projectWorkflowInstanceIntegrity';
@@ -67,7 +68,7 @@ describe('p2_v2 workflow instance snapshots and integrity', () => {
       'rfq_risk_assessment',
       'estimate_quote',
       'contract_review',
-      'design_applicability',
+      'technical_configuration_review',
       'production_planning',
       'wad_authorization',
       'preproduction_release',
@@ -82,6 +83,22 @@ describe('p2_v2 workflow instance snapshots and integrity', () => {
 
   it('accepts a complete registry-matching instance', () => {
     expect(validateWorkflowInstanceIntegrity(instance, validSteps)).toEqual([]);
+  });
+
+  it('continues to validate stored definition-version-1 snapshots unchanged', () => {
+    const legacySnapshot = getP2V2StagesForDefinitionVersion(1);
+    expect(
+      validateWorkflowInstanceIntegrity(
+        { ...instance, definition_version: 1 },
+        legacySnapshot.map((stage) => ({
+          project_id: instance.project_id,
+          step_type: stage.type,
+          step_order: stage.order,
+          label_snapshot: stage.label,
+          description_snapshot: stage.description,
+        }))
+      )
+    ).toEqual([]);
   });
 
   it('reports missing, duplicate, order, project, unknown, definition, and version corruption', () => {

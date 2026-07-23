@@ -6,6 +6,7 @@ import { db } from '../../db';
 import { recordAuditEvent, type AuditLedgerTx } from './auditLedgerService';
 import { getCurrentProductionPlan } from './projectProductionPlanningService';
 import { evaluateCommercialBaseline } from './projectCommercialReviewService';
+import { evaluateTechnicalConfigurationBaseline } from './projectTechnicalConfigurationReviewService';
 import { resolveProjectWorkflowVersion } from './projectWorkflowVersionService';
 import { validateWorkflowInstanceIntegrity } from './projectWorkflowInstanceIntegrity';
 import {
@@ -102,9 +103,13 @@ async function context(
       { issues }
     );
   const step = steps.find((entry) => entry.step_type === 'wad_authorization');
-  const design = steps.find(
-    (entry) => entry.step_type === 'design_applicability'
+  const compatibilityDefinition = Number(instances[0].definition_version) === 1;
+  const technical = steps.find((entry) =>
+    compatibilityDefinition
+      ? entry.step_type === 'design_applicability'
+      : entry.step_type === 'technical_configuration_review'
   );
+  const contract = steps.find((entry) => entry.step_type === 'contract_review');
   const planning = steps.find(
     (entry) => entry.step_type === 'production_planning'
   );
@@ -116,11 +121,20 @@ async function context(
     );
   if (
     requirePrerequisites &&
-    (!design || !['COMPLETE', 'NOT_APPLICABLE'].includes(design.status))
+    (!technical ||
+      !(compatibilityDefinition
+        ? ['COMPLETE', 'NOT_APPLICABLE'].includes(technical.status)
+        : technical.status === 'COMPLETE'))
   )
     throw new ProjectWadAuthorizationError(
-      'DESIGN_APPLICABILITY_REQUIRED',
-      'Design Applicability must remain complete or approved not applicable.',
+      'TECHNICAL_CONFIGURATION_REVIEW_REQUIRED',
+      'Technical & Configuration Review must remain complete and current.',
+      409
+    );
+  if (requirePrerequisites && (!contract || contract.status !== 'COMPLETE'))
+    throw new ProjectWadAuthorizationError(
+      'CONTRACT_REVIEW_REQUIRED',
+      'Contract Review must remain complete and current.',
       409
     );
   if (requirePrerequisites && (!planning || planning.status !== 'COMPLETE'))
@@ -129,7 +143,14 @@ async function context(
       'Production Planning must be complete.',
       409
     );
-  return { project, instance: instances[0], step, design, planning };
+  return {
+    project,
+    instance: instances[0],
+    step,
+    technical,
+    planning,
+    compatibilityDefinition,
+  };
 }
 
 async function currentAuthorization(projectId: string, tx: Executor) {
@@ -241,14 +262,26 @@ async function readiness(
   if (!authorization)
     return {
       ready: false,
-      stale: false,
-      blockers: ['A WAD draft is required.'],
+      stale: differences.length > 0,
+      blockers: Array.from(new Set([...blockers, 'A WAD draft is required.'])),
       differences,
     };
   const ctx = await context(projectId, tx, false, false);
-  if (!['COMPLETE', 'NOT_APPLICABLE'].includes(ctx.design?.status ?? '')) {
-    blockers.push('Design Applicability is no longer valid.');
-    differences.push('Design Applicability decision or release changed.');
+  if (
+    !(ctx.compatibilityDefinition
+      ? ['COMPLETE', 'NOT_APPLICABLE'].includes(ctx.technical?.status ?? '')
+      : ctx.technical?.status === 'COMPLETE')
+  ) {
+    blockers.push('Technical & Configuration Review is no longer valid.');
+    differences.push('Technical/configuration baseline changed.');
+  }
+  if (!ctx.compatibilityDefinition) {
+    const technical = await evaluateTechnicalConfigurationBaseline(
+      projectId,
+      tx
+    );
+    blockers.push(...technical.blockers);
+    differences.push(...technical.differences);
   }
   if (ctx.planning?.status !== 'COMPLETE') {
     blockers.push('Production Planning is no longer complete.');

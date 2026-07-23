@@ -11,7 +11,9 @@ const stages = Array.from({ length: 10 }, (_, index) => ({
       ? 'design_applicability'
       : index === 4
         ? 'production_planning'
-        : `stage_${index + 1}`,
+        : index === 5
+          ? 'wad_authorization'
+          : `stage_${index + 1}`,
   stepOrder: index + 1,
   label: `Stage ${index + 1}`,
   description: `Description ${index + 1}`,
@@ -135,7 +137,7 @@ describe('P2V2ProjectWorkflow', () => {
     expect(screen.getByTestId('v2-approval')).toHaveTextContent('REJECTED');
   });
 
-  it('makes only Design Applicability and Production Planning writable from the ten-stage summary', async () => {
+  it('makes only Design Applicability, Production Planning and WAD Authorization writable from the ten-stage summary', async () => {
     renderWorkflow(initialized);
     expect(
       await screen.findByTestId('open-design-applicability')
@@ -145,6 +147,9 @@ describe('P2V2ProjectWorkflow', () => {
     ).toHaveLength(1);
     expect(
       screen.getAllByRole('button', { name: 'Open Production Planning' })
+    ).toHaveLength(1);
+    expect(
+      screen.getAllByRole('button', { name: 'Open WAD Authorization' })
     ).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'Details' })).toHaveLength(10);
   });

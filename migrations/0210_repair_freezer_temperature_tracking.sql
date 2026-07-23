@@ -27,6 +27,36 @@ CREATE TABLE IF NOT EXISTS "freezer_temperature_logs" (
     ON DELETE no action ON UPDATE no action
 );
 
+-- The first freezer-log release stored six readings as required columns on this
+-- table. New records store readings in freezer_temperature_readings, so those
+-- legacy columns must be nullable during an in-place upgrade.
+DO $$
+DECLARE
+  legacy_column text;
+BEGIN
+  FOREACH legacy_column IN ARRAY ARRAY[
+    'freezer_1_temperature',
+    'freezer_2_temperature',
+    'freezer_3_temperature',
+    'freezer_4_temperature',
+    'layup_room_temperature',
+    'refrigerator_container_temperature'
+  ]
+  LOOP
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'freezer_temperature_logs'
+        AND column_name = legacy_column
+    ) THEN
+      EXECUTE format(
+        'ALTER TABLE freezer_temperature_logs ALTER COLUMN %I DROP NOT NULL',
+        legacy_column
+      );
+    END IF;
+  END LOOP;
+END $$;
 CREATE INDEX IF NOT EXISTS "freezer_temperature_logs_recorded_at_idx"
   ON "freezer_temperature_logs" ("recorded_at");
 CREATE INDEX IF NOT EXISTS "freezer_temperature_logs_recorded_by_user_idx"

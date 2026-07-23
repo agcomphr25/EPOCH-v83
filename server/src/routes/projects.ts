@@ -41,6 +41,7 @@ import { getCurrentProductionPlan } from '../services/projectProductionPlanningS
 import projectWadAuthorizationRoutes from './projectWadAuthorization';
 import projectCommercialReviewRoutes from './projectCommercialReviews';
 import projectTechnicalConfigurationReviewRoutes from './projectTechnicalConfigurationReview';
+import projectPreproductionReadinessRoutes from './projectPreproductionReadiness';
 import { getTechnicalConfigurationReview } from '../services/projectTechnicalConfigurationReviewService';
 import { getCurrentWadAuthorization } from '../services/projectWadAuthorizationService';
 import { getUserPermissions } from '../services/permissionService';
@@ -1589,6 +1590,10 @@ router.use('/:id/workflow-v2/commercial-reviews', projectCommercialReviewRoutes)
 router.use(
   '/:id/workflow-v2/technical-configuration-review',
   projectTechnicalConfigurationReviewRoutes
+);
+router.use(
+  '/:id/workflow-v2/preproduction-readiness',
+  projectPreproductionReadinessRoutes
 );
 
 router.get('/:id/workflow-v2/design-applicability', async (req, res) => {

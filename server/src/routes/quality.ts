@@ -635,6 +635,7 @@ router.get('/freezer-temperature-logs', async (req: Request, res: Response) => {
         locationName: freezerTemperatureReadings.locationNameSnapshot,
         sortOrder: freezerTemperatureReadings.locationSortOrderSnapshot,
         temperature: freezerTemperatureReadings.temperature,
+        isNotApplicable: freezerTemperatureReadings.isNotApplicable,
       })
       .from(freezerTemperatureReadings)
       .where(inArray(freezerTemperatureReadings.logId, logs.map((log) => log.id)))
@@ -671,20 +672,25 @@ router.post('/freezer-temperature-logs', async (req: Request, res: Response) => 
       });
     }
 
-    const submittedReading = parsed.data.readings[0];
-    const [location] = await db
+    const submittedIds = parsed.data.readings.map((reading) => reading.locationId);
+    const locations = await db
       .select()
       .from(freezerTemperatureLocations)
       .where(
         and(
-          eq(freezerTemperatureLocations.id, submittedReading.locationId),
+          inArray(freezerTemperatureLocations.id, submittedIds),
           eq(freezerTemperatureLocations.isActive, true)
         )
-      )
-      .limit(1);
-    if (!location) {
-      return res.status(400).json({ error: 'Select an active freezer' });
+      );
+    if (locations.length !== submittedIds.length) {
+      return res.status(400).json({ error: 'One or more selected freezers are not active' });
     }
+    if (parsed.data.readings.some((reading) => reading.isNotApplicable) && !parsed.data.notes) {
+      return res.status(400).json({ error: 'Add a note explaining any N/A freezer' });
+    }
+    const submittedByLocation = new Map(
+      parsed.data.readings.map((reading) => [reading.locationId, reading])
+    );
 
     const actor = await resolveUserSnapshot(req.user.id);
     const log = await db.transaction(async (tx) => {
@@ -698,13 +704,19 @@ router.post('/freezer-temperature-logs', async (req: Request, res: Response) => 
         })
         .returning();
 
-      await tx.insert(freezerTemperatureReadings).values({
-        logId: createdLog.id,
-        locationId: location.id,
-        locationNameSnapshot: location.name,
-        locationSortOrderSnapshot: location.sortOrder,
-        temperature: String(submittedReading.temperature),
-      });
+      await tx.insert(freezerTemperatureReadings).values(
+        locations.map((location) => {
+          const reading = submittedByLocation.get(location.id)!;
+          return {
+            logId: createdLog.id,
+            locationId: location.id,
+            locationNameSnapshot: location.name,
+            locationSortOrderSnapshot: location.sortOrder,
+            temperature: reading.isNotApplicable ? null : String(reading.temperature),
+            isNotApplicable: reading.isNotApplicable,
+          };
+        })
+      );
       return createdLog;
     });
 

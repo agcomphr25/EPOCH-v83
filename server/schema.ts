@@ -1907,7 +1907,8 @@ export const freezerTemperatureReadings = pgTable(
       .notNull(),
     locationNameSnapshot: text('location_name_snapshot').notNull(),
     locationSortOrderSnapshot: integer('location_sort_order_snapshot').notNull(),
-    temperature: numeric('temperature', { precision: 6, scale: 2 }).notNull(),
+    temperature: numeric('temperature', { precision: 6, scale: 2 }),
+    isNotApplicable: boolean('is_not_applicable').default(false).notNull(),
   },
   (table) => ({
     uniqueLogLocation: unique('freezer_temperature_readings_log_location_unique').on(
@@ -3060,12 +3061,23 @@ export const insertFreezerTemperatureLogSchema = createInsertSchema(
     notes: z.string().trim().max(2000).optional().nullable(),
     readings: z
       .array(
-        z.object({
-          locationId: z.string().uuid(),
-          temperature: freezerTemperatureValueSchema,
-        })
+        z
+          .object({
+            locationId: z.string().uuid(),
+            temperature: freezerTemperatureValueSchema.optional().nullable(),
+            isNotApplicable: z.boolean().default(false),
+          })
+          .superRefine((reading, ctx) => {
+            const hasTemperature = reading.temperature !== null && reading.temperature !== undefined;
+            if (hasTemperature === reading.isNotApplicable) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'Enter a temperature or mark the freezer N/A',
+              });
+            }
+          })
       )
-      .length(1, 'Exactly one freezer reading is required'),
+      .min(1, 'At least one freezer reading is required'),
   })
   .superRefine((data, ctx) => {
     const ids = data.readings.map((reading) => reading.locationId);

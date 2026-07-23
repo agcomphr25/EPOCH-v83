@@ -1859,17 +1859,29 @@ export const maintenanceLogs = pgTable('maintenance_logs', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const freezerTemperatureLocations = pgTable(
+  'freezer_temperature_locations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    name: text('name').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    activeSortIdx: index('freezer_temperature_locations_active_sort_idx').on(
+      table.isActive,
+      table.sortOrder
+    ),
+  })
+);
+
 export const freezerTemperatureLogs = pgTable(
   'freezer_temperature_logs',
   {
     id: serial('id').primaryKey(),
     recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull(),
-    freezer1Temperature: numeric('freezer_1_temperature', { precision: 6, scale: 2 }).notNull(),
-    freezer2Temperature: numeric('freezer_2_temperature', { precision: 6, scale: 2 }).notNull(),
-    freezer3Temperature: numeric('freezer_3_temperature', { precision: 6, scale: 2 }).notNull(),
-    freezer4Temperature: numeric('freezer_4_temperature', { precision: 6, scale: 2 }).notNull(),
-    layupRoomTemperature: numeric('layup_room_temperature', { precision: 6, scale: 2 }).notNull(),
-    refrigeratorContainerTemperature: numeric('refrigerator_container_temperature', { precision: 6, scale: 2 }).notNull(),
     notes: text('notes'),
     recordedByUserId: integer('recorded_by_user_id').references(() => users.id).notNull(),
     recordedByDisplayName: text('recorded_by_display_name').notNull(),
@@ -1877,6 +1889,32 @@ export const freezerTemperatureLogs = pgTable(
   },
   (table) => ({
     recordedAtIdx: index('freezer_temperature_logs_recorded_at_idx').on(table.recordedAt),
+    recordedByUserIdx: index('freezer_temperature_logs_recorded_by_user_idx').on(
+      table.recordedByUserId
+    ),
+  })
+);
+
+export const freezerTemperatureReadings = pgTable(
+  'freezer_temperature_readings',
+  {
+    id: serial('id').primaryKey(),
+    logId: integer('log_id')
+      .references(() => freezerTemperatureLogs.id, { onDelete: 'cascade' })
+      .notNull(),
+    locationId: uuid('location_id')
+      .references(() => freezerTemperatureLocations.id)
+      .notNull(),
+    locationNameSnapshot: text('location_name_snapshot').notNull(),
+    locationSortOrderSnapshot: integer('location_sort_order_snapshot').notNull(),
+    temperature: numeric('temperature', { precision: 6, scale: 2 }).notNull(),
+  },
+  (table) => ({
+    uniqueLogLocation: unique('freezer_temperature_readings_log_location_unique').on(
+      table.logId,
+      table.locationId
+    ),
+    locationIdx: index('freezer_temperature_readings_location_idx').on(table.locationId),
   })
 );
 
@@ -2994,6 +3032,20 @@ const freezerTemperatureValueSchema = z.coerce
   .min(-200, 'Temperature must be at least -200')
   .max(200, 'Temperature must be no more than 200');
 
+export const insertFreezerTemperatureLocationSchema = createInsertSchema(
+  freezerTemperatureLocations
+)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    name: z.string().trim().min(1, 'Name is required').max(100),
+    sortOrder: z.coerce.number().int().min(0).default(0),
+    isActive: z.boolean().default(true),
+  });
+
 export const insertFreezerTemperatureLogSchema = createInsertSchema(
   freezerTemperatureLogs
 )
@@ -3005,13 +3057,25 @@ export const insertFreezerTemperatureLogSchema = createInsertSchema(
   })
   .extend({
     recordedAt: z.coerce.date(),
-    freezer1Temperature: freezerTemperatureValueSchema,
-    freezer2Temperature: freezerTemperatureValueSchema,
-    freezer3Temperature: freezerTemperatureValueSchema,
-    freezer4Temperature: freezerTemperatureValueSchema,
-    layupRoomTemperature: freezerTemperatureValueSchema,
-    refrigeratorContainerTemperature: freezerTemperatureValueSchema,
     notes: z.string().trim().max(2000).optional().nullable(),
+    readings: z
+      .array(
+        z.object({
+          locationId: z.string().uuid(),
+          temperature: freezerTemperatureValueSchema,
+        })
+      )
+      .min(1, 'At least one temperature reading is required'),
+  })
+  .superRefine((data, ctx) => {
+    const ids = data.readings.map((reading) => reading.locationId);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['readings'],
+        message: 'Each temperature location may only be recorded once',
+      });
+    }
   });
 
 export const insertTimeClockEntrySchema = createInsertSchema(timeClockEntries)
@@ -3350,10 +3414,15 @@ export type InsertMaintenanceSchedule = z.infer<
 export type MaintenanceSchedule = typeof maintenanceSchedules.$inferSelect;
 export type InsertMaintenanceLog = z.infer<typeof insertMaintenanceLogSchema>;
 export type MaintenanceLog = typeof maintenanceLogs.$inferSelect;
+export type InsertFreezerTemperatureLocation = z.infer<
+  typeof insertFreezerTemperatureLocationSchema
+>;
+export type FreezerTemperatureLocation = typeof freezerTemperatureLocations.$inferSelect;
 export type InsertFreezerTemperatureLog = z.infer<
   typeof insertFreezerTemperatureLogSchema
 >;
 export type FreezerTemperatureLog = typeof freezerTemperatureLogs.$inferSelect;
+export type FreezerTemperatureReading = typeof freezerTemperatureReadings.$inferSelect;
 export type InsertTimeClockEntry = z.infer<typeof insertTimeClockEntrySchema>;
 export type TimeClockEntry = typeof timeClockEntries.$inferSelect;
 export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;

@@ -40,6 +40,8 @@ import projectProductionPlanningRoutes from './projectProductionPlanning';
 import { getCurrentProductionPlan } from '../services/projectProductionPlanningService';
 import projectWadAuthorizationRoutes from './projectWadAuthorization';
 import projectCommercialReviewRoutes from './projectCommercialReviews';
+import projectTechnicalConfigurationReviewRoutes from './projectTechnicalConfigurationReview';
+import { getTechnicalConfigurationReview } from '../services/projectTechnicalConfigurationReviewService';
 import { getCurrentWadAuthorization } from '../services/projectWadAuthorizationService';
 import { getUserPermissions } from '../services/permissionService';
 import {
@@ -1584,6 +1586,10 @@ function sendDesignError(res: Response, error: unknown) {
 router.use('/:id/workflow-v2/production-planning', projectProductionPlanningRoutes);
 router.use('/:id/workflow-v2/wad-authorization', projectWadAuthorizationRoutes);
 router.use('/:id/workflow-v2/commercial-reviews', projectCommercialReviewRoutes);
+router.use(
+  '/:id/workflow-v2/technical-configuration-review',
+  projectTechnicalConfigurationReviewRoutes
+);
 
 router.get('/:id/workflow-v2/design-applicability', async (req, res) => {
   try {
@@ -1651,29 +1657,51 @@ router.get('/:id/workflow-v2', async (req, res) => {
     if (!instance) return res.json(buildUninitializedP2V2Response(project.id));
     const model = await getWorkflowReadModel(String(instance.id));
     const response = buildP2V2WorkflowResponse(project.id, model);
-    const design = await getCurrentDesignApplicability(project.id);
-    if (
-      design.decision?.status === 'APPROVED' &&
-      design.decision.responsibility_type !== 'CUSTOMER_BUILD_TO_PRINT' &&
-      !design.release.released
-    ) {
-      response.stages = response.stages.map((stage) =>
-        stage.stepType === 'design_applicability'
-          ? {
-              ...stage,
-              status: 'BLOCKED',
-              blockedReason: design.release.blockers.join(' '),
-            }
-          : stage
-      );
-      response.blockedStages = response.stages.filter(
-        (stage) => stage.status === 'BLOCKED'
-      ).length;
+    const compatibilityDefinition = Number(instance.definition_version) === 1;
+    if (compatibilityDefinition) {
+      const design = await getCurrentDesignApplicability(project.id);
+      if (
+        design.decision?.status === 'APPROVED' &&
+        design.decision.responsibility_type !== 'CUSTOMER_BUILD_TO_PRINT' &&
+        !design.release.released
+      ) {
+        response.stages = response.stages.map((stage) =>
+          stage.stepType === 'design_applicability'
+            ? {
+                ...stage,
+                status: 'BLOCKED',
+                blockedReason: design.release.blockers.join(' '),
+              }
+            : stage
+        );
+      }
+    } else {
+      const technical = await getTechnicalConfigurationReview(project.id);
+      if (technical.review && !technical.readiness.ready) {
+        response.stages = response.stages.map((stage) =>
+          stage.stepType === 'technical_configuration_review'
+            ? {
+                ...stage,
+                status: 'BLOCKED',
+                blockedReason: technical.readiness.blockers.join(' '),
+              }
+            : stage
+        );
+      }
     }
-    const designStage = response.stages.find(
-      (stage) => stage.stepType === 'design_applicability'
+    response.blockedStages = response.stages.filter(
+      (stage) => stage.status === 'BLOCKED'
+    ).length;
+    const prerequisiteStage = response.stages.find((stage) =>
+      compatibilityDefinition
+        ? stage.stepType === 'design_applicability'
+        : stage.stepType === 'technical_configuration_review'
     );
-    if (['COMPLETE', 'NOT_APPLICABLE'].includes(designStage?.status ?? '')) {
+    if (
+      ['COMPLETE', 'NOT_APPLICABLE'].includes(
+        prerequisiteStage?.status ?? ''
+      )
+    ) {
       const productionPlan = await getCurrentProductionPlan(project.id);
       if (
         productionPlan.plan?.status === 'RELEASED' &&
@@ -1716,7 +1744,9 @@ router.get('/:id/workflow-v2', async (req, res) => {
     }
     if (
       planningStage?.status === 'COMPLETE' &&
-      ['COMPLETE', 'NOT_APPLICABLE'].includes(designStage?.status ?? '')
+      ['COMPLETE', 'NOT_APPLICABLE'].includes(
+        prerequisiteStage?.status ?? ''
+      )
     ) {
       const wadAuthorization = await getCurrentWadAuthorization(project.id);
       if (

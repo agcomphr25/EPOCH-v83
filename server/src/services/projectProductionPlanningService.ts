@@ -7,6 +7,7 @@ import { recordAuditEvent, type AuditLedgerTx } from './auditLedgerService';
 import { resolveProjectWorkflowVersion } from './projectWorkflowVersionService';
 import { validateWorkflowInstanceIntegrity } from './projectWorkflowInstanceIntegrity';
 import { evaluateCommercialBaseline } from './projectCommercialReviewService';
+import { evaluateTechnicalConfigurationBaseline } from './projectTechnicalConfigurationReviewService';
 import {
   ProjectProductionPlanningError,
   productionPlanItemBlockers,
@@ -38,7 +39,12 @@ const resultRows = <T extends Row>(value: unknown): T[] =>
 const clean = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
 
-async function context(projectId: string, tx: Executor, lock = false) {
+async function context(
+  projectId: string,
+  tx: Executor,
+  lock = false,
+  requireTechnicalBaseline = true
+) {
   const project = resultRows(
     await tx.execute(
       sql`SELECT id, workflow_version, po_id FROM projects WHERE id=${projectId} ${lock ? sql`FOR UPDATE` : sql``}`
@@ -87,20 +93,52 @@ async function context(projectId: string, tx: Executor, lock = false) {
       { issues }
     );
   const step = steps.find((row) => row.step_type === 'production_planning');
-  const design = steps.find((row) => row.step_type === 'design_applicability');
+  const compatibilityDefinition = Number(instances[0].definition_version) === 1;
+  const technical = steps.find((row) =>
+    compatibilityDefinition
+      ? row.step_type === 'design_applicability'
+      : row.step_type === 'technical_configuration_review'
+  );
   if (!step)
     throw new ProjectProductionPlanningError(
       'PRODUCTION_PLANNING_STAGE_REQUIRED',
       'Production Planning stage is missing.',
       409
     );
-  if (!design || !['COMPLETE', 'NOT_APPLICABLE'].includes(design.status))
-    throw new ProjectProductionPlanningError(
-      'DESIGN_APPLICABILITY_REQUIRED',
-      'Design Applicability must be complete or approved not applicable.',
-      409
+  if (requireTechnicalBaseline) {
+    if (
+      !technical ||
+      !(compatibilityDefinition
+        ? ['COMPLETE', 'NOT_APPLICABLE'].includes(technical.status)
+        : technical.status === 'COMPLETE')
+    )
+      throw new ProjectProductionPlanningError(
+        'TECHNICAL_CONFIGURATION_REVIEW_REQUIRED',
+        'Technical & Configuration Review must be complete and current.',
+        409
+      );
+  }
+  if (requireTechnicalBaseline && !compatibilityDefinition) {
+    const baseline = await evaluateTechnicalConfigurationBaseline(
+      projectId,
+      tx
     );
-  return { project, instance: instances[0], step, steps };
+    if (!baseline.valid)
+      throw new ProjectProductionPlanningError(
+        'TECHNICAL_CONFIGURATION_BASELINE_INVALID',
+        'Technical & Configuration Review is incomplete or stale.',
+        409,
+        { blockers: baseline.blockers }
+      );
+  }
+  return {
+    project,
+    instance: instances[0],
+    step,
+    steps,
+    technical,
+    compatibilityDefinition,
+  };
 }
 
 async function currentPlan(projectId: string, tx: Executor) {
@@ -182,16 +220,16 @@ async function configurationRows(
   );
 }
 
-function baselineHash(po: Row, rows: Row[], designRelease?: Row | null) {
+function baselineHash(po: Row, rows: Row[], technicalBasis?: Row | null) {
   return createHash('sha256')
     .update(
       JSON.stringify({
         po: [po.id, po.revision_number, po.updated_at],
-        designRelease: designRelease
+        technicalBasis: technicalBasis
           ? [
-              designRelease.id,
-              designRelease.release_revision,
-              designRelease.release_status,
+              technicalBasis.id,
+              technicalBasis.source_revision ?? technicalBasis.release_revision,
+              technicalBasis.status ?? technicalBasis.release_status,
             ]
           : null,
         items: rows.map((row) => [
@@ -381,6 +419,19 @@ async function staleness(
         'The controlling Engineering Release was reopened or superseded.'
       );
   }
+  if (!ctx.compatibilityDefinition) {
+    const technical = await evaluateTechnicalConfigurationBaseline(
+      plan.project_id,
+      tx
+    );
+    const currentReference = technical.review
+      ? `Technical Review ${technical.review.revision_number}:${technical.review.source_revision}`
+      : null;
+    if (!technical.valid || plan.configuration_revision !== currentReference)
+      differences.push(
+        'Technical & Configuration Review is stale or differs from the released planning baseline.'
+      );
+  }
   for (const item of items.filter((row) => row.is_manufactured)) {
     const state = resultRows(
       await tx.execute(
@@ -411,7 +462,7 @@ async function staleness(
 }
 
 async function readModel(projectId: string, tx: Executor) {
-  const ctx = await context(projectId, tx);
+  const ctx = await context(projectId, tx, false, false);
   const plan = await currentPlan(projectId, tx);
   const history = resultRows(
     await tx.execute(
@@ -438,6 +489,13 @@ async function readModel(projectId: string, tx: Executor) {
     : ['Create a Production Planning draft.'];
   const commercial = await evaluateCommercialBaseline(projectId, tx);
   blockers.push(...commercial.blockers);
+  if (!ctx.compatibilityDefinition) {
+    const technical = await evaluateTechnicalConfigurationBaseline(
+      projectId,
+      tx
+    );
+    blockers.push(...technical.blockers);
+  }
   for (const item of items.filter((row) => row.is_manufactured)) {
     if (
       item.inspection_extent === 'APPROVED_SAMPLING' &&
@@ -563,11 +621,20 @@ async function createRevision(
       'The current P2 PO has no configuration items.',
       409
     );
-  const designRelease = await currentDesignRelease(projectId, tx);
-  const baseline = baselineHash(po, rows, designRelease);
+  const designRelease = ctx.compatibilityDefinition
+    ? await currentDesignRelease(projectId, tx)
+    : null;
+  const technical = ctx.compatibilityDefinition
+    ? null
+    : await evaluateTechnicalConfigurationBaseline(projectId, tx);
+  const technicalBasis = technical?.review ?? designRelease;
+  const baseline = baselineHash(po, rows, technicalBasis);
+  const configurationRevision = technical?.review
+    ? `Technical Review ${technical.review.revision_number}:${technical.review.source_revision}`
+    : `PO ${po.po_number} Rev ${po.revision_number}`;
   const plan = resultRows(
     await tx.execute(
-      sql`INSERT INTO project_production_plans (project_id,workflow_instance_id,workflow_step_instance_id,revision_number,status,po_id,po_revision_number,po_number,configuration_baseline_id,configuration_revision,design_release_id,design_release_revision,effectivity_type,effectivity_reference,requirement_source,planning_basis,notes,created_by,created_by_display_name) VALUES (${projectId},${ctx.instance.id},${ctx.step.id},${revision},'DRAFT',${po.id},${po.revision_number},${po.po_number},${baseline},${`PO ${po.po_number} Rev ${po.revision_number}`},${designRelease?.id ?? null},${designRelease?.release_revision ?? null},${input.effectivityType ?? 'PO_REVISION'},${clean(input.effectivityReference) || `PO ${po.po_number} Rev ${po.revision_number}`},${clean(input.requirementSource)},${clean(input.planningBasis)},${clean(input.notes) || null},${actor.userId},${actor.displayName}) RETURNING *`
+      sql`INSERT INTO project_production_plans (project_id,workflow_instance_id,workflow_step_instance_id,revision_number,status,po_id,po_revision_number,po_number,configuration_baseline_id,configuration_revision,design_release_id,design_release_revision,effectivity_type,effectivity_reference,requirement_source,planning_basis,notes,created_by,created_by_display_name) VALUES (${projectId},${ctx.instance.id},${ctx.step.id},${revision},'DRAFT',${po.id},${po.revision_number},${po.po_number},${baseline},${configurationRevision},${designRelease?.id ?? null},${designRelease?.release_revision ?? null},${input.effectivityType ?? 'PO_REVISION'},${clean(input.effectivityReference) || `PO ${po.po_number} Rev ${po.revision_number}`},${clean(input.requirementSource)},${clean(input.planningBasis)},${clean(input.notes) || null},${actor.userId},${actor.displayName}) RETURNING *`
     )
   )[0];
   await insertConfigurationItems(plan, rows, tx);
@@ -626,12 +693,21 @@ export async function refreshDraft(
         409
       );
     const rows = await configurationRows(projectId, po.id, tx);
-    const designRelease = await currentDesignRelease(projectId, tx);
+    const designRelease = ctx.compatibilityDefinition
+      ? await currentDesignRelease(projectId, tx)
+      : null;
+    const technical = ctx.compatibilityDefinition
+      ? null
+      : await evaluateTechnicalConfigurationBaseline(projectId, tx);
+    const technicalBasis = technical?.review ?? designRelease;
+    const configurationRevision = technical?.review
+      ? `Technical Review ${technical.review.revision_number}:${technical.review.source_revision}`
+      : `PO ${po.po_number} Rev ${po.revision_number}`;
     await tx.execute(
       sql`DELETE FROM project_production_plan_items WHERE production_plan_id=${planId}`
     );
     await tx.execute(
-      sql`UPDATE project_production_plans SET po_id=${po.id},po_revision_number=${po.revision_number},po_number=${po.po_number},configuration_baseline_id=${baselineHash(po, rows, designRelease)},configuration_revision=${`PO ${po.po_number} Rev ${po.revision_number}`},design_release_id=${designRelease?.id ?? null},design_release_revision=${designRelease?.release_revision ?? null},effectivity_reference=${`PO ${po.po_number} Rev ${po.revision_number}`},updated_at=now() WHERE id=${planId}`
+      sql`UPDATE project_production_plans SET po_id=${po.id},po_revision_number=${po.revision_number},po_number=${po.po_number},configuration_baseline_id=${baselineHash(po, rows, technicalBasis)},configuration_revision=${configurationRevision},design_release_id=${designRelease?.id ?? null},design_release_revision=${designRelease?.release_revision ?? null},effectivity_reference=${`PO ${po.po_number} Rev ${po.revision_number}`},updated_at=now() WHERE id=${planId}`
     );
     const refreshed = {
       ...plan,

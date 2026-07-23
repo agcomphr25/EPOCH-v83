@@ -1,5 +1,5 @@
 import {
-  getInternalP2V2InitializationStages,
+  getP2V2StagesForDefinitionVersion,
   P2_V2_DEFINITION_VERSION,
 } from './projectWorkflowRegistry';
 
@@ -21,13 +21,24 @@ export function validateWorkflowInstanceIntegrity(
   instance: Row,
   steps: Row[]
 ): WorkflowIntegrityIssue[] {
-  const definition = getInternalP2V2InitializationStages();
   const issues: WorkflowIntegrityIssue[] = [];
   if (instance.workflow_version !== 'p2_v2')
     issues.push({
       code: 'WRONG_WORKFLOW_VERSION',
       message: 'Workflow instance is not p2_v2.',
     });
+  let definition: ReturnType<typeof getP2V2StagesForDefinitionVersion>;
+  try {
+    definition = getP2V2StagesForDefinitionVersion(
+      Number(instance.definition_version)
+    );
+  } catch {
+    issues.push({
+      code: 'REGISTRY_DEFINITION_MISMATCH',
+      message: `Unknown p2_v2 definition version ${String(instance.definition_version)}.`,
+    });
+    return issues;
+  }
   const byType = new Map<string, Row[]>();
   const byOrder = new Map<number, Row[]>();
   for (const step of steps) {
@@ -68,11 +79,11 @@ export function validateWorkflowInstanceIntegrity(
     ) {
       issues.push({
         code: 'REGISTRY_DEFINITION_MISMATCH',
-        message: `Stage ${stage.type} does not match definition version ${P2_V2_DEFINITION_VERSION}.`,
+        message: `Stage ${stage.type} does not match definition version ${String(instance.definition_version ?? P2_V2_DEFINITION_VERSION)}.`,
       });
     }
   }
-  for (const [order, matches] of byOrder)
+  for (const [order, matches] of Array.from(byOrder))
     if (matches.length > 1)
       issues.push({
         code: 'DUPLICATE_ORDER',

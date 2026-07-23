@@ -139,7 +139,7 @@ const LEGACY_V1_STEPS = freezeItems<ProjectWorkflowStepDefinition>([
   },
 ]);
 
-const P2_V2_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
+const P2_V2_DEFINITION_V1_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
   {
     type: 'rfq_risk_assessment',
     order: 1,
@@ -202,7 +202,87 @@ const P2_V2_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
   },
 ]);
 
-export const P2_V2_DEFINITION_VERSION = 1;
+const P2_V2_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
+  {
+    type: 'rfq_risk_assessment',
+    order: 1,
+    label: 'RFQ Review',
+    description:
+      'Confirm customer inquiry scope, requirements, and risk evidence.',
+  },
+  {
+    type: 'estimate_quote',
+    order: 2,
+    label: 'Estimate & Quote',
+    description: 'Confirm the approved estimate and released commercial offer.',
+  },
+  {
+    type: 'contract_review',
+    order: 3,
+    label: 'Contract Review',
+    description:
+      'Approve the accepted customer order and contractual baseline.',
+  },
+  {
+    type: 'technical_configuration_review',
+    order: 4,
+    label: 'Technical & Configuration Review',
+    description:
+      'Confirm the released technical and configuration baseline required to manufacture and inspect the customer order.',
+  },
+  {
+    type: 'production_planning',
+    order: 5,
+    label: 'Production Planning',
+    description:
+      'Establish BOM, routing, material, quality, and execution plans.',
+  },
+  {
+    type: 'wad_authorization',
+    order: 6,
+    label: 'WAD Authorization',
+    description: 'Authorize work through controlled WAD evidence.',
+  },
+  {
+    type: 'preproduction_release',
+    order: 7,
+    label: 'Preproduction Readiness',
+    description:
+      'Confirm materials, tooling, documents, and readiness before release.',
+  },
+  {
+    type: 'production_quality',
+    order: 8,
+    label: 'Production',
+    description: 'Execute controlled manufacturing operations.',
+  },
+  {
+    type: 'final_release_shipping',
+    order: 9,
+    label: 'Quality & Product Release',
+    description:
+      'Complete inspection, acceptance, certification, and product release.',
+  },
+  {
+    type: 'project_closing',
+    order: 10,
+    label: 'Shipping & Project Closing',
+    description:
+      'Ship the accepted product and close the customer-order project.',
+  },
+]);
+
+export const P2_V2_DEFINITION_VERSION = 2;
+
+export function getP2V2StagesForDefinitionVersion(
+  definitionVersion: number
+): readonly ProjectWorkflowStageDefinition[] {
+  if (definitionVersion === 1) return P2_V2_DEFINITION_V1_STAGES;
+  if (definitionVersion === P2_V2_DEFINITION_VERSION) return P2_V2_STAGES;
+  throw new ProjectWorkflowDefinitionValidationError(
+    `Unknown p2_v2 definition version ${definitionVersion}`
+  );
+}
 
 // Internal-only snapshot source for Phase 3. This does not make p2_v2 active
 // or available to normal project creation.

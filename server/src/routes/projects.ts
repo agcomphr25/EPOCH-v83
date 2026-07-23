@@ -39,6 +39,7 @@ import { buildP2V2WorkflowResponse, buildUninitializedP2V2Response } from '../se
 import projectProductionPlanningRoutes from './projectProductionPlanning';
 import { getCurrentProductionPlan } from '../services/projectProductionPlanningService';
 import projectWadAuthorizationRoutes from './projectWadAuthorization';
+import projectCommercialReviewRoutes from './projectCommercialReviews';
 import { getCurrentWadAuthorization } from '../services/projectWadAuthorizationService';
 import { getUserPermissions } from '../services/permissionService';
 import {
@@ -1582,6 +1583,7 @@ function sendDesignError(res: Response, error: unknown) {
 
 router.use('/:id/workflow-v2/production-planning', projectProductionPlanningRoutes);
 router.use('/:id/workflow-v2/wad-authorization', projectWadAuthorizationRoutes);
+router.use('/:id/workflow-v2/commercial-reviews', projectCommercialReviewRoutes);
 
 router.get('/:id/workflow-v2/design-applicability', async (req, res) => {
   try {

@@ -7,13 +7,19 @@ import P2V2ProjectWorkflow from '../components/projects/P2V2ProjectWorkflow';
 const stages = Array.from({ length: 10 }, (_, index) => ({
   id: `step-${index + 1}`,
   stepType:
-    index === 3
-      ? 'design_applicability'
-      : index === 4
-        ? 'production_planning'
-        : index === 5
-          ? 'wad_authorization'
-          : `stage_${index + 1}`,
+    index === 0
+      ? 'rfq_risk_assessment'
+      : index === 1
+        ? 'estimate_quote'
+        : index === 2
+          ? 'contract_review'
+          : index === 3
+            ? 'design_applicability'
+            : index === 4
+              ? 'production_planning'
+              : index === 5
+                ? 'wad_authorization'
+                : `stage_${index + 1}`,
   stepOrder: index + 1,
   label: `Stage ${index + 1}`,
   description: `Description ${index + 1}`,
@@ -137,11 +143,18 @@ describe('P2V2ProjectWorkflow', () => {
     expect(screen.getByTestId('v2-approval')).toHaveTextContent('REJECTED');
   });
 
-  it('makes only Design Applicability, Production Planning and WAD Authorization writable from the ten-stage summary', async () => {
+  it('makes only the first six stages writable from the ten-stage summary', async () => {
     renderWorkflow(initialized);
     expect(
-      await screen.findByTestId('open-design-applicability')
+      await screen.findByTestId('open-commercial-review-rfq_risk_assessment')
     ).toBeInTheDocument();
+    expect(
+      screen.getByTestId('open-commercial-review-estimate_quote')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId('open-commercial-review-contract_review')
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('open-design-applicability')).toBeInTheDocument();
     expect(
       screen.getAllByRole('button', { name: 'Open Design Applicability' })
     ).toHaveLength(1);

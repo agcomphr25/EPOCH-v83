@@ -6,6 +6,7 @@ import { db } from '../../db';
 import { recordAuditEvent, type AuditLedgerTx } from './auditLedgerService';
 import { resolveProjectWorkflowVersion } from './projectWorkflowVersionService';
 import { validateWorkflowInstanceIntegrity } from './projectWorkflowInstanceIntegrity';
+import { evaluateCommercialBaseline } from './projectCommercialReviewService';
 import {
   ProjectProductionPlanningError,
   productionPlanItemBlockers,
@@ -435,6 +436,8 @@ async function readModel(projectId: string, tx: Executor) {
   const blockers = plan
     ? items.flatMap(productionPlanItemBlockers)
     : ['Create a Production Planning draft.'];
+  const commercial = await evaluateCommercialBaseline(projectId, tx);
+  blockers.push(...commercial.blockers);
   for (const item of items.filter((row) => row.is_manufactured)) {
     if (
       item.inspection_extent === 'APPROVED_SAMPLING' &&

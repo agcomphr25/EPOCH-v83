@@ -10421,6 +10421,12 @@ export const controlledDocuments = pgTable('controlled_documents', {
   versionDate: date('version_date'),
   originationDate: date('origination_date'),
   status: text('status').notNull().default('draft'), // draft, pending, approved, expired
+  lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
+  lifecycleReason: text('lifecycle_reason'),
+  currentRevisionId: uuid('current_revision_id'),
+  currentReleasedRevisionId: uuid('current_released_revision_id'),
+  workingDraftRevisionId: uuid('working_draft_revision_id'),
+  numberControlStatus: text('number_control_status').notNull().default('LEGACY_UNVERIFIED'),
   effectiveDate: date('effective_date'),
   expirationDate: date('expiration_date'),
   retentionLength: text('retention_length'), // Optional: e.g., "7 years", "permanent"
@@ -10446,16 +10452,73 @@ export const documentVersionHistory = pgTable('document_version_history', {
   id: uuid('id').defaultRandom().primaryKey(),
   documentId: uuid('document_id').references(() => controlledDocuments.id).notNull(),
   versionNumber: text('version_number').notNull(), // e.g., "1.0", "1.1", "2.0"
+  revisionSequence: integer('revision_sequence').notNull().default(1),
+  lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
   changeDescription: text('change_description'),
   changeType: text('change_type'), // major, minor
   filePath: text('file_path'), // Path to version file
+  fileName: text('file_name'),
+  mediaType: text('media_type'),
+  fileSize: integer('file_size'),
+  fileChecksum: text('file_checksum'),
+  checksumStatus: text('checksum_status').notNull().default('PENDING_BACKFILL'),
   status: text('status').notNull(), // draft, pending, approved
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   approvedBy: text('approved_by'),
   approvedAt: timestamp('approved_at'),
+  submittedByUserId: integer('submitted_by_user_id').references(() => users.id),
+  submittedBySnapshot: jsonb('submitted_by_snapshot'),
+  submittedAt: timestamp('submitted_at'),
+  reviewedByUserId: integer('reviewed_by_user_id').references(() => users.id),
+  reviewedBySnapshot: jsonb('reviewed_by_snapshot'),
+  reviewedAt: timestamp('reviewed_at'),
+  approvedByUserId: integer('approved_by_user_id').references(() => users.id),
+  approvedBySnapshot: jsonb('approved_by_snapshot'),
+  releasedByUserId: integer('released_by_user_id').references(() => users.id),
+  releasedBySnapshot: jsonb('released_by_snapshot'),
+  releasedAt: timestamp('released_at'),
+  supersededByRevisionId: uuid('superseded_by_revision_id'),
+  supersededAt: timestamp('superseded_at'),
+  supersededByUserId: integer('superseded_by_user_id').references(() => users.id),
+  obsoletedAt: timestamp('obsoleted_at'),
+  obsoletedByUserId: integer('obsoleted_by_user_id').references(() => users.id),
+  revisionReason: text('revision_reason'),
+  metadata: jsonb('metadata').notNull().default({}),
   effectiveDate: date('effective_date'),
   expirationDate: date('expiration_date'),
+});
+
+export const controlledDocumentNumberRegistry = pgTable('controlled_document_number_registry', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  normalizedNumber: text('normalized_number').notNull().unique(),
+  displayNumber: text('display_number').notNull(),
+  controlledDocumentId: uuid('controlled_document_id').references(() => controlledDocuments.id, { onDelete: 'restrict' }),
+  status: text('status').notNull().default('RESERVED'),
+  conflictDocumentIds: jsonb('conflict_document_ids').notNull().default([]),
+  reservedByUserId: integer('reserved_by_user_id').references(() => users.id),
+  reservedBySnapshot: jsonb('reserved_by_snapshot'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const controlledDocumentRevisionApprovals = pgTable('controlled_document_revision_approvals', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  controlledDocumentId: uuid('controlled_document_id').references(() => controlledDocuments.id, { onDelete: 'restrict' }).notNull(),
+  revisionId: uuid('revision_id').references(() => documentVersionHistory.id, { onDelete: 'restrict' }).notNull(),
+  fileChecksum: text('file_checksum').notNull(),
+  documentNumberSnapshot: text('document_number_snapshot').notNull(),
+  revisionSnapshot: text('revision_snapshot').notNull(),
+  decision: text('decision').notNull(),
+  signatureMeaning: text('signature_meaning').notNull(),
+  decisionComment: text('decision_comment'),
+  actorUserId: integer('actor_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
+  actorUsernameSnapshot: text('actor_username_snapshot').notNull(),
+  actorRoleSnapshot: text('actor_role_snapshot').notNull(),
+  actorCapabilitiesSnapshot: jsonb('actor_capabilities_snapshot').notNull().default([]),
+  approvalStatus: text('approval_status').notNull().default('VALID'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  metadata: jsonb('metadata').notNull().default({}),
 });
 
 // Insert Schemas

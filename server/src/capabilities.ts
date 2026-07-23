@@ -43,7 +43,17 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   'projects.approve_closing',
 
   // Controlled documents
+  'documents.view',
+  'documents.create',
+  'documents.edit_draft',
+  'documents.submit',
   'documents.approve',
+  'documents.release',
+  'documents.revise',
+  'documents.supersede',
+  'documents.obsolete',
+  'documents.void',
+  'documents.number_admin',
   'design.control.edit',
   'design.control.submit',
   'design.control.approve',

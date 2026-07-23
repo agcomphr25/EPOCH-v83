@@ -4,8 +4,8 @@ import path from 'path';
 import { db } from '../../../server/db';
 import { pool } from '../../../server/db';
 import { requirePermission } from '../../../server/middleware/requirePermission';
-import { controlledDocuments, documentVersionHistory, insertControlledDocumentSchema, insertDocumentVersionHistorySchema } from '../../../server/schema';
-import { eq, desc, and, inArray } from 'drizzle-orm';
+import { controlledDocumentNumberRegistry, controlledDocuments, documentVersionHistory, insertControlledDocumentSchema, insertDocumentVersionHistorySchema } from '../../../server/schema';
+import { eq, desc, and, inArray, sql } from 'drizzle-orm';
 import fs from 'fs/promises';
 import { z } from 'zod';
 import Papa from 'papaparse';
@@ -14,8 +14,45 @@ import { writeAccessLog } from './vault';
 import { fileURLToPath } from 'url';
 import { PDFDocument, PDFFont, StandardFonts, rgb } from 'pdf-lib';
 import { getFileStorageProvider, getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
+import {
+  ControlledDocumentError,
+  attachExternalApprovalEvidence,
+  createControlledDocument,
+  createControlledRevision,
+  getControlledDocumentState,
+  getDocumentNumberConflicts,
+  recordRejectedHardDelete,
+  transitionControlledRevision,
+  updateDraftMetadata,
+} from '../services/controlledDocumentLifecycleService';
+import {
+  assertControlledDocumentSchemaReady,
+  ControlledDocumentSchemaNotReadyError,
+} from '../services/controlledDocumentSchemaReadiness';
 
 const router = Router();
+
+const lifecycleActor = (req: Request) => {
+  const user = (req as any).user;
+  if (!user || !Number.isInteger(Number(user.id))) {
+    throw new ControlledDocumentError(401, 'AUTHENTICATION_REQUIRED', 'Authenticated user identity is required');
+  }
+  return { id: Number(user.id), username: String(user.username), role: String(user.role) };
+};
+
+const requestEvidence = (req: Request) => ({
+  ipAddress: ((req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || null),
+  userAgent: req.headers['user-agent'] ?? null,
+});
+
+const sendLifecycleError = (res: Response, error: unknown, fallback: string) => {
+  if (error instanceof ControlledDocumentError) {
+    res.status(error.statusCode).json({ error: error.code, message: error.message, ...error.details });
+    return;
+  }
+  console.error(fallback, error);
+  res.status(500).json({ error: 'CONTROLLED_DOCUMENT_OPERATION_FAILED', message: fallback });
+};
 
 // Helper function to get user from session
 async function getUserFromSession(req: Request): Promise<any | null> {
@@ -91,10 +128,6 @@ const requireDocumentEditor = async (req: Request, res: Response, next: any) => 
   const user = await getUserFromSession(req);
   if (!user) {
     return res.status(401).json({ error: 'Authentication required' });
-  }
-  const documentManagers = ['lauriet'];
-  if (user.role !== 'ADMIN' && user.role !== 'OWNER' && !documentManagers.includes(user.username)) {
-    return res.status(403).json({ error: 'You do not have permission to create or edit documents' });
   }
   (req as any).user = user;
   next();
@@ -354,8 +387,25 @@ const normalizeImportedFilePath = async (row: Record<string, unknown>, documentN
   }
 };
 
+router.use(async (_req, res, next) => {
+  try {
+    await assertControlledDocumentSchemaReady();
+    next();
+  } catch (error) {
+    if (error instanceof ControlledDocumentSchemaNotReadyError) {
+      return res.status(503).json({
+        error: error.code,
+        message: error.message,
+        requiredMigration: '0209_master_document_control_hardening.sql',
+        missingObjects: error.missingObjects,
+      });
+    }
+    next(error);
+  }
+});
+
 // Get all controlled documents (authenticated users only)
-router.get('/', requireAuth, async (req: Request, res: Response) => {
+router.get('/', requireAuth, requirePermission('documents.view'), async (req: Request, res: Response) => {
   try {
     const docs = await db.select().from(controlledDocuments).orderBy(desc(controlledDocuments.createdAt));
     res.json(docs);
@@ -365,8 +415,16 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+router.get('/number-conflicts', requireAuth, requirePermission('documents.number_admin'), async (_req: Request, res: Response) => {
+  try {
+    res.json({ conflicts: await getDocumentNumberConflicts() });
+  } catch (error) {
+    sendLifecycleError(res, error, 'Failed to load controlled document number conflicts');
+  }
+});
+
 // Get single document by ID (authenticated users only)
-router.get('/:id', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, requirePermission('documents.view'), async (req: Request, res: Response) => {
   try {
     const [doc] = await db
       .select()
@@ -376,7 +434,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     if (!doc) {
       return res.status(404).json({ error: 'Document not found' });
     }
-    
+
     res.json(doc);
   } catch (error) {
     console.error('Error fetching document:', error);
@@ -385,7 +443,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
 });
 
 // Get version history for a document (authenticated users only)
-router.get('/:id/versions', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id/versions', requireAuth, requirePermission('documents.view'), async (req: Request, res: Response) => {
   try {
     const versions = await db
       .select()
@@ -400,124 +458,184 @@ router.get('/:id/versions', requireAuth, async (req: Request, res: Response) => 
   }
 });
 
+router.get('/:id/revisions', requireAuth, requirePermission('documents.view'), async (req: Request, res: Response) => {
+  try {
+    const state = await getControlledDocumentState(req.params.id);
+    res.json({ document: state.document, currentRevision: state.currentRevision, revisions: state.revisions, approvals: state.approvals });
+  } catch (error) {
+    sendLifecycleError(res, error, 'Failed to load controlled document revisions');
+  }
+});
+
+router.get('/:id/revisions/:revisionId', requireAuth, requirePermission('documents.view'), async (req: Request, res: Response) => {
+  try {
+    const state = await getControlledDocumentState(req.params.id);
+    const revision = state.revisions.find((candidate) => candidate.id === req.params.revisionId);
+    if (!revision) return res.status(404).json({ error: 'REVISION_NOT_FOUND' });
+    res.json({ document: state.document, revision, approvals: state.approvals.filter((row) => row.revisionId === revision.id) });
+  } catch (error) {
+    sendLifecycleError(res, error, 'Failed to load controlled document revision');
+  }
+});
+
+router.get('/:id/revisions/:revisionId/download', requireAuth, requirePermission('documents.view'), requireStepUp(), async (req: Request, res: Response) => {
+  try {
+    const actor = lifecycleActor(req);
+    const state = await getControlledDocumentState(req.params.id);
+    const revision = state.revisions.find((candidate) => candidate.id === req.params.revisionId);
+    if (!revision?.filePath) return res.status(404).json({ error: 'REVISION_FILE_NOT_FOUND' });
+    if (state.document.classification === 'restricted' || state.document.classification === 'classified') {
+      if (actor.role !== 'ADMIN' && actor.role !== 'OWNER') {
+        const grants = await pool.query<{ id: number }>(
+          `SELECT id FROM vault_access_grants WHERE document_id = $1 AND (
+             (grantee_type = 'user' AND grantee_name = $2)
+             OR (grantee_type = 'role' AND grantee_name = $3)
+           ) LIMIT 1`,
+          [state.document.id, actor.username, actor.role]
+        );
+        if (!grants?.length) {
+          await writeAccessLog({ documentId: state.document.id, userId: actor.username, action: 'denied', ipAddress: requestEvidence(req).ipAddress ?? 'unknown' });
+          return res.status(403).json({ error: 'Access denied: insufficient clearance for this revision' });
+        }
+      }
+    }
+    const external = getExternalRedirectUrl(revision.filePath);
+    if (external) {
+      await writeAccessLog({ documentId: state.document.id, userId: actor.username, action: 'download', ipAddress: requestEvidence(req).ipAddress ?? 'unknown' });
+      return res.redirect(external);
+    }
+    let buffer: Buffer;
+    if (revision.filePath.startsWith('/objects/') || revision.filePath.startsWith('/supabase-objects/')) {
+      buffer = await getFileStorageProviderForObjectPath(revision.filePath).downloadBuffer(revision.filePath);
+    } else {
+      const resolvedPath = resolveControlledDocumentFile(revision.filePath);
+      if (!resolvedPath) {
+        return res.status(422).json({ error: 'REVISION_FILE_LOCATION_UNSUPPORTED' });
+      }
+      buffer = await fs.readFile(resolvedPath);
+    }
+    await writeAccessLog({ documentId: state.document.id, userId: actor.username, action: 'download', ipAddress: requestEvidence(req).ipAddress ?? 'unknown' });
+    res.setHeader('Content-Type', revision.mediaType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${revision.fileName || `${state.document.documentNumber}-${revision.versionNumber}`}"`);
+    res.send(buffer);
+  } catch (error) {
+    sendLifecycleError(res, error, 'Failed to download exact controlled revision');
+  }
+});
+
+router.post('/:id/revise', requireAuth, requirePermission('documents.revise'), upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'REVISION_FILE_REQUIRED' });
+    const filePath = await persistControlledDocumentUpload(req.file, req.params.id);
+    const result = await createControlledRevision({
+      documentId: req.params.id,
+      expectedCurrentRevisionId: typeof req.body?.currentRevisionId === 'string' ? req.body.currentRevisionId : undefined,
+      revisionValue: String(req.body?.revisionValue || ''),
+      reason: String(req.body?.reason || ''),
+      file: { path: filePath, name: req.file.originalname, mediaType: req.file.mimetype, size: req.file.size, buffer: req.file.buffer },
+      actor: lifecycleActor(req),
+      request: requestEvidence(req),
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    sendLifecycleError(res, error, 'Failed to create controlled revision');
+  }
+});
+
+const lifecycleHandler = (
+  action: 'submit' | 'approve' | 'release' | 'supersede' | 'obsolete' | 'void'
+) => async (req: Request, res: Response) => {
+  try {
+    const result = await transitionControlledRevision({
+      documentId: req.params.id,
+      revisionId: typeof req.body?.revisionId === 'string' ? req.body.revisionId : undefined,
+      action,
+      decision: action === 'approve' ? req.body?.decision : undefined,
+      reason: String(req.body?.reason || req.body?.comment || ''),
+      effectiveDate: typeof req.body?.effectiveDate === 'string' ? req.body.effectiveDate : null,
+      actor: lifecycleActor(req),
+      request: requestEvidence(req),
+    });
+    res.json(result);
+  } catch (error) {
+    sendLifecycleError(res, error, `Failed to ${action} controlled revision`);
+  }
+};
+
+router.post('/:id/submit', requireAuth, requirePermission('documents.submit'), lifecycleHandler('submit'));
+router.post('/:id/decision', requireAuth, requirePermission('documents.approve'), lifecycleHandler('approve'));
+router.post('/:id/release', requireAuth, requirePermission('documents.release'), lifecycleHandler('release'));
+router.post('/:id/supersede', requireAuth, requirePermission('documents.supersede'), lifecycleHandler('supersede'));
+router.post('/:id/obsolete', requireAuth, requirePermission('documents.obsolete'), lifecycleHandler('obsolete'));
+router.post('/:id/void', requireAuth, requirePermission('documents.void'), lifecycleHandler('void'));
+
+router.post('/:id/revisions/:revisionId/external-approval-evidence', requireAuth, requirePermission('documents.approve'), async (req: Request, res: Response) => {
+  try {
+    const evidence = await attachExternalApprovalEvidence({
+      documentId: req.params.id,
+      revisionId: req.params.revisionId,
+      externalApprover: String(req.body?.externalApprover || ''),
+      externalOrganization: typeof req.body?.externalOrganization === 'string' ? req.body.externalOrganization : undefined,
+      evidenceReference: String(req.body?.evidenceReference || ''),
+      comment: String(req.body?.comment || ''),
+      actor: lifecycleActor(req),
+      request: requestEvidence(req),
+    });
+    res.status(201).json({ evidence });
+  } catch (error) {
+    sendLifecycleError(res, error, 'Failed to attach external approval evidence');
+  }
+});
+
 // Create new document with file upload (admin/owner/document managers only)
 // Auth middleware runs BEFORE upload to prevent anonymous file uploads
-router.post('/', requireDocumentEditor, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/', requireDocumentEditor, requirePermission('documents.create'), upload.single('file'), async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user!; // Guaranteed by middleware
-    const {
-      documentNumber,
-      documentName,
-      templateKey,
-      documentType,
-      department,
-      category,
-      description,
-      currentVersion,
-      versionDate,
-      originationDate,
-      retentionLength,
-      documentOwner,
-      classification,
-      cuiCategory,
-      itarCategory,
-      exportControlJurisdiction,
-      customerId,
-      contractArtifactType,
-      accessRule,
-      mfaRequired
-    } = req.body;
-    
-    const createdBy = user.username; // Use authenticated user
-
     const filePath = req.file
-      ? await persistControlledDocumentUpload(req.file, documentNumber)
+      ? await persistControlledDocumentUpload(req.file, req.body.documentNumber)
       : null;
-
-    // Calculate expiration date (1 year from now)
-    const now = new Date();
-    const expirationDate = new Date(now);
-    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-
-    const [newDoc] = await db.insert(controlledDocuments).values({
-      documentNumber,
-      documentName,
-      templateKey: templateKey || null,
-      documentType,
-      department,
-      category,
-      description,
-      currentVersion: currentVersion || '1.0',
-      versionDate: versionDate || null,
-      originationDate: originationDate || null,
-      status: 'pending',
-      retentionLength: retentionLength || '10 years',
-      documentOwner,
-      filePath,
-      classification: classification || 'internal',
-      cuiCategory: cuiCategory || null,
-      itarCategory: itarCategory || null,
-      exportControlJurisdiction: exportControlJurisdiction || null,
-      customerId: customerId || null,
-      contractArtifactType: contractArtifactType || null,
-      accessRule: accessRule || (classification === 'classified' || classification === 'restricted' ? 'explicit_grant' : 'authenticated'),
-      mfaRequired: mfaRequired === 'true' || mfaRequired === true || classification === 'classified' || classification === 'restricted',
-      downloadTrackingRequired: true,
-      createdBy,
-      expirationDate: expirationDate.toISOString().split('T')[0],
-    }).returning();
-
-    // Create initial version history entry
-    await db.insert(documentVersionHistory).values({
-      documentId: newDoc.id,
-      versionNumber: currentVersion || '1.0',
-      changeDescription: 'Initial version',
-      changeType: 'major',
-      filePath,
-      status: 'pending',
-      createdBy,
-      expirationDate: expirationDate.toISOString().split('T')[0],
+    const result = await createControlledDocument({
+      document: {
+        documentNumber: req.body.documentNumber,
+        documentName: req.body.documentName,
+        templateKey: req.body.templateKey || null,
+        documentType: req.body.documentType,
+        department: req.body.department,
+        category: req.body.category || null,
+        description: req.body.description || null,
+        revisionValue: req.body.currentVersion || '1.0',
+        retentionLength: req.body.retentionLength || '10 years',
+        documentOwner: req.body.documentOwner || null,
+        classification: req.body.classification || 'internal',
+        cuiCategory: req.body.cuiCategory || null,
+        itarCategory: req.body.itarCategory || null,
+        exportControlJurisdiction: req.body.exportControlJurisdiction || null,
+        customerId: req.body.customerId || null,
+        contractArtifactType: req.body.contractArtifactType || null,
+        accessRule: req.body.accessRule || 'authenticated',
+        mfaRequired: req.body.mfaRequired === 'true' || req.body.mfaRequired === true,
+      },
+      file: req.file && filePath ? {
+        path: filePath,
+        name: req.file.originalname,
+        mediaType: req.file.mimetype,
+        size: req.file.size,
+        buffer: req.file.buffer,
+      } : null,
+      actor: lifecycleActor(req),
+      request: requestEvidence(req),
     });
-
-    res.status(201).json(newDoc);
+    res.status(201).json(result.document);
   } catch (error: any) {
-    console.error('Error creating document:', error);
-    res.status(500).json({
-      error: 'Failed to create document',
-      details: error?.message || String(error),
-    });
+    sendLifecycleError(res, error, 'Failed to create controlled document');
   }
 });
 
 // Update document / Create new version (admin/owner/document managers only)
 // Auth middleware runs BEFORE upload to prevent anonymous file uploads
-router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Request, res: Response) => {
+router.put('/:id', requireDocumentEditor, requirePermission('documents.edit_draft'), upload.single('file'), async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user!; // Guaranteed by middleware
-    const {
-      createNewVersion,
-      changeDescription,
-      documentName,
-      templateKey,
-      documentType,
-      department,
-      category,
-      description,
-      versionDate,
-      originationDate,
-      retentionLength,
-      documentOwner,
-      classification,
-      cuiCategory,
-      itarCategory,
-      exportControlJurisdiction,
-      customerId,
-      contractArtifactType,
-      accessRule,
-      mfaRequired
-    } = req.body;
-    
-    const createdBy = user.username; // Use authenticated user
+    const { createNewVersion, changeDescription } = req.body;
 
     const [existingDoc] = await db
       .select()
@@ -528,177 +646,76 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    let newVersion = existingDoc.currentVersion;
-    let filePath = existingDoc.filePath;
-
-    if (createNewVersion === 'true' || createNewVersion === true) {
-      // Validate that file is uploaded when creating new version
-      if (!req.file) {
-        return res.status(400).json({ 
-          error: 'File upload is required when creating a new version' 
-        });
-      }
-
-      // Calculate new version number
-      newVersion = nextRevisionVersion(existingDoc.currentVersion);
-
-      // Use the newly uploaded file
-      filePath = await persistControlledDocumentUpload(req.file, existingDoc.id);
-
-      // Calculate new expiration date (1 year from now)
-      const now = new Date();
-      const expirationDate = new Date(now);
-      expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-
-      // Create version history entry
-      await db.insert(documentVersionHistory).values({
+    if (req.file && !(createNewVersion === 'true' || createNewVersion === true)) {
+      await updateDraftMetadata({
         documentId: req.params.id,
-        versionNumber: newVersion,
-        changeDescription: changeDescription || 'Document updated',
-        changeType: 'minor',
-        filePath,
-        status: 'pending',
-        createdBy,
-        expirationDate: expirationDate.toISOString().split('T')[0],
+        patch: req.body,
+        containsFile: true,
+        actor: lifecycleActor(req),
+        request: requestEvidence(req),
       });
-
-      // Update main document
-      const [updatedDoc] = await db
-        .update(controlledDocuments)
-        .set({
-          currentVersion: newVersion,
-          status: 'pending',
-          filePath,
-          documentName,
-          templateKey: templateKey || existingDoc.templateKey,
-          documentType,
-          department,
-          category,
-          description,
-          versionDate: versionDate || existingDoc.versionDate,
-          originationDate: originationDate || existingDoc.originationDate,
-          retentionLength: retentionLength || existingDoc.retentionLength || '10 years',
-          documentOwner,
-          classification: classification || existingDoc.classification,
-          cuiCategory: cuiCategory || null,
-          itarCategory: itarCategory || null,
-          exportControlJurisdiction: exportControlJurisdiction || null,
-          customerId: customerId || null,
-          contractArtifactType: contractArtifactType || null,
-          accessRule: accessRule || existingDoc.accessRule || 'authenticated',
-          mfaRequired: mfaRequired === 'true' || mfaRequired === true || existingDoc.mfaRequired,
-          expirationDate: expirationDate.toISOString().split('T')[0],
-          updatedAt: new Date(),
-        })
-        .where(eq(controlledDocuments.id, req.params.id))
-        .returning();
-
-      res.json(updatedDoc);
-    } else {
-      // Just update metadata without versioning
-      if (req.file) {
-        filePath = await persistControlledDocumentUpload(req.file, existingDoc.id);
-      }
-
-      const [updatedDoc] = await db
-        .update(controlledDocuments)
-        .set({
-          documentName,
-          templateKey: templateKey || existingDoc.templateKey,
-          documentType,
-          department,
-          category,
-          description,
-          versionDate: versionDate || existingDoc.versionDate,
-          originationDate: originationDate || existingDoc.originationDate,
-          retentionLength: retentionLength || existingDoc.retentionLength || '10 years',
-          documentOwner,
-          filePath,
-          classification: classification || existingDoc.classification,
-          cuiCategory: cuiCategory || null,
-          itarCategory: itarCategory || null,
-          exportControlJurisdiction: exportControlJurisdiction || null,
-          customerId: customerId || null,
-          contractArtifactType: contractArtifactType || null,
-          accessRule: accessRule || existingDoc.accessRule || 'authenticated',
-          mfaRequired: mfaRequired === 'true' || mfaRequired === true || existingDoc.mfaRequired,
-          updatedAt: new Date(),
-        })
-        .where(eq(controlledDocuments.id, req.params.id))
-        .returning();
-
-      res.json(updatedDoc);
+      return;
     }
+
+    if (req.file) {
+      if (!String(changeDescription || '').trim()) {
+        return res.status(400).json({ error: 'REVISION_REASON_REQUIRED', message: 'A revision reason is required' });
+      }
+      const filePath = await persistControlledDocumentUpload(req.file, existingDoc.id);
+      const result = await createControlledRevision({
+        documentId: req.params.id,
+        expectedCurrentRevisionId: typeof req.body.currentRevisionId === 'string' ? req.body.currentRevisionId : undefined,
+        revisionValue: String(req.body.revisionValue || nextRevisionVersion(existingDoc.currentVersion)),
+        reason: String(changeDescription),
+        file: {
+          path: filePath,
+          name: req.file.originalname,
+          mediaType: req.file.mimetype,
+          size: req.file.size,
+          buffer: req.file.buffer,
+        },
+        actor: lifecycleActor(req),
+        request: requestEvidence(req),
+      });
+      return res.json(result.document);
+    }
+
+    const metadataResult = await updateDraftMetadata({
+      documentId: req.params.id,
+      patch: req.body,
+      containsFile: false,
+      actor: lifecycleActor(req),
+      request: requestEvidence(req),
+    });
+    return res.json(metadataResult.document);
   } catch (error) {
-    console.error('Error updating document:', error);
-    res.status(500).json({ error: 'Failed to update document' });
+    sendLifecycleError(res, error, 'Failed to update controlled document');
   }
 });
 
 // Approve document — requires documents.approve capability
 router.post('/:id/approve', requirePermission('documents.approve'), async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    const { effectiveDate } = req.body;
-    const approvedBy = user.username; // Use session username, not client input
-
-    const [existingDoc] = await db
-      .select()
-      .from(controlledDocuments)
-      .where(eq(controlledDocuments.id, req.params.id));
-
-    if (!existingDoc) {
-      return res.status(404).json({ error: 'Document not found' });
-    }
-
-    const approvalDate = new Date();
-    const effectiveDateObj = effectiveDate ? new Date(effectiveDate) : approvalDate;
-    
-    // Calculate expiration date (1 year from effective date)
-    const expirationDate = new Date(effectiveDateObj);
-    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-
-    // Update main document
-    const [updatedDoc] = await db
-      .update(controlledDocuments)
-      .set({
-        status: 'approved',
-        effectiveDate: effectiveDateObj.toISOString().split('T')[0],
-        expirationDate: expirationDate.toISOString().split('T')[0],
-        updatedAt: new Date(),
-      })
-      .where(eq(controlledDocuments.id, req.params.id))
-      .returning();
-
-    // Update version history for current version
-    await db
-      .update(documentVersionHistory)
-      .set({
-        status: 'approved',
-        approvedBy,
-        approvedAt: approvalDate,
-        effectiveDate: effectiveDateObj.toISOString().split('T')[0],
-        expirationDate: expirationDate.toISOString().split('T')[0],
-      })
-      .where(and(
-        eq(documentVersionHistory.documentId, req.params.id),
-        eq(documentVersionHistory.versionNumber, existingDoc.currentVersion)
-      ));
-
-    res.json(updatedDoc);
+    const state = await transitionControlledRevision({
+      documentId: req.params.id,
+      revisionId: typeof req.body?.revisionId === 'string' ? req.body.revisionId : undefined,
+      action: 'approve',
+      decision: 'APPROVED',
+      reason: typeof req.body?.comment === 'string' && req.body.comment.trim()
+        ? req.body.comment.trim()
+        : 'Authenticated controlled revision approval',
+      actor: lifecycleActor(req),
+      request: requestEvidence(req),
+    });
+    res.json(state.document);
   } catch (error) {
-    console.error('Error approving document:', error);
-    res.status(500).json({ error: 'Failed to approve document' });
+    sendLifecycleError(res, error, 'Failed to approve controlled revision');
   }
 });
 
 // View PDF document file inline - requires authentication + step-up re-auth (credentials verified within 30 min)
 // ACL enforcement: restricted/classified docs require an explicit vault access grant or admin/owner role
-router.get('/:id/view', requireAuth, requireStepUp(), async (req: Request, res: Response) => {
+router.get('/:id/view', requireAuth, requirePermission('documents.view'), requireStepUp(), async (req: Request, res: Response) => {
   const actor = (req as any).user as { id: number; username: string; role: string };
   const ipAddress = (
     (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
@@ -790,7 +807,7 @@ router.get('/:id/view', requireAuth, requireStepUp(), async (req: Request, res: 
 
 // Download document file - requires authentication + step-up re-auth (credentials verified within 30 min)
 // ACL enforcement: restricted/classified docs require an explicit vault access grant or admin/owner role
-router.get('/:id/download', requireAuth, requireStepUp(), async (req: Request, res: Response) => {
+router.get('/:id/download', requireAuth, requirePermission('documents.view'), requireStepUp(), async (req: Request, res: Response) => {
   const actor = (req as any).user as { id: number; username: string; role: string };
   const ipAddress = (
     (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
@@ -892,32 +909,26 @@ router.delete('/:id', requireAdminOrOwner, async (req: Request, res: Response) =
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    // Delete version history first (foreign key constraint)
-    await db
-      .delete(documentVersionHistory)
-      .where(eq(documentVersionHistory.documentId, req.params.id));
+    await recordRejectedHardDelete({
+      documentId: doc.id,
+      actor: lifecycleActor(req),
+      request: requestEvidence(req),
+    });
 
-    // Delete main document
-    await db
-      .delete(controlledDocuments)
-      .where(eq(controlledDocuments.id, req.params.id));
-
-    // Optionally delete files from filesystem
-    // This is commented out for safety - consider implementing with soft delete
-    // if (doc.filePath) {
-    //   const fullPath = path.join(process.cwd(), 'server/src', doc.filePath);
-    //   await fs.unlink(fullPath).catch(console.error);
-    // }
-
-    res.json({ message: 'Document deleted successfully' });
+    res.status(410).json({
+      error: 'HARD_DELETE_DISABLED',
+      message: doc.lifecycleStatus === 'RELEASED' || doc.currentReleasedRevisionId
+        ? 'Controlled documents and revision history cannot be deleted. Use the authorized Obsolete action.'
+        : 'Controlled documents and revision history cannot be deleted. Use the authorized Void action.',
+      lifecycleStatus: doc.lifecycleStatus,
+    });
   } catch (error) {
-    console.error('Error deleting document:', error);
-    res.status(500).json({ error: 'Failed to delete document' });
+    sendLifecycleError(res, error, 'Failed to reject controlled document hard deletion');
   }
 });
 
 // CSV Import (admin/owner/document managers only)
-router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), async (req: Request, res: Response) => {
+router.post('/import/csv', requireDocumentEditor, requirePermission('documents.number_admin'), csvUpload.single('file'), async (req: Request, res: Response) => {
   try {
     const user = (req as any).user!;
     
@@ -1063,14 +1074,8 @@ router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), asyn
         await db
           .update(controlledDocuments)
           .set({
-            documentName: doc.documentName,
-            documentType: doc.documentType,
-            department: doc.department,
-            currentVersion: doc.currentVersion,
             retentionLength: doc.retentionLength,
             description: doc.description || existing.description,
-            filePath: doc.filePath || existing.filePath,
-            effectiveDate: doc.effectiveDate || existing.effectiveDate,
             expirationDate: doc.expirationDate,
             updatedAt: new Date(),
           })
@@ -1082,7 +1087,9 @@ router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), asyn
           documentType: doc.documentType,
           department: doc.department,
           currentVersion: doc.currentVersion,
-          status: doc.effectiveDate ? 'approved' : 'draft',
+          status: 'draft',
+          lifecycleStatus: 'DRAFT',
+          numberControlStatus: 'RESERVED',
           retentionLength: doc.retentionLength,
           description: doc.description,
           filePath: doc.filePath,
@@ -1098,19 +1105,37 @@ router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), asyn
     if (documentsToCreate.length > 0) {
       const newDocs = await db.insert(controlledDocuments).values(documentsToCreate).returning();
 
-      const versionHistoryToCreate = newDocs.map((newDoc) => ({
-        documentId: newDoc.id,
-        versionNumber: newDoc.currentVersion,
-        changeDescription: newDoc.description || 'Imported from CSV',
-        changeType: 'major',
-        status: newDoc.status,
-        createdBy: user.username,
-        filePath: newDoc.filePath,
-        effectiveDate: newDoc.effectiveDate,
-        expirationDate: newDoc.expirationDate,
-      }));
-
-      await db.insert(documentVersionHistory).values(versionHistoryToCreate);
+      for (const newDoc of newDocs) {
+        await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`document-number:${newDoc.documentNumber.trim().toUpperCase()}`}))`);
+          await tx.insert(controlledDocumentNumberRegistry).values({
+            normalizedNumber: newDoc.documentNumber.trim().toUpperCase(),
+            displayNumber: newDoc.documentNumber.trim(),
+            controlledDocumentId: newDoc.id,
+            status: 'RESERVED',
+          });
+          const [revision] = await tx.insert(documentVersionHistory).values({
+            documentId: newDoc.id,
+            versionNumber: newDoc.currentVersion,
+            revisionSequence: 1,
+            lifecycleStatus: 'DRAFT',
+            changeDescription: newDoc.description || 'Imported from CSV',
+            revisionReason: 'Imported from CSV; legacy file checksum requires verification',
+            changeType: 'major',
+            status: 'draft',
+            createdBy: user.username,
+            filePath: newDoc.filePath,
+            checksumStatus: newDoc.filePath ? 'PENDING_BACKFILL' : 'NOT_APPLICABLE',
+            effectiveDate: newDoc.effectiveDate,
+            expirationDate: newDoc.expirationDate,
+            metadata: { provenance: 'LEGACY_CSV_IMPORT' },
+          }).returning();
+          await tx.update(controlledDocuments).set({
+            currentRevisionId: revision.id,
+            workingDraftRevisionId: revision.id,
+          }).where(eq(controlledDocuments.id, newDoc.id));
+        });
+      }
     }
 
     // Log final results

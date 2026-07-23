@@ -232,6 +232,7 @@ export const safeMigrationFiles = [
   '0206_project_commercial_stage_reviews.sql',
   '0207_design_control_authority_foundation.sql',
   '0208_design_control_authenticated_approvals.sql',
+  '0210_master_document_control_hardening.sql',
   '0210_repair_freezer_temperature_tracking.sql',
   'investigation_308_order_duplication.sql',
 ];
@@ -253,6 +254,7 @@ export const criticalMigrationFiles = new Set([
   '0196_document_template_builder_tables.sql',
   '0207_design_control_authority_foundation.sql',
   '0208_design_control_authenticated_approvals.sql',
+  '0210_master_document_control_hardening.sql',
   '0210_repair_freezer_temperature_tracking.sql',
 ]);
 

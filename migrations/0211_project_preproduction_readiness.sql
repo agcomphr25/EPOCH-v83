@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS project_preproduction_readiness_reviews (
     REFERENCES project_workflow_instances(id, project_id) ON DELETE RESTRICT,
   FOREIGN KEY (workflow_step_instance_id, project_id)
     REFERENCES project_workflow_step_instances(id, project_id) ON DELETE RESTRICT,
-  UNIQUE (project_id, workflow_instance_id, revision_number)
+  UNIQUE (project_id, workflow_instance_id, revision_number),
+  UNIQUE (id, project_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS project_preproduction_current_unique
   ON project_preproduction_readiness_reviews(project_id, workflow_instance_id)
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS project_production_releases (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL,
   workflow_instance_id UUID NOT NULL,
-  readiness_review_id UUID NOT NULL REFERENCES project_preproduction_readiness_reviews(id) ON DELETE RESTRICT,
+  readiness_review_id UUID NOT NULL,
   readiness_revision INTEGER NOT NULL,
   wad_authorization_id UUID NOT NULL REFERENCES project_wad_authorizations(id) ON DELETE RESTRICT,
   wad_revision INTEGER NOT NULL,
@@ -62,7 +63,10 @@ CREATE TABLE IF NOT EXISTS project_production_releases (
   evidence_snapshot JSONB NOT NULL,
   FOREIGN KEY (workflow_instance_id, project_id)
     REFERENCES project_workflow_instances(id, project_id) ON DELETE RESTRICT,
-  UNIQUE (project_id, readiness_review_id)
+  FOREIGN KEY (readiness_review_id, project_id)
+    REFERENCES project_preproduction_readiness_reviews(id, project_id) ON DELETE RESTRICT,
+  UNIQUE (project_id, readiness_review_id),
+  UNIQUE (id, project_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS project_production_release_current_unique
   ON project_production_releases(project_id)
@@ -71,15 +75,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS project_production_release_current_unique
 CREATE TABLE IF NOT EXISTS project_production_launches (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL,
-  production_release_id UUID NOT NULL REFERENCES project_production_releases(id) ON DELETE RESTRICT,
+  production_release_id UUID NOT NULL,
   idempotency_key TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('COMPLETE','FAILED')),
+  status TEXT NOT NULL CHECK (status = 'COMPLETE'),
   production_evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
   error_code TEXT,
   error_message TEXT,
   launched_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   launched_by_display_name TEXT NOT NULL,
   launched_at TIMESTAMP NOT NULL DEFAULT now(),
+  FOREIGN KEY (production_release_id, project_id)
+    REFERENCES project_production_releases(id, project_id) ON DELETE RESTRICT,
   UNIQUE (project_id, idempotency_key)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS project_production_launch_complete_unique

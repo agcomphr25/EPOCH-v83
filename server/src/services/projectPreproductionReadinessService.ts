@@ -10,7 +10,9 @@ import { resolveProjectWorkflowVersion } from './projectWorkflowVersionService';
 import { validateWorkflowInstanceIntegrity } from './projectWorkflowInstanceIntegrity';
 import { getCurrentWadAuthorization } from './projectWadAuthorizationService';
 import {
+  assertProductionCountsMatchPlan,
   checklistBlockers,
+  plannedProductionCounts,
   requiredPreproductionRoles,
   resolveFirstProductionDepartment,
   type ChecklistDecision,
@@ -941,12 +943,6 @@ export async function approveProductionRelease(
 ) {
   return db.transaction(async (tx) => {
     const { ctx, review, source } = await validateRelease(projectId, tx);
-    if (ctx.project.current_stage !== 'PREPRODUCTION_READINESS')
-      throw new ProjectPreproductionError(
-        'INVALID_PROJECT_STATUS',
-        'Project is not in the permitted preproduction status.',
-        409
-      );
     const existing = resultRows(
       await tx.execute(
         sql`SELECT * FROM project_production_releases WHERE project_id=${projectId} AND status='APPROVED'`
@@ -961,6 +957,12 @@ export async function approveProductionRelease(
         409
       );
     }
+    if (ctx.project.current_stage !== 'PREPRODUCTION_READINESS')
+      throw new ProjectPreproductionError(
+        'INVALID_PROJECT_STATUS',
+        'Project is not in the permitted preproduction status.',
+        409
+      );
     const plan = source.planning.plan;
     const wad = source.wad.authorization;
     const [release] = resultRows(
@@ -1051,7 +1053,7 @@ export async function launchProduction(
         );
       const items = resultRows(
         await tx.execute(
-          sql`SELECT id,quantity FROM p2_purchase_order_items WHERE po_id=${poId} ORDER BY id`
+          sql`SELECT id,quantity,part_number FROM p2_purchase_order_items WHERE po_id=${poId} ORDER BY id`
         )
       );
       if (!items.length)
@@ -1060,13 +1062,74 @@ export async function launchProduction(
           'The linked P2 PO has no line items.',
           409
         );
+      const planItems = resultRows(
+        await tx.execute(sql`
+          SELECT ppi.*,pr.department_sequence
+          FROM project_production_plan_items ppi
+          LEFT JOIN part_routings pr ON pr.id=ppi.routing_id
+          WHERE ppi.production_plan_id=${release.production_plan_id}
+            AND ppi.project_id=${projectId}
+            AND ppi.is_manufactured=true
+            AND ppi.make_buy='MAKE'
+          ORDER BY ppi.assembly_path
+          FOR SHARE OF ppi`)
+      );
+      if (!planItems.length)
+        throw new ProjectPreproductionError(
+          'MANUFACTURED_PLAN_REQUIRED',
+          'The released Production Plan has no manufactured items.',
+          409
+        );
+      let plannedCounts: Map<string, number>;
+      try {
+        plannedCounts = plannedProductionCounts(
+          planItems.map((item) => ({
+            part_number: String(item.part_number ?? ''),
+            extended_project_quantity: item.extended_project_quantity,
+            routing_id: item.routing_id,
+            routing_release_status: item.routing_release_status,
+            department_sequence: item.department_sequence,
+          }))
+        );
+      } catch (error) {
+        throw new ProjectPreproductionError(
+          'RELEASED_ROUTING_INVALID',
+          error instanceof Error
+            ? error.message
+            : 'The released routing baseline is invalid.',
+          409
+        );
+      }
       const existingOrders = resultRows(
         await tx.execute(
           sql`SELECT id FROM p2_production_orders WHERE p2_po_id=${poId}`
         )
       );
+      if (existingOrders.length)
+        throw new ProjectPreproductionError(
+          'PREEXISTING_PRODUCTION_RECORDS',
+          'Production records already exist outside this V2 launch. Resolve them before retrying.',
+          409
+        );
+      const existingSerialized = resultRows(
+        await tx.execute(
+          sql`SELECT id FROM p2_serialized_items WHERE po_id=${poId} LIMIT 1`
+        )
+      );
+      if (existingSerialized.length)
+        throw new ProjectPreproductionError(
+          'PREEXISTING_SERIALIZED_RECORDS',
+          'Serialized records already exist outside this V2 launch. Resolve them before retrying.',
+          409
+        );
       const createdSerialIds: string[] = [];
       for (const item of items) {
+        const plannedTopLevel = planItems.find(
+          (entry) =>
+            entry.part_number === item.part_number &&
+            !clean(entry.parent_part_number)
+        );
+        if (!plannedTopLevel?.serialization_required) continue;
         const countRow = resultRows(
           await tx.execute(
             sql`SELECT count(*)::int count FROM p2_serialized_items WHERE po_item_id=${item.id}`
@@ -1087,10 +1150,65 @@ export async function launchProduction(
             ).map((entry) => entry.id)
           );
       }
-      const productionOrders =
-        existingOrders.length === 0
-          ? await storage.generateP2ProductionOrders(poId, undefined, tx)
-          : [];
+      const productionOrders = await storage.generateP2ProductionOrders(
+        poId,
+        undefined,
+        tx
+      );
+      try {
+        assertProductionCountsMatchPlan(
+          plannedCounts,
+          productionOrders.map((entry) => entry.sku)
+        );
+      } catch (error) {
+        throw new ProjectPreproductionError(
+          'GENERATED_RECORDS_MISMATCH',
+          error instanceof Error
+            ? error.message
+            : 'Generated production records do not match the released plan.',
+          409
+        );
+      }
+      const routeByPart = new Map<
+        string,
+        { department: string; routingId: string; routingRevision: unknown }
+      >();
+      for (const planItem of planItems) {
+        const department = resolveFirstProductionDepartment(
+          planItem.department_sequence,
+          true
+        );
+        const prior = routeByPart.get(planItem.part_number);
+        if (
+          !department ||
+          (prior &&
+            (prior.department !== department ||
+              prior.routingId !== planItem.routing_id))
+        )
+          throw new ProjectPreproductionError(
+            'AMBIGUOUS_RELEASED_ROUTING',
+            `${planItem.part_number} does not resolve to one released first department.`,
+            409
+          );
+        routeByPart.set(planItem.part_number, {
+          department,
+          routingId: planItem.routing_id,
+          routingRevision: planItem.routing_revision,
+        });
+      }
+      for (const order of productionOrders) {
+        const route = routeByPart.get(order.sku);
+        if (!route)
+          throw new ProjectPreproductionError(
+            'PRODUCTION_ORDER_NOT_PLANNED',
+            `Generated production order ${order.id} is not in the released plan.`,
+            409
+          );
+        await tx.execute(sql`
+          UPDATE p2_production_orders
+          SET department=${route.department},updated_at=now()
+          WHERE id=${order.id}`);
+      }
       const schedulable = resultRows(
         await tx.execute(sql`
           SELECT si.id,si.po_item_id,si.part_number,si.part_routing_id,
@@ -1160,6 +1278,14 @@ export async function launchProduction(
                 (entry) => entry.id
               ),
               routedItems: routed,
+              releasedRoutingBaselines: Array.from(routeByPart.entries()).map(
+                ([partNumber, value]) => ({ partNumber, ...value })
+              ),
+              travelersCreated: 0,
+              inventoryDemandsCreated: 0,
+              reservationsCreated: 0,
+              shippingRecordsCreated: 0,
+              closingRecordsCreated: 0,
             })}::jsonb,${actor.userId},${actor.displayName}) RETURNING *`)
       );
       await recordAuditEvent(
@@ -1186,21 +1312,26 @@ export async function launchProduction(
       return readModel(projectId, tx);
     });
   } catch (error) {
-    await recordAuditEvent({
-      eventType: 'P2_V2_PRODUCTION_LAUNCH_FAILED',
-      subjectType: 'project',
-      subjectId: projectId,
-      sourceService: 'projectPreproductionReadinessService',
-      actor: { id: actor.userId, username: actor.username, role: actor.role },
-      payload: {
-        projectId,
-        idempotencyKey,
-        errorCode:
-          error instanceof ProjectPreproductionError
-            ? error.code
-            : 'PRODUCTION_LAUNCH_FAILED',
-      },
-    });
+    try {
+      await recordAuditEvent({
+        eventType: 'P2_V2_PRODUCTION_LAUNCH_FAILED',
+        subjectType: 'project',
+        subjectId: projectId,
+        sourceService: 'projectPreproductionReadinessService',
+        actor: { id: actor.userId, username: actor.username, role: actor.role },
+        payload: {
+          projectId,
+          // Do not persist the caller's potentially sensitive opaque key.
+          idempotencyKeyPresent: Boolean(clean(idempotencyKey)),
+          errorCode:
+            error instanceof ProjectPreproductionError
+              ? error.code
+              : 'PRODUCTION_LAUNCH_FAILED',
+        },
+      });
+    } catch (auditError) {
+      console.error('Failed to record P2 V2 launch failure audit:', auditError);
+    }
     throw error;
   }
 }

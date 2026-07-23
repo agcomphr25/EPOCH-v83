@@ -381,6 +381,7 @@ export default function P2V2PreproductionReadiness({
               disabled={
                 action.isPending ||
                 data.projectStatus !== 'READY_FOR_P2_RELEASE' ||
+                data.readiness.state !== 'READY' ||
                 Boolean(data.launch?.status === 'COMPLETE')
               }
               data-testid="launch-production"
@@ -408,11 +409,14 @@ export default function P2V2PreproductionReadiness({
           <DialogHeader>
             <DialogTitle>Launch production?</DialogTitle>
             <DialogDescription>
-              This revalidates the approved release, creates only missing
-              serialized units and production orders through the existing P2
-              services, routes items to their first valid department, activates
-              Stage 8, and changes the project to IN_PRODUCTION. The operation
-              is atomic and protected against duplicate retries.
+              This revalidates the approved release, creates the serialized
+              units required by the released plan and its exact manufactured
+              production orders through the existing P2 services, routes each
+              item to its released first department, activates Stage 8, and
+              changes the project to IN_PRODUCTION. Travelers, inventory
+              demands, reservations, shipping, and closing records are not
+              created by this action. The operation is atomic and protected
+              against duplicate retries.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

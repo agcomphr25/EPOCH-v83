@@ -3065,7 +3065,7 @@ export const insertFreezerTemperatureLogSchema = createInsertSchema(
           temperature: freezerTemperatureValueSchema,
         })
       )
-      .min(1, 'At least one temperature reading is required'),
+      .length(1, 'Exactly one freezer reading is required'),
   })
   .superRefine((data, ctx) => {
     const ids = data.readings.map((reading) => reading.locationId);

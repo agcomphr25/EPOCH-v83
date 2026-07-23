@@ -226,6 +226,7 @@ export const safeMigrationFiles = [
   '0201_close_fully_shipped_p1_purchase_orders.sql',
   '0207_design_control_authority_foundation.sql',
   '0208_design_control_authenticated_approvals.sql',
+  '0210_master_document_control_hardening.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -246,6 +247,7 @@ export const criticalMigrationFiles = new Set([
   '0196_document_template_builder_tables.sql',
   '0207_design_control_authority_foundation.sql',
   '0208_design_control_authenticated_approvals.sql',
+  '0210_master_document_control_hardening.sql',
 ]);
 
 export async function runSafeBootMigrations() {

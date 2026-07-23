@@ -46,6 +46,7 @@ import {
 import type { ControlledDocument, DocumentVersionHistory } from '@shared/schema';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const DOCUMENT_TYPE_OPTIONS = [
   { value: 'POSTER', label: 'Poster', codeToken: 'Poster' },
@@ -164,6 +165,7 @@ const nextRevisionVersion = (version: string | null | undefined) => {
 };
 
 export default function MasterDocumentRegister() {
+  const { can } = usePermissions();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -212,8 +214,8 @@ export default function MasterDocumentRegister() {
     },
   });
 
-  const canCreateEdit = session?.role === 'ADMIN' || session?.role === 'OWNER' || session?.username === 'lauriet';
-  const canApprove = session?.username === 'lauriet';
+  const canCreateEdit = can('documents.create') || can('documents.edit_draft');
+  const canApprove = can('documents.approve');
 
   // Get unique departments and types for filters
   const departments = ['all', ...Array.from(new Set(documents.map((d) => d.department)))];
@@ -254,7 +256,9 @@ export default function MasterDocumentRegister() {
     const matchesType = typeFilter === 'all' || doc.documentType === typeFilter;
     const matchesStatus =
       statusFilter === 'all' ||
-      (statusFilter === 'expired' ? isExpired(doc) : doc.status === statusFilter);
+      (statusFilter === 'expired'
+        ? isExpired(doc)
+        : ((doc as any).lifecycleStatus || doc.status).toLowerCase() === statusFilter.toLowerCase());
 
     return matchesSearch && matchesDepartment && matchesType && matchesStatus;
   });
@@ -278,7 +282,19 @@ export default function MasterDocumentRegister() {
       );
     }
 
-    switch (doc.status) {
+    switch ((doc as any).lifecycleStatus || doc.status?.toUpperCase()) {
+      case 'RELEASED':
+        return <Badge className="bg-emerald-700">Released</Badge>;
+      case 'SUPERSEDED':
+        return <Badge variant="outline">Superseded</Badge>;
+      case 'OBSOLETE':
+        return <Badge variant="destructive">Obsolete</Badge>;
+      case 'VOID':
+        return <Badge variant="secondary">Void</Badge>;
+      case 'IN_REVIEW':
+        return <Badge variant="outline" className="border-blue-500 text-blue-700">In Review</Badge>;
+      case 'APPROVED':
+      case 'approved':
       case 'approved':
         return (
           <Badge variant="default" className="flex items-center gap-1 bg-green-600">
@@ -293,6 +309,7 @@ export default function MasterDocumentRegister() {
             Pending
           </Badge>
         );
+      case 'DRAFT':
       case 'draft':
         return (
           <Badge variant="secondary" className="flex items-center gap-1">
@@ -519,9 +536,9 @@ export default function MasterDocumentRegister() {
 
   // Update document mutation
   const updateDocumentMutation = useMutation({
-    mutationFn: async ({ id, formData }: { id: string; formData: FormData }) => {
-      return await apiRequest(`/api/controlled-documents/${id}`, {
-        method: 'PUT',
+    mutationFn: async ({ id, formData, revise }: { id: string; formData: FormData; revise: boolean }) => {
+      return await apiRequest(`/api/controlled-documents/${id}${revise ? '/revise' : ''}`, {
+        method: revise ? 'POST' : 'PUT',
         body: formData,
       });
     },
@@ -563,23 +580,31 @@ export default function MasterDocumentRegister() {
     const formData = new FormData(formElement);
 
     if (createNewVersion) {
-      formData.append('createNewVersion', 'true');
+      formData.append('revisionValue', nextRevisionVersion(selectedDocument.currentVersion));
+      formData.append('reason', String(formData.get('changeDescription') || ''));
+      if ((selectedDocument as any).currentRevisionId) {
+        formData.append('currentRevisionId', (selectedDocument as any).currentRevisionId);
+      }
     }
 
     if (selectedFile) {
       formData.append('file', selectedFile);
     }
 
-    updateDocumentMutation.mutate({ id: selectedDocument.id, formData });
+    updateDocumentMutation.mutate({ id: selectedDocument.id, formData, revise: createNewVersion });
   };
 
   // Approve document mutation
   const approveDocumentMutation = useMutation({
     mutationFn: async ({ id, effectiveDate }: { id: string; effectiveDate: string }) => {
-      return await apiRequest(`/api/controlled-documents/${id}/approve`, {
+      return await apiRequest(`/api/controlled-documents/${id}/decision`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ effectiveDate }),
+        body: JSON.stringify({
+          revisionId: (selectedDocument as any)?.currentRevisionId,
+          decision: 'APPROVED',
+          comment: `Approved with effective date ${effectiveDate}`,
+        }),
       });
     },
     onSuccess: () => {
@@ -610,6 +635,26 @@ export default function MasterDocumentRegister() {
 
     approveDocumentMutation.mutate({ id: selectedDocument.id, effectiveDate });
   };
+
+  const lifecycleMutation = useMutation({
+    mutationFn: async ({ doc, action }: { doc: ControlledDocument; action: 'submit' | 'release' | 'obsolete' | 'void' }) => {
+      const reason = window.prompt(`Reason for ${action}`);
+      if (!reason?.trim()) throw new Error('A transition reason is required');
+      return apiRequest(`/api/controlled-documents/${doc.id}/${action}`, {
+        method: 'POST',
+        body: {
+          revisionId: (doc as any).currentRevisionId,
+          reason: reason.trim(),
+        },
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] }),
+    onError: (error: any) => toast({
+      title: 'Document lifecycle action failed',
+      description: error.message,
+      variant: 'destructive',
+    }),
+  });
 
   // CSV Import mutation
   const importCsvMutation = useMutation({
@@ -774,6 +819,10 @@ export default function MasterDocumentRegister() {
                   <SelectItem value="draft">Draft</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="released">Released</SelectItem>
+                  <SelectItem value="superseded">Superseded</SelectItem>
+                  <SelectItem value="obsolete">Obsolete</SelectItem>
+                  <SelectItem value="void">Void</SelectItem>
                   <SelectItem value="expired">Expired</SelectItem>
                 </SelectContent>
               </Select>
@@ -805,6 +854,7 @@ export default function MasterDocumentRegister() {
                       <TableHead>Type</TableHead>
                       <TableHead>Department</TableHead>
                       <TableHead>Version</TableHead>
+                      <TableHead>Released / Draft</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Effective Date</TableHead>
                       <TableHead>Expiration Date</TableHead>
@@ -832,7 +882,20 @@ export default function MasterDocumentRegister() {
                         <TableCell>{doc.documentType}</TableCell>
                         <TableCell>{doc.department}</TableCell>
                         <TableCell className="font-mono text-sm">{formatVersionDisplay(doc)}</TableCell>
-                        <TableCell>{getStatusBadge(doc)}</TableCell>
+                        <TableCell className="text-xs">
+                          <div>Released: {(doc as any).currentReleasedRevisionId ? doc.currentVersion : 'None'}</div>
+                          <div>Working draft: {(doc as any).workingDraftRevisionId ? doc.currentVersion : 'None'}</div>
+                          {(doc as any).numberControlStatus === 'NUMBER_RECONCILIATION_REQUIRED' && (
+                            <Badge variant="destructive" className="mt-1">Number conflict</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(doc)}
+                          {(doc as any).lifecycleStatus &&
+                            String((doc as any).lifecycleStatus).toLowerCase() !== doc.status?.toLowerCase() && (
+                              <div className="mt-1 text-xs text-muted-foreground">Legacy: {doc.status}</div>
+                            )}
+                        </TableCell>
                         <TableCell>{formatDate(doc.effectiveDate)}</TableCell>
                         <TableCell>
                           <div>
@@ -891,7 +954,7 @@ export default function MasterDocumentRegister() {
                             >
                               <History className="h-4 w-4" />
                             </Button>
-                            {canCreateEdit && (
+                            {can('documents.edit_draft') && (doc as any).lifecycleStatus === 'DRAFT' && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -903,7 +966,26 @@ export default function MasterDocumentRegister() {
                                 <Edit className="h-4 w-4" />
                               </Button>
                             )}
-                            {canApprove && doc.status === 'pending' && (
+                            {can('documents.revise') && !['OBSOLETE', 'VOID'].includes((doc as any).lifecycleStatus) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedDocument(doc);
+                                  setCreateNewVersion(true);
+                                  setSelectedFile(null);
+                                  setIsEditDialogOpen(true);
+                                }}
+                              >
+                                Create Revision
+                              </Button>
+                            )}
+                            {can('documents.submit') && (doc as any).lifecycleStatus === 'DRAFT' && (
+                              <Button size="sm" variant="outline" onClick={() => lifecycleMutation.mutate({ doc, action: 'submit' })}>
+                                Submit
+                              </Button>
+                            )}
+                            {canApprove && (doc as any).lifecycleStatus === 'IN_REVIEW' && (
                               <Button
                                 size="sm"
                                 variant="default"
@@ -915,6 +997,15 @@ export default function MasterDocumentRegister() {
                                 <CheckCircle className="h-4 w-4 mr-1" />
                                 Approve
                               </Button>
+                            )}
+                            {can('documents.release') && (doc as any).lifecycleStatus === 'APPROVED' && (
+                              <Button size="sm" onClick={() => lifecycleMutation.mutate({ doc, action: 'release' })}>Release</Button>
+                            )}
+                            {can('documents.obsolete') && ((doc as any).lifecycleStatus === 'RELEASED' || (doc as any).lifecycleStatus === 'SUPERSEDED') && (
+                              <Button size="sm" variant="destructive" onClick={() => lifecycleMutation.mutate({ doc, action: 'obsolete' })}>Obsolete</Button>
+                            )}
+                            {can('documents.void') && ['DRAFT', 'IN_REVIEW'].includes((doc as any).lifecycleStatus) && (
+                              <Button size="sm" variant="ghost" onClick={() => lifecycleMutation.mutate({ doc, action: 'void' })}>Void</Button>
                             )}
                           </div>
                         </TableCell>
@@ -1133,7 +1224,9 @@ export default function MasterDocumentRegister() {
           <DialogHeader>
             <DialogTitle>Edit Controlled Document</DialogTitle>
             <DialogDescription>
-              Update document information or create a new version
+              {createNewVersion
+                ? 'Create a traceable draft revision with new file content'
+                : 'Update draft metadata. File content cannot be replaced here.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1157,19 +1250,7 @@ export default function MasterDocumentRegister() {
                           : 'Updating current version'}
                       </p>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="createNewVersion"
-                        checked={createNewVersion}
-                        onChange={(e) => setCreateNewVersion(e.target.checked)}
-                        className="rounded"
-                        data-testid="checkbox-create-version"
-                      />
-                      <Label htmlFor="createNewVersion" className="cursor-pointer">
-                        Create New Version
-                      </Label>
-                    </div>
+                    <Badge variant="outline">{createNewVersion ? 'Create Revision' : 'Metadata Only'}</Badge>
                   </div>
 
                   {createNewVersion && (
@@ -1324,9 +1405,9 @@ export default function MasterDocumentRegister() {
                 </div>
               </div>
 
-              <div className="space-y-2">
+              {createNewVersion && <div className="space-y-2">
                 <Label htmlFor="edit-file">
-                  {createNewVersion ? 'Upload New File (Required for new version)' : 'Upload New File (Optional)'}
+                  New revision file *
                 </Label>
                 <div className="flex items-center gap-2">
                   <Input
@@ -1348,7 +1429,7 @@ export default function MasterDocumentRegister() {
                     Current file: {selectedDocument.filePath.split('/').pop()}
                   </p>
                 )}
-              </div>
+              </div>}
 
               <DialogFooter>
                 <Button
@@ -1383,7 +1464,7 @@ export default function MasterDocumentRegister() {
           <DialogHeader>
             <DialogTitle>Approve Controlled Document</DialogTitle>
             <DialogDescription>
-              Set the effective date for this approved document
+              Record an authenticated approval for the exact current revision and checksum. Release is a separate action.
             </DialogDescription>
           </DialogHeader>
 
@@ -1421,7 +1502,7 @@ export default function MasterDocumentRegister() {
                   data-testid="input-effective-date"
                 />
                 <p className="text-xs text-gray-500">
-                  This date marks when the document becomes active. Expiration will be set to 1 year from this date.
+                  This date is included in the approval comment only. The release action controls the effective revision.
                 </p>
               </div>
 
@@ -1475,8 +1556,10 @@ export default function MasterDocumentRegister() {
                     <TableHead>Version</TableHead>
                     <TableHead>Change</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Checksum</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Approved</TableHead>
+                    <TableHead>File</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1486,10 +1569,30 @@ export default function MasterDocumentRegister() {
                       <TableCell className="max-w-sm whitespace-pre-wrap text-sm">
                         {version.changeDescription || 'No change note recorded'}
                       </TableCell>
-                      <TableCell>{version.status}</TableCell>
+                      <TableCell>{(version as any).lifecycleStatus || version.status}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {(version as any).fileChecksum
+                          ? String((version as any).fileChecksum).slice(0, 12)
+                          : (version as any).checksumStatus || 'Legacy unknown'}
+                      </TableCell>
                       <TableCell>
                         <div className="text-sm">{formatDate(version.createdAt as any)}</div>
                         <div className="text-xs text-gray-500">{version.createdBy}</div>
+                      </TableCell>
+                      <TableCell>
+                        {(version as any).filePath && selectedDocument && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.open(
+                              `/api/controlled-documents/${selectedDocument.id}/revisions/${version.id}/download`,
+                              '_blank',
+                              'noopener,noreferrer'
+                            )}
+                          >
+                            Exact Revision
+                          </Button>
+                        )}
                       </TableCell>
                       <TableCell>
                         {version.approvedAt ? (

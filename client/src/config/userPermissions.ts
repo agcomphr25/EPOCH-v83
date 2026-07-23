@@ -29,6 +29,7 @@ export const CAPABILITY_GATED_ROUTES: Record<string, string | string[]> = {
     'design.control.submit',
     'design.control.approve',
   ],
+  '/master-document-register': 'documents.view',
 };
 
 export function getRequiredCapability(route: string): string | string[] | undefined {

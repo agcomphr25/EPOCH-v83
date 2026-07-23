@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../../db';
 import { 
   controlledDocuments,
+  controlledDocumentNumberRegistry,
   documentVersionHistory,
   inventoryItems,
   routingDocuments, 
@@ -27,7 +28,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 const require = createRequire(import.meta.url);
 const TEMPLATE_UPLOAD_TABLES = new Set([
@@ -36,6 +37,7 @@ const TEMPLATE_UPLOAD_TABLES = new Set([
   'document_templates',
   'template_fields',
   'controlled_documents',
+  'controlled_document_number_registry',
   'document_version_history',
   'project_documents',
   'media_library',
@@ -1550,18 +1552,42 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
       created_at: new Date(),
       updated_at: new Date(),
     }, ['document_number', 'document_name', 'document_type', 'department', 'current_version', 'status', 'created_by']);
+    await insertPublicRowReturning('controlled_document_number_registry', {
+      normalized_number: documentNumber.trim().toUpperCase(),
+      display_number: documentNumber.trim(),
+      controlled_document_id: controlledDocument.id,
+      status: 'RESERVED',
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['normalized_number', 'display_number', 'controlled_document_id']);
 
-    await insertPublicRowReturning('document_version_history', {
+    const controlledRevision = await insertPublicRowReturning('document_version_history', {
       document_id: controlledDocument.id,
       version_number: '1.0',
+      revision_sequence: 1,
+      lifecycle_status: 'DRAFT',
       change_description: 'Initial controlled template imported from Form & Document Builder',
+      revision_reason: 'Initial controlled template imported from Form & Document Builder',
       change_type: 'major',
       file_path: fileUrl,
-      status: 'pending',
+      file_name: fileName,
+      media_type: mimeType || 'application/pdf',
+      file_size: fileBuffer.length,
+      file_checksum: createHash('sha256').update(fileBuffer).digest('hex'),
+      checksum_status: 'VERIFIED',
+      status: 'draft',
       created_by: createdBy,
       expiration_date: expirationDate.toISOString().split('T')[0],
       created_at: new Date(),
     }, ['document_id', 'version_number', 'status', 'created_by']);
+    await db.execute(sql`
+      UPDATE controlled_documents
+      SET current_revision_id = ${controlledRevision.id},
+          working_draft_revision_id = ${controlledRevision.id},
+          lifecycle_status = 'DRAFT',
+          status = 'draft'
+      WHERE id = ${controlledDocument.id}
+    `);
 
     res.status(201).json({
       document: routingDocument,
@@ -1938,16 +1964,36 @@ ${templateContent ? `\nTemplate:\n${templateContent}` : ''}`;
       expirationDate: expirationDate.toISOString().split('T')[0],
     }).returning();
 
-    await db.insert(documentVersionHistory).values({
+    const [controlledRevision] = await db.insert(documentVersionHistory).values({
       documentId: controlledDocument.id,
       versionNumber: '1.0',
+      revisionSequence: 1,
+      lifecycleStatus: 'DRAFT',
       changeDescription: 'Initial generated document created from Form & Document Builder',
+      revisionReason: 'Initial generated document created from Form & Document Builder',
       changeType: 'major',
       filePath: fileUrl,
-      status: 'pending',
+      fileName: pdfFileName,
+      mediaType: 'application/pdf',
+      fileSize: pdfBuffer.length,
+      fileChecksum: createHash('sha256').update(pdfBuffer).digest('hex'),
+      checksumStatus: 'VERIFIED',
+      status: 'draft',
       createdBy,
       expirationDate: expirationDate.toISOString().split('T')[0],
+    }).returning();
+    await db.insert(controlledDocumentNumberRegistry).values({
+      normalizedNumber: documentNumber.trim().toUpperCase(),
+      displayNumber: documentNumber.trim(),
+      controlledDocumentId: controlledDocument.id,
+      status: 'RESERVED',
     });
+    await db.update(controlledDocuments).set({
+      currentRevisionId: controlledRevision.id,
+      workingDraftRevisionId: controlledRevision.id,
+      lifecycleStatus: 'DRAFT',
+      status: 'draft',
+    }).where(eq(controlledDocuments.id, controlledDocument.id));
     
     res.status(201).json({ document: newDocument, specSheet, controlledDocument, generatedContent });
   } catch (error) {
@@ -2381,18 +2427,42 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       created_at: new Date(),
       updated_at: new Date(),
     }, ['document_number', 'document_name', 'document_type', 'department', 'current_version', 'status', 'created_by']);
+    await insertPublicRowReturning('controlled_document_number_registry', {
+      normalized_number: documentNumber.trim().toUpperCase(),
+      display_number: documentNumber.trim(),
+      controlled_document_id: controlledDocument.id,
+      status: 'RESERVED',
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, ['normalized_number', 'display_number', 'controlled_document_id']);
 
-    await insertPublicRowReturning('document_version_history', {
+    const controlledRevision = await insertPublicRowReturning('document_version_history', {
       document_id: controlledDocument.id,
       version_number: '1.0',
+      revision_sequence: 1,
+      lifecycle_status: 'DRAFT',
       change_description: `Initial ${humanizeDocumentType(templateType)} created from reusable Form & Document Builder template`,
+      revision_reason: `Initial ${humanizeDocumentType(templateType)} created from reusable Form & Document Builder template`,
       change_type: 'major',
       file_path: fileUrl,
-      status: 'pending',
+      file_name: path.basename(fileUrl),
+      media_type: 'application/pdf',
+      file_size: pdfBuffer.length,
+      file_checksum: createHash('sha256').update(pdfBuffer).digest('hex'),
+      checksum_status: 'VERIFIED',
+      status: 'draft',
       created_by: createdBy,
       expiration_date: expirationDate.toISOString().split('T')[0],
       created_at: new Date(),
     }, ['document_id', 'version_number', 'status', 'created_by']);
+    await db.execute(sql`
+      UPDATE controlled_documents
+      SET current_revision_id = ${controlledRevision.id},
+          working_draft_revision_id = ${controlledRevision.id},
+          lifecycle_status = 'DRAFT',
+          status = 'draft'
+      WHERE id = ${controlledDocument.id}
+    `);
 
     creationStage = 'attaching document to project';
     let projectDocument = null;

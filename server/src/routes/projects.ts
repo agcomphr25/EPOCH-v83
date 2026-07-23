@@ -36,6 +36,8 @@ import { getFileStorageProviderForObjectPath } from '../services/fileStorageProv
 import { buildProjectBomAssemblyTree, type ProjectBomAssemblyRow } from '../services/projectBomAssembly';
 import { getActiveWorkflowInstanceForProject, getWorkflowReadModel } from '../services/projectWorkflowInstanceService';
 import { buildP2V2WorkflowResponse, buildUninitializedP2V2Response } from '../services/projectWorkflowV2ReadModel';
+import projectProductionPlanningRoutes from './projectProductionPlanning';
+import { getCurrentProductionPlan } from '../services/projectProductionPlanningService';
 import { getUserPermissions } from '../services/permissionService';
 import {
   createDraft as createDesignApplicabilityDraft,
@@ -1576,6 +1578,8 @@ function sendDesignError(res: Response, error: unknown) {
   return res.status(500).json({ error: 'DESIGN_APPLICABILITY_FAILED', message: 'The Design Applicability action failed.' });
 }
 
+router.use('/:id/workflow-v2/production-planning', projectProductionPlanningRoutes);
+
 router.get('/:id/workflow-v2/design-applicability', async (req, res) => {
   try {
     const model = await getCurrentDesignApplicability(req.params.id);
@@ -1660,6 +1664,29 @@ router.get('/:id/workflow-v2', async (req, res) => {
       response.blockedStages = response.stages.filter(
         (stage) => stage.status === 'BLOCKED'
       ).length;
+    }
+    const designStage = response.stages.find(
+      (stage) => stage.stepType === 'design_applicability'
+    );
+    if (['COMPLETE', 'NOT_APPLICABLE'].includes(designStage?.status ?? '')) {
+      const productionPlan = await getCurrentProductionPlan(project.id);
+      if (
+        productionPlan.plan?.status === 'RELEASED' &&
+        productionPlan.readiness.stale
+      ) {
+        response.stages = response.stages.map((stage) =>
+          stage.stepType === 'production_planning'
+            ? {
+                ...stage,
+                status: 'BLOCKED',
+                blockedReason: productionPlan.readiness.differences.join(' '),
+              }
+            : stage
+        );
+        response.blockedStages = response.stages.filter(
+          (stage) => stage.status === 'BLOCKED'
+        ).length;
+      }
     }
     return res.json(response);
   } catch (error) {

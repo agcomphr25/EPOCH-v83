@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import P2V2DesignApplicability from './P2V2DesignApplicability';
+import P2V2ProductionPlanning from './P2V2ProductionPlanning';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -370,6 +371,11 @@ export default function P2V2ProjectWorkflow({
               {stage.stepType === 'design_applicability' && (
                 <div className="mt-3">
                   <P2V2DesignApplicability projectId={projectId} />
+                </div>
+              )}
+              {stage.stepType === 'production_planning' && (
+                <div className="mt-3">
+                  <P2V2ProductionPlanning projectId={projectId} />
                 </div>
               )}
             </CardContent>

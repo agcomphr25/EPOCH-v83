@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../db', () => ({
   db: {
@@ -27,6 +28,7 @@ const migrationFiles = [
   'migrations/0190_design_control_requirement_applicability.sql',
   'migrations/0191_engineering_releases.sql',
   'migrations/0192_engineering_packages.sql',
+  'migrations/0207_design_control_authority_foundation.sql',
 ];
 
 const originalDatabaseUrl = process.env.DATABASE_URL;
@@ -133,15 +135,36 @@ describe('Design Control schema hardening', () => {
 
   it('allows readiness when required schema SELECT checks succeed', async () => {
     const calls: string[] = [];
+    let callNumber = 0;
     const client = {
       execute: async (statement: unknown) => {
         calls.push(String(statement));
+        callNumber += 1;
+        if (callNumber === requiredDesignControlTables.length + 1) {
+          return [
+            { column_name: 'authority_status' },
+            { column_name: 'designated_authoritative_at' },
+            { column_name: 'designated_authoritative_by' },
+            { column_name: 'superseded_at' },
+            { column_name: 'superseded_by' },
+            { column_name: 'supersession_reason' },
+            { column_name: 'superseded_by_record_id' },
+            { column_name: 'record_version' },
+          ];
+        }
+        if (callNumber === requiredDesignControlTables.length + 2) return [{ present: 1 }];
+        if (callNumber === requiredDesignControlTables.length + 3) {
+          return [
+            { conname: 'design_control_records_authority_status_check' },
+            { conname: 'design_control_records_superseded_by_record_fk' },
+          ];
+        }
         return [];
       },
     };
 
     await expect(assertDesignControlSchemaReady(client)).resolves.toBeUndefined();
-    expect(calls).toHaveLength(requiredDesignControlTables.length);
+    expect(calls).toHaveLength(requiredDesignControlTables.length + 3);
   });
 
   it('surfaces safe-boot migration startup failures clearly', async () => {

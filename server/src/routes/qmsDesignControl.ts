@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 
 import { db } from '../../db';
+import { authenticateToken } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 import {
   designControlChanges,
   designControlRecords,
@@ -28,6 +30,11 @@ import {
   designControlSchemaNotReadyPayload,
   isDesignControlSchemaNotReadyError,
 } from '../services/designControlSchemaReadiness';
+import { DESIGN_CONTROL_WORKFLOW, workflowItemLookupKeys } from '../../../shared/designControlWorkflow';
+import {
+  initializeDesignControlForProject,
+  resolveDesignControlAuthority,
+} from '../services/designControlAuthorityService';
 
 const router = Router();
 
@@ -53,259 +60,15 @@ type StepPayload = {
   status?: string;
 };
 
-const workflowSteps = [
-  {
-    key: '1',
-    title: 'Design Project Intake',
-    requiredFields: [
-      'Project / customer / order link',
-      'Design type',
-      'Product name',
-      'Intended use',
-      'Customer requirements summary',
-      'Target manufacturing date',
-      'Responsible engineer',
-      'Quality representative',
-      'Manufacturing representative',
-      'Required deliverables',
-    ],
-    requiredChecklist: [],
-    requiredApprovals: ['Engineering intake approval', 'Quality intake approval'],
-  },
-  {
-    key: '2',
-    title: 'Design Planning',
-    requiredFields: [
-      'Design scope',
-      'Design milestones',
-      'Required reviews',
-      'Required verification activities',
-      'Required validation activities',
-      'Required resources',
-      'Required suppliers',
-      'Required software/tools',
-      'Responsibilities',
-      'Approval roles',
-    ],
-    requiredChecklist: [],
-    requiredApprovals: ['Engineering planning approval', 'Quality planning approval', 'Manufacturing planning approval'],
-  },
-  {
-    key: '3',
-    title: 'Design Inputs / Requirements',
-    requiredFields: [
-      'Requirement ID',
-      'Requirement category',
-      'Source',
-      'Requirement statement',
-      'Acceptance criteria',
-      'Verification method',
-      'Priority',
-      'Owner',
-      'Status',
-    ],
-    requiredChecklist: [
-      'Customer requirements captured',
-      'Performance requirements captured',
-      'Regulatory requirements captured',
-      'Safety requirements captured',
-      'Material requirements captured',
-      'Manufacturing requirements captured',
-      'Inspection requirements captured',
-      'Test requirements captured',
-      'Packaging/shipping requirements captured',
-    ],
-    requiredApprovals: ['Requirements owner approval'],
-  },
-  {
-    key: '4',
-    title: 'Requirements Review Checklist',
-    requiredFields: ['Review notes', 'Open requirement gaps', 'Disposition of conflicts'],
-    requiredChecklist: [
-      'Requirements are complete',
-      'Requirements are clear',
-      'Requirements are measurable',
-      'Conflicts resolved',
-      'Missing information documented',
-      'Manufacturability reviewed',
-      'Inspection requirements reviewed',
-      'Test requirements reviewed',
-      'Quality approval complete',
-      'Engineering approval complete',
-    ],
-    requiredApprovals: ['Engineering approval', 'Quality approval'],
-  },
-  {
-    key: '5',
-    title: 'Design Risk Assessment',
-    requiredFields: [
-      'Risk item',
-      'Failure mode',
-      'Cause',
-      'Effect',
-      'Severity',
-      'Occurrence',
-      'Detection',
-      'Risk priority',
-      'Mitigation action',
-      'Owner',
-      'Due date',
-      'Residual risk',
-      'Approval status',
-    ],
-    requiredChecklist: [],
-    requiredApprovals: ['Engineering risk approval', 'Quality risk approval'],
-  },
-  {
-    key: '6',
-    title: 'Concept Design Review',
-    requiredFields: [
-      'Concept summary',
-      'Design alternatives considered',
-      'Selected concept',
-      'Reason selected',
-      'Major assumptions',
-      'Open questions',
-      'Manufacturability concerns',
-      'Quality concerns',
-      'Attachments',
-    ],
-    requiredChecklist: [
-      'Concept meets major requirements',
-      'Risks reviewed',
-      'Manufacturing reviewed',
-      'Quality reviewed',
-      'Customer needs considered',
-      'Approval to proceed',
-    ],
-    requiredApprovals: ['Engineering concept approval', 'Quality concept approval', 'Manufacturing concept approval'],
-  },
-  {
-    key: '7',
-    title: 'Detailed Design Outputs',
-    requiredFields: ['Output package notes', 'Linked drawings/BOM/revision package', 'Design output owner'],
-    requiredChecklist: [
-      'CAD model attached',
-      'Drawing attached',
-      'BOM created',
-      'Material specs defined',
-      'Critical characteristics defined',
-      'Tolerances defined',
-      'Special processes defined',
-      'Inspection points defined',
-      'Test requirements defined',
-      'Software/firmware version defined, if applicable',
-      'Supplier parts identified',
-      'Revision assigned',
-      'Design output approved',
-    ],
-    requiredApprovals: ['Engineering output approval', 'Document control approval'],
-  },
-  {
-    key: '8',
-    title: 'Prototype Build Record',
-    requiredFields: [
-      'Prototype serial number',
-      'Build revision',
-      'Build date',
-      'Builder',
-      'Linked BOM revision',
-      'Linked drawing revisions',
-      'Material lots',
-      'Purchased component lots/serials',
-      'Deviations used',
-      'Photos',
-      'Build notes',
-      'Issues found',
-      'Disposition',
-    ],
-    requiredChecklist: [],
-    requiredApprovals: ['Engineering build approval', 'Quality build approval'],
-  },
-  {
-    key: '9',
-    title: 'Design Verification',
-    requiredFields: [
-      'Requirement ID',
-      'Verification method',
-      'Test/inspection performed',
-      'Result',
-      'Pass/fail',
-      'Evidence attachment',
-      'Nonconformance link',
-      'Engineering disposition',
-      'Verified by',
-      'Date',
-    ],
-    requiredChecklist: [],
-    requiredApprovals: ['Verification approval'],
-  },
-  {
-    key: '10',
-    title: 'Design Validation',
-    requiredFields: [
-      'Validation activity',
-      'Intended use tested',
-      'Mission/profile tested',
-      'Customer requirement linked',
-      'Result',
-      'Pass/fail',
-      'Evidence attachment',
-      'Customer witness/approval, if applicable',
-      'Validation approval',
-    ],
-    requiredChecklist: [],
-    requiredApprovals: ['Engineering validation approval', 'Quality validation approval', 'Customer/program validation approval'],
-  },
-  {
-    key: '11',
-    title: 'Final Design Review',
-    requiredFields: ['Final review notes', 'Open issue disposition', 'Configuration baseline'],
-    requiredChecklist: [
-      'All requirements reviewed',
-      'All high risks closed or accepted',
-      'Design outputs approved',
-      'Prototype build documented',
-      'Verification complete',
-      'Validation complete',
-      'Open issues dispositioned',
-      'Configuration baseline established',
-      'Manufacturing reviewed',
-      'Quality reviewed',
-      'Program management reviewed',
-    ],
-    requiredApprovals: ['Engineering', 'Quality', 'Manufacturing', 'Program Manager'],
-  },
-  {
-    key: '12',
-    title: 'Engineering Release Gate',
-    requiredFields: ['Release package notes', 'Linked project_id / PO / WAD', 'Locked design revision baseline'],
-    requiredChecklist: [
-      'released CAD',
-      'released drawings',
-      'released BOM',
-      'approved routing',
-      'approved traveler requirement',
-      'approved work instructions',
-      'approved inspection plan',
-      'approved test procedure',
-      'required certifications identified',
-      'supplier requirements flowed down',
-      'material requirements approved',
-      'tooling and fixtures ready',
-      'CNC programs approved when applicable',
-      'training and certifications complete',
-      'packaging and shipping requirements defined',
-      'design revision baseline locked',
-    ],
-    requiredApprovals: [
-      'engineering release approval',
-      'quality release approval',
-      'manufacturing release approval',
-      'program manager release approval',
-    ],
-  },
-];
+// Route validation consumes the same canonical definition as initialization and the client.
+const workflowSteps = DESIGN_CONTROL_WORKFLOW.map((step) => ({
+  key: step.key,
+  title: step.title,
+  purpose: step.purpose,
+  requiredFields: step.fields.map((field) => field.key),
+  requiredChecklist: step.checklist.map((entry) => entry.key),
+  requiredApprovals: step.approvals.map((approval) => approval.key),
+}));
 
 const requiredStepKeys = workflowSteps.filter((step) => step.key !== '12').map((step) => step.key);
 const releaseGateSourceRequirements = canonicalManufacturingEvidenceRequirements.map((requirement) => ({
@@ -354,13 +117,15 @@ function valueForCanonicalKey(values: Record<string, unknown>, canonicalKey: str
   return found?.[1];
 }
 
-function isTruthyCanonical(values: Record<string, unknown>, canonicalKey: string) {
-  return valueForCanonicalKey(values, canonicalKey) === true;
-}
-
-function hasFilledCanonicalValue(values: Record<string, unknown>, canonicalKey: string) {
-  const value = valueForCanonicalKey(values, canonicalKey);
-  return String(value ?? '').trim().length > 0;
+function valuesForWorkflowItem(values: Record<string, unknown>, stepKey: string, kind: 'fields' | 'checklist' | 'approvals', canonicalKey: string) {
+  const step = DESIGN_CONTROL_WORKFLOW.find((candidate) => candidate.key === stepKey);
+  const workflowItem = step?.[kind].find((candidate) => candidate.key === canonicalKey);
+  const lookupKeys = workflowItem ? workflowItemLookupKeys(workflowItem) : [canonicalKey];
+  for (const lookupKey of lookupKeys) {
+    const value = valueForCanonicalKey(values, lookupKey);
+    if (value !== undefined) return value;
+  }
+  return undefined;
 }
 
 function missingForStep(step: WorkflowStepDefinition, payload: StepPayload, options: { includeChecklist?: boolean } = {}) {
@@ -370,9 +135,9 @@ function missingForStep(step: WorkflowStepDefinition, payload: StepPayload, opti
   const includeChecklist = options.includeChecklist ?? true;
 
   return {
-    fields: step.requiredFields.filter((field) => !hasFilledCanonicalValue(formData, field)),
-    checklist: includeChecklist ? step.requiredChecklist.filter((item) => !isTruthyCanonical(checklist, item)) : [],
-    approvals: step.requiredApprovals.filter((approval) => !isTruthyCanonical(approvals, approval)),
+    fields: step.requiredFields.filter((field) => String(valuesForWorkflowItem(formData, step.key, 'fields', field) ?? '').trim().length === 0),
+    checklist: includeChecklist ? step.requiredChecklist.filter((entry) => valuesForWorkflowItem(checklist, step.key, 'checklist', entry) !== true) : [],
+    approvals: step.requiredApprovals.filter((approval) => valuesForWorkflowItem(approvals, step.key, 'approvals', approval) !== true),
   };
 }
 
@@ -619,14 +384,20 @@ router.get('/', async (_req: Request, res: Response) => {
         .select()
         .from(designControlRecords)
         .orderBy(desc(designControlRecords.updatedAt), desc(designControlRecords.createdAt));
-    res.json({ records });
+    const rdProjectId = typeof _req.query.rdProjectId === 'string' ? _req.query.rdProjectId.trim() : '';
+    const authority = rdProjectId ? await resolveDesignControlAuthority(rdProjectId) : null;
+    res.json({
+      records,
+      authorityState: authority?.state ?? null,
+      authoritativeRecordId: authority?.authoritativeRecord?.id ?? null,
+    });
   } catch (error) {
     console.error('[qms-design-control] Failed to list records', error);
     res.status(500).json({ message: 'Failed to load design control records' });
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticateToken, requirePermission('design.control.create'), async (req: Request, res: Response) => {
   try {
     const parsed = insertDesignControlRecordSchema.safeParse({
       title: req.body?.title || 'New Design Control Record',
@@ -648,6 +419,28 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
+    if (parsed.data.rdProjectId) {
+      const result = await initializeDesignControlForProject({
+        projectId: parsed.data.rdProjectId,
+        title: parsed.data.title,
+        actor: { username: actorFromRequest(req) },
+        requestMetadata: { ipAddress: req.ip, userAgent: req.get('user-agent') ?? null },
+      });
+      if (result.status === 'project_not_found') {
+        return res.status(404).json({ message: 'R&D project not found' });
+      }
+      if (result.status === 'conflict') {
+        return res.status(409).json({
+          message: 'This R&D project already has Design Control records. Use the project authority reconciliation workflow.',
+          authorityState: result.resolution.state,
+          authoritativeRecordId: result.resolution.authoritativeRecord?.id ?? null,
+        });
+      }
+      return res.status(result.status === 'created' ? 201 : 200).json({
+        record: result.resolution?.authoritativeRecord ?? null,
+        authorityState: result.resolution?.state ?? 'INVALID_STATE',
+      });
+    }
     const record = await createDesignControlRecordWithInitialWorkflow(parsed.data);
 
     res.status(201).json({ record });
@@ -664,7 +457,6 @@ router.get('/:id', async (req: Request, res: Response) => {
       res.status(404).json({ message: 'Design control record not found' });
       return;
     }
-
     await ensureWorkflowSteps(record);
     const [
       steps,
@@ -703,11 +495,18 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id/steps/:stepKey', async (req: Request, res: Response) => {
+router.patch('/:id/steps/:stepKey', authenticateToken, async (req: Request, res: Response) => {
   try {
     const record = await getRecord(req.params.id);
     if (!record) {
       res.status(404).json({ message: 'Design control record not found' });
+      return;
+    }
+    if (record.rdProjectId && record.authorityStatus !== 'authoritative') {
+      res.status(409).json({
+        message: 'Historical Design Control records are read-only. Designate an authoritative record before editing.',
+        authorityStatus: record.authorityStatus,
+      });
       return;
     }
 
@@ -829,11 +628,18 @@ router.patch('/:id/steps/:stepKey', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/submit-release', async (req: Request, res: Response) => {
+router.post('/:id/submit-release', authenticateToken, async (req: Request, res: Response) => {
   try {
     const record = await getRecord(req.params.id);
     if (!record) {
       res.status(404).json({ message: 'Design control record not found' });
+      return;
+    }
+    if (record.rdProjectId && record.authorityStatus !== 'authoritative') {
+      res.status(409).json({
+        message: 'Historical Design Control records cannot be submitted for release.',
+        authorityStatus: record.authorityStatus,
+      });
       return;
     }
 
@@ -922,7 +728,7 @@ router.get('/:id/engineering-release-preview', async (req: Request, res: Respons
   }
 });
 
-router.post('/:id/engineering-release', async (req: Request, res: Response) => {
+router.post('/:id/engineering-release', authenticateToken, async (req: Request, res: Response) => {
   try {
     const result = await submitEngineeringRelease({
       recordId: req.params.id,

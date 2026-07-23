@@ -170,6 +170,7 @@ interface DesignControlProjectRecord {
   id: string;
   title: string;
   status: string;
+  authorityStatus?: string;
   rdProjectId?: string | null;
   updatedAt?: string | null;
   releasedAt?: string | null;
@@ -495,17 +496,6 @@ function mergeDraftRecords(
   return [...byId.values()].sort((a, b) =>
     (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
   );
-}
-
-function mergeProjects(
-  sharedProjects: RDProject[],
-  localProjects: RDProject[]
-) {
-  const byId = new Map<string, RDProject>();
-  for (const project of [...sharedProjects, ...localProjects]) {
-    if (project?.id) byId.set(project.id, project);
-  }
-  return [...byId.values()];
 }
 
 async function saveSharedProject(project: RDProject) {
@@ -900,6 +890,7 @@ export default function RDProjectsPage() {
   const [isGeneratingEngineeringPackage, setIsGeneratingEngineeringPackage] = useState(false);
   const [engineeringReleaseError, setEngineeringReleaseError] = useState<string | null>(null);
   const [engineeringPackageError, setEngineeringPackageError] = useState<string | null>(null);
+  const [localImportState, setLocalImportState] = useState<Record<string, string>>({});
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('projectId')
   );
@@ -918,10 +909,11 @@ export default function RDProjectsPage() {
     'overview';
   const [activeProjectTab, setActiveProjectTab] = useState(initialProjectTab);
 
-  const projects = useMemo(
-    () => mergeProjects(sharedProjects, localProjects),
-    [sharedProjects, localProjects]
-  );
+  const projects = sharedProjects;
+  const localOnlyProjects = useMemo(() => {
+    const serverIds = new Set(sharedProjects.map((project) => project.id));
+    return localProjects.filter((project) => project.id && !serverIds.has(project.id));
+  }, [localProjects, sharedProjects]);
   const draftRecords = useMemo(
     () => mergeDraftRecords(localDraftRecords, sharedDraftRecords),
     [localDraftRecords, sharedDraftRecords]
@@ -973,25 +965,30 @@ export default function RDProjectsPage() {
   const {
     data: selectedDesignControlPayload,
     isLoading: isLoadingDesignControlRecords,
-  } = useQuery<{ records: DesignControlProjectRecord[] }>({
-    queryKey: ['/api/qms/design-control', 'rd-project', selectedProject?.id],
+  } = useQuery<{
+    state: string;
+    authoritativeRecord: DesignControlProjectRecord | null;
+    records: DesignControlProjectRecord[];
+  }>({
+    queryKey: ['/api/rd-projects', selectedProject?.id, 'design-control'],
     enabled: Boolean(selectedProject?.id),
     retry: false,
     queryFn: async () => {
-      if (!selectedProject?.id) return { records: [] };
-      const params = new URLSearchParams({ rdProjectId: selectedProject.id });
-      const response = await fetch(`/api/qms/design-control?${params.toString()}`, {
+      if (!selectedProject?.id) return { state: 'NOT_INITIALIZED', authoritativeRecord: null, records: [] };
+      const response = await fetch(`/api/rd-projects/${encodeURIComponent(selectedProject.id)}/design-control`, {
         credentials: 'include',
       });
-      if (!response.ok) return { records: [] };
+      if (!response.ok) return { state: 'NOT_INITIALIZED', authoritativeRecord: null, records: [] };
       const payload = await response.json();
       return {
+        state: payload.state,
+        authoritativeRecord: payload.authoritativeRecord ?? null,
         records: Array.isArray(payload.records) ? payload.records : [],
       };
     },
   });
   const selectedDesignControlRecords = selectedDesignControlPayload?.records ?? [];
-  const activeDesignControlRecord = selectedDesignControlRecords[0] ?? null;
+  const activeDesignControlRecord = selectedDesignControlPayload?.authoritativeRecord ?? null;
   const {
     data: engineeringReleasePayload,
     isLoading: isLoadingEngineeringReleasePreview,
@@ -1297,18 +1294,12 @@ export default function RDProjectsPage() {
     if (!selectedProject) return;
     setIsCreatingDesignControlRecord(true);
     try {
-      const response = await fetch('/api/qms/design-control', {
+      const response = await fetch(`/api/rd-projects/${encodeURIComponent(selectedProject.id)}/design-control/initialize`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: `${selectedProject.projectName} Design Control`,
-          rdProjectId: selectedProject.id,
-          metadata: {
-            rdProjectName: selectedProject.projectName,
-            source: '/design/rd-projects',
-            downstreamIntent: 'released-design-to-manufactured-inventory-item',
-          },
         }),
       });
 
@@ -1317,14 +1308,45 @@ export default function RDProjectsPage() {
       }
 
       const payload = await response.json();
-      await queryClient.invalidateQueries({
-        queryKey: ['/api/qms/design-control', 'rd-project', selectedProject.id],
-      });
-      setLocation(designControlUrl(selectedProject, payload.record?.id));
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['/api/rd-projects', selectedProject.id, 'design-control'],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['/api/qms/design-control', 'rd-project', selectedProject.id],
+        }),
+      ]);
+      setLocation(designControlUrl(selectedProject, payload.resolution?.authoritativeRecord?.id));
     } catch (error) {
       console.error('Failed to create R&D design control record:', error);
     } finally {
       setIsCreatingDesignControlRecord(false);
+    }
+  };
+
+  const importLocalProject = async (project: RDProject) => {
+    if (!window.confirm(`Import the browser-local project "${project.projectName}" to the shared server project list? Existing server projects will not be overwritten.`)) return;
+    setLocalImportState((current) => ({ ...current, [project.id]: 'importing' }));
+    try {
+      const response = await fetch('/api/rd-projects/reconcile-local', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...project,
+          confirmed: true,
+          localStorageKey: R_AND_D_PROJECT_STORAGE_KEY,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setLocalImportState((current) => ({ ...current, [project.id]: payload.outcome ?? 'failed' }));
+        return;
+      }
+      setLocalImportState((current) => ({ ...current, [project.id]: 'imported' }));
+      await queryClient.invalidateQueries({ queryKey: ['/api/rd-projects'] });
+    } catch {
+      setLocalImportState((current) => ({ ...current, [project.id]: 'failed' }));
     }
   };
 
@@ -1404,6 +1426,46 @@ export default function RDProjectsPage() {
             New R &amp; D Project
           </Button>
         </div>
+
+        {localOnlyProjects.length > 0 && (
+          <Card className="border-amber-300 bg-amber-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base text-amber-900">
+                <AlertTriangle className="h-5 w-5" />
+                Browser-local project data needs review
+              </CardTitle>
+              <CardDescription className="text-amber-800">
+                These legacy records remain in this browser but are not shared server projects. They are excluded from normal project selection until reviewed and imported.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {localOnlyProjects.map((project) => (
+                <div key={project.id} className="flex flex-col gap-3 rounded-md border border-amber-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium">{project.projectName}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Owner: {project.owner || 'Unassigned'} · Status: {project.status} · Draft tabs: {project.draftTabIds.length}
+                    </p>
+                    {project.description && (
+                      <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{project.description}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Local ID {project.id} · {localImportState[project.id] ?? 'local only'}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={localImportState[project.id] === 'importing' || localImportState[project.id] === 'imported'}
+                    onClick={() => importLocalProject(project)}
+                  >
+                    {localImportState[project.id] === 'importing' ? 'Checking…' : localImportState[project.id] === 'imported' ? 'Imported' : 'Review and import'}
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
@@ -2061,7 +2123,7 @@ export default function RDProjectsPage() {
                           <Button
                             className="gap-2 self-start"
                             onClick={createDesignControlRecordForProject}
-                            disabled={isCreatingDesignControlRecord}
+                            disabled={isCreatingDesignControlRecord || selectedDesignControlRecords.length > 0}
                           >
                             <Plus className="h-4 w-4" />
                             {isCreatingDesignControlRecord ? 'Creating...' : 'Create Design Control'}
@@ -2071,6 +2133,11 @@ export default function RDProjectsPage() {
                           <div className="rounded-md border bg-white px-3 py-2 text-sm text-muted-foreground">
                             When this design is released, its R&amp;D data can become the source package for a manufactured inventory item. That released item can later be selected from P2 when a PO is received.
                           </div>
+                          {selectedDesignControlPayload?.state === 'RECONCILIATION_REQUIRED' && (
+                            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+                              Multiple historical Design Control records require an administrator to designate authority. No record was selected automatically.
+                            </div>
+                          )}
                           {isLoadingDesignControlRecords ? (
                             <div className="rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
                               Loading design-control records...
@@ -2099,9 +2166,11 @@ export default function RDProjectsPage() {
                                         {record.title}
                                       </p>
                                       <p className="mt-1 text-xs text-muted-foreground">
-                                        {record.releasedAt
+                                        {record.authorityStatus === 'authoritative'
+                                          ? 'Authoritative Design Control'
+                                          : record.releasedAt
                                           ? 'Released design control'
-                                          : `Status: ${record.status}`}
+                                          : `Status: ${record.status} · Authority: ${record.authorityStatus ?? 'legacy'}`}
                                       </p>
                                     </div>
                                     <Badge variant="outline">

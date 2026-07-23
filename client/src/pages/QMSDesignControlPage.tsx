@@ -20,6 +20,7 @@ import {
   Route,
   ShieldCheck,
 } from 'lucide-react';
+import { DESIGN_CONTROL_WORKFLOW } from '@shared/designControlWorkflow';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -538,275 +539,16 @@ const lifecycleStages = [
   { stage: 'Release', owner: 'Manufacturing', state: 'Engineering baseline ready for manufactured-item creation' },
 ];
 
-const designWorkflowSteps: DesignWorkflowStep[] = [
-  {
-    id: '1',
-    title: 'Design Project Intake',
-    purpose: 'Capture what is being designed and why.',
-    fields: [
-      'Project / customer / order link',
-      'Design type',
-      'Product name',
-      'Intended use',
-      'Customer requirements summary',
-      'Target manufacturing date',
-      'Responsible engineer',
-      'Quality representative',
-      'Manufacturing representative',
-      'Required deliverables',
-    ],
-    approvals: ['Engineering intake approval', 'Quality intake approval'],
-  },
-  {
-    id: '2',
-    title: 'Design Planning',
-    purpose: 'AS9100 design planning.',
-    fields: [
-      'Design scope',
-      'Design milestones',
-      'Required reviews',
-      'Required verification activities',
-      'Required validation activities',
-      'Required resources',
-      'Required suppliers',
-      'Required software/tools',
-      'Responsibilities',
-      'Approval roles',
-    ],
-    approvals: ['Engineering planning approval', 'Quality planning approval', 'Manufacturing planning approval'],
-  },
-  {
-    id: '3',
-    title: 'Design Inputs / Requirements',
-    purpose: 'Capture controlled design inputs.',
-    fields: [
-      'Requirement ID',
-      'Requirement category',
-      'Source',
-      'Requirement statement',
-      'Acceptance criteria',
-      'Verification method',
-      'Priority',
-      'Owner',
-      'Status',
-    ],
-    checklist: [
-      'Customer requirements captured',
-      'Performance requirements captured',
-      'Regulatory requirements captured',
-      'Safety requirements captured',
-      'Material requirements captured',
-      'Manufacturing requirements captured',
-      'Inspection requirements captured',
-      'Test requirements captured',
-      'Packaging/shipping requirements captured',
-    ],
-    approvals: ['Requirements owner approval'],
-  },
-  {
-    id: '4',
-    title: 'Requirements Review Checklist',
-    purpose: 'Confirm requirements are complete before design work proceeds.',
-    fields: ['Review notes', 'Open requirement gaps', 'Disposition of conflicts'],
-    checklist: [
-      'Requirements are complete',
-      'Requirements are clear',
-      'Requirements are measurable',
-      'Conflicts resolved',
-      'Missing information documented',
-      'Manufacturability reviewed',
-      'Inspection requirements reviewed',
-      'Test requirements reviewed',
-      'Quality approval complete',
-      'Engineering approval complete',
-    ],
-    approvals: ['Engineering approval', 'Quality approval'],
-  },
-  {
-    id: '5',
-    title: 'Design Risk Assessment',
-    purpose: 'Assess design risk before committing to the selected design path.',
-    fields: [
-      'Risk item',
-      'Failure mode',
-      'Cause',
-      'Effect',
-      'Severity',
-      'Occurrence',
-      'Detection',
-      'Risk priority',
-      'Mitigation action',
-      'Owner',
-      'Due date',
-      'Residual risk',
-      'Approval status',
-    ],
-    examples: [
-      'Battery overheating',
-      'Composite delamination',
-      'Wing flex',
-      'CG out of tolerance',
-      'Servo mount failure',
-      'Material substitution',
-      'Supplier component change',
-      'Prototype test failure',
-    ],
-    approvals: ['Engineering risk approval', 'Quality risk approval'],
-  },
-  {
-    id: '6',
-    title: 'Concept Design Review',
-    purpose: 'Approve the concept before detailed design.',
-    fields: [
-      'Concept summary',
-      'Design alternatives considered',
-      'Selected concept',
-      'Reason selected',
-      'Major assumptions',
-      'Open questions',
-      'Manufacturability concerns',
-      'Quality concerns',
-      'Attachments',
-    ],
-    checklist: [
-      'Concept meets major requirements',
-      'Risks reviewed',
-      'Manufacturing reviewed',
-      'Quality reviewed',
-      'Customer needs considered',
-      'Approval to proceed',
-    ],
-    approvals: ['Engineering concept approval', 'Quality concept approval', 'Manufacturing concept approval'],
-  },
-  {
-    id: '7',
-    title: 'Detailed Design Outputs',
-    purpose: 'Control the actual design output package.',
-    fields: ['Output package notes', 'Linked drawings/BOM/revision package', 'Design output owner'],
-    checklist: [
-      'CAD model attached',
-      'Drawing attached',
-      'BOM created',
-      'Material specs defined',
-      'Critical characteristics defined',
-      'Tolerances defined',
-      'Special processes defined',
-      'Inspection points defined',
-      'Test requirements defined',
-      'Software/firmware version defined, if applicable',
-      'Supplier parts identified',
-      'Revision assigned',
-      'Design output approved',
-    ],
-    approvals: ['Engineering output approval', 'Document control approval'],
-  },
-  {
-    id: '8',
-    title: 'Prototype Build Record',
-    purpose: 'Document exactly what was built.',
-    fields: [
-      'Prototype serial number',
-      'Build revision',
-      'Build date',
-      'Builder',
-      'Linked BOM revision',
-      'Linked drawing revisions',
-      'Material lots',
-      'Purchased component lots/serials',
-      'Deviations used',
-      'Photos',
-      'Build notes',
-      'Issues found',
-      'Disposition',
-    ],
-    approvals: ['Engineering build approval', 'Quality build approval'],
-  },
-  {
-    id: '9',
-    title: 'Design Verification',
-    purpose: 'Confirm the design output meets the design inputs.',
-    fields: [
-      'Requirement ID',
-      'Verification method',
-      'Test/inspection performed',
-      'Result',
-      'Pass/fail',
-      'Evidence attachment',
-      'Nonconformance link',
-      'Engineering disposition',
-      'Verified by',
-      'Date',
-    ],
-    approvals: ['Verification approval'],
-  },
-  {
-    id: '10',
-    title: 'Design Validation',
-    purpose: 'Confirm the product works for the intended use/customer mission.',
-    fields: [
-      'Validation activity',
-      'Intended use tested',
-      'Mission/profile tested',
-      'Customer requirement linked',
-      'Result',
-      'Pass/fail',
-      'Evidence attachment',
-      'Customer witness/approval, if applicable',
-      'Validation approval',
-    ],
-    approvals: ['Engineering validation approval', 'Quality validation approval', 'Customer/program validation approval'],
-  },
-  {
-    id: '11',
-    title: 'Final Design Review',
-    purpose: 'Cross-functional approval before manufacturing release.',
-    fields: ['Final review notes', 'Open issue disposition', 'Configuration baseline'],
-    checklist: [
-      'All requirements reviewed',
-      'All high risks closed or accepted',
-      'Design outputs approved',
-      'Prototype build documented',
-      'Verification complete',
-      'Validation complete',
-      'Open issues dispositioned',
-      'Configuration baseline established',
-      'Manufacturing reviewed',
-      'Quality reviewed',
-      'Program management reviewed',
-    ],
-    approvals: ['Engineering', 'Quality', 'Manufacturing', 'Program Manager'],
-  },
-  {
-    id: '12',
-    title: 'Engineering Release Gate',
-    purpose: 'Freeze the controlled engineering baseline before manufactured inventory item creation.',
-    fields: ['Release package notes', 'Linked project_id / PO / WAD', 'Locked design revision baseline'],
-    checklist: [
-      'Released CAD',
-      'Released drawings',
-      'Released BOM',
-      'Approved routing',
-      'Approved traveler requirement',
-      'Approved work instructions',
-      'Approved inspection plan',
-      'Approved test procedure',
-      'Required certifications identified',
-      'Supplier requirements flowed down',
-      'Material requirements approved',
-      'Tooling/fixtures ready',
-      'CNC programs approved, if applicable',
-      'Training/certifications complete',
-      'Packaging/shipping requirements defined',
-      'Design revision baseline locked',
-    ],
-    approvals: [
-      'Engineering release approval',
-      'Quality release approval',
-      'Manufacturing release approval',
-      'Program Manager release approval',
-    ],
-  },
-];
+// Visible labels are projected from stable shared machine keys.
+const designWorkflowSteps: DesignWorkflowStep[] = DESIGN_CONTROL_WORKFLOW.map((step) => ({
+  id: step.key,
+  title: step.title,
+  purpose: step.purpose,
+  fields: step.fields.map((field) => field.label),
+  checklist: step.checklist.map((entry) => entry.label),
+  approvals: step.approvals.map((approval) => approval.label),
+  examples: step.examples ? [...step.examples] : undefined,
+}));
 
 function createInitialWorkflowData() {
   return designWorkflowSteps.reduce<Record<string, WorkflowStepData>>((acc, step) => {
@@ -1065,10 +807,16 @@ export default function QMSDesignControlPage() {
       try {
         const params = new URLSearchParams();
         if (rdProjectIdParam) params.set('rdProjectId', rdProjectIdParam);
-        const response = await apiRequest(`/api/qms/design-control${params.toString() ? `?${params.toString()}` : ''}`) as { records: DesignControlRecord[] };
+        const response = await apiRequest(`/api/qms/design-control${params.toString() ? `?${params.toString()}` : ''}`) as {
+          records: DesignControlRecord[];
+          authorityState?: string | null;
+          authoritativeRecordId?: string | null;
+        };
         if (cancelled) return;
         setDesignControlRecords(response.records ?? []);
-        setActiveDesignControlRecordId((current) => current ?? recordIdParam ?? response.records?.[0]?.id ?? null);
+        setActiveDesignControlRecordId((current) =>
+          current ?? recordIdParam ?? response.authoritativeRecordId ?? (rdProjectIdParam ? null : response.records?.[0]?.id) ?? null
+        );
       } catch (error: any) {
         if (!cancelled) setLoadError(error.message || 'Failed to load design control records.');
       } finally {

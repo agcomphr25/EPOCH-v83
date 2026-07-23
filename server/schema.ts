@@ -17458,6 +17458,14 @@ export const designControlRecords = pgTable('design_control_records', {
   recordNumber: text('record_number'),
   title: text('title').notNull(),
   status: text('status').notNull().default('draft'),
+  authorityStatus: text('authority_status').notNull().default('legacy'),
+  designatedAuthoritativeAt: timestamp('designated_authoritative_at'),
+  designatedAuthoritativeBy: text('designated_authoritative_by'),
+  supersededAt: timestamp('superseded_at'),
+  supersededBy: text('superseded_by'),
+  supersessionReason: text('supersession_reason'),
+  supersededByRecordId: uuid('superseded_by_record_id'),
+  recordVersion: integer('record_version').notNull().default(1),
   rdProjectId: text('rd_project_id').references(() => rdProjects.id, { onDelete: 'set null' }),
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   productionWorkOrderId: uuid('production_work_order_id').references(() => productionWorkOrders.id, { onDelete: 'set null' }),
@@ -17477,6 +17485,10 @@ export const designControlRecords = pgTable('design_control_records', {
   productionWorkOrderIdx: index('design_control_records_pwo_id_idx').on(table.productionWorkOrderId),
   p2PurchaseOrderIdx: index('design_control_records_p2_po_id_idx').on(table.p2PurchaseOrderId),
   statusIdx: index('design_control_records_status_idx').on(table.status),
+  authorityStatusIdx: index('design_control_records_authority_status_idx').on(table.authorityStatus),
+  authoritativeRdProjectUnique: uniqueIndex('design_control_records_authoritative_rd_project_unique')
+    .on(table.rdProjectId)
+    .where(sql`${table.authorityStatus} = 'authoritative' AND ${table.rdProjectId} IS NOT NULL`),
 }));
 
 const designControlTraceabilityColumns = () => ({

@@ -1,4 +1,5 @@
 import type { P1POQueueCustomer, P1POQueueItem } from '../../schema';
+import { isP1FlatTop } from '../utils/p1FlatTop';
 
 // ---------------------------------------------------------------------------
 // Low-level fulfillment helpers
@@ -204,10 +205,7 @@ export function computeP1Queue(
             (specs.paint_options as string | null) ??
             null,
           texture: (specs.texture as string | null) ?? null,
-          flatTop:
-            (specs.flatTop as boolean | null) ??
-            (specs.flat_top as boolean | null) ??
-            null,
+          flatTop: isP1FlatTop(specs),
           orderedQuantity: Number(item.quantity || 0),
           availableQuantity,
           departmentStatuses: fulfillmentStats?.departmentStatuses ?? {},

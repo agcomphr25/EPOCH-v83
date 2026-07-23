@@ -7,6 +7,10 @@ import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 import { idempotencyMiddleware, logIdempotencyEvent } from '../../middleware/idempotency';
 import { resolveItemDisplayName } from '../utils/resolveItemDisplayName';
 import { deriveCanonicalMaterial } from '../utils/deriveCanonicalMaterial';
+import {
+  isP1FlatTop,
+  normalizeP1FlatTopSpecifications,
+} from '../utils/p1FlatTop';
 
 const router = Router();
 
@@ -398,7 +402,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
 
         const specs = item.specifications || {};
         const normalizedSpecs = {
-          ...specs,
+          ...normalizeP1FlatTopSpecifications(specs),
           action_length: specs.action_length || specs.actionLength || '',
         };
         const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -723,6 +727,7 @@ router.post('/progress', async (req: Request, res: Response) => {
 
         const item = poItem.rows[0];
         const specs = item.specifications || {};
+        const isFlatTop = isP1FlatTop(specs);
         const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
         // Lock and progress the exact existing PENDING units. Creating rows here
@@ -752,20 +757,29 @@ router.post('/progress', async (req: Request, res: Response) => {
             po_id: item.po_id,
             specifications: specs,
             action_length: specs.action_length || '',
+            isFlattop: isFlatTop,
+            flatTop: isFlatTop,
+            flat_top: isFlatTop,
+            flattop: isFlatTop,
           });
 
           await client.query(`
             INSERT INTO all_orders (
               order_id, order_date, due_date, customer_id, model_id,
               current_department, status, notes, features, order_source,
-              source_po_id, source_po_item_id, department_history, created_at, updated_at
+              source_po_id, source_po_item_id, department_history, is_flattop,
+              created_at, updated_at
             ) VALUES (
               $1, NOW(), $2, $3, $4, 'Barcode', 'IN_PROGRESS', $5, $6::jsonb,
-              'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
+              'PO_RELEASE', $7, $8, '[]'::jsonb, $9, NOW(), NOW()
             )
             ON CONFLICT (order_id) DO UPDATE
-            SET current_department = 'Barcode', status = 'IN_PROGRESS', updated_at = NOW()
-          `, [orderId, dueDate, item.customer_id || item.customer_name, item.item_id || '', notes, features, item.po_id, poItemId]);
+            SET current_department = 'Barcode',
+                status = 'IN_PROGRESS',
+                features = EXCLUDED.features,
+                is_flattop = EXCLUDED.is_flattop,
+                updated_at = NOW()
+          `, [orderId, dueDate, item.customer_id || item.customer_name, item.item_id || '', notes, features, item.po_id, poItemId, isFlatTop]);
 
           await client.query(`
             UPDATE production_orders

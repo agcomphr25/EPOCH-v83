@@ -17,6 +17,7 @@ import {
 } from '../services/p1ShipmentRevenueService';
 import { buildRevenueDimensionTags } from '../services/productionLineAccounting';
 import { deriveP1ProductionStatus } from '../utils/p1ProductionStatus';
+import { isP1FlatTop } from '../utils/p1FlatTop';
 
 const router = Router();
 
@@ -1159,6 +1160,7 @@ router.post('/smart-progress', async (req, res) => {
 
     const results = {
       toShippingQC: [] as string[],
+      toFinish: [] as string[],
       toCNC: [] as string[],
       failed: [] as { orderId: string; reason: string }[],
     };
@@ -1183,6 +1185,14 @@ router.post('/smart-progress', async (req, res) => {
           console.warn(
             `⚠️ ${orderId}: Wrong department (${order.currentDepartment})`
           );
+          continue;
+        }
+
+        if (isP1FlatTop(order.specifications)) {
+          await storage.updateProductionOrder(order.id, {
+            currentDepartment: 'Finish',
+          });
+          results.toFinish.push(orderId);
           continue;
         }
 
@@ -1229,9 +1239,10 @@ router.post('/smart-progress', async (req, res) => {
     // Always return 200 with success/failed arrays
     res.json({
       toShippingQC: results.toShippingQC,
+      toFinish: results.toFinish,
       toCNC: results.toCNC,
       failed: results.failed,
-      message: `Progressed ${results.toShippingQC.length + results.toCNC.length}/${orderIds.length} items`,
+      message: `Progressed ${results.toShippingQC.length + results.toFinish.length + results.toCNC.length}/${orderIds.length} items`,
     });
   } catch (error: any) {
     console.error('❌ Error in smart progression:', error);

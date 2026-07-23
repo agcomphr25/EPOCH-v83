@@ -4180,6 +4180,7 @@ export default function OrderEntry() {
                         // Clear features that are not available for flattop
                         setFeatures((prev) => ({
                           ...prev,
+                          handedness: undefined,
                           action_length: undefined,
                           action_inlet: undefined,
                           bottom_metal: undefined,
@@ -4501,9 +4502,16 @@ export default function OrderEntry() {
                                 handedness: value === '__NONE__' ? undefined : value,
                               }))
                             }
+                            disabled={isFlattop}
                           >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select handedness..." />
+                            <SelectTrigger className={isFlattop ? 'opacity-50 cursor-not-allowed' : ''}>
+                              <SelectValue
+                                placeholder={
+                                  isFlattop
+                                    ? 'Not Available (Flattop)'
+                                    : 'Select handedness...'
+                                }
+                              />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__NONE__">None</SelectItem>

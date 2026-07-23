@@ -224,9 +224,16 @@ export const safeMigrationFiles = [
   '0199_project_workflow_version.sql',
   '0200_reconcile_oem_shipment_fulfillment.sql',
   '0201_close_fully_shipped_p1_purchase_orders.sql',
+  '0201_freezer_temperature_logs.sql',
+  '0202_project_workflow_instances.sql',
+  '0203_project_design_applicability_decisions.sql',
+  '0204_project_production_plans.sql',
+  '0205_project_wad_authorizations.sql',
+  '0206_project_commercial_stage_reviews.sql',
   '0207_design_control_authority_foundation.sql',
   '0208_design_control_authenticated_approvals.sql',
   '0210_master_document_control_hardening.sql',
+  '0210_repair_freezer_temperature_tracking.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -248,6 +255,7 @@ export const criticalMigrationFiles = new Set([
   '0207_design_control_authority_foundation.sql',
   '0208_design_control_authenticated_approvals.sql',
   '0210_master_document_control_hardening.sql',
+  '0210_repair_freezer_temperature_tracking.sql',
 ]);
 
 export async function runSafeBootMigrations() {

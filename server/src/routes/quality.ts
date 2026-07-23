@@ -671,28 +671,19 @@ router.post('/freezer-temperature-logs', async (req: Request, res: Response) => 
       });
     }
 
-    const activeLocations = await db
+    const submittedReading = parsed.data.readings[0];
+    const [location] = await db
       .select()
       .from(freezerTemperatureLocations)
-      .where(eq(freezerTemperatureLocations.isActive, true))
-      .orderBy(
-        asc(freezerTemperatureLocations.sortOrder),
-        asc(freezerTemperatureLocations.name)
-      );
-    if (activeLocations.length === 0) {
-      return res.status(400).json({ error: 'Add at least one active temperature location first' });
-    }
-
-    const submitted = new Map(
-      parsed.data.readings.map((reading) => [reading.locationId, reading.temperature])
-    );
-    if (
-      submitted.size !== activeLocations.length ||
-      activeLocations.some((location) => !submitted.has(location.id))
-    ) {
-      return res.status(400).json({
-        error: 'A reading is required for every active temperature location',
-      });
+      .where(
+        and(
+          eq(freezerTemperatureLocations.id, submittedReading.locationId),
+          eq(freezerTemperatureLocations.isActive, true)
+        )
+      )
+      .limit(1);
+    if (!location) {
+      return res.status(400).json({ error: 'Select an active freezer' });
     }
 
     const actor = await resolveUserSnapshot(req.user.id);
@@ -707,15 +698,13 @@ router.post('/freezer-temperature-logs', async (req: Request, res: Response) => 
         })
         .returning();
 
-      await tx.insert(freezerTemperatureReadings).values(
-        activeLocations.map((location) => ({
-          logId: createdLog.id,
-          locationId: location.id,
-          locationNameSnapshot: location.name,
-          locationSortOrderSnapshot: location.sortOrder,
-          temperature: String(submitted.get(location.id)),
-        }))
-      );
+      await tx.insert(freezerTemperatureReadings).values({
+        logId: createdLog.id,
+        locationId: location.id,
+        locationNameSnapshot: location.name,
+        locationSortOrderSnapshot: location.sortOrder,
+        temperature: String(submittedReading.temperature),
+      });
       return createdLog;
     });
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -21,6 +21,13 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -75,9 +82,8 @@ export default function FreezerTemperatureLogPage() {
   const queryClient = useQueryClient();
   const [recordedAt, setRecordedAt] = useState(currentLocalDateTime);
   const [notes, setNotes] = useState('');
-  const [readingValues, setReadingValues] = useState<Record<string, string>>(
-    {}
-  );
+  const [selectedLocationId, setSelectedLocationId] = useState('');
+  const [temperature, setTemperature] = useState('');
   const [newLocationName, setNewLocationName] = useState('');
   const [editingLocationId, setEditingLocationId] = useState<string | null>(
     null
@@ -113,16 +119,6 @@ export default function FreezerTemperatureLogPage() {
     [locations]
   );
 
-  useEffect(() => {
-    setReadingValues((current) => {
-      const next: Record<string, string> = {};
-      activeLocations.forEach((location) => {
-        next[location.id] = current[location.id] ?? '';
-      });
-      return next;
-    });
-  }, [activeLocations]);
-
   const invalidateFreezerData = () => {
     queryClient.invalidateQueries({
       queryKey: ['/api/quality/freezer-temperature-locations'],
@@ -147,11 +143,11 @@ export default function FreezerTemperatureLogPage() {
     onSuccess: () => {
       setNewLocationName('');
       invalidateFreezerData();
-      toast({ title: 'Temperature location added' });
+      toast({ title: 'Freezer added' });
     },
     onError: (error: Error) => {
       toast({
-        title: 'Could not add location',
+        title: 'Could not add freezer',
         description: error.message,
         variant: 'destructive',
       });
@@ -215,10 +211,7 @@ export default function FreezerTemperatureLogPage() {
         body: {
           recordedAt: new Date(recordedAt).toISOString(),
           notes: notes.trim() || null,
-          readings: activeLocations.map((location) => ({
-            locationId: location.id,
-            temperature: readingValues[location.id],
-          })),
+          readings: [{ locationId: selectedLocationId, temperature }],
         },
       }),
     onSuccess: () => {
@@ -227,9 +220,7 @@ export default function FreezerTemperatureLogPage() {
       });
       setRecordedAt(currentLocalDateTime());
       setNotes('');
-      setReadingValues(
-        Object.fromEntries(activeLocations.map((location) => [location.id, '']))
-      );
+      setTemperature('');
       toast({
         title: 'Temperature check saved',
         description: 'The employee and time were recorded automatically.',
@@ -244,12 +235,10 @@ export default function FreezerTemperatureLogPage() {
     },
   });
 
-  const allReadingsEntered =
-    activeLocations.length > 0 &&
-    activeLocations.every((location) => {
-      const value = readingValues[location.id];
-      return value?.trim() !== '' && Number.isFinite(Number(value));
-    });
+  const readingEntered =
+    Boolean(selectedLocationId) &&
+    temperature.trim() !== '' &&
+    Number.isFinite(Number(temperature));
   const latest = logs[0];
   const latestByLocation = new Map(
     latest?.readings.map((reading) => [reading.locationId, reading]) ?? []
@@ -301,7 +290,7 @@ export default function FreezerTemperatureLogPage() {
               disabled={!newLocationName.trim() || createLocation.isPending}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add location
+              Add Freezer
             </Button>
           </div>
 
@@ -421,7 +410,7 @@ export default function FreezerTemperatureLogPage() {
             <Thermometer className="h-5 w-5" /> Record a temperature check
           </CardTitle>
           <CardDescription>
-            Enter a reading for every active location. Your employee name is
+            Select a freezer and enter its reading. Your employee name is
             attached automatically.
           </CardDescription>
         </CardHeader>
@@ -430,7 +419,7 @@ export default function FreezerTemperatureLogPage() {
             className="space-y-5"
             onSubmit={(event) => {
               event.preventDefault();
-              if (allReadingsEntered) createLog.mutate();
+              if (readingEntered) createLog.mutate();
             }}
           >
             <div className="max-w-sm space-y-2">
@@ -446,40 +435,49 @@ export default function FreezerTemperatureLogPage() {
 
             {activeLocations.length === 0 ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-amber-900">
-                Add or restore a temperature location before recording a check.
+                Add or restore a freezer before recording a check.
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {activeLocations.map((location) => (
-                  <div key={location.id} className="space-y-2">
-                    <Label htmlFor={`reading-${location.id}`}>
-                      {location.name}
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id={`reading-${location.id}`}
-                        type="number"
-                        inputMode="decimal"
-                        min="-200"
-                        max="200"
-                        step="0.1"
-                        required
-                        className="pr-14 text-lg font-medium"
-                        placeholder="0.0"
-                        value={readingValues[location.id] ?? ''}
-                        onChange={(event) =>
-                          setReadingValues((current) => ({
-                            ...current,
-                            [location.id]: event.target.value,
-                          }))
-                        }
-                      />
-                      <span className="pointer-events-none absolute right-3 top-2.5 text-sm text-gray-500">
-                        deg F
-                      </span>
-                    </div>
+              <div className="grid max-w-2xl gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="freezer-select">Freezer</Label>
+                  <Select
+                    value={selectedLocationId}
+                    onValueChange={setSelectedLocationId}
+                  >
+                    <SelectTrigger id="freezer-select">
+                      <SelectValue placeholder="Select a freezer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeLocations.map((location) => (
+                        <SelectItem key={location.id} value={location.id}>
+                          {location.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="temperature-reading">Temperature</Label>
+                  <div className="relative">
+                    <Input
+                      id="temperature-reading"
+                      type="number"
+                      inputMode="decimal"
+                      min="-200"
+                      max="200"
+                      step="0.1"
+                      required
+                      className="pr-14 text-lg font-medium"
+                      placeholder="0.0"
+                      value={temperature}
+                      onChange={(event) => setTemperature(event.target.value)}
+                    />
+                    <span className="pointer-events-none absolute right-3 top-2.5 text-sm text-gray-500">
+                      deg F
+                    </span>
                   </div>
-                ))}
+                </div>
               </div>
             )}
 
@@ -500,9 +498,7 @@ export default function FreezerTemperatureLogPage() {
               <Button
                 type="submit"
                 size="lg"
-                disabled={
-                  !allReadingsEntered || !recordedAt || createLog.isPending
-                }
+                disabled={!readingEntered || !recordedAt || createLog.isPending}
               >
                 {createLog.isPending ? 'Saving...' : 'Save temperature check'}
               </Button>

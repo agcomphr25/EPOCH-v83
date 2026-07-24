@@ -991,7 +991,7 @@ export async function approveProductionRelease(
            configuration_baseline_id,effectivity_reference,approved_by,
            approved_by_display_name,evidence_snapshot)
         VALUES (${projectId},${ctx.instance.id},${review.id},${Number(review.revision_number)},
-          ${wad.id},${Number(wad.revision_number)},${plan.id},${Number(plan.revision_number)},
+          ${wad.id},${Number(wad.wad_revision)},${plan.id},${Number(plan.revision_number)},
           ${String(plan.configuration_baseline_id)},${review.effectivity_reference},
           ${actor.userId},${actor.displayName},
           ${JSON.stringify({ sourceRevisions: review.source_stage_revisions, approvals: (await approvals(review, tx)).map((a) => ({ type: a.approval_type, actor: a.actor_display_name, decidedAt: a.decided_at })) })}::jsonb)
@@ -1014,7 +1014,7 @@ export async function approveProductionRelease(
         payload: {
           projectId,
           readinessRevision: Number(review.revision_number),
-          wadRevision: Number(wad.revision_number),
+          wadRevision: Number(wad.wad_revision),
         },
       },
       tx

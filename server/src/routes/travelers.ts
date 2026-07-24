@@ -18,6 +18,7 @@ import * as allocationService from '../services/laborAllocationService';
 import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
 import { executeTravelerAutoPunch } from './timeClock';
 import { recordAuditEvent } from '../services/auditLedgerService';
+import { getTravelerProductionExecutionGate } from '../services/projectProductionExecutionService';
 import { db } from '../../db';
 import {
   insertTravelerSchema,
@@ -1799,6 +1800,19 @@ async function promoteTravelerToInProgress(
   | { ok: false; status: number; body: any }
 > {
   const id = traveler.id;
+  const v2ExecutionGate = traveler.projectId
+    ? await getTravelerProductionExecutionGate(id)
+    : null;
+  if (v2ExecutionGate && !v2ExecutionGate.allowed) {
+    return {
+      ok: false,
+      status: 409,
+      body: {
+        error: v2ExecutionGate.code,
+        message: v2ExecutionGate.reason,
+      },
+    };
+  }
 
   // Kit release gate: if traveler is linked to a KIT queue item, it must be RELEASED.
   if (traveler.inventoryItemId) {
@@ -2787,6 +2801,15 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     let traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
       return res.status(404).json({ error: 'Traveler not found' });
+    }
+    const v2ExecutionGate = traveler.projectId
+      ? await getTravelerProductionExecutionGate(travelerId)
+      : null;
+    if (v2ExecutionGate && !v2ExecutionGate.allowed) {
+      return res.status(409).json({
+        error: v2ExecutionGate.code,
+        message: v2ExecutionGate.reason,
+      });
     }
 
     if (traveler.status === 'DRAFT') {

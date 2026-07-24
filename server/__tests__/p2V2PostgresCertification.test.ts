@@ -31,6 +31,10 @@ import {
   submitPreproduction,
 } from '../src/services/projectPreproductionReadinessService';
 import {
+  createCompletionReview,
+  getProductionDashboard,
+} from '../src/services/projectProductionExecutionService';
+import {
   getP2V2StagesForDefinitionVersion,
   P2_V2_DEFINITION_VERSION,
 } from '../src/services/projectWorkflowRegistry';
@@ -658,6 +662,9 @@ describe('Phase 8 migration certification', () => {
     expect(
       criticalMigrationFiles.has('0212_project_preproduction_launch_safety.sql')
     ).toBe(true);
+    expect(
+      criticalMigrationFiles.has('0220_p2_v2_production_execution.sql')
+    ).toBe(true);
     const migration = readFileSync(
       path.resolve('migrations/0210_project_preproduction_readiness.sql')
     );
@@ -684,6 +691,26 @@ describe('Phase 8 migration certification', () => {
     );
     expect(constraints.rows).toHaveLength(3);
     expect(constraints.rows.every((row) => row.convalidated)).toBe(true);
+  });
+
+  it('has additive Phase 9A Production evidence, hold, link, and approval tables', async () => {
+    const result = await query<{ table_name: string }>(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema='public' AND table_name=ANY($1::text[])
+       ORDER BY table_name`,
+      [[
+        'project_production_stage_reviews',
+        'project_production_evidence_links',
+        'project_production_holds',
+        'project_production_stage_approvals',
+      ]]
+    );
+    expect(result.rows.map((row) => row.table_name)).toEqual([
+      'project_production_evidence_links',
+      'project_production_holds',
+      'project_production_stage_approvals',
+      'project_production_stage_reviews',
+    ]);
   });
 });
 
@@ -877,6 +904,22 @@ describe('actual production launch service against PostgreSQL', () => {
       [fixture.projectId]
     );
     expect(success.rows).toHaveLength(1);
+  });
+
+  it('aggregates launched authoritative records without duplicating execution data', async () => {
+    const dashboard = await getProductionDashboard(baseProjectId);
+    expect(dashboard.productionOrders).toHaveLength(6);
+    expect(dashboard.serializedItems).toHaveLength(2);
+    expect(dashboard.readiness.state).toBe('BLOCKED');
+    expect(dashboard.deferrals).toEqual({
+      finalProductRelease: true,
+      shipping: true,
+      projectClosing: true,
+    });
+    const created = await createCompletionReview(baseProjectId, actor);
+    expect(created.review?.revision_number).toBe(1);
+    expect(created.review?.status).toBe('BLOCKED');
+    expect(created.productionOrders).toHaveLength(6);
   });
 
   it('keeps null and legacy workflow versions isolated', async () => {

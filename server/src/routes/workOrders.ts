@@ -56,6 +56,7 @@ import {
   type WadContext,
   type ApprovedTemplateSummary,
 } from '../services/productionControl/productionControlAI.service';
+import { getProjectProductionExecutionGate } from '../services/projectProductionExecutionService';
 
 const router = Router();
 
@@ -1335,6 +1336,13 @@ router.post('/:id/travelers/create', requirePermission('work_orders.release'), a
       .where(eq(productionWorkOrders.id, id))
       .limit(1);
     if (!wad) return res.status(404).json({ error: 'Production work order not found', id });
+    const v2ExecutionGate = await getProjectProductionExecutionGate(wad.projectId);
+    if (!v2ExecutionGate.allowed) {
+      return res.status(409).json({
+        error: v2ExecutionGate.code,
+        message: v2ExecutionGate.reason,
+      });
+    }
     const documentationPackage = evaluateDocumentationRequirements(wad);
 
     let traveler: Awaited<ReturnType<typeof storage.createTravelerFromProductionWorkOrder>>;
@@ -1354,6 +1362,14 @@ router.post('/:id/travelers/create', requirePermission('work_orders.release'), a
         return res.status(404).json({ error: err.message });
       }
       throw err;
+    }
+    if (v2ExecutionGate.appliesToV2) {
+      const [linkedTraveler] = await db
+        .update(travelers)
+        .set({ projectId: wad.projectId, updatedAt: new Date() })
+        .where(eq(travelers.id, traveler.id))
+        .returning();
+      traveler = linkedTraveler ?? traveler;
     }
 
     return res.status(201).json({

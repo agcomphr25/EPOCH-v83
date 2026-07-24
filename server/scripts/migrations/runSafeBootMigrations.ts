@@ -235,13 +235,14 @@ export const safeMigrationFiles = [
   '0209_project_technical_configuration_reviews.sql',
   '0210_master_document_control_hardening.sql',
   '0210_project_preproduction_readiness.sql',
+  '0210_repair_freezer_temperature_tracking.sql',
   '0211_design_control_form_templates.sql',
+  '0212_project_preproduction_launch_safety.sql',
   '0213_design_control_project_form_instances.sql',
   '0214_engineering_change_requests.sql',
   '0215_engineering_change_notices.sql',
   '0216_post_release_design_change_gating.sql',
-  '0210_repair_freezer_temperature_tracking.sql',
-  '0212_project_preproduction_launch_safety.sql',
+  '0217_freezer_na_readings.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -264,13 +265,14 @@ export const criticalMigrationFiles = new Set([
   '0208_design_control_authenticated_approvals.sql',
   '0210_master_document_control_hardening.sql',
   '0210_project_preproduction_readiness.sql',
+  '0210_repair_freezer_temperature_tracking.sql',
   '0211_design_control_form_templates.sql',
+  '0212_project_preproduction_launch_safety.sql',
   '0213_design_control_project_form_instances.sql',
   '0214_engineering_change_requests.sql',
   '0215_engineering_change_notices.sql',
   '0216_post_release_design_change_gating.sql',
-  '0210_repair_freezer_temperature_tracking.sql',
-  '0212_project_preproduction_launch_safety.sql',
+  '0217_freezer_na_readings.sql',
 ]);
 
 export async function runSafeBootMigrations() {

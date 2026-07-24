@@ -73,6 +73,7 @@ import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import OrderActionButtons from '@/components/OrderActionButtons';
 import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 import { deriveOrderLabels, logBarcodeDebug } from '@/utils/deriveOrderLabels';
+import { isP1FlatTopOrder } from '@/utils/p1FlatTop';
 
 // Kickback form validation schema
 const kickbackFormSchema = z.object({
@@ -103,34 +104,8 @@ type KickbackFormData = z.infer<typeof kickbackFormSchema>;
 
 type ViewMode = 'grouped' | 'flat' | 'list';
 
-const isFlatTopValue = (value: unknown) =>
-  value === true ||
-  (typeof value === 'string' && ['true', 'yes', 'flat top', 'flattop'].includes(value.trim().toLowerCase()));
-
-const isFlatTopOrder = (order: any) => {
-  if (!order) return false;
-  const specifications = order.specifications ?? order.features?.specifications ?? {};
-  const nestedFeatures = specifications?.features ?? {};
-  return (
-    isFlatTopValue(order.isFlattop) ||
-    isFlatTopValue(order.isFlatTop) ||
-    isFlatTopValue(order.flatTop) ||
-    isFlatTopValue(order.flat_top) ||
-    isFlatTopValue(order.features?.flattop) ||
-    isFlatTopValue(order.features?.flatTop) ||
-    isFlatTopValue(order.features?.flat_top) ||
-    isFlatTopValue(specifications?.isFlattop) ||
-    isFlatTopValue(specifications?.flatTop) ||
-    isFlatTopValue(specifications?.flat_top) ||
-    isFlatTopValue(nestedFeatures?.isFlattop) ||
-    isFlatTopValue(nestedFeatures?.flatTop) ||
-    isFlatTopValue(nestedFeatures?.flat_top) ||
-    isFlatTopValue(nestedFeatures?.flattop)
-  );
-};
-
 const isRegularFlatTopOrder = (order: any) =>
-  !String(order?.orderId || '').startsWith('PO-') && isFlatTopOrder(order);
+  !String(order?.orderId || '').startsWith('PO-') && isP1FlatTopOrder(order);
 
 export default function BarcodeQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -533,7 +508,7 @@ export default function BarcodeQueuePage() {
           
           if (isPOItem) {
             // Check if PO item has flattop option
-            const isFlattop = isFlatTopOrder(order);
+            const isFlattop = isP1FlatTopOrder(order);
             if (isFlattop) {
               poFlatTopOrderIds.push(orderId);
             } else {
@@ -977,7 +952,7 @@ export default function BarcodeQueuePage() {
               const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
               const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
               const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
-              const isRegularFlatTop = isFlatTopOrder(order);
+              const isRegularFlatTop = isP1FlatTopOrder(order);
 
               return (
                 <Card
@@ -1098,7 +1073,7 @@ export default function BarcodeQueuePage() {
                     const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
                     const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
                     const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
-                    const isRegularFlatTop = isFlatTopOrder(order);
+                    const isRegularFlatTop = isP1FlatTopOrder(order);
 
                     return (
                       <tr
@@ -1269,7 +1244,7 @@ export default function BarcodeQueuePage() {
                       const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
                       const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
                       const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
-                      const isRegularFlatTop = isFlatTopOrder(order);
+                      const isRegularFlatTop = isP1FlatTopOrder(order);
 
                       return (
                         <Card
@@ -1595,7 +1570,7 @@ export default function BarcodeQueuePage() {
                             const actionLength = orderLabels2.actionLengthRaw;
                             const isTikka = orderLabels2.isTikka;
                             const materialType = orderLabels2.materialLabel;
-                            const isRegularFlatTop = isFlatTopOrder(order);
+                            const isRegularFlatTop = isP1FlatTopOrder(order);
 
                             // Check if this is a PO order (no label printing needed)
                             const isPOOrder = order.orderId.startsWith('PO-');
@@ -1711,7 +1686,7 @@ export default function BarcodeQueuePage() {
                                           {getActionBadgeLabel(orderLabels2)} Action
                                         </Badge>
                                         {/* Flattop badge for P1 PO orders */}
-                                        {isPOOrder && isFlatTopOrder(order) && (
+                                        {isPOOrder && isP1FlatTopOrder(order) && (
                                           <Badge
                                             variant="outline"
                                             className="text-xs border-purple-500 text-purple-700 bg-purple-50 font-semibold"

@@ -72,6 +72,7 @@ import { LayupSchedulePreview } from './LayupSchedulePreview';
 import { ScheduleHistoryDialog } from './ScheduleHistoryDialog';
 import { MoldSettings } from './MoldSettings';
 import { deriveOrderLabels } from '@/utils/deriveOrderLabels';
+import { isP1FlatTopOrder } from '@/utils/p1FlatTop';
 
 interface ProductionQueueOrder {
   orderId: string;
@@ -1151,7 +1152,7 @@ export default function ProductionQueueManager() {
           <TableHead>Stock Model</TableHead>
           <TableHead>Action Length</TableHead>
           <TableHead>Bottom Metal</TableHead>
-          <TableHead>LOP / Fill</TableHead>
+          <TableHead>Other</TableHead>
           <TableHead>Due Date</TableHead>
           <TableHead>Days to Due</TableHead>
           <TableHead>Urgency</TableHead>
@@ -1186,6 +1187,7 @@ export default function ProductionQueueManager() {
             : '';
           const otherOptions = order.features?.other_options || [];
           const hasHeavyFill = Array.isArray(otherOptions) && otherOptions.includes('heavy_fill');
+          const isFlatTop = isP1FlatTopOrder(order);
           const queueIndex = productionQueue.findIndex((queueOrder) => queueOrder.orderId === order.orderId);
 
           return (
@@ -1253,13 +1255,6 @@ export default function ProductionQueueManager() {
                   <Badge variant="secondary" className="font-medium">
                     {actionLength}
                   </Badge>
-                ) : order.isFlattop ? (
-                  <Badge
-                    className="bg-yellow-100 text-yellow-900 border-yellow-300 font-semibold"
-                    title="Flattop stock: action length is not machined"
-                  >
-                    FLATTOP
-                  </Badge>
                 ) : isTikkaModel ? (
                   <Badge
                     variant="secondary"
@@ -1289,6 +1284,11 @@ export default function ProductionQueueManager() {
                   {hasHeavyFill && (
                     <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-semibold text-xs">
                       HEAVY FILL
+                    </Badge>
+                  )}
+                  {isFlatTop && (
+                    <Badge className="bg-yellow-100 text-yellow-900 border-yellow-300 font-semibold text-xs">
+                      FLAT TOP
                     </Badge>
                   )}
                 </div>
@@ -2219,7 +2219,7 @@ export default function ProductionQueueManager() {
                         <TableHead>Stock Model</TableHead>
                         <TableHead>Action Length</TableHead>
                         <TableHead>Bottom Metal</TableHead>
-                        <TableHead>LOP / Fill</TableHead>
+                        <TableHead>Other</TableHead>
                         <TableHead>Due Date</TableHead>
                         <TableHead>Days to Due</TableHead>
                         <TableHead>Urgency</TableHead>
@@ -2255,6 +2255,7 @@ export default function ProductionQueueManager() {
                         // Check for heavy fill option
                         const otherOptions = order.features?.other_options || [];
                         const hasHeavyFill = Array.isArray(otherOptions) && otherOptions.includes('heavy_fill');
+                        const isFlatTop = isP1FlatTopOrder(order);
 
                         return (
                           <TableRow
@@ -2327,13 +2328,6 @@ export default function ProductionQueueManager() {
                                 >
                                   {actionLengthDisplay}
                                 </Badge>
-                              ) : order.isFlattop ? (
-                                <Badge
-                                  className="bg-yellow-100 text-yellow-900 border-yellow-300 font-semibold"
-                                  title="Flattop stock: action length is not machined"
-                                >
-                                  FLATTOP
-                                </Badge>
                               ) : isTikkaModel ? (
                                 <Badge
                                   variant="secondary"
@@ -2363,6 +2357,11 @@ export default function ProductionQueueManager() {
                                 {hasHeavyFill && (
                                   <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-semibold text-xs">
                                     HEAVY FILL
+                                  </Badge>
+                                )}
+                                {isFlatTop && (
+                                  <Badge className="bg-yellow-100 text-yellow-900 border-yellow-300 font-semibold text-xs">
+                                    FLAT TOP
                                   </Badge>
                                 )}
                               </div>

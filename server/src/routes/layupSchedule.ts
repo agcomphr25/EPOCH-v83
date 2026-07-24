@@ -7,6 +7,7 @@ import { eq, and, inArray, sql } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 import { deriveCanonicalMaterial } from '../utils/deriveCanonicalMaterial';
 import { parseP1POUnitOrderId } from '../utils/parseP1POUnitOrderId';
+import { isP1FlatTop } from '../utils/p1FlatTop';
 
 function normalizeMaterial(raw: string): string {
   const lower = raw.toLowerCase().trim();
@@ -422,6 +423,7 @@ router.post('/generate', async (req: Request, res: Response) => {
           customerName: allOrders.customerId, // Using customerId as customerName for now
           dueDate: allOrders.dueDate,
           features: allOrders.features,
+          isFlattop: allOrders.isFlattop,
         })
         .from(allOrders)
         .where(inArray(allOrders.orderId, selectedOrderIds));
@@ -483,6 +485,10 @@ router.post('/generate', async (req: Request, res: Response) => {
           lopValue,
           hasADL,
           hasHeavyFill,
+          isFlatTop: isP1FlatTop({
+            ...features,
+            isFlattop: order.isFlattop,
+          }),
         };
       });
     }
@@ -501,6 +507,7 @@ router.post('/generate', async (req: Request, res: Response) => {
           actionLength: poProducts.actionLength,
           actionInlet: poProducts.actionInlet,
           stockModel: poProducts.stockModel,
+          flatTop: poProducts.flatTop,
         })
         .from(poProducts)
         .where(inArray(poProducts.id, itemIds));
@@ -569,6 +576,9 @@ router.post('/generate', async (req: Request, res: Response) => {
             hasLOP: false,
             hasADL: false,
             hasHeavyFill: false,
+            isFlatTop:
+              poProductData?.flatTop === true ||
+              isP1FlatTop((item as any).specifications),
           });
         }
       }
@@ -718,6 +728,7 @@ router.post('/generate', async (req: Request, res: Response) => {
               lopValue: item.lopValue || null,
               hasADL: item.hasADL || false,
               hasHeavyFill: item.hasHeavyFill || false,
+              isFlatTop: item.isFlatTop || false,
             });
             
             moldDayCapacity[mold.moldId][day] = currentUsage + 1;
@@ -1578,7 +1589,8 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
           ao.fb_order_number,
           ao.model_id AS stock_model,
           ao.customer_id AS customer_name,
-          ao.features
+          ao.features,
+          ao.is_flattop
         FROM all_orders ao
         WHERE ao.order_id = ANY($1::text[])
       `,
@@ -1655,6 +1667,7 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
           hasLOP: checkHasLOP(features),
           hasADL: checkHasADL(features),
           hasHeavyFill: checkHasHeavyFill(features),
+          isFlatTop: isP1FlatTop(features),
         };
       } else {
         // Regular order
@@ -1688,6 +1701,10 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
           hasLOP: checkHasLOP(features),
           hasADL: checkHasADL(features),
           hasHeavyFill: checkHasHeavyFill(features),
+          isFlatTop: isP1FlatTop({
+            ...features,
+            isFlattop: order.is_flattop,
+          }),
         };
       }
     });

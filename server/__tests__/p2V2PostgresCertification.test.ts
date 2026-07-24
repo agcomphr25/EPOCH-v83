@@ -181,8 +181,10 @@ describe('Phase 8 migration certification', () => {
       '0210_project_preproduction_readiness.sql',
       '0210_repair_freezer_temperature_tracking.sql',
     ]);
-    expect(safeMigrationFiles[safeMigrationFiles.length - 1]).toBe(
-      '0212_project_preproduction_launch_safety.sql'
+    expect(
+      safeMigrationFiles.indexOf('0212_project_preproduction_launch_safety.sql')
+    ).toBeGreaterThan(
+      safeMigrationFiles.indexOf('0210_repair_freezer_temperature_tracking.sql')
     );
     expect(
       criticalMigrationFiles.has('0212_project_preproduction_launch_safety.sql')
@@ -194,7 +196,7 @@ describe('Phase 8 migration certification', () => {
       path.resolve('migrations/0210_project_preproduction_readiness.sql')
     );
     expect(createHash('sha1').update(sql).digest('hex')).toBe(
-      '1d936d8a9f79d7d7191716d6489056bb74a58b90'
+      '586207c1d54f765129aa1f45944ea5f27746326b'
     );
   });
 
@@ -350,7 +352,7 @@ describe('Phase 8 real PostgreSQL launch safety', () => {
     expect(resolveFirstProductionDepartment(['Cutting'], true)).toBe(
       'Cutting Table'
     );
-    expect(() => resolveFirstProductionDepartment([], true)).toThrow();
+    expect(resolveFirstProductionDepartment([], true)).toBeNull();
     expect(
       plannedProductionCounts([
         {

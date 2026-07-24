@@ -51,6 +51,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { ProjectFormInstancesPanel } from '@/components/design-control/ProjectFormInstancesPanel';
 import { EngineeringChangeRequestRegister } from '@/components/design-control/EngineeringChangeRequestRegister';
+import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
 
 interface EmployeeOption {
   id: number;
@@ -2204,6 +2205,9 @@ export default function RDProjectsPage() {
                           <EngineeringChangeRequestRegister
                             projectId={selectedProject.id}
                             recordId={activeDesignControlRecord.id}
+                          />
+                          <EngineeringChangeNoticeWorkspace
+                            projectId={selectedProject.id}
                           />
                           <ProjectFormInstancesPanel
                             recordId={activeDesignControlRecord.id}

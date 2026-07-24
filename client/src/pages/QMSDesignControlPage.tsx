@@ -53,6 +53,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ProjectFormInstancesPanel } from '@/components/design-control/ProjectFormInstancesPanel';
 import { EngineeringChangeRequestRegister } from '@/components/design-control/EngineeringChangeRequestRegister';
+import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
 
 type StatusTone = 'draft' | 'active' | 'review' | 'approved' | 'blocked' | 'released';
 
@@ -1716,10 +1717,14 @@ export default function QMSDesignControlPage() {
           </TabsContent>
 
           <TabsContent value="changes" className="space-y-4">
-            <SectionHeader icon={History} title="Engineering Changes" description="Authoritative ECR impact review and immutable disposition history. ECN execution remains a later controlled phase." />
+            <SectionHeader icon={History} title="Engineering Changes" description="Authoritative ECR review plus controlled ECN implementation, V&V, and release-readiness oversight." />
             <EngineeringChangeRequestRegister
               projectId={activeDesignControlRecord?.rdProjectId}
               recordId={activeDesignControlRecordId}
+              oversightMode
+            />
+            <EngineeringChangeNoticeWorkspace
+              projectId={activeDesignControlRecord?.rdProjectId}
               oversightMode
             />
           </TabsContent>

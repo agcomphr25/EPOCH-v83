@@ -24,7 +24,6 @@ import {
   launchProduction,
   launchProductionForCertification,
   ProjectPreproductionError,
-  type ProductionLaunchCertificationFault,
 } from '../src/services/projectPreproductionReadinessService';
 import {
   getP2V2StagesForDefinitionVersion,
@@ -79,11 +78,14 @@ async function markStageComplete(
     `UPDATE project_commercial_stage_reviews
        SET status='COMPLETE', sufficiently_defined=true,
            differences_resolved=true, completed_at=now()
-     WHERE id=$1;
-     UPDATE project_workflow_step_instances
+     WHERE id=$1`,
+    [reviewId]
+  );
+  await query(
+    `UPDATE project_workflow_step_instances
        SET status='COMPLETE', completed_at=now()
-     WHERE project_id=$2 AND step_type=$3`,
-    [reviewId, projectId, stage]
+     WHERE project_id=$1 AND step_type=$2`,
+    [projectId, stage]
   );
 }
 
@@ -99,15 +101,18 @@ async function createFixture(
     await client.query(
       `INSERT INTO p2_customers(customer_id,customer_name,rfq_prefix)
          VALUES ($1,'Certification Customer','CRT')
-       ON CONFLICT DO NOTHING;
-       INSERT INTO inventory_items
+       ON CONFLICT DO NOTHING`,
+      [customer]
+    );
+    await client.query(
+      `INSERT INTO inventory_items
          (ag_part_number,name,type,item_type,manufactured_category,
           manufacturing_level,manufacturing_department)
          VALUES
-         ($2,'Parent Assembly','Manufactured','MANUFACTURED','ASSEMBLY','FINAL','Assembly'),
-         ($3,'Machined Child','Manufactured','MANUFACTURED','MACHINED_PART','COMPONENT','CNC')
+         ($1,'Parent Assembly','Manufactured','MANUFACTURED','ASSEMBLY','FINAL','Assembly'),
+         ($2,'Machined Child','Manufactured','MANUFACTURED','MACHINED_PART','COMPONENT','CNC')
        ON CONFLICT (ag_part_number) DO NOTHING`,
-      [customer, `PARENT-${suffix}`, `CHILD-${suffix}`]
+      [`PARENT-${suffix}`, `CHILD-${suffix}`]
     );
     const po = await client.query<{ id: number }>(
       `INSERT INTO p2_purchase_orders
@@ -175,10 +180,7 @@ async function createFixture(
       steps[stage.type] = step.rows[0].id;
     }
     await client.query(
-      `INSERT INTO users(id,username,password_hash,role)
-       SELECT value,'phase8-certifier-'||value,'not-used','ADMIN'
-       FROM generate_series(9101,9110) value ON CONFLICT (id) DO NOTHING;
-       INSERT INTO rfq_risk_assessments
+      `INSERT INTO rfq_risk_assessments
          (rfq_number,customer_id,customer_name,form_data,bid_decision,status)
        VALUES ($1,$2,'Certification Customer',
                $3::jsonb,'bid','submitted')`,
@@ -211,8 +213,11 @@ async function createFixture(
       [quote.rows[0].id, `CERT-QUOTE-${suffix}`, customer]
     );
     await client.query(
-      `UPDATE p2_purchase_orders SET source_quote_id=$1 WHERE id=$2;
-       INSERT INTO quote_po_reconciliations
+      `UPDATE p2_purchase_orders SET source_quote_id=$1 WHERE id=$2`,
+      [quote.rows[0].id, poId]
+    );
+    await client.query(
+      `INSERT INTO quote_po_reconciliations
          (quote_id,quote_snapshot_id,p2_purchase_order_id,po_number,status)
        VALUES ($1,$3,$2,$4,'MATCH')`,
       [quote.rows[0].id, poId, snapshot.rows[0].id, poNumber]
@@ -350,10 +355,13 @@ async function createFixture(
     );
     await query(
       `UPDATE project_technical_configuration_reviews
-         SET status='COMPLETE',completed_at=now() WHERE id=$1;
-       UPDATE project_workflow_step_instances SET status='COMPLETE'
-         WHERE id=$2`,
-      [technical.review.id, steps.technical_configuration_review]
+         SET status='COMPLETE',completed_at=now() WHERE id=$1`,
+      [technical.review.id]
+    );
+    await query(
+      `UPDATE project_workflow_step_instances SET status='COMPLETE'
+         WHERE id=$1`,
+      [steps.technical_configuration_review]
     );
     const configurationRevision = `Technical Review 1:${technical.review.source_revision}`;
     const plan = await query<{ id: string }>(
@@ -614,8 +622,13 @@ async function cleanLaunchState(fixture: Fixture) {
 beforeAll(async () => {
   await query(`TRUNCATE audit_events RESTART IDENTITY CASCADE`);
   await query(
-    `INSERT INTO users(id,username,password_hash,role)
-     SELECT value,'phase8-certifier-'||value,'not-used','ADMIN'
+    `INSERT INTO employees(id,employee_code,name,user_role)
+     SELECT value,'PHASE8-'||value,'Phase 8 Certifier '||value,'ADMIN'
+     FROM generate_series(9101,9110) value ON CONFLICT (id) DO NOTHING`
+  );
+  await query(
+    `INSERT INTO users(id,username,password_hash,role,employee_id)
+     SELECT value,'phase8-certifier-'||value,'not-used','ADMIN',value
      FROM generate_series(9101,9110) value ON CONFLICT (id) DO NOTHING`
   );
 });
@@ -685,12 +698,12 @@ describe('real launch feature gate', () => {
         code: 'P2_V2_PRODUCTION_LAUNCH_DISABLED',
         status: 503,
       });
-      const audit = await query<{ event_type: string }>(
-        `SELECT event_type FROM audit_events
-         WHERE event_type='P2_V2_PRODUCTION_LAUNCH_BLOCKED'
+      const audit = await query<{ action: string }>(
+        `SELECT action FROM audit_events
+         WHERE action='P2_V2_PRODUCTION_LAUNCH_BLOCKED'
          ORDER BY id DESC LIMIT 1`
       );
-      expect(audit.rows[0]?.event_type).toBe('P2_V2_PRODUCTION_LAUNCH_BLOCKED');
+      expect(audit.rows[0]?.action).toBe('P2_V2_PRODUCTION_LAUNCH_BLOCKED');
     }
   );
 
@@ -732,17 +745,15 @@ describe('actual production launch service against PostgreSQL', () => {
       orders: 0,
       launches: 0,
     });
-    const audits = await query<{ event_type: string }>(
-      `SELECT event_type FROM audit_events
-       WHERE payload->>'projectId'=$1
-         AND event_type LIKE 'P2_V2_PRODUCTION_LAUNCH_%'
+    const audits = await query<{ action: string }>(
+      `SELECT action FROM audit_events
+       WHERE payload_json->>'projectId'=$1
+         AND action LIKE 'P2_V2_PRODUCTION_LAUNCH_%'
        ORDER BY id`,
       [fixture.projectId]
     );
-    expect(audits.rows.some((row) => row.event_type.endsWith('FAILED'))).toBe(
-      true
-    );
-    expect(audits.rows.some((row) => row.event_type.endsWith('LAUNCHED'))).toBe(
+    expect(audits.rows.some((row) => row.action.endsWith('FAILED'))).toBe(true);
+    expect(audits.rows.some((row) => row.action.endsWith('LAUNCHED'))).toBe(
       false
     );
   });
@@ -810,7 +821,7 @@ describe('actual production launch service against PostgreSQL', () => {
     });
     const success = await query(
       `SELECT id FROM audit_events
-       WHERE event_type='P2_V2_PRODUCTION_LAUNCHED'
+       WHERE action='P2_V2_PRODUCTION_LAUNCHED'
          AND subject_id=(SELECT id::text FROM project_production_launches
                          WHERE project_id=$1)`,
       [fixture.projectId]

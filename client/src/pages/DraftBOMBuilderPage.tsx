@@ -4916,8 +4916,8 @@ function PartsRequestWorkspace({
   return (
     <section className="space-y-4">
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 flex-1 space-y-3">
+        <div className="space-y-4">
+          <div className="min-w-0 space-y-3">
             <div>
               <h2 className="font-semibold text-slate-950">Parts/request</h2>
               <p className="text-sm text-slate-600">
@@ -4987,7 +4987,7 @@ function PartsRequestWorkspace({
             </Accordion>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4">
             <label
               className="flex items-start gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
               title="During spreadsheet import, match exact AG, supplier, or manufacturer part numbers to existing Inventory items."

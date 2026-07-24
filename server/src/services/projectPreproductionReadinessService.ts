@@ -3,7 +3,12 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { storage } from '../../storage';
 import { isP2V2ProductionLaunchEnabled } from '../lib/featureFlags';
-import { recordAuditEvent, type AuditLedgerTx } from './auditLedgerService';
+import {
+  jsonValuesEqual,
+  recordAuditEvent,
+  type AuditLedgerTx,
+  type JsonValue,
+} from './auditLedgerService';
 import { evaluateCommercialBaseline } from './projectCommercialReviewService';
 import { getCurrentProductionPlan } from './projectProductionPlanningService';
 import { evaluateTechnicalConfigurationBaseline } from './projectTechnicalConfigurationReviewService';
@@ -64,10 +69,6 @@ const resultRows = <T extends Row>(value: unknown): T[] =>
     : ((value as { rows?: T[] } | null)?.rows ?? []);
 const clean = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
-const sourceRevisionsMatch = (stored: Row, current: Row) =>
-  ['commercial', 'technical', 'productionPlanning', 'wadAuthorization'].every(
-    (key) => (stored?.[key] ?? null) === (current?.[key] ?? null)
-  );
 
 async function context(
   projectId: string,
@@ -409,9 +410,9 @@ async function readiness(projectId: string, review: Row | null, tx: Executor) {
       stale: false,
     };
   const source = await sourceState(projectId, tx);
-  const stale = !sourceRevisionsMatch(
-    review.source_stage_revisions,
-    source.revisions
+  const stale = !jsonValuesEqual(
+    review.source_stage_revisions as JsonValue,
+    source.revisions as JsonValue
   );
   const blockers = [
     ...source.blockers,

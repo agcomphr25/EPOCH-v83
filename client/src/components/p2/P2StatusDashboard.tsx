@@ -35,8 +35,12 @@ interface POStatus {
   dueDate: string;
   totalItems: number;
   completedItems: number;
+  shippedItems?: number;
+  needsFinalizationItems?: number;
   scheduledItems: number;
   inProductionItems: number;
+  productionPipelineItems?: number;
+  missingItems?: number;
   scrappedItems?: number;
   pendingItems: number;
   hasBOMsNeeded: boolean;
@@ -328,7 +332,7 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                           <div className="flex items-center justify-between text-sm">
                             <span>Progress</span>
                             <span className="font-medium">
-                              {po.completedItems} / {po.totalItems} items
+                              {po.shippedItems ?? po.completedItems} / {po.totalItems} shipped
                             </span>
                           </div>
                           <Progress value={getProgressPercentage(po)} className="h-2" />
@@ -345,6 +349,12 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                               {po.inProductionItems} in production
                             </span>
                           )}
+                          {(po.needsFinalizationItems ?? 0) > 0 && (
+                            <span className="flex items-center gap-1 text-orange-600">
+                              <CheckCircle className="h-3 w-3" />
+                              {po.needsFinalizationItems} need finalization
+                            </span>
+                          )}
                           {po.scheduledItems > 0 && (
                             <span className="flex items-center gap-1 text-green-600">
                               <Clock className="h-3 w-3" />
@@ -357,10 +367,10 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                               {po.scrappedItems} scrapped
                             </span>
                           )}
-                          {po.pendingItems > 0 && (
+                          {(po.missingItems ?? po.pendingItems) > 0 && (
                             <span className="flex items-center gap-1 text-amber-600">
-                              <Clock className="h-3 w-3" />
-                              {po.pendingItems} pending
+                              <AlertCircle className="h-3 w-3" />
+                              {po.missingItems ?? po.pendingItems} missing
                             </span>
                           )}
                         </div>

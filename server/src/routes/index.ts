@@ -20,6 +20,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { buildP2SerializedUnitLedger } from '../lib/p2SerializedUnitLedger';
 import { softAuth, authenticateToken, sessionAwareAuth, requireAdminOrOwner } from '../../middleware/auth';
 import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
 import employeesRoutes from './employees';
@@ -4854,26 +4855,35 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const orderedQtyByPoId = new Map<number, number>(
         orderedQtyRows.map((r: any) => [Number(r.poId), Number(r.orderedQty) || 0])
       );
-      const shippedQtyRows = poIds.length > 0
+      const shippedSerializedItemRows = allPoIds.length > 0
         ? await optionalP2Rows(
-            'shipped lot quantity',
+            'shipped serialized-unit membership',
             dbPool.query(
-              `SELECT po_id AS "poId", COALESCE(SUM(quantity), 0)::int AS "shippedQty"
-               FROM p2_lot_numbers
-               WHERE po_id = ANY($1)
+              `SELECT
+                 lot.po_id AS "poId",
+                 shipped_item.id AS "serializedItemId"
+               FROM p2_lot_numbers lot
+               CROSS JOIN LATERAL jsonb_array_elements_text(
+                 COALESCE(lot.serialized_item_ids, '[]'::jsonb)
+               ) AS shipped_item(id)
+               WHERE lot.po_id = ANY($1)
                  AND (
-                   COALESCE(UPPER(status), '') IN ('SHIPPED', 'CLOSED', 'COMPLETE', 'COMPLETED')
-                   OR shipped_at IS NOT NULL
-                   OR packing_slip_id IS NOT NULL
-                 )
-               GROUP BY po_id`,
-              [poIds]
+                   COALESCE(UPPER(lot.status), '') = 'SHIPPED'
+                   OR lot.shipped_at IS NOT NULL
+                 )`,
+              [allPoIds]
             )
           )
         : [];
-      const shippedQtyByPoId = new Map<number, number>(
-        shippedQtyRows.map((r: any) => [Number(r.poId), Number(r.shippedQty) || 0])
-      );
+      const shippedSerializedItemIdsByPoId = new Map<number, Set<string>>();
+      for (const row of shippedSerializedItemRows) {
+        const poId = Number(row.poId);
+        const serializedItemId = String(row.serializedItemId ?? '').trim().toLowerCase();
+        if (!Number.isFinite(poId) || !serializedItemId) continue;
+        const ids = shippedSerializedItemIdsByPoId.get(poId) ?? new Set<string>();
+        ids.add(serializedItemId);
+        shippedSerializedItemIdsByPoId.set(poId, ids);
+      }
       
       p2StatusStage = 'building P2 status response';
       const poStatuses = pos.map((po: any) => {
@@ -4885,64 +4895,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const travelerProjectStats = linkedProject?.projectId
           ? travelerStatsByProject.get(String(linkedProject.projectId))
           : null;
-        const travelerCompletedItems = Number(travelerProjectStats?.completedQty ?? 0);
-        const travelerInProductionItems = Number(travelerProjectStats?.inProductionQty ?? 0);
         const travelerTotalItems = Number(travelerProjectStats?.totalQty ?? 0);
-        const sumStats = (rows: Array<any | undefined>) => rows.some(Boolean)
-          ? {
-              totalQty: rows.reduce((sum, row) => sum + Number(row?.totalQty ?? 0), 0),
-              completedQty: rows.reduce((sum, row) => sum + Number(row?.completedQty ?? 0), 0),
-              inProductionQty: rows.reduce((sum, row) => sum + Number(row?.inProductionQty ?? 0), 0),
-            }
-            : null;
-        const legacyP2Stats = sumStats(familyPoIds.map((id) => legacyStatsByPoId.get(id)));
-        const legacyProjectStats = sumStats(familyPoIds.map((id) => legacyProjectStatsByPoId.get(id)));
-        const legacyStats = sumStats([legacyP2Stats, legacyProjectStats]);
-        
-        // Use actual column names: status (ACTIVE/COMPLETED/SCRAPPED/HOLD) and currentDepartment
-        const serializedCompletedItems = poItems.filter((s: any) => {
-          const status = String(s.status || '').trim().toUpperCase();
-          const dept = String(s.currentDepartment || '').trim().toUpperCase();
-          return ['COMPLETED', 'COMPLETE', 'SHIPPED', 'CLOSED'].includes(status)
-            || ['SHIPPED', 'SHIPPING', 'CLOSED'].includes(dept)
-            || s.shippedAt
-            || s.packingSlipId;
-        }).length;
-        const legacyCompletedItems = Number(legacyStats?.completedQty ?? 0);
-        const shippedLotCompletedItems = familyPoIds.reduce(
-          (sum, familyPoId) => sum + (shippedQtyByPoId.get(familyPoId) ?? 0),
-          0
-        );
-        const completedItems = Math.max(
-          serializedCompletedItems,
-          legacyCompletedItems,
-          shippedLotCompletedItems,
-          travelerCompletedItems
-        );
-
-        const scheduledItems = poItems.filter((s: any) => {
-          if (s.status !== 'ACTIVE') return false;
-          const dept = normalizeP2ControlDepartment(s.currentDepartment || '');
-          return dept === 'Layup';
-        }).length;
-
         const scrappedItems = poItems.filter((s: any) => {
           const status = String(s.status || '').trim().toUpperCase();
           return status === 'SCRAPPED' || status === 'SCRAP';
         }).length;
-
-        const serializedInProductionItems = poItems.filter((s: any) => {
-          if (s.status !== 'ACTIVE') return false;
-          const dept = normalizeP2ControlDepartment(s.currentDepartment || '');
-          // Scheduled Layup work is not floor production yet.
-          return dept !== 'Pending Layup' && dept !== 'Layup' && dept !== '';
-        }).length;
-        const legacyInProductionItems = Number(legacyStats?.inProductionQty ?? 0);
-        const rawInProductionItems = Math.max(
-          serializedInProductionItems,
-          legacyInProductionItems,
-          travelerInProductionItems
-        );
 
         // totalItems is the sum of ordered quantities across all line items so that
         // lines without serialized items generated yet are still reflected on the card.
@@ -4954,14 +4911,21 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const totalItems = currentPoOrderedQty > 0
           ? currentPoOrderedQty
           : Math.max(familyOrderedQty, travelerTotalItems, poItems.length);
-        const inProductionItems = Math.min(
-          rawInProductionItems,
-          Math.max(0, totalItems - completedItems)
+        const shippedSerializedItemIds = new Set<string>();
+        for (const familyPoId of familyPoIds) {
+          for (const id of shippedSerializedItemIdsByPoId.get(familyPoId) ?? []) {
+            shippedSerializedItemIds.add(id);
+          }
+        }
+        const ledger = buildP2SerializedUnitLedger(
+          totalItems,
+          poItems,
+          shippedSerializedItemIds,
         );
-
-        // pendingItems = everything not yet completed or in-production (including
-        // line item quantities that haven't had serialized items generated yet).
-        const pendingItems = Math.max(0, totalItems - completedItems - scheduledItems - inProductionItems - scrappedItems);
+        const completedItems = ledger.shipped;
+        const scheduledItems = ledger.scheduled;
+        const inProductionItems = ledger.activeProduction;
+        const pendingItems = ledger.missing;
         
         const rawStatus = normalizeP2Status(po.status) || 'OPEN';
 
@@ -4977,8 +4941,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           dueDate: po.expectedDelivery,
           totalItems,
           completedItems,
+          shippedItems: ledger.shipped,
+          needsFinalizationItems: ledger.finalization,
           scheduledItems,
           inProductionItems,
+          productionPipelineItems: ledger.productionPipeline,
+          missingItems: ledger.missing,
           scrappedItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,

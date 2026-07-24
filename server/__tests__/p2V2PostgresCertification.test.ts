@@ -544,7 +544,13 @@ async function createFixture(
       actor
     );
     const readinessId = readiness.review.id;
-    await submitPreproduction(projectId, readinessId, 0, actor);
+    const readinessLockVersion = Number(readiness.review.lock_version);
+    await submitPreproduction(
+      projectId,
+      readinessId,
+      readinessLockVersion,
+      actor
+    );
     for (const [index, role] of [
       'PROJECT_MANAGEMENT',
       'ENGINEERING',
@@ -554,7 +560,7 @@ async function createFixture(
       await decidePreproduction(
         projectId,
         readinessId,
-        index + 1,
+        readinessLockVersion + index + 1,
         role,
         'APPROVED',
         'Phase 8 certification',
@@ -567,7 +573,12 @@ async function createFixture(
         }
       );
     }
-    await completePreproduction(projectId, readinessId, 5, actor);
+    await completePreproduction(
+      projectId,
+      readinessId,
+      readinessLockVersion + 5,
+      actor
+    );
     const release = await approveProductionRelease(projectId, actor);
     return {
       projectId,

@@ -62,9 +62,13 @@ jobs:
         run: npx drizzle-kit push --force
 
       - name: First safe-boot migration run
+        env:
+          SAFE_BOOT_MIGRATIONS_ONLY: 'true'
         run: npm run maintenance:safe-migrations
 
       - name: Second safe-boot migration run
+        env:
+          SAFE_BOOT_MIGRATIONS_ONLY: 'true'
         run: npm run maintenance:safe-migrations
 
       - name: Run isolated PostgreSQL certification

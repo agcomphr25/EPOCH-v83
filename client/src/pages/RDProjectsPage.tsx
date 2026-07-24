@@ -53,6 +53,7 @@ import { ProjectFormInstancesPanel } from '@/components/design-control/ProjectFo
 import { EngineeringChangeRequestRegister } from '@/components/design-control/EngineeringChangeRequestRegister';
 import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
 import { PostReleaseChangePanel } from '@/components/design-control/PostReleaseChangePanel';
+import { ControlledCopyPanel } from '@/components/design-control/ControlledCopyPanel';
 
 interface EmployeeOption {
   id: number;
@@ -2211,6 +2212,10 @@ export default function RDProjectsPage() {
                             projectId={selectedProject.id}
                           />
                           <PostReleaseChangePanel
+                            projectId={selectedProject.id}
+                            recordId={activeDesignControlRecord.id}
+                          />
+                          <ControlledCopyPanel
                             projectId={selectedProject.id}
                             recordId={activeDesignControlRecord.id}
                           />

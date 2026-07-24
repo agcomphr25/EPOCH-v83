@@ -27,6 +27,7 @@ import {
   DesignControlTemplateSchemaNotReadyError,
   requiredDesignControlTemplateMigration,
 } from '../services/designControlTemplateSchemaReadiness';
+import { assertNoOutstandingCopiesForRevision } from '../services/controlledPrintedCopyService';
 
 const router = Router();
 
@@ -90,6 +91,14 @@ const evidence = (req: Request) => ({
     null,
   userAgent: req.headers['user-agent'] ?? null,
 });
+const requireControlledCopyExceptionAuthority = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  if (!req.body?.controlledCopyException) return next();
+  return requirePermission('documents.controlled_copy.admin')(req, res, next);
+};
 
 const sendError = (res: Response, error: unknown) => {
   if (error instanceof ControlledDocumentError) {
@@ -258,6 +267,7 @@ router.post(
 router.post(
   '/:templateKey/revisions/:revisionId/release',
   requirePermission('documents.template.release'),
+  requireControlledCopyExceptionAuthority,
   async (req, res) => {
     try {
       const context = await exactContext(
@@ -265,6 +275,24 @@ router.post(
         req.params.revisionId
       );
       const reason = String(req.body.reason ?? '');
+      if (
+        context.template.activeTemplateRevisionId &&
+        context.template.activeTemplateRevisionId !== req.params.revisionId
+      ) {
+        await assertNoOutstandingCopiesForRevision(
+          context.template.activeTemplateRevisionId,
+          req.body.controlledCopyException
+            ? {
+                reason: String(req.body.controlledCopyException.reason),
+                actor: {
+                  ...actor(req),
+                  displayName: actor(req).username,
+                  capabilities: [],
+                },
+              }
+            : undefined
+        );
+      }
       const artifact = await prepareReleasedBlankPdf({
         templateKey: req.params.templateKey,
         revisionId: req.params.revisionId,
@@ -301,6 +329,7 @@ router.post(
 router.post(
   '/:templateKey/revisions/:revisionId/obsolete',
   requirePermission('documents.template.obsolete'),
+  requireControlledCopyExceptionAuthority,
   async (req, res) => {
     try {
       const context = await exactContext(
@@ -308,6 +337,19 @@ router.post(
         req.params.revisionId
       );
       const reason = String(req.body.reason ?? '');
+      await assertNoOutstandingCopiesForRevision(
+        req.params.revisionId,
+        req.body.controlledCopyException
+          ? {
+              reason: String(req.body.controlledCopyException.reason),
+              actor: {
+                ...actor(req),
+                displayName: actor(req).username,
+                capabilities: [],
+              },
+            }
+          : undefined
+      );
       await transitionControlledRevision({
         documentId: context.template.document!.id,
         revisionId: context.revision.documentVersionHistoryId,

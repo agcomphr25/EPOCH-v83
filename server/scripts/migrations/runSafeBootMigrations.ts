@@ -239,6 +239,7 @@ export const safeMigrationFiles = [
   '0213_design_control_project_form_instances.sql',
   '0214_engineering_change_requests.sql',
   '0215_engineering_change_notices.sql',
+  '0216_post_release_design_change_gating.sql',
   '0210_repair_freezer_temperature_tracking.sql',
   '0212_project_preproduction_launch_safety.sql',
   'investigation_308_order_duplication.sql',
@@ -267,6 +268,7 @@ export const criticalMigrationFiles = new Set([
   '0213_design_control_project_form_instances.sql',
   '0214_engineering_change_requests.sql',
   '0215_engineering_change_notices.sql',
+  '0216_post_release_design_change_gating.sql',
   '0210_repair_freezer_temperature_tracking.sql',
   '0212_project_preproduction_launch_safety.sql',
 ]);

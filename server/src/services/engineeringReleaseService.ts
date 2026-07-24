@@ -619,6 +619,19 @@ export async function submitEngineeringRelease(input: {
       };
     }
 
+    if (
+      preview.proposedReleaseRevision !== 'A' ||
+      preview.releaseHistory.length > 0
+    ) {
+      return {
+        status: 'blocked' as const,
+        missingEvidence: [
+          'Revision B+ must use the ECN-authorized post-release Engineering Release endpoint',
+        ],
+        preview,
+      };
+    }
+
     const projectForms =
       preview.proposedReleaseRevision === 'A'
         ? await getProjectFormReleaseReadiness(context.record.id, tx as DbClient)
@@ -672,6 +685,16 @@ export async function submitEngineeringRelease(input: {
       designControlRecordId: context.record.id,
       releaseNumber: preview.proposedReleaseNumber,
       releaseRevision: preview.proposedReleaseRevision,
+      releaseSequence: 1,
+      releaseType: 'INITIAL',
+      releaseReason: 'Initial Design Control release',
+      releaseChecksum: stableHash({
+        releaseType: 'INITIAL',
+        sequence: 1,
+        revision: preview.proposedReleaseRevision,
+        readiness: preview,
+        approvals: authenticatedApprovals,
+      }),
       releaseStatus: 'RELEASED',
       productName: preview.productName,
       effectiveDate,

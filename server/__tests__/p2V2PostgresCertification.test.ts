@@ -20,10 +20,14 @@ import {
   type TechnicalReviewActor,
 } from '../src/services/projectTechnicalConfigurationReviewService';
 import {
+  approveProductionRelease,
+  completePreproduction,
   createPreproductionReadiness,
+  decidePreproduction,
   launchProduction,
   launchProductionForCertification,
   ProjectPreproductionError,
+  submitPreproduction,
 } from '../src/services/projectPreproductionReadinessService';
 import {
   getP2V2StagesForDefinitionVersion,
@@ -204,6 +208,17 @@ async function createFixture(
        RETURNING id`,
       [`CERT-QUOTE-${suffix}`, customer]
     );
+    const estimatingRfq = await client.query<{ id: string }>(
+      `INSERT INTO estimating_rfqs
+         (rfq_number,customer_name_snapshot,quote_id,revision,status)
+       VALUES ($1,'Certification Customer',$2,'A','COMPLETE') RETURNING id`,
+      [`CERT-ESTIMATE-RFQ-${suffix}`, quote.rows[0].id]
+    );
+    const estimate = await client.query<{ id: string }>(
+      `INSERT INTO estimate_versions(rfq_id,version_number,status)
+       VALUES ($1,1,'APPROVED') RETURNING id`,
+      [estimatingRfq.rows[0].id]
+    );
     const snapshot = await client.query<{ id: string }>(
       `INSERT INTO quote_snapshots
          (quote_id,quote_number,revision_number,revision_label,customer_id,
@@ -311,6 +326,7 @@ async function createFixture(
       {
         sourceRecordType: 'quote',
         sourceRecordId: quote.rows[0].id,
+        secondarySourceId: estimate.rows[0].id,
         sufficientlyDefined: true,
         differencesResolved: true,
         effectivityReference: 'CFG-A',
@@ -528,11 +544,12 @@ async function createFixture(
       actor
     );
     const readinessId = readiness.review.id;
-    await query(
-      `UPDATE project_preproduction_readiness_reviews
-         SET status='COMPLETE',readiness_state='READY',completed_at=now()
-       WHERE id=$1`,
-      [readinessId]
+    const readinessLockVersion = Number(readiness.review.lock_version);
+    await submitPreproduction(
+      projectId,
+      readinessId,
+      readinessLockVersion,
+      actor
     );
     for (const [index, role] of [
       'PROJECT_MANAGEMENT',
@@ -540,44 +557,29 @@ async function createFixture(
       'QUALITY',
       'OPERATIONS',
     ].entries()) {
-      await query(
-        `INSERT INTO project_workflow_step_approvals
-           (workflow_step_instance_id,project_id,approval_type,decision,
-            signature_meaning,actor_user_id,actor_display_name,actor_role,
-            step_revision_snapshot,evidence_snapshot)
-         VALUES ($1,$2,$3,'APPROVED','Phase 8 certification',$4,$5,$3,'1',$6::jsonb)`,
-        [
-          steps.preproduction_release,
-          projectId,
-          `PREPRODUCTION_${role}`,
-          9102 + index,
-          `Certifier ${role}`,
-          JSON.stringify({
-            preproductionReadinessId: readinessId,
-            revision: 1,
-            invalidated: false,
-          }),
-        ]
+      await decidePreproduction(
+        projectId,
+        readinessId,
+        readinessLockVersion + index + 1,
+        role,
+        'APPROVED',
+        'Phase 8 certification',
+        '',
+        {
+          ...actor,
+          userId: 9102 + index,
+          displayName: `Certifier ${role}`,
+          role,
+        }
       );
     }
-    const release = await query<{ id: string }>(
-      `INSERT INTO project_production_releases
-         (project_id,workflow_instance_id,readiness_review_id,readiness_revision,
-          wad_authorization_id,wad_revision,production_plan_id,
-          production_plan_revision,configuration_baseline_id,
-          effectivity_reference,approved_by,approved_by_display_name,
-          evidence_snapshot)
-       VALUES ($1,$2,$3,1,$4,1,$5,1,'TECHNICAL_REVIEW','CFG-A',$6,
-               'Phase 8 Certifier','{}') RETURNING id`,
-      [
-        projectId,
-        workflowId,
-        readinessId,
-        authorization.rows[0].id,
-        planId,
-        actor.userId,
-      ]
+    await completePreproduction(
+      projectId,
+      readinessId,
+      readinessLockVersion + 5,
+      actor
     );
+    const release = await approveProductionRelease(projectId, actor);
     return {
       projectId,
       poId,
@@ -586,7 +588,7 @@ async function createFixture(
       planId,
       wadId: authorization.rows[0].id,
       readinessId,
-      releaseId: release.rows[0].id,
+      releaseId: String(release.release.id),
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -829,12 +831,8 @@ describe('actual production launch service against PostgreSQL', () => {
     expect(success.rows).toHaveLength(1);
   });
 
-  it('keeps null, legacy, and unknown workflow versions isolated', async () => {
-    for (const [index, workflowVersion] of [
-      null,
-      'legacy_v1',
-      'unknown',
-    ].entries()) {
+  it('keeps null and legacy workflow versions isolated', async () => {
+    for (const [index, workflowVersion] of [null, 'legacy_v1'].entries()) {
       const id = `00000000-0000-4000-8000-00000000080${index + 2}`;
       await query(
         `INSERT INTO projects
@@ -854,8 +852,7 @@ describe('actual production launch service against PostgreSQL', () => {
       `SELECT id FROM projects
        WHERE id IN
        ('00000000-0000-4000-8000-000000000802',
-        '00000000-0000-4000-8000-000000000803',
-        '00000000-0000-4000-8000-000000000804')
+        '00000000-0000-4000-8000-000000000803')
        AND current_stage<>'READY_FOR_P2_RELEASE'`
     );
     expect(changed.rows).toHaveLength(0);

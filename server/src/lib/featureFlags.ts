@@ -41,7 +41,7 @@ export const salariedDraftEntryEnabled: boolean = envBool('SALARIED_DRAFT_ENTRY_
  * launch validation are complete.
  */
 export function isP2V2ProductionLaunchEnabled(): boolean {
-  return envBool('P2_V2_PRODUCTION_LAUNCH_ENABLED', false);
+  return process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED === 'true';
 }
 
 /**

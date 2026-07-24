@@ -304,6 +304,10 @@ export async function runSafeBootMigrations() {
 
   console.log(`✅ Pre-deploy migrations: ${appliedCount}/${safeMigrationFiles.length} applied (or already correct)`);
 
+  // Certification replays only the migration mechanism. The remaining helpers
+  // are application-startup maintenance and may retain long-lived resources.
+  if (process.env.SAFE_BOOT_MIGRATIONS_ONLY === 'true') return;
+
   try {
     const { logCriticalSchemaHealth } = await import('../../utils/schemaHealth');
     await logCriticalSchemaHealth();

@@ -11,13 +11,27 @@ import {
 } from '../scripts/migrations/runSafeBootMigrations';
 import { isP2V2ProductionLaunchEnabled } from '../src/lib/featureFlags';
 import {
-  plannedProductionCounts,
-  resolveFirstProductionDepartment,
-} from '../src/services/projectPreproductionRules';
+  createCommercialReview,
+  type CommercialActor,
+  type CommercialStage,
+} from '../src/services/projectCommercialReviewService';
+import {
+  createTechnicalConfigurationReview,
+  type TechnicalReviewActor,
+} from '../src/services/projectTechnicalConfigurationReviewService';
+import {
+  createPreproductionReadiness,
+  launchProduction,
+  launchProductionForCertification,
+  ProjectPreproductionError,
+} from '../src/services/projectPreproductionReadinessService';
+import {
+  getP2V2StagesForDefinitionVersion,
+  P2_V2_DEFINITION_VERSION,
+} from '../src/services/projectWorkflowRegistry';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL is required');
-
 const databaseUrl = new URL(connectionString);
 if (
   databaseUrl.hostname !== '127.0.0.1' ||
@@ -28,151 +42,603 @@ if (
   );
 }
 
-const pool = new Pool({ connectionString, max: 8 });
+const pool = new Pool({ connectionString, max: 12 });
+const actor: CommercialActor & TechnicalReviewActor = {
+  userId: 9101,
+  username: 'phase8-certifier',
+  displayName: 'Phase 8 Certifier',
+  role: 'ADMIN',
+};
+const baseProjectId = '00000000-0000-4000-8000-000000000801';
 
-async function resetCertificationSchema() {
-  await pool.query(`
-    DROP SCHEMA IF EXISTS p2_v2_cert CASCADE;
-    CREATE SCHEMA p2_v2_cert;
-    CREATE TABLE p2_v2_cert.projects (
-      id uuid PRIMARY KEY,
-      workflow_version text,
-      status text NOT NULL,
-      stage8_active boolean NOT NULL DEFAULT false,
-      launch_count integer NOT NULL DEFAULT 0
-    );
-    CREATE TABLE p2_v2_cert.launches (
-      id uuid PRIMARY KEY,
-      project_id uuid NOT NULL REFERENCES p2_v2_cert.projects(id),
-      idempotency_key text NOT NULL,
-      evidence jsonb NOT NULL,
-      UNIQUE(project_id, idempotency_key),
-      UNIQUE(project_id)
-    );
-    CREATE TABLE p2_v2_cert.serialized_items (
-      id uuid PRIMARY KEY,
-      project_id uuid NOT NULL REFERENCES p2_v2_cert.projects(id),
-      part_number text NOT NULL,
-      department text NOT NULL,
-      UNIQUE(project_id, part_number, id)
-    );
-    CREATE TABLE p2_v2_cert.production_orders (
-      id uuid PRIMARY KEY,
-      project_id uuid NOT NULL REFERENCES p2_v2_cert.projects(id),
-      part_number text NOT NULL,
-      quantity integer NOT NULL CHECK (quantity > 0),
-      department text NOT NULL,
-      routing_revision integer NOT NULL,
-      wad_revision integer NOT NULL,
-      effectivity text NOT NULL,
-      UNIQUE(project_id, part_number)
-    );
-    CREATE TABLE p2_v2_cert.audit_events (
-      id bigserial PRIMARY KEY,
-      project_id uuid NOT NULL,
-      event_type text NOT NULL,
-      payload jsonb NOT NULL DEFAULT '{}'::jsonb
-    );
-  `);
+type Fixture = {
+  projectId: string;
+  poId: number;
+  workflowId: string;
+  steps: Record<string, string>;
+  planId: string;
+  wadId: string;
+  readinessId: string;
+  releaseId: string;
+};
+
+async function query<T extends Record<string, unknown>>(
+  text: string,
+  values: unknown[] = []
+) {
+  return pool.query<T>(text, values);
 }
 
-async function syntheticLaunch(
+async function markStageComplete(
   projectId: string,
-  key: string,
-  failAt?: 'SERIAL' | 'ORDER' | 'STAGE8' | 'STATUS'
+  stage: CommercialStage,
+  reviewId: string
 ) {
+  await query(
+    `UPDATE project_commercial_stage_reviews
+       SET status='COMPLETE', sufficiently_defined=true,
+           differences_resolved=true, completed_at=now()
+     WHERE id=$1`,
+    [reviewId]
+  );
+  await query(
+    `UPDATE project_workflow_step_instances
+       SET status='COMPLETE', completed_at=now()
+     WHERE project_id=$1 AND step_type=$2`,
+    [projectId, stage]
+  );
+}
+
+async function createFixture(
+  projectId = baseProjectId,
+  suffix = 'A'
+): Promise<Fixture> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const locked = await client.query(
-      `SELECT * FROM p2_v2_cert.projects WHERE id=$1 FOR UPDATE`,
-      [projectId]
+    const customer = `CERT-${suffix}`;
+    const poNumber = `CERT-PO-${suffix}`;
+    await client.query(
+      `INSERT INTO p2_customers(customer_id,customer_name,rfq_prefix)
+         VALUES ($1,'Certification Customer','CRT')
+       ON CONFLICT DO NOTHING`,
+      [customer]
     );
-    if (locked.rows[0]?.workflow_version !== 'p2_v2')
-      throw new Error('WORKFLOW_VERSION_NOT_SUPPORTED');
-    const prior = await client.query(
-      `SELECT * FROM p2_v2_cert.launches WHERE project_id=$1`,
-      [projectId]
+    await client.query(
+      `INSERT INTO inventory_items
+         (ag_part_number,name,type,item_type,manufactured_category,
+          manufacturing_level,manufacturing_department)
+         VALUES
+         ($1,'Parent Assembly','Manufactured','MANUFACTURED','ASSEMBLY','FINAL','Assembly'),
+         ($2,'Machined Child','Manufactured','MANUFACTURED','MACHINED_PART','COMPONENT','CNC')
+       ON CONFLICT (ag_part_number) DO NOTHING`,
+      [`PARENT-${suffix}`, `CHILD-${suffix}`]
     );
-    if (prior.rowCount) {
-      if (prior.rows[0].idempotency_key === key) {
-        await client.query('ROLLBACK');
-        return prior.rows[0];
-      }
-      throw new Error('CONFLICTING_LAUNCH');
+    const po = await client.query<{ id: number }>(
+      `INSERT INTO p2_purchase_orders
+         (po_number,customer_id,customer_name,po_date,expected_delivery,status,
+          revision_number,is_current_revision)
+       VALUES ($1,$2,'Certification Customer',CURRENT_DATE,CURRENT_DATE+30,
+               'READY_FOR_P2_RELEASE',1,true)
+       RETURNING id`,
+      [poNumber, customer]
+    );
+    const poId = po.rows[0].id;
+    await client.query(
+      `INSERT INTO p2_purchase_order_items
+         (po_id,inventory_item_id,part_number,part_name,quantity,specifications)
+       SELECT $1,id,ag_part_number,name,2,'Released configuration'
+       FROM inventory_items WHERE ag_part_number=$2`,
+      [poId, `PARENT-${suffix}`]
+    );
+    await client.query(
+      `INSERT INTO projects
+         (id,project_code,project_name,customer_id,workflow_version,current_stage,
+          po_id,status)
+       VALUES ($1,$2,'Phase 8 real launch certification',$3,'p2_v2',
+               'READY_FOR_P2_RELEASE',$4,'active')`,
+      [projectId, `CERT-PROJECT-${suffix}`, customer, poId]
+    );
+    const workflow = await client.query<{ id: string }>(
+      `INSERT INTO project_workflow_instances
+         (project_id,workflow_version,definition_version,status)
+       VALUES ($1,'p2_v2',$2,'ACTIVE') RETURNING id`,
+      [projectId, P2_V2_DEFINITION_VERSION]
+    );
+    const workflowId = workflow.rows[0].id;
+    const steps: Record<string, string> = {};
+    for (const stage of getP2V2StagesForDefinitionVersion(
+      P2_V2_DEFINITION_VERSION
+    )) {
+      const step = await client.query<{ id: string }>(
+        `INSERT INTO project_workflow_step_instances
+           (workflow_instance_id,project_id,step_type,step_order,label_snapshot,
+            description_snapshot,status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [
+          workflowId,
+          projectId,
+          stage.type,
+          stage.order,
+          stage.label,
+          stage.description,
+          [
+            'rfq_risk_assessment',
+            'estimate_quote',
+            'contract_review',
+            'technical_configuration_review',
+            'production_planning',
+            'wad_authorization',
+            'preproduction_release',
+          ].includes(stage.type)
+            ? 'COMPLETE'
+            : stage.type === 'production_quality'
+              ? 'NOT_STARTED'
+              : 'NOT_APPLICABLE',
+        ]
+      );
+      steps[stage.type] = step.rows[0].id;
     }
     await client.query(
-      `INSERT INTO p2_v2_cert.serialized_items
-       VALUES (gen_random_uuid(),$1,'PARENT','Assembly'),
-              (gen_random_uuid(),$1,'CHILD','CNC')`,
-      [projectId]
-    );
-    if (failAt === 'SERIAL') throw new Error('FAULT_SERIAL');
-    await client.query(
-      `INSERT INTO p2_v2_cert.production_orders
-       VALUES (gen_random_uuid(),$1,'PARENT',2,'Assembly',3,4,'CFG-A'),
-              (gen_random_uuid(),$1,'CHILD',4,'CNC',7,4,'CFG-A')`,
-      [projectId]
-    );
-    if (failAt === 'ORDER') throw new Error('FAULT_ORDER');
-    await client.query(
-      `UPDATE p2_v2_cert.projects SET stage8_active=true WHERE id=$1`,
-      [projectId]
-    );
-    if (failAt === 'STAGE8') throw new Error('FAULT_STAGE8');
-    await client.query(
-      `UPDATE p2_v2_cert.projects
-       SET status='IN_PRODUCTION',launch_count=launch_count+1 WHERE id=$1`,
-      [projectId]
-    );
-    if (failAt === 'STATUS') throw new Error('FAULT_STATUS');
-    const result = await client.query(
-      `INSERT INTO p2_v2_cert.launches
-       VALUES (gen_random_uuid(),$1,$2,$3::jsonb) RETURNING *`,
+      `INSERT INTO rfq_risk_assessments
+         (rfq_number,customer_id,customer_name,form_data,bid_decision,status)
+       VALUES ($1,$2,'Certification Customer',
+               $3::jsonb,'bid','submitted')`,
       [
-        projectId,
-        key,
+        `CERT-RFQ-${suffix}`,
+        customer,
         JSON.stringify({
-          travelersCreated: 0,
-          inventoryDemandsCreated: 0,
-          reservationsCreated: 0,
-          shippingRecordsCreated: 0,
-          closingRecordsCreated: 0,
+          parts: [{ partNumber: `PARENT-${suffix}`, quantity: 2 }],
+          requestedDueDate: '2030-01-01',
         }),
       ]
     );
-    await client.query('COMMIT');
-    await pool.query(
-      `INSERT INTO p2_v2_cert.audit_events(project_id,event_type)
-       VALUES ($1,'P2_V2_PRODUCTION_LAUNCHED')`,
-      [projectId]
+    const rfq = await client.query<{ id: number }>(
+      `SELECT id FROM rfq_risk_assessments WHERE rfq_number=$1`,
+      [`CERT-RFQ-${suffix}`]
     );
-    return result.rows[0];
+    const quote = await client.query<{ id: string }>(
+      `INSERT INTO quotes
+         (quote_number,customer_id,customer_name,status,valid_until)
+       VALUES ($1,$2,'Certification Customer','SENT',now()+interval '1 year')
+       RETURNING id`,
+      [`CERT-QUOTE-${suffix}`, customer]
+    );
+    const snapshot = await client.query<{ id: string }>(
+      `INSERT INTO quote_snapshots
+         (quote_id,quote_number,revision_number,revision_label,customer_id,
+          customer_name,valid_until)
+       VALUES ($1,$2,1,'Rev 1',$3,'Certification Customer',now()+interval '1 year')
+       RETURNING id`,
+      [quote.rows[0].id, `CERT-QUOTE-${suffix}`, customer]
+    );
+    await client.query(
+      `UPDATE p2_purchase_orders SET source_quote_id=$1 WHERE id=$2`,
+      [quote.rows[0].id, poId]
+    );
+    await client.query(
+      `INSERT INTO quote_po_reconciliations
+         (quote_id,quote_snapshot_id,p2_purchase_order_id,po_number,status)
+       VALUES ($1,$3,$2,$4,'MATCH')`,
+      [quote.rows[0].id, poId, snapshot.rows[0].id, poNumber]
+    );
+    const template = await client.query<{ id: number }>(
+      `INSERT INTO contract_review_checklist_templates
+         (name,status,is_active) VALUES ($1,'approved',true) RETURNING id`,
+      [`Phase 8 ${suffix}`]
+    );
+    const contract = await client.query<{ id: string }>(
+      `INSERT INTO contract_review_checklist_instances
+         (checklist_template_id,project_id,p2_purchase_order_id,status)
+       VALUES ($1,$2,$3,'approved') RETURNING id`,
+      [template.rows[0].id, projectId, poId]
+    );
+    const bomParent = await client.query<{ id: string }>(
+      `INSERT INTO boms(parent_part_ag_number,code,is_active)
+       VALUES ($1,$2,true) RETURNING id`,
+      [`PARENT-${suffix}`, `BOM-PARENT-${suffix}`]
+    );
+    const bomParentRevision = await client.query<{ id: string }>(
+      `INSERT INTO bom_revisions(bom_id,rev_code,is_released)
+       VALUES ($1,'A',true) RETURNING id`,
+      [bomParent.rows[0].id]
+    );
+    const bomChild = await client.query<{ id: string }>(
+      `INSERT INTO boms(parent_part_ag_number,code,is_active)
+       VALUES ($1,$2,true) RETURNING id`,
+      [`CHILD-${suffix}`, `BOM-CHILD-${suffix}`]
+    );
+    const bomChildRevision = await client.query<{ id: string }>(
+      `INSERT INTO bom_revisions(bom_id,rev_code,is_released)
+       VALUES ($1,'A',true) RETURNING id`,
+      [bomChild.rows[0].id]
+    );
+    await client.query(
+      `INSERT INTO bom_lines(revision_id,child_part_ag_number,qty_per)
+       VALUES ($1,$2,2)`,
+      [bomParentRevision.rows[0].id, `CHILD-${suffix}`]
+    );
+    const routingTemplate = await client.query<{ id: string }>(
+      `INSERT INTO production_control_templates
+         (name,template_type,approval_status,created_by)
+       VALUES ($1,'ROUTING','APPROVED','phase8') RETURNING id`,
+      [`Phase 8 Routing ${suffix}`]
+    );
+    const parentRouting = await client.query<{ id: string }>(
+      `INSERT INTO part_routings
+         (inventory_item_id,project_id,part_number,part_name,department_sequence,
+          traceability_config,created_from_template_id,created_by)
+       VALUES ((SELECT id::text FROM inventory_items WHERE ag_part_number=$2),
+               $1,$2,'Parent Assembly','["Assembly"]','{}',$3,'phase8')
+       RETURNING id`,
+      [projectId, `PARENT-${suffix}`, routingTemplate.rows[0].id]
+    );
+    const childRouting = await client.query<{ id: string }>(
+      `INSERT INTO part_routings
+         (inventory_item_id,project_id,part_number,part_name,department_sequence,
+          traceability_config,created_from_template_id,created_by)
+       VALUES ((SELECT id::text FROM inventory_items WHERE ag_part_number=$2),
+               $1,$2,'Machined Child','["CNC"]','{}',$3,'phase8')
+       RETURNING id`,
+      [projectId, `CHILD-${suffix}`, routingTemplate.rows[0].id]
+    );
+    await client.query('COMMIT');
+
+    const rfqReview = await createCommercialReview(
+      projectId,
+      'rfq_risk_assessment',
+      {
+        sourceRecordType: 'rfq_risk_assessment',
+        sourceRecordId: String(rfq.rows[0].id),
+        requirements: {
+          parts: [{ partNumber: `PARENT-${suffix}`, quantity: 2 }],
+          requestedDueDate: '2030-01-01',
+        },
+        sufficientlyDefined: true,
+        differencesResolved: true,
+        effectivityReference: 'CFG-A',
+      },
+      actor
+    );
+    await markStageComplete(
+      projectId,
+      'rfq_risk_assessment',
+      rfqReview.review.id
+    );
+    const quoteReview = await createCommercialReview(
+      projectId,
+      'estimate_quote',
+      {
+        sourceRecordType: 'quote',
+        sourceRecordId: quote.rows[0].id,
+        sufficientlyDefined: true,
+        differencesResolved: true,
+        effectivityReference: 'CFG-A',
+      },
+      actor
+    );
+    await markStageComplete(projectId, 'estimate_quote', quoteReview.review.id);
+    const contractReview = await createCommercialReview(
+      projectId,
+      'contract_review',
+      {
+        sourceRecordType: 'contract_review_instance',
+        sourceRecordId: contract.rows[0].id,
+        sufficientlyDefined: true,
+        differencesResolved: true,
+        effectivityReference: 'CFG-A',
+      },
+      actor
+    );
+    await markStageComplete(
+      projectId,
+      'contract_review',
+      contractReview.review.id
+    );
+    const technical = await createTechnicalConfigurationReview(
+      projectId,
+      {
+        technicalBaseline: {
+          partRequirements: [
+            {
+              partNumber: `PARENT-${suffix}`,
+              quantity: 2,
+              drawingNumber: `DWG-${suffix}`,
+              drawingRevision: 'A',
+            },
+          ],
+        },
+        sufficientlyDefined: true,
+        effectivityReference: 'CFG-A',
+      },
+      actor
+    );
+    await query(
+      `UPDATE project_technical_configuration_reviews
+         SET status='COMPLETE',completed_at=now() WHERE id=$1`,
+      [technical.review.id]
+    );
+    await query(
+      `UPDATE project_workflow_step_instances SET status='COMPLETE'
+         WHERE id=$1`,
+      [steps.technical_configuration_review]
+    );
+    const configurationRevision = `Technical Review 1:${technical.review.source_revision}`;
+    const plan = await query<{ id: string }>(
+      `INSERT INTO project_production_plans
+         (project_id,workflow_instance_id,workflow_step_instance_id,
+          revision_number,status,po_id,po_revision_number,po_number,
+          configuration_baseline_id,configuration_revision,effectivity_type,
+          effectivity_reference,requirement_source,planning_basis)
+       VALUES ($1,$2,$3,1,'RELEASED',$4,1,$5,'TECHNICAL_REVIEW',$6,
+               'PROJECT','CFG-A','CERTIFIED_BASELINE','Phase 8 certification')
+       RETURNING id`,
+      [
+        projectId,
+        workflowId,
+        steps.production_planning,
+        poId,
+        poNumber,
+        configurationRevision,
+      ]
+    );
+    const planId = plan.rows[0].id;
+    for (const item of [
+      {
+        part: `PARENT-${suffix}`,
+        name: 'Parent Assembly',
+        path: 'root',
+        parent: null,
+        qty: 2,
+        bom: bomParent.rows[0].id,
+        revision: bomParentRevision.rows[0].id,
+        routing: parentRouting.rows[0].id,
+        serial: true,
+      },
+      {
+        part: `CHILD-${suffix}`,
+        name: 'Machined Child',
+        path: 'root/child',
+        parent: `PARENT-${suffix}`,
+        qty: 4,
+        bom: bomChild.rows[0].id,
+        revision: bomChildRevision.rows[0].id,
+        routing: childRouting.rows[0].id,
+        serial: false,
+      },
+    ]) {
+      await query(
+        `INSERT INTO project_production_plan_items
+           (production_plan_id,project_id,part_number,part_name,parent_part_number,
+            assembly_path,extended_project_quantity,make_buy,is_manufactured,
+            bom_id,bom_revision_id,bom_revision,bom_release_status,routing_id,
+            routing_revision,routing_release_status,effectivity_reference,
+            drawing_number,drawing_revision,
+            routing_requirement,traveler_requirement,traveler_type,
+            work_instruction_requirement,work_instruction_basis,
+            inspection_requirement,inspection_extent,fai_requirement,fai_reason,
+            traceability_level,serialization_required,lot_traceability_required,
+            special_process_source,packaging_instruction_requirement,notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'MAKE',true,$8,$9,'A','RELEASED',
+                 $10,'1','RELEASED','CFG-A','DWG-CERT','A',
+                 'REQUIRED','REQUIRED','INDIVIDUAL',
+                 'DRAWING_SPEC_SUFFICIENT','Released drawing','REQUIRED',
+                 'IN_PROCESS_AND_FINAL','NOT_REQUIRED','Certification fixture',
+                 'SERIAL',$11,false,'NONE','NOT_REQUIRED_APPROVED',
+                 'Packaging controlled by drawing')`,
+        [
+          planId,
+          projectId,
+          item.part,
+          item.name,
+          item.parent,
+          item.path,
+          item.qty,
+          item.bom,
+          item.revision,
+          item.routing,
+          item.serial,
+        ]
+      );
+    }
+    const wad = await query<{ id: string }>(
+      `INSERT INTO production_work_orders
+         (work_order_number,project_id,part_number,quantity,status,wad_status,
+          department_budgets,total_budget_hours,material_budget_amount,wizard_data)
+       VALUES ($1,$2,$3,2,'RELEASED','APPROVED','{"Assembly":{"hours":8}}',
+               8,100,'{}') RETURNING id`,
+      [`CERT-WAD-${suffix}`, projectId, `PARENT-${suffix}`]
+    );
+    const inherited = (
+      await query(
+        `SELECT * FROM project_production_plan_items
+                   WHERE production_plan_id=$1 ORDER BY assembly_path`,
+        [planId]
+      )
+    ).rows;
+    const chargeCode = await query<{ id: number }>(
+      `INSERT INTO charge_codes(code,description,department,active)
+       VALUES ($1,'Phase 8 certification','Assembly',true) RETURNING id`,
+      [`CERT-${suffix}`]
+    );
+    const authorization = await query<{ id: string }>(
+      `INSERT INTO project_wad_authorizations
+         (project_id,workflow_instance_id,workflow_step_instance_id,
+          production_plan_id,production_plan_revision,wad_work_order_id,
+          wad_number,wad_revision,status,po_id,po_revision_number,
+          configuration_revision,effectivity_reference,
+          inherited_requirements_snapshot,budget_snapshot)
+       VALUES ($1,$2,$3,$4,1,$5,$6,1,'RELEASED',$7,1,$8,'CFG-A',$9::jsonb,$10::jsonb)
+       RETURNING id`,
+      [
+        projectId,
+        workflowId,
+        steps.wad_authorization,
+        planId,
+        wad.rows[0].id,
+        `CERT-WAD-${suffix}`,
+        poId,
+        configurationRevision,
+        JSON.stringify({ manufacturedItems: inherited }),
+        JSON.stringify({
+          departments: [
+            {
+              department: 'Assembly',
+              hours: 8,
+              chargeCodeId: chargeCode.rows[0].id,
+              zeroBudgetJustification: null,
+            },
+          ],
+          materialBudget: 100,
+          outsideProcessingBudget: 0,
+          startDate: '2030-01-01',
+          dueDate: '2030-02-01',
+          risks: [
+            {
+              description: 'Fixture',
+              owner: 'Phase 8',
+              control: 'Isolated DB',
+            },
+          ],
+          responsibleOwners: ['Phase 8'],
+        }),
+      ]
+    );
+    await query(
+      `UPDATE production_work_orders
+       SET wizard_data=jsonb_build_object('__p2V2Authorization',
+           jsonb_build_object('authorizationId',$1::text))
+       WHERE id=$2`,
+      [authorization.rows[0].id, wad.rows[0].id]
+    );
+    const readiness = await createPreproductionReadiness(
+      projectId,
+      {
+        checklist: [
+          {
+            key: 'certified',
+            category: 'Phase 8',
+            label: 'All real readiness evidence is current',
+            applicability: 'REQUIRED',
+            satisfied: true,
+          },
+        ],
+        effectivityReference: 'CFG-A',
+      },
+      actor
+    );
+    const readinessId = readiness.review.id;
+    await query(
+      `UPDATE project_preproduction_readiness_reviews
+         SET status='COMPLETE',readiness_state='READY',completed_at=now()
+       WHERE id=$1`,
+      [readinessId]
+    );
+    for (const [index, role] of [
+      'PROJECT_MANAGEMENT',
+      'ENGINEERING',
+      'QUALITY',
+      'OPERATIONS',
+    ].entries()) {
+      await query(
+        `INSERT INTO project_workflow_step_approvals
+           (workflow_step_instance_id,project_id,approval_type,decision,
+            signature_meaning,actor_user_id,actor_display_name,actor_role,
+            step_revision_snapshot,evidence_snapshot)
+         VALUES ($1,$2,$3,'APPROVED','Phase 8 certification',$4,$5,$3,'1',$6::jsonb)`,
+        [
+          steps.preproduction_release,
+          projectId,
+          `PREPRODUCTION_${role}`,
+          9102 + index,
+          `Certifier ${role}`,
+          JSON.stringify({
+            preproductionReadinessId: readinessId,
+            revision: 1,
+            invalidated: false,
+          }),
+        ]
+      );
+    }
+    const release = await query<{ id: string }>(
+      `INSERT INTO project_production_releases
+         (project_id,workflow_instance_id,readiness_review_id,readiness_revision,
+          wad_authorization_id,wad_revision,production_plan_id,
+          production_plan_revision,configuration_baseline_id,
+          effectivity_reference,approved_by,approved_by_display_name,
+          evidence_snapshot)
+       VALUES ($1,$2,$3,1,$4,1,$5,1,'TECHNICAL_REVIEW','CFG-A',$6,
+               'Phase 8 Certifier','{}') RETURNING id`,
+      [
+        projectId,
+        workflowId,
+        readinessId,
+        authorization.rows[0].id,
+        planId,
+        actor.userId,
+      ]
+    );
+    return {
+      projectId,
+      poId,
+      workflowId,
+      steps,
+      planId,
+      wadId: authorization.rows[0].id,
+      readinessId,
+      releaseId: release.rows[0].id,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
-    await pool.query(
-      `INSERT INTO p2_v2_cert.audit_events(project_id,event_type,payload)
-       VALUES ($1,'P2_V2_PRODUCTION_LAUNCH_FAILED',$2::jsonb)`,
-      [projectId, JSON.stringify({ keyPresent: Boolean(key) })]
-    );
     throw error;
   } finally {
     client.release();
   }
 }
 
+async function cleanLaunchState(fixture: Fixture) {
+  const result = await query<{
+    current_stage: string;
+    po_status: string;
+    production_status: string;
+    serials: number;
+    orders: number;
+    launches: number;
+  }>(
+    `SELECT p.current_stage,po.status po_status,s.status production_status,
+       (SELECT count(*)::int FROM p2_serialized_items WHERE po_id=po.id) serials,
+       (SELECT count(*)::int FROM p2_production_orders WHERE p2_po_id=po.id) orders,
+       (SELECT count(*)::int FROM project_production_launches WHERE project_id=p.id) launches
+     FROM projects p
+     JOIN p2_purchase_orders po ON po.id=p.po_id
+     JOIN project_workflow_step_instances s
+       ON s.project_id=p.id AND s.step_type='production_quality'
+     WHERE p.id=$1`,
+    [fixture.projectId]
+  );
+  return result.rows[0];
+}
+
 beforeAll(async () => {
-  expect(isP2V2ProductionLaunchEnabled()).toBe(true);
-  await resetCertificationSchema();
+  await query(`TRUNCATE audit_events RESTART IDENTITY CASCADE`);
+  await query(
+    `INSERT INTO employees(id,employee_code,name,user_role)
+     SELECT value,'PHASE8-'||value,'Phase 8 Certifier '||value,'ADMIN'
+     FROM generate_series(9101,9110) value ON CONFLICT (id) DO NOTHING`
+  );
+  await query(
+    `INSERT INTO users(id,username,password_hash,role,employee_id)
+     SELECT value,'phase8-certifier-'||value,'not-used','ADMIN',value
+     FROM generate_series(9101,9110) value ON CONFLICT (id) DO NOTHING`
+  );
 });
 
 afterAll(async () => {
-  await pool.query('DROP SCHEMA IF EXISTS p2_v2_cert CASCADE');
   await pool.end();
 });
 
 describe('Phase 8 migration certification', () => {
-  it('uses the explicit deterministic safe-boot order including duplicate prefixes', () => {
+  it('uses deterministic safe-boot order, checksum, and critical 0212 migration', () => {
     expect(new Set(safeMigrationFiles).size).toBe(safeMigrationFiles.length);
     expect(
       safeMigrationFiles.filter((file) => file.startsWith('0210_'))
@@ -189,95 +655,113 @@ describe('Phase 8 migration certification', () => {
     expect(
       criticalMigrationFiles.has('0212_project_preproduction_launch_safety.sql')
     ).toBe(true);
-  });
-
-  it('preserves the certified 0210 readiness migration checksum', () => {
-    const sql = readFileSync(
+    const migration = readFileSync(
       path.resolve('migrations/0210_project_preproduction_readiness.sql')
     );
-    expect(createHash('sha1').update(sql).digest('hex')).toBe(
+    expect(createHash('sha1').update(migration).digest('hex')).toBe(
       '586207c1d54f765129aa1f45944ea5f27746326b'
     );
   });
 
-  it('has Phase 1-8 tables and the 0212 constraints applied and validatable', async () => {
-    const tables = await pool.query(
-      `SELECT to_regclass(name) AS table_name FROM unnest($1::text[]) name`,
-      [
-        [
-          'project_workflow_instances',
-          'project_workflow_step_instances',
-          'project_production_plans',
-          'project_wad_authorizations',
-          'project_preproduction_readiness_reviews',
-          'project_production_releases',
-          'project_production_launches',
-        ],
-      ]
+  it('has Phase 1-8 tables and validated 0212 constraints', async () => {
+    await query(
+      `ALTER TABLE project_production_releases
+         VALIDATE CONSTRAINT project_production_releases_readiness_project_fkey;
+       ALTER TABLE project_production_launches
+         VALIDATE CONSTRAINT project_production_launches_release_project_fkey;
+       ALTER TABLE project_production_launches
+         VALIDATE CONSTRAINT project_production_launches_complete_only_check`
     );
-    expect(tables.rows.every((row) => row.table_name)).toBe(true);
-    const constraints = await pool.query(`
-      SELECT conname, convalidated FROM pg_constraint
-      WHERE conname IN (
-        'project_production_releases_readiness_project_fkey',
+    const constraints = await query<{ conname: string; convalidated: boolean }>(
+      `SELECT conname,convalidated FROM pg_constraint WHERE conname IN
+       ('project_production_releases_readiness_project_fkey',
         'project_production_launches_release_project_fkey',
-        'project_production_launches_complete_only_check'
-      ) ORDER BY conname`);
-    expect(constraints.rowCount).toBe(3);
-    for (const row of constraints.rows) {
-      await pool.query(
-        `ALTER TABLE ${
-          row.conname.includes('releases')
-            ? 'project_production_releases'
-            : 'project_production_launches'
-        } VALIDATE CONSTRAINT ${row.conname}`
-      );
-    }
+        'project_production_launches_complete_only_check')
+       ORDER BY conname`
+    );
+    expect(constraints.rows).toHaveLength(3);
+    expect(constraints.rows.every((row) => row.convalidated)).toBe(true);
   });
 });
 
-describe('Phase 8 real PostgreSQL launch safety', () => {
-  const projectId = '00000000-0000-4000-8000-000000000801';
-
-  beforeAll(async () => {
-    await pool.query(
-      `INSERT INTO p2_v2_cert.projects VALUES
-       ($1,'p2_v2','READY_FOR_P2_RELEASE',false,0),
-       ('00000000-0000-4000-8000-000000000802',NULL,'READY',false,0),
-       ('00000000-0000-4000-8000-000000000803','legacy_v1','READY',false,0),
-       ('00000000-0000-4000-8000-000000000804','unknown','READY',false,0)`,
-      [projectId]
-    );
-  });
-
-  it.each(['SERIAL', 'ORDER', 'STAGE8', 'STATUS'] as const)(
-    'rolls back a controlled %s failure and retains only failure audit',
-    async (fault) => {
+describe('real launch feature gate', () => {
+  it.each([undefined, '', 'false', 'TRUE', '1', ' true '])(
+    'fails closed for %s, returns 503, records blocked audit, and writes no launch state',
+    async (value) => {
+      if (value === undefined)
+        delete process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED;
+      else process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED = value;
+      expect(isP2V2ProductionLaunchEnabled()).toBe(false);
       await expect(
-        syntheticLaunch(projectId, `fail-${fault}`, fault)
-      ).rejects.toThrow();
-      const state = await pool.query(
-        `SELECT p.status,p.stage8_active,
-          (SELECT count(*)::int FROM p2_v2_cert.serialized_items WHERE project_id=p.id) serials,
-          (SELECT count(*)::int FROM p2_v2_cert.production_orders WHERE project_id=p.id) orders,
-          (SELECT count(*)::int FROM p2_v2_cert.launches WHERE project_id=p.id) launches
-         FROM p2_v2_cert.projects p WHERE id=$1`,
-        [projectId]
-      );
-      expect(state.rows[0]).toMatchObject({
-        status: 'READY_FOR_P2_RELEASE',
-        stage8_active: false,
-        serials: 0,
-        orders: 0,
-        launches: 0,
+        launchProduction(baseProjectId, `blocked-${String(value)}`, actor)
+      ).rejects.toMatchObject({
+        code: 'P2_V2_PRODUCTION_LAUNCH_DISABLED',
+        status: 503,
       });
+      const audit = await query<{ action: string }>(
+        `SELECT action FROM audit_events
+         WHERE action='P2_V2_PRODUCTION_LAUNCH_BLOCKED'
+         ORDER BY id DESC LIMIT 1`
+      );
+      expect(audit.rows[0]?.action).toBe('P2_V2_PRODUCTION_LAUNCH_BLOCKED');
     }
   );
 
-  it('serializes concurrent keys, establishes one result, and rejects conflict', async () => {
+  it('enables only exact lowercase true', () => {
+    process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED = 'true';
+    expect(isP2V2ProductionLaunchEnabled()).toBe(true);
+  });
+});
+
+describe('actual production launch service against PostgreSQL', () => {
+  let fixture: Fixture;
+  beforeAll(async () => {
+    process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED = 'true';
+    fixture = await createFixture();
+  });
+
+  it.each([
+    'AFTER_SERIALIZED_ITEMS',
+    'AFTER_FIRST_PRODUCTION_ORDER',
+    'AFTER_ALL_PRODUCTION_ORDERS',
+    'AFTER_STAGE_8_ACTIVATION',
+    'AFTER_PROJECT_STATUS_UPDATE',
+  ] as const)('rolls back %s and retains only failure audit', async (point) => {
+    await expect(
+      launchProductionForCertification(
+        fixture.projectId,
+        `fault-${point}`,
+        actor,
+        (current) => {
+          if (current === point) throw new Error(`CERTIFICATION_${point}`);
+        }
+      )
+    ).rejects.toThrow(`CERTIFICATION_${point}`);
+    expect(await cleanLaunchState(fixture)).toMatchObject({
+      current_stage: 'READY_FOR_P2_RELEASE',
+      po_status: 'READY_FOR_P2_RELEASE',
+      production_status: 'NOT_STARTED',
+      serials: 0,
+      orders: 0,
+      launches: 0,
+    });
+    const audits = await query<{ action: string }>(
+      `SELECT action FROM audit_events
+       WHERE payload_json->>'projectId'=$1
+         AND action LIKE 'P2_V2_PRODUCTION_LAUNCH_%'
+       ORDER BY id`,
+      [fixture.projectId]
+    );
+    expect(audits.rows.some((row) => row.action.endsWith('FAILED'))).toBe(true);
+    expect(audits.rows.some((row) => row.action.endsWith('LAUNCHED'))).toBe(
+      false
+    );
+  });
+
+  it('serializes concurrent keys, permits same-key retry, and rejects a conflict', async () => {
     const results = await Promise.allSettled([
-      syntheticLaunch(projectId, 'key-a'),
-      syntheticLaunch(projectId, 'key-b'),
+      launchProduction(fixture.projectId, 'concurrent-key-a', actor),
+      launchProduction(fixture.projectId, 'concurrent-key-b', actor),
     ]);
     expect(
       results.filter((result) => result.status === 'fulfilled')
@@ -285,133 +769,95 @@ describe('Phase 8 real PostgreSQL launch safety', () => {
     expect(
       results.filter((result) => result.status === 'rejected')
     ).toHaveLength(1);
-    const established = await syntheticLaunch(projectId, 'key-a').catch(() =>
-      syntheticLaunch(projectId, 'key-b')
+    const launch = await query<{ idempotency_key: string }>(
+      `SELECT idempotency_key FROM project_production_launches
+       WHERE project_id=$1`,
+      [fixture.projectId]
     );
-    expect(established.project_id).toBe(projectId);
-    await expect(syntheticLaunch(projectId, 'key-c')).rejects.toThrow(
-      'CONFLICTING_LAUNCH'
-    );
+    await expect(
+      launchProduction(fixture.projectId, launch.rows[0].idempotency_key, actor)
+    ).resolves.toMatchObject({ projectStatus: 'IN_PRODUCTION' });
+    await expect(
+      launchProduction(fixture.projectId, 'conflicting-key', actor)
+    ).rejects.toBeInstanceOf(ProjectPreproductionError);
   });
 
-  it('reconciles exact records, links, departments, once-only state and deferrals', async () => {
-    const [project, serials, orders, launches] = await Promise.all([
-      pool.query(`SELECT * FROM p2_v2_cert.projects WHERE id=$1`, [projectId]),
-      pool.query(
-        `SELECT * FROM p2_v2_cert.serialized_items WHERE project_id=$1`,
-        [projectId]
-      ),
-      pool.query(
-        `SELECT * FROM p2_v2_cert.production_orders WHERE project_id=$1 ORDER BY part_number`,
-        [projectId]
-      ),
-      pool.query(`SELECT * FROM p2_v2_cert.launches WHERE project_id=$1`, [
-        projectId,
-      ]),
-    ]);
-    expect(project.rows[0]).toMatchObject({
-      status: 'IN_PRODUCTION',
-      stage8_active: true,
-      launch_count: 1,
+  it('reconciles exact hierarchy, routing, Stage 8, statuses, audit, and deferrals', async () => {
+    expect(await cleanLaunchState(fixture)).toMatchObject({
+      current_stage: 'IN_PRODUCTION',
+      po_status: 'IN_PRODUCTION',
+      production_status: 'IN_PROGRESS',
+      serials: 2,
+      orders: 6,
+      launches: 1,
     });
-    expect(serials.rowCount).toBe(2);
-    expect(orders.rows).toMatchObject([
-      {
-        part_number: 'CHILD',
-        quantity: 4,
-        department: 'CNC',
-        routing_revision: 7,
-        wad_revision: 4,
-        effectivity: 'CFG-A',
-      },
-      {
-        part_number: 'PARENT',
-        quantity: 2,
-        department: 'Assembly',
-        routing_revision: 3,
-        wad_revision: 4,
-        effectivity: 'CFG-A',
-      },
+    const orders = await query<{
+      sku: string;
+      department: string;
+      count: number;
+    }>(
+      `SELECT sku,department,count(*)::int count
+       FROM p2_production_orders WHERE p2_po_id=$1
+       GROUP BY sku,department ORDER BY sku`,
+      [fixture.poId]
+    );
+    expect(orders.rows).toEqual([
+      { sku: 'CHILD-A', department: 'CNC', count: 4 },
+      { sku: 'PARENT-A', department: 'Assembly', count: 2 },
     ]);
-    expect(launches).toHaveProperty('rowCount', 1);
-    expect(launches.rows[0].evidence).toMatchObject({
+    const launch = await query<{
+      production_evidence: Record<string, unknown>;
+    }>(
+      `SELECT production_evidence FROM project_production_launches
+       WHERE project_id=$1`,
+      [fixture.projectId]
+    );
+    expect(launch.rows[0].production_evidence).toMatchObject({
       travelersCreated: 0,
       inventoryDemandsCreated: 0,
       reservationsCreated: 0,
       shippingRecordsCreated: 0,
       closingRecordsCreated: 0,
     });
+    const success = await query(
+      `SELECT id FROM audit_events
+       WHERE action='P2_V2_PRODUCTION_LAUNCHED'
+         AND subject_id=(SELECT id::text FROM project_production_launches
+                         WHERE project_id=$1)`,
+      [fixture.projectId]
+    );
+    expect(success.rows).toHaveLength(1);
   });
 
-  it('routes canonical departments, multi-level manufactured items, and excludes purchased items', () => {
-    expect(resolveFirstProductionDepartment(['Assembly'], true)).toBe(
-      'Assembly'
-    );
-    expect(resolveFirstProductionDepartment(['Layup'], true)).toBe('Layup');
-    expect(resolveFirstProductionDepartment(['CNC'], true)).toBe('CNC');
-    expect(resolveFirstProductionDepartment(['Cutting'], true)).toBe(
-      'Cutting Table'
-    );
-    expect(resolveFirstProductionDepartment([], true)).toBeNull();
-    expect(
-      plannedProductionCounts([
-        {
-          part_number: 'PARENT',
-          extended_project_quantity: 2,
-          routing_id: 'r1',
-          routing_release_status: 'RELEASED',
-          department_sequence: ['Assembly'],
-        },
-        {
-          part_number: 'CHILD',
-          extended_project_quantity: 4,
-          routing_id: 'r2',
-          routing_release_status: 'RELEASED',
-          department_sequence: ['CNC'],
-        },
-      ])
-    ).toEqual(
-      new Map([
-        ['PARENT', 2],
-        ['CHILD', 4],
-      ])
-    );
-  });
-
-  it('keeps legacy and unknown workflow versions isolated and fail-closed', async () => {
-    for (const id of [
-      '00000000-0000-4000-8000-000000000802',
-      '00000000-0000-4000-8000-000000000803',
-      '00000000-0000-4000-8000-000000000804',
-    ]) {
-      await expect(syntheticLaunch(id, `legacy-${id}`)).rejects.toThrow(
-        'WORKFLOW_VERSION_NOT_SUPPORTED'
+  it('keeps null, legacy, and unknown workflow versions isolated', async () => {
+    for (const [index, workflowVersion] of [
+      null,
+      'legacy_v1',
+      'unknown',
+    ].entries()) {
+      const id = `00000000-0000-4000-8000-00000000080${index + 2}`;
+      await query(
+        `INSERT INTO projects
+           (id,project_code,project_name,customer_id,workflow_version,current_stage)
+         VALUES ($1,$2,'Legacy isolation','CERT-A',$3,'READY_FOR_P2_RELEASE')`,
+        [id, `LEGACY-${index}`, workflowVersion]
       );
+      await expect(
+        launchProduction(id, `legacy-${index}`, actor)
+      ).rejects.toMatchObject({
+        code: expect.stringMatching(
+          /P2_V2_REQUIRED|UNKNOWN_WORKFLOW_VERSION|WORKFLOW_INSTANCE_REQUIRED/
+        ),
+      });
     }
-    const rows = await pool.query(
-      `SELECT workflow_version,status,stage8_active,launch_count
-       FROM p2_v2_cert.projects WHERE id<>$1 ORDER BY id`,
-      [projectId]
+    const changed = await query(
+      `SELECT id FROM projects
+       WHERE id IN
+       ('00000000-0000-4000-8000-000000000802',
+        '00000000-0000-4000-8000-000000000803',
+        '00000000-0000-4000-8000-000000000804')
+       AND current_stage<>'READY_FOR_P2_RELEASE'`
     );
-    expect(rows.rows).toEqual([
-      {
-        workflow_version: null,
-        status: 'READY',
-        stage8_active: false,
-        launch_count: 0,
-      },
-      {
-        workflow_version: 'legacy_v1',
-        status: 'READY',
-        stage8_active: false,
-        launch_count: 0,
-      },
-      {
-        workflow_version: 'unknown',
-        status: 'READY',
-        stage8_active: false,
-        launch_count: 0,
-      },
-    ]);
+    expect(changed.rows).toHaveLength(0);
   });
 });

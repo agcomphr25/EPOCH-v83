@@ -36,6 +36,16 @@ export type PreproductionInput = {
   risksAndControls?: Array<{ risk: string; owner: string; control: string }>;
   effectivityReference: string;
 };
+export type ProductionLaunchCertificationFault =
+  | 'AFTER_SERIALIZED_ITEMS'
+  | 'AFTER_FIRST_PRODUCTION_ORDER'
+  | 'AFTER_ALL_PRODUCTION_ORDERS'
+  | 'AFTER_STAGE_8_ACTIVATION'
+  | 'AFTER_PROJECT_STATUS_UPDATE';
+
+type ProductionLaunchDependencies = {
+  fault?: (point: ProductionLaunchCertificationFault) => void | Promise<void>;
+};
 
 export class ProjectPreproductionError extends Error {
   constructor(
@@ -1007,10 +1017,11 @@ export async function approveProductionRelease(
   });
 }
 
-export async function launchProduction(
+async function launchProductionWithDependencies(
   projectId: string,
   idempotencyKey: string,
-  actor: PreproductionActor
+  actor: PreproductionActor,
+  dependencies: ProductionLaunchDependencies
 ) {
   if (!clean(idempotencyKey))
     throw new ProjectPreproductionError(
@@ -1203,11 +1214,14 @@ export async function launchProduction(
             ).map((entry) => entry.id)
           );
       }
+      await dependencies.fault?.('AFTER_SERIALIZED_ITEMS');
       const productionOrders = await storage.generateP2ProductionOrders(
         poId,
         undefined,
-        tx
+        tx,
+        () => dependencies.fault?.('AFTER_FIRST_PRODUCTION_ORDER')
       );
+      await dependencies.fault?.('AFTER_ALL_PRODUCTION_ORDERS');
       try {
         assertProductionCountsMatchPlan(
           plannedCounts,
@@ -1311,9 +1325,11 @@ export async function launchProduction(
         UPDATE project_workflow_step_instances SET status='IN_PROGRESS',
           started_at=COALESCE(started_at,now()),blocked_reason=NULL,updated_at=now()
         WHERE id=${productionStep.id}`);
+      await dependencies.fault?.('AFTER_STAGE_8_ACTIVATION');
       await tx.execute(sql`
         UPDATE projects SET current_stage='IN_PRODUCTION',stage_updated_at=now(),updated_at=now()
         WHERE id=${projectId}`);
+      await dependencies.fault?.('AFTER_PROJECT_STATUS_UPDATE');
       await tx.execute(sql`
         UPDATE p2_purchase_orders SET status='IN_PRODUCTION',updated_at=now() WHERE id=${poId}`);
       const [launch] = resultRows(
@@ -1388,3 +1404,22 @@ export async function launchProduction(
     throw error;
   }
 }
+
+export const launchProduction = (
+  projectId: string,
+  idempotencyKey: string,
+  actor: PreproductionActor
+) => launchProductionWithDependencies(projectId, idempotencyKey, actor, {});
+
+/**
+ * Direct-call certification seam. It changes no runtime behavior and is not
+ * reachable from HTTP; PostgreSQL certification uses it only to throw at
+ * transaction boundaries that cannot otherwise be observed externally.
+ */
+export const launchProductionForCertification = (
+  projectId: string,
+  idempotencyKey: string,
+  actor: PreproductionActor,
+  fault: NonNullable<ProductionLaunchDependencies['fault']>
+) =>
+  launchProductionWithDependencies(projectId, idempotencyKey, actor, { fault });

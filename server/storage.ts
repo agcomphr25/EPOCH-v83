@@ -1939,7 +1939,8 @@ export interface IStorage {
   generateP2ProductionOrders(
     poId: number,
     opts?: { onlyPoItemId?: number; quantityOverride?: number },
-    dbClient?: typeof db
+    dbClient?: typeof db,
+    onFirstInsert?: () => void | Promise<void>
   ): Promise<P2ProductionOrder[]>;
   addP2SerializedItemsForPoItem(
     poItemId: number,
@@ -16244,7 +16245,8 @@ export class DatabaseStorage implements IStorage {
   async generateP2ProductionOrders(
     poId: number,
     opts?: { onlyPoItemId?: number; quantityOverride?: number },
-    dbClient: DbOrTx = db
+    dbClient: DbOrTx = db,
+    onFirstInsert?: () => void | Promise<void>
   ): Promise<P2ProductionOrder[]> {
     const [po] = await dbClient
       .select()
@@ -16622,6 +16624,7 @@ export class DatabaseStorage implements IStorage {
         .returning();
 
       productionOrders.push(...inserted);
+      if (batchStart === 0 && inserted.length > 0) await onFirstInsert?.();
     }
 
     console.log(`\n✅ Generated ${productionOrders.length} production orders for manufactured items`);

@@ -10,6 +10,7 @@ on:
       - 'server/scripts/migrations/runSafeBootMigrations.ts'
       - 'server/src/lib/featureFlags.ts'
       - 'server/src/services/projectPreproductionReadinessService.ts'
+      - 'server/storage.ts'
       - 'server/__tests__/p2V2PostgresCertification.test.ts'
       - 'package.json'
       - 'package-lock.json'

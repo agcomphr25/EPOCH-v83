@@ -56,6 +56,7 @@ type Model = {
   release: { id: string; status: string; approved_at: string } | null;
   launch: { id: string; status: string; launched_at: string } | null;
   projectStatus: string;
+  productionLaunchEnabled: boolean;
   recommendedChecklist: ChecklistItem[];
 };
 
@@ -380,7 +381,9 @@ export default function P2V2PreproductionReadiness({
               onClick={() => setLaunchOpen(true)}
               disabled={
                 action.isPending ||
+                !data.productionLaunchEnabled ||
                 data.projectStatus !== 'READY_FOR_P2_RELEASE' ||
+                data.readiness.state !== 'READY' ||
                 Boolean(data.launch?.status === 'COMPLETE')
               }
               data-testid="launch-production"
@@ -389,6 +392,16 @@ export default function P2V2PreproductionReadiness({
               Launch Production
             </Button>
           </div>
+          {!data.productionLaunchEnabled && (
+            <Alert data-testid="production-launch-disabled">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Production Launch awaiting deployment validation</AlertTitle>
+              <AlertDescription>
+                Production Release remains available, but V2 production records
+                cannot be generated until deployment validation is complete.
+              </AlertDescription>
+            </Alert>
+          )}
           {data.release && (
             <p className="text-sm">
               Release {data.release.status} ·{' '}
@@ -408,11 +421,14 @@ export default function P2V2PreproductionReadiness({
           <DialogHeader>
             <DialogTitle>Launch production?</DialogTitle>
             <DialogDescription>
-              This revalidates the approved release, creates only missing
-              serialized units and production orders through the existing P2
-              services, routes items to their first valid department, activates
-              Stage 8, and changes the project to IN_PRODUCTION. The operation
-              is atomic and protected against duplicate retries.
+              This revalidates the approved release, creates the serialized
+              units required by the released plan and its exact manufactured
+              production orders through the existing P2 services, routes each
+              item to its released first department, activates Stage 8, and
+              changes the project to IN_PRODUCTION. Travelers, inventory
+              demands, reservations, shipping, and closing records are not
+              created by this action. The operation is atomic and protected
+              against duplicate retries.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

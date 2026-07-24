@@ -262,6 +262,7 @@ const KNOWN_DUPLICATE_PREFIXES = new Set<string>([
   '0188', // 0188_rd_projects.sql vs 0188b_design_control_add_rd_project_id.sql — remediation migration to add rd_project_id columns to pre-existing design_control_* tables
   '0192', // 0192_backfill_routed_timer_oven_cure_logs.sql vs 0192_engineering_packages.sql — backfill oven/cure timer history landed in same window as engineering packages
   '0201', // 0201_close_fully_shipped_p1_purchase_orders.sql vs 0201_freezer_temperature_logs.sql — parallel P1 PO closure reconciliation + freezer temperature logging merged in the same window
+  '0210', // Three merged migrations already share 0210; preserve them and put Phase 8C corrections in 0212
 ]);
 
 describe('Migration file structure', () => {

@@ -2,6 +2,9 @@
 -- Authoritative manufacturing records remain in their existing tables. This
 -- migration stores only controlled links and immutable review snapshots.
 
+CREATE UNIQUE INDEX IF NOT EXISTS project_production_launches_id_project_unique
+  ON project_production_launches(id, project_id);
+
 CREATE TABLE IF NOT EXISTS project_production_stage_reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL,

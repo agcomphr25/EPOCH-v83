@@ -52,6 +52,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { apiRequest } from '@/lib/queryClient';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ProjectFormInstancesPanel } from '@/components/design-control/ProjectFormInstancesPanel';
+import { EngineeringChangeRequestRegister } from '@/components/design-control/EngineeringChangeRequestRegister';
 
 type StatusTone = 'draft' | 'active' | 'review' | 'approved' | 'blocked' | 'released';
 
@@ -426,26 +427,7 @@ const validation: RegisterRow[] = [
   },
 ];
 
-const changes: RegisterRow[] = [
-  {
-    id: 'ECR-7025',
-    title: 'Revise insert bond prep note',
-    project: 'Bond fixture process update',
-    owner: 'Document Control',
-    status: 'approved',
-    evidence: 'ECR, redline, approval record',
-    due: '2026-07-16',
-  },
-  {
-    id: 'ECR-7033',
-    title: 'Add alternate material callout',
-    project: 'Composite antenna fairing redesign',
-    owner: 'Engineering',
-    status: 'review',
-    evidence: 'ECR package, material equivalency review',
-    due: '2026-07-28',
-  },
-];
+const changes: RegisterRow[] = [];
 
 const releases: ReleaseRow[] = [
   {
@@ -1162,10 +1144,17 @@ export default function QMSDesignControlPage() {
         </Card>
 
         {activeDesignControlRecordId && (
-          <ProjectFormInstancesPanel
-            recordId={activeDesignControlRecordId}
-            oversightMode
-          />
+          <>
+            <EngineeringChangeRequestRegister
+              projectId={activeDesignControlRecord?.rdProjectId}
+              recordId={activeDesignControlRecordId}
+              oversightMode
+            />
+            <ProjectFormInstancesPanel
+              recordId={activeDesignControlRecordId}
+              oversightMode
+            />
+          </>
         )}
 
         <div className="grid gap-4 md:grid-cols-4">
@@ -1727,8 +1716,12 @@ export default function QMSDesignControlPage() {
           </TabsContent>
 
           <TabsContent value="changes" className="space-y-4">
-            <SectionHeader icon={History} title="Engineering Changes" description="Change requests, impact review, redlines, approvals, implementation records, and revision history." action="New ECR" />
-            <RegisterTable rows={changes} onOpen={setSelectedRecord} />
+            <SectionHeader icon={History} title="Engineering Changes" description="Authoritative ECR impact review and immutable disposition history. ECN execution remains a later controlled phase." />
+            <EngineeringChangeRequestRegister
+              projectId={activeDesignControlRecord?.rdProjectId}
+              recordId={activeDesignControlRecordId}
+              oversightMode
+            />
           </TabsContent>
 
           <TabsContent value="release" className="space-y-4">

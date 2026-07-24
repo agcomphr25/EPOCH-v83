@@ -3,7 +3,12 @@ import { createHash } from 'crypto';
 import { sql } from 'drizzle-orm';
 
 import { db } from '../../db';
-import { recordAuditEvent, type AuditLedgerTx } from './auditLedgerService';
+import {
+  jsonValuesEqual,
+  recordAuditEvent,
+  type AuditLedgerTx,
+  type JsonValue,
+} from './auditLedgerService';
 import { evaluateCommercialBaseline } from './projectCommercialReviewService';
 import { resolveProjectWorkflowVersion } from './projectWorkflowVersionService';
 import { validateWorkflowInstanceIntegrity } from './projectWorkflowInstanceIntegrity';
@@ -82,6 +87,10 @@ const rows = <T extends Row>(value: unknown): T[] =>
     : ((value as { rows?: T[] } | null)?.rows ?? []);
 const clean = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
+const technicalSnapshotForComparison = (value: Row) => {
+  const { status: _status, updated_at: _updatedAt, ...po } = value?.po ?? {};
+  return { ...value, po } as JsonValue;
+};
 const hash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -348,7 +357,12 @@ async function readiness(projectId: string, review: Row | null, tx: Executor) {
   const evidence = await validateEvidence(review.released_evidence ?? [], tx);
   const blockers = [...evidence.blockers];
   const differences: string[] = [];
-  if (source.revision !== review.source_revision) {
+  const sourceRevisionChanged = source.revision !== review.source_revision;
+  const technicalSnapshotUnchanged = jsonValuesEqual(
+    technicalSnapshotForComparison(review.source_snapshot),
+    technicalSnapshotForComparison(source.snapshot)
+  );
+  if (sourceRevisionChanged && !technicalSnapshotUnchanged) {
     differences.push(
       'Customer PO, line-item, or BOM/configuration revision changed.'
     );

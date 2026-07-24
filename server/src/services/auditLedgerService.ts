@@ -111,6 +111,13 @@ export function canonicalize(value: unknown): string {
   );
 }
 
+export type JsonValue =
+  null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+export function jsonValuesEqual(left: JsonValue, right: JsonValue): boolean {
+  return canonicalize(left) === canonicalize(right);
+}
+
 function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input, 'utf8').digest('hex');
 }

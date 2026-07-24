@@ -3,7 +3,12 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { storage } from '../../storage';
 import { isP2V2ProductionLaunchEnabled } from '../lib/featureFlags';
-import { recordAuditEvent, type AuditLedgerTx } from './auditLedgerService';
+import {
+  jsonValuesEqual,
+  recordAuditEvent,
+  type AuditLedgerTx,
+  type JsonValue,
+} from './auditLedgerService';
 import { evaluateCommercialBaseline } from './projectCommercialReviewService';
 import { getCurrentProductionPlan } from './projectProductionPlanningService';
 import { evaluateTechnicalConfigurationBaseline } from './projectTechnicalConfigurationReviewService';
@@ -405,9 +410,10 @@ async function readiness(projectId: string, review: Row | null, tx: Executor) {
       stale: false,
     };
   const source = await sourceState(projectId, tx);
-  const stale =
-    JSON.stringify(review.source_stage_revisions) !==
-    JSON.stringify(source.revisions);
+  const stale = !jsonValuesEqual(
+    review.source_stage_revisions as JsonValue,
+    source.revisions as JsonValue
+  );
   const blockers = [
     ...source.blockers,
     ...checklistBlockers(review.checklist_snapshot ?? []),
@@ -985,7 +991,7 @@ export async function approveProductionRelease(
            configuration_baseline_id,effectivity_reference,approved_by,
            approved_by_display_name,evidence_snapshot)
         VALUES (${projectId},${ctx.instance.id},${review.id},${Number(review.revision_number)},
-          ${wad.id},${Number(wad.revision_number)},${plan.id},${Number(plan.revision_number)},
+          ${wad.id},${Number(wad.wad_revision)},${plan.id},${Number(plan.revision_number)},
           ${String(plan.configuration_baseline_id)},${review.effectivity_reference},
           ${actor.userId},${actor.displayName},
           ${JSON.stringify({ sourceRevisions: review.source_stage_revisions, approvals: (await approvals(review, tx)).map((a) => ({ type: a.approval_type, actor: a.actor_display_name, decidedAt: a.decided_at })) })}::jsonb)
@@ -1008,7 +1014,7 @@ export async function approveProductionRelease(
         payload: {
           projectId,
           readinessRevision: Number(review.revision_number),
-          wadRevision: Number(wad.revision_number),
+          wadRevision: Number(wad.wad_revision),
         },
       },
       tx
@@ -1278,10 +1284,10 @@ async function launchProductionWithDependencies(
       }
       const schedulable = resultRows(
         await tx.execute(sql`
-          SELECT si.id,si.po_item_id,si.part_number,si.part_routing_id,
-                 pr.department_sequence
-          FROM p2_serialized_items si
-          LEFT JOIN part_routings pr ON pr.id=si.part_routing_id
+           SELECT si.id,si.po_item_id,si.part_number,si.part_routing_id,
+                  pr.department_sequence
+           FROM p2_serialized_items si
+           LEFT JOIN part_routings pr ON pr.id::text=si.part_routing_id
           WHERE si.po_id=${poId} AND si.status='ACTIVE'
             AND si.current_department='Pending Layup'`)
       );

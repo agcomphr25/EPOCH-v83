@@ -24,6 +24,7 @@ import {
   completePreproduction,
   createPreproductionReadiness,
   decidePreproduction,
+  getPreproductionReadiness,
   launchProduction,
   launchProductionForCertification,
   ProjectPreproductionError,
@@ -720,6 +721,53 @@ describe('actual production launch service against PostgreSQL', () => {
   beforeAll(async () => {
     process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED = 'true';
     fixture = await createFixture();
+  });
+
+  it('keeps readiness and release current after PostgreSQL jsonb key normalization', async () => {
+    const readiness = await getPreproductionReadiness(fixture.projectId);
+    expect(readiness.readiness).toMatchObject({
+      ready: true,
+      blockers: [],
+      stale: false,
+    });
+    const state = await query<{
+      readiness_status: string;
+      release_status: string;
+    }>(
+      `SELECT r.status readiness_status,l.status release_status
+       FROM project_preproduction_readiness_reviews r
+       JOIN project_production_releases l
+         ON l.readiness_review_id=r.id AND l.project_id=r.project_id
+       WHERE r.project_id=$1`,
+      [fixture.projectId]
+    );
+    expect(state.rows).toEqual([
+      { readiness_status: 'COMPLETE', release_status: 'APPROVED' },
+    ]);
+  });
+
+  it('blocks production launch after a real baseline revision change', async () => {
+    const changedFixture = await createFixture(
+      '00000000-0000-4000-8000-000000000811',
+      'B'
+    );
+    await query(
+      `UPDATE project_commercial_stage_reviews
+       SET revision_number=revision_number+1
+       WHERE project_id=$1 AND stage_type='contract_review'`,
+      [changedFixture.projectId]
+    );
+    await expect(
+      launchProduction(changedFixture.projectId, 'changed-baseline', actor)
+    ).rejects.toMatchObject({ code: 'COMPLETED_READINESS_REQUIRED' });
+    expect(await cleanLaunchState(changedFixture)).toMatchObject({
+      current_stage: 'READY_FOR_P2_RELEASE',
+      po_status: 'READY_FOR_P2_RELEASE',
+      production_status: 'NOT_STARTED',
+      serials: 0,
+      orders: 0,
+      launches: 0,
+    });
   });
 
   it.each([

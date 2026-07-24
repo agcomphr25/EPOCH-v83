@@ -3,7 +3,12 @@ import { createHash } from 'crypto';
 import { sql } from 'drizzle-orm';
 
 import { db } from '../../db';
-import { recordAuditEvent, type AuditLedgerTx } from './auditLedgerService';
+import {
+  jsonValuesEqual,
+  recordAuditEvent,
+  type AuditLedgerTx,
+  type JsonValue,
+} from './auditLedgerService';
 import { resolveProjectWorkflowVersion } from './projectWorkflowVersionService';
 import { validateWorkflowInstanceIntegrity } from './projectWorkflowInstanceIntegrity';
 import {
@@ -61,6 +66,12 @@ const resultRows = <T extends Row>(value: unknown): T[] =>
     : ((value as { rows?: T[] } | null)?.rows ?? []);
 const clean = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
+const contractSnapshotForComparison = (value: Row) => {
+  const { secondarySourceId: _secondarySourceId, ...snapshot } = value ?? {};
+  const { po_updated_at: _poUpdatedAt, ...contract } =
+    snapshot.contract ?? {};
+  return { ...snapshot, contract } as JsonValue;
+};
 const hash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -482,7 +493,15 @@ async function blockers(
   );
   const values = [...source.eligibilityBlockers];
   const differences: string[] = [];
-  if (source.sourceRevision !== review.source_revision) {
+  const sourceRevisionChanged =
+    source.sourceRevision !== review.source_revision;
+  const contractSnapshotUnchanged =
+    stage === 'contract_review' &&
+    jsonValuesEqual(
+      contractSnapshotForComparison(review.source_snapshot),
+      contractSnapshotForComparison(source.snapshot)
+    );
+  if (sourceRevisionChanged && !contractSnapshotUnchanged) {
     differences.push('Authoritative source revision changed.');
     values.push('Review source is stale and requires a new revision.');
   }

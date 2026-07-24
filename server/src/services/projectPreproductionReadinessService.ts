@@ -1284,10 +1284,10 @@ async function launchProductionWithDependencies(
       }
       const schedulable = resultRows(
         await tx.execute(sql`
-          SELECT si.id,si.po_item_id,si.part_number,si.part_routing_id,
-                 pr.department_sequence
-          FROM p2_serialized_items si
-          LEFT JOIN part_routings pr ON pr.id=si.part_routing_id
+           SELECT si.id,si.po_item_id,si.part_number,si.part_routing_id,
+                  pr.department_sequence
+           FROM p2_serialized_items si
+           LEFT JOIN part_routings pr ON pr.id::text=si.part_routing_id
           WHERE si.po_id=${poId} AND si.status='ACTIVE'
             AND si.current_department='Pending Layup'`)
       );

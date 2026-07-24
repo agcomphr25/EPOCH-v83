@@ -24,6 +24,7 @@ import {
   completePreproduction,
   createPreproductionReadiness,
   decidePreproduction,
+  getPreproductionReadiness,
   launchProduction,
   launchProductionForCertification,
   ProjectPreproductionError,
@@ -723,6 +724,12 @@ describe('actual production launch service against PostgreSQL', () => {
   });
 
   it('keeps readiness and release current after PostgreSQL jsonb key normalization', async () => {
+    const readiness = await getPreproductionReadiness(fixture.projectId);
+    expect(readiness.readiness).toMatchObject({
+      ready: true,
+      blockers: [],
+      stale: false,
+    });
     const state = await query<{
       readiness_status: string;
       release_status: string;

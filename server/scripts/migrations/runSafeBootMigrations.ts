@@ -244,6 +244,7 @@ export const safeMigrationFiles = [
   '0216_post_release_design_change_gating.sql',
   '0217_freezer_na_readings.sql',
   '0218_as9100_audit_readiness.sql',
+  '0219_controlled_printed_copies.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -275,6 +276,7 @@ export const criticalMigrationFiles = new Set([
   '0216_post_release_design_change_gating.sql',
   '0217_freezer_na_readings.sql',
   '0218_as9100_audit_readiness.sql',
+  '0219_controlled_printed_copies.sql',
 ]);
 
 export async function runSafeBootMigrations() {

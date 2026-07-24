@@ -100,6 +100,9 @@ import projectFormsRoutes, {
 } from './projectForms';
 import engineeringChangeRequestsRoutes from './engineeringChangeRequests';
 import engineeringChangeNoticesRoutes from './engineeringChangeNotices';
+import controlledPrintedCopiesRoutes, {
+  controlledCopyScopeRouter,
+} from './controlledPrintedCopies';
 import vaultRoutes from './vault';
 import adminRoutes from './admin';
 import policiesRoutes from './policies';
@@ -1373,6 +1376,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/project-forms', projectFormsRoutes);
   app.use('/api', engineeringChangeRequestsRoutes);
   app.use('/api', engineeringChangeNoticesRoutes);
+  app.use('/api/controlled-copies', controlledPrintedCopiesRoutes);
+  app.use('/api', controlledCopyScopeRouter);
 
   // CMMC Secure Vault — classification management + immutable access audit log
   app.use('/api/vault', vaultRoutes);

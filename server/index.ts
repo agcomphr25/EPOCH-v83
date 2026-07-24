@@ -343,6 +343,7 @@ const publicRoutes = [
   '/api/cnc/operation-batches/station', // CNC operation batch station - badge authenticated floor flow
   '/api/timekeeping/kiosk', // Time Clock kiosk - PIN-based auth, no EPOCH session token
   '/api/work-orders/production/', // Labor budget override request/poll (kiosk, soft auth — individual mutation routes enforce permissions). Trailing slash keeps the bare /production listing endpoint behind strict auth.
+  '/api/controlled-copies/verify/', // Non-sensitive controlled-copy authenticity verification
 ];
 
 app.use('/api', (req, res, next) => {
@@ -4589,6 +4590,13 @@ async function initializeBackgroundServices() {
           { key: 'engineering.release.create', description: 'Create ECN-authorized Engineering Releases', category: 'engineering' },
           { key: 'engineering.release.approve', description: 'Approve controlled Engineering Releases', category: 'engineering' },
           { key: 'engineering.release.admin', description: 'Administer Engineering Release controls', category: 'engineering' },
+          { key: 'documents.controlled_copy.view', description: 'View accountable controlled printed copies', category: 'documents' },
+          { key: 'documents.controlled_copy.issue', description: 'Issue accountable controlled printed copies', category: 'documents' },
+          { key: 'documents.controlled_copy.return', description: 'Acknowledge, return, and scan controlled copies', category: 'documents' },
+          { key: 'documents.controlled_copy.reconcile', description: 'Reconcile and close returned controlled copies', category: 'documents' },
+          { key: 'documents.controlled_copy.destroy', description: 'Destroy controlled copies with evidence', category: 'documents' },
+          { key: 'documents.controlled_copy.report_lost', description: 'Report and assess lost controlled copies', category: 'documents' },
+          { key: 'documents.controlled_copy.admin', description: 'Administer exceptions and legacy copy reconciliation', category: 'documents' },
           { key: 'design.control.edit', description: 'Edit authoritative Design Control step drafts', category: 'design' },
           { key: 'design.control.submit', description: 'Submit complete Design Control content versions for approval', category: 'design' },
           { key: 'design.control.approve', description: 'Approve general Design Control approval slots', category: 'design' },

@@ -55,6 +55,7 @@ import { ProjectFormInstancesPanel } from '@/components/design-control/ProjectFo
 import { EngineeringChangeRequestRegister } from '@/components/design-control/EngineeringChangeRequestRegister';
 import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
 import { PostReleaseChangePanel } from '@/components/design-control/PostReleaseChangePanel';
+import { ControlledCopyPanel } from '@/components/design-control/ControlledCopyPanel';
 
 type StatusTone = 'draft' | 'active' | 'review' | 'approved' | 'blocked' | 'released';
 
@@ -1729,6 +1730,11 @@ export default function QMSDesignControlPage() {
               oversightMode
             />
             <PostReleaseChangePanel
+              projectId={activeDesignControlRecord?.rdProjectId}
+              recordId={activeDesignControlRecordId}
+              oversightMode
+            />
+            <ControlledCopyPanel
               projectId={activeDesignControlRecord?.rdProjectId}
               recordId={activeDesignControlRecordId}
               oversightMode

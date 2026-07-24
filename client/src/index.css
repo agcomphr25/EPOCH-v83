@@ -1115,6 +1115,12 @@
     border-color: #9a3412;
     color: #9a3412;
   }
+
+  .layup-badge-flattop {
+    background: #fef9c3;
+    border-color: #ca8a04;
+    color: #713f12;
+  }
   
   .layup-badge-stiller {
     background: #fef3c7;

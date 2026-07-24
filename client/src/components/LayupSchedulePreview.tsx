@@ -24,6 +24,7 @@ interface ScheduledItem {
   lopValue?: string | null;
   hasADL?: boolean;
   hasHeavyFill?: boolean;
+  isFlatTop?: boolean;
 }
 
 interface OverflowItem {
@@ -371,6 +372,11 @@ export function LayupSchedulePreview({
       border-color: #ea580c; 
       color: #9a3412;
     }
+    .badge-flattop {
+      background: linear-gradient(to bottom, #fef9c3, #fef08a);
+      border-color: #ca8a04;
+      color: #713f12;
+    }
     .badge-stiller { 
       background: linear-gradient(to bottom, #fef3c7, #fde68a);
       border-color: #d97706; 
@@ -476,12 +482,13 @@ export function LayupSchedulePreview({
               const hasStillerInlet = stillerInlets.some(pattern => actionInlet.includes(pattern));
               const showStiller = isMA && hasStillerInlet;
               const showSMR = isMA && !hasStillerInlet;
-              const hasBadges = item.hasLOP || item.hasADL || item.hasHeavyFill || showStiller || showSMR;
+              const hasBadges = item.hasLOP || item.hasADL || item.hasHeavyFill || item.isFlatTop || showStiller || showSMR;
               return hasBadges ? `
               <div class="badges">
                 ${item.hasLOP ? `<div class="badge badge-lop">LOP ${item.lopValue || ''}</div>` : ''}
                 ${item.hasADL ? '<div class="badge badge-adl">ADL</div>' : ''}
                 ${item.hasHeavyFill ? '<div class="badge badge-heavy">HEAVY</div>' : ''}
+                ${item.isFlatTop ? '<div class="badge badge-flattop">FLAT TOP</div>' : ''}
                 ${showStiller ? '<div class="badge badge-stiller">Stiller</div>' : ''}
                 ${showSMR ? '<div class="badge badge-smr">SMR</div>' : ''}
               </div>
@@ -626,6 +633,11 @@ export function LayupSchedulePreview({
                                 Heavy Fill
                               </Badge>
                             )}
+                            {item.isFlatTop && (
+                              <Badge className="bg-yellow-100 text-yellow-900 border-yellow-300 text-xs">
+                                Flat Top
+                              </Badge>
+                            )}
                             {(() => {
                               const actionLength = (item.actionLength || '').toLowerCase().trim();
                               const actionInlet = (item.actionInlet || '').toLowerCase().trim();
@@ -648,7 +660,7 @@ export function LayupSchedulePreview({
                               }
                               return null;
                             })()}
-                            {!item.hasLOP && !item.hasADL && !item.hasHeavyFill && !(
+                            {!item.hasLOP && !item.hasADL && !item.hasHeavyFill && !item.isFlatTop && !(
                               (item.actionLength || '').toLowerCase() === 'ma' || (item.actionLength || '').toLowerCase() === 'medium'
                             ) && (
                               <span className="text-gray-400 text-xs">-</span>
@@ -696,12 +708,13 @@ export function LayupSchedulePreview({
                       const hasStillerInlet = stillerInlets.some(pattern => actionInlet.includes(pattern));
                       const showStiller = isMA && hasStillerInlet;
                       const showSMR = isMA && !hasStillerInlet;
-                      const hasBadges = item.hasLOP || item.hasADL || item.hasHeavyFill || showStiller || showSMR;
+                      const hasBadges = item.hasLOP || item.hasADL || item.hasHeavyFill || item.isFlatTop || showStiller || showSMR;
                       return hasBadges ? (
                         <div className="layup-badges">
                           {item.hasLOP && <span className="layup-badge layup-badge-lop">LOP {item.lopValue || ''}</span>}
                           {item.hasADL && <span className="layup-badge layup-badge-adl">ADL</span>}
                           {item.hasHeavyFill && <span className="layup-badge layup-badge-heavy">HEAVY</span>}
+                          {item.isFlatTop && <span className="layup-badge layup-badge-flattop">FLAT TOP</span>}
                           {showStiller && <span className="layup-badge layup-badge-stiller">Stiller</span>}
                           {showSMR && <span className="layup-badge layup-badge-smr">SMR</span>}
                         </div>

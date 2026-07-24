@@ -61,15 +61,26 @@ jobs:
       - name: Create current application schema
         run: npx drizzle-kit push --force
 
+      - name: Restore migration-only schema baseline
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql
+
       - name: First safe-boot migration run
         env:
           SAFE_BOOT_MIGRATIONS_ONLY: 'true'
         run: npm run maintenance:safe-migrations
 
+      - name: Capture first-run schema
+        run: pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges > /tmp/schema-first.sql
+
       - name: Second safe-boot migration run
         env:
           SAFE_BOOT_MIGRATIONS_ONLY: 'true'
         run: npm run maintenance:safe-migrations
+
+      - name: Prove second-run schema idempotency
+        run: |
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges > /tmp/schema-second.sql
+          diff --unified /tmp/schema-first.sql /tmp/schema-second.sql
 
       - name: Run isolated PostgreSQL certification
         env:

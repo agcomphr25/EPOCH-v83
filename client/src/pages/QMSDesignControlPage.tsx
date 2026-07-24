@@ -54,6 +54,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { ProjectFormInstancesPanel } from '@/components/design-control/ProjectFormInstancesPanel';
 import { EngineeringChangeRequestRegister } from '@/components/design-control/EngineeringChangeRequestRegister';
 import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
+import { PostReleaseChangePanel } from '@/components/design-control/PostReleaseChangePanel';
 
 type StatusTone = 'draft' | 'active' | 'review' | 'approved' | 'blocked' | 'released';
 
@@ -1725,6 +1726,11 @@ export default function QMSDesignControlPage() {
             />
             <EngineeringChangeNoticeWorkspace
               projectId={activeDesignControlRecord?.rdProjectId}
+              oversightMode
+            />
+            <PostReleaseChangePanel
+              projectId={activeDesignControlRecord?.rdProjectId}
+              recordId={activeDesignControlRecordId}
               oversightMode
             />
           </TabsContent>

@@ -52,6 +52,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ProjectFormInstancesPanel } from '@/components/design-control/ProjectFormInstancesPanel';
 import { EngineeringChangeRequestRegister } from '@/components/design-control/EngineeringChangeRequestRegister';
 import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
+import { PostReleaseChangePanel } from '@/components/design-control/PostReleaseChangePanel';
 
 interface EmployeeOption {
   id: number;
@@ -2208,6 +2209,10 @@ export default function RDProjectsPage() {
                           />
                           <EngineeringChangeNoticeWorkspace
                             projectId={selectedProject.id}
+                          />
+                          <PostReleaseChangePanel
+                            projectId={selectedProject.id}
+                            recordId={activeDesignControlRecord.id}
                           />
                           <ProjectFormInstancesPanel
                             recordId={activeDesignControlRecord.id}

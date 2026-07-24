@@ -64,6 +64,10 @@ const resultRows = <T extends Row>(value: unknown): T[] =>
     : ((value as { rows?: T[] } | null)?.rows ?? []);
 const clean = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
+const sourceRevisionsMatch = (stored: Row, current: Row) =>
+  ['commercial', 'technical', 'productionPlanning', 'wadAuthorization'].every(
+    (key) => (stored?.[key] ?? null) === (current?.[key] ?? null)
+  );
 
 async function context(
   projectId: string,
@@ -405,9 +409,10 @@ async function readiness(projectId: string, review: Row | null, tx: Executor) {
       stale: false,
     };
   const source = await sourceState(projectId, tx);
-  const stale =
-    JSON.stringify(review.source_stage_revisions) !==
-    JSON.stringify(source.revisions);
+  const stale = !sourceRevisionsMatch(
+    review.source_stage_revisions,
+    source.revisions
+  );
   const blockers = [
     ...source.blockers,
     ...checklistBlockers(review.checklist_snapshot ?? []),

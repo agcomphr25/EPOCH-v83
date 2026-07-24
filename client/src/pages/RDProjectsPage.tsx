@@ -50,6 +50,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { ProjectFormInstancesPanel } from '@/components/design-control/ProjectFormInstancesPanel';
+import { EngineeringChangeRequestRegister } from '@/components/design-control/EngineeringChangeRequestRegister';
 
 interface EmployeeOption {
   id: number;
@@ -2199,9 +2200,15 @@ export default function RDProjectsPage() {
 
                     <TabsContent value="engineering-release" className="space-y-4">
                       {activeDesignControlRecord && (
-                        <ProjectFormInstancesPanel
-                          recordId={activeDesignControlRecord.id}
-                        />
+                        <>
+                          <EngineeringChangeRequestRegister
+                            projectId={selectedProject.id}
+                            recordId={activeDesignControlRecord.id}
+                          />
+                          <ProjectFormInstancesPanel
+                            recordId={activeDesignControlRecord.id}
+                          />
+                        </>
                       )}
                       <Card>
                         <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">

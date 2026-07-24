@@ -204,6 +204,17 @@ async function createFixture(
        RETURNING id`,
       [`CERT-QUOTE-${suffix}`, customer]
     );
+    const estimatingRfq = await client.query<{ id: string }>(
+      `INSERT INTO estimating_rfqs
+         (rfq_number,customer_name_snapshot,quote_id,revision,status)
+       VALUES ($1,'Certification Customer',$2,'A','COMPLETE') RETURNING id`,
+      [`CERT-ESTIMATE-RFQ-${suffix}`, quote.rows[0].id]
+    );
+    const estimate = await client.query<{ id: string }>(
+      `INSERT INTO estimate_versions(rfq_id,version_number,status)
+       VALUES ($1,1,'APPROVED') RETURNING id`,
+      [estimatingRfq.rows[0].id]
+    );
     const snapshot = await client.query<{ id: string }>(
       `INSERT INTO quote_snapshots
          (quote_id,quote_number,revision_number,revision_label,customer_id,
@@ -311,6 +322,7 @@ async function createFixture(
       {
         sourceRecordType: 'quote',
         sourceRecordId: quote.rows[0].id,
+        secondarySourceId: estimate.rows[0].id,
         sufficientlyDefined: true,
         differencesResolved: true,
         effectivityReference: 'CFG-A',

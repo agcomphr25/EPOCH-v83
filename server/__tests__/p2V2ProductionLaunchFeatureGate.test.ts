@@ -38,6 +38,9 @@ describe('P2 V2 Production Launch feature gate', () => {
     ['explicit false', 'false'],
     ['malformed', 'enabled'],
     ['unknown', '1'],
+    ['whitespace-wrapped true', ' true '],
+    ['uppercase true', 'TRUE'],
+    ['mixed-case true', 'True'],
   ])('fails closed when configuration is %s', async (_label, value) => {
     if (value === undefined) {
       delete process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED;
@@ -68,7 +71,7 @@ describe('P2 V2 Production Launch feature gate', () => {
   });
 
   it('enables only the exact true configuration', () => {
-    process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED = ' true ';
+    process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED = 'true';
     expect(isP2V2ProductionLaunchEnabled()).toBe(true);
   });
 });

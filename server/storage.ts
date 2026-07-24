@@ -3993,9 +3993,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async generateNextP2OrderIds(prefix: string, count: number): Promise<{ startSequence: number; endSequence: number }> {
+    return this.generateNextP2OrderIdsWithClient(prefix, count, db);
+  }
+
+  async generateNextP2OrderIdsWithClient(
+    prefix: string,
+    count: number,
+    dbClient: DbOrTx
+  ): Promise<{ startSequence: number; endSequence: number }> {
     const P2_ORDER_PREFIX = "";
 
-    const upsertResult = await db.execute(sql`
+    const upsertResult = await dbClient.execute(sql`
       INSERT INTO p2_order_id_sequences (year_month_prefix, current_sequence, updated_at)
       VALUES (${prefix}, ${count}, NOW())
       ON CONFLICT (year_month_prefix) DO UPDATE SET
@@ -4008,7 +4016,7 @@ export class DatabaseStorage implements IStorage {
     if (upsertResult && upsertResult.rows && upsertResult.rows.length > 0) {
       endSequence = Number(upsertResult.rows[0].current_sequence);
     } else {
-      const fallback = await db.execute(sql`
+      const fallback = await dbClient.execute(sql`
         SELECT current_sequence FROM p2_order_id_sequences WHERE year_month_prefix = ${prefix}
       `);
       endSequence = fallback?.rows?.[0] ? Number(fallback.rows[0].current_sequence) : count;
@@ -16238,12 +16246,20 @@ export class DatabaseStorage implements IStorage {
     opts?: { onlyPoItemId?: number; quantityOverride?: number },
     dbClient: DbOrTx = db
   ): Promise<P2ProductionOrder[]> {
-    const po = await this.getP2PurchaseOrder(poId);
+    const [po] = await dbClient
+      .select()
+      .from(p2PurchaseOrders)
+      .where(eq(p2PurchaseOrders.id, poId))
+      .limit(1);
     if (!po) {
       throw new Error(`P2 Purchase Order ${poId} not found`);
     }
 
-    const allPoItems = await this.getP2PurchaseOrderItems(poId);
+    const allPoItems = await dbClient
+      .select()
+      .from(p2PurchaseOrderItems)
+      .where(eq(p2PurchaseOrderItems.poId, poId))
+      .orderBy(p2PurchaseOrderItems.createdAt);
     if (allPoItems.length === 0) {
       throw new Error(`No items found for P2 Purchase Order ${poId}`);
     }
@@ -16565,7 +16581,12 @@ export class DatabaseStorage implements IStorage {
     const now = new Date();
     const currentPrefix = getCurrentYearMonthPrefix(now);
 
-    const { startSequence, endSequence } = await this.generateNextP2OrderIds(currentPrefix, pendingOrders.length);
+    const { startSequence, endSequence } =
+      await this.generateNextP2OrderIdsWithClient(
+        currentPrefix,
+        pendingOrders.length,
+        dbClient
+      );
 
     const BATCH_SIZE = 500;
     const productionOrders: P2ProductionOrder[] = [];

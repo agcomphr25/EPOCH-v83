@@ -36,6 +36,15 @@ export const useAllocationCostingRead: boolean = envBool('USE_ALLOCATION_COSTING
 export const salariedDraftEntryEnabled: boolean = envBool('SALARIED_DRAFT_ENTRY_ENABLED', false);
 
 /**
+ * Gates only the consequential p2_v2 Production Launch mutation.
+ * This remains fail-closed until isolated-database, concurrency, and staging
+ * launch validation are complete.
+ */
+export function isP2V2ProductionLaunchEnabled(): boolean {
+  return envBool('P2_V2_PRODUCTION_LAUNCH_ENABLED', false);
+}
+
+/**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read
  * exclusively from public.punch_ledger.  For periods ending BEFORE this date,

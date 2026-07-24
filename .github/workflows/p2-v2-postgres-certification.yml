@@ -1,0 +1,74 @@
+name: P2 V2 PostgreSQL certification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/p2-v2-postgres-certification.yml'
+      - 'migrations/**'
+      - 'server/schema.ts'
+      - 'server/scripts/migrations/runSafeBootMigrations.ts'
+      - 'server/src/lib/featureFlags.ts'
+      - 'server/src/services/projectPreproductionReadinessService.ts'
+      - 'server/__tests__/p2V2PostgresCertification.test.ts'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p2-v2-postgres-certification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: epoch_cert
+          POSTGRES_PASSWORD: epoch_cert_password
+          POSTGRES_DB: epoch_p2_v2_certification
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U epoch_cert -d epoch_p2_v2_certification"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql://epoch_cert:epoch_cert_password@127.0.0.1:5432/epoch_p2_v2_certification
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install committed dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Create current application schema
+        run: npx drizzle-kit push --force
+
+      - name: First safe-boot migration run
+        run: npm run maintenance:safe-migrations
+
+      - name: Second safe-boot migration run
+        run: npm run maintenance:safe-migrations
+
+      - name: Run isolated PostgreSQL certification
+        env:
+          P2_V2_PRODUCTION_LAUNCH_ENABLED: 'true'
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/p2V2PostgresCertification.test.ts
+          --reporter=verbose

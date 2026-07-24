@@ -54,6 +54,7 @@ import { EngineeringChangeRequestRegister } from '@/components/design-control/En
 import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
 import { PostReleaseChangePanel } from '@/components/design-control/PostReleaseChangePanel';
 import { ControlledCopyPanel } from '@/components/design-control/ControlledCopyPanel';
+import { DesignHistoryFilePanel } from '@/components/design-control/DesignHistoryFilePanel';
 
 interface EmployeeOption {
   id: number;
@@ -2338,6 +2339,13 @@ export default function RDProjectsPage() {
                                   </Button>
                                   <div className="font-medium">Next action: Create Manufactured Inventory Item</div>
                                 </div>
+                              )}
+
+                              {engineeringReleasePreview.existingRelease && (
+                                <DesignHistoryFilePanel
+                                  projectId={selectedProject.id}
+                                  releaseId={releasedEngineeringReleaseId}
+                                />
                               )}
 
                               {engineeringReleasePreview.existingRelease && (

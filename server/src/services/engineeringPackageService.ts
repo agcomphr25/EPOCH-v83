@@ -100,6 +100,12 @@ const packageDefinitions = [
   { category: 'required_certifications_identified', label: 'Certification Requirements', required: true },
   { category: 'packaging_shipping_requirements_defined', label: 'Packaging Requirements', required: true },
   { category: 'manufacturing_notes', label: 'Manufacturing Notes', required: false },
+  { category: 'routing_references', label: 'Routing and manufacturing-planning references', required: false },
+  { category: 'work_instruction_references', label: 'Controlled work-instruction references', required: false },
+  { category: 'software_firmware_configuration', label: 'Software and firmware configuration', required: false },
+  { category: 'effectivity', label: 'Release and change effectivity', required: false },
+  { category: 'controlled_design_forms', label: 'Controlled Design Control form evidence', required: false },
+  { category: 'authenticated_release_approvals', label: 'Authenticated release approvals', required: false },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -164,6 +170,12 @@ function categoryMatchesPackageItem(item: EngineeringBaselineItem, category: str
   if (category === 'manufacturing_notes') {
     return item.baselineCategory === 'design_step_12' || stableStringify(item.immutableSnapshot).toLowerCase().includes('manufacturing notes');
   }
+  if (category === 'routing_references') return item.baselineCategory.includes('routing');
+  if (category === 'work_instruction_references') return item.baselineCategory.includes('work_instruction');
+  if (category === 'software_firmware_configuration') return item.baselineCategory.includes('software') || item.baselineCategory.includes('firmware');
+  if (category === 'effectivity') return item.baselineCategory.includes('effectivity') || item.baselineCategory.includes('engineering_change');
+  if (category === 'controlled_design_forms') return item.baselineCategory.includes('project_form') || item.sourceModule?.includes('Project Form');
+  if (category === 'authenticated_release_approvals') return item.baselineCategory.includes('approval') || item.baselineCategory.includes('release_gate');
   return false;
 }
 
@@ -347,6 +359,9 @@ export function buildEngineeringPackageSnapshot(input: {
       bomRefs: contents.filter((item) => item.category === 'released_bom').map((item) => item.sourceRecordId),
       cadRefs: contents.filter((item) => item.category === 'released_cad').map((item) => item.sourceRecordId),
       drawingRefs: contents.filter((item) => item.category === 'released_drawings').map((item) => item.sourceRecordId),
+      routingRefs: contents.filter((item) => item.category === 'routing_references').map((item) => item.sourceRecordId),
+      workInstructionRefs: contents.filter((item) => item.category === 'work_instruction_references').map((item) => item.sourceRecordId),
+      controlledFormRefs: contents.filter((item) => item.category === 'controlled_design_forms').map((item) => item.sourceRecordId),
     },
   };
   return {
@@ -477,6 +492,10 @@ export async function generateEngineeringPackage(input: {
         metadata: item,
       });
     }
+
+    await tx.execute(sql`UPDATE engineering_packages
+      SET package_checksum = ${packageSnapshot.snapshotChecksum}
+      WHERE id = ${createdPackage.id}`);
 
     return {
       status: 'created' as const,

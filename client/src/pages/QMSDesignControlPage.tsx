@@ -56,6 +56,7 @@ import { EngineeringChangeRequestRegister } from '@/components/design-control/En
 import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
 import { PostReleaseChangePanel } from '@/components/design-control/PostReleaseChangePanel';
 import { ControlledCopyPanel } from '@/components/design-control/ControlledCopyPanel';
+import { DesignHistoryFilePanel } from '@/components/design-control/DesignHistoryFilePanel';
 
 type StatusTone = 'draft' | 'active' | 'review' | 'approved' | 'blocked' | 'released';
 
@@ -457,36 +458,6 @@ const releases: ReleaseRow[] = [
   },
 ];
 
-const dhf: RegisterRow[] = [
-  {
-    id: 'DHF-9007',
-    title: 'Design input baseline',
-    project: 'Composite antenna fairing redesign',
-    owner: 'Document Control',
-    status: 'approved',
-    evidence: 'Controlled input bundle',
-    due: '2026-07-17',
-  },
-  {
-    id: 'DHF-9015',
-    title: 'Verification and validation evidence set',
-    project: 'Composite antenna fairing redesign',
-    owner: 'Quality',
-    status: 'review',
-    evidence: 'Inspection, validation, review records',
-    due: '2026-08-09',
-  },
-  {
-    id: 'DHF-9021',
-    title: 'Release and change history package',
-    project: 'Bond fixture process update',
-    owner: 'Document Control',
-    status: 'released',
-    evidence: 'Release packet, ECR history',
-    due: '2026-07-18',
-  },
-];
-
 const statusLabels: Record<StatusTone, string> = {
   draft: 'Draft',
   active: 'Active',
@@ -791,7 +762,7 @@ export default function QMSDesignControlPage() {
   const [isApprovalActionPending, setIsApprovalActionPending] = useState(false);
 
   const gateProgress = useMemo(() => {
-    const allRows = [...inputs, ...outputs, ...reviews, ...verification, ...validation, ...changes, ...releases, ...dhf];
+    const allRows = [...inputs, ...outputs, ...reviews, ...verification, ...validation, ...changes, ...releases];
     const complete = allRows.filter((row) => ['approved', 'released'].includes(row.status)).length;
     return Math.round((complete / allRows.length) * 100);
   }, []);
@@ -1748,7 +1719,10 @@ export default function QMSDesignControlPage() {
 
           <TabsContent value="dhf" className="space-y-4">
             <SectionHeader icon={FileCheck2} title="Design History File" description="The retained evidence set proving the design was developed and released under controlled conditions." action="Add DHF Record" />
-            <RegisterTable rows={dhf} onOpen={setSelectedRecord} />
+            <DesignHistoryFilePanel
+              projectId={activeDesignControlRecord?.rdProjectId}
+              oversightMode
+            />
           </TabsContent>
         </Tabs>
 

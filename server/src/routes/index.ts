@@ -103,6 +103,7 @@ import engineeringChangeNoticesRoutes from './engineeringChangeNotices';
 import controlledPrintedCopiesRoutes, {
   controlledCopyScopeRouter,
 } from './controlledPrintedCopies';
+import designHistoryFilesRoutes from './designHistoryFiles';
 import vaultRoutes from './vault';
 import adminRoutes from './admin';
 import policiesRoutes from './policies';
@@ -1378,6 +1379,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api', engineeringChangeNoticesRoutes);
   app.use('/api/controlled-copies', controlledPrintedCopiesRoutes);
   app.use('/api', controlledCopyScopeRouter);
+  app.use('/api', designHistoryFilesRoutes);
 
   // CMMC Secure Vault — classification management + immutable access audit log
   app.use('/api/vault', vaultRoutes);

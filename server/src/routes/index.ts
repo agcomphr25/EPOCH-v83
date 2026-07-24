@@ -96,6 +96,7 @@ import projectFormsRoutes, {
   designControlProjectFormsRouter,
 } from './projectForms';
 import engineeringChangeRequestsRoutes from './engineeringChangeRequests';
+import engineeringChangeNoticesRoutes from './engineeringChangeNotices';
 import vaultRoutes from './vault';
 import adminRoutes from './admin';
 import policiesRoutes from './policies';
@@ -1366,6 +1367,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/design-control', designControlProjectFormsRouter);
   app.use('/api/project-forms', projectFormsRoutes);
   app.use('/api', engineeringChangeRequestsRoutes);
+  app.use('/api', engineeringChangeNoticesRoutes);
 
   // CMMC Secure Vault — classification management + immutable access audit log
   app.use('/api/vault', vaultRoutes);

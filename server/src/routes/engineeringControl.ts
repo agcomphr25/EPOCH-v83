@@ -80,8 +80,7 @@ const ecoReleaseSchema = z.object({
   releaseLinkage: z.record(z.unknown()).optional(),
 });
 
-function actorFromRequest(req: Request, override?: string): string {
-  if (override) return override;
+function actorFromRequest(req: Request, _legacyOverrideIgnored?: string): string {
   const user = (req as any).user;
   return user?.username || user?.email || user?.displayName || 'system';
 }

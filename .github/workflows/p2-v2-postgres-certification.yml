@@ -70,7 +70,9 @@ jobs:
         run: npm run maintenance:safe-migrations
 
       - name: Capture first-run schema
-        run: pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges > /tmp/schema-first.sql
+        run: >-
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
+          sed '/^\\\(un\)\?restrict /d' > /tmp/schema-first.sql
 
       - name: Second safe-boot migration run
         env:
@@ -79,7 +81,8 @@ jobs:
 
       - name: Prove second-run schema idempotency
         run: |
-          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges > /tmp/schema-second.sql
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
+            sed '/^\\\(un\)\?restrict /d' > /tmp/schema-second.sql
           diff --unified /tmp/schema-first.sql /tmp/schema-second.sql
 
       - name: Run isolated PostgreSQL certification

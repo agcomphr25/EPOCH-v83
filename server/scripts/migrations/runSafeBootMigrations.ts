@@ -232,6 +232,7 @@ export const safeMigrationFiles = [
   '0206_project_commercial_stage_reviews.sql',
   '0207_design_control_authority_foundation.sql',
   '0208_design_control_authenticated_approvals.sql',
+  '0209_project_technical_configuration_reviews.sql',
   '0210_master_document_control_hardening.sql',
   '0210_project_preproduction_readiness.sql',
   '0211_design_control_form_templates.sql',

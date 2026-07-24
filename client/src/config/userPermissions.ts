@@ -29,6 +29,13 @@ export const CAPABILITY_GATED_ROUTES: Record<string, string | string[]> = {
     'design.control.submit',
     'design.control.approve',
   ],
+  '/qms/as9100-audit-readiness': [
+    'qms.audit_readiness.view',
+    'qms.audit_readiness.edit',
+    'qms.audit_readiness.review',
+    'qms.audit_readiness.approve',
+    'qms.audit_readiness.admin',
+  ],
   '/master-document-register': 'documents.view',
 };
 
@@ -162,6 +169,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/qms/ncr-central-record',
   '/qms/nsia-registrar',
   '/qms/design-control',
+  '/qms/as9100-audit-readiness',
   '/qms/parts-equipment',
   '/assets',
   '/asset-dashboard',

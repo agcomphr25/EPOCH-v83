@@ -11,6 +11,7 @@ import {
   Settings,
   Package,
   ClipboardList,
+  ClipboardCheck,
   BarChart,
   BarChart3,
   ChevronDown,
@@ -985,6 +986,12 @@ export default function Navigation() {
       label: 'Design Control',
       icon: Route,
       description: 'Design inputs, review gates, validation, and release controls',
+    },
+    {
+      path: '/qms/as9100-audit-readiness',
+      label: 'AS9100 Audit Readiness',
+      icon: ClipboardCheck,
+      description: 'Evidence-based assessment cycles, approvals, auditor view, and controlled exports',
     },
     {
       path: '/qms/parts-equipment',

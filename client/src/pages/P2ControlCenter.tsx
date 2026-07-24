@@ -70,6 +70,18 @@ interface P2Stats {
   activeTravelers?: number;
 }
 
+interface P2LedgerStatus {
+  id: number;
+  poNumber: string;
+  customerName: string;
+  status: string;
+  projectId: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
+  scheduledItems: number;
+  inProductionItems: number;
+}
+
 interface Traveler {
   id: string;
   travelerNumber: string;
@@ -175,7 +187,7 @@ export default function P2ControlCenter() {
     })
   );
 
-  const { data: allPOStatuses = [] } = useQuery<{ id: number; poNumber: string; customerName: string; status: string; projectId: string | null; projectCode?: string | null; projectName?: string | null }[]>({
+  const { data: allPOStatuses = [] } = useQuery<P2LedgerStatus[]>({
     queryKey: ['/api/p2/control-center/po-statuses'],
     refetchInterval: 30000,
   });
@@ -183,6 +195,16 @@ export default function P2ControlCenter() {
   const openPOs = useMemo(
     () => allPOStatuses.filter((po) => po.status !== 'completed'),
     [allPOStatuses]
+  );
+  const serializedLedgerStats = useMemo(
+    () => allPOStatuses.reduce(
+      (totals, po) => ({
+        scheduledItems: totals.scheduledItems + Number(po.scheduledItems || 0),
+        inProduction: totals.inProduction + Number(po.inProductionItems || 0),
+      }),
+      { scheduledItems: 0, inProduction: 0 },
+    ),
+    [allPOStatuses],
   );
   const poFilterOptions = useMemo(
     () => activeTab === 'shipping' ? allPOStatuses : openPOs,
@@ -422,12 +444,12 @@ export default function P2ControlCenter() {
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
               <div className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(stats?.scheduledItems || 0) > 0 ? 'bg-purple-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${serializedLedgerStats.scheduledItems > 0 ? 'bg-purple-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
                   <Calendar className="h-4 w-4" />
                 </div>
                 <div className="text-sm">
                   <div className="font-medium">3. Schedule</div>
-                  <div className="text-xs text-muted-foreground">{stats?.scheduledItems || 0} scheduled</div>
+                  <div className="text-xs text-muted-foreground">{serializedLedgerStats.scheduledItems} scheduled</div>
                   {(gateBlockedCounts['step3'] ?? 0) > 0 && (
                     <div className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
                       <Lock className="h-2.5 w-2.5" />
@@ -438,12 +460,12 @@ export default function P2ControlCenter() {
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
               <div className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(stats?.inProduction || 0) > 0 ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${serializedLedgerStats.inProduction > 0 ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
                   <Factory className="h-4 w-4" />
                 </div>
                 <div className="text-sm">
                   <div className="font-medium">4. Production</div>
-                  <div className="text-xs text-muted-foreground">{stats?.inProduction || 0} in progress</div>
+                  <div className="text-xs text-muted-foreground">{serializedLedgerStats.inProduction} active</div>
                   {(gateBlockedCounts['step4'] ?? 0) > 0 && (
                     <div className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
                       <Lock className="h-2.5 w-2.5" />
@@ -540,7 +562,7 @@ export default function P2ControlCenter() {
               <Calendar className="h-4 w-4 text-purple-600" />
               <span className="text-sm text-muted-foreground">Scheduled</span>
             </div>
-            <div className="text-2xl font-bold mt-1">{stats?.scheduledItems || 0}</div>
+            <div className="text-2xl font-bold mt-1">{serializedLedgerStats.scheduledItems}</div>
           </CardContent>
         </Card>
 
@@ -550,7 +572,7 @@ export default function P2ControlCenter() {
               <Factory className="h-4 w-4 text-green-600" />
               <span className="text-sm text-muted-foreground">In Production</span>
             </div>
-            <div className="text-2xl font-bold mt-1">{stats?.inProduction || 0}</div>
+            <div className="text-2xl font-bold mt-1">{serializedLedgerStats.inProduction}</div>
           </CardContent>
         </Card>
 

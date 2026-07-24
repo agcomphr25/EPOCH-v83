@@ -17737,6 +17737,107 @@ export const designControlStepApprovals = pgTable('design_control_step_approvals
 export type DesignControlStepContentVersion = typeof designControlStepContentVersions.$inferSelect;
 export type DesignControlStepApproval = typeof designControlStepApprovals.$inferSelect;
 
+export const projectFormInstances = pgTable('project_form_instances', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  instanceNumber: text('instance_number').notNull().unique(),
+  rdProjectId: text('rd_project_id').notNull().references(() => rdProjects.id, { onDelete: 'restrict' }),
+  designControlRecordId: uuid('design_control_record_id').notNull().references(() => designControlRecords.id, { onDelete: 'restrict' }),
+  designControlStepId: uuid('design_control_step_id').notNull().references(() => designControlSteps.id, { onDelete: 'restrict' }),
+  stepKey: text('step_key').notNull(),
+  templateRegistrationId: uuid('template_registration_id').notNull().references(() => designControlFormTemplates.id, { onDelete: 'restrict' }),
+  templateDefinitionRevisionId: uuid('template_definition_revision_id').notNull().references(() => designControlFormTemplateRevisions.id, { onDelete: 'restrict' }),
+  documentVersionHistoryId: uuid('document_version_history_id').notNull().references(() => documentVersionHistory.id, { onDelete: 'restrict' }),
+  templateDocumentNumberSnapshot: text('template_document_number_snapshot').notNull(),
+  templateRevisionSnapshot: text('template_revision_snapshot').notNull(),
+  templateChecksumSnapshot: text('template_checksum_snapshot').notNull(),
+  rendererVersion: text('renderer_version').notNull(),
+  completionMethod: text('completion_method').notNull(),
+  lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
+  draftContent: jsonb('draft_content').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  indexedMetadata: jsonb('indexed_metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  currentContentRevisionId: uuid('current_content_revision_id'),
+  retainedPdfPath: text('retained_pdf_path'),
+  retainedPdfChecksum: text('retained_pdf_checksum'),
+  retainedPdfSize: integer('retained_pdf_size'),
+  retainedPdfGeneratedAt: timestamp('retained_pdf_generated_at', { withTimezone: true }),
+  supersedesInstanceId: uuid('supersedes_instance_id'),
+  supersededByInstanceId: uuid('superseded_by_instance_id'),
+  createdByUserId: integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  createdBySnapshot: jsonb('created_by_snapshot').$type<Record<string, unknown>>().notNull(),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }),
+  submittedByUserId: integer('submitted_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+  submittedBySnapshot: jsonb('submitted_by_snapshot').$type<Record<string, unknown>>(),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  recordStepIdx: index('project_form_instances_record_idx').on(table.designControlRecordId, table.stepKey),
+  projectIdx: index('project_form_instances_project_idx').on(table.rdProjectId),
+}));
+
+export const projectFormInstanceRevisions = pgTable('project_form_instance_revisions', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  projectFormInstanceId: uuid('project_form_instance_id').notNull().references(() => projectFormInstances.id, { onDelete: 'restrict' }),
+  contentRevisionNumber: integer('content_revision_number').notNull(),
+  canonicalContent: jsonb('canonical_content').$type<Record<string, unknown>>().notNull(),
+  contentChecksum: text('content_checksum').notNull(),
+  templateDefinitionRevisionId: uuid('template_definition_revision_id').notNull().references(() => designControlFormTemplateRevisions.id, { onDelete: 'restrict' }),
+  templateChecksumSnapshot: text('template_checksum_snapshot').notNull(),
+  revisionStatus: text('revision_status').notNull().default('SUBMITTED'),
+  changeReason: text('change_reason').notNull(),
+  createdByUserId: integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  createdBySnapshot: jsonb('created_by_snapshot').$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  instanceRevisionUnique: uniqueIndex('project_form_instance_revisions_sequence_unique').on(table.projectFormInstanceId, table.contentRevisionNumber),
+}));
+
+export const projectFormApprovals = pgTable('project_form_approvals', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  projectFormInstanceId: uuid('project_form_instance_id').notNull().references(() => projectFormInstances.id, { onDelete: 'restrict' }),
+  projectFormInstanceRevisionId: uuid('project_form_instance_revision_id').notNull().references(() => projectFormInstanceRevisions.id, { onDelete: 'restrict' }),
+  contentChecksum: text('content_checksum').notNull(),
+  templateDefinitionRevisionId: uuid('template_definition_revision_id').notNull().references(() => designControlFormTemplateRevisions.id, { onDelete: 'restrict' }),
+  approvalKey: text('approval_key').notNull(),
+  approvalRoleSnapshot: text('approval_role_snapshot').notNull(),
+  requiredCapabilitySnapshot: text('required_capability_snapshot').notNull(),
+  decision: text('decision').notNull(),
+  signatureMeaning: text('signature_meaning').notNull(),
+  actorUserId: integer('actor_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  actorUsernameSnapshot: text('actor_username_snapshot').notNull(),
+  actorDisplayNameSnapshot: text('actor_display_name_snapshot').notNull(),
+  actorRoleSnapshot: text('actor_role_snapshot').notNull(),
+  actorCapabilitiesSnapshot: jsonb('actor_capabilities_snapshot').$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
+  decisionComment: text('decision_comment'),
+  status: text('status').notNull().default('VALID'),
+  invalidatedAt: timestamp('invalidated_at', { withTimezone: true }),
+  invalidatedByUserId: integer('invalidated_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+  invalidationReason: text('invalidation_reason'),
+  signedAt: timestamp('signed_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const projectFormAttachments = pgTable('project_form_attachments', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  projectFormInstanceId: uuid('project_form_instance_id').notNull().references(() => projectFormInstances.id, { onDelete: 'restrict' }),
+  projectFormInstanceRevisionId: uuid('project_form_instance_revision_id').references(() => projectFormInstanceRevisions.id, { onDelete: 'restrict' }),
+  attachmentKind: text('attachment_kind').notNull(),
+  originalFilename: text('original_filename').notNull(),
+  storedPath: text('stored_path').notNull(),
+  mimeType: text('mime_type').notNull(),
+  byteSize: integer('byte_size').notNull(),
+  sha256Checksum: text('sha256_checksum').notNull(),
+  indexingMetadata: jsonb('indexing_metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  uploadedByUserId: integer('uploaded_by_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  uploadedBySnapshot: jsonb('uploaded_by_snapshot').$type<Record<string, unknown>>().notNull(),
+  uploadedAt: timestamp('uploaded_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type ProjectFormInstance = typeof projectFormInstances.$inferSelect;
+export type ProjectFormInstanceRevision = typeof projectFormInstanceRevisions.$inferSelect;
+export type ProjectFormApproval = typeof projectFormApprovals.$inferSelect;
+export type ProjectFormAttachment = typeof projectFormAttachments.$inferSelect;
+
 export const designControlRequirements = pgTable('design_control_requirements', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   recordId: uuid('record_id').notNull().references(() => designControlRecords.id, { onDelete: 'cascade' }),

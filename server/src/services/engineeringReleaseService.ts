@@ -28,6 +28,7 @@ import {
   getRecordAuthenticatedApprovalEvidence,
   getRecordAuthenticatedApprovalReadiness,
 } from './designControlApprovalService';
+import { getProjectFormReleaseReadiness } from './projectFormInstanceService';
 
 type DbClient = typeof db;
 type DesignControlRecord = typeof designControlRecords.$inferSelect;
@@ -561,11 +562,15 @@ export async function getEngineeringReleasePreview(recordId: string, client: DbC
     };
   }
   const authenticated = await getRecordAuthenticatedApprovalReadiness(recordId, client);
+  const projectForms =
+    preview.proposedReleaseRevision === 'A'
+      ? await getProjectFormReleaseReadiness(recordId, client)
+      : { ready: true, missingItems: [] as string[] };
   return {
     ...preview,
-    ready: preview.ready && authenticated.ready,
-    missingEvidence: [...preview.missingEvidence, ...authenticated.missingItems],
-    approvalProvenance: 'AUTHENTICATED_VERSION_BOUND' as const,
+    ready: preview.ready && authenticated.ready && projectForms.ready,
+    missingEvidence: [...preview.missingEvidence, ...authenticated.missingItems, ...projectForms.missingItems],
+    approvalProvenance: 'AUTHENTICATED_VERSION_BOUND_AND_PROJECT_FORM_INSTANCES' as const,
   };
 }
 
@@ -611,6 +616,23 @@ export async function submitEngineeringRelease(input: {
           `Design Control record is ${context.record.authorityStatus}; new Engineering Releases require the project's authoritative record`,
         ],
         preview,
+      };
+    }
+
+    const projectForms =
+      preview.proposedReleaseRevision === 'A'
+        ? await getProjectFormReleaseReadiness(context.record.id, tx as DbClient)
+        : { ready: true, missingItems: [] as string[] };
+    if (!projectForms.ready) {
+      return {
+        status: 'blocked' as const,
+        missingEvidence: projectForms.missingItems,
+        preview: {
+          ...preview,
+          ready: false,
+          missingEvidence: [...preview.missingEvidence, ...projectForms.missingItems],
+          approvalProvenance: 'PROJECT_FORM_INSTANCE_AUTHENTICATED_VERSION_BOUND' as const,
+        },
       };
     }
 

@@ -10,8 +10,22 @@ export const DESIGN_CONTROL_FORM_RENDERER_VERSION =
 export type DesignControlFormField = {
   key: string;
   label: string;
-  type: 'text' | 'textarea' | 'date' | 'checkbox' | 'attachment' | 'signature';
+  type:
+    | 'text'
+    | 'textarea'
+    | 'date'
+    | 'number'
+    | 'select'
+    | 'checkbox'
+    | 'yes_no'
+    | 'personnel'
+    | 'role'
+    | 'requirement_reference'
+    | 'evidence_reference'
+    | 'attachment'
+    | 'signature';
   required: boolean;
+  options?: readonly string[];
 };
 
 export type DesignControlFormSection = {

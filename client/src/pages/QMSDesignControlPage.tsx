@@ -51,6 +51,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { apiRequest } from '@/lib/queryClient';
 import { usePermissions } from '@/hooks/usePermissions';
+import { ProjectFormInstancesPanel } from '@/components/design-control/ProjectFormInstancesPanel';
 
 type StatusTone = 'draft' | 'active' | 'review' | 'approved' | 'blocked' | 'released';
 
@@ -1159,6 +1160,13 @@ export default function QMSDesignControlPage() {
             </Button>
           </CardContent>
         </Card>
+
+        {activeDesignControlRecordId && (
+          <ProjectFormInstancesPanel
+            recordId={activeDesignControlRecordId}
+            oversightMode
+          />
+        )}
 
         <div className="grid gap-4 md:grid-cols-4">
           {lifecycleMetrics.map((metric) => {

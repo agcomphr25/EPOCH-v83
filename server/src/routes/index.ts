@@ -92,6 +92,9 @@ import followupOrdersRoutes from './followupOrders';
 import cuttingTableRoutes from './cuttingTable';
 import controlledDocumentsRoutes from './controlledDocuments';
 import designControlFormTemplatesRoutes from './designControlFormTemplates';
+import projectFormsRoutes, {
+  designControlProjectFormsRouter,
+} from './projectForms';
 import vaultRoutes from './vault';
 import adminRoutes from './admin';
 import policiesRoutes from './policies';
@@ -1359,6 +1362,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Controlled Documents (Master Document Register) routes
   app.use('/api/controlled-documents', controlledDocumentsRoutes);
   app.use('/api/design-control-form-templates', designControlFormTemplatesRoutes);
+  app.use('/api/design-control', designControlProjectFormsRouter);
+  app.use('/api/project-forms', projectFormsRoutes);
 
   // CMMC Secure Vault — classification management + immutable access audit log
   app.use('/api/vault', vaultRoutes);

@@ -42,6 +42,8 @@ import {
   Clock,
   History,
   Upload,
+  Printer,
+  RefreshCw,
 } from 'lucide-react';
 import type { ControlledDocument, DocumentVersionHistory } from '@shared/schema';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -164,6 +166,33 @@ const nextRevisionVersion = (version: string | null | undefined) => {
   return `${major}.${minor + 1}`;
 };
 
+type DesignControlTemplateRevisionView = {
+  id: string;
+  documentVersionHistoryId: string;
+  documentRevisionSnapshot: string;
+  lifecycleStatus: string;
+  definitionChecksum: string;
+  blankPdfChecksum: string | null;
+  canonicalDefinition: Record<string, unknown>;
+};
+
+type DesignControlTemplateView = {
+  id: string;
+  templateKey: string;
+  formCategory: string;
+  workflowStepKey: string | null;
+  changeRecordType: string | null;
+  reconciliationStatus: string;
+  activeTemplateRevisionId: string | null;
+  document: ControlledDocument | null;
+  revisions: DesignControlTemplateRevisionView[];
+};
+
+type DesignControlTemplateReconciliationView = {
+  conflicts: Array<{ id: string; templateKey: string; conflictType: string; details: Record<string, unknown> }>;
+  legacyTemplates: Array<{ id: string; templateName: string; templateType: string; reason: string }>;
+};
+
 export default function MasterDocumentRegister() {
   const { can } = usePermissions();
   const [searchQuery, setSearchQuery] = useState('');
@@ -197,6 +226,13 @@ export default function MasterDocumentRegister() {
     queryKey: ['/api/controlled-documents'],
   });
 
+  const { data: designControlTemplates = [], isLoading: areDesignTemplatesLoading } = useQuery<DesignControlTemplateView[]>({
+    queryKey: ['/api/design-control-form-templates'],
+  });
+  const { data: designTemplateReconciliation } = useQuery<DesignControlTemplateReconciliationView>({
+    queryKey: ['/api/design-control-form-templates/reconciliation'],
+  });
+
   // Fetch current user session for role-based access
   const { data: session } = useQuery<{ username: string; role: string }>({
     queryKey: ['/api/auth/session'],
@@ -216,6 +252,72 @@ export default function MasterDocumentRegister() {
 
   const canCreateEdit = can('documents.create') || can('documents.edit_draft');
   const canApprove = can('documents.approve');
+  const isDesignControlTemplate = (doc: ControlledDocument) =>
+    Boolean((doc as any).templateKey?.startsWith('design-control-'));
+
+  const designTemplateMutation = useMutation({
+    mutationFn: async (input: {
+      path: string;
+      body?: Record<string, unknown>;
+      method?: 'POST';
+    }) => {
+      const response = await fetch(`/api/design-control-form-templates${input.path}`, {
+        method: input.method ?? 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input.body ?? {}),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || payload.error || 'Template operation failed');
+      return payload;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/design-control-form-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/design-control-form-templates/reconciliation'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
+      toast({ title: 'Design Control template updated' });
+    },
+    onError: (error: Error) => toast({
+      title: 'Design Control template action failed',
+      description: error.message,
+      variant: 'destructive',
+    }),
+  });
+
+  const runDesignTemplateAction = (
+    template: DesignControlTemplateView,
+    revision: DesignControlTemplateRevisionView,
+    action: 'submit' | 'decision' | 'release' | 'obsolete',
+  ) => {
+    const reason = window.prompt(`Reason for ${action}:`);
+    if (!reason?.trim()) return;
+    designTemplateMutation.mutate({
+      path: `/${template.templateKey}/revisions/${revision.id}/${action}`,
+      body: action === 'decision' ? { reason, decision: 'APPROVED' } : { reason },
+    });
+  };
+
+  const createDesignTemplateRevision = (
+    template: DesignControlTemplateView,
+    revision: DesignControlTemplateRevisionView,
+  ) => {
+    const documentRevision = window.prompt(
+      'New controlled document revision:',
+      nextRevisionVersion(revision.documentRevisionSnapshot),
+    );
+    if (!documentRevision?.trim()) return;
+    const reason = window.prompt('Material-change reason:');
+    if (!reason?.trim()) return;
+    designTemplateMutation.mutate({
+      path: `/${template.templateKey}/revisions`,
+      body: {
+        expectedDocumentRevisionId: revision.documentVersionHistoryId,
+        documentRevision,
+        reason,
+        definition: revision.canonicalDefinition,
+      },
+    });
+  };
 
   // Get unique departments and types for filters
   const departments = ['all', ...Array.from(new Set(documents.map((d) => d.department)))];
@@ -830,6 +932,130 @@ export default function MasterDocumentRegister() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-lg">Design Control Form Templates</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Exact template-definition revisions linked to independently controlled MDR documents.
+                Project form entry begins in Phase 5 and is not available here.
+              </p>
+            </div>
+            {can('documents.template.create') && (
+              <Button
+                variant="outline"
+                disabled={designTemplateMutation.isPending}
+                onClick={() => designTemplateMutation.mutate({ path: '/seed' })}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Ensure canonical 14
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent>
+            {Boolean(designTemplateReconciliation?.conflicts.length || designTemplateReconciliation?.legacyTemplates.length) && (
+              <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <div className="font-medium">Template reconciliation required</div>
+                <div>
+                  {designTemplateReconciliation?.conflicts.length ?? 0} canonical mapping conflict(s) and{' '}
+                  {designTemplateReconciliation?.legacyTemplates.length ?? 0} legacy configurable template(s) were left intact.
+                  No record was automatically overwritten or relinked.
+                </div>
+              </div>
+            )}
+            {areDesignTemplatesLoading ? (
+              <div className="py-6 text-center text-muted-foreground">Loading Design Control templates…</div>
+            ) : designControlTemplates.length === 0 ? (
+              <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+                No canonical Design Control templates are registered. An authorized document controller can run the idempotent seed operation.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Template / Mapping</TableHead>
+                      <TableHead>MDR Document</TableHead>
+                      <TableHead>Exact Revision</TableHead>
+                      <TableHead>Definition / PDF</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {designControlTemplates.map((template) => {
+                      const revision = template.revisions[template.revisions.length - 1];
+                      const mapping = template.workflowStepKey
+                        ? `Design Control step ${template.workflowStepKey}`
+                        : template.changeRecordType;
+                      return (
+                        <TableRow key={template.id}>
+                          <TableCell>
+                            <div className="font-medium">{template.document?.documentName ?? template.templateKey}</div>
+                            <div className="font-mono text-xs text-muted-foreground">{template.templateKey}</div>
+                            <Badge variant="outline" className="mt-1">{mapping}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium">{template.document?.documentNumber ?? 'Missing mapping'}</div>
+                            <div className="text-xs text-muted-foreground">{template.document?.id}</div>
+                            {template.reconciliationStatus !== 'READY' && (
+                              <Badge variant="destructive">Reconciliation required</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {revision ? (
+                              <>
+                                <div>Document revision {revision.documentRevisionSnapshot}</div>
+                                <div className="font-mono text-xs text-muted-foreground">{revision.id}</div>
+                              </>
+                            ) : <Badge variant="destructive">Missing revision mapping</Badge>}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div className="font-mono">Definition: {revision?.definitionChecksum.slice(0, 12) ?? '—'}…</div>
+                            <div className="font-mono">Blank PDF: {revision?.blankPdfChecksum?.slice(0, 12) ?? 'not retained'}{revision?.blankPdfChecksum ? '…' : ''}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={revision?.lifecycleStatus === 'RELEASED' ? 'default' : 'outline'}>
+                              {revision?.lifecycleStatus ?? 'UNMAPPED'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {revision && (
+                              <div className="flex flex-wrap gap-2">
+                                <Button size="sm" variant="outline" onClick={() => window.open(`/api/design-control-form-templates/${template.templateKey}/revisions/${revision.id}/preview`, '_blank')}>
+                                  <Eye className="h-4 w-4 mr-1" /> Preview
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => window.open(`/api/design-control-form-templates/${template.templateKey}/revisions/${revision.id}/download`, '_blank')}>
+                                  <Printer className="h-4 w-4 mr-1" /> Download / Print
+                                </Button>
+                                {can('documents.template.revise') && !['OBSOLETE'].includes(revision.lifecycleStatus) && (
+                                  <Button size="sm" variant="outline" onClick={() => createDesignTemplateRevision(template, revision)}>Create Revision</Button>
+                                )}
+                                {can('documents.submit') && revision.lifecycleStatus === 'DRAFT' && (
+                                  <Button size="sm" onClick={() => runDesignTemplateAction(template, revision, 'submit')}>Submit</Button>
+                                )}
+                                {can('documents.template.release') && revision.lifecycleStatus === 'IN_REVIEW' && (
+                                  <Button size="sm" onClick={() => runDesignTemplateAction(template, revision, 'decision')}>Approve</Button>
+                                )}
+                                {can('documents.template.release') && revision.lifecycleStatus === 'APPROVED' && (
+                                  <Button size="sm" onClick={() => runDesignTemplateAction(template, revision, 'release')}>Release</Button>
+                                )}
+                                {can('documents.template.obsolete') && ['RELEASED', 'SUPERSEDED'].includes(revision.lifecycleStatus) && (
+                                  <Button size="sm" variant="destructive" onClick={() => runDesignTemplateAction(template, revision, 'obsolete')}>Obsolete</Button>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Documents Table */}
         <Card>
           <CardHeader>
@@ -954,7 +1180,7 @@ export default function MasterDocumentRegister() {
                             >
                               <History className="h-4 w-4" />
                             </Button>
-                            {can('documents.edit_draft') && (doc as any).lifecycleStatus === 'DRAFT' && (
+                            {!isDesignControlTemplate(doc) && can('documents.edit_draft') && (doc as any).lifecycleStatus === 'DRAFT' && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -966,7 +1192,7 @@ export default function MasterDocumentRegister() {
                                 <Edit className="h-4 w-4" />
                               </Button>
                             )}
-                            {can('documents.revise') && !['OBSOLETE', 'VOID'].includes((doc as any).lifecycleStatus) && (
+                            {!isDesignControlTemplate(doc) && can('documents.revise') && !['OBSOLETE', 'VOID'].includes((doc as any).lifecycleStatus) && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -980,12 +1206,12 @@ export default function MasterDocumentRegister() {
                                 Create Revision
                               </Button>
                             )}
-                            {can('documents.submit') && (doc as any).lifecycleStatus === 'DRAFT' && (
+                            {!isDesignControlTemplate(doc) && can('documents.submit') && (doc as any).lifecycleStatus === 'DRAFT' && (
                               <Button size="sm" variant="outline" onClick={() => lifecycleMutation.mutate({ doc, action: 'submit' })}>
                                 Submit
                               </Button>
                             )}
-                            {canApprove && (doc as any).lifecycleStatus === 'IN_REVIEW' && (
+                            {!isDesignControlTemplate(doc) && canApprove && (doc as any).lifecycleStatus === 'IN_REVIEW' && (
                               <Button
                                 size="sm"
                                 variant="default"
@@ -998,13 +1224,13 @@ export default function MasterDocumentRegister() {
                                 Approve
                               </Button>
                             )}
-                            {can('documents.release') && (doc as any).lifecycleStatus === 'APPROVED' && (
+                            {!isDesignControlTemplate(doc) && can('documents.release') && (doc as any).lifecycleStatus === 'APPROVED' && (
                               <Button size="sm" onClick={() => lifecycleMutation.mutate({ doc, action: 'release' })}>Release</Button>
                             )}
-                            {can('documents.obsolete') && ((doc as any).lifecycleStatus === 'RELEASED' || (doc as any).lifecycleStatus === 'SUPERSEDED') && (
+                            {!isDesignControlTemplate(doc) && can('documents.obsolete') && ((doc as any).lifecycleStatus === 'RELEASED' || (doc as any).lifecycleStatus === 'SUPERSEDED') && (
                               <Button size="sm" variant="destructive" onClick={() => lifecycleMutation.mutate({ doc, action: 'obsolete' })}>Obsolete</Button>
                             )}
-                            {can('documents.void') && ['DRAFT', 'IN_REVIEW'].includes((doc as any).lifecycleStatus) && (
+                            {!isDesignControlTemplate(doc) && can('documents.void') && ['DRAFT', 'IN_REVIEW'].includes((doc as any).lifecycleStatus) && (
                               <Button size="sm" variant="ghost" onClick={() => lifecycleMutation.mutate({ doc, action: 'void' })}>Void</Button>
                             )}
                           </div>

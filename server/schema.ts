@@ -10521,6 +10521,74 @@ export const controlledDocumentRevisionApprovals = pgTable('controlled_document_
   metadata: jsonb('metadata').notNull().default({}),
 });
 
+export const designControlFormTemplates = pgTable('design_control_form_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  templateKey: text('template_key').notNull().unique(),
+  controlledDocumentId: uuid('controlled_document_id')
+    .references(() => controlledDocuments.id, { onDelete: 'restrict' })
+    .notNull()
+    .unique(),
+  formCategory: text('form_category').notNull(),
+  workflowStepKey: text('workflow_step_key'),
+  changeRecordType: text('change_record_type'),
+  activeTemplateRevisionId: uuid('active_template_revision_id'),
+  reconciliationStatus: text('reconciliation_status').notNull().default('READY'),
+  reconciliationDetails: jsonb('reconciliation_details').notNull().default({}),
+  createdByUserId: integer('created_by_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const designControlFormTemplateRevisions = pgTable('design_control_form_template_revisions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  designControlFormTemplateId: uuid('design_control_form_template_id')
+    .references(() => designControlFormTemplates.id, { onDelete: 'restrict' })
+    .notNull(),
+  documentVersionHistoryId: uuid('document_version_history_id')
+    .references(() => documentVersionHistory.id, { onDelete: 'restrict' })
+    .notNull()
+    .unique(),
+  templateRevisionSequence: integer('template_revision_sequence').notNull(),
+  templateSchemaVersion: text('template_schema_version').notNull(),
+  rendererVersion: text('renderer_version').notNull(),
+  lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
+  canonicalDefinition: jsonb('canonical_definition').notNull(),
+  definitionChecksum: text('definition_checksum').notNull(),
+  documentNumberSnapshot: text('document_number_snapshot').notNull(),
+  documentRevisionSnapshot: text('document_revision_snapshot').notNull(),
+  templateKeySnapshot: text('template_key_snapshot').notNull(),
+  lifecycleStatusAtUse: text('lifecycle_status_at_use').notNull().default('DRAFT'),
+  blankPdfPath: text('blank_pdf_path'),
+  blankPdfChecksum: text('blank_pdf_checksum'),
+  blankPdfSize: integer('blank_pdf_size'),
+  blankPdfGeneratedAt: timestamp('blank_pdf_generated_at'),
+  revisionReason: text('revision_reason').notNull(),
+  createdByUserId: integer('created_by_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  templateRevisionUnique: uniqueIndex('design_control_form_template_revisions_sequence_unique')
+    .on(table.designControlFormTemplateId, table.templateRevisionSequence),
+  templateIdx: index('design_control_form_template_revisions_template_idx')
+    .on(table.designControlFormTemplateId),
+  lifecycleIdx: index('design_control_form_template_revisions_lifecycle_idx')
+    .on(table.lifecycleStatus),
+}));
+
+export const designControlFormTemplateReconciliation = pgTable('design_control_form_template_reconciliation', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  templateKey: text('template_key').notNull(),
+  conflictType: text('conflict_type').notNull(),
+  details: jsonb('details').notNull().default({}),
+  detectedByUserId: integer('detected_by_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
+  detectedAt: timestamp('detected_at').defaultNow().notNull(),
+  resolvedAt: timestamp('resolved_at'),
+  resolutionNote: text('resolution_note'),
+}, (table) => ({
+  unresolvedConflictUnique: uniqueIndex('design_control_form_template_reconciliation_unresolved_unique')
+    .on(table.templateKey, table.conflictType)
+    .where(sql`${table.resolvedAt} IS NULL`),
+}));
+
 // Insert Schemas
 export const insertControlledDocumentSchema = createInsertSchema(controlledDocuments).omit({
   id: true,
@@ -10538,6 +10606,8 @@ export type ControlledDocument = typeof controlledDocuments.$inferSelect;
 export type InsertControlledDocument = z.infer<typeof insertControlledDocumentSchema>;
 
 export type DocumentVersionHistory = typeof documentVersionHistory.$inferSelect;
+export type DesignControlFormTemplate = typeof designControlFormTemplates.$inferSelect;
+export type DesignControlFormTemplateRevision = typeof designControlFormTemplateRevisions.$inferSelect;
 export type InsertDocumentVersionHistory = z.infer<typeof insertDocumentVersionHistorySchema>;
 
 // ============================================================================

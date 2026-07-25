@@ -6185,7 +6185,7 @@ export const chargeCodes = pgTable('charge_codes', {
   code: text('code').notNull().unique(),
   description: text('description'),
   type: text('type').notNull().default('DIRECT'), // DIRECT | OVERHEAD | G_AND_A
-  costHandling: text('cost_handling').notNull().default('DIRECT_CONTRACT'), // DIRECT_CONTRACT | IRAD | BID_PROPOSAL | FRINGE | OVERHEAD | G_AND_A | UNALLOWABLE | OTHER
+  costHandling: text('cost_handling').notNull().default('DIRECT_CONTRACT'), // DIRECT_CONTRACT | DIRECT_PRODUCT_COMMERCIAL_COGS | IRAD | BID_PROPOSAL | FRINGE | OVERHEAD | G_AND_A | UNALLOWABLE | OTHER
   productionLine: text('production_line'), // P1 | P2 | P3 | P4...
   activityCategory: text('activity_category'), // Reporting rollup, e.g. Layup, QC, Cleanup, CSR
   costObjectivePolicy: text('cost_objective_policy').notNull().default('NONE'), // NONE | P1_INVENTORY_WIP_GENERAL_STOCK | PROJECT_REQUIRED | CONFIGURED

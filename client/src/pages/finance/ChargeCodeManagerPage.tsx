@@ -64,6 +64,7 @@ const chargeCodeFormSchema = insertChargeCodeSchema.extend({
   type: z.enum(['DIRECT', 'OVERHEAD', 'G_AND_A', 'IR_AND_D', 'B_AND_P']),
   costHandling: z.enum([
     'DIRECT_CONTRACT',
+    'DIRECT_PRODUCT_COMMERCIAL_COGS',
     'IRAD',
     'BID_PROPOSAL',
     'FRINGE',
@@ -566,6 +567,9 @@ function ChargeCodeForm({
                   <SelectContent>
                     <SelectItem value="DIRECT_CONTRACT">
                       Direct Contract
+                    </SelectItem>
+                    <SelectItem value="DIRECT_PRODUCT_COMMERCIAL_COGS">
+                      Direct Product/Commercial CoGS
                     </SelectItem>
                     <SelectItem value="IRAD">IR&amp;D</SelectItem>
                     <SelectItem value="BID_PROPOSAL">B&amp;P</SelectItem>
@@ -1339,6 +1343,7 @@ export default function ChargeCodeManagerPage() {
   };
   const handlingLabel: Record<string, string> = {
     DIRECT_CONTRACT: 'Direct Contract',
+    DIRECT_PRODUCT_COMMERCIAL_COGS: 'Direct Product/Commercial CoGS',
     IRAD: 'IR&D',
     BID_PROPOSAL: 'B&P',
     FRINGE: 'Fringe',

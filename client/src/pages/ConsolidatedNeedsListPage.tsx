@@ -178,6 +178,7 @@ export default function ConsolidatedNeedsListPage() {
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
+  const [focusedVendorKey, setFocusedVendorKey] = useState('');
   const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor'>('by-vendor');
   const [vendorFilterTab, setVendorFilterTab] = useState<'all' | 'po' | 'website' | 'email'>('all');
   const [vendorRequestViews, setVendorRequestViews] = useState<Record<string, VendorRequestView>>({});
@@ -1925,16 +1926,277 @@ export default function ConsolidatedNeedsListPage() {
     );
   };
 
+  const renderPurchasingWorkspace = () => {
+    if (isLoading) {
+      return <div className="py-12 text-center text-sm text-muted-foreground">Loading purchasing queue...</div>;
+    }
+
+    const readyForGroup = (group: VendorGroup) => group.requests.filter((request) => {
+      const method = resolveEffectiveOrderMethod(request, getResolvedVendorForRequest(request));
+      return method === 'EMAIL' ? isEmailOrderableRequest(request) : isOrderMarkableRequest(request);
+    });
+    const blockedForGroup = (group: VendorGroup) => group.requests.filter((request) => request.status === 'PENDING');
+    const urgencyRank = (group: VendorGroup) => {
+      const values = group.requests.map((request) => request.urgency);
+      if (values.includes('CRITICAL')) return 4;
+      if (values.includes('HIGH')) return 3;
+      if (values.includes('MEDIUM')) return 2;
+      return 1;
+    };
+    const actionableGroups = filteredVendorGroups
+      .filter((group) => readyForGroup(group).length > 0 || blockedForGroup(group).length > 0)
+      .sort((a, b) => {
+        const readyDelta = readyForGroup(b).length - readyForGroup(a).length;
+        return readyDelta || urgencyRank(b) - urgencyRank(a);
+      });
+
+    if (actionableGroups.length === 0) {
+      return (
+        <div className="rounded-lg border border-dashed p-10 text-center">
+          <CheckCircle className="mx-auto mb-3 h-8 w-8 text-green-600" />
+          <p className="font-medium">Nothing needs purchasing attention.</p>
+          <p className="mt-1 text-sm text-muted-foreground">All open requests are already ordered or received.</p>
+        </div>
+      );
+    }
+
+    const focusedGroup = actionableGroups.find((group) => group.key === focusedVendorKey) || actionableGroups[0];
+    const readyRequests = readyForGroup(focusedGroup);
+    const blockedRequests = blockedForGroup(focusedGroup);
+    const totalReady = actionableGroups.reduce((sum, group) => sum + readyForGroup(group).length, 0);
+    const totalBlocked = actionableGroups.reduce((sum, group) => sum + blockedForGroup(group).length, 0);
+    const readySpend = actionableGroups.reduce((groupSum, group) => (
+      groupSum + readyForGroup(group).reduce((sum, request) => sum + Number(request.estimatedCost || 0), 0)
+    ), 0);
+    const missingInfo = actionableGroups.reduce((groupSum, group) => (
+      groupSum + group.requests.filter((request) => (
+        !group.vendorId || !getVendorSkuDisplay(request) || !request.estimatedCost
+      )).length
+    ), 0);
+
+    const orderMethodBadge = (group: VendorGroup) => {
+      if (group.orderMethod === 'WEBSITE') {
+        return <Badge className="bg-teal-100 text-teal-800 hover:bg-teal-100"><Globe className="mr-1 h-3 w-3" />Website</Badge>;
+      }
+      if (group.orderMethod === 'EMAIL') {
+        return <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-100"><Mail className="mr-1 h-3 w-3" />Email</Badge>;
+      }
+      return <Badge variant="secondary"><FileText className="mr-1 h-3 w-3" />PO</Badge>;
+    };
+
+    const runPrimaryAction = () => {
+      if (focusedGroup.orderMethod === 'WEBSITE') {
+        if (focusedGroup.websiteUrl) window.open(focusedGroup.websiteUrl, '_blank');
+        else toast({ title: 'Website needed', description: 'Add a website to this vendor before ordering.', variant: 'destructive' });
+      } else if (focusedGroup.orderMethod === 'EMAIL') {
+        handleSendVendorEmail(focusedGroup);
+      } else {
+        openCreateBatchDialog(focusedGroup, true);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg border bg-white p-4 dark:bg-gray-950">
+            <div className="text-2xl font-semibold text-blue-600">{totalReady}</div>
+            <div className="font-medium">Ready to order</div>
+            <div className="text-sm text-muted-foreground">{actionableGroups.length} actionable vendors</div>
+          </div>
+          <button type="button" onClick={() => setStatusViewAndClearSelection('PENDING')} className="rounded-lg border bg-white p-4 text-left hover:border-amber-300 dark:bg-gray-950">
+            <div className="text-2xl font-semibold text-amber-600">{totalBlocked}</div>
+            <div className="font-medium">Needs approval</div>
+            <div className="text-sm text-muted-foreground">Resolve before ordering</div>
+          </button>
+          <div className="rounded-lg border bg-white p-4 dark:bg-gray-950">
+            <div className="text-2xl font-semibold text-red-600">{missingInfo}</div>
+            <div className="font-medium">Missing information</div>
+            <div className="text-sm text-muted-foreground">Vendor, SKU, or cost</div>
+          </div>
+          <div className="rounded-lg border bg-white p-4 dark:bg-gray-950">
+            <div className="text-2xl font-semibold text-green-600">
+              ${readySpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="font-medium">Estimated ready spend</div>
+            <div className="text-sm text-muted-foreground">Pending requests excluded</div>
+          </div>
+        </div>
+
+        <div className="grid min-h-[640px] overflow-hidden rounded-lg border bg-white dark:bg-gray-950 lg:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.55fr)]">
+          <section className="border-b lg:border-b-0 lg:border-r" aria-label="Vendor ordering queue">
+            <div className="space-y-3 border-b p-4">
+              <div>
+                <h2 className="font-semibold">Ordering queue</h2>
+                <p className="text-sm text-muted-foreground">Only vendors with open purchasing work</p>
+              </div>
+              <Input
+                aria-label="Search actionable vendors"
+                placeholder="Search vendors or parts..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+              <Tabs value={vendorFilterTab} onValueChange={(value) => setVendorFilterTab(value as typeof vendorFilterTab)}>
+                <TabsList className="grid h-auto w-full grid-cols-4">
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="po">PO</TabsTrigger>
+                  <TabsTrigger value="website">Web</TabsTrigger>
+                  <TabsTrigger value="email">Email</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <div className="max-h-[570px] overflow-y-auto">
+              {actionableGroups.map((group) => {
+                const groupReady = readyForGroup(group);
+                const groupBlocked = blockedForGroup(group);
+                const selected = group.key === focusedGroup.key;
+                return (
+                  <button
+                    key={group.key}
+                    type="button"
+                    onClick={() => {
+                      setFocusedVendorKey(group.key);
+                      setSelectedVendorRequests(new Set());
+                    }}
+                    className={`grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-4 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+                      selected ? 'border-l-4 border-l-blue-600 bg-blue-50/70 dark:bg-blue-950/30' : 'hover:bg-gray-50 dark:hover:bg-gray-900'
+                    }`}
+                    aria-pressed={selected}
+                    data-testid={`vendor-queue-${group.key}`}
+                  >
+                    <span className="min-w-0">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="truncate font-medium">{group.vendorName}</span>
+                        {urgencyRank(group) >= 3 && <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Urgent</Badge>}
+                      </span>
+                      <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {orderMethodBadge(group)}
+                        <span>{group.totalQuantity} units</span>
+                      </span>
+                    </span>
+                    <span className="grid grid-cols-2 gap-x-3 text-right text-xs">
+                      <span className="text-green-700"><strong className="block text-base">{groupReady.length}</strong>ready</span>
+                      <span className={groupBlocked.length ? 'text-amber-700' : 'text-muted-foreground'}><strong className="block text-base">{groupBlocked.length}</strong>blocked</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="min-w-0" aria-label={`${focusedGroup.vendorName} order details`}>
+            <div className="flex flex-col gap-4 border-b p-5 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-xl font-semibold">{focusedGroup.vendorName}</h2>
+                  {orderMethodBadge(focusedGroup)}
+                  {urgencyRank(focusedGroup) >= 3 && <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Urgent</Badge>}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {focusedGroup.requests.length} open · {readyRequests.length} ready · {blockedRequests.length} need approval · ${focusedGroup.totalEstimatedCost.toFixed(2)} estimated
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {!focusedGroup.vendorId && (
+                  <Button variant="outline" onClick={() => {
+                    setSelectedVendorRequests(new Set(focusedGroup.requests.map((request) => request.id)));
+                    setIsVendorAssignDialogOpen(true);
+                  }}>
+                    <Building2 className="mr-2 h-4 w-4" />Assign vendor
+                  </Button>
+                )}
+                {readyRequests.length > 0 && (
+                  <Button onClick={runPrimaryAction} data-testid="button-focused-vendor-primary">
+                    {focusedGroup.orderMethod === 'WEBSITE' ? <ExternalLink className="mr-2 h-4 w-4" /> : <Send className="mr-2 h-4 w-4" />}
+                    {focusedGroup.orderMethod === 'WEBSITE'
+                      ? 'Open vendor website'
+                      : focusedGroup.orderMethod === 'EMAIL'
+                        ? `Send email (${readyRequests.length})`
+                        : `Create & send PO (${readyRequests.length})`}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="max-h-[560px] space-y-5 overflow-y-auto p-5">
+              <div className="overflow-hidden rounded-lg border">
+                <div className="flex items-center justify-between border-b bg-gray-50 px-4 py-3 dark:bg-gray-900">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">Ready to order</h3>
+                    <Badge className="bg-green-100 text-green-800 hover:bg-green-100">{readyRequests.length}</Badge>
+                  </div>
+                  {readyRequests.length > 0 && <Button size="sm" variant="ghost" onClick={() => selectAllInVendor(focusedGroup)}>Select all</Button>}
+                </div>
+                {readyRequests.length === 0 ? (
+                  <p className="p-5 text-sm text-muted-foreground">No approved requests are ready for this vendor.</p>
+                ) : (
+                  <div className="divide-y">
+                    {readyRequests.map((request) => (
+                      <div key={request.id} className="grid gap-3 p-4 sm:grid-cols-[auto_minmax(160px,1.5fr)_55px_minmax(100px,0.8fr)_105px_auto] sm:items-center">
+                        <Checkbox aria-label={`Select ${request.partName}`} checked={selectedVendorRequests.has(request.id)} onCheckedChange={() => toggleRequestSelection(request.id)} />
+                        <button type="button" onClick={() => openInventoryProfile(request)} className="min-w-0 text-left">
+                          <span className="block truncate text-sm font-medium hover:underline">{request.partName}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{getVendorSkuDisplay(request) || 'SKU missing'} · {request.partNumber}</span>
+                        </button>
+                        <div className="text-sm">{getRemainingRequestQuantity(request)}</div>
+                        <div className="text-sm"><span className="block text-xs text-muted-foreground">Department</span>{request.department}</div>
+                        <div className="text-sm font-medium">{request.estimatedCost ? `$${request.estimatedCost.toFixed(2)}` : <span className="text-amber-700">Cost missing</span>}</div>
+                        <Button size="sm" variant="ghost" onClick={() => setDetailRequest(request)}><Eye className="mr-1 h-4 w-4" />View</Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="overflow-hidden rounded-lg border border-amber-200">
+                <div className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-4 py-3 dark:bg-amber-950/20">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">Needs approval</h3>
+                    <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">{blockedRequests.length}</Badge>
+                  </div>
+                  <span className="text-xs text-muted-foreground">Not included in vendor order</span>
+                </div>
+                {blockedRequests.length === 0 ? (
+                  <p className="p-5 text-sm text-muted-foreground">No approval blockers for this vendor.</p>
+                ) : (
+                  <div className="divide-y divide-amber-100">
+                    {blockedRequests.map((request) => (
+                      <div key={request.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(160px,1fr)_70px_minmax(100px,0.7fr)_auto] sm:items-center">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">{request.partName}</div>
+                          <div className="truncate text-xs text-muted-foreground">{getVendorSkuDisplay(request) || 'SKU missing'} · requested by {request.requestedBy}</div>
+                        </div>
+                        <div className="text-sm">{request.quantity} units</div>
+                        <div className="text-sm">{request.department}</div>
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={() => handleAction(request, 'reject')}>Reject</Button>
+                          <Button size="sm" onClick={() => handleAction(request, 'approve')}>Approve</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Consolidated Parts Needs</h1>
         <p className="text-muted-foreground mt-1">
-          Manage all parts requests across departments - grouped by part number or vendor
+          {mainViewTab === 'by-vendor'
+            ? 'Prioritized vendors with open needs requiring action'
+            : 'Manage all parts requests across departments - grouped by part number or vendor'}
         </p>
       </div>
 
+      {mainViewTab === 'by-status' && (
+      <>
       {/* Search */}
       <Card>
         <CardContent className="pt-6">
@@ -2032,6 +2294,8 @@ export default function ConsolidatedNeedsListPage() {
           </Button>
         </div>
       </div>
+      </>
+      )}
 
       {/* Main View Tabs */}
       <Tabs value={mainViewTab} onValueChange={(v) => {
@@ -2102,17 +2366,7 @@ export default function ConsolidatedNeedsListPage() {
         </TabsContent>
 
         <TabsContent value="by-vendor">
-          <Card>
-            <CardHeader>
-              <CardTitle>Requests by Vendor</CardTitle>
-              <CardDescription>
-                Parts grouped by vendor for efficient ordering - select items to bulk order
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {renderVendorGroupedView()}
-            </CardContent>
-          </Card>
+          {renderPurchasingWorkspace()}
         </TabsContent>
       </Tabs>
 

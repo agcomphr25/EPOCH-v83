@@ -180,6 +180,7 @@ const AnalyticsDashboard = React.lazy(() => import('./pages/AnalyticsDashboard')
 const QuoteAccuracyDashboard = React.lazy(() => import('./pages/QuoteAccuracyDashboard'));
 const AGTestDashboard = React.lazy(() => import('./pages/AGTestDashboard'));
 const ADMINTestDashboard = React.lazy(() => import('./pages/GLENNTestDashboard'));
+const AdminDashboardPreview = React.lazy(() => import('./pages/AdminDashboardPreview'));
 const ProductionCommandCenter = React.lazy(() => import('./pages/ProductionCommandCenter'));
 const ProductionControlCenter = React.lazy(() => import('./pages/ProductionControlCenter'));
 const ProductionControlCenterLive = React.lazy(() => import('./pages/ProductionControlCenterLive'));
@@ -411,13 +412,14 @@ function isFloorOperatorRoute(location: string) {
 
 function ConditionalOfflineIndicator() {
   const isEmbed = useIsEmbedMode();
-  return isEmbed ? null : <OfflineIndicator />;
+  const [location] = useLocation();
+  return isEmbed || location === '/admin-dashboard-preview' ? null : <OfflineIndicator />;
 }
 
 function ConditionalMainWrapper({ children }: { children: React.ReactNode }) {
   const isEmbed = useIsEmbedMode();
   const [location] = useLocation();
-  if (isEmbed || isFloorOperatorRoute(location)) {
+  if (isEmbed || location === '/admin-dashboard-preview' || isFloorOperatorRoute(location)) {
     return <div className="w-full min-h-screen overflow-auto">{children}</div>;
   }
   return <main className="container mx-auto px-4 py-8">{children}</main>;
@@ -432,6 +434,7 @@ function ConditionalNavigation() {
     location === '/darleneb-dashboard' ||
     location === '/ag-dashboard' ||
     location === '/staciw-dashboard' ||
+    location === '/admin-dashboard-preview' ||
     location === '/login' ||
     location.startsWith('/sign-order') || // Hide navigation on customer sign order page
     location.startsWith('/fill-and-sign') || // Hide navigation on customer fill-and-sign page
@@ -976,6 +979,10 @@ function App() {
                   <Route
                     path="/admin-dashboard"
                     component={ADMINTestDashboard}
+                  />
+                  <Route
+                    path="/admin-dashboard-preview"
+                    component={AdminDashboardPreview}
                   />
                   <Route
                     path="/johnl-dashboard"

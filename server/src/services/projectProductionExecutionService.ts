@@ -47,6 +47,27 @@ const rows = <T extends Row>(value: unknown): T[] =>
     : ((value as { rows?: T[] } | null)?.rows ?? []);
 const hash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const intArray = (values: number[]) =>
+  values.length
+    ? sql`ARRAY[${sql.join(
+        values.map((value) => sql`${value}`),
+        sql`,`
+      )}]::int[]`
+    : sql`ARRAY[]::int[]`;
+const uuidArray = (values: string[]) =>
+  values.length
+    ? sql`ARRAY[${sql.join(
+        values.map((value) => sql`${value}`),
+        sql`,`
+      )}]::uuid[]`
+    : sql`ARRAY[]::uuid[]`;
+const textArray = (values: string[]) =>
+  values.length
+    ? sql`ARRAY[${sql.join(
+        values.map((value) => sql`${value}`),
+        sql`,`
+      )}]::text[]`
+    : sql`ARRAY[]::text[]`;
 
 export async function getTravelerProductionExecutionGate(
   travelerId: string,
@@ -248,14 +269,14 @@ async function collectEvidence(
     await tx.execute(sql`
       SELECT * FROM p2_production_orders
       WHERE p2_po_id=${ctx.project.po_id}
-        AND id = ANY(${orderIds}::int[])
+        AND id = ANY(${intArray(orderIds)})
       ORDER BY sku,id`)
   );
   const serializedItems = rows(
     await tx.execute(sql`
       SELECT * FROM p2_serialized_items
       WHERE po_id=${ctx.project.po_id}
-        AND id = ANY(${serialIds}::uuid[])
+        AND id = ANY(${uuidArray(serialIds)})
       ORDER BY part_number,sequence_number`)
   );
   const travelers = rows(
@@ -270,7 +291,8 @@ async function collectEvidence(
       WHERE t.production_work_order_id IN (
         SELECT id FROM production_work_orders WHERE project_id=${projectId})
         OR t.serial_number IN (
-          SELECT serial_number FROM p2_serialized_items WHERE id=ANY(${serialIds}::uuid[]))
+          SELECT serial_number FROM p2_serialized_items
+          WHERE id=ANY(${uuidArray(serialIds)}))
       GROUP BY t.id ORDER BY t.created_at`)
   );
   const holds = rows(
@@ -282,14 +304,18 @@ async function collectEvidence(
     await tx.execute(sql`
       SELECT * FROM nonconformance_records
       WHERE p1_or_p2='P2' AND status<>'Resolved'
-        AND (order_id=ANY(${productionOrders.map((entry) => String(entry.order_id))}::text[])
-          OR serial_number=ANY(${serializedItems.map((entry) => String(entry.serial_number))}::text[]))
+        AND (order_id=ANY(${textArray(
+          productionOrders.map((entry) => String(entry.order_id))
+        )})
+          OR serial_number=ANY(${textArray(
+            serializedItems.map((entry) => String(entry.serial_number))
+          )}))
       ORDER BY created_at`)
   );
   const traceability = rows(
     await tx.execute(sql`
       SELECT tr.* FROM p2_serialized_item_traceability tr
-      WHERE tr.serialized_item_id=ANY(${serialIds}::uuid[])`)
+      WHERE tr.serialized_item_id=ANY(${uuidArray(serialIds)})`)
   );
   const labor = rows(
     await tx.execute(sql`
@@ -298,7 +324,9 @@ async function collectEvidence(
         COALESCE(sum(EXTRACT(EPOCH FROM (clock_out-clock_in))/3600)
           FILTER (WHERE clock_out IS NOT NULL),0)::numeric AS actual_hours
       FROM time_clock_entries
-      WHERE traveler_id=ANY(${travelers.map((entry) => String(entry.id))}::uuid[])`)
+      WHERE traveler_id=ANY(${uuidArray(
+        travelers.map((entry) => String(entry.id))
+      )})`)
   )[0] ?? { entry_count: 0, open_count: 0, actual_hours: 0 };
   const requiredManufacturedItems = plan.items.filter(
     (item: Row) => item.make_buy === 'MAKE'

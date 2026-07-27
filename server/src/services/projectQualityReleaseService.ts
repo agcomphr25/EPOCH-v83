@@ -259,7 +259,8 @@ export async function createQualityReview(
         '[]'::jsonb,${actor.userId},${actor.displayName}) RETURNING *`)
     )[0];
     await tx.execute(sql`UPDATE project_workflow_step_instances SET status='IN_PROGRESS',started_at=COALESCE(started_at,now()),
-      updated_at=now() WHERE id=${model.ctx.qualityStep.id} AND status='NOT_STARTED'`);
+      updated_at=now() WHERE id=${model.ctx.qualityStep.id}
+        AND status IN ('NOT_STARTED','NOT_APPLICABLE')`);
     await recordAuditEvent(
       {
         eventType: 'P2_V2_QUALITY_REVIEW_CREATED',

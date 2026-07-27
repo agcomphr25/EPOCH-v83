@@ -40,7 +40,6 @@ import {
   decideQualityReview,
   getQualityDashboard,
   placeReleaseHold,
-  ProjectQualityReleaseError,
   releaseProductHold,
   releaseProduct,
   submitQualityReview,
@@ -1210,19 +1209,23 @@ describe('actual production launch service against PostgreSQL', () => {
     expect(changed.rows).toHaveLength(0);
   });
 
-  it('fails closed for an unknown workflow version in the real Quality service', async () => {
+  it('fails closed for an unknown workflow version at the database boundary', async () => {
     const id = '00000000-0000-4000-8000-000000000804';
-    await query(
-      `INSERT INTO projects
-       (id,project_code,project_name,customer_id,workflow_version,current_stage)
-       VALUES ($1,'UNKNOWN-V2','Unknown isolation','CERT-A','future_v9','IN_PRODUCTION')`,
-      [id]
-    );
-    await expect(createQualityReview(id, actor)).rejects.toBeInstanceOf(
-      ProjectQualityReleaseError
-    );
+    await expect(
+      query(
+        `INSERT INTO projects
+         (id,project_code,project_name,customer_id,workflow_version,current_stage)
+         VALUES ($1,'UNKNOWN-V2','Unknown isolation','CERT-A','future_v9','IN_PRODUCTION')`,
+        [id]
+      )
+    ).rejects.toMatchObject({
+      constraint: 'projects_workflow_version_check',
+    });
+    expect(
+      (await query(`SELECT id FROM projects WHERE id=$1`, [id])).rows
+    ).toHaveLength(0);
     await expect(createQualityReview(id, actor)).rejects.toMatchObject({
-      code: 'UNKNOWN_WORKFLOW_VERSION',
+      code: 'PROJECT_NOT_FOUND',
     });
   });
 });

@@ -12,6 +12,9 @@ const capabilities = read('server/src/capabilities.ts');
 const catalog = read('shared/designControlFormCatalog.ts');
 const qms = read('client/src/pages/QMSDesignControlPage.tsx');
 const rd = read('client/src/pages/RDProjectsPage.tsx');
+const workspace = read(
+  'client/src/features/design-control/DesignControlWorkspace.tsx'
+);
 const register = read(
   'client/src/components/design-control/EngineeringChangeRequestRegister.tsx'
 );
@@ -255,8 +258,9 @@ describe('Phase 6 authoritative Engineering Change Requests', () => {
   it('replaces hard-coded ECR samples with the shared live register', () => {
     expect(qms).not.toContain('ECR-7025');
     expect(qms).not.toContain('ECR-7033');
-    expect(qms).toContain('<EngineeringChangeRequestRegister');
-    expect(rd).toContain('<EngineeringChangeRequestRegister');
+    expect(qms).toContain('<DesignControlWorkspace');
+    expect(rd).toContain('<DesignControlWorkspace');
+    expect(workspace).toContain('<EngineeringChangeRequestRegister');
   });
 
   it('does not implement ECN creation or Revision B+ authorization', () => {

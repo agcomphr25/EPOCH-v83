@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 
 import { db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
@@ -15,6 +15,7 @@ import {
   designControlValidation,
   designControlVerification,
   insertDesignControlRecordSchema,
+  rdProjects,
 } from '../../schema';
 import {
   canonicalManufacturingEvidenceRequirements,
@@ -436,6 +437,93 @@ router.get('/', async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('[qms-design-control] Failed to list records', error);
     res.status(500).json({ message: 'Failed to load design control records' });
+  }
+});
+
+router.get('/oversight/projects', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
+    const pageSize = Math.min(50, Math.max(5, Number.parseInt(String(req.query.pageSize || '20'), 10) || 20));
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const status = typeof req.query.status === 'string' ? req.query.status.trim() : '';
+    const authority = typeof req.query.authority === 'string' ? req.query.authority.trim() : '';
+    const conditions: SQL[] = [];
+    if (search) {
+      conditions.push(or(
+        ilike(rdProjects.projectName, `%${search}%`),
+        ilike(rdProjects.id, `%${search}%`),
+        ilike(rdProjects.owner, `%${search}%`),
+        ilike(designControlRecords.recordNumber, `%${search}%`),
+      )!);
+    }
+    if (status) conditions.push(eq(designControlRecords.status, status));
+    if (authority) conditions.push(eq(designControlRecords.authorityStatus, authority));
+    const where = conditions.length ? and(...conditions) : undefined;
+
+    const [totalResult, projects] = await Promise.all([
+      db.select({ value: count() })
+        .from(rdProjects)
+        .leftJoin(
+          designControlRecords,
+          and(
+            eq(designControlRecords.rdProjectId, rdProjects.id),
+            eq(designControlRecords.authorityStatus, 'authoritative'),
+          ),
+        )
+        .where(where),
+      db.select({
+        projectId: rdProjects.id,
+        projectName: rdProjects.projectName,
+        engineer: rdProjects.owner,
+        projectStatus: rdProjects.status,
+        updatedAt: rdProjects.updatedAt,
+        recordId: designControlRecords.id,
+        recordNumber: designControlRecords.recordNumber,
+        recordTitle: designControlRecords.title,
+        designControlStatus: designControlRecords.status,
+        authorityStatus: designControlRecords.authorityStatus,
+        revision: designControlRecords.recordVersion,
+        releasedAt: designControlRecords.releasedAt,
+      })
+        .from(rdProjects)
+        .leftJoin(
+          designControlRecords,
+          and(
+            eq(designControlRecords.rdProjectId, rdProjects.id),
+            eq(designControlRecords.authorityStatus, 'authoritative'),
+          ),
+        )
+        .where(where)
+        .orderBy(desc(rdProjects.updatedAt))
+        .limit(pageSize)
+        .offset((page - 1) * pageSize),
+    ]);
+
+    const recordIds = projects.flatMap((project) => project.recordId ? [project.recordId] : []);
+    const stepCounts = recordIds.length
+      ? await db.select({
+        recordId: designControlSteps.recordId,
+        completed: sql<number>`count(*) filter (where ${designControlSteps.status} in ('approved', 'complete', 'completed'))`,
+        blocked: sql<number>`count(*) filter (where ${designControlSteps.status} = 'blocked')`,
+      }).from(designControlSteps).where(inArray(designControlSteps.recordId, recordIds)).groupBy(designControlSteps.recordId)
+      : [];
+    const counts = new Map(stepCounts.map((row) => [row.recordId, row]));
+
+    res.json({
+      page,
+      pageSize,
+      total: totalResult[0]?.value ?? 0,
+      projects: projects.map((project) => ({
+        ...project,
+        completedSteps: Number(counts.get(project.recordId || '')?.completed || 0),
+        blockedSteps: Number(counts.get(project.recordId || '')?.blocked || 0),
+        requiresInitialization: !project.recordId,
+      })),
+      bounded: true,
+    });
+  } catch (error) {
+    console.error('[qms-design-control] Failed to load oversight projects', error);
+    res.status(500).json({ message: 'Failed to load Design Control oversight' });
   }
 });
 

@@ -14,6 +14,7 @@ import { getActiveRoutingStep } from '../services/routingStepService';
 import { adjustPacketInventoryItem } from '../utils/p1PacketInventory';
 import { laborAllocationsEnabled } from '../lib/featureFlags';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
+import { isOvenCureDepartmentName } from '../lib/timerTraceability';
 import * as allocationService from '../services/laborAllocationService';
 import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
 import { executeTravelerAutoPunch } from './timeClock';
@@ -2902,15 +2903,21 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     // ── WAD-based labor context (Task #1235) — PRE-MUTATION CHECKS ─────────
     // Resolve charge code BEFORE performStepStart so we can fail-closed without
     // leaving the step in an inconsistent IN_PROGRESS state.
-    const ccResult = await resolveChargeCode({
-      productionWorkOrderId: traveler.productionWorkOrderId ?? null,
-      travelerId,
-      travelerStepId: step.id,
-      department: step.departmentName ?? null,
-    });
+    // Oven/Cure is timer-managed. Its linked Timer Station run owns item
+    // start/end evidence and the traveler cure log, not a labor charge code.
+    const isTimerManagedOvenCure = isOvenCureDepartmentName(step.departmentName);
+    const ccResult = isTimerManagedOvenCure
+      ? null
+      : await resolveChargeCode({
+          productionWorkOrderId: traveler.productionWorkOrderId ?? null,
+          travelerId,
+          travelerStepId: step.id,
+          department: step.departmentName ?? null,
+        });
+    const resolvedChargeCode = ccResult && !('error' in ccResult) ? ccResult : null;
 
     // Fail-closed: if WAD is linked and charge code resolution failed, abort NOW (step NOT yet started).
-    if ('error' in ccResult && traveler.productionWorkOrderId) {
+    if (ccResult && 'error' in ccResult && traveler.productionWorkOrderId) {
       return res.status(400).json({
         error: 'CHARGE_CODE_UNRESOLVED',
         message: ccResult.error,
@@ -2920,7 +2927,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     let travelerAutoPunch:
       | { action: 'clockedIn' | 'switched' | 'unchanged'; chargeCode: string | null; warning?: string }
       | null = null;
-    if (traveler.productionWorkOrderId) {
+    if (traveler.productionWorkOrderId && !isTimerManagedOvenCure) {
       if (resolvedEmployeeId == null) {
         return res.status(400).json({
           error: 'EMPLOYEE_NOT_RESOLVED',
@@ -2990,8 +2997,8 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     ]);
 
     const wadLaborContext = {
-      chargeCode: 'error' in ccResult ? null : ccResult.chargeCode,
-      chargeCodeResolvedFrom: 'error' in ccResult ? null : ccResult.resolvedFrom,
+      chargeCode: resolvedChargeCode?.chargeCode ?? null,
+      chargeCodeResolvedFrom: resolvedChargeCode?.resolvedFrom ?? null,
       certificationStatus: certResult.status,
       certificationName: certResult.certificationName,
       certReason: certResult.reason,
@@ -3002,12 +3009,12 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     };
 
     // Stamp the open punch entry for this employee with step-level traceability.
-    if (resolvedEmployeeId != null) {
+    if (resolvedEmployeeId != null && !isTimerManagedOvenCure) {
       const openEntry = await storage.getOpenPunchLedgerEntry(resolvedEmployeeId);
       if (openEntry) {
         await storage.updatePunchLedgerEntry(openEntry.id, {
           travelerStepId: stepId,
-          chargeCodeId: 'error' in ccResult ? null : ccResult.chargeCodeId,
+          chargeCodeId: resolvedChargeCode?.chargeCodeId ?? null,
           operation: activeOperationName,
           certificationStatus: certResult.status,
           isOverrun: budgetResult.isOverrun,
@@ -3020,7 +3027,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
           const updatedOpenEntry = await storage.getOpenPunchLedgerEntry(resolvedEmployeeId);
           if (updatedOpenEntry) {
             allocationService.switchAllocation(updatedOpenEntry, {
-              chargeCodeId: 'error' in ccResult ? null : ccResult.chargeCodeId,
+              chargeCodeId: resolvedChargeCode?.chargeCodeId ?? null,
               travelerId,
               travelerStepId: stepId,
               productionWorkOrderId: traveler.productionWorkOrderId ?? null,

@@ -3,7 +3,11 @@ import { and, count, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle
 
 import { db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
-import { requirePermission } from '../../middleware/requirePermission';
+import {
+  requireAnyPermission,
+  requirePermission,
+} from '../../middleware/requirePermission';
+import { DESIGN_CONTROL_AUTHORIZATION } from '../designControlAuthorization';
 import {
   designControlChanges,
   designControlRecords,
@@ -60,6 +64,11 @@ router.use(async (_req, res, next) => {
     next(error);
   }
 });
+router.use(authenticateToken);
+
+const requireDesignControlView = requireAnyPermission(
+  DESIGN_CONTROL_AUTHORIZATION.designControlView
+);
 
 type StepPayload = {
   formData?: Record<string, unknown>;
@@ -407,7 +416,7 @@ async function createDesignControlRecordWithInitialWorkflow(
   });
 }
 
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', requireDesignControlView, async (_req: Request, res: Response) => {
   try {
     const conditions: SQL[] = [];
     if (typeof _req.query.rdProjectId === 'string' && _req.query.rdProjectId.trim()) {
@@ -440,7 +449,7 @@ router.get('/', async (_req: Request, res: Response) => {
   }
 });
 
-router.get('/oversight/projects', authenticateToken, async (req: Request, res: Response) => {
+router.get('/oversight/projects', requireDesignControlView, async (req: Request, res: Response) => {
   try {
     const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
     const pageSize = Math.min(50, Math.max(5, Number.parseInt(String(req.query.pageSize || '20'), 10) || 20));
@@ -580,7 +589,7 @@ router.post('/', authenticateToken, requirePermission('design.control.create'), 
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', requireDesignControlView, async (req: Request, res: Response) => {
   try {
     const record = await getRecord(req.params.id);
     if (!record) {
@@ -750,7 +759,7 @@ router.post('/:id/submit-release', authenticateToken, async (req: Request, res: 
   });
 });
 
-router.get('/:id/manufacturing-evidence', async (req: Request, res: Response) => {
+router.get('/:id/manufacturing-evidence', requireDesignControlView, async (req: Request, res: Response) => {
   try {
     const record = await getRecord(req.params.id);
     if (!record) {
@@ -768,7 +777,7 @@ router.get('/:id/manufacturing-evidence', async (req: Request, res: Response) =>
   }
 });
 
-router.get('/:id/engineering-release-preview', async (req: Request, res: Response) => {
+router.get('/:id/engineering-release-preview', requireDesignControlView, async (req: Request, res: Response) => {
   try {
     const preview = await getEngineeringReleasePreview(req.params.id);
     if (!preview) {
@@ -812,7 +821,7 @@ router.post('/:id/engineering-release', authenticateToken, requirePermission('de
   }
 });
 
-router.get('/:id/readiness', async (req: Request, res: Response) => {
+router.get('/:id/readiness', requireDesignControlView, async (req: Request, res: Response) => {
   try {
     const record = await getRecord(req.params.id);
     if (!record) {

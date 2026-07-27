@@ -1,0 +1,63 @@
+export const DESIGN_CONTROL_AUTHORIZATION = {
+  projectAdministration: ['design.control.admin'],
+  designControlView: [
+    'design.control.view',
+    'design.control.edit',
+    'design.control.submit',
+    'design.control.approve',
+    'qms.audit_readiness.view',
+  ],
+  designControlCreate: ['design.control.create'],
+  designControlEdit: ['design.control.edit'],
+  designControlSubmit: ['design.control.submit'],
+  stepApproval: ['design.control.approve'],
+  verification: ['design.verify'],
+  validation: ['design.validate'],
+  engineeringRelease: ['design.release'],
+  ecrView: ['engineering.ecr.view'],
+  ecrCreate: ['engineering.ecr.create'],
+  ecrReview: ['engineering.ecr.review'],
+  ecrDisposition: ['engineering.ecr.disposition'],
+  ecnView: ['engineering.ecn.view'],
+  ecnCreate: ['engineering.ecn.create'],
+  ecnApproval: ['engineering.ecn.approve'],
+  ecnImplementation: ['engineering.ecn.implement'],
+  projectFormView: ['design.forms.view'],
+  projectFormEdit: ['design.forms.edit'],
+  projectFormApproval: ['design.forms.approve'],
+  controlledTemplateAdministration: ['documents.template.release'],
+  controlledCopyView: ['documents.controlled_copy.view'],
+  controlledCopyIssue: ['documents.controlled_copy.issue'],
+  controlledCopyReconciliation: ['documents.controlled_copy.reconcile'],
+  dhfView: ['design.dhf.view'],
+  dhfGenerate: ['design.dhf.generate'],
+  dhfApproval: ['design.dhf.approve'],
+  dhfExport: ['design.dhf.export'],
+  dhfVerification: ['design.dhf.verify'],
+  auditorReadOnly: ['qms.audit_readiness.view'],
+  legacyReconciliation: [
+    'design.control.admin',
+    'engineering.ecr.admin',
+    'engineering.ecn.admin',
+    'documents.controlled_copy.admin',
+    'design.dhf.admin',
+  ],
+} as const;
+
+export type DesignControlAuthorizationAction =
+  keyof typeof DESIGN_CONTROL_AUTHORIZATION;
+
+export const DESIGN_CONTROL_ROLE_EXPECTATIONS = {
+  designEngineer: ['design.control.edit', 'design.control.submit'],
+  engineeringApprover: ['design.control.approve'],
+  quality: ['design.control.approve', 'design.verify', 'design.validate'],
+  manufacturingOperations: ['engineering.ecr.review'],
+  projectProgramManager: ['design.control.create'],
+  documentControl: [
+    'documents.template.release',
+    'documents.controlled_copy.issue',
+  ],
+  designAdministrator: ['design.control.admin'],
+  auditor: ['qms.audit_readiness.view'],
+  ordinaryUser: [],
+} as const;

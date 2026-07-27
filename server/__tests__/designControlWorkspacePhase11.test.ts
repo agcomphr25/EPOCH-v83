@@ -89,7 +89,10 @@ describe('Phase 11 unified Design Control workspace', () => {
   });
 
   it('authenticates the oversight aggregation endpoint', () => {
-    expect(route).toContain("router.get('/oversight/projects', authenticateToken");
+    expect(route).toContain('router.use(authenticateToken)');
+    expect(route).toContain(
+      "router.get('/oversight/projects', requireDesignControlView",
+    );
   });
 
   it('provides loading, empty, error, retry, and permission messages', () => {

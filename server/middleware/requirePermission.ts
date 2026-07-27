@@ -19,7 +19,8 @@ export function requirePermission(capabilityKey: string) {
       if (req.badgeLookupFailed) {
         return res.status(422).json({
           error: 'Badge not recognised',
-          detail: 'The badge ID you entered was not found in the employee directory. Please check the badge ID and try again.',
+          detail:
+            'The badge ID you entered was not found in the employee directory. Please check the badge ID and try again.',
         });
       }
       return res.status(401).json({ error: 'Authentication required' });
@@ -46,6 +47,32 @@ export function requirePermission(capabilityKey: string) {
     } catch (err) {
       console.error('[requirePermission] Error checking permissions:', err);
       // Fail closed — deny on error
+      return res.status(403).json({ error: 'Permission check failed' });
+    }
+  };
+}
+
+export function requireAnyPermission(capabilityKeys: readonly string[]) {
+  if (capabilityKeys.length === 0) {
+    throw new Error('requireAnyPermission requires at least one capability');
+  }
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const { id, role } = req.user as any;
+    if (role === 'ADMIN' || role === 'OWNER') return next();
+    try {
+      const { permissionSet } = await getUserPermissions(id, role);
+      if (!capabilityKeys.some((key) => permissionSet.has(key))) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          requiredAnyCapability: capabilityKeys,
+        });
+      }
+      next();
+    } catch (err) {
+      console.error('[requireAnyPermission] Error checking permissions:', err);
       return res.status(403).json({ error: 'Permission check failed' });
     }
   };

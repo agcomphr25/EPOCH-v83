@@ -30,6 +30,7 @@ import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
 import { executeTravelerAutoPunch, type TravelerAutoPunchResult } from './timeClock';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
+import { isOvenCureDepartmentName } from '../lib/timerTraceability';
 
 const router = Router();
 
@@ -2387,6 +2388,10 @@ router.post('/start-task', async (req: Request, res: Response) => {
 
     const departmentConfig = routing ? (routing.departmentConfig as any) : {};
     const config = departmentConfig?.[department] || {};
+    // Oven/Cure is a timer-managed routing operation. The linked production
+    // timer records its start/end timestamps and closes the traveler-visible
+    // cure log, so it is not a labor punch that requires a charge code.
+    const isTimerManagedOvenCure = isOvenCureDepartmentName(department);
 
     // BACKEND CERTIFICATION ENFORCEMENT - Critical for AS9100 compliance
     const certificationPartNumber =
@@ -2453,23 +2458,26 @@ router.post('/start-task', async (req: Request, res: Response) => {
     if (existingTask && existingTask.employeeId === parseInt(employeeId)) {
       // Task #188: also auto-switch the punch on resume so the operator's
       // active punch_ledger session is on the correct WAD/charge-code.
-      const resumedPunch = await runAutoPunchForP2Task({
-        travelerId: ensuredTravelerResult?.traveler?.id ?? null,
-        serialNumber: serializedItem.serialNumber,
-        partNumber: certificationPartNumber,
-        inventoryItemId: inventoryIdentity.inventoryItemId,
-        partRoutingId: routing?.id ?? serializedItem.partRoutingId ?? null,
-        internalPartNumber: inventoryIdentity.internalPartNumber,
-        serializedItemPartNumber: serializedItem.partNumber,
-        employeeId,
-        laborApprovalId: req.body?.laborApprovalId ? parseInt(req.body.laborApprovalId, 10) : null,
-        adminPtoOverride: req.body?.adminPtoOverride === true,
-        adminOverrideReason:
-          typeof req.body?.adminOverrideReason === 'string' ? req.body.adminOverrideReason.trim() : null,
-        user: req.user ?? null,
-        ip: req.ip ?? null,
-      });
-      if (!resumedPunch.ok) {
+      // Timer-managed Oven/Cure resumes do not create labor punches.
+      const resumedPunch = isTimerManagedOvenCure
+        ? null
+        : await runAutoPunchForP2Task({
+            travelerId: ensuredTravelerResult?.traveler?.id ?? null,
+            serialNumber: serializedItem.serialNumber,
+            partNumber: certificationPartNumber,
+            inventoryItemId: inventoryIdentity.inventoryItemId,
+            partRoutingId: routing?.id ?? serializedItem.partRoutingId ?? null,
+            internalPartNumber: inventoryIdentity.internalPartNumber,
+            serializedItemPartNumber: serializedItem.partNumber,
+            employeeId,
+            laborApprovalId: req.body?.laborApprovalId ? parseInt(req.body.laborApprovalId, 10) : null,
+            adminPtoOverride: req.body?.adminPtoOverride === true,
+            adminOverrideReason:
+              typeof req.body?.adminOverrideReason === 'string' ? req.body.adminOverrideReason.trim() : null,
+            user: req.user ?? null,
+            ip: req.ip ?? null,
+          });
+      if (resumedPunch && !resumedPunch.ok) {
         return res.status(resumedPunch.status).json(resumedPunch.body);
       }
 
@@ -2534,7 +2542,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
         workTask: existingTask,
         resumed: true,
         message: 'Resumed existing task',
-        punch: resumedPunch.punch,
+        punch: resumedPunch?.punch ?? null,
       });
     }
 
@@ -2564,24 +2572,27 @@ router.post('/start-task', async (req: Request, res: Response) => {
     // charge-code activeness). Per Task #77, traveler punches default to
     // PENDING_APPROVAL. If a gate fails we return BEFORE inserting the
     // p2_work_tasks row so the operator is not "started" against an
-    // unauthorized charge code.
-    const startPunch = await runAutoPunchForP2Task({
-      travelerId: ensuredTravelerResult?.traveler?.id ?? null,
-      serialNumber: serializedItem.serialNumber,
-      partNumber: certificationPartNumber,
-      inventoryItemId: inventoryIdentity.inventoryItemId,
-      partRoutingId: routing?.id ?? serializedItem.partRoutingId ?? null,
-      internalPartNumber: inventoryIdentity.internalPartNumber,
-      serializedItemPartNumber: serializedItem.partNumber,
-      employeeId,
-      laborApprovalId: req.body?.laborApprovalId ? parseInt(req.body.laborApprovalId, 10) : null,
-      adminPtoOverride: req.body?.adminPtoOverride === true,
-      adminOverrideReason:
-        typeof req.body?.adminOverrideReason === 'string' ? req.body.adminOverrideReason.trim() : null,
-      user: req.user ?? null,
-      ip: req.ip ?? null,
-    });
-    if (!startPunch.ok) {
+    // unauthorized charge code. Timer-managed Oven/Cure steps intentionally
+    // skip the labor punch; their linked timer run owns elapsed-time evidence.
+    const startPunch = isTimerManagedOvenCure
+      ? null
+      : await runAutoPunchForP2Task({
+          travelerId: ensuredTravelerResult?.traveler?.id ?? null,
+          serialNumber: serializedItem.serialNumber,
+          partNumber: certificationPartNumber,
+          inventoryItemId: inventoryIdentity.inventoryItemId,
+          partRoutingId: routing?.id ?? serializedItem.partRoutingId ?? null,
+          internalPartNumber: inventoryIdentity.internalPartNumber,
+          serializedItemPartNumber: serializedItem.partNumber,
+          employeeId,
+          laborApprovalId: req.body?.laborApprovalId ? parseInt(req.body.laborApprovalId, 10) : null,
+          adminPtoOverride: req.body?.adminPtoOverride === true,
+          adminOverrideReason:
+            typeof req.body?.adminOverrideReason === 'string' ? req.body.adminOverrideReason.trim() : null,
+          user: req.user ?? null,
+          ip: req.ip ?? null,
+        });
+    if (startPunch && !startPunch.ok) {
       return res.status(startPunch.status).json(startPunch.body);
     }
 
@@ -2601,12 +2612,15 @@ router.post('/start-task', async (req: Request, res: Response) => {
       employeeCode,
       employeeName,
       certificationId: certification.id,
-      travelerId: startPunch.chargeContext.travelerId ?? null,
-      travelerStepId: startPunch.entry?.travelerStepId ?? null,
-      productionWorkOrderId: startPunch.entry?.productionWorkOrderId ?? null,
-      projectId: startPunch.entry?.projectId ?? null,
-      chargeCodeId: startPunch.entry?.chargeCodeId ?? null,
-      operationName: startPunch.chargeContext.operation ?? department,
+      travelerId: startPunch?.chargeContext.travelerId ?? ensuredTravelerResult?.traveler?.id ?? null,
+      travelerStepId: startPunch?.entry?.travelerStepId ?? null,
+      productionWorkOrderId:
+        startPunch?.entry?.productionWorkOrderId ??
+        ensuredTravelerResult?.traveler?.productionWorkOrderId ??
+        null,
+      projectId: startPunch?.entry?.projectId ?? null,
+      chargeCodeId: startPunch?.entry?.chargeCodeId ?? null,
+      operationName: startPunch?.chargeContext.operation ?? department,
       electronicSignoffRequired: true,
       electronicSignoffStatus: 'PENDING',
       status: 'IN_PROGRESS',
@@ -2718,7 +2732,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
       success: true,
       workTask,
       message: 'Task started successfully',
-      punch: startPunch.punch,
+      punch: startPunch?.punch ?? null,
     });
   } catch (error: any) {
     console.error('Error starting task:', error);

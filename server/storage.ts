@@ -9485,22 +9485,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getVendorsWithUnmigratedDocuments(): Promise<Vendor[]> {
+    // Only select the columns the migration function actually needs:
+    // id, name (for logging), and the two document URL columns.
+    // Selecting the full vendor shape here was fragile because optional
+    // columns (default_order_method, scope_approved_for, etc.) may not exist
+    // on every environment.
     const sql = `
       SELECT
-        id, name, contact_person as "contactPerson", email, additional_email as "additionalEmail",
-        phone, address, approved, evaluated,
-        evaluation_date as "evaluationDate", notes,
-        is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt",
-        street, city, state, zip_code as "zipCode", country, scope_approved_for as "scopeApprovedFor",
-        scope, quality_score as "qualityScore", cost_score as "costScore",
-        delivery_score as "deliveryScore", response_score as "responseScore",
-        approval_source as "approvalSource", approval_pdf_url as "approvalPdfUrl",
-        start_renewal_date as "startRenewalDate",
-        approval_expiration as "approvalExpiration",
-        approval_level as "approvalLevel", main_document_url as "mainDocumentUrl",
-        terms_and_conditions as "termsAndConditions", payment_terms as "paymentTerms",
-        shipping_instructions as "shippingInstructions",
-        default_order_method as "defaultOrderMethod"
+        id,
+        name,
+        main_document_url as "mainDocumentUrl",
+        approval_pdf_url as "approvalPdfUrl"
       FROM vendors
       WHERE is_active = true
         AND (

@@ -96,6 +96,10 @@ describe('Design Control authority foundation', () => {
       join(root, 'client/src/pages/QMSDesignControlPage.tsx'),
       'utf8'
     );
+    const workspace = readFileSync(
+      join(root, 'client/src/features/design-control/DesignControlWorkspace.tsx'),
+      'utf8'
+    );
 
     expect(migration).toContain(
       'design_control_records_authoritative_rd_project_unique'
@@ -115,7 +119,8 @@ describe('Design Control authority foundation', () => {
     expect(projectRoutes).toContain('z.string().trim().min(1)');
     expect(projectRoutes).toContain("outcome: 'possible_duplicate'");
     expect(qmsRoutes).toContain("from '../../../shared/designControlWorkflow'");
-    expect(qmsPage).toContain("from '@shared/designControlWorkflow'");
+    expect(qmsPage).toContain("from '@/features/design-control/DesignControlWorkspace'");
+    expect(workspace).toContain("from '@shared/designControlWorkflow'");
     expect(releaseService).toContain("authorityStatus !== 'authoritative'");
     expect(rdProjectsPage).toContain('const projects = sharedProjects');
     expect(rdProjectsPage).toContain('Browser-local project data needs review');

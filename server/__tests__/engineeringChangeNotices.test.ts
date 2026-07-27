@@ -16,6 +16,9 @@ const ui = read(
 );
 const rd = read('client/src/pages/RDProjectsPage.tsx');
 const qms = read('client/src/pages/QMSDesignControlPage.tsx');
+const workspace = read(
+  'client/src/features/design-control/DesignControlWorkspace.tsx'
+);
 
 describe('Phase 7 authoritative Engineering Change Notices', () => {
   it('uses additive idempotent migration 0215 without destructive legacy changes', () => {
@@ -341,8 +344,9 @@ describe('Phase 7 authoritative Engineering Change Notices', () => {
   });
 
   it('uses one shared live ECN workspace in RD and QMS', () => {
-    expect(rd).toContain('<EngineeringChangeNoticeWorkspace');
-    expect(qms).toContain('<EngineeringChangeNoticeWorkspace');
+    expect(rd).toContain('<DesignControlWorkspace');
+    expect(qms).toContain('<DesignControlWorkspace');
+    expect(workspace).toContain('<EngineeringChangeNoticeWorkspace');
     expect(ui).toContain('/api/design-projects/');
     expect(qms).not.toMatch(/ECO-\d{3,}|ECN-\d{3,}/);
   });

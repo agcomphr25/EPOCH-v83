@@ -1845,6 +1845,11 @@ export default function ProjectDetailPage() {
         if ((project as any).poNumber) params.set('poNumber', (project as any).poNumber);
         break;
       case 'rfq_risk_assessment':
+        params.set('projectId', project.id);
+        params.set('projectStepId', step.id);
+        if (step.status === 'completed') params.set('intent', 'view');
+        if (project.customerId) params.set('customerId', project.customerId);
+        break;
       case 'quote':
         if (!params.has('id') && project.customerId) params.set('customerId', project.customerId);
         break;

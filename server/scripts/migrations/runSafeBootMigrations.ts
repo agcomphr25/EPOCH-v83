@@ -247,6 +247,7 @@ export const safeMigrationFiles = [
   '0219_controlled_printed_copies.sql',
   '0220_p2_v2_production_execution.sql',
   '0221_design_history_files.sql',
+  '0222_vendor_scope_approved_for.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -281,6 +282,7 @@ export const criticalMigrationFiles = new Set([
   '0219_controlled_printed_copies.sql',
   '0220_p2_v2_production_execution.sql',
   '0221_design_history_files.sql',
+  '0222_vendor_scope_approved_for.sql',
 ]);
 
 export async function runSafeBootMigrations() {

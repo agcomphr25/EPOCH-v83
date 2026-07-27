@@ -16,6 +16,7 @@ import P2V2TechnicalConfigurationReview from './P2V2TechnicalConfigurationReview
 import P2V2WadAuthorization from './P2V2WadAuthorization';
 import P2V2CommercialReview from './P2V2CommercialReview';
 import P2V2PreproductionReadiness from './P2V2PreproductionReadiness';
+import P2V2ProductionExecution from './P2V2ProductionExecution';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -419,6 +420,11 @@ export default function P2V2ProjectWorkflow({
               {stage.stepType === 'preproduction_release' && (
                 <div className="mt-3">
                   <P2V2PreproductionReadiness projectId={projectId} />
+                </div>
+              )}
+              {stage.stepType === 'production_quality' && (
+                <div className="mt-3">
+                  <P2V2ProductionExecution projectId={projectId} />
                 </div>
               )}
             </CardContent>

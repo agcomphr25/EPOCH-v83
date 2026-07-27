@@ -21,12 +21,21 @@ describe('Design Control client authority foundation', () => {
       '12',
     ]);
 
-    const source = readFileSync(
+    // QMSDesignControlPage now delegates rendering to DesignControlWorkspace,
+    // which is where the shared workflow import lives.
+    const workspaceSrc = readFileSync(
+      join(process.cwd(), 'client/src/features/design-control/DesignControlWorkspace.tsx'),
+      'utf8'
+    );
+    expect(workspaceSrc).toContain("from '@shared/designControlWorkflow'");
+    expect(workspaceSrc).not.toContain('legacyDesignWorkflowSteps');
+
+    // The page itself should render the workspace component.
+    const pageSrc = readFileSync(
       join(process.cwd(), 'client/src/pages/QMSDesignControlPage.tsx'),
       'utf8'
     );
-    expect(source).toContain("from '@shared/designControlWorkflow'");
-    expect(source).not.toContain('legacyDesignWorkflowSteps');
+    expect(pageSrc).toContain('DesignControlWorkspace');
   });
 
   it('keeps server projects authoritative and local-only data visible for review', () => {

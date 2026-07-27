@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { requirePermission } from '../../middleware/requirePermission';
 
 import {
   generateEngineeringPackage,
@@ -12,7 +13,7 @@ function actorFromRequest(req: Request) {
   return user?.displayName ?? user?.username ?? user?.email ?? 'system';
 }
 
-router.get('/:releaseId/package-preview', async (req: Request, res: Response) => {
+router.get('/:releaseId/package-preview', requirePermission('engineering.package.view'), async (req: Request, res: Response) => {
   try {
     const preview = await getEngineeringPackagePreview(req.params.releaseId);
     if (!preview) {
@@ -27,7 +28,7 @@ router.get('/:releaseId/package-preview', async (req: Request, res: Response) =>
   }
 });
 
-router.post('/:releaseId/generate-package', async (req: Request, res: Response) => {
+router.post('/:releaseId/generate-package', requirePermission('engineering.package.generate'), async (req: Request, res: Response) => {
   try {
     const result = await generateEngineeringPackage({
       releaseId: req.params.releaseId,

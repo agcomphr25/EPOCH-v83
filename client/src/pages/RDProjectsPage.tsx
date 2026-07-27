@@ -49,12 +49,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { ProjectFormInstancesPanel } from '@/components/design-control/ProjectFormInstancesPanel';
-import { EngineeringChangeRequestRegister } from '@/components/design-control/EngineeringChangeRequestRegister';
-import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
-import { PostReleaseChangePanel } from '@/components/design-control/PostReleaseChangePanel';
-import { ControlledCopyPanel } from '@/components/design-control/ControlledCopyPanel';
 import { DesignHistoryFilePanel } from '@/components/design-control/DesignHistoryFilePanel';
+import { DesignControlWorkspace } from '@/features/design-control/DesignControlWorkspace';
 
 interface EmployeeOption {
   id: number;
@@ -2204,26 +2200,12 @@ export default function RDProjectsPage() {
 
                     <TabsContent value="engineering-release" className="space-y-4">
                       {activeDesignControlRecord && (
-                        <>
-                          <EngineeringChangeRequestRegister
-                            projectId={selectedProject.id}
-                            recordId={activeDesignControlRecord.id}
-                          />
-                          <EngineeringChangeNoticeWorkspace
-                            projectId={selectedProject.id}
-                          />
-                          <PostReleaseChangePanel
-                            projectId={selectedProject.id}
-                            recordId={activeDesignControlRecord.id}
-                          />
-                          <ControlledCopyPanel
-                            projectId={selectedProject.id}
-                            recordId={activeDesignControlRecord.id}
-                          />
-                          <ProjectFormInstancesPanel
-                            recordId={activeDesignControlRecord.id}
-                          />
-                        </>
+                        <DesignControlWorkspace
+                          projectId={selectedProject.id}
+                          recordId={activeDesignControlRecord.id}
+                          releaseId={releasedEngineeringReleaseId}
+                          mode="project"
+                        />
                       )}
                       <Card>
                         <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">

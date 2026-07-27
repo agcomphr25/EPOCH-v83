@@ -3798,6 +3798,7 @@ export const vendors = pgTable('vendors', {
   paymentTerms: text('payment_terms'), // Vendor-specific payment terms
   shippingInstructions: text('shipping_instructions'), // Vendor-specific shipping instructions
   defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO', 'WEBSITE', or 'EMAIL'
+  scopeApprovedFor: text('scope_approved_for'), // Specific materials/services the vendor is approved to supply
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

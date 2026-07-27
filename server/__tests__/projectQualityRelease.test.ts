@@ -10,7 +10,7 @@ import {
 
 const root = path.resolve(__dirname, '../..');
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
-const migration = read('migrations/0222_p2_v2_quality_product_release.sql');
+const migration = read('migrations/0224_p2_v2_quality_product_release.sql');
 const service = read('server/src/services/projectQualityReleaseService.ts');
 const routes = read('server/src/routes/projectQualityRelease.ts');
 

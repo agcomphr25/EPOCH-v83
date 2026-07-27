@@ -281,6 +281,22 @@ describe('Migration file structure', () => {
     expect(empty, `Empty migration files: ${empty.join(', ')}`).toHaveLength(0);
   });
 
+  it('repairs the contradictory P2 V2 production-launch status constraint', () => {
+    const base = fs.readFileSync(
+      path.join(MIGRATIONS_DIR, '0210_project_preproduction_readiness.sql'),
+      'utf8',
+    );
+    const repair = fs.readFileSync(
+      path.join(MIGRATIONS_DIR, '0223_project_production_launch_status_repair.sql'),
+      'utf8',
+    );
+
+    expect(base).toMatch(/status\s+TEXT\s+NOT NULL\s+CHECK\s*\(status IN \('COMPLETE','FAILED'\)\)/);
+    expect(repair).toMatch(
+      /DROP CONSTRAINT IF EXISTS project_production_launches_complete_only_check/,
+    );
+  });
+
   it('no NEW migration files share an undocumented numeric prefix with an existing file', () => {
     const seen = new Map<string, string[]>();
     for (const f of files) {

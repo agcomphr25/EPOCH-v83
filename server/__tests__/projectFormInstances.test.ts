@@ -238,7 +238,7 @@ describe('Phase 5 Design Project Form Instances', () => {
     expect(
       service.match(/db\.transaction\(async \(tx\)/g)?.length
     ).toBeGreaterThan(5);
-    expect(service).toContain('input.request ?? {},\n      tx');
+    expect(service).toMatch(/input\.request \?\? \{\},\r?\n\s+tx/);
   });
 
   it('renders deterministic completed PDF identity, footer, pagination, and barcode', async () => {

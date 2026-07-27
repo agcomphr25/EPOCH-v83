@@ -131,66 +131,6 @@ function mapP2PackingSlipRow(row: any) {
   };
 }
 
-async function getLinkedP2InvoiceNumberForPackingSlip(
-  packingSlipId: string,
-  lotId?: string | null,
-): Promise<string | null> {
-  const rows = await pool.query<{ invoice_number: string }>(
-    `SELECT invoice_number
-       FROM ar_invoices
-      WHERE status <> 'VOID'
-        AND (
-          packing_slip_id = $1
-          OR (
-            $2::uuid IS NOT NULL
-            AND lot_id = $2::uuid
-            AND packing_slip_id IS NULL
-          )
-        )
-      ORDER BY
-        CASE WHEN packing_slip_id = $1 THEN 0 ELSE 1 END,
-        created_at DESC
-      LIMIT 1`,
-    [packingSlipId, lotId ?? null]
-  );
-
-  return rows.rows[0]?.invoice_number ?? null;
-}
-
-async function syncP2PackingSlipNumberToLinkedInvoice(slip: any) {
-  if (!slip?.id) return slip;
-
-  const linkedInvoiceNumber = await getLinkedP2InvoiceNumberForPackingSlip(
-    slip.id,
-    slip.lotNumberId ?? slip.lot_number_id ?? null,
-  );
-  if (!linkedInvoiceNumber) return slip;
-
-  const currentPackingSlipNumber = slip.packingSlipNumber ?? slip.packing_slip_number ?? null;
-  const currentInvoiceNumber = slip.invoiceNumber ?? slip.invoice_number ?? null;
-  if (currentPackingSlipNumber === linkedInvoiceNumber && currentInvoiceNumber === linkedInvoiceNumber) {
-    return slip;
-  }
-
-  const result = await pool.query(
-    `UPDATE p2_packing_slips
-        SET packing_slip_number = $1,
-            invoice_number = $1,
-            external_pdf_url = NULL,
-            updated_at = NOW()
-      WHERE id = $2
-      RETURNING *`,
-    [linkedInvoiceNumber, slip.id]
-  );
-
-  return mapP2PackingSlipRow(result.rows[0]) ?? {
-    ...slip,
-    packingSlipNumber: linkedInvoiceNumber,
-    invoiceNumber: linkedInvoiceNumber,
-    externalPdfUrl: null,
-  };
-}
-
 async function selectP2PackingSlipFallback(id: string) {
   const result = await pool.query(
     `
@@ -208,8 +148,7 @@ async function selectP2PackingSlipFallback(id: string) {
     [id]
   );
 
-  const slip = mapP2PackingSlipRow(result.rows[0]);
-  return syncP2PackingSlipNumberToLinkedInvoice(slip);
+  return mapP2PackingSlipRow(result.rows[0]);
 }
 
 async function selectP2ReplacementSlipsFallback(replacesPackingSlipId: string) {
@@ -229,8 +168,7 @@ async function selectP2ReplacementSlipsFallback(replacesPackingSlipId: string) {
     [replacesPackingSlipId]
   );
 
-  const slips = result.rows.map(mapP2PackingSlipRow).filter(Boolean);
-  return Promise.all(slips.map(syncP2PackingSlipNumberToLinkedInvoice));
+  return result.rows.map(mapP2PackingSlipRow).filter(Boolean);
 }
 
 async function selectP2PackingSlipById(id: string) {
@@ -243,7 +181,7 @@ async function selectP2PackingSlipById(id: string) {
       .from(p2PackingSlips)
       .where(eq(p2PackingSlips.id, id));
 
-    return syncP2PackingSlipNumberToLinkedInvoice(slip ?? null);
+    return slip ?? null;
   } catch (err) {
     console.warn('[P2Shipping] Falling back to compatibility packing slip lookup:', { id, err });
     return selectP2PackingSlipFallback(id);

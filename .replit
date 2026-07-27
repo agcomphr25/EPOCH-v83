@@ -10,6 +10,7 @@ packages = ["jq", "postgresql", "cairo", "pango", "libjpeg", "giflib", "librsvg"
 deploymentTarget = "autoscale"
 run = ["npm", "run", "start"]
 build = ["npm", "run", "deploy"]
+migrate = ["true"]
 
 [env]
 #PORT = "5000"

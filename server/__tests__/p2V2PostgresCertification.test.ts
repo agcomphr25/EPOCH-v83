@@ -35,6 +35,11 @@ import {
   getProductionDashboard,
 } from '../src/services/projectProductionExecutionService';
 import {
+  createQualityReview,
+  decideQualityReview,
+  releaseProduct,
+} from '../src/services/projectQualityReleaseService';
+import {
   getP2V2StagesForDefinitionVersion,
   P2_V2_DEFINITION_VERSION,
 } from '../src/services/projectWorkflowRegistry';
@@ -920,6 +925,41 @@ describe('actual production launch service against PostgreSQL', () => {
     expect(created.review?.revision_number).toBe(1);
     expect(created.review?.status).toBe('BLOCKED');
     expect(created.productionOrders).toHaveLength(6);
+  });
+
+  it('executes the real Quality review and idempotent Product Release transaction', async () => {
+    await query(`UPDATE p2_serialized_items SET status='COMPLETED',
+      current_department='Final QC',final_qc_completed_at=now(),completed_at=now()
+      WHERE po_id=$1`, [fixture.poId]);
+    await query(`INSERT INTO p2_final_inspection_results
+      (serialized_item_id,barcode,part_number,inspection_type,overall_result,inspector_name,qa_mgr_approval)
+      SELECT id,barcode,part_number,'FINAL','PASS','PG Certifier','Approved'
+      FROM p2_serialized_items WHERE po_id=$1`, [fixture.poId]);
+    await query(`UPDATE project_production_stage_reviews SET status='COMPLETE',completed_at=now()
+      WHERE project_id=$1`, [fixture.projectId]);
+    await query(`UPDATE project_workflow_step_instances SET status='COMPLETE',completed_at=now()
+      WHERE project_id=$1 AND step_type='production_quality'`, [fixture.projectId]);
+    const created = await createQualityReview(fixture.projectId, actor);
+    let lock = Number(created.review?.lock_version);
+    for (const type of ['QUALITY','OPERATIONS','PROJECT_MANAGEMENT'] as const) {
+      const decided = await decideQualityReview(fixture.projectId, lock, type, 'APPROVED',
+        `${type} certifies revision 1`, '', actor);
+      lock = Number(decided.review?.lock_version);
+    }
+    const input = {
+      expectedLockVersion: lock,
+      idempotencyKey: 'phase9b-pg-cert-release-1',
+      partNumber: String(created.items[0].part_number),
+      quantity: 1,
+      serialNumbers: [String(created.items[0].release_serial)],
+      batchLots: [],
+      signatureMeaning: 'Quality authorizes exact product for customer release',
+    };
+    const first = await releaseProduct(fixture.projectId, input, actor);
+    expect(first.release.shipping_status).toBe('AVAILABLE');
+    expect((await releaseProduct(fixture.projectId, input, actor)).idempotentReplay).toBe(true);
+    expect((await query(`SELECT id FROM project_product_releases WHERE project_id=$1`,
+      [fixture.projectId])).rows).toHaveLength(1);
   });
 
   it('keeps null and legacy workflow versions isolated', async () => {

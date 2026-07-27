@@ -965,6 +965,11 @@ describe('actual production launch service against PostgreSQL', () => {
       WHERE project_id=$1 AND step_type='production_quality'`,
       [fixture.projectId]
     );
+    const stage10Before = await query<{ status: string; updated_at: Date }>(
+      `SELECT status,updated_at FROM project_workflow_step_instances
+       WHERE project_id=$1 AND step_type='project_closing'`,
+      [fixture.projectId]
+    );
     const created = await createQualityReview(fixture.projectId, actor);
     expect(created.review?.status).toBe('IN_PROGRESS');
     let lock = Number(created.review?.lock_version);
@@ -1155,12 +1160,12 @@ describe('actual production launch service against PostgreSQL', () => {
       [fixture.projectId]
     );
     expect(stage.rows[0].status).toBe('COMPLETE');
-    const shippingStage = await query<{ status: string }>(
-      `SELECT status FROM project_workflow_step_instances
+    const shippingStage = await query<{ status: string; updated_at: Date }>(
+      `SELECT status,updated_at FROM project_workflow_step_instances
        WHERE project_id=$1 AND step_type='project_closing'`,
       [fixture.projectId]
     );
-    expect(shippingStage.rows[0].status).toBe('NOT_STARTED');
+    expect(shippingStage.rows).toEqual(stage10Before.rows);
     const shipmentCount = await query<{ count: number }>(
       `SELECT count(*)::int count FROM shipment_records WHERE po_numbers=$1`,
       [fixture.projectId]

@@ -4,12 +4,14 @@ import { z } from 'zod';
 import { getUserPermissions } from '../services/permissionService';
 import {
   createQualityReview,
+  completeQualityReview,
   decideQualityReview,
   getQualityDashboard,
   placeReleaseHold,
   ProjectQualityReleaseError,
   releaseProductHold,
   releaseProduct,
+  submitQualityReview,
 } from '../services/projectQualityReleaseService';
 import type { ProductionActor } from '../services/projectProductionExecutionService';
 
@@ -136,6 +138,20 @@ router.post('/reviews', async (req, res) => {
     fail(res, error);
   }
 });
+router.post('/reviews/current/submit', async (req, res) => {
+  try {
+    const body = expected.parse(req.body);
+    res.json(
+      await submitQualityReview(
+        id(req),
+        body.expectedLockVersion,
+        await authorized(req, 'projects.quality_release.manage')
+      )
+    );
+  } catch (error) {
+    fail(res, error);
+  }
+});
 for (const [path, type, capability] of [
   ['quality', 'QUALITY', 'projects.quality_release.quality_decide'],
   ['operations', 'OPERATIONS', 'projects.quality_release.operations_decide'],
@@ -164,6 +180,20 @@ for (const [path, type, capability] of [
     }
   });
 }
+router.post('/reviews/current/complete', async (req, res) => {
+  try {
+    const body = expected.parse(req.body);
+    res.json(
+      await completeQualityReview(
+        id(req),
+        body.expectedLockVersion,
+        await authorized(req, 'projects.quality_release.manage')
+      )
+    );
+  } catch (error) {
+    fail(res, error);
+  }
+});
 router.post('/releases', async (req, res) => {
   try {
     const body = release.parse(req.body);

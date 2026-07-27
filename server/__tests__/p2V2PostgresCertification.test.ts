@@ -35,9 +35,14 @@ import {
   getProductionDashboard,
 } from '../src/services/projectProductionExecutionService';
 import {
+  completeQualityReview,
   createQualityReview,
   decideQualityReview,
+  getQualityDashboard,
+  placeReleaseHold,
+  releaseProductHold,
   releaseProduct,
+  submitQualityReview,
 } from '../src/services/projectQualityReleaseService';
 import {
   getP2V2StagesForDefinitionVersion,
@@ -678,24 +683,26 @@ describe('Phase 8 migration certification', () => {
     );
   });
 
-  it('has Phase 1-8 tables and validated 0212 constraints', async () => {
+  it('has Phase 1-8 tables and the repaired launch constraints', async () => {
     await query(
       `ALTER TABLE project_production_releases
          VALIDATE CONSTRAINT project_production_releases_readiness_project_fkey;
        ALTER TABLE project_production_launches
-         VALIDATE CONSTRAINT project_production_launches_release_project_fkey;
-       ALTER TABLE project_production_launches
-         VALIDATE CONSTRAINT project_production_launches_complete_only_check`
+         VALIDATE CONSTRAINT project_production_launches_release_project_fkey`
     );
     const constraints = await query<{ conname: string; convalidated: boolean }>(
       `SELECT conname,convalidated FROM pg_constraint WHERE conname IN
        ('project_production_releases_readiness_project_fkey',
-        'project_production_launches_release_project_fkey',
-        'project_production_launches_complete_only_check')
+        'project_production_launches_release_project_fkey')
        ORDER BY conname`
     );
-    expect(constraints.rows).toHaveLength(3);
+    expect(constraints.rows).toHaveLength(2);
     expect(constraints.rows.every((row) => row.convalidated)).toBe(true);
+    const retired = await query(
+      `SELECT 1 FROM pg_constraint
+       WHERE conname='project_production_launches_complete_only_check'`
+    );
+    expect(retired.rows).toHaveLength(0);
   });
 
   it('has additive Phase 9A Production evidence, hold, link, and approval tables', async () => {
@@ -703,12 +710,14 @@ describe('Phase 8 migration certification', () => {
       `SELECT table_name FROM information_schema.tables
        WHERE table_schema='public' AND table_name=ANY($1::text[])
        ORDER BY table_name`,
-      [[
-        'project_production_stage_reviews',
-        'project_production_evidence_links',
-        'project_production_holds',
-        'project_production_stage_approvals',
-      ]]
+      [
+        [
+          'project_production_stage_reviews',
+          'project_production_evidence_links',
+          'project_production_holds',
+          'project_production_stage_approvals',
+        ],
+      ]
     );
     expect(result.rows.map((row) => row.table_name)).toEqual([
       'project_production_evidence_links',
@@ -927,39 +936,255 @@ describe('actual production launch service against PostgreSQL', () => {
     expect(created.productionOrders).toHaveLength(6);
   });
 
-  it('executes the real Quality review and idempotent Product Release transaction', async () => {
-    await query(`UPDATE p2_serialized_items SET status='COMPLETED',
+  it('executes the complete real Quality lifecycle, partial release, concurrency, rollback and hold controls', async () => {
+    await expect(
+      createQualityReview(fixture.projectId, actor)
+    ).rejects.toMatchObject({
+      code: 'CURRENT_PRODUCTION_COMPLETION_REQUIRED',
+    });
+    await query(
+      `UPDATE p2_serialized_items SET status='COMPLETED',
       current_department='Final QC',final_qc_completed_at=now(),completed_at=now()
-      WHERE po_id=$1`, [fixture.poId]);
-    await query(`INSERT INTO p2_final_inspection_results
+      WHERE po_id=$1`,
+      [fixture.poId]
+    );
+    await query(
+      `INSERT INTO p2_final_inspection_results
       (serialized_item_id,barcode,part_number,inspection_type,overall_result,inspector_name,qa_mgr_approval)
       SELECT id,barcode,part_number,'FINAL','PASS','PG Certifier','Approved'
-      FROM p2_serialized_items WHERE po_id=$1`, [fixture.poId]);
-    await query(`UPDATE project_production_stage_reviews SET status='COMPLETE',completed_at=now()
-      WHERE project_id=$1`, [fixture.projectId]);
-    await query(`UPDATE project_workflow_step_instances SET status='COMPLETE',completed_at=now()
-      WHERE project_id=$1 AND step_type='production_quality'`, [fixture.projectId]);
+      FROM p2_serialized_items WHERE po_id=$1`,
+      [fixture.poId]
+    );
+    await query(
+      `UPDATE project_production_stage_reviews SET status='COMPLETE',completed_at=now()
+      WHERE project_id=$1`,
+      [fixture.projectId]
+    );
+    await query(
+      `UPDATE project_workflow_step_instances SET status='COMPLETE',completed_at=now()
+      WHERE project_id=$1 AND step_type='production_quality'`,
+      [fixture.projectId]
+    );
+    const stage10Before = await query<{ status: string; updated_at: Date }>(
+      `SELECT status,updated_at FROM project_workflow_step_instances
+       WHERE project_id=$1 AND step_type='project_closing'`,
+      [fixture.projectId]
+    );
     const created = await createQualityReview(fixture.projectId, actor);
+    expect(created.review?.status).toBe('IN_PROGRESS');
     let lock = Number(created.review?.lock_version);
-    for (const type of ['QUALITY','OPERATIONS','PROJECT_MANAGEMENT'] as const) {
-      const decided = await decideQualityReview(fixture.projectId, lock, type, 'APPROVED',
-        `${type} certifies revision 1`, '', actor);
+    const submitted = await submitQualityReview(fixture.projectId, lock, actor);
+    expect(submitted.review?.status).toBe('READY_FOR_REVIEW');
+    lock = Number(submitted.review?.lock_version);
+    for (const type of ['OPERATIONS', 'PROJECT_MANAGEMENT'] as const) {
+      const decided = await decideQualityReview(
+        fixture.projectId,
+        lock,
+        type,
+        'APPROVED',
+        `${type} certifies revision 1`,
+        '',
+        actor
+      );
       lock = Number(decided.review?.lock_version);
     }
+    await expect(
+      completeQualityReview(fixture.projectId, lock, actor)
+    ).rejects.toMatchObject({ code: 'QUALITY_APPROVALS_REQUIRED' });
+    await expect(
+      releaseProduct(
+        fixture.projectId,
+        {
+          expectedLockVersion: lock,
+          idempotencyKey: 'authority-blocked-release',
+          partNumber: String(created.items[0].part_number),
+          quantity: 1,
+          serialNumbers: [String(created.items[0].release_serial)],
+          batchLots: [],
+          signatureMeaning:
+            'Operations and PM are not Quality release authority',
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'READY_FOR_RELEASE_REQUIRED' });
+    const qualityDecision = await decideQualityReview(
+      fixture.projectId,
+      lock,
+      'QUALITY',
+      'APPROVED',
+      'Quality certifies revision 1',
+      '',
+      actor
+    );
+    lock = Number(qualityDecision.review?.lock_version);
+    const completed = await completeQualityReview(
+      fixture.projectId,
+      lock,
+      actor
+    );
+    expect(completed.review?.status).toBe('READY_FOR_RELEASE');
+    lock = Number(completed.review?.lock_version);
+    const firstSerial = String(created.items[0].release_serial);
+    const secondSerial = String(created.items[1].release_serial);
+    const partNumber = String(created.items[0].part_number);
+    await expect(
+      releaseProduct(
+        fixture.projectId,
+        {
+          expectedLockVersion: lock,
+          idempotencyKey: 'forced-rollback-release',
+          partNumber,
+          quantity: 1,
+          serialNumbers: [firstSerial],
+          batchLots: [],
+          signatureMeaning: 'Forced rollback certification',
+          certificationFailurePoint: 'AFTER_ALLOCATIONS',
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect(
+      (
+        await query(
+          `SELECT id FROM project_product_releases WHERE project_id=$1`,
+          [fixture.projectId]
+        )
+      ).rows
+    ).toHaveLength(0);
+    expect(
+      (
+        await query(
+          `SELECT id FROM project_product_release_allocations WHERE project_id=$1`,
+          [fixture.projectId]
+        )
+      ).rows
+    ).toHaveLength(0);
     const input = {
       expectedLockVersion: lock,
       idempotencyKey: 'phase9b-pg-cert-release-1',
-      partNumber: String(created.items[0].part_number),
+      partNumber,
       quantity: 1,
-      serialNumbers: [String(created.items[0].release_serial)],
+      serialNumbers: [firstSerial],
       batchLots: [],
       signatureMeaning: 'Quality authorizes exact product for customer release',
     };
-    const first = await releaseProduct(fixture.projectId, input, actor);
-    expect(first.release.shipping_status).toBe('AVAILABLE');
-    expect((await releaseProduct(fixture.projectId, input, actor)).idempotentReplay).toBe(true);
-    expect((await query(`SELECT id FROM project_product_releases WHERE project_id=$1`,
-      [fixture.projectId])).rows).toHaveLength(1);
+    const concurrent = await Promise.allSettled([
+      releaseProduct(fixture.projectId, input, actor),
+      releaseProduct(
+        fixture.projectId,
+        { ...input, idempotencyKey: 'phase9b-pg-cert-release-race' },
+        actor
+      ),
+    ]);
+    expect(
+      concurrent.filter((result) => result.status === 'fulfilled')
+    ).toHaveLength(1);
+    expect(
+      concurrent.filter((result) => result.status === 'rejected')
+    ).toHaveLength(1);
+    const first = concurrent.find((result) => result.status === 'fulfilled');
+    if (!first || first.status !== 'fulfilled')
+      throw new Error('Concurrent release did not produce a winner');
+    const firstResult = first.value;
+    expect(firstResult.dashboard.review?.status).toBe('PARTIALLY_RELEASED');
+    const winningKey = String(firstResult.release.idempotency_key);
+    const winningInput =
+      winningKey === input.idempotencyKey
+        ? input
+        : { ...input, idempotencyKey: winningKey };
+    expect(
+      (await releaseProduct(fixture.projectId, winningInput, actor))
+        .idempotentReplay
+    ).toBe(true);
+    await expect(
+      releaseProduct(fixture.projectId, { ...winningInput, quantity: 2 }, actor)
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    await expect(
+      releaseProduct(
+        fixture.projectId,
+        {
+          ...input,
+          expectedLockVersion: Number(
+            firstResult.dashboard.review?.lock_version
+          ),
+          idempotencyKey: 'cumulative-over-release',
+          quantity: 2,
+          serialNumbers: [firstSerial, secondSerial],
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'RELEASE_EXCEEDS_ELIGIBLE_QUANTITY' });
+    const held = await placeReleaseHold(
+      fixture.projectId,
+      String(firstResult.release.id),
+      'Certification containment',
+      1,
+      [firstSerial],
+      [],
+      actor
+    );
+    expect(held.releases[0].shipping_status).toBe('BLOCKED');
+    const activeHold = held.holds.find((entry) => entry.status === 'ACTIVE');
+    const holdReleased = await releaseProductHold(
+      fixture.projectId,
+      String(firstResult.release.id),
+      String(activeHold?.id),
+      'Certification disposition complete',
+      actor
+    );
+    expect(holdReleased.releases[0].shipping_status).toBe('AVAILABLE');
+    await expect(
+      query(
+        `UPDATE project_product_releases SET released_quantity=99 WHERE id=$1`,
+        [firstResult.release.id]
+      )
+    ).rejects.toThrow(/immutable/i);
+    const afterFirst = await getQualityDashboard(fixture.projectId);
+    const final = await releaseProduct(
+      fixture.projectId,
+      {
+        expectedLockVersion: Number(afterFirst.review?.lock_version),
+        idempotencyKey: 'phase9b-pg-cert-release-2',
+        partNumber,
+        quantity: 1,
+        serialNumbers: [secondSerial],
+        batchLots: [],
+        signatureMeaning: 'Quality authorizes final exact product',
+      },
+      actor
+    );
+    expect(final.dashboard.review?.status).toBe('COMPLETE');
+    const stage = await query<{ status: string }>(
+      `SELECT status FROM project_workflow_step_instances
+       WHERE project_id=$1 AND step_type='final_release_shipping'`,
+      [fixture.projectId]
+    );
+    expect(stage.rows[0].status).toBe('COMPLETE');
+    const shippingStage = await query<{ status: string; updated_at: Date }>(
+      `SELECT status,updated_at FROM project_workflow_step_instances
+       WHERE project_id=$1 AND step_type='project_closing'`,
+      [fixture.projectId]
+    );
+    expect(shippingStage.rows).toEqual(stage10Before.rows);
+    const shipmentCount = await query<{ count: number }>(
+      `SELECT count(*)::int count FROM shipment_records WHERE po_numbers=$1`,
+      [fixture.projectId]
+    );
+    expect(shipmentCount.rows[0].count).toBe(0);
+    const unchanged = await query<{ status: string; current_stage: string }>(
+      `SELECT status,current_stage FROM projects WHERE id=$1`,
+      [fixture.projectId]
+    );
+    expect(unchanged.rows[0].status).not.toBe('CLOSED');
+    expect(unchanged.rows[0].current_stage).toBe('IN_PRODUCTION');
+    expect(
+      (
+        await query(
+          `SELECT id FROM project_product_releases WHERE project_id=$1`,
+          [fixture.projectId]
+        )
+      ).rows
+    ).toHaveLength(2);
   });
 
   it('keeps null and legacy workflow versions isolated', async () => {
@@ -987,5 +1212,25 @@ describe('actual production launch service against PostgreSQL', () => {
        AND current_stage<>'READY_FOR_P2_RELEASE'`
     );
     expect(changed.rows).toHaveLength(0);
+  });
+
+  it('fails closed for an unknown workflow version at the database boundary', async () => {
+    const id = '00000000-0000-4000-8000-000000000804';
+    await expect(
+      query(
+        `INSERT INTO projects
+         (id,project_code,project_name,customer_id,workflow_version,current_stage)
+         VALUES ($1,'UNKNOWN-V2','Unknown isolation','CERT-A','future_v9','IN_PRODUCTION')`,
+        [id]
+      )
+    ).rejects.toMatchObject({
+      constraint: 'projects_workflow_version_check',
+    });
+    expect(
+      (await query(`SELECT id FROM projects WHERE id=$1`, [id])).rows
+    ).toHaveLength(0);
+    await expect(createQualityReview(id, actor)).rejects.toMatchObject({
+      code: 'PROJECT_NOT_FOUND',
+    });
   });
 });

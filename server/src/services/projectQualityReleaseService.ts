@@ -251,7 +251,7 @@ export async function createQualityReview(
         production_plan_revision,wad_revision,configuration_baseline_id,effectivity_reference,
         evidence_snapshot,document_manifest,blockers,warnings,created_by,created_by_display_name)
       VALUES (${projectId},${model.ctx.instance.id},${model.ctx.qualityStep.id},${model.ctx.productionReview.id},
-        ${revision},${model.readiness.state},${model.ctx.productionReview.revision_number},
+        ${revision},${model.readiness.blockers.length ? 'BLOCKED' : 'IN_PROGRESS'},${model.ctx.productionReview.revision_number},
         ${model.ctx.productionReview.production_plan_revision},${model.ctx.productionReview.wad_revision},
         ${model.ctx.productionReview.configuration_baseline_id},${model.ctx.productionReview.effectivity_reference},
         ${JSON.stringify({ items: model.items, ncrs: model.ncrs, production: model.production })}::jsonb,
@@ -259,7 +259,8 @@ export async function createQualityReview(
         '[]'::jsonb,${actor.userId},${actor.displayName}) RETURNING *`)
     )[0];
     await tx.execute(sql`UPDATE project_workflow_step_instances SET status='IN_PROGRESS',started_at=COALESCE(started_at,now()),
-      updated_at=now() WHERE id=${model.ctx.qualityStep.id} AND status='NOT_STARTED'`);
+      updated_at=now() WHERE id=${model.ctx.qualityStep.id}
+        AND status IN ('NOT_STARTED','NOT_APPLICABLE')`);
     await recordAuditEvent(
       {
         eventType: 'P2_V2_QUALITY_REVIEW_CREATED',
@@ -273,6 +274,56 @@ export async function createQualityReview(
           productionCompletionRevision:
             model.ctx.productionReview.revision_number,
         },
+      },
+      tx
+    );
+    return getQualityDashboard(projectId, tx);
+  });
+}
+
+export async function submitQualityReview(
+  projectId: string,
+  expectedLockVersion: number,
+  actor: ProductionActor
+) {
+  return db.transaction(async (tx) => {
+    const model = await evidence(projectId, tx);
+    if (
+      !model.review ||
+      !['IN_PROGRESS', 'BLOCKED'].includes(model.review.status)
+    )
+      throw new ProjectQualityReleaseError(
+        'QUALITY_REVIEW_NOT_SUBMITTABLE',
+        'A current in-progress Quality review is required.',
+        409
+      );
+    if (Number(model.review.lock_version) !== expectedLockVersion)
+      throw new ProjectQualityReleaseError(
+        'STALE_WRITE',
+        'The Quality review is stale.',
+        409
+      );
+    if (model.readiness.blockers.length)
+      throw new ProjectQualityReleaseError(
+        'QUALITY_READINESS_BLOCKED',
+        'Quality evidence blockers must be resolved before submission.',
+        409,
+        { blockers: model.readiness.blockers }
+      );
+    await tx.execute(sql`UPDATE project_quality_reviews
+      SET status='READY_FOR_REVIEW',submitted_at=now(),lock_version=lock_version+1,
+        evidence_snapshot=${JSON.stringify({ items: model.items, ncrs: model.ncrs, production: model.production })}::jsonb,
+        document_manifest=${JSON.stringify(model.documentManifest)}::jsonb,
+        blockers='[]'::jsonb,updated_at=now()
+      WHERE id=${model.review.id} AND lock_version=${expectedLockVersion}`);
+    await recordAuditEvent(
+      {
+        eventType: 'P2_V2_QUALITY_REVIEW_SUBMITTED',
+        subjectType: 'project_quality_review',
+        subjectId: model.review.id,
+        sourceService: 'projectQualityReleaseService',
+        actor: { id: actor.userId, username: actor.username, role: actor.role },
+        payload: { projectId, revision: model.review.revision_number },
       },
       tx
     );
@@ -297,6 +348,12 @@ export async function decideQualityReview(
         'Create a Quality review first.',
         409
       );
+    if (model.review.status !== 'READY_FOR_REVIEW')
+      throw new ProjectQualityReleaseError(
+        'QUALITY_REVIEW_NOT_PENDING_APPROVAL',
+        'Submit the Quality review before recording approvals.',
+        409
+      );
     if (Number(model.review.lock_version) !== expectedLockVersion)
       throw new ProjectQualityReleaseError(
         'STALE_WRITE',
@@ -313,21 +370,67 @@ export async function decideQualityReview(
       signature_meaning=EXCLUDED.signature_meaning,reason=EXCLUDED.reason,
       actor_user_id=EXCLUDED.actor_user_id,actor_employee_id=EXCLUDED.actor_employee_id,
       actor_display_name=EXCLUDED.actor_display_name,actor_role=EXCLUDED.actor_role,decided_at=now()`);
-    const approvals = rows(
-      await tx.execute(
-        sql`SELECT approval_type,decision FROM project_quality_review_approvals WHERE quality_review_id=${model.review.id}`
-      )
-    );
-    const ready =
-      model.readiness.blockers.length === 0 &&
-      ['QUALITY', 'OPERATIONS', 'PROJECT_MANAGEMENT'].every((type) =>
-        approvals.some(
+    await tx.execute(sql`UPDATE project_quality_reviews
+      SET lock_version=lock_version+1,updated_at=now()
+      WHERE id=${model.review.id} AND lock_version=${expectedLockVersion}`);
+    return getQualityDashboard(projectId, tx);
+  });
+}
+
+export async function completeQualityReview(
+  projectId: string,
+  expectedLockVersion: number,
+  actor: ProductionActor
+) {
+  return db.transaction(async (tx) => {
+    const model = await evidence(projectId, tx);
+    if (!model.review || model.review.status !== 'READY_FOR_REVIEW')
+      throw new ProjectQualityReleaseError(
+        'QUALITY_REVIEW_NOT_PENDING_APPROVAL',
+        'A submitted Quality review is required.',
+        409
+      );
+    if (Number(model.review.lock_version) !== expectedLockVersion)
+      throw new ProjectQualityReleaseError(
+        'STALE_WRITE',
+        'The Quality review is stale.',
+        409
+      );
+    if (model.readiness.blockers.length)
+      throw new ProjectQualityReleaseError(
+        'QUALITY_EVIDENCE_STALE',
+        'Authoritative Quality evidence no longer supports release.',
+        409,
+        { blockers: model.readiness.blockers }
+      );
+    const missing = ['QUALITY', 'OPERATIONS', 'PROJECT_MANAGEMENT'].filter(
+      (type) =>
+        !model.approvals.some(
           (entry) =>
             entry.approval_type === type && entry.decision === 'APPROVED'
         )
+    );
+    if (missing.length)
+      throw new ProjectQualityReleaseError(
+        'QUALITY_APPROVALS_REQUIRED',
+        'All required functional approvals must be recorded.',
+        409,
+        { missingApprovals: missing }
       );
-    await tx.execute(sql`UPDATE project_quality_reviews SET status=${ready ? 'READY_FOR_RELEASE' : model.readiness.state},
-      lock_version=lock_version+1,updated_at=now() WHERE id=${model.review.id} AND lock_version=${expectedLockVersion}`);
+    await tx.execute(sql`UPDATE project_quality_reviews
+      SET status='READY_FOR_RELEASE',completed_at=now(),lock_version=lock_version+1,updated_at=now()
+      WHERE id=${model.review.id} AND lock_version=${expectedLockVersion}`);
+    await recordAuditEvent(
+      {
+        eventType: 'P2_V2_QUALITY_REVIEW_COMPLETED',
+        subjectType: 'project_quality_review',
+        subjectId: model.review.id,
+        sourceService: 'projectQualityReleaseService',
+        actor: { id: actor.userId, username: actor.username, role: actor.role },
+        payload: { projectId, revision: model.review.revision_number },
+      },
+      tx
+    );
     return getQualityDashboard(projectId, tx);
   });
 }
@@ -342,6 +445,7 @@ export type ReleaseInput = {
   serialNumbers: string[];
   batchLots: string[];
   signatureMeaning: string;
+  certificationFailurePoint?: 'AFTER_RELEASE' | 'AFTER_ALLOCATIONS';
 };
 
 export async function releaseProduct(
@@ -368,7 +472,10 @@ export async function releaseProduct(
         );
       return { release: prior, dashboard: model, idempotentReplay: true };
     }
-    if (!model.review || model.review.status !== 'READY_FOR_RELEASE')
+    if (
+      !model.review ||
+      !['READY_FOR_RELEASE', 'PARTIALLY_RELEASED'].includes(model.review.status)
+    )
       throw new ProjectQualityReleaseError(
         'READY_FOR_RELEASE_REQUIRED',
         'The Quality review is not READY_FOR_RELEASE.',
@@ -423,6 +530,15 @@ export async function releaseProduct(
       ${JSON.stringify(model.documentManifest)}::jsonb,${input.signatureMeaning},${actor.userId},
       ${actor.employeeId ?? null},${actor.displayName},${actor.role},${input.idempotencyKey},${requestHash}) RETURNING *`)
     )[0];
+    if (
+      input.certificationFailurePoint === 'AFTER_RELEASE' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectQualityReleaseError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after release insert.',
+        409
+      );
     for (const serial of input.serialNumbers)
       await tx.execute(sql`INSERT INTO project_product_release_allocations(
       product_release_id,project_id,po_line_id,part_number,serial_number,quantity)
@@ -432,8 +548,28 @@ export async function releaseProduct(
       product_release_id,project_id,po_line_id,part_number,batch_lot,quantity)
       VALUES(${release.id},${projectId},${input.poLineId ?? null},${input.partNumber},${batch},
       ${input.quantity / Math.max(1, input.batchLots.length)})`);
-    await tx.execute(sql`UPDATE project_quality_reviews SET status='PARTIALLY_RELEASED',
+    if (
+      input.certificationFailurePoint === 'AFTER_ALLOCATIONS' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectQualityReleaseError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after allocation insert.',
+        409
+      );
+    const remainingQuantity = Math.max(
+      0,
+      model.readiness.eligibleQuantity - input.quantity
+    );
+    const reviewStatus =
+      remainingQuantity === 0 ? 'COMPLETE' : 'PARTIALLY_RELEASED';
+    await tx.execute(sql`UPDATE project_quality_reviews SET status=${reviewStatus},
       lock_version=lock_version+1,updated_at=now() WHERE id=${model.review.id}`);
+    if (reviewStatus === 'COMPLETE')
+      await tx.execute(sql`UPDATE project_workflow_step_instances
+        SET status='COMPLETE',completed_at=now(),completed_by=${actor.userId},
+          completed_by_display_name=${actor.displayName},updated_at=now()
+        WHERE id=${model.ctx.qualityStep.id} AND status='IN_PROGRESS'`);
     await recordAuditEvent(
       {
         eventType: 'P2_V2_PRODUCT_RELEASED',
@@ -448,6 +584,8 @@ export async function releaseProduct(
           serialNumbers: input.serialNumbers,
           batchLots: input.batchLots,
           shipmentCreated: false,
+          remainingQuantity,
+          stage9Complete: reviewStatus === 'COMPLETE',
         },
       },
       tx

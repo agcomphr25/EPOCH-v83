@@ -11,6 +11,7 @@ import {
 const root = path.resolve(__dirname, '../..');
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
 const migration = read('migrations/0222_p2_v2_quality_product_release.sql');
+const hardening = read('migrations/0224_p2_v2_quality_release_hardening.sql');
 const service = read('server/src/services/projectQualityReleaseService.ts');
 const routes = read('server/src/routes/projectQualityRelease.ts');
 
@@ -131,6 +132,10 @@ describe('P2 V2 Quality and controlled Product Release', () => {
     expect(migration).toContain('project_product_release_holds');
     expect(migration).toContain('projects.quality_release.release_product');
     expect(routes).toContain('projects.quality_release.release_product');
+    expect(hardening).toContain('protect_product_release_identity');
+    expect(hardening).toContain(
+      'Product Release identity and evidence are immutable'
+    );
   });
 
   it('uses transactions, advisory serialization, idempotency and creates no shipment', () => {
@@ -138,6 +143,9 @@ describe('P2 V2 Quality and controlled Product Release', () => {
     expect(service).toContain('pg_advisory_xact_lock');
     expect(service).toContain('IDEMPOTENCY_CONFLICT');
     expect(service).toContain('shipmentCreated: false');
+    expect(service).toContain('submitQualityReview');
+    expect(service).toContain('completeQualityReview');
+    expect(service).toContain('CERTIFICATION_FORCED_ROLLBACK');
     expect(service).not.toMatch(/INSERT INTO (?:p2_)?shipments/i);
   });
 

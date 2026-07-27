@@ -172,31 +172,31 @@ function setupPoolQuery(opts: {
   poolQuery.mockImplementation(async (sql: string, _params?: any[]) => {
     const s = sql.replace(/\s+/g, ' ');
     if (s.includes('ALTER TABLE')) {
-      return Object.assign([], { rowCount: 0 });
+      return Object.assign([], { rowCount: 0, rows: [] });
     }
     if (s.includes('FROM p2_packing_slips') && s.includes('WHERE id = $1') && !s.includes('packing_slip_number = $1')) {
       const rows = opts.slip ? [opts.slip] : [];
-      return Object.assign(rows, { rowCount: rows.length });
+      return Object.assign(rows, { rowCount: rows.length, rows });
     }
     if (s.includes('FROM p2_packing_slips') && s.includes('packing_slip_number = $1')) {
       const rows = opts.duplicateSlipNumber ? [{ id: 'other-slip' }] : [];
-      return Object.assign(rows, { rowCount: rows.length });
+      return Object.assign(rows, { rowCount: rows.length, rows });
     }
     if (s.includes('FROM ar_invoices') && s.includes('packing_slip_id = $1')) {
       const rows = opts.linkedInvoiceNumber
         ? [{ id: 'invoice-1', invoice_number: opts.linkedInvoiceNumber }]
         : [];
-      return Object.assign(rows, { rowCount: rows.length });
+      return Object.assign(rows, { rowCount: rows.length, rows });
     }
     if (s.includes('FROM ar_invoices') && s.includes('invoice_number = $1')) {
       const rows = opts.duplicateInvoiceNumber ? [{ id: 'invoice-dup' }] : [];
-      return Object.assign(rows, { rowCount: rows.length });
+      return Object.assign(rows, { rowCount: rows.length, rows });
     }
     if (s.includes('FROM p2_lot_numbers') && s.includes('lot_number = $1')) {
       const rows = opts.duplicateLotNumber ? [{ id: 'other-lot' }] : [];
-      return Object.assign(rows, { rowCount: rows.length });
+      return Object.assign(rows, { rowCount: rows.length, rows });
     }
-    return Object.assign([], { rowCount: 0 });
+    return Object.assign([], { rowCount: 0, rows: [] });
   });
 }
 
@@ -237,6 +237,33 @@ const STAFF: TestUser = { id: 3, username: 'staff-user', role: 'STAFF' };
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+describe('GET /api/p2/packing-slips/:id', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns a historical packing slip without renaming it to its linked invoice number', async () => {
+    setupPoolQuery({
+      slip: slipRow({
+        packing_slip_number: 'ROC26-0004',
+        invoice_number: 'ROC26-0004',
+      }),
+      linkedInvoiceNumber: 'ROC26-0007',
+    });
+
+    const app = await buildApp(ADMIN);
+    const res = await request(app).get(`/api/p2/packing-slips/${SLIP_ID}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.packingSlipNumber).toBe('ROC26-0004');
+    expect(
+      poolQuery.mock.calls.some(([sql]) =>
+        String(sql).replace(/\s+/g, ' ').includes('UPDATE p2_packing_slips'),
+      ),
+    ).toBe(false);
+  });
+});
 
 describe('PATCH /api/p2/packing-slips/:id', () => {
   beforeEach(() => {

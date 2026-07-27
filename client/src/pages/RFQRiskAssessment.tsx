@@ -96,6 +96,9 @@ export default function RFQRiskAssessment() {
   const search = useSearch();
   const urlCustomerId = new URLSearchParams(search).get('customerId') ?? '';
   const urlAssessmentId = new URLSearchParams(search).get('id') ?? '';
+  const urlProjectId = new URLSearchParams(search).get('projectId') ?? '';
+  const urlProjectStepId = new URLSearchParams(search).get('projectStepId') ?? '';
+  const urlIntent = new URLSearchParams(search).get('intent') ?? '';
 
   // Tab and search state
   const [activeTab, setActiveTab] = useState('create');
@@ -170,9 +173,40 @@ export default function RFQRiskAssessment() {
   });
 
   // Fetch all RFQ assessments for list view
-  const { data: assessments = [], refetch: refetchAssessments } = useQuery<RFQAssessment[]>({
+  const {
+    data: assessments = [],
+    isLoading: areAssessmentsLoading,
+    refetch: refetchAssessments,
+  } = useQuery<RFQAssessment[]>({
     queryKey: ['/api/customers/rfq-assessments'],
   });
+
+  async function linkAssessmentToProjectStep(assessmentId: number): Promise<boolean> {
+    if (!urlProjectId || !urlProjectStepId) return true;
+
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(urlProjectId)}/steps/${encodeURIComponent(urlProjectStepId)}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ linkedRfqId: assessmentId }),
+        },
+      );
+
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+      return true;
+    } catch (error) {
+      console.error('Failed to link RFQ assessment to project step:', error);
+      toast({
+        title: 'Project Link Not Updated',
+        description: 'The assessment is still available, but its shortcut from this project could not be updated.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  }
 
   // Default to "view" tab when assessments exist and the user hasn't manually switched tabs
   useEffect(() => {
@@ -192,6 +226,61 @@ export default function RFQRiskAssessment() {
     loadAssessmentForEditing(linkedAssessment.rfqNumber);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlAssessmentId, assessments]);
+
+  const resolvedProjectAssessmentRef = useRef(false);
+  useEffect(() => {
+    if (
+      urlAssessmentId ||
+      !urlProjectStepId ||
+      !urlCustomerId ||
+      areAssessmentsLoading ||
+      resolvedProjectAssessmentRef.current
+    ) {
+      return;
+    }
+
+    const matchingAssessments = assessments.filter(
+      (assessment) => assessment.customerId === urlCustomerId,
+    );
+
+    if (matchingAssessments.length === 1) {
+      resolvedProjectAssessmentRef.current = true;
+      const assessment = matchingAssessments[0];
+      void loadAssessmentForEditing(assessment.rfqNumber);
+      void linkAssessmentToProjectStep(assessment.id);
+      return;
+    }
+
+    if (matchingAssessments.length > 1) {
+      resolvedProjectAssessmentRef.current = true;
+      setUserSwitchedTab(true);
+      setActiveTab('view');
+      toast({
+        title: 'Select the Existing Assessment',
+        description: 'More than one RFQ assessment exists for this customer. Choose the correct RFQ from the list.',
+      });
+      return;
+    }
+
+    if (urlIntent === 'view') {
+      resolvedProjectAssessmentRef.current = true;
+      setUserSwitchedTab(true);
+      setActiveTab('view');
+      toast({
+        title: 'No Assessment Found',
+        description: 'No saved RFQ assessment was found for this project customer.',
+        variant: 'destructive',
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    urlAssessmentId,
+    urlProjectStepId,
+    urlCustomerId,
+    urlIntent,
+    areAssessmentsLoading,
+    assessments,
+  ]);
 
   // Authorization logic for high-risk RFQs (score > 16)
   const isHighRisk = formData.totalOverallPoints > 16;
@@ -235,12 +324,30 @@ export default function RFQRiskAssessment() {
   // We wait until customers have loaded before calling handleCustomerChange so the lookup succeeds.
   const autoPopulatedRef = useRef(false);
   useEffect(() => {
-    if (urlCustomerId && customers.length > 0 && !autoPopulatedRef.current) {
+    const hasExistingProjectAssessment =
+      !!urlProjectStepId &&
+      assessments.some((assessment) => assessment.customerId === urlCustomerId);
+
+    if (
+      urlCustomerId &&
+      customers.length > 0 &&
+      !areAssessmentsLoading &&
+      !hasExistingProjectAssessment &&
+      urlIntent !== 'view' &&
+      !autoPopulatedRef.current
+    ) {
       autoPopulatedRef.current = true;
       handleCustomerChange(urlCustomerId);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customers, urlCustomerId]);
+  }, [
+    customers,
+    urlCustomerId,
+    urlProjectStepId,
+    urlIntent,
+    assessments,
+    areAssessmentsLoading,
+  ]);
 
   // Effect to handle canvas resizing
   useEffect(() => {
@@ -545,6 +652,7 @@ export default function RFQRiskAssessment() {
 
         const savedAssessment = await saveResponse.json();
         setEditingAssessmentId(savedAssessment.id);
+        await linkAssessmentToProjectStep(savedAssessment.id);
         
         // Now submit it
         const submitResponse = await fetch(`/api/customers/rfq-assessments/${savedAssessment.id}/submit`, {
@@ -710,6 +818,7 @@ export default function RFQRiskAssessment() {
       
       // Keep the assessment loaded so user can upload PDFs immediately
       setEditingAssessmentId(savedAssessment.id);
+      await linkAssessmentToProjectStep(savedAssessment.id);
       setAttachments(savedAssessment.attachments || []);
       
       // Refresh the assessments list in background
@@ -777,6 +886,9 @@ export default function RFQRiskAssessment() {
 
   // Filter assessments based on search term
   const filteredAssessments = assessments.filter(assessment => {
+    if (urlProjectStepId && urlCustomerId && assessment.customerId !== urlCustomerId) {
+      return false;
+    }
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -860,6 +972,7 @@ export default function RFQRiskAssessment() {
         const savedAssessment = await saveResponse.json();
         assessmentId = savedAssessment.id;
         setEditingAssessmentId(assessmentId);
+        await linkAssessmentToProjectStep(assessmentId);
         wasAutoSaved = true;
         await refetchAssessments();
       }
@@ -972,6 +1085,11 @@ export default function RFQRiskAssessment() {
         variant: 'destructive',
       });
     }
+  };
+
+  const openAssessmentFromList = async (assessment: RFQAssessment) => {
+    await loadAssessmentForEditing(assessment.rfqNumber);
+    await linkAssessmentToProjectStep(assessment.id);
   };
 
   // Function to clear the form and start fresh
@@ -1894,7 +2012,7 @@ export default function RFQRiskAssessment() {
                                   variant="outline"
                                   className="flex items-center gap-1 w-full"
                                   data-testid={`button-view-${assessment.id}`}
-                                  onClick={() => loadAssessmentForEditing(assessment.rfqNumber)}
+                                  onClick={() => void openAssessmentFromList(assessment)}
                                 >
                                   <Eye className="h-3 w-3" />
                                   {isSubmitted ? 'View' : 'Edit'}

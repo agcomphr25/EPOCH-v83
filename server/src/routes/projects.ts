@@ -44,6 +44,7 @@ import projectTechnicalConfigurationReviewRoutes from './projectTechnicalConfigu
 import projectPreproductionReadinessRoutes from './projectPreproductionReadiness';
 import projectProductionExecutionRoutes from './projectProductionExecution';
 import projectQualityReleaseRoutes from './projectQualityRelease';
+import projectShippingCloseoutRoutes from './projectShippingCloseout';
 import { getTechnicalConfigurationReview } from '../services/projectTechnicalConfigurationReviewService';
 import { getCurrentWadAuthorization } from '../services/projectWadAuthorizationService';
 import { getUserPermissions } from '../services/permissionService';
@@ -1602,6 +1603,7 @@ router.use(
   projectProductionExecutionRoutes
 );
 router.use('/:id/workflow-v2/quality-release', projectQualityReleaseRoutes);
+router.use('/:id/workflow-v2/shipping-closeout', projectShippingCloseoutRoutes);
 
 router.get('/:id/workflow-v2/design-applicability', async (req, res) => {
   try {

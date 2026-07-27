@@ -251,6 +251,7 @@ export const safeMigrationFiles = [
   '0222_vendor_scope_approved_for.sql',
   '0223_project_production_launch_status_repair.sql',
   '0224_p2_v2_quality_release_hardening.sql',
+  '0225_p2_v2_shipping_project_closeout.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -289,6 +290,7 @@ export const criticalMigrationFiles = new Set([
   '0222_vendor_scope_approved_for.sql',
   '0223_project_production_launch_status_repair.sql',
   '0224_p2_v2_quality_release_hardening.sql',
+  '0225_p2_v2_shipping_project_closeout.sql',
 ]);
 
 export async function runSafeBootMigrations() {

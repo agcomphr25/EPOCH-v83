@@ -36,6 +36,13 @@ interface Mold {
   isActive: boolean;
 }
 
+interface StockModel {
+  id: string;
+  name: string;
+  displayName: string;
+  isActive: boolean;
+}
+
 interface MoldSettingsProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -76,6 +83,11 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
   const { data: moldsData, isLoading, refetch } = useQuery<Mold[]>({
     queryKey: ['/api/molds'],
     enabled: open,
+  });
+
+  const { data: stockModelsData = [], isLoading: stockModelsLoading } = useQuery<StockModel[]>({
+    queryKey: ['/api/stock-models'],
+    enabled: open || addMoldOpen,
   });
 
   const updateMoldMutation = useMutation({
@@ -133,6 +145,9 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
   });
 
   const molds = moldsData || [];
+  const availableStockModels = stockModelsData
+    .filter(model => model.isActive)
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
   const uniqueModelNames = Array.from(new Set(molds.map(m => m.modelName))).sort();
 
   const filteredMolds = molds.filter(mold => {
@@ -401,14 +416,31 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
                                     ))}
                                   </div>
                                   <div className="flex gap-1">
-                                    <Input
-                                      placeholder="Add stock model..."
+                                    <select
+                                      aria-label="Stock model to add"
                                       value={newStockModel}
                                       onChange={(e) => setNewStockModel(e.target.value)}
-                                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addStockModel())}
-                                      className="h-8 text-xs"
-                                    />
-                                    <Button size="sm" variant="outline" onClick={addStockModel} className="h-8">
+                                      disabled={stockModelsLoading}
+                                      className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-xs"
+                                    >
+                                      <option value="">
+                                        {stockModelsLoading ? 'Loading stock models...' : 'Select stock model...'}
+                                      </option>
+                                      {availableStockModels
+                                        .filter(model => !editValues.stockModels.includes(model.id))
+                                        .map(model => (
+                                          <option key={model.id} value={model.id}>
+                                            {model.displayName} ({model.id})
+                                          </option>
+                                        ))}
+                                    </select>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={addStockModel}
+                                      disabled={!newStockModel}
+                                      className="h-8"
+                                    >
                                       <Plus className="w-3 h-3" />
                                     </Button>
                                   </div>
@@ -585,14 +617,31 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
                 ))}
               </div>
               <div className="flex gap-2">
-                <Input
-                  placeholder="Add stock model..."
+                <select
+                  aria-label="Stock model to add to new mold"
                   value={newMoldStockModelInput}
                   onChange={(e) => setNewMoldStockModelInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNewMoldStockModel())}
-                  className="text-sm"
-                />
-                <Button type="button" variant="outline" size="sm" onClick={addNewMoldStockModel}>
+                  disabled={stockModelsLoading}
+                  className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">
+                    {stockModelsLoading ? 'Loading stock models...' : 'Select stock model...'}
+                  </option>
+                  {availableStockModels
+                    .filter(model => !newMoldForm.stockModels.includes(model.id))
+                    .map(model => (
+                      <option key={model.id} value={model.id}>
+                        {model.displayName} ({model.id})
+                      </option>
+                    ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addNewMoldStockModel}
+                  disabled={!newMoldStockModelInput}
+                >
                   <Plus className="w-3 h-3" />
                 </Button>
               </div>

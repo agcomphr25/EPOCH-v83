@@ -18,6 +18,7 @@ import P2V2CommercialReview from './P2V2CommercialReview';
 import P2V2PreproductionReadiness from './P2V2PreproductionReadiness';
 import P2V2ProductionExecution from './P2V2ProductionExecution';
 import P2V2QualityProductRelease from './P2V2QualityProductRelease';
+import P2V2ShippingProjectCloseout from './P2V2ShippingProjectCloseout';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -431,6 +432,11 @@ export default function P2V2ProjectWorkflow({
               {stage.stepType === 'final_release_shipping' && (
                 <div className="mt-3">
                   <P2V2QualityProductRelease projectId={projectId} />
+                </div>
+              )}
+              {stage.stepType === 'project_closing' && (
+                <div className="mt-3">
+                  <P2V2ShippingProjectCloseout projectId={projectId} />
                 </div>
               )}
             </CardContent>

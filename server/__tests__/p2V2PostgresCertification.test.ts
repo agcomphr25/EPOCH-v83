@@ -45,6 +45,20 @@ import {
   submitQualityReview,
 } from '../src/services/projectQualityReleaseService';
 import {
+  authorizeShipment,
+  closeProject,
+  confirmShipment,
+  decideCloseoutReview,
+  getShippingCloseoutDashboard,
+  placeShippingHold,
+  recordDelivery,
+  releaseShippingHold,
+  reopenProject,
+  saveCloseoutReview,
+  saveShippingReview,
+  submitCloseoutReview,
+} from '../src/services/projectShippingCloseoutService';
+import {
   getP2V2StagesForDefinitionVersion,
   P2_V2_DEFINITION_VERSION,
 } from '../src/services/projectWorkflowRegistry';
@@ -675,6 +689,9 @@ describe('Phase 8 migration certification', () => {
     expect(
       criticalMigrationFiles.has('0220_p2_v2_production_execution.sql')
     ).toBe(true);
+    expect(
+      criticalMigrationFiles.has('0225_p2_v2_shipping_project_closeout.sql')
+    ).toBe(true);
     const migration = readFileSync(
       path.resolve('migrations/0210_project_preproduction_readiness.sql')
     );
@@ -724,6 +741,34 @@ describe('Phase 8 migration certification', () => {
       'project_production_holds',
       'project_production_stage_approvals',
       'project_production_stage_reviews',
+    ]);
+  });
+
+  it('has additive Phase 9C Shipping, allocation, hold, closeout and history tables', async () => {
+    const result = await query<{ table_name: string }>(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema='public' AND table_name=ANY($1::text[])
+       ORDER BY table_name`,
+      [
+        [
+          'project_shipping_reviews',
+          'project_shipment_authorizations',
+          'project_shipment_allocation_links',
+          'project_shipping_holds',
+          'project_closeout_reviews',
+          'project_closeout_approvals',
+          'project_closeout_events',
+        ],
+      ]
+    );
+    expect(result.rows.map((row) => row.table_name)).toEqual([
+      'project_closeout_approvals',
+      'project_closeout_events',
+      'project_closeout_reviews',
+      'project_shipment_allocation_links',
+      'project_shipment_authorizations',
+      'project_shipping_holds',
+      'project_shipping_reviews',
     ]);
   });
 });
@@ -1185,6 +1230,436 @@ describe('actual production launch service against PostgreSQL', () => {
         )
       ).rows
     ).toHaveLength(2);
+  });
+
+  it('executes real Shipping, partial delivery reconciliation, controlled closeout, immutability and reopen', async () => {
+    const before = await getShippingCloseoutDashboard(fixture.projectId);
+    expect(before.eligibleAllocations).toHaveLength(2);
+    const [firstAllocation, secondAllocation] = before.eligibleAllocations;
+    const shippingInput = (allocationId: string, suffix: string) => ({
+      allocationIds: [allocationId],
+      packaging: {
+        packagingMethod: 'Individual clean bag in rigid carton',
+        preservationMethod: 'Dry/FOD protected with handling labels',
+        packageCount: 1,
+        packageIdentifiers: [`CERT-PKG-${suffix}`],
+        weightLbs: 4,
+        dimensions: { length: 12, width: 8, height: 4 },
+        cushioningProtection: 'Closed-cell cushioning',
+        moistureFodControls: 'Verified clean and dry',
+        shelfLifeMarking: 'Not applicable',
+        handlingLabels: ['PO', 'Part', 'Revision', 'Serial'],
+        customerBagTagRequirements: 'Customer PO bag/tag applied',
+      },
+      shipTo: {
+        name: 'Certification Customer Receiving',
+        line1: '1 Certification Way',
+        city: 'Tulsa',
+        region: 'OK',
+        postalCode: '74101',
+        country: 'US',
+      },
+      carrier: {
+        carrier: 'MANUAL',
+        serviceLevel: 'CERTIFICATION',
+        manualTrackingAllowed: true,
+        partialShipmentAllowed: true,
+        deliveryRequired: true,
+      },
+      documentManifest: [
+        {
+          documentId: `cert-doc-${suffix}`,
+          documentNumber: `COC-CERT-${suffix}`,
+          revision: 'A',
+          status: 'RELEASED',
+          checksum: createHash('sha256').update(suffix).digest('hex'),
+          inclusionReason: 'Customer certificate and traceability package',
+          required: true,
+        },
+      ],
+    });
+
+    const firstReview = await saveShippingReview(
+      fixture.projectId,
+      shippingInput(String(firstAllocation.id), '1'),
+      actor
+    );
+    expect(firstReview.review?.status).toBe('READY_TO_SHIP');
+    expect(firstReview.ctx.shippingStep.status).toBe('IN_PROGRESS');
+    const shippingHold = await placeShippingHold(
+      fixture.projectId,
+      {
+        scope: 'PROJECT',
+        reason: 'Certification Shipping containment',
+        reviewId: String(firstReview.review?.id),
+      },
+      actor
+    );
+    const activeShippingHold = shippingHold.shippingHolds.find(
+      (entry) => entry.status === 'ACTIVE'
+    );
+    await expect(
+      authorizeShipment(
+        fixture.projectId,
+        {
+          expectedLockVersion: Number(firstReview.review?.lock_version),
+          idempotencyKey: 'phase9c-held-authorization',
+          signatureMeaning: 'Shipping authorization must remain blocked',
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'SHIPPING_HOLD_ACTIVE' });
+    await releaseShippingHold(
+      fixture.projectId,
+      String(activeShippingHold?.id),
+      'Quality and Shipping containment disposition complete',
+      actor
+    );
+    const authorizationInput = {
+      expectedLockVersion: Number(firstReview.review?.lock_version),
+      idempotencyKey: 'phase9c-shipment-authorization-1',
+      signatureMeaning:
+        'Shipping authorizes exact partial Product Release allocation',
+    };
+    const concurrent = await Promise.allSettled([
+      authorizeShipment(fixture.projectId, authorizationInput, actor),
+      authorizeShipment(
+        fixture.projectId,
+        {
+          ...authorizationInput,
+          idempotencyKey: 'phase9c-shipment-authorization-race',
+        },
+        actor
+      ),
+    ]);
+    expect(
+      concurrent.filter((result) => result.status === 'fulfilled')
+    ).toHaveLength(1);
+    expect(
+      concurrent.filter((result) => result.status === 'rejected')
+    ).toHaveLength(1);
+    const authorizationWinner = concurrent.find(
+      (result) => result.status === 'fulfilled'
+    );
+    if (!authorizationWinner || authorizationWinner.status !== 'fulfilled')
+      throw new Error('Concurrent shipment authorization produced no winner');
+    const firstAuthorization = authorizationWinner.value.authorization;
+    const winningAuthorizationInput = {
+      ...authorizationInput,
+      idempotencyKey: String(firstAuthorization.idempotency_key),
+    };
+    expect(
+      (
+        await authorizeShipment(
+          fixture.projectId,
+          winningAuthorizationInput,
+          actor
+        )
+      ).idempotentReplay
+    ).toBe(true);
+    await expect(
+      authorizeShipment(
+        fixture.projectId,
+        {
+          ...winningAuthorizationInput,
+          signatureMeaning: 'Conflicting authorization evidence',
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    expect(
+      (
+        await query(
+          `SELECT count(*)::int count FROM shipment_records
+           WHERE reference=$1`,
+          [firstAuthorization.authorization_number]
+        )
+      ).rows[0]
+    ).toMatchObject({ count: 0 });
+
+    await expect(
+      confirmShipment(
+        fixture.projectId,
+        String(firstAuthorization.id),
+        {
+          idempotencyKey: 'phase9c-confirm-rollback',
+          trackingNumber: 'MANUAL-CERT-ROLLBACK',
+          manualTracking: true,
+          certificationFailurePoint: 'AFTER_ALLOCATIONS',
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect(
+      (
+        await query(
+          `SELECT count(*)::int count FROM shipment_records
+           WHERE reference=$1`,
+          [firstAuthorization.authorization_number]
+        )
+      ).rows[0]
+    ).toMatchObject({ count: 0 });
+    expect(
+      (
+        await query<{ status: string }>(
+          `SELECT status FROM project_shipment_allocation_links
+           WHERE shipment_authorization_id=$1`,
+          [firstAuthorization.id]
+        )
+      ).rows.every((entry) => entry.status === 'AUTHORIZED')
+    ).toBe(true);
+
+    const confirmation = await confirmShipment(
+      fixture.projectId,
+      String(firstAuthorization.id),
+      {
+        idempotencyKey: 'phase9c-confirm-1',
+        trackingNumber: 'MANUAL-CERT-0001',
+        manualTracking: true,
+      },
+      actor
+    );
+    expect(confirmation.authorization.status).toBe('CONFIRMED');
+    expect(
+      (
+        await query<{ status: string }>(
+          `SELECT status FROM projects WHERE id=$1`,
+          [fixture.projectId]
+        )
+      ).rows[0].status
+    ).not.toBe('completed');
+    await expect(
+      recordDelivery(
+        fixture.projectId,
+        String(firstAuthorization.id),
+        {
+          status: 'DELIVERED',
+          evidenceSource: 'CARRIER',
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'PROOF_OF_DELIVERY_REQUIRED' });
+    await recordDelivery(
+      fixture.projectId,
+      String(firstAuthorization.id),
+      {
+        status: 'DELIVERED',
+        evidenceSource: 'MANUAL_POD',
+        proofOfDeliveryReference: 'POD-CERT-0001',
+      },
+      actor
+    );
+    const afterPartial = await getShippingCloseoutDashboard(fixture.projectId);
+    expect(
+      afterPartial.links.filter((entry) => entry.status === 'DELIVERED')
+    ).toHaveLength(1);
+    expect(afterPartial.eligibleAllocations).toHaveLength(1);
+
+    const secondReview = await saveShippingReview(
+      fixture.projectId,
+      shippingInput(String(secondAllocation.id), '2'),
+      actor
+    );
+    const secondAuthorized = await authorizeShipment(
+      fixture.projectId,
+      {
+        expectedLockVersion: Number(secondReview.review?.lock_version),
+        idempotencyKey: 'phase9c-shipment-authorization-2',
+        signatureMeaning: 'Shipping authorizes remaining released allocation',
+      },
+      actor
+    );
+    await confirmShipment(
+      fixture.projectId,
+      String(secondAuthorized.authorization.id),
+      {
+        idempotencyKey: 'phase9c-confirm-2',
+        trackingNumber: 'MANUAL-CERT-0002',
+        manualTracking: true,
+      },
+      actor
+    );
+    await recordDelivery(
+      fixture.projectId,
+      String(secondAuthorized.authorization.id),
+      {
+        status: 'DELIVERY_EXCEPTION',
+        evidenceSource: 'CARRIER',
+        exception: 'Certification carrier exception',
+      },
+      actor
+    );
+    const blockedCloseoutInput = {
+      deliveryRequired: true,
+      financeTransferredOrComplete: true,
+      financeDisposition: 'Transferred to Finance',
+      productionReconciled: true,
+      qualityReconciled: true,
+      supplierAndPropertyReconciled: true,
+      openActions: [],
+      documentArchiveManifest: [
+        {
+          documentId: 'closeout-cert-archive',
+          documentNumber: 'CLOSEOUT-CERT',
+          revision: 'A',
+          status: 'RELEASED',
+          checksum: createHash('sha256').update('closeout').digest('hex'),
+          inclusionReason: 'Immutable project closeout archive',
+        },
+      ],
+    };
+    const blockedCloseout = await saveCloseoutReview(
+      fixture.projectId,
+      blockedCloseoutInput,
+      actor
+    );
+    expect(blockedCloseout.closeout?.status).toBe('BLOCKED');
+    expect(blockedCloseout.closeout?.blockers).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/delivery evidence/i),
+        expect.stringMatching(/delivery exception/i),
+      ])
+    );
+    await recordDelivery(
+      fixture.projectId,
+      String(secondAuthorized.authorization.id),
+      {
+        status: 'DELIVERED',
+        evidenceSource: 'MANUAL_POD',
+        proofOfDeliveryReference: 'POD-CERT-0002',
+      },
+      actor
+    );
+    const closeoutReady = await saveCloseoutReview(
+      fixture.projectId,
+      {
+        ...blockedCloseoutInput,
+        expectedLockVersion: Number(blockedCloseout.closeout?.lock_version),
+      },
+      actor
+    );
+    expect(closeoutReady.closeout?.status).toBe('READY_FOR_CLOSEOUT_REVIEW');
+    const submitted = await submitCloseoutReview(
+      fixture.projectId,
+      Number(closeoutReady.closeout?.lock_version),
+      actor
+    );
+    expect(submitted.closeout?.status).toBe('PENDING_APPROVAL');
+    const approvalActors = [9101, 9102, 9103, 9104].map((userId) => ({
+      ...actor,
+      userId,
+      employeeId: userId,
+      username: `phase8-certifier-${userId}`,
+      displayName: `Phase 9C Certifier ${userId}`,
+    }));
+    let closeoutLock = Number(submitted.closeout?.lock_version);
+    for (const [index, type] of [
+      'PROJECT_MANAGEMENT',
+      'QUALITY',
+      'OPERATIONS',
+      'SHIPPING_LOGISTICS',
+    ].entries()) {
+      const decided = await decideCloseoutReview(
+        fixture.projectId,
+        closeoutLock,
+        type,
+        'APPROVED',
+        `${type} approves exact closeout revision`,
+        '',
+        approvalActors[index]
+      );
+      closeoutLock = Number(decided.closeout?.lock_version);
+    }
+    await expect(
+      decideCloseoutReview(
+        fixture.projectId,
+        closeoutLock,
+        'FINANCE',
+        'APPROVED',
+        'Duplicate actor approval',
+        '',
+        approvalActors[0]
+      )
+    ).rejects.toMatchObject({ code: 'SEGREGATION_OF_DUTIES_REQUIRED' });
+    const closeInput = {
+      expectedLockVersion: closeoutLock,
+      idempotencyKey: 'phase9c-close-project-1',
+      signatureMeaning: 'Authorized complete customer-order reconciliation',
+    };
+    const closed = await closeProject(fixture.projectId, closeInput, {
+      ...actor,
+      userId: 9105,
+      employeeId: 9105,
+      username: 'phase8-certifier-9105',
+      displayName: 'Phase 9C Close Authority',
+    });
+    expect(closed.closeout.status).toBe('CLOSED');
+    expect(
+      (
+        await query<{ status: string; current_stage: string }>(
+          `SELECT status,current_stage FROM projects WHERE id=$1`,
+          [fixture.projectId]
+        )
+      ).rows[0]
+    ).toEqual({ status: 'completed', current_stage: 'PROJECT_CLOSED' });
+    expect(
+      (
+        await query<{ status: string }>(
+          `SELECT status FROM p2_purchase_orders WHERE id=$1`,
+          [fixture.poId]
+        )
+      ).rows[0].status
+    ).toBe('CLOSED');
+    expect(
+      (
+        await query<{ status: string }>(
+          `SELECT status FROM project_workflow_instances WHERE id=$1`,
+          [fixture.workflowId]
+        )
+      ).rows[0].status
+    ).toBe('COMPLETE');
+    await expect(
+      query(
+        `UPDATE project_closeout_reviews
+         SET reconciliation_snapshot='{"tampered":true}'::jsonb
+         WHERE id=$1`,
+        [closed.closeout.id]
+      )
+    ).rejects.toThrow(/immutable/i);
+    expect(
+      (await closeProject(fixture.projectId, closeInput, actor))
+        .idempotentReplay
+    ).toBe(true);
+    await expect(
+      saveShippingReview(
+        fixture.projectId,
+        shippingInput(String(firstAllocation.id), 'closed'),
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'WORKFLOW_CLOSED' });
+    const reopened = await reopenProject(
+      fixture.projectId,
+      {
+        reason: 'Controlled certification follow-up',
+        responsibleOwner: 'Project Management',
+      },
+      {
+        ...actor,
+        userId: 9106,
+        employeeId: 9106,
+        username: 'phase8-certifier-9106',
+        displayName: 'Phase 9C Reopen Authority',
+      }
+    );
+    expect(reopened.closeout?.status).toBe('REOPENED');
+    expect(reopened.closeoutEvents.map((entry) => entry.event_type)).toEqual([
+      'CLOSED',
+      'REOPENED',
+    ]);
+    expect(reopened.eligibleAllocations).toHaveLength(0);
+    expect(reopened.links.every((entry) => entry.status === 'DELIVERED')).toBe(
+      true
+    );
   });
 
   it('keeps null and legacy workflow versions isolated', async () => {

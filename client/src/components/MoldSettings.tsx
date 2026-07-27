@@ -92,7 +92,7 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
 
   const updateMoldMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<Mold> }) => {
-      return apiRequest(`/api/molds/${id}`, {
+      return apiRequest(`/api/layup-schedule/molds/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       });
@@ -109,7 +109,7 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
 
   const bulkUpdateMutation = useMutation({
     mutationFn: async ({ modelName, data }: { modelName: string; data: Partial<Mold> }) => {
-      return apiRequest('/api/molds/bulk/by-model', {
+      return apiRequest('/api/layup-schedule/molds/bulk/by-model', {
         method: 'PATCH',
         body: JSON.stringify({ modelName, ...data }),
       });

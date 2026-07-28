@@ -43,6 +43,11 @@ interface StockModel {
   isActive: boolean;
 }
 
+interface UpdateMoldResponse {
+  success: true;
+  mold: Mold;
+}
+
 interface MoldSettingsProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -90,20 +95,27 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
     enabled: open || addMoldOpen,
   });
 
-  const updateMoldMutation = useMutation({
+  const updateMoldMutation = useMutation<UpdateMoldResponse, Error, { id: number; data: Partial<Mold> }>({
     mutationFn: async ({ id, data }: { id: number; data: Partial<Mold> }) => {
       return apiRequest(`/api/layup-schedule/molds/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       });
     },
-    onSuccess: () => {
+    onSuccess: ({ mold }) => {
+      queryClient.setQueryData<Mold[]>(['/api/molds'], (current) =>
+        current?.map((item) => (item.id === mold.id ? mold : item)),
+      );
       queryClient.invalidateQueries({ queryKey: ['/api/molds'] });
       toast({ title: 'Mold updated', description: 'Mold settings have been saved.' });
       setEditingMold(null);
     },
-    onError: (error: any) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    onError: (error) => {
+      const message =
+        error.message && !error.message.trim().startsWith('<')
+          ? error.message
+          : 'Unable to save mold settings.';
+      toast({ title: 'Unable to save mold', description: message, variant: 'destructive' });
     },
   });
 
@@ -485,12 +497,23 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
                                     disabled={updateMoldMutation.isPending}
                                     className="h-8 px-2"
                                   >
-                                    <Save className="w-3 h-3" />
+                                    {updateMoldMutation.isPending ? (
+                                      <>
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                        <span className="sr-only">Saving</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Save className="w-3 h-3" />
+                                        <span className="sr-only">Save mold</span>
+                                      </>
+                                    )}
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     onClick={cancelEditing}
+                                    disabled={updateMoldMutation.isPending}
                                     className="h-8 px-2"
                                   >
                                     <X className="w-3 h-3" />

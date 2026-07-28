@@ -193,7 +193,7 @@ async function createFixture(
          ($1,'Parent Assembly','Manufactured','MANUFACTURED','ASSEMBLY','FINAL','Assembly'),
          ($2,'Machined Child','Manufactured','MANUFACTURED','MACHINED_PART','COMPONENT','CNC'),
          ($3,'Layup Detail','Manufactured','MANUFACTURED','COMPOSITE','COMPONENT','Layup'),
-         ($4,'Cut Detail','Manufactured','MANUFACTURED','CUT_PART','COMPONENT','Cutting Table'),
+         ($4,'Cut Detail','Manufactured','MANUFACTURED','COMPONENT','COMPONENT','Cutting Table'),
          ($5,'Purchased Hardware','Purchased','PURCHASED',NULL,'COMPONENT',NULL)
        ON CONFLICT (ag_part_number) DO NOTHING`,
       [

@@ -94,7 +94,15 @@ const initialized = {
 function renderWorkflow(response: object) {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue({ ok: true, json: async () => response })
+    vi.fn().mockImplementation(async (input: RequestInfo | URL) =>
+      String(input).endsWith('/workflow-v2')
+        ? { ok: true, json: async () => response }
+        : {
+            ok: false,
+            status: 404,
+            json: async () => ({ message: 'Endpoint not mocked in summary test' }),
+          }
+    )
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },

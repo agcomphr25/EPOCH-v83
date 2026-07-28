@@ -86,6 +86,8 @@ const initialized = {
   blockedStages: 1,
   pendingApprovalStages: 0,
   percentComplete: 0,
+  requiredApprovals: [],
+  approvals: [],
   stages,
 };
 

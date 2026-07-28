@@ -31,8 +31,8 @@ describe('P1 PO demand and production progression boundary', () => {
   it('shows Generate Schedule for regular, PO-only, and mixed selections', () => {
     const source = readFileSync(componentPath, 'utf8');
 
-    expect(source).toContain(
-      "selectedQueueOrders.size > 0 ||\n                  Array.from(selectedPOItems.values()).some"
+    expect(source).toMatch(
+      /selectedQueueOrders\.size > 0\s*\|\|\s*Array\.from\(selectedPOItems\.values\(\)\)\.some/,
     );
     expect(source).toContain('Generate Schedule');
   });

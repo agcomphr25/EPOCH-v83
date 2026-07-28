@@ -56,6 +56,33 @@ describe('layup schedule PO progression scope', () => {
     expect(route).toContain('eligible existing production unit(s) could be resolved');
   });
 
+  it('never treats production or PO line IDs as stock-model identity', () => {
+    expect(route).not.toContain('row.stock_model_id || row.item_id');
+    expect(route).not.toContain('{ source: \'production_orders.item_id\'');
+    expect(route).not.toContain('{ source: \'purchase_order_items.item_id\'');
+  });
+
+  it('uses one resolver for demand and mold entries and returns traceable preview fields', () => {
+    expect(route).toContain('new StockModelResolver(stockModelsList)');
+    expect(route).toContain('stockModelResolver.resolve(m.model_name)');
+    expect(route).toContain('stockModelResolver.resolve(originalRef?.value)');
+    expect(route).toContain('stockModelDisplayName: item.stockModelDisplayName');
+    expect(route).toContain('originalRef: item.originalRef');
+  });
+
+  it('distinguishes unresolved identity, incompatible molds, and exhausted capacity', () => {
+    expect(route).toContain("errorCode: 'STOCK_MODEL_UNRESOLVED'");
+    expect(route).toContain("errorCode: 'NO_COMPATIBLE_MOLD'");
+    expect(route).toContain("errorCode: 'NO_AVAILABLE_CAPACITY'");
+  });
+
+  it('preserves snake-case and camel-case action length and inlet fields', () => {
+    expect(route).toContain('features.action_length || features.actionLength');
+    expect(route).toContain('features.action_inlet || features.actionInlet');
+    expect(route).toContain('specifications.action_length || specifications.actionLength');
+    expect(route).toContain('specifications.action_inlet || specifications.actionInlet');
+  });
+
   it('replaces only matching schedule rows so a repeated save is idempotent', () => {
     expect(route).toContain('DELETE FROM layup_schedule');
     expect(route).toContain('WHERE order_id = ANY($1::text[])');

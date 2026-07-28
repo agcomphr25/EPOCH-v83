@@ -358,4 +358,22 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     const result = computeP1Queue([], new Map(), []);
     expect(result).toHaveLength(0);
   });
+
+  it('prefers purchase_order_items.stock_model_id over specification labels', () => {
+    const po = makePO();
+    const item = makeItem({
+      stockModelId: '84',
+      specifications: { stockModel: 'stale-label' },
+    });
+    const result = computeP1Queue(
+      [po],
+      new Map([[po.id, [item]]]),
+      [makeProdRow({ production_status: 'PENDING', current_department: 'P1 Production Queue' })],
+    );
+
+    expect(result[0].purchaseOrders[0].items[0]).toMatchObject({
+      stockModel: '84',
+      stockModelId: '84',
+    });
+  });
 });

@@ -12,6 +12,10 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { buildRevenueDimensionTags } from './productionLineAccounting';
 import { assignReservedP2InvoiceNumberToPackingSlip } from './p2InvoiceNumberService';
 import { formatP2CustomerSerialNumbers } from '../utils/p2CustomerSerialDisplay';
+import {
+  assertP2InvoiceHonorsReservation,
+  requireReservedP2InvoiceNumber,
+} from './p2InvoiceReservationInvariant';
 
 let p2PackingSlipInvoiceNumberSchemaReady: Promise<void> | null = null;
 let p2BillingAllocationSchemaReady: Promise<void> | null = null;
@@ -465,21 +469,6 @@ export async function createInvoiceFromPackingSlip(
   lotId: string,
   overrides: InvoicePreviewInput = {},
 ): Promise<{ id: string; invoiceNumber: string; status: string; existing: boolean }> {
-  const existing = await db
-    .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
-    .from(arInvoices)
-    .where(eq(arInvoices.packingSlipId, packingSlipId));
-
-  if (existing.length > 0) {
-    console.log(`[InvoiceService] Duplicate prevented (pre-check): invoice already exists for packing slip ${packingSlipId}`);
-    return {
-      id: existing[0].id,
-      invoiceNumber: existing[0].invoiceNumber,
-      status: existing[0].status,
-      existing: true,
-    };
-  }
-
   const preview = await buildInvoicePreviewFromPackingSlip(packingSlipId, lotId, overrides);
   if (preview.isNoChargeReplacement) {
     console.log(`[InvoiceService] No-charge replacement flag active for packing slip ${packingSlipId}; all line prices forced to $0 unless manually overridden`);
@@ -489,12 +478,45 @@ export async function createInvoiceFromPackingSlip(
     const invoice = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('p2-packing-slip-invoice'), hashtext(${packingSlipId}))`);
 
+      const [lockedSlip] = await tx
+        .select({
+          id: p2PackingSlips.id,
+          invoiceNumber: p2PackingSlips.invoiceNumber,
+        })
+        .from(p2PackingSlips)
+        .where(eq(p2PackingSlips.id, packingSlipId))
+        .for('update');
+
+      if (!lockedSlip) {
+        throw new Error(`Packing slip ${packingSlipId} not found during invoice creation`);
+      }
+
+      const reservedInvoiceNumber = requireReservedP2InvoiceNumber({
+        packingSlipId,
+        invoiceNumber: lockedSlip.invoiceNumber,
+      });
+
+      assertP2InvoiceHonorsReservation({
+        packingSlipId,
+        reservedInvoiceNumber,
+        actualInvoiceNumber: preview.invoiceNumber,
+      });
+
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext('p2-invoice-number'), hashtext(${reservedInvoiceNumber}))`,
+      );
+
       const [existingInTransaction] = await tx
         .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
         .from(arInvoices)
         .where(eq(arInvoices.packingSlipId, packingSlipId));
 
       if (existingInTransaction) {
+        assertP2InvoiceHonorsReservation({
+          packingSlipId,
+          reservedInvoiceNumber,
+          actualInvoiceNumber: existingInTransaction.invoiceNumber,
+        });
         console.log(`[InvoiceService] Duplicate prevented (transaction): invoice already exists for packing slip ${packingSlipId}`);
         return {
           id: existingInTransaction.id,
@@ -504,11 +526,25 @@ export async function createInvoiceFromPackingSlip(
         };
       }
 
+      const [invoiceNumberConflict] = await tx
+        .select({
+          id: arInvoices.id,
+          packingSlipId: arInvoices.packingSlipId,
+        })
+        .from(arInvoices)
+        .where(eq(arInvoices.invoiceNumber, reservedInvoiceNumber));
+
+      if (invoiceNumberConflict) {
+        throw new Error(
+          `Reserved invoice number ${reservedInvoiceNumber} for packing slip ${packingSlipId} is already used by invoice ${invoiceNumberConflict.id} linked to packing slip ${invoiceNumberConflict.packingSlipId || 'none'}; invoice creation stopped`,
+        );
+      }
+
       const [invoice] = await tx
         .insert(arInvoices)
         .values({
           customerId: preview.customerId,
-          invoiceNumber: preview.invoiceNumber,
+          invoiceNumber: reservedInvoiceNumber,
           invoiceDate: preview.invoiceDate,
           dueDate: preview.dueDate,
           terms: preview.terms,
@@ -578,7 +614,7 @@ export async function createInvoiceFromPackingSlip(
             'LOCK_FOR_INVOICE',
             jsonb_build_object(
               'invoiceId', ${invoice.id}::text,
-              'invoiceNumber', ${preview.invoiceNumber}::text,
+              'invoiceNumber', ${reservedInvoiceNumber}::text,
               'allocationId', sba.allocation_id
             ),
             'system:invoice-create',
@@ -593,8 +629,8 @@ export async function createInvoiceFromPackingSlip(
       await tx
         .update(p2PackingSlips)
         .set({
-          invoiceNumber: preview.invoiceNumber,
-          packingSlipNumber: preview.invoiceNumber,
+          invoiceNumber: reservedInvoiceNumber,
+          packingSlipNumber: reservedInvoiceNumber,
         })
         .where(eq(p2PackingSlips.id, packingSlipId));
 

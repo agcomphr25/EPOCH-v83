@@ -26,4 +26,18 @@ describe('packing slip invoice duplicate guards', () => {
     expect(source).toContain('Duplicate prevented (transaction)');
     expect(source).toContain('existing: true');
   });
+
+  it('locks and enforces the packing slip reserved number before creating a P2 invoice', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'server/src/services/invoiceFromPackingSlip.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain(".for('update')");
+    expect(source).toContain("pg_advisory_xact_lock(hashtext('p2-invoice-number')");
+    expect(source).toContain('const reservedInvoiceNumber = requireReservedP2InvoiceNumber');
+    expect(source).toContain('assertP2InvoiceHonorsReservation');
+    expect(source).toContain('invoiceNumber: reservedInvoiceNumber');
+    expect(source).toContain('is already used by invoice');
+  });
 });

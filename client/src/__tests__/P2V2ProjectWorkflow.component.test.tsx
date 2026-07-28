@@ -4,24 +4,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import P2V2ProjectWorkflow from '../components/projects/P2V2ProjectWorkflow';
 
-const stages = Array.from({ length: 10 }, (_, index) => ({
+const stageDefinitions = [
+  ['rfq_risk_assessment', 'RFQ & Risk Assessment'],
+  ['estimate_quote', 'Estimate & Quote'],
+  ['contract_review', 'Contract Review'],
+  ['technical_configuration_review', 'Technical & Configuration Review'],
+  ['production_planning', 'Production Planning'],
+  ['wad_authorization', 'WAD Authorization'],
+  ['preproduction_release', 'Preproduction & Production Release'],
+  ['production_quality', 'Production Execution'],
+  ['final_release_shipping', 'Quality & Product Release'],
+  ['project_closing', 'Shipping, Delivery & Project Closing'],
+] as const;
+
+const stages = stageDefinitions.map(([stepType, label], index) => ({
   id: `step-${index + 1}`,
-  stepType:
-    index === 0
-      ? 'rfq_risk_assessment'
-      : index === 1
-        ? 'estimate_quote'
-        : index === 2
-          ? 'contract_review'
-          : index === 3
-            ? 'technical_configuration_review'
-            : index === 4
-              ? 'production_planning'
-              : index === 5
-                ? 'wad_authorization'
-                : `stage_${index + 1}`,
+  stepType,
   stepOrder: index + 1,
-  label: `Stage ${index + 1}`,
+  label,
   description: `Description ${index + 1}`,
   status: index === 0 ? 'BLOCKED' : 'NOT_STARTED',
   applicability: 'REQUIRED',
@@ -113,6 +113,8 @@ describe('P2V2ProjectWorkflow', () => {
       await screen.findByText('P2 Project Workflow V2')
     ).toBeInTheDocument();
     expect(screen.getAllByTestId(/^v2-stage-\d+$/)).toHaveLength(10);
+    for (const [, label] of stageDefinitions)
+      expect(screen.getByText(label)).toBeInTheDocument();
     expect(screen.getByTestId('v2-integrity-warning')).toHaveTextContent(
       'Example integrity problem'
     );
@@ -121,6 +123,9 @@ describe('P2V2ProjectWorkflow', () => {
     );
     expect(screen.getByText('BLOCKED')).toBeInTheDocument();
     for (const forbidden of [
+      'Design Control',
+      'ECR',
+      'ECN',
       'Start',
       'Mark Complete',
       'Skip',

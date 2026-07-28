@@ -16,6 +16,7 @@ on:
       - 'server/src/routes/projectShippingCloseout.ts'
       - 'server/storage.ts'
       - 'server/__tests__/p2V2PostgresCertification.test.ts'
+      - 'client/src/__tests__/P2V2*.component.test.tsx'
       - 'package.json'
       - 'package-lock.json'
 
@@ -97,4 +98,32 @@ jobs:
           npx vitest run
           --config vitest.config.server.ts
           server/__tests__/p2V2PostgresCertification.test.ts
+          --reporter=verbose
+
+      - name: Run Phase 1-9 focused server regressions
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/projectCommercialReview.test.ts
+          server/__tests__/projectTechnicalConfigurationReview.test.ts
+          server/__tests__/projectProductionPlanning.test.ts
+          server/__tests__/projectWadAuthorization.test.ts
+          server/__tests__/projectPreproductionReadiness.test.ts
+          server/__tests__/projectProductionExecution.test.ts
+          server/__tests__/projectQualityRelease.test.ts
+          server/__tests__/projectShippingCloseout.test.ts
+          server/__tests__/p2V2ProductionLaunchFeatureGate.test.ts
+          --reporter=verbose
+
+      - name: Run P2 V2 ten-stage component regressions
+        run: >-
+          npx vitest run
+          --config vitest.config.client.ts
+          client/src/__tests__/P2V2ProjectWorkflow.component.test.tsx
+          client/src/__tests__/P2V2ProductionPlanning.component.test.tsx
+          client/src/__tests__/P2V2WadAuthorization.component.test.tsx
+          client/src/__tests__/P2V2PreproductionReadiness.component.test.tsx
+          client/src/__tests__/P2V2ProductionExecution.component.test.tsx
+          client/src/__tests__/P2V2QualityProductRelease.component.test.tsx
+          client/src/__tests__/P2V2ShippingProjectCloseout.component.test.tsx
           --reporter=verbose

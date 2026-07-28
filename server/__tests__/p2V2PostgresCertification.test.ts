@@ -11,12 +11,18 @@ import {
 } from '../scripts/migrations/runSafeBootMigrations';
 import { isP2V2ProductionLaunchEnabled } from '../src/lib/featureFlags';
 import {
+  completeCommercialReview,
   createCommercialReview,
+  decideCommercialReview,
+  submitCommercialReview,
   type CommercialActor,
   type CommercialStage,
 } from '../src/services/projectCommercialReviewService';
 import {
+  completeTechnicalConfigurationReview,
   createTechnicalConfigurationReview,
+  decideTechnicalConfigurationReview,
+  submitTechnicalConfigurationReview,
   type TechnicalReviewActor,
 } from '../src/services/projectTechnicalConfigurationReviewService';
 import {
@@ -83,6 +89,18 @@ const actor: CommercialActor & TechnicalReviewActor = {
   role: 'ADMIN',
 };
 const baseProjectId = '00000000-0000-4000-8000-000000000801';
+const certifiedStageOrder = [
+  'rfq_risk_assessment',
+  'estimate_quote',
+  'contract_review',
+  'technical_configuration_review',
+  'production_planning',
+  'wad_authorization',
+  'preproduction_release',
+  'production_quality',
+  'final_release_shipping',
+  'project_closing',
+];
 
 type Fixture = {
   projectId: string;
@@ -102,23 +120,53 @@ async function query<T extends Record<string, unknown>>(
   return pool.query<T>(text, values);
 }
 
-async function markStageComplete(
+const certificationActor = (
+  userId: number,
+  role: string
+): CommercialActor & TechnicalReviewActor => ({
+  ...actor,
+  userId,
+  employeeId: userId,
+  username: `phase10-certifier-${userId}`,
+  displayName: `Phase 10 Certifier ${userId}`,
+  role,
+});
+
+async function certifyCommercialStage(
   projectId: string,
   stage: CommercialStage,
-  reviewId: string
+  review: { id: string; lock_version: number | string }
 ) {
-  await query(
-    `UPDATE project_commercial_stage_reviews
-       SET status='COMPLETE', sufficiently_defined=true,
-           differences_resolved=true, completed_at=now()
-     WHERE id=$1`,
-    [reviewId]
+  let model = await submitCommercialReview(
+    projectId,
+    stage,
+    review.id,
+    Number(review.lock_version),
+    actor
   );
-  await query(
-    `UPDATE project_workflow_step_instances
-       SET status='COMPLETE', completed_at=now()
-     WHERE project_id=$1 AND step_type=$2`,
-    [projectId, stage]
+  const roles =
+    stage === 'contract_review'
+      ? ['PROJECT_MANAGEMENT', 'ENGINEERING', 'QUALITY', 'OPERATIONS']
+      : ['PROJECT_MANAGEMENT'];
+  for (const [index, role] of roles.entries()) {
+    model = await decideCommercialReview(
+      projectId,
+      stage,
+      review.id,
+      Number(model.review.lock_version),
+      role as 'PROJECT_MANAGEMENT' | 'ENGINEERING' | 'QUALITY' | 'OPERATIONS',
+      'APPROVED',
+      `${role} approves the controlled ${stage} baseline`,
+      '',
+      certificationActor(9101 + index, role)
+    );
+  }
+  return completeCommercialReview(
+    projectId,
+    stage,
+    review.id,
+    Number(model.review.lock_version),
+    actor
   );
 }
 
@@ -143,9 +191,18 @@ async function createFixture(
           manufacturing_level,manufacturing_department)
          VALUES
          ($1,'Parent Assembly','Manufactured','MANUFACTURED','ASSEMBLY','FINAL','Assembly'),
-         ($2,'Machined Child','Manufactured','MANUFACTURED','MACHINED_PART','COMPONENT','CNC')
+         ($2,'Machined Child','Manufactured','MANUFACTURED','MACHINED_PART','COMPONENT','CNC'),
+         ($3,'Layup Detail','Manufactured','MANUFACTURED','COMPOSITE','COMPONENT','Layup'),
+         ($4,'Cut Detail','Manufactured','MANUFACTURED','CUT_PART','COMPONENT','Cutting Table'),
+         ($5,'Purchased Hardware','Purchased','PURCHASED',NULL,'COMPONENT',NULL)
        ON CONFLICT (ag_part_number) DO NOTHING`,
-      [`PARENT-${suffix}`, `CHILD-${suffix}`]
+      [
+        `PARENT-${suffix}`,
+        `CHILD-${suffix}`,
+        `LAYUP-${suffix}`,
+        `CUT-${suffix}`,
+        `BUY-${suffix}`,
+      ]
     );
     const po = await client.query<{ id: number }>(
       `INSERT INTO p2_purchase_orders
@@ -160,9 +217,17 @@ async function createFixture(
     await client.query(
       `INSERT INTO p2_purchase_order_items
          (po_id,inventory_item_id,part_number,part_name,quantity,specifications)
-       SELECT $1,id,ag_part_number,name,2,'Released configuration'
+       SELECT $1,id,ag_part_number,name,1,$3
+       FROM inventory_items WHERE ag_part_number=$2
+       UNION ALL
+       SELECT $1,id,ag_part_number,name,1,$4
        FROM inventory_items WHERE ag_part_number=$2`,
-      [poId, `PARENT-${suffix}`]
+      [
+        poId,
+        `PARENT-${suffix}`,
+        'Customer PO line 1 - released configuration',
+        'Customer PO line 2 - released configuration',
+      ]
     );
     await client.query(
       `INSERT INTO projects
@@ -326,6 +391,24 @@ async function createFixture(
        RETURNING id`,
       [projectId, `CHILD-${suffix}`, routingTemplate.rows[0].id]
     );
+    const layupRouting = await client.query<{ id: string }>(
+      `INSERT INTO part_routings
+         (inventory_item_id,project_id,part_number,part_name,department_sequence,
+          traceability_config,created_from_template_id,created_by)
+       VALUES ((SELECT id::text FROM inventory_items WHERE ag_part_number=$2),
+               $1,$2,'Layup Detail','["Layup"]','{}',$3,'phase10')
+       RETURNING id`,
+      [projectId, `LAYUP-${suffix}`, routingTemplate.rows[0].id]
+    );
+    const cuttingRouting = await client.query<{ id: string }>(
+      `INSERT INTO part_routings
+         (inventory_item_id,project_id,part_number,part_name,department_sequence,
+          traceability_config,created_from_template_id,created_by)
+       VALUES ((SELECT id::text FROM inventory_items WHERE ag_part_number=$2),
+               $1,$2,'Cut Detail','["Cutting Table"]','{}',$3,'phase10')
+       RETURNING id`,
+      [projectId, `CUT-${suffix}`, routingTemplate.rows[0].id]
+    );
     await client.query('COMMIT');
 
     const rfqReview = await createCommercialReview(
@@ -344,10 +427,10 @@ async function createFixture(
       },
       actor
     );
-    await markStageComplete(
+    await certifyCommercialStage(
       projectId,
       'rfq_risk_assessment',
-      rfqReview.review.id
+      rfqReview.review
     );
     const quoteReview = await createCommercialReview(
       projectId,
@@ -362,7 +445,11 @@ async function createFixture(
       },
       actor
     );
-    await markStageComplete(projectId, 'estimate_quote', quoteReview.review.id);
+    await certifyCommercialStage(
+      projectId,
+      'estimate_quote',
+      quoteReview.review
+    );
     const contractReview = await createCommercialReview(
       projectId,
       'contract_review',
@@ -375,10 +462,10 @@ async function createFixture(
       },
       actor
     );
-    await markStageComplete(
+    await certifyCommercialStage(
       projectId,
       'contract_review',
-      contractReview.review.id
+      contractReview.review
     );
     const technical = await createTechnicalConfigurationReview(
       projectId,
@@ -398,15 +485,34 @@ async function createFixture(
       },
       actor
     );
-    await query(
-      `UPDATE project_technical_configuration_reviews
-         SET status='COMPLETE',completed_at=now() WHERE id=$1`,
-      [technical.review.id]
+    let technicalModel = await submitTechnicalConfigurationReview(
+      projectId,
+      technical.review.id,
+      Number(technical.review.lock_version),
+      actor
     );
-    await query(
-      `UPDATE project_workflow_step_instances SET status='COMPLETE'
-         WHERE id=$1`,
-      [steps.technical_configuration_review]
+    for (const [index, role] of [
+      'PROJECT_MANAGEMENT',
+      'ENGINEERING',
+      'QUALITY',
+      'OPERATIONS',
+    ].entries()) {
+      technicalModel = await decideTechnicalConfigurationReview(
+        projectId,
+        technical.review.id,
+        Number(technicalModel.review.lock_version),
+        role as 'PROJECT_MANAGEMENT' | 'ENGINEERING' | 'QUALITY' | 'OPERATIONS',
+        'APPROVED',
+        `${role} approves the controlled technical baseline`,
+        '',
+        certificationActor(9101 + index, role)
+      );
+    }
+    await completeTechnicalConfigurationReview(
+      projectId,
+      technical.review.id,
+      Number(technicalModel.review.lock_version),
+      actor
     );
     const configurationRevision = `Technical Review 1:${technical.review.source_revision}`;
     const plan = await query<{ id: string }>(
@@ -439,6 +545,8 @@ async function createFixture(
         revision: bomParentRevision.rows[0].id,
         routing: parentRouting.rows[0].id,
         serial: true,
+        makeBuy: 'MAKE',
+        manufactured: true,
       },
       {
         part: `CHILD-${suffix}`,
@@ -450,6 +558,47 @@ async function createFixture(
         revision: bomChildRevision.rows[0].id,
         routing: childRouting.rows[0].id,
         serial: false,
+        makeBuy: 'MAKE',
+        manufactured: true,
+      },
+      {
+        part: `LAYUP-${suffix}`,
+        name: 'Layup Detail',
+        path: 'layup',
+        parent: null,
+        qty: 1,
+        bom: bomChild.rows[0].id,
+        revision: bomChildRevision.rows[0].id,
+        routing: layupRouting.rows[0].id,
+        serial: false,
+        makeBuy: 'MAKE',
+        manufactured: true,
+      },
+      {
+        part: `CUT-${suffix}`,
+        name: 'Cut Detail',
+        path: 'cutting',
+        parent: null,
+        qty: 1,
+        bom: bomChild.rows[0].id,
+        revision: bomChildRevision.rows[0].id,
+        routing: cuttingRouting.rows[0].id,
+        serial: false,
+        makeBuy: 'MAKE',
+        manufactured: true,
+      },
+      {
+        part: `BUY-${suffix}`,
+        name: 'Purchased Hardware',
+        path: 'purchased',
+        parent: null,
+        qty: 1,
+        bom: null,
+        revision: null,
+        routing: null,
+        serial: false,
+        makeBuy: 'BUY',
+        manufactured: false,
       },
     ]) {
       await query(
@@ -464,8 +613,12 @@ async function createFixture(
             inspection_requirement,inspection_extent,fai_requirement,fai_reason,
             traceability_level,serialization_required,lot_traceability_required,
             special_process_source,packaging_instruction_requirement,notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'MAKE',true,$8,$9,'A','RELEASED',
-                 $10,'1','RELEASED','CFG-A','DWG-CERT','A',
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$12,$13,$8,$9,
+                 CASE WHEN $13 THEN 'A' ELSE NULL END,
+                 CASE WHEN $13 THEN 'RELEASED' ELSE 'NOT_APPLICABLE' END,
+                 $10,CASE WHEN $13 THEN '1' ELSE NULL END,
+                 CASE WHEN $13 THEN 'RELEASED' ELSE 'NOT_APPLICABLE' END,
+                 'CFG-A','DWG-CERT','A',
                  'REQUIRED','REQUIRED','INDIVIDUAL',
                  'DRAWING_SPEC_SUFFICIENT','Released drawing','REQUIRED',
                  'IN_PROCESS_AND_FINAL','NOT_REQUIRED','Certification fixture',
@@ -483,6 +636,8 @@ async function createFixture(
           item.revision,
           item.routing,
           item.serial,
+          item.makeBuy,
+          item.manufactured,
         ]
       );
     }
@@ -668,7 +823,7 @@ afterAll(async () => {
   await pool.end();
 });
 
-describe('Phase 8 migration certification', () => {
+describe('Phase 10A ten-stage migration certification', () => {
   it('uses deterministic safe-boot order, checksum, and critical 0212 migration', () => {
     expect(new Set(safeMigrationFiles).size).toBe(safeMigrationFiles.length);
     expect(
@@ -692,6 +847,22 @@ describe('Phase 8 migration certification', () => {
     expect(
       criticalMigrationFiles.has('0225_p2_v2_shipping_project_closeout.sql')
     ).toBe(true);
+    for (const migration of [
+      '0199_project_workflow_version.sql',
+      '0202_project_workflow_instances.sql',
+      '0204_project_production_plans.sql',
+      '0205_project_wad_authorizations.sql',
+      '0206_project_commercial_stage_reviews.sql',
+      '0209_project_technical_configuration_reviews.sql',
+      '0210_project_preproduction_readiness.sql',
+      '0212_project_preproduction_launch_safety.sql',
+      '0220_p2_v2_production_execution.sql',
+      '0222_p2_v2_quality_product_release.sql',
+      '0224_p2_v2_quality_release_hardening.sql',
+      '0225_p2_v2_shipping_project_closeout.sql',
+      '0226_project_production_launch_composite_key.sql',
+    ])
+      expect(safeMigrationFiles).toContain(migration);
     const migration = readFileSync(
       path.resolve('migrations/0210_project_preproduction_readiness.sql')
     );
@@ -924,7 +1095,7 @@ describe('actual production launch service against PostgreSQL', () => {
       po_status: 'IN_PRODUCTION',
       production_status: 'IN_PROGRESS',
       serials: 2,
-      orders: 6,
+      orders: 8,
       launches: 1,
     });
     const orders = await query<{
@@ -939,8 +1110,27 @@ describe('actual production launch service against PostgreSQL', () => {
     );
     expect(orders.rows).toEqual([
       { sku: 'CHILD-A', department: 'CNC', count: 4 },
+      { sku: 'CUT-A', department: 'Cutting Table', count: 1 },
+      { sku: 'LAYUP-A', department: 'Layup', count: 1 },
       { sku: 'PARENT-A', department: 'Assembly', count: 2 },
     ]);
+    expect(orders.rows.some((entry) => entry.sku === 'BUY-A')).toBe(false);
+    const lifecycle = await query<{
+      step_type: string;
+      step_order: number;
+      status: string;
+    }>(
+      `SELECT step_type,step_order,status
+       FROM project_workflow_step_instances
+       WHERE project_id=$1 ORDER BY step_order`,
+      [fixture.projectId]
+    );
+    expect(lifecycle.rows.map((entry) => entry.step_type)).toEqual(
+      certifiedStageOrder
+    );
+    expect(
+      lifecycle.rows.slice(0, 8).every((entry) => entry.status === 'COMPLETE')
+    ).toBe(true);
     const launch = await query<{
       production_evidence: Record<string, unknown>;
     }>(
@@ -967,7 +1157,7 @@ describe('actual production launch service against PostgreSQL', () => {
 
   it('aggregates launched authoritative records without duplicating execution data', async () => {
     const dashboard = await getProductionDashboard(baseProjectId);
-    expect(dashboard.productionOrders).toHaveLength(6);
+    expect(dashboard.productionOrders).toHaveLength(8);
     expect(dashboard.serializedItems).toHaveLength(2);
     expect(dashboard.readiness.state).toBe('BLOCKED');
     expect(dashboard.deferrals).toEqual({
@@ -978,7 +1168,7 @@ describe('actual production launch service against PostgreSQL', () => {
     const created = await createCompletionReview(baseProjectId, actor);
     expect(created.review?.revision_number).toBe(1);
     expect(created.review?.status).toBe('BLOCKED');
-    expect(created.productionOrders).toHaveLength(6);
+    expect(created.productionOrders).toHaveLength(8);
   });
 
   it('executes the complete real Quality lifecycle, partial release, concurrency, rollback and hold controls', async () => {

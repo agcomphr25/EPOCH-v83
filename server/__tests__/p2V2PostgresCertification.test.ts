@@ -760,6 +760,7 @@ async function createFixture(
       'ENGINEERING',
       'QUALITY',
       'OPERATIONS',
+      'SUPPLY_CHAIN',
     ].entries()) {
       await decidePreproduction(
         projectId,
@@ -780,7 +781,7 @@ async function createFixture(
     await completePreproduction(
       projectId,
       readinessId,
-      readinessLockVersion + 5,
+      readinessLockVersion + 6,
       actor
     );
     const release = await approveProductionRelease(projectId, actor);

@@ -24,7 +24,7 @@
     "trace:ar-invoice-number": "tsx server/scripts/traceArInvoiceNumber.ts",
     "timekeeping:import-timetrakgo-pdf": "tsx server/scripts/importTimeTrakGoTimeCardPdf.ts",
     "predb:push": "npx tsx server/pre-deploy-migrate.ts",
-    "db:push": "drizzle-kit push",
+    "db:push": "drizzle-kit push --config drizzle.app.config.ts",
     "prepare": "husky || true",
     "generate:audit-pdf": "node scripts/generate-audit-pdf.cjs"
   },

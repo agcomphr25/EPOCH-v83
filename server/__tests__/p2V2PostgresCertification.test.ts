@@ -217,10 +217,10 @@ async function createFixture(
     await client.query(
       `INSERT INTO p2_purchase_order_items
          (po_id,inventory_item_id,part_number,part_name,quantity,specifications)
-       SELECT $1,id,ag_part_number,name,1,$3
+       SELECT $1::integer,id,ag_part_number,name,1,$3
        FROM inventory_items WHERE ag_part_number=$2
        UNION ALL
-       SELECT $1,id,ag_part_number,name,1,$4
+       SELECT $1::integer,id,ag_part_number,name,1,$4
        FROM inventory_items WHERE ag_part_number=$2`,
       [
         poId,

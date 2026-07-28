@@ -22,6 +22,10 @@ const p2NumberMocks = vi.hoisted(() => ({
   recordP2InvoiceNumberAudit: vi.fn(),
 }));
 
+const pdfMocks = vi.hoisted(() => ({
+  generatePackingSlipPdf: vi.fn(),
+}));
+
 // Auth: authenticateToken is a no-op (the test middleware below sets req.user).
 // requireRole is a faithful re-implementation that returns 403 when the
 // authenticated user's role is not in the allowed list — this lets us cover
@@ -83,7 +87,7 @@ vi.mock('../src/services/p2InvoiceNumberService', () => ({
 }));
 
 vi.mock('../utils/pdf/packingSlipPdf', () => ({
-  generatePackingSlipPdf: vi.fn(),
+  generatePackingSlipPdf: (...args: any[]) => pdfMocks.generatePackingSlipPdf(...args),
 }));
 
 vi.mock('../replit_integrations/object_storage/objectStorage', () => ({
@@ -171,6 +175,14 @@ function setupPoolQuery(opts: {
 }) {
   poolQuery.mockImplementation(async (sql: string, _params?: any[]) => {
     const s = sql.replace(/\s+/g, ' ');
+    if (s.includes('FROM user_sessions')) {
+      const rows = [{ username: ADMIN.username, expires_at: new Date(Date.now() + 60_000) }];
+      return Object.assign(rows, { rowCount: rows.length, rows });
+    }
+    if (s.includes('FROM users') && s.includes('is_active = true')) {
+      const rows = [{ username: ADMIN.username, role: ADMIN.role }];
+      return Object.assign(rows, { rowCount: rows.length, rows });
+    }
     if (s.includes('ALTER TABLE')) {
       return Object.assign([], { rowCount: 0, rows: [] });
     }
@@ -262,6 +274,67 @@ describe('GET /api/p2/packing-slips/:id', () => {
         String(sql).replace(/\s+/g, ' ').includes('UPDATE p2_packing_slips'),
       ),
     ).toBe(false);
+  });
+});
+
+describe('GET /api/p2/packing-slips/:id/pdf', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders a historical packing slip with its actually linked invoice number', async () => {
+    setupPoolQuery({
+      slip: slipRow({
+        packing_slip_number: 'ROC26-0002',
+        invoice_number: 'ROC26-0004',
+      }),
+      linkedInvoiceNumber: 'ROC26-0004',
+    });
+    pdfMocks.generatePackingSlipPdf.mockResolvedValue(Buffer.from('%PDF-test'));
+
+    const app = await buildApp(ADMIN);
+    const res = await request(app)
+      .get(`/api/p2/packing-slips/${SLIP_ID}/pdf`)
+      .set('Authorization', 'Bearer test-session');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/^application\/pdf/);
+    expect(pdfMocks.generatePackingSlipPdf).toHaveBeenCalledWith(expect.objectContaining({
+      packingSlipNumber: 'ROC26-0002',
+      invoiceNumber: 'ROC26-0004',
+    }));
+  });
+
+  it('still renders from the stored invoice number when the linked-invoice lookup fails', async () => {
+    setupPoolQuery({
+      slip: slipRow({
+        packing_slip_number: 'ROC26-0002',
+        invoice_number: 'ROC26-0004',
+      }),
+    });
+    poolQuery.mockImplementationOnce(async (sql: string) => {
+      const rows = [{ username: ADMIN.username, expires_at: new Date(Date.now() + 60_000) }];
+      return Object.assign(rows, { rowCount: rows.length, rows });
+    });
+    const originalImplementation = poolQuery.getMockImplementation();
+    poolQuery.mockImplementation(async (sql: string, params?: any[]) => {
+      if (sql.replace(/\s+/g, ' ').includes('FROM ar_invoices')) {
+        throw new Error('legacy schema mismatch');
+      }
+      return originalImplementation!(sql, params);
+    });
+    pdfMocks.generatePackingSlipPdf.mockResolvedValue(Buffer.from('%PDF-test'));
+
+    const app = await buildApp(ADMIN);
+    const res = await request(app)
+      .get(`/api/p2/packing-slips/${SLIP_ID}/pdf`)
+      .set('Authorization', 'Bearer test-session');
+
+    expect(res.status).toBe(200);
+    expect(pdfMocks.generatePackingSlipPdf).toHaveBeenCalledWith(expect.objectContaining({
+      packingSlipNumber: 'ROC26-0002',
+      invoiceNumber: 'ROC26-0004',
+    }));
   });
 });
 

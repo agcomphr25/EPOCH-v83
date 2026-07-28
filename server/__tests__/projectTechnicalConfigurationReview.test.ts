@@ -54,6 +54,13 @@ describe('Phase 8B technical and configuration review boundaries', () => {
     expect(service).toContain(
       'Required technical information remains missing.'
     );
+    expect(service).toContain('sourceRequirementsByPart');
+    expect(service).toContain(
+      '(sourceRequirementsByPart.get(partNumber) ?? 0) + Number(item.quantity)'
+    );
+    expect(service).toContain(
+      'Number(captured.quantity) !== sourceQuantity'
+    );
   });
 
   it('uses manufacturing functions, conditional Supply Chain, and segregation of duties', () => {

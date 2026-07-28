@@ -8,6 +8,8 @@ import { format, addDays, startOfWeek, getDay } from 'date-fns';
 import { deriveCanonicalMaterial } from '../utils/deriveCanonicalMaterial';
 import { parseP1POUnitOrderId } from '../utils/parseP1POUnitOrderId';
 import { isP1FlatTop } from '../utils/p1FlatTop';
+import { authorizeApiRoute } from '../../middleware/routeAuthorization';
+import { createUpdateMoldSettingsHandler } from './moldSettingsUpdate';
 
 function normalizeMaterial(raw: string): string {
   const lower = raw.toLowerCase().trim();
@@ -95,60 +97,12 @@ router.patch('/molds/bulk/by-model', async (req: Request, res: Response) => {
   }
 });
 
-// Update a mold's settings (enabled, multiplier, isActive)
-router.patch('/molds/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { enabled, multiplier, isActive, stockModels: newStockModels } = req.body;
-    
-    console.log(`🔧 Updating mold id=${id} with:`, { enabled, multiplier, isActive, stockModels: newStockModels });
-    
-    // Build dynamic UPDATE query using raw SQL (Drizzle .returning() doesn't work with this DB)
-    const setClauses: string[] = ['updated_at = NOW()'];
-    const params: any[] = [];
-    let paramIndex = 1;
-    
-    if (typeof enabled === 'boolean') {
-      setClauses.push(`enabled = $${paramIndex++}`);
-      params.push(enabled);
-    }
-    if (typeof isActive === 'boolean') {
-      setClauses.push(`is_active = $${paramIndex++}`);
-      params.push(isActive);
-    }
-    if (typeof multiplier === 'number' && multiplier > 0) {
-      setClauses.push(`multiplier = $${paramIndex++}`);
-      params.push(multiplier);
-    }
-    if (Array.isArray(newStockModels)) {
-      setClauses.push(`stock_models = $${paramIndex++}`);
-      params.push(newStockModels);
-    }
-    
-    params.push(parseInt(id));
-    
-    const updateQuery = `
-      UPDATE molds 
-      SET ${setClauses.join(', ')} 
-      WHERE id = $${paramIndex}
-      RETURNING *
-    `;
-    
-    const result = await pool.query(updateQuery, params);
-    const rows = result?.rows || result || [];
-    
-    if (!Array.isArray(rows) || rows.length === 0) {
-      console.log(`❌ Mold id=${id} not found or update failed`);
-      return res.status(404).json({ success: false, error: 'Mold not found' });
-    }
-    
-    console.log(`✅ Updated mold ${id}:`, rows[0]);
-    res.json({ success: true, mold: rows[0] });
-  } catch (error: any) {
-    console.error('Error updating mold:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// Update the editable Mold Settings fields by numeric database ID.
+router.patch(
+  '/molds/:id',
+  authorizeApiRoute(['/department-queue/production-queue']),
+  createUpdateMoldSettingsHandler(),
+);
 
 // Update a mold's stock_models
 router.patch('/molds/:moldId/stock-models', async (req: Request, res: Response) => {

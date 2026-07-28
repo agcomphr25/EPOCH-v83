@@ -615,9 +615,9 @@ async function createFixture(
             special_process_source,packaging_instruction_requirement,notes)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$12,$13,$8,$9,
                  CASE WHEN $13 THEN 'A' ELSE NULL END,
-                 CASE WHEN $13 THEN 'RELEASED' ELSE 'NOT_APPLICABLE' END,
+                 CASE WHEN $13 THEN 'RELEASED' ELSE 'NOT_REQUIRED_APPROVED' END,
                  $10,CASE WHEN $13 THEN '1' ELSE NULL END,
-                 CASE WHEN $13 THEN 'RELEASED' ELSE 'NOT_APPLICABLE' END,
+                 CASE WHEN $13 THEN 'RELEASED' ELSE 'NOT_REQUIRED_APPROVED' END,
                  'CFG-A','DWG-CERT','A',
                  'REQUIRED','REQUIRED','INDIVIDUAL',
                  'DRAWING_SPEC_SUFFICIENT','Released drawing','REQUIRED',

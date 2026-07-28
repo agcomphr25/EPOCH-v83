@@ -277,7 +277,7 @@ describe('Phase 8C integration safety contract', () => {
     expect(transaction).toContain('FOR SHARE OF ppi,pr,pct');
     expect(transaction).toContain('assertProductionCountsMatchPlan');
     expect(transaction).toMatch(
-      /generateP2ProductionOrders\(\s*poId,\s*undefined,\s*tx\s*\)/
+      /storage\.generateP2ProductionOrders\(\s*poId,\s*undefined,\s*tx\s*\)/
     );
     expect(transaction).toContain("step_type === 'production_quality'");
     expect(transaction).toContain("current_stage='IN_PRODUCTION'");

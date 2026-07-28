@@ -139,6 +139,7 @@ type SlipRow = {
   lot_number_id: string | null;
   customer_id: string;
   customer_name: string;
+  external_pdf_url: string | null;
 };
 
 function slipRow(overrides: Partial<SlipRow> = {}): SlipRow {
@@ -151,6 +152,7 @@ function slipRow(overrides: Partial<SlipRow> = {}): SlipRow {
     lot_number_id: LOT_ID,
     customer_id: 'RWC',
     customer_name: 'Rock West Composites',
+    external_pdf_url: null,
     ...overrides,
   };
 }
@@ -324,6 +326,29 @@ describe('GET /api/p2/packing-slips/:id/pdf', () => {
       return originalImplementation!(sql, params);
     });
     pdfMocks.generatePackingSlipPdf.mockResolvedValue(Buffer.from('%PDF-test'));
+
+    const app = await buildApp(ADMIN);
+    const res = await request(app)
+      .get(`/api/p2/packing-slips/${SLIP_ID}/pdf`)
+      .set('Authorization', 'Bearer test-session');
+
+    expect(res.status).toBe(200);
+    expect(pdfMocks.generatePackingSlipPdf).toHaveBeenCalledWith(expect.objectContaining({
+      packingSlipNumber: 'ROC26-0002',
+      invoiceNumber: 'ROC26-0004',
+    }));
+  });
+
+  it('regenerates an old frozen PDF whose filename predates distinct document numbers', async () => {
+    setupPoolQuery({
+      slip: slipRow({
+        packing_slip_number: 'ROC26-0002',
+        invoice_number: 'ROC26-0004',
+        external_pdf_url: '/objects/p2/packing-slip-ROC26-0002.pdf',
+      }),
+      linkedInvoiceNumber: 'ROC26-0004',
+    });
+    pdfMocks.generatePackingSlipPdf.mockResolvedValue(Buffer.from('%PDF-corrected'));
 
     const app = await buildApp(ADMIN);
     const res = await request(app)

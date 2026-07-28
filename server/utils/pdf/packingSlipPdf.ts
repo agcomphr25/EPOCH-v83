@@ -70,8 +70,8 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
     color: COLORS.TEXT_PRIMARY,
   });
 
-  const slipNumWidth = font.widthOfTextAtSize(invoiceNumber, FONT_SIZES.BODY_MEDIUM);
-  page.drawText(invoiceNumber, {
+  const slipNumWidth = font.widthOfTextAtSize(data.packingSlipNumber, FONT_SIZES.BODY_MEDIUM);
+  page.drawText(data.packingSlipNumber, {
     x: PAGE_WIDTH - margin - slipNumWidth,
     y: PAGE_HEIGHT - margin - LINE_HEIGHTS.COMPACT - 4,
     size: FONT_SIZES.BODY_MEDIUM,

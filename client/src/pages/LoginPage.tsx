@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import { queryClient } from '@/lib/queryClient';
+import { fetchWhenServerReady, parseResponse } from '@/lib/serverReadiness';
 
 type LoginMode = 'regular' | 'p2-traveler' | 'timer-station' | 'badge' | 'time-clock';
 
@@ -67,36 +68,6 @@ export default function LoginPage() {
     }
   }, [activeMode]);
 
-  // Retry POSTs that hit the boot-window 503 ("Server starting, please retry")
-  // or transient network errors. Up to ~6 attempts over ~10s. Auth failures
-  // (401/400) are returned immediately so genuine errors aren't masked.
-  const fetchWithBootRetry = async (
-    url: string,
-    init: RequestInit,
-    maxAttempts = 6,
-    delayMs = 1500,
-  ): Promise<Response> => {
-    let lastErr: unknown;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const response = await fetch(url, init);
-        if (response.status !== 503) return response;
-        // Server is still booting — wait and retry.
-      } catch (err) {
-        lastErr = err;
-      }
-      if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, delayMs));
-      }
-    }
-    if (lastErr) throw lastErr;
-    // Give up — return a synthetic 503 so the caller can show an error.
-    return new Response(
-      JSON.stringify({ error: 'Server is still starting. Please try again in a moment.' }),
-      { status: 503, headers: { 'Content-Type': 'application/json' } },
-    );
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -112,7 +83,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetchWithBootRetry('/api/auth/login', {
+      const response = await fetchWhenServerReady('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,9 +92,9 @@ export default function LoginPage() {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json();
+      const { data, error } = await parseResponse<any>(response);
 
-      if (response.ok) {
+      if (response.ok && data) {
         if (data.sessionToken) {
           localStorage.setItem('sessionToken', data.sessionToken);
         }
@@ -142,7 +113,7 @@ export default function LoginPage() {
       } else {
         toast({
           title: 'Login Failed',
-          description: data.error || 'Invalid username or password',
+          description: error || 'Invalid username or password',
           variant: 'destructive',
         });
       }
@@ -173,7 +144,7 @@ export default function LoginPage() {
     setIsBadgeLoading(true);
 
     try {
-      const response = await fetchWithBootRetry('/api/auth/badge-login', {
+      const response = await fetchWhenServerReady('/api/auth/badge-login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -182,12 +153,12 @@ export default function LoginPage() {
         body: JSON.stringify({ employeeCode: badgeCode.trim() }),
       });
 
-      const data = await response.json();
+      const { data, error } = await parseResponse<any>(response);
 
-      if (!response.ok) {
+      if (!response.ok || !data) {
         toast({
           title: 'Badge Login Failed',
-          description: data.error || 'Invalid employee badge code',
+          description: error || 'Invalid employee badge code',
           variant: 'destructive',
         });
         return;

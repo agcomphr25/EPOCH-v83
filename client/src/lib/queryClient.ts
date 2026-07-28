@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from '@tanstack/react-query';
+import { fetchWhenServerReady } from './serverReadiness';
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -228,7 +229,9 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     window.location.hostname.includes('.repl.co') ||
     window.location.hostname.includes('agcompepoch.xyz');
 
-  const defaultTimeout = isDeployment ? 15000 : 120000;
+  // Production route registration can legitimately take close to a minute.
+  // Keep the request controller alive longer than the readiness poll window.
+  const defaultTimeout = isDeployment ? 135000 : 120000;
   const timeoutDuration = options.timeout ?? defaultTimeout;
 
   console.log(
@@ -284,7 +287,7 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
   }
 
   try {
-    const response = await fetch(fullUrl, config);
+    const response = await fetchWhenServerReady(fullUrl, config);
     clearTimeout(timeoutId);
     console.log(`✅ API Response from ${url}: ${response.status}`);
 
@@ -396,7 +399,7 @@ export const getQueryFn: <T>(options: {
       (window.location.hostname.includes('.replit.app') ||
         window.location.hostname.includes('.repl.co') ||
         window.location.hostname.includes('agcompepoch.xyz'));
-    const timeoutDuration = isDeployment ? 45000 : 30000;
+    const timeoutDuration = isDeployment ? 135000 : 120000;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -418,7 +421,7 @@ export const getQueryFn: <T>(options: {
         ? { Authorization: `Bearer ${storedToken}` }
         : {};
 
-      const res = await fetch(url, {
+      const res = await fetchWhenServerReady(url, {
         credentials: 'include',
         signal: controller.signal,
         headers,

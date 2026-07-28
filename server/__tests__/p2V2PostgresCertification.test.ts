@@ -384,8 +384,14 @@ async function createFixture(
     );
     await client.query(
       `INSERT INTO bom_lines(revision_id,child_part_ag_number,qty_per)
-       VALUES ($1,$2,2)`,
-      [bomParentRevision.rows[0].id, `CHILD-${suffix}`]
+       VALUES ($1,$2,2),($1,$3,1),($1,$4,1),($1,$5,1)`,
+      [
+        bomParentRevision.rows[0].id,
+        `CHILD-${suffix}`,
+        `LAYUP-${suffix}`,
+        `CUT-${suffix}`,
+        `BUY-${suffix}`,
+      ]
     );
     const routingTemplate = await client.query<{ id: string }>(
       `INSERT INTO production_control_templates
@@ -586,7 +592,7 @@ async function createFixture(
         name: 'Layup Detail',
         path: 'layup',
         parent: null,
-        qty: 1,
+        qty: 2,
         bom: bomLayup.rows[0].id,
         revision: bomLayupRevision.rows[0].id,
         routing: layupRouting.rows[0].id,
@@ -599,7 +605,7 @@ async function createFixture(
         name: 'Cut Detail',
         path: 'cutting',
         parent: null,
-        qty: 1,
+        qty: 2,
         bom: bomCutting.rows[0].id,
         revision: bomCuttingRevision.rows[0].id,
         routing: cuttingRouting.rows[0].id,
@@ -612,7 +618,7 @@ async function createFixture(
         name: 'Purchased Hardware',
         path: 'purchased',
         parent: null,
-        qty: 1,
+        qty: 2,
         bom: null,
         revision: null,
         routing: null,
@@ -1116,7 +1122,7 @@ describe('actual production launch service against PostgreSQL', () => {
       po_status: 'IN_PRODUCTION',
       production_status: 'IN_PROGRESS',
       serials: 2,
-      orders: 8,
+      orders: 10,
       launches: 1,
     });
     const orders = await query<{
@@ -1131,8 +1137,8 @@ describe('actual production launch service against PostgreSQL', () => {
     );
     expect(orders.rows).toEqual([
       { sku: 'CHILD-A', department: 'CNC', count: 4 },
-      { sku: 'CUT-A', department: 'Cutting Table', count: 1 },
-      { sku: 'LAYUP-A', department: 'Layup', count: 1 },
+      { sku: 'CUT-A', department: 'Cutting Table', count: 2 },
+      { sku: 'LAYUP-A', department: 'Layup', count: 2 },
       { sku: 'PARENT-A', department: 'Assembly', count: 2 },
     ]);
     expect(orders.rows.some((entry) => entry.sku === 'BUY-A')).toBe(false);
@@ -1178,7 +1184,7 @@ describe('actual production launch service against PostgreSQL', () => {
 
   it('aggregates launched authoritative records without duplicating execution data', async () => {
     const dashboard = await getProductionDashboard(baseProjectId);
-    expect(dashboard.productionOrders).toHaveLength(8);
+    expect(dashboard.productionOrders).toHaveLength(10);
     expect(dashboard.serializedItems).toHaveLength(2);
     expect(dashboard.readiness.state).toBe('BLOCKED');
     expect(dashboard.deferrals).toEqual({
@@ -1189,7 +1195,7 @@ describe('actual production launch service against PostgreSQL', () => {
     const created = await createCompletionReview(baseProjectId, actor);
     expect(created.review?.revision_number).toBe(1);
     expect(created.review?.status).toBe('BLOCKED');
-    expect(created.productionOrders).toHaveLength(8);
+    expect(created.productionOrders).toHaveLength(10);
   });
 
   it('executes the complete real Quality lifecycle, partial release, concurrency, rollback and hold controls', async () => {

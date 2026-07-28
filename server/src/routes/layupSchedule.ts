@@ -901,13 +901,13 @@ router.post('/save', async (req: Request, res: Response) => {
         const uniqueOrderIds = Array.from(new Set(orderIds));
         
         // Pre-filter to only orders in eligible source departments (preserving original WHERE guard)
-        const eligibleRows = await client.query(
+        const eligibleResult = await client.query<{ order_id: string }>(
           `SELECT order_id FROM all_orders
            WHERE order_id = ANY($1::text[])
            AND current_department IN ('P1 Production Queue', 'Production Queue')`,
           [uniqueOrderIds]
-        ) as any[];
-        const eligibleIds = eligibleRows.map((r: any) => r.order_id);
+        );
+        const eligibleIds = eligibleResult.rows.map(row => row.order_id);
 
         if (eligibleIds.length > 0) {
           const movedRows = await auditUpdateOrders({

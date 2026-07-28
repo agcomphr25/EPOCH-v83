@@ -114,12 +114,15 @@ export function buildP2SerializedUnitLedger(
   for (const bucket of bucketBySerial.values()) counts[bucket] += 1;
 
   const accounted = Object.values(counts).reduce((sum, count) => sum + count, 0);
-  const missing = Math.max(0, total - accounted);
   if (accounted > total) {
-    throw new Error(
-      `P2 serialized-unit ledger invariant failed: ${accounted} bucketed units exceed ordered quantity ${total}`,
+    // Over-allocation: more serialized units exist than were ordered (e.g. PO was
+    // revised down after production started). Treat missing as 0 and continue —
+    // the caller sees the real counts and can surface the discrepancy in the UI.
+    console.warn(
+      `[p2SerializedUnitLedger] Over-allocation on PO: ${accounted} bucketed units exceed ordered quantity ${total}`,
     );
   }
+  const missing = Math.max(0, total - accounted);
 
   return {
     ...counts,

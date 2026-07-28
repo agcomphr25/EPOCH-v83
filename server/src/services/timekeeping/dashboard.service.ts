@@ -1031,7 +1031,7 @@ export async function getPayrollReviewBatch(
             SELECT 1
             FROM labor_approvals la
             WHERE la.employee_id = pl.employee_id::text
-              AND la.production_work_order_id = pl.production_work_order_id::text
+              AND la.production_work_order_id = pl.production_work_order_id
           )
         GROUP BY pl.employee_id
       `,

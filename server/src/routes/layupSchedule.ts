@@ -10,6 +10,10 @@ import { parseP1POUnitOrderId } from '../utils/parseP1POUnitOrderId';
 import { isP1FlatTop } from '../utils/p1FlatTop';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 import { createUpdateMoldSettingsHandler } from './moldSettingsUpdate';
+import {
+  firstStockModelReference,
+  StockModelResolver,
+} from '../helpers/stockModelResolver';
 
 function normalizeMaterial(raw: string): string {
   const lower = raw.toLowerCase().trim();
@@ -309,16 +313,14 @@ router.post('/generate', async (req: Request, res: Response) => {
     
     // Fetch stock models with display names for material detection
     const stockModelsList = await db.select({
+      id: stockModels.id,
       name: stockModels.name,
       displayName: stockModels.displayName,
     }).from(stockModels);
     
-    // Create a map of model name -> display name for quick lookup
-    const stockModelDisplayMap = new Map(
-      stockModelsList.map(m => [m.name, m.displayName || ''])
-    );
+    const stockModelResolver = new StockModelResolver(stockModelsList);
     
-    console.log(`📦 Loaded ${stockModelDisplayMap.size} stock models for material detection`);
+    console.log(`📦 Loaded ${stockModelsList.length} stock models for identity resolution`);
     
     // Fetch ALL molds (don't filter by enabled status since database has them disabled)
     // Use pool.query for proper PostgreSQL array handling (rawSql/Neon driver returns empty arrays)
@@ -338,18 +340,29 @@ router.post('/generate', async (req: Request, res: Response) => {
     }
     
     // Parse stock_models from PostgreSQL array format "{a,b,c}" to JavaScript array
-    const activeMolds = rawMolds.map((m: any) => ({
-      id: m.id,
-      moldId: m.mold_id,
-      modelName: m.model_name,
-      stockModels: typeof m.stock_models === 'string' 
+    const activeMolds = rawMolds.map((m: any) => {
+      const moldStockModelRefs = typeof m.stock_models === 'string'
         ? m.stock_models.replace(/^\{|\}$/g, '').split(',').filter((s: string) => s.length > 0)
-        : (Array.isArray(m.stock_models) ? m.stock_models : []),
-      instanceNumber: m.instance_number,
-      enabled: m.enabled,
-      multiplier: m.multiplier || 1,
-      isActive: m.is_active,
-    }));
+        : (Array.isArray(m.stock_models) ? m.stock_models : []);
+      const fallbackMoldModel = stockModelResolver.resolve(m.model_name);
+
+      return {
+        id: m.id,
+        moldId: m.mold_id,
+        modelName: m.model_name,
+        stockModels: moldStockModelRefs,
+        resolvedStockModels: [
+          ...moldStockModelRefs
+            .map((reference: string) => stockModelResolver.resolve(reference))
+            .filter(Boolean),
+          ...(moldStockModelRefs.length === 0 && fallbackMoldModel ? [fallbackMoldModel] : []),
+        ],
+        instanceNumber: m.instance_number,
+        enabled: m.enabled,
+        multiplier: m.multiplier || 1,
+        isActive: m.is_active,
+      };
+    });
     
     console.log(`🏭 Found ${activeMolds.length} active molds`);
     if (activeMolds.length > 0) {
@@ -394,10 +407,10 @@ router.post('/generate', async (req: Request, res: Response) => {
         const otherOptions = Array.isArray(features.other_options) ? features.other_options : [];
         
         // Extract action length
-        let actionLength = features.action_length;
+        let actionLength = features.action_length || features.actionLength;
         if (!actionLength || actionLength === 'none') {
           // Try to derive from action_inlet
-          const actionInlet = features.action_inlet;
+          const actionInlet = features.action_inlet || features.actionInlet;
           if (actionInlet) {
             if (actionInlet.includes('short')) {
               actionLength = 'SA';
@@ -407,8 +420,9 @@ router.post('/generate', async (req: Request, res: Response) => {
           }
         }
         
-        // Use material_canonical as single source of truth for P1 material
-        let material: string | null = order.materialCanonical || null;
+        let material: string | null = features.material
+          ? normalizeMaterial(features.material)
+          : null;
         if (!material) {
           material = deriveCanonicalMaterial(order.stockModel || '') || null;
         }
@@ -430,10 +444,22 @@ router.post('/generate', async (req: Request, res: Response) => {
         
         const hasHeavyFill = otherOptions.includes('heavy_fill');
         
+        const originalRef = firstStockModelReference([
+          { source: 'all_orders.model_id', value: order.stockModel },
+        ]);
+        const resolvedStockModel = stockModelResolver.resolve(originalRef?.value);
+
         return {
           ...order,
+          stockModel: resolvedStockModel?.name || originalRef?.value || '',
+          resolvedStockModel,
+          stockModelId: resolvedStockModel?.id ?? null,
+          stockModelName: resolvedStockModel?.name ?? null,
+          stockModelDisplayName: resolvedStockModel?.displayName ?? null,
+          originalRef: originalRef?.value ?? null,
+          stockModelSource: originalRef?.source ?? null,
           actionLength,
-          actionInlet: features.action_inlet || null,
+          actionInlet: features.action_inlet || features.actionInlet || null,
           material,
           hasLOP,
           lopValue,
@@ -473,10 +499,15 @@ router.post('/generate', async (req: Request, res: Response) => {
             prod.due_date,
             prod.specifications,
             poi.stock_model_id,
-            poi.specifications AS po_specifications
+            poi.stock_model_name,
+            poi.specifications AS po_specifications,
+            pp.stock_model AS po_product_stock_model
           FROM production_orders prod
           JOIN purchase_order_items poi ON poi.id = prod.po_item_id
           JOIN purchase_orders po ON po.id = prod.po_id
+          LEFT JOIN po_products pp
+            ON poi.item_type = 'custom_model'
+            AND poi.item_id = pp.id::text
           WHERE prod.po_item_id = $1
             AND po.po_number = $2
             AND COALESCE(prod.is_fulfilled, false) = false
@@ -504,7 +535,9 @@ router.post('/generate', async (req: Request, res: Response) => {
         }
 
         for (const row of rows) {
-          const specifications = row.specifications || row.po_specifications || {};
+          const productionSpecifications = row.specifications || {};
+          const poSpecifications = row.po_specifications || {};
+          const specifications = { ...poSpecifications, ...productionSpecifications };
           let actionLength = specifications.action_length || specifications.actionLength || null;
           const actionInlet = specifications.action_inlet || specifications.actionInlet || null;
           if ((!actionLength || actionLength === 'none') && actionInlet) {
@@ -512,8 +545,17 @@ router.post('/generate', async (req: Request, res: Response) => {
             if (actionInlet.includes('long')) actionLength = 'LA';
           }
 
-          const stockModel =
-            row.stock_model_id || row.item_id || item.stockModel || row.item_name || '';
+          const originalRef = firstStockModelReference([
+            { source: 'purchase_order_items.stock_model_id', value: row.stock_model_id },
+            { source: 'production_orders.specifications.stockModel', value: productionSpecifications.stockModel },
+            { source: 'production_orders.specifications.stock_model', value: productionSpecifications.stock_model },
+            { source: 'purchase_order_items.specifications.stockModel', value: poSpecifications.stockModel },
+            { source: 'purchase_order_items.specifications.stock_model', value: poSpecifications.stock_model },
+            { source: 'po_products.stock_model', value: row.po_product_stock_model },
+            { source: 'purchase_order_items.stock_model_name', value: row.stock_model_name },
+          ]);
+          const resolvedStockModel = stockModelResolver.resolve(originalRef?.value);
+          const stockModel = resolvedStockModel?.name || originalRef?.value || '';
           const material = specifications.material
             ? normalizeMaterial(specifications.material)
             : deriveCanonicalMaterial(stockModel) || null;
@@ -525,6 +567,12 @@ router.post('/generate', async (req: Request, res: Response) => {
             poItemId: row.po_item_id,
             productionOrderId: row.order_id,
             stockModel,
+            resolvedStockModel,
+            stockModelId: resolvedStockModel?.id ?? null,
+            stockModelName: resolvedStockModel?.name ?? null,
+            stockModelDisplayName: resolvedStockModel?.displayName ?? null,
+            originalRef: originalRef?.value ?? null,
+            stockModelSource: originalRef?.source ?? null,
             customerId: row.customer_id,
             customerName: row.customer_name,
             dueDate: row.due_date,
@@ -576,75 +624,29 @@ router.post('/generate', async (req: Request, res: Response) => {
     for (const item of allItems) {
       let scheduled = false;
       
-      // Find compatible molds for this stock model
-      // Handle both array and string formats for mold.stockModels (in case Drizzle returns different formats)
-      // Also fallback to model_name matching if stockModels is empty (database driver workaround)
-      const compatibleMolds = activeMolds.filter(mold => {
-        if (!item.stockModel) return false;
-        
-        // Model name alias mappings for stock models with non-standard naming
-        // Includes carbon fiber (cf_) and fiberglass (fg_) variants
-        const modelAliases: Record<string, string[]> = {
-          'adjustable_gladius': ['adj_amor', 'adj_gladius', 'adjustable_amor', 'cf_adj_armor', 'cf_adj_gladius', 'fg_adj_armor', 'fg_adj_gladius'],
-          'adjustable_alpine_hunter': ['adj_alpine_hunter', 'adj_alpine', 'cf_adj_alp_hunter', 'cf_adj_alpine_hunter', 'cf_adj_alpine', 'fg_adj_alp_hunter', 'fg_adj_alpine_hunter', 'fg_adj_alpine'],
-          'alpine_hunter': ['cf_alpine_hunter', 'fg_alpine_hunter'],
-        };
-        
-        // Normalize function: "Mesa Universal" -> "mesa_universal"
-        const normalizeModelName = (name: string) => 
-          name.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
-        
-        // Check if stock model matches any alias
-        const getCanonicalName = (stockModel: string): string => {
-          const normalized = stockModel.toLowerCase();
-          for (const [canonical, aliases] of Object.entries(modelAliases)) {
-            if (aliases.includes(normalized) || normalized === canonical) {
-              return canonical;
-            }
-          }
-          return normalized;
-        };
-        
-        const canonicalStockModel = getCanonicalName(item.stockModel);
-        
-        // First try stockModels array matching
-        if (mold.stockModels && mold.stockModels.length > 0) {
-          // If it's an array, use includes
-          if (Array.isArray(mold.stockModels)) {
-            // Check both original and canonical names
-            return mold.stockModels.includes(item.stockModel) || 
-                   mold.stockModels.some(m => getCanonicalName(m) === canonicalStockModel);
-          }
-          
-          // If it's a string (postgres array format like "{a,b,c}"), parse and check
-          if (typeof mold.stockModels === 'string') {
-            const modelsStr = mold.stockModels as string;
-            // Handle postgres array format: {model1,model2,model3}
-            const cleanedModels = modelsStr.replace(/^\{|\}$/g, '').split(',');
-            return cleanedModels.includes(item.stockModel) ||
-                   cleanedModels.some(m => getCanonicalName(m) === canonicalStockModel);
-          }
-        }
-        
-        // Fallback: match by normalized model_name when stockModels is empty
-        // e.g., mold "Mesa Universal" matches stock_model "mesa_universal"
-        const normalizedMoldModel = normalizeModelName(mold.modelName);
-        const normalizedStockModel = item.stockModel.toLowerCase();
-        
-        // Check if normalized names match, including aliases
-        return normalizedMoldModel === normalizedStockModel ||
-               normalizedMoldModel === canonicalStockModel ||
-               normalizedMoldModel.includes(normalizedStockModel) ||
-               normalizedStockModel.includes(normalizedMoldModel) ||
-               normalizedMoldModel.includes(canonicalStockModel) ||
-               canonicalStockModel.includes(normalizedMoldModel);
-      });
+      if (!item.resolvedStockModel) {
+        overflowItems.push({
+          ...item,
+          errorCode: 'STOCK_MODEL_UNRESOLVED',
+          reason:
+            `Stock model "${item.originalRef || 'missing'}" could not be resolved. ` +
+            'Correct the stock model on the order or purchase-order line before scheduling.',
+        });
+        continue;
+      }
+
+      const compatibleMolds = activeMolds.filter(mold =>
+        mold.resolvedStockModels.some((moldModel: any) =>
+          stockModelResolver.areCompatible(item.resolvedStockModel, moldModel),
+        ),
+      );
       
       if (compatibleMolds.length === 0) {
         console.log(`⚠️ No compatible molds for ${item.orderId} (stockModel: ${item.stockModel}, type: ${typeof item.stockModel})`);
         overflowItems.push({
           ...item,
-          reason: `No compatible molds for stock model: ${item.stockModel}`,
+          errorCode: 'NO_COMPATIBLE_MOLD',
+          reason: `No compatible mold is configured for ${item.stockModelDisplayName}`,
         });
         continue;
       }
@@ -671,6 +673,10 @@ router.post('/generate', async (req: Request, res: Response) => {
               orderId: item.orderId,
               fbOrderNumber: item.fbOrderNumber,
               stockModel: item.stockModel,
+              stockModelId: item.stockModelId,
+              stockModelName: item.stockModelName,
+              stockModelDisplayName: item.stockModelDisplayName,
+              originalRef: item.originalRef,
               customerName: item.customerName,
               scheduledDate: format(scheduledDate, 'yyyy-MM-dd'),
               moldId: mold.moldId,
@@ -704,6 +710,7 @@ router.post('/generate', async (req: Request, res: Response) => {
         console.log(`❌ Cannot schedule ${item.orderId} - no capacity available`);
         overflowItems.push({
           ...item,
+          errorCode: 'NO_AVAILABLE_CAPACITY',
           reason: 'No available mold capacity in the scheduling window',
         });
       }

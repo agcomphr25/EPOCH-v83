@@ -12,6 +12,10 @@ interface ScheduledItem {
   orderId: string;
   fbOrderNumber: string;
   stockModel: string;
+  stockModelId?: string | null;
+  stockModelName?: string | null;
+  stockModelDisplayName?: string | null;
+  originalRef?: string | null;
   customerName: string;
   scheduledDate: string;
   moldId: string;
@@ -31,8 +35,19 @@ interface OverflowItem {
   orderId: string;
   fbOrderNumber: string;
   stockModel: string;
+  stockModelDisplayName?: string | null;
+  originalRef?: string | null;
+  errorCode?: 'STOCK_MODEL_UNRESOLVED' | 'NO_COMPATIBLE_MOLD' | 'NO_AVAILABLE_CAPACITY';
   customerName: string;
   reason: string;
+}
+
+function stockModelLabel(item: {
+  stockModel: string;
+  stockModelDisplayName?: string | null;
+  originalRef?: string | null;
+}): string {
+  return item.stockModelDisplayName || item.stockModel || item.originalRef || 'Unresolved stock model';
 }
 
 interface LayupSchedulePreviewProps {
@@ -463,7 +478,7 @@ export function LayupSchedulePreview({
               </div>
               <div>
                 <div class="field-label">Stock Model</div>
-                <div class="field-value">${item.stockModel}</div>
+                <div class="field-value">${stockModelLabel(item)}</div>
               </div>
               <div>
                 <div class="field-label">Mold</div>
@@ -607,7 +622,7 @@ export function LayupSchedulePreview({
                       <TableRow key={idx}>
                         <TableCell className="font-mono text-sm">{item.orderId}</TableCell>
                         <TableCell>
-                          <Badge variant="outline">{item.stockModel}</Badge>
+                          <Badge variant="outline">{stockModelLabel(item)}</Badge>
                         </TableCell>
                         <TableCell className="font-medium">{item.moldId}</TableCell>
                         <TableCell className="text-sm">
@@ -686,7 +701,7 @@ export function LayupSchedulePreview({
                       </div>
                       <div>
                         <div className="layup-field-label">Stock Model</div>
-                        <div className="layup-field-value">{item.stockModel}</div>
+                        <div className="layup-field-value">{stockModelLabel(item)}</div>
                       </div>
                       <div>
                         <div className="layup-field-label">Mold</div>
@@ -770,7 +785,7 @@ export function LayupSchedulePreview({
                   <TableRow key={idx}>
                     <TableCell className="font-mono text-sm">{item.orderId}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{item.stockModel}</Badge>
+                      <Badge variant="outline">{stockModelLabel(item)}</Badge>
                     </TableCell>
                     <TableCell className="text-sm">{item.customerName}</TableCell>
                     <TableCell className="text-sm text-yellow-700">{item.reason}</TableCell>

@@ -118,6 +118,8 @@ export interface RawPurchaseOrderItem {
   notes: string | null;
   productionNotes: string | null;
   dueDate?: Date | string | null;
+  stockModelId?: string | null;
+  stockModelName?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,8 +161,10 @@ export function computeP1Queue(
       .map((item) => {
         const specs = (item.specifications as Record<string, unknown>) || {};
         const stockModel =
+          item.stockModelId ??
           (specs.stockModel as string | null) ??
           (specs.stock_model as string | null) ??
+          item.stockModelName ??
           null;
         const fulfillmentStats = itemFulfillmentMap.get(item.id);
         // This is the operational P1 queue, so selectable quantity means exact
@@ -174,6 +178,7 @@ export function computeP1Queue(
           poNumber: po.poNumber,
           productName: item.itemName ?? '',
           stockModel,
+          stockModelId: item.stockModelId ?? null,
           specifications:
             specs && Object.keys(specs).length > 0 ? specs : null,
           itemType: item.itemType ?? null,

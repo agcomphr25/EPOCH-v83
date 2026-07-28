@@ -88,4 +88,14 @@ describe('layup schedule PO progression scope', () => {
     expect(route).toContain('WHERE order_id = ANY($1::text[])');
     expect(route).toContain('INSERT INTO layup_schedule');
   });
+
+  it('maps eligible regular orders from the production pg QueryResult rows', () => {
+    const saveStart = route.indexOf("router.post('/save'");
+    const saveRoute = route.slice(saveStart, route.indexOf("router.get('/current-week'", saveStart));
+
+    expect(saveRoute).toContain('const eligibleResult = await client.query<{ order_id: string }>');
+    expect(saveRoute).toContain('eligibleResult.rows.map(row => row.order_id)');
+    expect(saveRoute).not.toContain('eligibleRows.map');
+    expect(saveRoute).not.toContain(') as any[]');
+  });
 });

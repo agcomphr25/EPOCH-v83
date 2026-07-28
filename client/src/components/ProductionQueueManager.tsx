@@ -420,14 +420,34 @@ export default function ProductionQueueManager() {
       const nextMonday = new Date(today);
       nextMonday.setDate(today.getDate() + ((1 + 7 - today.getDay()) % 7 || 7));
       nextMonday.setDate(nextMonday.getDate() + (selectedWeekOffset * 7));
+
+      const poSelections: Array<{
+        poNumber: string;
+        itemId: number;
+        stockModel: string;
+        quantity: number;
+      }> = [];
+      selectedPOItems.forEach((itemMap, poNumber) => {
+        const purchaseOrder = p1PurchaseOrders
+          .flatMap((customer) => customer.purchaseOrders)
+          .find((po) => po.poNumber === poNumber);
+
+        itemMap.forEach((quantity, itemId) => {
+          const item = purchaseOrder?.items.find((candidate) => candidate.id === itemId);
+          poSelections.push({
+            poNumber,
+            itemId,
+            stockModel: item?.stockModel || item?.productName || '',
+            quantity,
+          });
+        });
+      });
       
       return apiRequest('/api/layup-schedule/generate', {
         method: 'POST',
         body: {
           selectedOrderIds: Array.from(selectedQueueOrders),
-          // PO demand must be generated into P1 Production Queue first. The
-          // scheduler accepts only existing production-order IDs from this UI.
-          selectedPOItems: [],
+          selectedPOItems: poSelections,
           workDays: selectedDays,
           weekStart: nextMonday.toISOString(),
         },
@@ -460,6 +480,7 @@ export default function ProductionQueueManager() {
         orderId: item.orderId,
         scheduledDate: item.scheduledDate,
         moldId: item.moldId,
+        stockModel: item.stockModel,
         employeeAssignments: [],
       }));
 
@@ -475,7 +496,7 @@ export default function ProductionQueueManager() {
     onSuccess: (result: any) => {
       toast({
         title: 'Schedule Approved',
-        description: `Successfully scheduled ${generatedSchedule?.scheduledItems.length} items and progressed ${result.ordersProgressed || 0} orders to Layup/Plugging`,
+        description: `Successfully scheduled ${result.entriesSaved || generatedSchedule?.scheduledItems.length || 0} units`,
       });
       
       // Clear selections
@@ -489,6 +510,7 @@ export default function ProductionQueueManager() {
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/reconciliation'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p1-po-queue/purchase-orders/open'] });
       queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule/weeks'] });
+      refetchPOs();
     },
     onError: (error: any) => {
       toast({
@@ -1492,7 +1514,8 @@ export default function ProductionQueueManager() {
                     Progress to Barcode ({selectedQueueOrders.size})
                   </Button>
                 )}
-                {selectedQueueOrders.size > 0 && (
+                {(selectedQueueOrders.size > 0 ||
+                  Array.from(selectedPOItems.values()).some((items) => items.size > 0)) && (
                   <Button
                     onClick={() => setDaySelectionDialogOpen(true)}
                     disabled={generateScheduleMutation.isPending}

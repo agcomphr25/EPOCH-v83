@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { auditUpdateOrders } from '../services/orderAuditWrapper';
 
 import { db, pool, rawSql } from '../../db';
-import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule, stockModels, insertMoldSchema } from '../../schema';
+import { molds, productionQueue, allOrders, layupSchedule, stockModels, insertMoldSchema } from '../../schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 import { deriveCanonicalMaterial } from '../utils/deriveCanonicalMaterial';
@@ -493,92 +493,95 @@ router.post('/generate', async (req: Request, res: Response) => {
       });
     }
     
-    // Fetch PO item details and prepare for scheduling
+    // Resolve exact existing P1 production units. Scheduling consumes demand
+    // already created by the PO release flow; it must never synthesize demand.
     const poItems: any[] = [];
     
     if (selectedPOItems.length > 0) {
-      console.log(`🔍 Preparing ${selectedPOItems.length} PO items for scheduling`);
-      
-      // Fetch action length from po_products table
-      const itemIds = selectedPOItems.map(item => item.itemId);
-      const poProductsData = await db
-        .select({
-          id: poProducts.id,
-          actionLength: poProducts.actionLength,
-          actionInlet: poProducts.actionInlet,
-          stockModel: poProducts.stockModel,
-          flatTop: poProducts.flatTop,
-        })
-        .from(poProducts)
-        .where(inArray(poProducts.id, itemIds));
-      
-      console.log(`📦 Fetched ${poProductsData.length} PO products with action length data`);
-      
-      // Create a map for quick lookup
-      const poProductMap = new Map(poProductsData.map(p => [p.id, p]));
-      
-      // Expand by quantity for scheduling
       for (const item of selectedPOItems) {
-        const poProductData = poProductMap.get(item.itemId);
-        
-        // Extract action length from po_products
-        let actionLength = poProductData?.actionLength || null;
-        if (!actionLength || actionLength === 'none') {
-          // Try to derive from action_inlet
-          const actionInlet = poProductData?.actionInlet;
-          if (actionInlet) {
-            if (actionInlet.includes('short')) {
-              actionLength = 'SA';
-            } else if (actionInlet.includes('long')) {
-              actionLength = 'LA';
-            }
+        if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+          return res.status(400).json({
+            success: false,
+            error: `Invalid selected quantity for PO item ${item.itemId}`,
+          });
+        }
+
+        const result = await pool.query(
+          `
+          SELECT
+            prod.order_id,
+            prod.po_number,
+            prod.po_item_id,
+            prod.item_id,
+            prod.item_name,
+            prod.customer_id,
+            prod.customer_name,
+            prod.due_date,
+            prod.specifications,
+            poi.stock_model_id,
+            poi.specifications AS po_specifications
+          FROM production_orders prod
+          JOIN purchase_order_items poi ON poi.id = prod.po_item_id
+          JOIN purchase_orders po ON po.id = prod.po_id
+          WHERE prod.po_item_id = $1
+            AND po.po_number = $2
+            AND COALESCE(prod.is_fulfilled, false) = false
+            AND UPPER(COALESCE(prod.production_status, 'PENDING')) != 'CANCELLED'
+            AND prod.current_department IN ('P1 Production Queue', 'Production Queue', 'Layup/Plugging')
+          ORDER BY
+            CASE WHEN EXISTS (
+              SELECT 1 FROM layup_schedule ls WHERE ls.order_id = prod.order_id
+            ) THEN 0 ELSE 1 END,
+            prod.created_at ASC,
+            prod.id ASC
+          LIMIT $3
+          `,
+          [item.itemId, item.poNumber, item.quantity],
+        );
+        const rows = Array.isArray(result) ? result : (result as any).rows || [];
+
+        if (rows.length !== item.quantity) {
+          return res.status(409).json({
+            success: false,
+            error:
+              `Selected ${item.quantity} unit(s) for PO item ${item.itemId} on ${item.poNumber}, ` +
+              `but only ${rows.length} eligible existing production unit(s) could be resolved`,
+          });
+        }
+
+        for (const row of rows) {
+          const specifications = row.specifications || row.po_specifications || {};
+          let actionLength = specifications.action_length || specifications.actionLength || null;
+          const actionInlet = specifications.action_inlet || specifications.actionInlet || null;
+          if ((!actionLength || actionLength === 'none') && actionInlet) {
+            if (actionInlet.includes('short')) actionLength = 'SA';
+            if (actionInlet.includes('long')) actionLength = 'LA';
           }
-        }
-        
-        let material: string | null = null;
 
-        // 🔎 If this is a PO item, fetch authoritative material from DB
-        if (item.poNumber && item.itemId) {
-          const [poItem] = await db
-            .select({ specifications: purchaseOrderItems.specifications })
-            .from(purchaseOrderItems)
-            .where(eq(purchaseOrderItems.id, item.itemId))
-            .limit(1);
+          const stockModel =
+            row.stock_model_id || row.item_id || item.stockModel || row.item_name || '';
+          const material = specifications.material
+            ? normalizeMaterial(specifications.material)
+            : deriveCanonicalMaterial(stockModel) || null;
 
-          if (poItem?.specifications) {
-            const specs = poItem.specifications as any;
-            if (specs?.material) {
-              material = normalizeMaterial(specs.material);
-            }
-          }
-        }
-
-        // 🔁 Fallback ONLY if DB material not found
-        if (!material) {
-          material =
-            (item as any).materialCanonical ||
-            deriveCanonicalMaterial(item.stockModel || '') ||
-            null;
-        }
-        
-        for (let i = 0; i < item.quantity; i++) {
           poItems.push({
-            orderId: `PO-${item.poNumber}-${item.itemId}-${i + 1}`,
-            fbOrderNumber: item.poNumber,
-            stockModel: item.stockModel,
-            customerId: null,
-            customerName: 'Purchase Order',
-            dueDate: null,
+            orderId: row.order_id,
+            fbOrderNumber: row.po_number,
+            poNumber: row.po_number,
+            poItemId: row.po_item_id,
+            productionOrderId: row.order_id,
+            stockModel,
+            customerId: row.customer_id,
+            customerName: row.customer_name,
+            dueDate: row.due_date,
             quantity: 1,
             actionLength,
-            actionInlet: poProductData?.actionInlet || null,
+            actionInlet,
             material,
             hasLOP: false,
             hasADL: false,
             hasHeavyFill: false,
-            isFlatTop:
-              poProductData?.flatTop === true ||
-              isP1FlatTop((item as any).specifications),
+            isFlatTop: isP1FlatTop(specifications),
           });
         }
       }
@@ -819,48 +822,6 @@ router.post('/save', async (req: Request, res: Response) => {
       console.log(`📅 Target layup days for this save: ${layupDays.join(', ')}`);
       console.log(`📋 Replacing ${orderIdsToReplace.length} specific orders (preserving all other orders on those days)`);
       
-      // Get existing schedule ONLY for the specific order IDs being replaced (to decrement PO item counts)
-      const existingResult = await client.query(
-        `
-        SELECT order_id 
-        FROM layup_schedule 
-        WHERE order_id = ANY($1::text[])
-      `,
-        [orderIdsToReplace]
-      );
-      
-      // Handle result - client.query returns { rows: [...] }
-      const existingRows = existingResult?.rows || [];
-      
-      // Decrement PO item counts for items being removed
-      const existingPOCounts = new Map<string, number>();
-      for (const row of (Array.isArray(existingRows) ? existingRows : [])) {
-        const orderId = row.order_id;
-        const parsedPOUnit = parseP1POUnitOrderId(orderId);
-        if (parsedPOUnit) {
-          const key = `${parsedPOUnit.poNumber}|${parsedPOUnit.poItemId}`;
-          existingPOCounts.set(key, (existingPOCounts.get(key) || 0) + 1);
-        }
-      }
-      
-      // Decrement counts before clearing
-      if (existingPOCounts.size > 0) {
-        const poItemEntries = Array.from(existingPOCounts.entries());
-        for (const [key, count] of poItemEntries) {
-          const [, itemId] = key.split('|');
-          await client.query(
-            `
-            UPDATE purchase_order_items
-            SET order_count = GREATEST(COALESCE(order_count, 0) - $1, 0),
-                updated_at = NOW()
-            WHERE id = $2
-          `,
-            [count, parseInt(itemId)]
-          );
-          console.log(`📦 Decremented PO item ${itemId}: removed ${count} from order_count`);
-        }
-      }
-      
       // Clear ONLY the specific order IDs being replaced (preserves other orders on those days)
       await client.query(
         `
@@ -875,8 +836,6 @@ router.post('/save', async (req: Request, res: Response) => {
       let savedCount = 0;
       let progressedCount = 0;
       const orderIds: string[] = [];
-      const poItemCounts = new Map<string, number>(); // Track PO item counts: "poNumber|itemId" -> count
-      const selectedPOOrderIds = new Set<string>();
 
       // Save schedule entries
       for (const entry of entries) {
@@ -937,107 +896,35 @@ router.post('/save', async (req: Request, res: Response) => {
         // Track PO items to update their order counts
         const parsedPOUnit = parseP1POUnitOrderId(orderId);
         if (parsedPOUnit) {
-            const { poNumber, poItemId } = parsedPOUnit;
-            const itemId = String(poItemId);
-            const key = `${poNumber}|${itemId}`;
-            poItemCounts.set(key, (poItemCounts.get(key) || 0) + 1);
-            selectedPOOrderIds.add(orderId);
-            
-            // Keep both queue records in sync. Barcode reads all_orders, while
-            // downstream PO routing also uses production_orders.
-            try {
-              // Get PO item details
-              const poItemResult = await client.query(`
-                SELECT 
-                  poi.id as item_id,
-                  poi.stock_model_id,
-                  poi.item_name,
-                  poi.item_type,
-                  po.id as po_id,
-                  po.po_number,
-                  po.customer_id,
-                  po.expected_delivery as due_date,
-                  po.customer_name
-                FROM purchase_order_items poi
-                JOIN purchase_orders po ON poi.po_id = po.id
-                WHERE poi.id = $1
-              `, [parseInt(itemId)]);
-              
-              if (poItemResult.rows && poItemResult.rows.length > 0) {
-                const poItem = poItemResult.rows[0];
-                
-                // Use derived stock model or fall back to item name
-                const stockModelForPO = derivedStockModel || poItem.stock_model_id || poItem.item_name || '';
-
-                await client.query(`
-                  INSERT INTO all_orders (
-                    order_id, order_date, due_date, customer_id, model_id,
-                    current_department, status, notes, features, order_source,
-                    source_po_id, source_po_item_id, department_history, created_at, updated_at
-                  ) VALUES (
-                    $1, NOW(), $2, $3, $4, 'Barcode', 'IN_PROGRESS', $5, $6::jsonb,
-                    'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
-                  )
-                  ON CONFLICT (order_id) DO UPDATE
-                  SET current_department = 'Barcode', status = 'IN_PROGRESS', updated_at = NOW()
-                `, [
-                  orderId,
-                  poItem.due_date || processedScheduledDate,
-                  poItem.customer_id || poItem.customer_name,
-                  stockModelForPO,
-                  `PO Item: ${poItem.item_name || stockModelForPO} - PO #${poItem.po_number}`,
-                  JSON.stringify({ po_item_id: parseInt(itemId), po_number: poItem.po_number, po_id: poItem.po_id }),
-                  poItem.po_id,
-                  parseInt(itemId),
-                ]);
-                
-                // Upsert production_orders record
-                const progressionResult = await client.query(`
-                  INSERT INTO production_orders (
-                    order_id, po_id, po_item_id, customer_id, customer_name, 
-                    po_number, item_type, item_id, item_name, 
-                    order_date, due_date, current_department, production_status
-                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                  ON CONFLICT (order_id) DO UPDATE SET
-                    current_department = 'Barcode',
-                    item_id = COALESCE(NULLIF($8, ''), production_orders.item_id),
-                    item_name = COALESCE(NULLIF($9, ''), production_orders.item_name),
-                    updated_at = NOW()
-                  RETURNING order_id
-                `, [
-                  orderId,
-                  poItem.po_id,
-                  parseInt(itemId),
-                  poItem.customer_id || 'unknown',
-                  poItem.customer_name || 'Unknown Customer',
-                  poItem.po_number,
-                  poItem.item_type || 'stock_model',
-                  stockModelForPO,
-                  poItem.item_name || stockModelForPO,
-                  new Date(),
-                  poItem.due_date || processedScheduledDate,
-                  'Barcode',
-                  'PENDING'
-                ]);
-
-                if (progressionResult.rowCount !== 1) {
-                  throw new Error(
-                    `Expected to progress exactly one production order for ${orderId}, updated ${progressionResult.rowCount ?? 0}`
-                  );
-                }
-                progressedCount += 1;
-                
-                console.log(`📦 Created/updated production_orders record for ${orderId} with stock model: ${stockModelForPO}`);
-              } else {
-                throw new Error(
-                  `Purchase-order item ${itemId} could not be resolved for scheduled unit ${orderId}`
-                );
-              }
-            } catch (poError) {
-              // Keep schedule rows and production status changes atomic.
-              throw poError;
-              console.log(`⚠️ Could not create production_orders for ${orderId}:`, poError);
+            const existingUnit = await client.query(
+              `
+              SELECT order_id
+              FROM production_orders
+              WHERE order_id = $1
+                AND po_item_id = $2
+                AND COALESCE(is_fulfilled, false) = false
+                AND UPPER(COALESCE(production_status, 'PENDING')) != 'CANCELLED'
+              FOR UPDATE
+              `,
+              [orderId, parsedPOUnit.poItemId],
+            );
+            if (existingUnit.rows.length !== 1) {
+              throw new Error(
+                `Existing P1 production unit ${orderId} is missing or no longer eligible for scheduling`
+              );
             }
+
+            const progressionResult = await client.query(
+              `
+              UPDATE production_orders
+              SET current_department = 'Layup/Plugging',
+                  updated_at = NOW()
+              WHERE order_id = $1
+              RETURNING order_id
+              `,
+              [orderId],
+            );
+            progressedCount += progressionResult.rowCount || 0;
         } else {
           // Track regular order IDs
           orderIds.push(orderId);
@@ -1046,28 +933,6 @@ router.post('/save', async (req: Request, res: Response) => {
         console.log(
           `✅ Order ${orderId} scheduled for ${scheduledDate}`
         );
-      }
-
-      // Update PO item order counts and track production order numbers
-      const productionOrderNumbers = new Set<string>();
-      if (poItemCounts.size > 0) {
-        const newPOItemEntries = Array.from(poItemCounts.entries());
-        for (const [key, count] of newPOItemEntries) {
-          const [poNumber, itemId] = key.split('|');
-          await client.query(
-            `
-            UPDATE purchase_order_items
-            SET order_count = COALESCE(order_count, 0) + $1,
-                updated_at = NOW()
-            WHERE id = $2
-          `,
-            [count, parseInt(itemId)]
-          );
-          console.log(`📦 Updated PO item ${itemId}: added ${count} to order_count`);
-          
-          // Track the production order number for progression
-          productionOrderNumbers.add(poNumber);
-        }
       }
 
       // Move regular orders to Layup/Plugging department (not PO items)
@@ -1094,64 +959,9 @@ router.post('/save', async (req: Request, res: Response) => {
             ip: req.ip,
             userAgent: req.headers['user-agent'] as string | null,
           });
-          progressedCount = movedRows.length;
+          progressedCount += movedRows.length;
         }
         console.log(`📦 Moved ${progressedCount} orders to Layup/Plugging department`);
-      }
-
-      // Confirm fully scheduled PO units remain synchronized in Barcode.
-      if (productionOrderNumbers.size > 0) {
-        const poNumbersArray = Array.from(productionOrderNumbers);
-        
-        // Check which POs have all items fully scheduled
-        const fullyScheduledPOs = [];
-        for (const poNumber of poNumbersArray) {
-          const checkResult = await client.query(
-            `
-            SELECT COUNT(*) as total_items,
-                   COUNT(*) FILTER (WHERE quantity - COALESCE(order_count, 0) = 0) as completed_items
-            FROM purchase_order_items poi
-            JOIN purchase_orders po ON poi.po_id = po.id
-            WHERE po.po_number = $1
-              AND (poi.stock_status IS NULL OR poi.stock_status != 'no stock')
-              AND (poi.item_type = 'stock_model' OR poi.item_type = 'custom_model')
-          `,
-            [poNumber]
-          );
-          
-          const checkRows = checkResult.rows || [];
-          if (checkRows.length > 0) {
-            const totalItems = parseInt(checkRows[0].total_items);
-            const completedItems = parseInt(checkRows[0].completed_items);
-            
-            console.log(`📊 PO ${poNumber}: ${completedItems}/${totalItems} items fully scheduled`);
-            
-            // Only move if ALL items are completed
-            if (totalItems > 0 && totalItems === completedItems) {
-              fullyScheduledPOs.push(poNumber);
-            }
-          }
-        }
-        
-        // Move only fully completed production orders
-        if (fullyScheduledPOs.length > 0) {
-          const poUpdateResult = await client.query(
-            `
-            UPDATE production_orders
-            SET current_department = 'Barcode',
-                updated_at = NOW()
-            WHERE order_id = ANY($1::text[])
-            AND current_department IN ('P1 Production Queue', 'Layup/Plugging', 'Barcode')
-          `,
-            [Array.from(selectedPOOrderIds)]
-          );
-          
-          const poProgressedCount = poUpdateResult.rowCount || 0;
-          // Exact per-unit upserts above already contributed to progressedCount.
-          console.log(`📦 Confirmed ${poProgressedCount} production orders in Barcode (all items complete): ${fullyScheduledPOs.join(', ')}`);
-        } else {
-          console.log(`📦 No fully scheduled PO groups required a Barcode confirmation update`);
-        }
       }
 
       // Commit transaction

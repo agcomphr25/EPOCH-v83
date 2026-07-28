@@ -34,10 +34,31 @@ describe('layup schedule PO progression scope', () => {
     'utf8'
   );
 
-  it('updates only submitted PO unit order IDs, never the entire PO', () => {
-    expect(route).toContain('const selectedPOOrderIds = new Set<string>()');
-    expect(route).toContain('WHERE order_id = ANY($1::text[])');
-    expect(route).toContain('[Array.from(selectedPOOrderIds)]');
+  it('updates only each submitted existing PO unit, never the entire PO', () => {
+    expect(route).toContain('WHERE order_id = $1');
+    expect(route).toContain("SET current_department = 'Layup/Plugging'");
     expect(route).not.toContain('WHERE po_number = ANY($1::text[])');
+  });
+
+  it('does not create demand or silently progress PO units to Barcode while saving', () => {
+    const saveStart = route.indexOf("router.post('/save'");
+    const saveRoute = route.slice(saveStart, route.indexOf("router.get('/current-week'", saveStart));
+
+    expect(saveRoute).not.toContain('INSERT INTO production_orders');
+    expect(saveRoute).not.toContain('INSERT INTO all_orders');
+    expect(saveRoute).not.toContain("SET current_department = 'Barcode'");
+  });
+
+  it('resolves the selected quantity from existing production orders and fails explicitly', () => {
+    expect(route).toContain('FROM production_orders prod');
+    expect(route).toContain('LIMIT $3');
+    expect(route).toContain('rows.length !== item.quantity');
+    expect(route).toContain('eligible existing production unit(s) could be resolved');
+  });
+
+  it('replaces only matching schedule rows so a repeated save is idempotent', () => {
+    expect(route).toContain('DELETE FROM layup_schedule');
+    expect(route).toContain('WHERE order_id = ANY($1::text[])');
+    expect(route).toContain('INSERT INTO layup_schedule');
   });
 });

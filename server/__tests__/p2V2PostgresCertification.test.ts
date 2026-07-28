@@ -1156,8 +1156,9 @@ describe('actual production launch service against PostgreSQL', () => {
       certifiedStageOrder
     );
     expect(
-      lifecycle.rows.slice(0, 8).every((entry) => entry.status === 'COMPLETE')
+      lifecycle.rows.slice(0, 7).every((entry) => entry.status === 'COMPLETE')
     ).toBe(true);
+    expect(lifecycle.rows[7].status).toBe('IN_PROGRESS');
     const launch = await query<{
       production_evidence: Record<string, unknown>;
     }>(

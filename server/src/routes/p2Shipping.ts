@@ -131,6 +131,50 @@ function mapP2PackingSlipRow(row: any) {
   };
 }
 
+/**
+ * Resolve the invoice displayed on a packing-slip PDF without mutating either
+ * document number. Direct packing-slip links take precedence; the lot fallback
+ * supports legacy invoices created before packing_slip_id was populated.
+ *
+ * This lookup is supplemental. A database compatibility issue must not prevent
+ * an otherwise valid packing slip from being rendered with its stored invoice
+ * number.
+ */
+async function getLinkedP2InvoiceNumberForPackingSlip(
+  packingSlipId: string,
+  lotId?: string | null,
+): Promise<string | null> {
+  try {
+    const rows = await pool.query<{ invoice_number: string }>(
+      `SELECT invoice_number
+         FROM ar_invoices
+        WHERE status <> 'VOID'
+          AND (
+            packing_slip_id = $1
+            OR (
+              $2::uuid IS NOT NULL
+              AND lot_id = $2::uuid
+              AND packing_slip_id IS NULL
+            )
+          )
+        ORDER BY
+          CASE WHEN packing_slip_id = $1 THEN 0 ELSE 1 END,
+          created_at DESC
+        LIMIT 1`,
+      [packingSlipId, lotId ?? null]
+    );
+
+    return rows.rows[0]?.invoice_number ?? null;
+  } catch (err) {
+    console.warn('[P2Shipping] Linked invoice lookup unavailable; using the packing slip snapshot:', {
+      packingSlipId,
+      lotId: lotId ?? null,
+      err,
+    });
+    return null;
+  }
+}
+
 async function selectP2PackingSlipFallback(id: string) {
   const result = await pool.query(
     `

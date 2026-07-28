@@ -13,7 +13,7 @@ cp tsconfig.json github-export/
 cp tailwind.config.ts github-export/
 cp postcss.config.js github-export/
 cp components.json github-export/
-cp drizzle.config.ts github-export/
+cp drizzle.app.config.ts github-export/
 cp capacitor.config.ts github-export/
 
 # Copy source directories

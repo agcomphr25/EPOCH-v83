@@ -14,6 +14,10 @@ vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
+vi.mock('@/lib/serverReadiness', () => ({
+  waitForServerReady: vi.fn().mockResolvedValue(undefined),
+}));
+
 interface FakeWsInstance {
   onopen: ((event: Event) => void) | null;
   onmessage: ((event: MessageEvent) => void) | null;

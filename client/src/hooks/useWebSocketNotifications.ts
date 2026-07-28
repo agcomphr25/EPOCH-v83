@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { handleWebSocketMessage } from '@/lib/punchNotificationHandlers';
+import { waitForServerReady } from '@/lib/serverReadiness';
 
 function getSessionToken(): string | null {
   const fromStorage = localStorage.getItem('sessionToken');
@@ -16,8 +17,15 @@ export function useWebSocketNotifications() {
   const reconnectAttemptsRef = useRef(0);
   const { toast } = useToast();
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
+      return;
+    }
+
+    try {
+      await waitForServerReady();
+    } catch {
+      reconnectTimeoutRef.current = setTimeout(connect, 10000);
       return;
     }
 

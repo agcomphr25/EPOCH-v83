@@ -362,6 +362,26 @@ async function createFixture(
        VALUES ($1,'A',true) RETURNING id`,
       [bomChild.rows[0].id]
     );
+    const bomLayup = await client.query<{ id: string }>(
+      `INSERT INTO boms(parent_part_ag_number,code,is_active)
+       VALUES ($1,$2,true) RETURNING id`,
+      [`LAYUP-${suffix}`, `BOM-LAYUP-${suffix}`]
+    );
+    const bomLayupRevision = await client.query<{ id: string }>(
+      `INSERT INTO bom_revisions(bom_id,rev_code,is_released)
+       VALUES ($1,'A',true) RETURNING id`,
+      [bomLayup.rows[0].id]
+    );
+    const bomCutting = await client.query<{ id: string }>(
+      `INSERT INTO boms(parent_part_ag_number,code,is_active)
+       VALUES ($1,$2,true) RETURNING id`,
+      [`CUT-${suffix}`, `BOM-CUT-${suffix}`]
+    );
+    const bomCuttingRevision = await client.query<{ id: string }>(
+      `INSERT INTO bom_revisions(bom_id,rev_code,is_released)
+       VALUES ($1,'A',true) RETURNING id`,
+      [bomCutting.rows[0].id]
+    );
     await client.query(
       `INSERT INTO bom_lines(revision_id,child_part_ag_number,qty_per)
        VALUES ($1,$2,2)`,
@@ -567,8 +587,8 @@ async function createFixture(
         path: 'layup',
         parent: null,
         qty: 1,
-        bom: bomChild.rows[0].id,
-        revision: bomChildRevision.rows[0].id,
+        bom: bomLayup.rows[0].id,
+        revision: bomLayupRevision.rows[0].id,
         routing: layupRouting.rows[0].id,
         serial: false,
         makeBuy: 'MAKE',
@@ -580,8 +600,8 @@ async function createFixture(
         path: 'cutting',
         parent: null,
         qty: 1,
-        bom: bomChild.rows[0].id,
-        revision: bomChildRevision.rows[0].id,
+        bom: bomCutting.rows[0].id,
+        revision: bomCuttingRevision.rows[0].id,
         routing: cuttingRouting.rows[0].id,
         serial: false,
         makeBuy: 'MAKE',

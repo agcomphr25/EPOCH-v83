@@ -380,8 +380,15 @@ async function readiness(projectId: string, review: Row | null, tx: Executor) {
   if (!clean(review.effectivity_reference))
     blockers.push('Delivery/configuration effectivity is required.');
   const requirements = review.technical_baseline?.partRequirements ?? [];
+  const sourceRequirementsByPart = new Map<string, number>();
   for (const item of source.items) {
     const partNumber = clean(item.ag_part_number) || clean(item.part_number);
+    sourceRequirementsByPart.set(
+      partNumber,
+      (sourceRequirementsByPart.get(partNumber) ?? 0) + Number(item.quantity)
+    );
+  }
+  for (const [partNumber, sourceQuantity] of sourceRequirementsByPart) {
     const captured = requirements.find(
       (entry: Row) => clean(entry.partNumber) === partNumber
     );
@@ -389,7 +396,7 @@ async function readiness(projectId: string, review: Row | null, tx: Executor) {
       blockers.push(`${partNumber}: technical part requirement is missing.`);
       continue;
     }
-    if (Number(captured.quantity) !== Number(item.quantity))
+    if (Number(captured.quantity) !== sourceQuantity)
       blockers.push(
         `${partNumber}: reviewed quantity does not match the customer PO.`
       );

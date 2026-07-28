@@ -255,7 +255,7 @@ describe('Phase 8C integration safety contract', () => {
 
   it('locks, revalidates, creates, activates Stage 8, and transitions inside one launch transaction', () => {
     const launch = service.slice(
-      service.indexOf('export async function launchProduction')
+      service.indexOf('async function launchProductionWithDependencies')
     );
     expect(launch.indexOf('isP2V2ProductionLaunchEnabled()')).toBeLessThan(
       launch.indexOf('db.transaction')
@@ -276,8 +276,9 @@ describe('Phase 8C integration safety contract', () => {
     expect(transaction).toContain('RELEASED_ROUTING_STALE');
     expect(transaction).toContain('FOR SHARE OF ppi,pr,pct');
     expect(transaction).toContain('assertProductionCountsMatchPlan');
-    expect(transaction).toMatch(
-      /generateP2ProductionOrders\(\s*poId,\s*undefined,\s*tx\s*\)/
+    expect(transaction).toContain('storage.generateP2ProductionOrders(');
+    expect(transaction).toContain(
+      "() => dependencies.fault?.('AFTER_FIRST_PRODUCTION_ORDER')"
     );
     expect(transaction).toContain("step_type === 'production_quality'");
     expect(transaction).toContain("current_stage='IN_PRODUCTION'");
@@ -292,7 +293,7 @@ describe('Phase 8C integration safety contract', () => {
   it('keeps Production Release non-consequential and enforces launch through the gated service', () => {
     const release = service.slice(
       service.indexOf('export async function approveProductionRelease'),
-      service.indexOf('export async function launchProduction')
+      service.indexOf('async function launchProductionWithDependencies')
     );
     expect(release).not.toContain('addP2SerializedItemsForPoItem');
     expect(release).not.toContain('generateP2ProductionOrders');

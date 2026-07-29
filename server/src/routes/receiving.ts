@@ -150,8 +150,31 @@ async function ensureReceivingProjectMaterialSchema(): Promise<void> {
           ADD COLUMN IF NOT EXISTS target_project_id UUID REFERENCES projects(id) ON DELETE SET NULL
       `);
       await db.execute(sql`
+        ALTER TABLE received_units
+          ADD COLUMN IF NOT EXISTS target_rd_project_id TEXT REFERENCES rd_projects(id) ON DELETE SET NULL
+      `);
+      await db.execute(sql`
         CREATE INDEX IF NOT EXISTS received_units_target_project_idx
           ON received_units(target_project_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS received_units_target_rd_project_idx
+          ON received_units(target_rd_project_id)
+      `);
+      await db.execute(sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'received_units_single_project_target_check'
+          ) THEN
+            ALTER TABLE received_units
+              ADD CONSTRAINT received_units_single_project_target_check
+              CHECK (target_project_id IS NULL OR target_rd_project_id IS NULL);
+          END IF;
+        END
+        $$
       `);
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS project_received_materials (
@@ -336,17 +359,38 @@ async function getOpenReceivingProjectTargets(): Promise<Array<{
   projectName: string;
   status: string;
   customerName: string | null;
+  targetType: 'project' | 'rd_project';
 }>> {
   const result = await db.execute(sql`
-    SELECT
-      p.id::text AS id,
-      p.project_code AS "projectCode",
-      p.project_name AS "projectName",
-      p.status,
-      p.customer_name_snapshot AS "customerName"
-    FROM projects p
-    WHERE p.status IN ('active', 'won', 'on_hold')
-    ORDER BY p.project_code ASC, p.created_at DESC
+    SELECT *
+    FROM (
+      SELECT
+        p.id::text AS id,
+        p.project_code AS "projectCode",
+        p.project_name AS "projectName",
+        p.status,
+        p.customer_name_snapshot AS "customerName",
+        'project'::text AS "targetType",
+        p.created_at AS "createdAt"
+      FROM projects p
+      WHERE p.status IN ('active', 'won', 'on_hold')
+
+      UNION ALL
+
+      SELECT
+        rp.id,
+        'R&D'::text AS "projectCode",
+        rp.project_name AS "projectName",
+        rp.status,
+        NULL::text AS "customerName",
+        'rd_project'::text AS "targetType",
+        rp.created_at AS "createdAt"
+      FROM rd_projects rp
+    ) targets
+    ORDER BY
+      CASE WHEN "targetType" = 'project' THEN 0 ELSE 1 END,
+      "projectCode" ASC,
+      "createdAt" DESC
   `);
   return sqlRows(result);
 }
@@ -407,6 +451,7 @@ async function syncProjectReceivedMaterial(unitId: number, user: AuthUser, notes
       ru.id AS "unitId",
       ru.receipt_id AS "receiptId",
       ru.target_project_id::text AS "targetProjectId",
+      ru.target_rd_project_id AS "targetRdProjectId",
       ru.material_lot_id::text AS "materialLotId",
       ru.quantity::numeric AS quantity,
       COALESCE(
@@ -431,6 +476,7 @@ async function syncProjectReceivedMaterial(unitId: number, user: AuthUser, notes
     unitId: number;
     receiptId: number;
     targetProjectId: string | null;
+    targetRdProjectId: string | null;
     materialLotId: string | null;
     quantity: string;
     unitCost: string;
@@ -438,7 +484,7 @@ async function syncProjectReceivedMaterial(unitId: number, user: AuthUser, notes
 
   if (!row) return;
 
-  if (!row.targetProjectId || !row.materialLotId) {
+  if (!row.targetProjectId || row.targetRdProjectId || !row.materialLotId) {
     await db.execute(sql`
       DELETE FROM project_received_materials
       WHERE received_unit_id = ${unitId}
@@ -1031,9 +1077,14 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
 
     const unitSequence = await getNextUnitSequence(receiptId);
     const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
+    if (req.body.targetProjectId && req.body.targetRdProjectId) {
+      return res.status(400).json({ error: 'Select either a production project or an R&D project, not both.' });
+    }
     const targetProjectId = req.body.targetProjectId !== undefined
       ? req.body.targetProjectId
-      : await resolveDefaultTargetProjectId(receipt, line);
+      : req.body.targetRdProjectId
+        ? null
+        : await resolveDefaultTargetProjectId(receipt, line);
 
     const body = insertReceivedUnitSchema.parse({
       ...req.body,
@@ -1139,9 +1190,14 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
     const unit = await assertUnitOwnership(receiptId, unitId);
     if (!unit) return res.status(404).json({ error: 'Unit not found or does not belong to this receipt' });
     const updates = insertReceivedUnitSchema.partial().parse(req.body);
+    const finalTargetProjectId = 'targetProjectId' in updates ? updates.targetProjectId : unit.targetProjectId;
+    const finalTargetRdProjectId = 'targetRdProjectId' in updates ? updates.targetRdProjectId : unit.targetRdProjectId;
+    if (finalTargetProjectId && finalTargetRdProjectId) {
+      return res.status(400).json({ error: 'Select either a production project or an R&D project, not both.' });
+    }
 
     // Audit traceability-affecting changes (location, freezer, allocation, disposition fields)
-    const auditableKeys: (keyof typeof updates)[] = ['quantity', 'uom', 'unitType', 'location', 'freezerNumber', 'allocatedToType', 'allocatedToId', 'targetProjectId', 'lotNumber', 'batchNumber', 'serialNumber', 'internalControlNumber', 'rollNumber', 'heatLot', 'manufactureDate', 'expirationDate', 'certReference'];
+    const auditableKeys: (keyof typeof updates)[] = ['quantity', 'uom', 'unitType', 'location', 'freezerNumber', 'allocatedToType', 'allocatedToId', 'targetProjectId', 'targetRdProjectId', 'lotNumber', 'batchNumber', 'serialNumber', 'internalControlNumber', 'rollNumber', 'heatLot', 'manufactureDate', 'expirationDate', 'certReference'];
     const auditableChanges: Record<string, unknown> = {};
     for (const key of auditableKeys) {
       if (key in updates) auditableChanges[key] = updates[key];
@@ -1335,8 +1391,9 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
       await logAudit(receiptId, 'unit_updated', user?.employeeId, actorName(user), { unitId, changes: auditableChanges });
     }
 
-    if ('targetProjectId' in updates) {
-      await syncProjectReceivedMaterial(unitId, user, updates.targetProjectId ? 'Project target assigned from receiving putaway' : 'Project target cleared from receiving putaway');
+    if ('targetProjectId' in updates || 'targetRdProjectId' in updates) {
+      const assigned = updates.targetProjectId || updates.targetRdProjectId;
+      await syncProjectReceivedMaterial(unitId, user, assigned ? 'Project target assigned from receiving putaway' : 'Project target cleared from receiving putaway');
     }
 
     res.json(updated);

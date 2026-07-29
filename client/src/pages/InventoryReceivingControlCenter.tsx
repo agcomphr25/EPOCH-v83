@@ -198,6 +198,7 @@ interface ReceivedUnit {
   allocatedToId?: number;
   materialLotId?: string;
   targetProjectId?: string | null;
+  targetRdProjectId?: string | null;
 }
 
 interface ReceivingProjectTarget {
@@ -206,6 +207,7 @@ interface ReceivingProjectTarget {
   projectName: string;
   status: string;
   customerName?: string | null;
+  targetType: 'project' | 'rd_project';
 }
 
 interface ReceiptDocument {
@@ -2368,7 +2370,7 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
 }
 
 // Step 4: Disposition
-function DispositionStep({ receipt, onNext, onUpdate }: {
+export function DispositionStep({ receipt, onNext, onUpdate }: {
   receipt: Receipt;
   onNext: () => void;
   onUpdate: (r: Receipt) => void;
@@ -2387,6 +2389,7 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
   const [approvalScope, setApprovalScope] = useState<'all' | 'per_item'>('all');
   const [defaultApprovalDepartmentId, setDefaultApprovalDepartmentId] = useState(NONE_SENTINEL);
   const [defaultApproverEmployeeId, setDefaultApproverEmployeeId] = useState('');
+  const [acceptAllConfirmationOpen, setAcceptAllConfirmationOpen] = useState(false);
   const [dispositionError, setDispositionError] = useState<{ error: string; missingDocuments?: string[] } | null>(null);
 
   // Safety net: when Disposition opens, ensure any non-split lines have been promoted
@@ -2523,6 +2526,58 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
     },
   });
 
+  const pendingUnits = units.filter(unit => unit.disposition === 'pending_inspection');
+  const expiredPendingUnits = pendingUnits.filter(unit => getExpirationStatus(unit.expirationDate) === 'expired');
+
+  const acceptAllMutation = useMutation({
+    mutationFn: async () => {
+      const selectedDepartment = departments.find(d => String(d.id) === defaultApprovalDepartmentId);
+      const selectedApprover = activeEmployees.find(emp => String(emp.id) === defaultApproverEmployeeId);
+      const notes = [
+        'Bulk accepted from Receiving Control Center',
+        `Approved department: ${selectedDepartment?.name ?? 'Receiving'}`,
+        selectedApprover ? `Approved employee: ${employeeLabel(selectedApprover)}` : `Approved employee: ${currentUser?.username ?? 'Current user'}`,
+        'Approval scope: All items',
+      ].join('\n');
+
+      if (selectedDepartment && receipt.departmentId !== selectedDepartment.id) {
+        await apiRequest(`/api/receipts/${receipt.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ departmentId: selectedDepartment.id }),
+        });
+      } else if (!selectedDepartment && receipt.departmentId) {
+        await apiRequest(`/api/receipts/${receipt.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ departmentId: null }),
+        });
+      }
+
+      const results = await Promise.allSettled(
+        pendingUnits.map(unit =>
+          apiRequest(`/api/receipts/${receipt.id}/units/${unit.id}/disposition`, {
+            method: 'POST',
+            body: JSON.stringify({ disposition: 'accepted', notes }),
+          })
+        )
+      );
+      return {
+        accepted: results.filter(result => result.status === 'fulfilled').length,
+        failed: results.filter(result => result.status === 'rejected').length,
+      };
+    },
+    onSuccess: async ({ accepted, failed }) => {
+      const updated = await apiRequest(`/api/receipts/${receipt.id}`);
+      onUpdate(updated);
+      setAcceptAllConfirmationOpen(false);
+      if (failed > 0) {
+        toast.error(`Accepted ${accepted} unit(s); ${failed} unit(s) need attention`);
+      } else {
+        toast.success(`Accepted all ${accepted} pending unit(s)`);
+      }
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to accept pending units'),
+  });
+
   return (
     <div className="space-y-2">
       {/* Strict-traceability lines that were skipped by ensure-units */}
@@ -2629,6 +2684,26 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
           <div className="text-[11px] text-gray-500">
             Current approval default: <span className="font-medium text-gray-700 dark:text-gray-300">{approvalDefaultsLabel}</span>
           </div>
+          {approvalScope === 'all' && pendingUnits.length > 0 && (
+            <Button
+              size="sm"
+              className="w-full h-8 bg-green-600 hover:bg-green-700"
+              onClick={() => setAcceptAllConfirmationOpen(true)}
+              disabled={acceptAllMutation.isPending || expiredPendingUnits.length > 0}
+              data-testid="button-accept-all-pending"
+              title={expiredPendingUnits.length > 0 ? 'Resolve expired units before accepting all' : undefined}
+            >
+              {acceptAllMutation.isPending
+                ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                : <CheckCircle2 className="w-3 h-3 mr-1" />}
+              Accept All {pendingUnits.length} Pending Unit{pendingUnits.length === 1 ? '' : 's'}
+            </Button>
+          )}
+          {approvalScope === 'all' && expiredPendingUnits.length > 0 && (
+            <div className="text-[11px] text-red-600">
+              Accept All is locked until {expiredPendingUnits.length} expired unit{expiredPendingUnits.length === 1 ? ' is' : 's are'} corrected or dispositioned.
+            </div>
+          )}
         </div>
       )}
       {units.map(unit => {
@@ -2794,6 +2869,33 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={acceptAllConfirmationOpen} onOpenChange={setAcceptAllConfirmationOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Accept all pending units?</DialogTitle>
+            <DialogDescription className="text-xs">
+              This will accept {pendingUnits.length} pending unit{pendingUnits.length === 1 ? '' : 's'} using the approval default:
+              {' '}{approvalDefaultsLabel}.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setAcceptAllConfirmationOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-green-600 hover:bg-green-700"
+              onClick={() => acceptAllMutation.mutate()}
+              disabled={acceptAllMutation.isPending}
+              data-testid="button-confirm-accept-all"
+            >
+              {acceptAllMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+              Accept All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {units.length > 0 && (
         <Button size="sm" className="w-full mt-2" onClick={onNext}>
           Continue to Putaway <ChevronRight className="w-3 h-3 ml-1" />
@@ -2836,8 +2938,29 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
   });
   const projectTargets = projectTargetsResponse?.data ?? [];
 
+  const projectTargetValue = (project: ReceivingProjectTarget) => `${project.targetType}:${project.id}`;
   const renderProjectTargetLabel = (project: ReceivingProjectTarget) =>
-    `${project.projectCode} - ${project.projectName}${project.customerName ? ` (${project.customerName})` : ''}`;
+    `${project.targetType === 'rd_project' ? '[R&D] ' : ''}${project.projectCode} - ${project.projectName}${project.customerName ? ` (${project.customerName})` : ''}`;
+
+  const projectTargetUpdates = (value: string): Record<string, unknown> => {
+    if (value === LEAVE_OPEN_SENTINEL) {
+      return {
+        targetProjectId: null,
+        targetRdProjectId: null,
+        allocatedToType: 'stock',
+        allocatedToId: null,
+      };
+    }
+    const separatorIndex = value.indexOf(':');
+    const targetType = value.slice(0, separatorIndex);
+    const id = value.slice(separatorIndex + 1);
+    return {
+      targetProjectId: targetType === 'project' ? id : null,
+      targetRdProjectId: targetType === 'rd_project' ? id : null,
+      allocatedToType: targetType,
+      allocatedToId: null,
+    };
+  };
 
   const needsPutaway = (unit: ReceivedUnit) =>
     unit.disposition === 'accepted' &&
@@ -2943,9 +3066,7 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
       updates.freezerNumber = parseInt(batchFreezer, 10);
     }
     if (batchTargetProjectId !== NONE_SENTINEL) {
-      updates.targetProjectId = batchTargetProjectId === LEAVE_OPEN_SENTINEL ? null : batchTargetProjectId;
-      updates.allocatedToType = batchTargetProjectId === LEAVE_OPEN_SENTINEL ? 'stock' : 'project';
-      updates.allocatedToId = null;
+      Object.assign(updates, projectTargetUpdates(batchTargetProjectId));
     }
     try {
       await Promise.all(units.map(u =>
@@ -3068,7 +3189,7 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
                   <SelectItem value={NONE_SENTINEL}>No batch project change</SelectItem>
                   <SelectItem value={LEAVE_OPEN_SENTINEL}>Leave open</SelectItem>
                   {projectTargets.map(project => (
-                    <SelectItem key={project.id} value={project.id}>
+                    <SelectItem key={`${project.targetType}:${project.id}`} value={projectTargetValue(project)}>
                       {renderProjectTargetLabel(project)}
                     </SelectItem>
                   ))}
@@ -3145,14 +3266,16 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
             <div className="col-span-2">
               <Label className="text-xs">Target Project</Label>
               <Select
-                value={unit.targetProjectId ?? LEAVE_OPEN_SENTINEL}
+                value={
+                  unit.targetRdProjectId
+                    ? `rd_project:${unit.targetRdProjectId}`
+                    : unit.targetProjectId
+                      ? `project:${unit.targetProjectId}`
+                      : LEAVE_OPEN_SENTINEL
+                }
                 onValueChange={v => updateUnitMutation.mutate({
                   unitId: unit.id,
-                  updates: {
-                    targetProjectId: v === LEAVE_OPEN_SENTINEL ? null : v,
-                    allocatedToType: v === LEAVE_OPEN_SENTINEL ? 'stock' : 'project',
-                    allocatedToId: null,
-                  },
+                  updates: projectTargetUpdates(v),
                 })}
               >
                 <SelectTrigger className="h-7 text-xs mt-0.5">
@@ -3161,7 +3284,7 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
                 <SelectContent>
                   <SelectItem value={LEAVE_OPEN_SENTINEL}>Leave open</SelectItem>
                   {projectTargets.map(project => (
-                    <SelectItem key={project.id} value={project.id}>
+                    <SelectItem key={`${project.targetType}:${project.id}`} value={projectTargetValue(project)}>
                       {renderProjectTargetLabel(project)}
                     </SelectItem>
                   ))}

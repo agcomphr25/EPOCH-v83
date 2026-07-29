@@ -19,6 +19,7 @@ import P2V2PreproductionReadiness from './P2V2PreproductionReadiness';
 import P2V2ProductionExecution from './P2V2ProductionExecution';
 import P2V2QualityProductRelease from './P2V2QualityProductRelease';
 import P2V2ShippingProjectCloseout from './P2V2ShippingProjectCloseout';
+import P2V2PilotControlCenter from './P2V2PilotControlCenter';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -287,6 +288,7 @@ export default function P2V2ProjectWorkflow({
           </div>
         </CardContent>
       </Card>
+      <P2V2PilotControlCenter projectId={projectId} />
       {data.integrityStatus !== 'VALID' && (
         <Card
           className="border-red-400 bg-red-50"
@@ -383,9 +385,7 @@ export default function P2V2ProjectWorkflow({
                 ] as const
               ).includes(
                 stage.stepType as
-                  | 'rfq_risk_assessment'
-                  | 'estimate_quote'
-                  | 'contract_review'
+                  'rfq_risk_assessment' | 'estimate_quote' | 'contract_review'
               ) && (
                 <div className="mt-3">
                   <P2V2CommercialReview

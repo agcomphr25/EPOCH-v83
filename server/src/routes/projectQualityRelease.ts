@@ -14,12 +14,17 @@ import {
   submitQualityReview,
 } from '../services/projectQualityReleaseService';
 import type { ProductionActor } from '../services/projectProductionExecutionService';
+import {
+  ProjectPilotControlError,
+  requireActivePilotForAction,
+} from '../services/projectPilotControlService';
 
 const router = Router({ mergeParams: true });
 const expected = z.object({ expectedLockVersion: z.number().int().positive() });
 const decision = expected.extend({
   decision: z.enum(['APPROVED', 'REJECTED', 'RETURNED']),
   signatureMeaning: z.string().min(1),
+  pilotConfirmation: z.string().min(1),
   reason: z.string().optional().default(''),
 });
 const release = expected.extend({
@@ -72,6 +77,10 @@ function fail(res: Response, error: unknown) {
       .status(400)
       .json({ error: 'INVALID_INPUT', details: error.flatten() });
   if (error instanceof ProjectQualityReleaseError)
+    return res
+      .status(error.status)
+      .json({ error: error.code, message: error.message, ...error.details });
+  if (error instanceof ProjectPilotControlError)
     return res
       .status(error.status)
       .json({ error: error.code, message: error.message, ...error.details });
@@ -197,15 +206,18 @@ router.post('/reviews/current/complete', async (req, res) => {
 router.post('/releases', async (req, res) => {
   try {
     const body = release.parse(req.body);
-    res
-      .status(201)
-      .json(
-        await releaseProduct(
-          id(req),
-          body,
-          await authorized(req, 'projects.quality_release.release_product')
-        )
-      );
+    const user = await authorized(
+      req,
+      'projects.quality_release.release_product'
+    );
+    await requireActivePilotForAction(id(req), 'PRODUCT_RELEASE', user, {
+      poLineId: body.poLineId,
+      partNumber: body.partNumber,
+      quantity: body.quantity,
+      idempotencyKey: body.idempotencyKey,
+      confirmation: body.pilotConfirmation,
+    });
+    res.status(201).json(await releaseProduct(id(req), body, user));
   } catch (error) {
     fail(res, error);
   }

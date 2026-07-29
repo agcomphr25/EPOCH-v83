@@ -19,6 +19,10 @@ import {
   submitCloseoutReview,
   voidShipmentAuthorization,
 } from '../services/projectShippingCloseoutService';
+import {
+  ProjectPilotControlError,
+  requireActivePilotForAction,
+} from '../services/projectPilotControlService';
 
 const router = Router({ mergeParams: true });
 const expected = z.object({ expectedLockVersion: z.number().int().positive() });
@@ -69,14 +73,18 @@ const shippingReview = z.object({
 const authorize = expected.extend({
   idempotencyKey: z.string().min(8).max(200),
   signatureMeaning: z.string().min(1),
+  pilotConfirmation: z.string().min(1),
 });
 const confirm = z.object({
   idempotencyKey: z.string().min(8).max(200),
+  pilotConfirmation: z.string().min(1),
   trackingNumber: z.string().min(1),
   manualTracking: z.boolean(),
   shipDate: z.string().datetime().optional(),
 });
 const delivery = z.object({
+  idempotencyKey: z.string().min(8).max(200),
+  pilotConfirmation: z.string().min(1),
   status: z.enum(['DELIVERED', 'DELIVERY_EXCEPTION', 'RETURNED']),
   deliveredAt: z.string().datetime().optional(),
   evidenceSource: z.enum(['CARRIER', 'MANUAL_POD', 'CUSTOMER_CONFIRMATION']),
@@ -115,6 +123,7 @@ const decision = expected.extend({
 const close = expected.extend({
   idempotencyKey: z.string().min(8).max(200),
   signatureMeaning: z.string().min(1),
+  pilotConfirmation: z.string().min(1),
 });
 
 function actor(req: Request): ProductionActor {
@@ -151,6 +160,10 @@ function fail(res: Response, error: unknown) {
       .status(400)
       .json({ error: 'INVALID_INPUT', details: error.flatten() });
   if (error instanceof ProjectShippingCloseoutError)
+    return res
+      .status(error.status)
+      .json({ error: error.code, message: error.message, ...error.details });
+  if (error instanceof ProjectPilotControlError)
     return res
       .status(error.status)
       .json({ error: error.code, message: error.message, ...error.details });
@@ -226,15 +239,13 @@ router.patch('/shipping/reviews/current', async (req, res) => {
 });
 router.post('/shipping/authorize', async (req, res) => {
   try {
-    res
-      .status(201)
-      .json(
-        await authorizeShipment(
-          id(req),
-          authorize.parse(req.body),
-          await authorized(req, 'projects.shipping_v2.authorize')
-        )
-      );
+    const body = authorize.parse(req.body);
+    const user = await authorized(req, 'projects.shipping_v2.authorize');
+    await requireActivePilotForAction(id(req), 'SHIPMENT_AUTHORIZATION', user, {
+      idempotencyKey: body.idempotencyKey,
+      confirmation: body.pilotConfirmation,
+    });
+    res.status(201).json(await authorizeShipment(id(req), body, user));
   } catch (error) {
     fail(res, error);
   }
@@ -243,12 +254,23 @@ router.post(
   '/shipping/authorizations/:authorizationId/confirm',
   async (req, res) => {
     try {
+      const body = confirm.parse(req.body);
+      const user = await authorized(req, 'projects.shipping_v2.confirm');
+      await requireActivePilotForAction(
+        id(req),
+        'SHIPMENT_CONFIRMATION',
+        user,
+        {
+          idempotencyKey: body.idempotencyKey,
+          confirmation: body.pilotConfirmation,
+        }
+      );
       res.json(
         await confirmShipment(
           id(req),
           String(req.params.authorizationId),
-          confirm.parse(req.body),
-          await authorized(req, 'projects.shipping_v2.confirm')
+          body,
+          user
         )
       );
     } catch (error) {
@@ -260,12 +282,23 @@ router.post(
   '/shipping/authorizations/:authorizationId/delivery',
   async (req, res) => {
     try {
+      const body = delivery.parse(req.body);
+      const user = await authorized(req, 'projects.shipping_v2.delivery');
+      await requireActivePilotForAction(
+        id(req),
+        'DELIVERY_CONFIRMATION',
+        user,
+        {
+          idempotencyKey: body.idempotencyKey,
+          confirmation: body.pilotConfirmation,
+        }
+      );
       res.json(
         await recordDelivery(
           id(req),
           String(req.params.authorizationId),
-          delivery.parse(req.body),
-          await authorized(req, 'projects.shipping_v2.delivery')
+          body,
+          user
         )
       );
     } catch (error) {
@@ -398,13 +431,13 @@ for (const [path, type, capability] of [
 }
 router.post('/closeout/close', async (req, res) => {
   try {
-    res.json(
-      await closeProject(
-        id(req),
-        close.parse(req.body),
-        await authorized(req, 'projects.closeout_v2.close')
-      )
-    );
+    const body = close.parse(req.body);
+    const user = await authorized(req, 'projects.closeout_v2.close');
+    await requireActivePilotForAction(id(req), 'PROJECT_CLOSURE', user, {
+      idempotencyKey: body.idempotencyKey,
+      confirmation: body.pilotConfirmation,
+    });
+    res.json(await closeProject(id(req), body, user));
   } catch (error) {
     fail(res, error);
   }
@@ -415,15 +448,16 @@ router.post('/closeout/reopen', async (req, res) => {
       .object({
         reason: z.string().min(1),
         responsibleOwner: z.string().min(1),
+        pilotIdempotencyKey: z.string().min(8).max(200),
+        pilotConfirmation: z.string().min(1),
       })
       .parse(req.body);
-    res.json(
-      await reopenProject(
-        id(req),
-        body,
-        await authorized(req, 'projects.closeout_v2.reopen')
-      )
-    );
+    const user = await authorized(req, 'projects.closeout_v2.reopen');
+    await requireActivePilotForAction(id(req), 'CONTROLLED_REOPENING', user, {
+      idempotencyKey: body.pilotIdempotencyKey,
+      confirmation: body.pilotConfirmation,
+    });
+    res.json(await reopenProject(id(req), body, user));
   } catch (error) {
     fail(res, error);
   }

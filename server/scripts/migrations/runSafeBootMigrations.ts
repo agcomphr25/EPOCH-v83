@@ -260,6 +260,7 @@ export const safeMigrationFiles = [
   '0226_project_production_launch_composite_key.sql',
   '0229_epoch_software_validation.sql',
   '0231_p1_po_item_quantity_adjustments.sql',
+  '0232_p2_v2_controlled_pilot_readiness.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -302,6 +303,7 @@ export const criticalMigrationFiles = new Set([
   '0226_project_production_launch_composite_key.sql',
   '0229_epoch_software_validation.sql',
   '0231_p1_po_item_quantity_adjustments.sql',
+  '0232_p2_v2_controlled_pilot_readiness.sql',
 ]);
 
 export async function runSafeBootMigrations() {
@@ -356,9 +358,8 @@ export async function runSafeBootMigrations() {
   if (process.env.SAFE_BOOT_MIGRATIONS_ONLY === 'true') return;
 
   try {
-    const { logCriticalSchemaHealth } = await import(
-      '../../utils/schemaHealth'
-    );
+    const { logCriticalSchemaHealth } =
+      await import('../../utils/schemaHealth');
     await logCriticalSchemaHealth();
   } catch (caughtSchemaHealthErr: unknown) {
     const schemaHealthErr = caughtSchemaHealthErr as MigrationError;
@@ -369,9 +370,8 @@ export async function runSafeBootMigrations() {
   }
 
   try {
-    const { migrateVendorDocumentUrls } = await import(
-      '../../src/routes/vendors'
-    );
+    const { migrateVendorDocumentUrls } =
+      await import('../../src/routes/vendors');
     await migrateVendorDocumentUrls();
   } catch (caughtVendorMigrErr: unknown) {
     const vendorMigrErr = caughtVendorMigrErr as MigrationError;

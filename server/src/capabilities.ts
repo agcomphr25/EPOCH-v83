@@ -199,6 +199,16 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   'training.manage_content',
   'training.record_completion',
 
+  // P2 V2 controlled pilot readiness
+  'projects.pilot_v2.view',
+  'projects.pilot_v2.manage',
+  'projects.pilot_v2.quality_approve',
+  'projects.pilot_v2.operations_approve',
+  'projects.pilot_v2.pm_approve',
+  'projects.pilot_v2.rollout_approve',
+  'projects.pilot_v2.issue_manage',
+  'projects.pilot_v2.training_record',
+
   // Admin
   'admin.manage_users',
   'admin.order_lookup',

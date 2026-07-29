@@ -1222,6 +1222,28 @@ describe('actual production launch service against PostgreSQL', () => {
       FROM p2_serialized_items WHERE po_id=$1`,
       [fixture.poId]
     );
+    await query(
+      `UPDATE p2_production_orders
+       SET status='COMPLETED',quantity_manufactured=quantity,completed_at=now()
+       WHERE p2_po_id=$1`,
+      [fixture.poId]
+    );
+    await query(
+      `UPDATE project_production_plan_items
+       SET traveler_requirement='NOT_REQUIRED_APPROVED',
+           traveler_not_required_reason='Phase 10A fixture uses controlled no-traveler exception'
+       WHERE project_id=$1 AND make_buy='MAKE'`,
+      [fixture.projectId]
+    );
+    await query(
+      `INSERT INTO p2_serialized_item_traceability
+         (serialized_item_id,department,traceability_type,traceability_label,
+          traceability_value,recorded_by)
+       SELECT id,'Final QC','lot_number','Material lot',
+              'PHASE10A-CERT-LOT','phase10a-certifier'
+       FROM p2_serialized_items WHERE po_id=$1`,
+      [fixture.poId]
+    );
     const existingProduction = await getProductionDashboard(fixture.projectId);
     let productionLock = Number(existingProduction.review?.lock_version);
     const productionReady = await recalculateProductionReadiness(
@@ -1241,11 +1263,16 @@ describe('actual production launch service against PostgreSQL', () => {
       'OPERATIONS',
       'QUALITY',
       'PROJECT_MANAGEMENT',
+      'MANUFACTURING_ENGINEERING',
     ].entries()) {
       const productionDecision = await decideProductionCompletion(
         fixture.projectId,
         productionLock,
-        approvalType as 'OPERATIONS' | 'QUALITY' | 'PROJECT_MANAGEMENT',
+        approvalType as
+          | 'OPERATIONS'
+          | 'QUALITY'
+          | 'PROJECT_MANAGEMENT'
+          | 'MANUFACTURING_ENGINEERING',
         'APPROVED',
         `${approvalType} certifies Production completion`,
         '',

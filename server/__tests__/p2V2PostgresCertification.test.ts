@@ -1229,9 +1229,7 @@ describe('actual production launch service against PostgreSQL', () => {
       productionLock,
       actor
     );
-    expect(productionReady.review?.status).toBe(
-      'READY_FOR_COMPLETION_REVIEW'
-    );
+    expect(productionReady.review?.status).toBe('READY_FOR_COMPLETION_REVIEW');
     productionLock = Number(productionReady.review?.lock_version);
     const productionSubmitted = await submitProductionCompletion(
       fixture.projectId,
@@ -1331,12 +1329,7 @@ describe('actual production launch service against PostgreSQL', () => {
     );
     lock = Number(qualityDecision.review?.lock_version);
     await expect(
-      completeQualityReview(
-        fixture.projectId,
-        lock,
-        actor,
-        'AFTER_COMPLETION'
-      )
+      completeQualityReview(fixture.projectId, lock, actor, 'AFTER_COMPLETION')
     ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
     expect((await getQualityDashboard(fixture.projectId)).review?.status).toBe(
       'READY_FOR_REVIEW'
@@ -1450,9 +1443,9 @@ describe('actual production launch service against PostgreSQL', () => {
         'AFTER_HOLD'
       )
     ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
-    expect(
-      (await getQualityDashboard(fixture.projectId)).holds
-    ).toHaveLength(0);
+    expect((await getQualityDashboard(fixture.projectId)).holds).toHaveLength(
+      0
+    );
     const held = await placeReleaseHold(
       fixture.projectId,
       String(firstResult.release.id),
@@ -1510,9 +1503,9 @@ describe('actual production launch service against PostgreSQL', () => {
         actor
       )
     ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
-    expect(
-      (await getQualityDashboard(fixture.projectId)).review?.status
-    ).toBe('PARTIALLY_RELEASED');
+    expect((await getQualityDashboard(fixture.projectId)).review?.status).toBe(
+      'PARTIALLY_RELEASED'
+    );
     const final = await releaseProduct(
       fixture.projectId,
       {

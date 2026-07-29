@@ -1278,10 +1278,10 @@ describe('actual production launch service against PostgreSQL', () => {
         '',
         {
           ...actor,
-          userId: 9050 + index,
-          employeeId: 9050 + index,
-          username: `phase10a-production-${9050 + index}`,
-          displayName: `Phase 10A Production Certifier ${9050 + index}`,
+          userId: 9102 + index,
+          employeeId: 9102 + index,
+          username: `phase8-certifier-${9102 + index}`,
+          displayName: `Phase 10A Production Certifier ${9102 + index}`,
         }
       );
       productionLock = Number(productionDecision.review?.lock_version);

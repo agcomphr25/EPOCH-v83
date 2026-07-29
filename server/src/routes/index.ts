@@ -3959,49 +3959,30 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   });
 
   app.post('/api/p2/changes/:id/approve', softAuth, async (req, res) => {
-    try {
-      const { storage } = await import('../../storage');
-      const { approvedById, approvedByName } = req.body;
-      const change = await storage.updateP2ProductionChange(req.params.id, {
-        status: 'APPROVED',
-        approvedById,
-        approvedByName,
-        approvedAt: new Date(),
-      });
-      res.json(change);
-    } catch (error: any) {
-      console.error('Error approving production change:', error);
-      res.status(500).json({ error: 'Failed to approve production change' });
-    }
+    res.status(409).json({
+      error: 'LEGACY_PCR_DECISION_DISABLED',
+      message:
+        'PCR approval requires the impact-based Quality Action workflow and cannot be completed through the legacy endpoint.',
+      controlledEndpoint: `/api/change-control/pcrs/${req.params.id}/decisions`,
+    });
   });
 
   app.post('/api/p2/changes/:id/reject', softAuth, async (req, res) => {
-    try {
-      const { storage } = await import('../../storage');
-      const { rejectedById, rejectedByName, rejectionReason } = req.body;
-      const change = await storage.updateP2ProductionChange(req.params.id, {
-        status: 'REJECTED',
-        rejectedById,
-        rejectedByName,
-        rejectedAt: new Date(),
-        rejectionReason,
-      });
-      res.json(change);
-    } catch (error: any) {
-      console.error('Error rejecting production change:', error);
-      res.status(500).json({ error: 'Failed to reject production change' });
-    }
+    res.status(409).json({
+      error: 'LEGACY_PCR_DECISION_DISABLED',
+      message:
+        'PCR disposition requires an authenticated Quality Action transition with a reason.',
+      controlledEndpoint: `/api/change-control/pcrs/${req.params.id}/actions/deny`,
+    });
   });
 
   app.put('/api/p2/changes/:id', softAuth, async (req, res) => {
-    try {
-      const { storage } = await import('../../storage');
-      const change = await storage.updateP2ProductionChange(req.params.id, req.body);
-      res.json(change);
-    } catch (error: any) {
-      console.error('Error updating production change:', error);
-      res.status(500).json({ error: 'Failed to update production change' });
-    }
+    res.status(409).json({
+      error: 'LEGACY_PCR_MUTATION_DISABLED',
+      message:
+        'Controlled PCR fields and lifecycle state must be changed through the Quality Action workflow.',
+      controlledEndpoint: `/api/change-control/pcrs/${req.params.id}/actions/:action`,
+    });
   });
 
   // Traveler Changes (Deviations) CRUD

@@ -222,9 +222,6 @@ export function computeP1Queue(
         };
       })
       .filter((item) => {
-        if (!item.itemType || item.itemType.toLowerCase() !== 'stock_model') {
-          return false;
-        }
         if (!item.stockModel || item.stockModel.trim() === '') {
           return false;
         }
@@ -236,9 +233,10 @@ export function computeP1Queue(
         if (!hasValidStockModel) {
           return false;
         }
-        // An operational P1 queue contains only lines with at least one exact
-        // unit still waiting in P1. Downstream-only and ungenerated lines do
-        // not belong here, although their history remains stored.
+        // Exact production rows are the source of truth for this operational
+        // queue. Some manufactured PO lines are catalogued as custom_model,
+        // so itemType must not hide units that are actually waiting in P1.
+        // Downstream-only and ungenerated lines still remain excluded.
         return item.availableQuantity > 0;
       });
 

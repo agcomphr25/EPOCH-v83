@@ -253,6 +253,7 @@ export const safeMigrationFiles = [
   '0224_p2_v2_quality_release_hardening.sql',
   '0225_p2_v2_shipping_project_closeout.sql',
   '0226_project_production_launch_composite_key.sql',
+  '0229_epoch_software_validation.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -293,6 +294,7 @@ export const criticalMigrationFiles = new Set([
   '0224_p2_v2_quality_release_hardening.sql',
   '0225_p2_v2_shipping_project_closeout.sql',
   '0226_project_production_launch_composite_key.sql',
+  '0229_epoch_software_validation.sql',
 ]);
 
 export async function runSafeBootMigrations() {

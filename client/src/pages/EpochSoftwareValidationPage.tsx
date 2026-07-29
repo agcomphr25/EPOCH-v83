@@ -1,0 +1,171 @@
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileCheck2, History, Lock, Plus, ShieldCheck } from 'lucide-react';
+import { apiRequest } from '@/lib/queryClient';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+
+type Package = {
+  id:string;package_number:string;title:string;system_name:string;validation_type:string;status:string;
+  production_version:string;commit_or_release_identifier?:string;validation_environment:string;
+  planned_start_date:string;planned_completion_date:string;locked_at?:string;
+  requirement_count?:number;execution_count?:number;open_defect_count?:number;
+};
+type Detail = {
+  package:Package;intendedUse:any[];requirements:any[];risks:any[];plans:any[];protocols:any[];
+  executions:any[];defects:any[];approvals:any[];periodicReviews:any[];events:any[];
+  readiness:Record<string,any>&{ready:boolean;blockers:string[]};
+};
+const sections=[
+  ['01','Intended Use','Controlled scope and dual authenticated approval'],
+  ['02','Software Requirements','Normalized, revision-controlled requirements baseline'],
+  ['03','Software Risk Assessment','Requirement-linked risk and mitigation register'],
+  ['04','Validation Plan','Approved plan required before formal execution'],
+  ['05','Test Protocols','Revision-controlled protocols, steps, requirements and risks'],
+  ['06','Test Execution and Evidence','Server-derived results and independent review'],
+  ['07','Defects and Corrections','Controlled defects, containment, correction and retest'],
+  ['08','Validation Summary','Server-calculated authoritative readiness'],
+  ['09','Production Approval','Authenticated approval and immutable final snapshot'],
+  ['10','Periodic Review','Change review and revalidation decision'],
+] as const;
+const pretty=(v:string)=>v.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+const tone=(v:string)=>v.includes('APPROVED')||v==='PASSED'||v==='CLOSED'?'bg-emerald-100 text-emerald-800':
+  v.includes('BLOCK')||v.includes('REJECT')||v==='FAILED'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-900';
+
+export default function EpochSoftwareValidationPage(){
+  const [selected,setSelected]=useState<string>();
+  const [createOpen,setCreateOpen]=useState(false);
+  const [auditor,setAuditor]=useState(false);
+  const [activeSection,setActiveSection]=useState('01');
+  const qc=useQueryClient(),{toast}=useToast();
+  const list=useQuery<Package[]>({queryKey:['/api/qms/epoch-software-validation'],
+    queryFn:async()=>(await apiRequest('/api/qms/epoch-software-validation')).json()});
+  const detail=useQuery<Detail>({queryKey:['/api/qms/epoch-software-validation',selected],enabled:Boolean(selected),
+    queryFn:async()=>(await apiRequest(`/api/qms/epoch-software-validation/${selected}`)).json()});
+  const create=useMutation({mutationFn:async(form:HTMLFormElement)=>{
+    const f=new FormData(form);const body=Object.fromEntries(f.entries());
+    return (await apiRequest('/api/qms/epoch-software-validation',{method:'POST',body})).json();
+  },onSuccess:(p:Package)=>{qc.invalidateQueries({queryKey:['/api/qms/epoch-software-validation']});
+    setCreateOpen(false);setSelected(p.id);toast({title:`${p.package_number} created`});},
+    onError:(e:Error)=>toast({title:'Package was not created',description:e.message,variant:'destructive'})});
+  const progress=useMemo(()=>{
+    const d=detail.data;if(!d)return 0;let complete=0;
+    if(d.readiness.intendedUseApproved)complete++;
+    if(d.readiness.requirementsBaselineApproved)complete++;
+    if(d.readiness.riskAssessmentApproved)complete++;
+    if(d.readiness.validationPlanApproved)complete++;
+    if(d.protocols.length&&d.protocols.every(x=>x.status==='APPROVED'))complete++;
+    if(d.executions.length&&d.executions.every(x=>['PASSED','PASSED_WITH_APPROVED_DEVIATION'].includes(x.overall_result)))complete++;
+    if(!d.readiness.openCriticalDefects&&!d.readiness.openHighDefects)complete++;
+    if(d.readiness.ready)complete+=2;
+    if(d.periodicReviews.length)complete++;
+    return complete*10;
+  },[detail.data]);
+
+  if(selected&&detail.data){
+    const d=detail.data,p=d.package,locked=Boolean(p.locked_at)||p.status.startsWith('APPROVED');
+    return <div className="container mx-auto space-y-5 p-4 lg:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div>
+        <Button variant="ghost" className="px-0" onClick={()=>setSelected(undefined)}><ArrowLeft className="mr-2 h-4 w-4"/>Validation packages</Button>
+        <h1 className="text-2xl font-bold">{p.package_number} · {p.title}</h1>
+        <p className="text-sm text-muted-foreground">EPOCH {p.production_version} · {pretty(p.validation_type)} · {p.validation_environment}</p>
+      </div><div className="flex flex-wrap gap-2">
+        <Button variant={auditor?'default':'outline'} onClick={()=>setAuditor(v=>!v)}><ShieldCheck className="mr-2 h-4 w-4"/>Auditor View</Button>
+        <ExportMenu id={p.id}/>
+      </div></div>
+      <div className={`rounded-md border p-3 text-sm font-semibold ${locked?'border-emerald-500 bg-emerald-50 text-emerald-900':'border-amber-400 bg-amber-50 text-amber-900'}`}>
+        {locked?<><Lock className="mr-2 inline h-4 w-4"/>CONTROLLED EPOCH SOFTWARE VALIDATION RECORD</>:'DRAFT — NOT APPROVED FOR INTENDED USE'}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Metric label="Workflow progress" value={`${progress}%`} ok={progress===100}/>
+        <Metric label="Requirements" value={String(d.requirements.length)} ok={d.readiness.requirementsBaselineApproved}/>
+        <Metric label="Tests passed" value={String(d.executions.filter(x=>x.overall_result==='PASSED').length)} ok={d.readiness.criticalTestsPassed===d.readiness.criticalTests}/>
+        <Metric label="Critical defects" value={String(d.readiness.openCriticalDefects||0)} danger={Boolean(d.readiness.openCriticalDefects)}/>
+        <Metric label="Overall readiness" value={d.readiness.ready?'Ready':'Blocked'} ok={d.readiness.ready} danger={!d.readiness.ready}/>
+      </div>
+      <Progress value={progress}/>
+      {!d.readiness.ready&&<Card className="border-red-300"><CardHeader><CardTitle className="flex items-center gap-2 text-base text-red-800"><AlertTriangle className="h-4 w-4"/>Readiness blockers</CardTitle></CardHeader>
+        <CardContent><ul className="list-disc space-y-1 pl-5 text-sm">{d.readiness.blockers.map(x=><li key={x}>{x}</li>)}</ul></CardContent></Card>}
+      <div className="grid gap-4 lg:grid-cols-[310px_1fr]">
+        <Card><CardHeader><CardTitle className="text-base">10 validation sections</CardTitle></CardHeader><CardContent className="space-y-2">
+          {sections.map(([key,title,description])=><button key={key} onClick={()=>setActiveSection(key)}
+            className={`w-full rounded-md border p-3 text-left ${activeSection===key?'border-primary bg-primary/5':'hover:bg-muted'}`}>
+            <div className="font-medium">{key}. {title}</div><div className="text-xs text-muted-foreground">{description}</div>
+          </button>)}
+        </CardContent></Card>
+        <SectionWorkspace section={activeSection} detail={d} auditor={auditor}/>
+      </div>
+      {auditor&&<Card><CardHeader><CardTitle className="flex items-center gap-2"><History className="h-5 w-5"/>Immutable audit history</CardTitle></CardHeader>
+        <CardContent><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Action</TableHead><TableHead>Actor</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
+          <TableBody>{d.events.map(e=><TableRow key={e.id}><TableCell>{new Date(e.created_at).toLocaleString()}</TableCell><TableCell>{pretty(e.action)}</TableCell><TableCell>{e.actor_display_name} · {e.actor_role}</TableCell><TableCell>{e.reason||'—'}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>}
+    </div>;
+  }
+
+  return <div className="container mx-auto space-y-5 p-4 lg:p-6">
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-bold">EPOCH Software Validation</h1>
+      <p className="text-muted-foreground">Objective evidence that EPOCH is suitable for its approved, documented QMS intended use.</p></div>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4"/>New validation package</Button></DialogTrigger>
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Create EPOCH Software Validation Package</DialogTitle></DialogHeader>
+        <form className="grid gap-4 md:grid-cols-2" onSubmit={e=>{e.preventDefault();create.mutate(e.currentTarget)}}>
+          <Field name="title" label="Package title" required/><Field name="systemName" label="System name" defaultValue="EPOCH" required/>
+          <Pick name="validationType" label="Validation type" values={['INITIAL_INTENDED_USE','MAJOR_RELEASE','CRITICAL_CHANGE','DATABASE_MIGRATION','SECURITY_ACCESS_CONTROL','BACKUP_RECOVERY','PERIODIC_REVIEW','PRE_AUDIT_REVALIDATION','CORRECTIVE_REVALIDATION']}/>
+          <Field name="productionVersion" label="Production version being validated" required/>
+          <Field name="commitOrReleaseIdentifier" label="Commit SHA or release identifier"/>
+          <Field name="productionDeploymentDate" label="Production deployment date" type="date"/>
+          <Field name="validationEnvironment" label="Validation environment" required/>
+          <Field name="productionEnvironmentReference" label="Production environment reference" required/>
+          <Field name="databaseProvider" label="Database type/provider" required/><Field name="hostingProvider" label="Hosting provider" required/>
+          <Field name="plannedStartDate" label="Planned start" type="date" required/><Field name="plannedCompletionDate" label="Planned completion" type="date" required/>
+          <div className="md:col-span-2"><Label>Reason for validation</Label><Textarea name="reasonForValidation" required/></div>
+          <div className="md:col-span-2"><Label>Notes</Label><Textarea name="notes"/></div>
+          <DialogFooter className="md:col-span-2"><Button type="submit" disabled={create.isPending}>Create controlled draft</Button></DialogFooter>
+        </form></DialogContent></Dialog>
+    </div>
+    <Card><CardContent className="pt-6 text-sm text-muted-foreground">This workflow does not assert that AS9100 requires a commercial ERP or a named validation format. It preserves objective evidence for EPOCH's defined QMS intended use.</CardContent></Card>
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{list.data?.map(p=><Card key={p.id} className="cursor-pointer hover:border-primary" onClick={()=>setSelected(p.id)}>
+      <CardHeader><div className="flex justify-between gap-2"><CardTitle className="text-lg">{p.package_number}</CardTitle><Badge className={tone(p.status)}>{pretty(p.status)}</Badge></div></CardHeader>
+      <CardContent><p className="font-semibold">{p.title}</p><p className="mt-2 text-sm text-muted-foreground">EPOCH {p.production_version} · {pretty(p.validation_type)}</p>
+        <div className="mt-4 grid grid-cols-3 text-center text-xs"><div>{p.requirement_count||0}<br/>requirements</div><div>{p.execution_count||0}<br/>executions</div><div>{p.open_defect_count||0}<br/>open defects</div></div></CardContent>
+    </Card>)}</div>
+    {!list.isLoading&&!list.data?.length&&<Card><CardContent className="py-12 text-center text-muted-foreground">No validation package exists. Create the first controlled draft package.</CardContent></Card>}
+  </div>;
+}
+
+function SectionWorkspace({section,detail:d,auditor}:{section:string;detail:Detail;auditor:boolean}){
+  const title=sections.find(x=>x[0]===section)?.[1]||'Validation';
+  const header=<CardHeader><CardTitle>{section}. {title}</CardTitle></CardHeader>;
+  if(section==='01')return <Card>{header}<CardContent>{d.intendedUse.length?<RecordView record={d.intendedUse[0]}/>:<Empty text="No Intended Use revision has been authored."/ >}</CardContent></Card>;
+  if(section==='02')return <Register title={title} records={d.requirements} columns={['requirement_id','module','category','statement','criticality','status']}/>;
+  if(section==='03')return <Register title={title} records={d.risks} columns={['risk_id','module','failure_mode','initial_risk_rating','residual_risk','status']}/>;
+  if(section==='04')return <Card>{header}<CardContent>{d.plans.length?<RecordView record={d.plans[0]}/>:<Empty text="No Validation Plan revision exists."/ >}</CardContent></Card>;
+  if(section==='05')return <Register title={title} records={d.protocols} columns={['test_id','title','module','criticality','revision','status']}/>;
+  if(section==='06')return <Register title={title} records={d.executions} columns={['execution_id','protocol_revision','tester_display_name','overall_result','review_decision','started_at']}/>;
+  if(section==='07')return <Register title={title} records={d.defects} columns={['defect_number','module','severity','description','retest_required','status']}/>;
+  if(section==='08')return <Card>{header}<CardContent><RecordView record={d.readiness}/></CardContent></Card>;
+  if(section==='09')return <Register title={title} records={d.approvals.filter(x=>x.record_type==='FINAL')} columns={['approval_role','decision','actor_display_name','actor_role','meaning','decided_at','status']}/>;
+  return <Register title={title} records={d.periodicReviews} columns={['review_date','current_production_version','revalidation_required','revalidation_scope','next_review_date','status']}/>;
+}
+function Register({title,records,columns}:{title:string;records:any[];columns:string[]}){
+  return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent className="overflow-x-auto">{records.length?
+    <Table><TableHeader><TableRow>{columns.map(c=><TableHead key={c}>{pretty(c)}</TableHead>)}</TableRow></TableHeader><TableBody>
+      {records.map((r,i)=><TableRow key={r.id||i}>{columns.map(c=><TableCell key={c} className="max-w-sm">{String(r[c]??'—')}</TableCell>)}</TableRow>)}
+    </TableBody></Table>:<Empty text={`No ${title.toLowerCase()} records exist.`}/>}</CardContent></Card>;
+}
+function RecordView({record}:{record:Record<string,any>}){return <dl className="grid gap-3 md:grid-cols-2">{Object.entries(record).filter(([k])=>!['id','package_id','created_by_user_id','updated_by_user_id'].includes(k)).map(([k,v])=>
+  <div key={k} className="rounded border p-2"><dt className="text-xs text-muted-foreground">{pretty(k)}</dt><dd className="whitespace-pre-wrap text-sm">{Array.isArray(v)?v.join(', '):typeof v==='object'?JSON.stringify(v):String(v??'—')}</dd></div>)}</dl>;}
+function Empty({text}:{text:string}){return <div className="py-12 text-center text-sm text-muted-foreground"><FileCheck2 className="mx-auto mb-3 h-8 w-8"/>{text}</div>;}
+function Metric({label,value,ok,danger}:{label:string;value:string;ok?:boolean;danger?:boolean}){return <Card><CardContent className="flex items-center gap-3 pt-5">{ok?<CheckCircle2 className="text-emerald-600"/>:danger?<AlertTriangle className="text-red-600"/>:<FileCheck2 className="text-primary"/>}<div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{value}</p></div></CardContent></Card>;}
+function ExportMenu({id}:{id:string}){return <Select onValueChange={v=>window.open(`/api/qms/epoch-software-validation/${id}/export?view=${v}`,'_blank')}><SelectTrigger className="w-56"><SelectValue placeholder="Export controlled report"/></SelectTrigger><SelectContent>
+  {['validation-plan','requirements-matrix','risk-register','test-protocols','test-executions','defects','summary','complete-package'].map(v=><SelectItem key={v} value={v}>{pretty(v)}</SelectItem>)}
+</SelectContent></Select>;}
+function Field({name,label,type='text',required,defaultValue}:{name:string;label:string;type?:string;required?:boolean;defaultValue?:string}){return <div><Label htmlFor={name}>{label}</Label><Input id={name} name={name} type={type} required={required} defaultValue={defaultValue}/></div>;}
+function Pick({name,label,values}:{name:string;label:string;values:string[]}){return <div><Label>{label}</Label><Select name={name} defaultValue={values[0]}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{values.map(v=><SelectItem key={v} value={v}>{pretty(v)}</SelectItem>)}</SelectContent></Select></div>;}

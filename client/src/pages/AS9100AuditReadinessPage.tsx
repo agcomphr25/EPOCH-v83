@@ -30,6 +30,12 @@ type Detail = {
   assessment: Assessment & { assessment_version: number; product_design_in_scope: boolean };
   items: Item[];
   readiness: Record<string, number>;
+  epochSoftwareValidation?: {
+    state: string; message: string; complete: boolean; blockers: string[];
+    package?: { id: string; packageNumber: string; status: string; productionVersion: string } | null;
+    versionMatches?: boolean; periodicReviewCurrent?: boolean;
+    readiness?: Record<string, any>;
+  };
 };
 
 const statusTone = (status: string) => {
@@ -134,6 +140,40 @@ export default function AS9100AuditReadinessPage() {
         <div><span className="text-xs text-muted-foreground">Approval state</span><p><Badge className={statusTone(assessment.status)}>{label(assessment.status)}</Badge></p></div>
         <div className="md:col-span-4"><span className="text-xs text-muted-foreground">QMS scope</span><p>{assessment.qms_scope}</p></div>
       </CardContent></Card>
+      <Card className={detail.data.epochSoftwareValidation?.complete ? 'border-emerald-400' : 'border-amber-400'}>
+        <CardHeader><div className="flex flex-wrap items-center justify-between gap-3"><div>
+          <CardTitle className="text-base">Section 2 — EPOCH Intended-Use Validation</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">{detail.data.epochSoftwareValidation?.message || 'Not validated — create or link an EPOCH Software Validation Package.'}</p>
+        </div><div className="flex flex-wrap gap-2">
+          <Button onClick={() => { window.location.href = '/qms/epoch-software-validation'; }}>Open EPOCH Software Validation</Button>
+          {detail.data.epochSoftwareValidation?.package && <Button variant="outline" onClick={() => { window.location.href = '/qms/epoch-software-validation'; }}>View Approved Validation</Button>}
+          <Button variant="outline" onClick={() => setSection('02')}>View Blockers</Button>
+          <Button variant="outline" onClick={() => setSection('02')}>View Evidence</Button>
+          <Button variant="outline" onClick={() => { window.location.href = '/qms/epoch-software-validation'; }}>View Validation History</Button>
+        </div></div></CardHeader>
+        <CardContent>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ['Intended Use approved', detail.data.epochSoftwareValidation?.readiness?.intendedUseApproved],
+              ['Software requirements approved', detail.data.epochSoftwareValidation?.readiness?.requirementsBaselineApproved],
+              ['Risk assessment approved', detail.data.epochSoftwareValidation?.readiness?.riskAssessmentApproved],
+              ['Validation Plan approved', detail.data.epochSoftwareValidation?.readiness?.validationPlanApproved],
+              ['Critical requirements tested', detail.data.epochSoftwareValidation?.readiness && detail.data.epochSoftwareValidation.readiness.criticalRequirementsTested >= detail.data.epochSoftwareValidation.readiness.criticalRequirements],
+              ['Critical tests passed', detail.data.epochSoftwareValidation?.readiness && detail.data.epochSoftwareValidation.readiness.criticalTestsPassed >= detail.data.epochSoftwareValidation.readiness.criticalTests],
+              ['No open critical defects', detail.data.epochSoftwareValidation?.readiness?.openCriticalDefects === 0],
+              ['No unaccepted high defects', detail.data.epochSoftwareValidation?.readiness && detail.data.epochSoftwareValidation.readiness.openHighDefects <= detail.data.epochSoftwareValidation.readiness.acceptedHighDefects],
+              ['Backup verification', detail.data.epochSoftwareValidation?.readiness?.backupPassed],
+              ['Restore test', detail.data.epochSoftwareValidation?.readiness?.restorePassed],
+              ['Outage drill', detail.data.epochSoftwareValidation?.readiness?.outageDrillPassed],
+              ['Production version approved', detail.data.epochSoftwareValidation?.versionMatches],
+              ['Periodic review current', detail.data.epochSoftwareValidation?.periodicReviewCurrent],
+            ].map(([name, ok]) => <div key={String(name)} className="flex items-center gap-2 rounded border p-2 text-sm">
+              {ok ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+              <span>{name}</span>
+            </div>)}
+          </div>
+        </CardContent>
+      </Card>
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
         <Card><CardHeader><CardTitle className="text-base">12 checklist sections</CardTitle></CardHeader><CardContent className="space-y-3">
           {sectionStats.map(([key, value]) => <button key={key} className="w-full rounded-md border p-2 text-left hover:bg-muted" onClick={() => setSection(key)}>

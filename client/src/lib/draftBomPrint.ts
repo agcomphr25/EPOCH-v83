@@ -110,10 +110,17 @@ function documentShell(title: string, body: string, printedAt = new Date(), land
     th { background: #e2e8f0; font-size: 9px; text-transform: uppercase; }
     .number { text-align: right; white-space: nowrap; }
     .footer { color: #64748b; font-size: 9px; margin-top: 12px; text-align: right; }
+    .print-toolbar { align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; display: flex; justify-content: space-between; margin-bottom: 16px; padding: 10px 12px; }
+    .print-button { background: #2563eb; border: 0; border-radius: 5px; color: #fff; cursor: pointer; font-size: 12px; font-weight: 700; padding: 8px 16px; }
+    .print-button:hover { background: #1d4ed8; }
     @media print { .no-print { display: none; } }
   </style>
 </head>
 <body>
+<div class="print-toolbar no-print">
+  <span>Review the document below, then select Print.</span>
+  <button class="print-button" type="button" onclick="window.print()">Print</button>
+</div>
 ${body}
 <div class="footer">Printed ${escapePrintHtml(printedAt.toLocaleString())}</div>
 </body>

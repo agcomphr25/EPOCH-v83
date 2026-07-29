@@ -59,6 +59,7 @@ describe('draft BOM print documents', () => {
     expect(html).toContain('AG-100');
     expect(html).toContain('Passivated');
     expect(html).toContain('$10.00');
+    expect(html).toContain('onclick="window.print()"');
     expect(html).not.toContain('<script>');
   });
 
@@ -71,6 +72,7 @@ describe('draft BOM print documents', () => {
     expect(html).toContain('L. Miller &amp; Sons');
     expect(html).toContain('$2.25');
     expect(html).toContain('Certificate required');
+    expect(html).toContain('Review the document below, then select Print.');
     expect(html).not.toContain('<script>');
   });
 

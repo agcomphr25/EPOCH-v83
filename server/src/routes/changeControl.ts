@@ -68,7 +68,11 @@ const readiness = async (_req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
-router.use(authenticate, readiness);
+// This router is mounted at /api alongside unrelated application routes.
+// Keep schema readiness local to Change Control so an unapplied optional QMS
+// migration cannot turn every API endpoint into a 503.
+router.use('/change-control', authenticate, readiness);
+router.use('/change-control-dashboard', authenticate, readiness);
 
 const actor = (req: Request) => {
   const user = (req as any).user;

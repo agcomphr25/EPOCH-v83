@@ -94,13 +94,15 @@ const initialized = {
 function renderWorkflow(response: object) {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockImplementation(async (input: RequestInfo | URL) =>
+    vi.fn().mockImplementation(async (input: Parameters<typeof fetch>[0]) =>
       String(input).endsWith('/workflow-v2')
         ? { ok: true, json: async () => response }
         : {
             ok: false,
             status: 404,
-            json: async () => ({ message: 'Endpoint not mocked in summary test' }),
+            json: async () => ({
+              message: 'Endpoint not mocked in summary test',
+            }),
           }
     )
   );

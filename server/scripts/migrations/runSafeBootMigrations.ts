@@ -1,7 +1,12 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { Pool } from 'pg';
 import { pathToFileURL } from 'url';
+
+import { Pool } from 'pg';
+
+type MigrationError = Error & {
+  code?: string;
+};
 
 export function getSafeBootMigrationConnectionString() {
   return process.env.FORCE_DATABASE_URL || process.env.DATABASE_URL;
@@ -300,7 +305,9 @@ export const criticalMigrationFiles = new Set([
 export async function runSafeBootMigrations() {
   const connectionString = getSafeBootMigrationConnectionString();
   if (!connectionString) {
-    throw new Error('Missing required database environment variable: FORCE_DATABASE_URL or DATABASE_URL');
+    throw new Error(
+      'Missing required database environment variable: FORCE_DATABASE_URL or DATABASE_URL'
+    );
   }
 
   const migrPool = new Pool({ connectionString });
@@ -319,9 +326,12 @@ export async function runSafeBootMigrations() {
       try {
         await migrPool.query(readFileSync(filePath, 'utf-8'));
         appliedCount++;
-      } catch (fileErr: any) {
+      } catch (caughtFileErr: unknown) {
+        const fileErr = caughtFileErr as MigrationError;
         if (criticalMigrationFiles.has(f)) {
-          console.error(`❌ Critical migration ${f} failed: ${fileErr.message}`);
+          console.error(
+            `❌ Critical migration ${f} failed: ${fileErr.message}`
+          );
           throw fileErr;
         }
         console.warn(`⚠️ Migration ${f} skipped: ${fileErr.message}`);
@@ -330,44 +340,71 @@ export async function runSafeBootMigrations() {
   } finally {
     try {
       await migrPool.end();
-    } catch (_) {}
+    } catch {
+      // Pool shutdown is best-effort after migration completion.
+    }
   }
 
-  console.log(`✅ Pre-deploy migrations: ${appliedCount}/${safeMigrationFiles.length} applied (or already correct)`);
+  console.log(
+    `✅ Pre-deploy migrations: ${appliedCount}/${safeMigrationFiles.length} applied (or already correct)`
+  );
 
   // Certification replays only the migration mechanism. The remaining helpers
   // are application-startup maintenance and may retain long-lived resources.
   if (process.env.SAFE_BOOT_MIGRATIONS_ONLY === 'true') return;
 
   try {
-    const { logCriticalSchemaHealth } = await import('../../utils/schemaHealth');
+    const { logCriticalSchemaHealth } = await import(
+      '../../utils/schemaHealth'
+    );
     await logCriticalSchemaHealth();
-  } catch (schemaHealthErr: any) {
-    console.warn('Critical schema health check skipped:', schemaHealthErr.message);
+  } catch (caughtSchemaHealthErr: unknown) {
+    const schemaHealthErr = caughtSchemaHealthErr as MigrationError;
+    console.warn(
+      'Critical schema health check skipped:',
+      schemaHealthErr.message
+    );
   }
 
   try {
-    const { migrateVendorDocumentUrls } = await import('../../src/routes/vendors');
+    const { migrateVendorDocumentUrls } = await import(
+      '../../src/routes/vendors'
+    );
     await migrateVendorDocumentUrls();
-  } catch (vendorMigrErr: any) {
-    console.warn('⚠️ Vendor document URL migration failed:', vendorMigrErr.message);
+  } catch (caughtVendorMigrErr: unknown) {
+    const vendorMigrErr = caughtVendorMigrErr as MigrationError;
+    console.warn(
+      '⚠️ Vendor document URL migration failed:',
+      vendorMigrErr.message
+    );
   }
 
   try {
-    const diskFiles = readdirSync(migrationsDir).filter((f: string) => f.endsWith('.sql'));
+    const diskFiles = readdirSync(migrationsDir).filter((f: string) =>
+      f.endsWith('.sql')
+    );
     const safeSet = new Set(safeMigrationFiles);
     const missing = diskFiles.filter((f: string) => !safeSet.has(f));
     if (missing.length > 0) {
       for (const f of missing) {
-        console.warn(`⚠️ Migration file on disk is NOT in safeMigrationFiles and will be skipped: ${f}`);
+        console.warn(
+          `⚠️ Migration file on disk is NOT in safeMigrationFiles and will be skipped: ${f}`
+        );
       }
     }
-  } catch (scanErr: any) {
-    console.warn('⚠️ Could not scan migrations directory for unlisted files:', scanErr.message);
+  } catch (caughtScanErr: unknown) {
+    const scanErr = caughtScanErr as MigrationError;
+    console.warn(
+      '⚠️ Could not scan migrations directory for unlisted files:',
+      scanErr.message
+    );
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   runSafeBootMigrations().catch((err) => {
     console.error('Safe boot migration runner failed:', err);
     process.exit(1);

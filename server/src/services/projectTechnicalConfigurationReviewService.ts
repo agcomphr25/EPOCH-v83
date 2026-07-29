@@ -88,7 +88,9 @@ const rows = <T extends Row>(value: unknown): T[] =>
 const clean = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
 const technicalSnapshotForComparison = (value: Row) => {
-  const { status: _status, updated_at: _updatedAt, ...po } = value?.po ?? {};
+  const po = { ...(value?.po ?? {}) };
+  delete po.status;
+  delete po.updated_at;
   return { ...value, po } as JsonValue;
 };
 const hash = (value: unknown) =>

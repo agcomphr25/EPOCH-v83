@@ -23,6 +23,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
+import { parseVendorPOQuantity } from '@/lib/vendorPOQuantity';
 
 // Helper function to format numbers with commas
 function formatNumber(value: number | undefined | null, decimals: number = 2): string {
@@ -40,13 +41,6 @@ function formatCurrency(value: number | undefined | null, decimals: number = 2):
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
-}
-
-function parseWholeQuantity(value: string): number {
-  if (value.trim() === '') return 0;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, Math.trunc(parsed));
 }
 
 type VendorPOItemSelectorProps = {
@@ -194,7 +188,7 @@ type NewItemState = {
   purchaseUnit: string;
   vendorUnit: string;
   conversionFactor: number;
-  quantity: number;
+  quantity: number | string;
   unitPrice: number;
   customerPoId?: number | null;
   projectId?: string | null;
@@ -316,6 +310,7 @@ export default function VendorPOItemSelector({
     productionWorkOrderId?: string | null;
     chargeCodeId?: number | null;
   }>({});
+  const [editedQuantityInput, setEditedQuantityInput] = useState('');
   const [linkedPartsRequestIds, setLinkedPartsRequestIds] = useState<number[]>([]);
 
   const { data: items = [], isLoading } = useQuery<VendorPOItem[]>({
@@ -417,7 +412,7 @@ export default function VendorPOItemSelector({
     if (hasUnitConversion) {
       return calculatedVendorValues.vendorQty * calculatedVendorValues.vendorUnitPrice;
     }
-    return newItem.quantity * newItem.unitPrice;
+    return Number(newItem.quantity || 0) * newItem.unitPrice;
   }, [hasUnitConversion, calculatedVendorValues, newItem.quantity, newItem.unitPrice]);
 
   const handlePartSelect = async (partId: string) => {
@@ -573,6 +568,7 @@ export default function VendorPOItemSelector({
       toast.success('Item updated successfully');
       setEditingItemId(null);
       setEditedItem({});
+      setEditedQuantityInput('');
       if (onTotalChange) {
         onTotalChange(calculateTotal());
       }
@@ -649,7 +645,8 @@ export default function VendorPOItemSelector({
         partsRequestQuantities: selectedPartsRequestQuantities,
       };
     } else {
-      if (newItem.quantity <= 0 || newItem.unitPrice < 0) {
+      const quantity = parseVendorPOQuantity(newItem.quantity);
+      if (quantity === null || newItem.unitPrice < 0) {
         toast.error('Please enter valid quantity and unit price');
         return;
       }
@@ -657,10 +654,10 @@ export default function VendorPOItemSelector({
       itemData = {
         agPartNumber: newItem.agPartNumber,
         description: newItem.description,
-        quantity: newItem.quantity,
+        quantity,
         unitPrice: newItem.unitPrice,
         vendorUnit: newItem.vendorUnit || null,
-        lineTotal: newItem.quantity * newItem.unitPrice,
+        lineTotal: quantity * newItem.unitPrice,
         customerPoId: newItem.customerPoId || null,
         projectId: newItem.projectId || null,
         productionWorkOrderId: newItem.productionWorkOrderId || null,
@@ -689,13 +686,18 @@ export default function VendorPOItemSelector({
       chargeCodeId: item.chargeCodeId,
       otherIdentifier: item.otherIdentifier,
     });
+    setEditedQuantityInput(String(item.quantity));
   };
 
   const handleSaveEdit = (itemId: number) => {
     const originalItem = items.find(item => item.id === itemId);
     if (!originalItem) return;
 
-    const nextQuantity = editedItem.quantity ?? originalItem.quantity;
+    const nextQuantity = parseVendorPOQuantity(editedQuantityInput);
+    if (nextQuantity === null) {
+      toast.error('Please enter a valid quantity greater than zero');
+      return;
+    }
     const nextUnitPrice = editedItem.unitPrice ?? originalItem.unitPrice;
     const nextProjectId = 'projectId' in editedItem ? editedItem.projectId : originalItem.projectId;
     const nextProductionWorkOrderId = 'productionWorkOrderId' in editedItem ? editedItem.productionWorkOrderId : originalItem.productionWorkOrderId;
@@ -729,6 +731,7 @@ export default function VendorPOItemSelector({
   const handleCancelEdit = () => {
     setEditingItemId(null);
     setEditedItem({});
+    setEditedQuantityInput('');
   };
 
   if (isLoading) {
@@ -884,11 +887,11 @@ export default function VendorPOItemSelector({
                   <Input
                     id="quantity"
                     type="number"
-                    step="1"
-                    min="1"
-                    inputMode="numeric"
+                    step="any"
+                    min="0.0001"
+                    inputMode="decimal"
                     value={newItem.quantity || ''}
-                    onChange={(e) => setNewItem({ ...newItem, quantity: parseWholeQuantity(e.target.value) })}
+                    onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
                     data-testid="input-quantity"
                   />
                 </div>
@@ -1172,11 +1175,11 @@ export default function VendorPOItemSelector({
                     {isEditing ? (
                       <Input
                         type="number"
-                        step="1"
-                        min="1"
-                        inputMode="numeric"
-                        value={editedItem.quantity || 0}
-                        onChange={(e) => setEditedItem({ ...editedItem, quantity: parseWholeQuantity(e.target.value) })}
+                        step="any"
+                        min="0.0001"
+                        inputMode="decimal"
+                        value={editedQuantityInput}
+                        onChange={(e) => setEditedQuantityInput(e.target.value)}
                         className="w-20"
                         data-testid={`input-edit-quantity-${item.id}`}
                       />
@@ -1200,7 +1203,7 @@ export default function VendorPOItemSelector({
                   </TableCell>
                   <TableCell>
                     {isEditing 
-                      ? formatCurrency((editedItem.quantity || 0) * (editedItem.unitPrice || 0))
+                      ? formatCurrency((parseVendorPOQuantity(editedQuantityInput) || 0) * (editedItem.unitPrice || 0))
                       : formatCurrency(item.lineTotal)
                     }
                   </TableCell>

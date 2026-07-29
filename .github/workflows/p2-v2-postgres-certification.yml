@@ -265,7 +265,7 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
 
       - name: Create current application schema
-        run: npx drizzle-kit push --force
+        run: npx drizzle-kit push --force --config drizzle.app.config.ts
 
       - name: Restore migration-only schema baseline
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql

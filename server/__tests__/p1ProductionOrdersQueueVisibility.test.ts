@@ -12,11 +12,21 @@ describe('P1 production order workflow boundary', () => {
     'utf8',
   );
 
-  it('keeps Purchase Order Management demand out of the regular production queue', () => {
+  it('keeps PO writes separate while including production rows in the unified queue read model', () => {
     expect(productionQueueSource).toContain(
       "COALESCE(o.order_source, 'SALES') <> 'PO_RELEASE'",
     );
-    expect(productionQueueSource).not.toContain('FROM production_orders p');
+    expect(productionQueueSource).toContain('FROM production_orders p');
+    expect(productionQueueSource).toContain(
+      "p.current_department = 'P1 Production Queue'",
+    );
+    expect(productionQueueSource).toContain(
+      "UPPER(COALESCE(p.production_status, '')) IN ('PENDING', 'IN_PROGRESS', 'ACTIVE')",
+    );
+    expect(productionQueueSource).toContain("'po_item_id', p.po_item_id");
+    expect(productionQueueSource).toContain(
+      'WHERE mirrored.order_id = p.order_id',
+    );
   });
 
   it('creates only production_orders while scheduling PO demand', () => {

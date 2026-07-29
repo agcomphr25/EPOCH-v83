@@ -36,6 +36,7 @@ const release = expected.extend({
   serialNumbers: z.array(z.string().min(1)).default([]),
   batchLots: z.array(z.string().min(1)).default([]),
   signatureMeaning: z.string().min(1),
+  pilotConfirmation: z.string().min(1),
 });
 const hold = z.object({
   reason: z.string().min(1),

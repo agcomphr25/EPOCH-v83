@@ -11,7 +11,7 @@ type Row = Record<string, unknown>;
 
 export type PilotActor = {
   userId: number;
-  employeeId: number | null;
+  employeeId?: number | null;
   username: string;
   displayName: string;
   role: string;
@@ -72,7 +72,7 @@ export const PILOT_TRAINING_TOPICS = Object.freeze([
   'issue_escalation',
   'rollback_and_recovery',
   'data_integrity_and_audit_records',
-]);
+] as const);
 
 export const PILOT_READINESS_KEYS = Object.freeze([
   'customer_po_lines_approved',
@@ -97,7 +97,7 @@ export const PILOT_READINESS_KEYS = Object.freeze([
   'serialization_quantity_controls_defined',
   'rollback_recovery_documented',
   'required_pilot_approvals_complete',
-]);
+] as const);
 
 export const PILOT_EVIDENCE_CATEGORIES = Object.freeze([
   'customer_requirements',
@@ -125,7 +125,7 @@ export const PILOT_EVIDENCE_CATEGORIES = Object.freeze([
   'quantity_reconciliation',
   'closing_approvals',
   'audit_history',
-]);
+] as const);
 
 const transitions: Record<string, readonly string[]> = {
   DRAFT: ['PENDING_READINESS', 'CANCELLED'],
@@ -436,7 +436,7 @@ export async function createPilotDraft(
         VALUES (${`PILOT-${projectId.slice(0, 8)}-R${revision}`},${input.environment},
           ${projectId},${input.workflowInstanceId},${input.customerPoId},
           ${input.customerPoNumber},${JSON.stringify(input.approvedPoLines)}::jsonb,
-          ${JSON.stringify([...new Set(input.approvedPoLines.map((line) => line.partNumber))])}::jsonb,
+          ${JSON.stringify(Array.from(new Set(input.approvedPoLines.map((line) => line.partNumber))))}::jsonb,
           ${JSON.stringify(Object.fromEntries(input.approvedPoLines.map((line) => [String(line.poLineId), line.maximumQuantity])))}::jsonb,
           'p2_v2',2,${input.configurationBaselineRevision},${input.productionPlanRevision},
           ${input.wadRevision},${JSON.stringify(input.authorizedParticipants)}::jsonb,
@@ -669,7 +669,7 @@ export async function decidePilotApproval(
          signature_meaning,evidence_reference,actor_user_id,actor_employee_id,actor_role)
       VALUES (${pilot.id},${Number(pilot.revision_number)},${approvalType},${input.decision},
         ${input.signatureMeaning},${input.evidenceReference},${actor.userId},
-        ${actor.employeeId},${actor.role})`);
+        ${actor.employeeId ?? null},${actor.role})`);
     await event(
       pilot,
       'PILOT_APPROVAL_DECIDED',

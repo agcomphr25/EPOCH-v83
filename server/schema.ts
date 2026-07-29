@@ -17214,6 +17214,7 @@ export const receivedUnits = pgTable('received_units', {
   allocatedToType: text('allocated_to_type'), // work_order | po_demand | stock | quarantine
   allocatedToId: integer('allocated_to_id'),
   targetProjectId: uuid('target_project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
+  targetRdProjectId: text('target_rd_project_id').references((): AnyPgColumn => rdProjects.id, { onDelete: 'set null' }),
   // Link to material_lots when accepted
   materialLotId: uuid('material_lot_id'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -17223,6 +17224,7 @@ export const receivedUnits = pgTable('received_units', {
   receiptIdx: index('received_units_receipt_idx').on(table.receiptId),
   barcodeIdx: uniqueIndex('received_units_barcode_idx').on(table.barcode),
   targetProjectIdx: index('received_units_target_project_idx').on(table.targetProjectId),
+  targetRdProjectIdx: index('received_units_target_rd_project_idx').on(table.targetRdProjectId),
 }));
 
 export const insertReceivedUnitSchema = createInsertSchema(receivedUnits).omit({

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReceivingProgressBar, PutawayStep } from '../pages/InventoryReceivingControlCenter';
+import { DispositionStep, ReceivingProgressBar, PutawayStep } from '../pages/InventoryReceivingControlCenter';
 import { getRccCompleteInvalidationKeys } from '../lib/rccInvalidation';
 
 const { mockApiRequest, mockToastError } = vi.hoisted(() => ({
@@ -83,6 +83,20 @@ function renderPutawayStep(
       </QueryClientProvider>
     ),
   };
+}
+
+function renderDispositionStep(
+  receipt: Receipt,
+  {
+    onNext = vi.fn(),
+    onUpdate = vi.fn(),
+  }: { onNext?: () => void; onUpdate?: (r: Receipt) => void } = {}
+) {
+  return render(
+    <QueryClientProvider client={makeQueryClient()}>
+      <DispositionStep receipt={receipt} onNext={onNext} onUpdate={onUpdate} />
+    </QueryClientProvider>
+  );
 }
 
 // ── ReceivingProgressBar ───────────────────────────────────────────────────────
@@ -413,5 +427,49 @@ describe('PutawayStep — completeReceiptMutation invalidates the correct query 
       method: 'PATCH',
       body: JSON.stringify({ status: 'complete' }),
     }));
+  });
+});
+
+describe('DispositionStep — Accept All', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('accepts every pending unit after confirmation and refreshes the receipt', async () => {
+    const pendingReceipt = makeReceipt({
+      units: [
+        { ...makeUnit(1), disposition: 'pending_inspection' },
+        { ...makeUnit(2), disposition: 'pending_inspection' },
+      ],
+    });
+    const refreshedReceipt = {
+      ...pendingReceipt,
+      units: pendingReceipt.units?.map(unit => ({ ...unit, disposition: 'accepted' })),
+    };
+    const onUpdate = vi.fn();
+
+    mockApiRequest.mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
+      if (url.endsWith('/ensure-units')) return { createdCount: 0, skipped: [] };
+      if (url.endsWith('/required-docs')) return { hasMissing: false, missingByPartNumber: {} };
+      if (url.endsWith('/disposition') && options?.method === 'POST') return {};
+      if (url === '/api/receipts/1') return refreshedReceipt;
+      return {};
+    });
+
+    renderDispositionStep(pendingReceipt, { onUpdate });
+
+    fireEvent.click(await screen.findByTestId('button-accept-all-pending'));
+    fireEvent.click(screen.getByTestId('button-confirm-accept-all'));
+
+    await waitFor(() => {
+      const dispositionCalls = mockApiRequest.mock.calls.filter(
+        ([url, options]) => String(url).endsWith('/disposition') && options?.method === 'POST'
+      );
+      expect(dispositionCalls).toHaveLength(2);
+      for (const [, options] of dispositionCalls) {
+        expect(JSON.parse(options.body)).toMatchObject({ disposition: 'accepted' });
+      }
+      expect(onUpdate).toHaveBeenCalledWith(refreshedReceipt);
+    });
   });
 });

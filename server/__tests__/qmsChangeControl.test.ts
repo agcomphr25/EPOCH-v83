@@ -8,7 +8,7 @@ const migration = readFileSync(
   'utf8'
 );
 const qualityActionMigration = readFileSync(
-  path.join(root, 'migrations', '0231_quality_action_change_control.sql'),
+  path.join(root, 'migrations', '0232_quality_action_change_control.sql'),
   'utf8'
 );
 const routes = readFileSync(

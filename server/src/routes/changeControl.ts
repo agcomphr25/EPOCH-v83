@@ -7,14 +7,25 @@ import { getUserPermissions } from '../services/permissionService';
 import {
   ChangeControlError,
   addChangeControlLink,
+  assignPcrInvestigator,
+  authorizePcrImplementation,
+  closePcr,
+  createAssessment,
   createNativeChange,
+  createPcr,
+  completePcrImplementation,
+  decideAssessmentRecommendation,
+  decidePcr,
   getChangeControlRecord,
+  getQualityActionDashboard,
   importHistoricalRecord,
   importHistoricalRows,
   importTemplate,
   listChangeControlRecords,
   parseRegister,
   previewHistoricalRows,
+  transitionPcr,
+  verifyPcrImplementation,
 } from '../services/changeControlService';
 
 const router = Router();
@@ -44,12 +55,15 @@ const authenticate = async (req: Request, res: Response, next: NextFunction) => 
 
 const readiness = async (_req: Request, res: Response, next: NextFunction) => {
   const rows = await pool.query(
-    `SELECT to_regclass('public.change_control_records') IS NOT NULL AS ready`
+    `SELECT to_regclass('public.change_control_records') IS NOT NULL
+         AND to_regclass('public.change_control_assessments') IS NOT NULL
+         AND to_regclass('public.pcr_audit_events') IS NOT NULL AS ready`
   );
   if (!rows[0]?.ready)
     return res.status(503).json({
       error: 'CHANGE_CONTROL_SCHEMA_NOT_READY',
-      requiredMigration: '0230_qms_change_control_register.sql',
+      requiredMigration:
+        '0230_qms_change_control_register.sql and 0231_quality_action_change_control.sql',
     });
   next();
 };
@@ -91,10 +105,84 @@ router.get(
   requirePermission('qms.change_control.view'),
   action((req) => listChangeControlRecords(req.query))
 );
+router.get(
+  '/change-control-dashboard',
+  requirePermission('qms.change_control.view'),
+  action((req) => getQualityActionDashboard(req.query))
+);
 router.post(
   '/change-control/:id/links',
   requirePermission('qms.change_control.create'),
   action((req) => addChangeControlLink(req.params.id, req.body ?? {}, actor(req)))
+);
+router.post(
+  '/change-control/:id/assessments',
+  requirePermission('qms.quality_action.screen'),
+  action((req) => createAssessment(req.params.id, req.body ?? {}, actor(req)))
+);
+router.post(
+  '/change-control/:id/assessments/:assessmentId/recommendations/:recommendationId/decision',
+  requirePermission('qms.quality_action.screen'),
+  action((req) =>
+    decideAssessmentRecommendation(
+      req.params.id,
+      req.params.assessmentId,
+      req.params.recommendationId,
+      req.body ?? {},
+      actor(req)
+    )
+  )
+);
+router.post(
+  '/change-control/pcrs',
+  requirePermission('qms.quality_action.pcr_create'),
+  action((req) => createPcr(req.body ?? {}, actor(req)))
+);
+router.post(
+  '/change-control/pcrs/:pcrId/assign',
+  requirePermission('qms.quality_action.assign_investigation'),
+  action((req) =>
+    assignPcrInvestigator(req.params.pcrId, req.body ?? {}, actor(req))
+  )
+);
+router.post(
+  '/change-control/pcrs/:pcrId/actions/:action',
+  requirePermission('qms.change_control.view'),
+  action((req) =>
+    transitionPcr(
+      req.params.pcrId,
+      req.params.action,
+      req.body ?? {},
+      actor(req)
+    )
+  )
+);
+router.post(
+  '/change-control/pcrs/:pcrId/decisions',
+  requirePermission('qms.change_control.view'),
+  action((req) => decidePcr(req.params.pcrId, req.body ?? {}, actor(req)))
+);
+router.post(
+  '/change-control/pcrs/:pcrId/authorize-implementation',
+  requirePermission('qms.quality_action.authorize_implementation'),
+  action((req) =>
+    authorizePcrImplementation(req.params.pcrId, req.body ?? {}, actor(req))
+  )
+);
+router.post(
+  '/change-control/pcrs/:pcrId/complete-implementation',
+  requirePermission('qms.quality_action.authorize_implementation'),
+  action((req) => completePcrImplementation(req.params.pcrId, req.body ?? {}, actor(req)))
+);
+router.post(
+  '/change-control/pcrs/:pcrId/verify',
+  requirePermission('qms.quality_action.verify_implementation'),
+  action((req) => verifyPcrImplementation(req.params.pcrId, req.body ?? {}, actor(req)))
+);
+router.post(
+  '/change-control/pcrs/:pcrId/close',
+  requirePermission('qms.quality_action.close'),
+  action((req) => closePcr(req.params.pcrId, req.body ?? {}, actor(req)))
 );
 router.get(
   '/change-control/:id',

@@ -35,6 +35,7 @@ type ChangeRow = {
   id: string;
   change_number: string;
   change_type: string;
+  display_type: string;
   title: string;
   source: 'IMPORTED_HISTORICAL' | 'EPOCH_NATIVE';
   status: string;
@@ -44,6 +45,19 @@ type ChangeRow = {
   actual_effective_date: string | null;
   proposed_effective_date: string | null;
   updated_at: string;
+  severity_risk: string | null;
+  product_safety_flag: boolean;
+  customer_impact_flag: boolean;
+  production_blocked: boolean;
+  customer_decision_required: boolean;
+  due_date: string | null;
+  next_action: {
+    code: string;
+    statement: string;
+    responsibleRole: string;
+    dueDate?: string | null;
+    classification: string;
+  };
 };
 
 type PreviewRow = {
@@ -55,6 +69,9 @@ type PreviewRow = {
 };
 
 const TYPES = [
+  'NCR',
+  'CAR',
+  'PCR',
   'ECR',
   'ECN_ECO',
   'DOCUMENT_CHANGE',
@@ -82,6 +99,7 @@ const initialHistorical = {
 export default function QMSChangeControlPage() {
   const { can } = usePermissions();
   const [rows, setRows] = useState<ChangeRow[]>([]);
+  const [cards, setCards] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState('ALL');
@@ -93,6 +111,7 @@ export default function QMSChangeControlPage() {
   const [historicalOpen, setHistoricalOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [nativeOpen, setNativeOpen] = useState(false);
+  const [pcrOpen, setPcrOpen] = useState(false);
   const [historical, setHistorical] = useState(initialHistorical);
   const [historicalFile, setHistoricalFile] = useState<File | null>(null);
   const [bulkFile, setBulkFile] = useState<File | null>(null);
@@ -107,6 +126,15 @@ export default function QMSChangeControlPage() {
     implementationPlan: '',
     priority: 'NORMAL',
     department: '',
+  });
+  const [pcr, setPcr] = useState({
+    changeType: 'PROCESS',
+    scope: 'PART',
+    partNumber: '',
+    proposedChange: '',
+    reason: '',
+    riskAssessment: '',
+    requiresCustomerApproval: false,
   });
 
   const query = useMemo(() => {
@@ -123,12 +151,13 @@ export default function QMSChangeControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/change-control${query ? `?${query}` : ''}`, {
+      const response = await fetch(`/api/change-control-dashboard${query ? `?${query}` : ''}`, {
         credentials: 'include',
       });
-      const payload = await response.json().catch(() => []);
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || payload.error || 'Unable to load Change Control');
-      setRows(Array.isArray(payload) ? payload : []);
+      setRows(Array.isArray(payload.records) ? payload.records : []);
+      setCards(payload.cards ?? {});
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unable to load Change Control');
     } finally {
@@ -208,13 +237,27 @@ export default function QMSChangeControlPage() {
     await load();
   };
 
+  const createPcr = async () => {
+    const response = await fetch('/api/change-control/pcrs', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pcr),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return setError(payload.message || 'Unable to submit PCR');
+    setPcrOpen(false);
+    await load();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-normal">Change Control</h1>
+          <h1 className="text-3xl font-bold tracking-normal">Quality Action &amp; Change Control</h1>
           <p className="text-muted-foreground">
-            Authoritative register for historical records and EPOCH-controlled ECR/ECN workflows.
+            Quality control center referencing authoritative NCR, CAR, PCR, ECR, and ECN workflows.
+            Recommendations support—not guarantee—AS9100 process execution and require Quality confirmation.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -233,7 +276,34 @@ export default function QMSChangeControlPage() {
               <Plus className="mr-2 h-4 w-4" /> Create New Change
             </Button>
           )}
+          {can('qms.quality_action.pcr_create') && (
+            <Button variant="outline" onClick={() => setPcrOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Submit PCR
+            </Button>
+          )}
         </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {[
+          ['New submissions', 'newSubmissions'],
+          ['Awaiting QMS review', 'awaitingQmsReview'],
+          ['Investigation overdue', 'investigationOverdue'],
+          ['Awaiting approval', 'awaitingApproval'],
+          ['Production blocked', 'productionBlocked'],
+          ['Customer decision required', 'customerDecisionRequired'],
+          ['Implementation incomplete', 'implementationIncomplete'],
+          ['Effectiveness review due', 'effectivenessReviewDue'],
+          ['Overdue actions', 'overdueActions'],
+          ['Recently closed', 'recentlyClosed'],
+        ].map(([label, key]) => (
+          <Card key={key}>
+            <CardContent className="pt-5">
+              <div className="text-2xl font-semibold">{cards[key] ?? 0}</div>
+              <div className="text-sm text-muted-foreground">{label}</div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {error && <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">{error}</div>}
@@ -253,25 +323,30 @@ export default function QMSChangeControlPage() {
         <CardContent className="pt-6">
           <Table>
             <TableHeader><TableRow>
-              {['Change number','Type','Title','Source','Status','Owner','Department','Affected','Effective date','Last updated','Actions'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}
+              {['Record number','Type','Title / problem','Source','Status','Risk','Safety','Customer','Production','Owner','Next required action','Due / age','Affected','Related','Updated','Actions'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}
             </TableRow></TableHeader>
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="font-medium">{row.change_number}</TableCell>
-                  <TableCell>{row.change_type}</TableCell>
+                  <TableCell>{row.display_type || row.change_type}</TableCell>
                   <TableCell>{row.title}</TableCell>
                   <TableCell>{row.source === 'IMPORTED_HISTORICAL' ? <Badge variant="secondary">Historical / Imported</Badge> : <Badge>Epoch Native</Badge>}</TableCell>
                   <TableCell>{row.status}</TableCell>
+                  <TableCell>{row.severity_risk || '—'}</TableCell>
+                  <TableCell>{row.product_safety_flag ? 'Impact' : '—'}</TableCell>
+                  <TableCell>{row.customer_impact_flag || row.customer_decision_required ? 'Review' : '—'}</TableCell>
+                  <TableCell>{row.production_blocked ? <Badge variant="destructive">Blocked</Badge> : 'Not blocked'}</TableCell>
                   <TableCell>{row.owner_username || '—'}</TableCell>
-                  <TableCell>{row.department || '—'}</TableCell>
+                  <TableCell><div className="max-w-xs"><Badge variant={row.next_action?.classification === 'BLOCKING' ? 'destructive' : 'outline'}>{row.next_action?.code || '—'}</Badge><div className="mt-1 text-xs text-muted-foreground">{row.next_action?.statement}</div></div></TableCell>
+                  <TableCell>{row.next_action?.dueDate || row.due_date || '—'}</TableCell>
                   <TableCell>{row.affected_items_count}</TableCell>
-                  <TableCell>{row.actual_effective_date || row.proposed_effective_date || '—'}</TableCell>
+                  <TableCell>{row.affected_items_count}</TableCell>
                   <TableCell>{new Date(row.updated_at).toLocaleDateString()}</TableCell>
                   <TableCell><Button size="sm" variant="outline" onClick={() => void openDetails(row.id)}>View</Button></TableCell>
                 </TableRow>
               ))}
-              {!rows.length && <TableRow><TableCell colSpan={11} className="py-8 text-center text-muted-foreground">{loading ? 'Loading…' : 'No matching change records'}</TableCell></TableRow>}
+              {!rows.length && <TableRow><TableCell colSpan={16} className="py-8 text-center text-muted-foreground">{loading ? 'Loading…' : 'No matching quality actions or changes'}</TableCell></TableRow>}
             </TableBody>
           </Table>
           <Button className="mt-4" variant="ghost" onClick={() => void load()} disabled={loading}>
@@ -337,6 +412,34 @@ export default function QMSChangeControlPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={pcrOpen} onOpenChange={setPcrOpen}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <DialogHeader><DialogTitle>Submit Process Change Request</DialogTitle></DialogHeader>
+          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            Submission starts QMS screening. It does not authorize implementation or departure from released requirements.
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Change type" value={pcr.changeType} onChange={(value) => setPcr({ ...pcr, changeType: value })} />
+            <Field label="Scope" value={pcr.scope} onChange={(value) => setPcr({ ...pcr, scope: value })} />
+            <Field label="Affected part number" value={pcr.partNumber} onChange={(value) => setPcr({ ...pcr, partNumber: value })} />
+            <div className="space-y-2">
+              <Label>Customer decision required</Label>
+              <Select value={pcr.requiresCustomerApproval ? 'YES' : 'NO'} onValueChange={(value) => setPcr({ ...pcr, requiresCustomerApproval: value === 'YES' })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="NO">No</SelectItem><SelectItem value="YES">Yes</SelectItem></SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Label>Proposed production/process change</Label>
+          <Textarea value={pcr.proposedChange} onChange={(event) => setPcr({ ...pcr, proposedChange: event.target.value })} />
+          <Label>Reason and business justification</Label>
+          <Textarea value={pcr.reason} onChange={(event) => setPcr({ ...pcr, reason: event.target.value })} />
+          <Label>Initial risk information</Label>
+          <Textarea value={pcr.riskAssessment} onChange={(event) => setPcr({ ...pcr, riskAssessment: event.target.value })} />
+          <DialogFooter><Button onClick={() => void createPcr()}>Submit for QMS Screening</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(details)} onOpenChange={(open) => !open && setDetails(null)}>
         <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
           {details && <>
@@ -357,6 +460,8 @@ export default function QMSChangeControlPage() {
               <DetailSection title="Attachments" value={(details.evidence || []).map((item: any) => `${item.original_filename} · SHA-256 ${item.sha256_checksum}`).join('\n') || 'No evidence attached'} />
               <DetailSection title="Related Changes" value={(details.links || []).filter((link: any) => link.link_type === 'RELATED_CHANGE').map((link: any) => link.linked_record_number || link.linked_record_id).join('\n') || 'None'} />
               <DetailSection title="Audit History" value={(details.audit || []).map((event: any) => `${new Date(event.occurred_at).toLocaleString()} · ${event.event_type}`).join('\n') || 'No register events'} />
+              <DetailSection title="Next Required Action" value={details.next_action ? `${details.next_action.classification}: ${details.next_action.statement}\nResponsible: ${details.next_action.responsibleRole}\nEvidence: ${(details.next_action.evidence || []).join('; ')}\nControl: ${details.next_action.controlReference || 'Not configured'}` : 'Assessment required'} />
+              <DetailSection title="AS9100 Workflow Assessment" value={(details.assessments || []).map((assessment: any) => `Version ${assessment.version} · ${assessment.lifecycle_status} · ${assessment.unresolved_recommendations} unresolved recommendations`).join('\n') || 'No versioned assessment submitted'} />
             </div>
           </>}
         </DialogContent>

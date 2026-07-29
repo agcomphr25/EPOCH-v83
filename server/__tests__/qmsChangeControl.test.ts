@@ -7,6 +7,10 @@ const migration = readFileSync(
   path.join(root, 'migrations', '0230_qms_change_control_register.sql'),
   'utf8'
 );
+const qualityActionMigration = readFileSync(
+  path.join(root, 'migrations', '0231_quality_action_change_control.sql'),
+  'utf8'
+);
 const routes = readFileSync(
   path.join(root, 'server', 'src', 'routes', 'changeControl.ts'),
   'utf8'
@@ -17,6 +21,10 @@ const service = readFileSync(
 );
 const page = readFileSync(
   path.join(root, 'client', 'src', 'pages', 'QMSChangeControlPage.tsx'),
+  'utf8'
+);
+const legacyRoutes = readFileSync(
+  path.join(root, 'server', 'src', 'routes', 'index.ts'),
   'utf8'
 );
 
@@ -103,5 +111,32 @@ describe('QMS Change Control architecture', () => {
     expect(migration).toContain(
       "source IN ('IMPORTED_HISTORICAL','EPOCH_NATIVE')"
     );
+  });
+
+  it('projects NCR, CAR, and PCR without replacing their authoritative records', () => {
+    expect(qualityActionMigration).toContain('sync_ncr_quality_action_register');
+    expect(qualityActionMigration).toContain('sync_car_quality_action_register');
+    expect(qualityActionMigration).toContain('sync_pcr_quality_action_register');
+    expect(qualityActionMigration).toContain("'NCR',n.id::text");
+    expect(qualityActionMigration).toContain("'CAR',c.id::text");
+    expect(qualityActionMigration).toContain("'PCR',p.id::text");
+  });
+
+  it('keeps assessment, approval, audit, and relationship evidence immutable', () => {
+    expect(qualityActionMigration).toContain('assessment_answers_no_update');
+    expect(qualityActionMigration).toContain('pcr_approval_immutable');
+    expect(qualityActionMigration).toContain('pcr_audit_immutable');
+    expect(qualityActionMigration).toContain('change_control_links_no_update');
+  });
+
+  it('exposes controlled PCR implementation and verification endpoints', () => {
+    expect(routes).toContain("'/change-control/pcrs/:pcrId/authorize-implementation'");
+    expect(routes).toContain("'/change-control/pcrs/:pcrId/complete-implementation'");
+    expect(routes).toContain("'/change-control/pcrs/:pcrId/verify'");
+    expect(routes).toContain("'/change-control/pcrs/:pcrId/close'");
+    expect(service).toContain('PCR_IMPLEMENTATION_GATE_BLOCKED');
+    expect(service).toContain('PCR_VERIFICATION_RESULTS_REQUIRED');
+    expect(legacyRoutes).toContain('LEGACY_PCR_DECISION_DISABLED');
+    expect(legacyRoutes).toContain('LEGACY_PCR_MUTATION_DISABLED');
   });
 });

@@ -175,6 +175,19 @@ async function getLinkedP2InvoiceNumberForPackingSlip(
   }
 }
 
+function p2PackingSlipPdfFileName(packingSlipNumber: string, invoiceNumber: string): string {
+  return `packing-slip-${packingSlipNumber}-invoice-${invoiceNumber}.pdf`;
+}
+
+function hasCurrentP2PackingSlipPdfSnapshot(
+  externalPdfUrl: string | null | undefined,
+  packingSlipNumber: string,
+  invoiceNumber: string,
+): boolean {
+  if (!externalPdfUrl) return false;
+  return externalPdfUrl.includes(p2PackingSlipPdfFileName(packingSlipNumber, invoiceNumber));
+}
+
 async function selectP2PackingSlipFallback(id: string) {
   const result = await pool.query(
     `
@@ -420,7 +433,7 @@ async function persistP2PackingSlipPdfSnapshot(slip: any): Promise<{ bytes: Buff
   const bytes = await generatePackingSlipPdf(slipData);
   const storagePath = await getFileStorageProvider().uploadBuffer({
     buffer: bytes,
-    fileName: `packing-slip-${slip.packingSlipNumber}.pdf`,
+    fileName: p2PackingSlipPdfFileName(slip.packingSlipNumber, slipData.invoiceNumber || slip.packingSlipNumber),
     contentType: 'application/pdf',
     scope: 'p2-packing-slip-issued',
     entityId: slip.id,
@@ -2233,10 +2246,23 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
   try {
     const slip = await selectP2PackingSlipById(req.params.id);
     if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
+    const resolvedInvoiceNumber = await getLinkedP2InvoiceNumberForPackingSlip(slip.id, slip.lotNumberId)
+      || slip.invoiceNumber
+      || slip.packingSlipNumber;
     const requiresCustomerSerialRefresh = hasP2CustomerSerialDisplaySuffix(slip.lineItems);
-    let shouldPersistSnapshot = !slip.externalPdfUrl || requiresCustomerSerialRefresh;
+    const requiresDocumentNumberRefresh =
+      slip.packingSlipNumber !== resolvedInvoiceNumber &&
+      !hasCurrentP2PackingSlipPdfSnapshot(
+        slip.externalPdfUrl,
+        slip.packingSlipNumber,
+        resolvedInvoiceNumber,
+      );
+    let shouldPersistSnapshot =
+      !slip.externalPdfUrl ||
+      requiresCustomerSerialRefresh ||
+      requiresDocumentNumberRefresh;
 
-    if (slip.externalPdfUrl && !requiresCustomerSerialRefresh) {
+    if (slip.externalPdfUrl && !requiresCustomerSerialRefresh && !requiresDocumentNumberRefresh) {
       try {
         const storedBytes = await downloadStoredBuffer(slip.externalPdfUrl);
         res.set('Content-Type', 'application/pdf');
@@ -2340,9 +2366,7 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
 
     const slipData: PackingSlipData = {
       packingSlipNumber: slip.packingSlipNumber,
-      invoiceNumber: await getLinkedP2InvoiceNumberForPackingSlip(slip.id, slip.lotNumberId)
-        || slip.invoiceNumber
-        || slip.packingSlipNumber,
+      invoiceNumber: resolvedInvoiceNumber,
       poNumber: slip.poNumber || undefined,
       lotNumber: slip.lotNumber || undefined,
       date: (slip.shipDate || slip.createdAt)
@@ -2461,7 +2485,7 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
       try {
         const storagePath = await getFileStorageProvider().uploadBuffer({
           buffer: bytes,
-          fileName: `packing-slip-${slip.packingSlipNumber}.pdf`,
+          fileName: p2PackingSlipPdfFileName(slip.packingSlipNumber, resolvedInvoiceNumber),
           contentType: 'application/pdf',
           scope: 'p2-packing-slip-issued',
           entityId: slip.id,

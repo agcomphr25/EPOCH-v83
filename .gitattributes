@@ -1,1 +1,2 @@
 .replit merge=ours
+output/pdf/*.pdf binary

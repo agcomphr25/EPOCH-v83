@@ -14078,6 +14078,18 @@ export const specSheets = pgTable('spec_sheets', {
   fileSize: integer('file_size'),
   
   specifications: jsonb('specifications'),
+  templateId: uuid('template_id'),
+  templateRevision: text('template_revision'),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id, { onDelete: 'restrict' }),
+  routingRevision: text('routing_revision'),
+  lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
+  specificationRevision: text('specification_revision').notNull().default('1.0'),
+  controlledDocumentId: uuid('controlled_document_id').references(() => controlledDocuments.id, { onDelete: 'restrict' }),
+  releasedRevisionId: uuid('released_revision_id'),
+  supersedesSpecSheetId: uuid('supersedes_spec_sheet_id'),
+  effectiveDate: date('effective_date'),
+  sourceChangeStatus: text('source_change_status').notNull().default('CURRENT'),
+  sourceChangeDetails: jsonb('source_change_details').notNull().default({}),
   aiExtractedContent: jsonb('ai_extracted_content'),
   aiExtractedFields: jsonb('ai_extracted_fields'),
   aiProcessedAt: timestamp('ai_processed_at', { withTimezone: true }),
@@ -14109,6 +14121,9 @@ export const documentTemplates = pgTable('document_templates', {
   defaultFields: jsonb('default_fields'),
   
   aiGeneratedPrompt: text('ai_generated_prompt'),
+  templateRevision: text('template_revision').notNull().default('1.0'),
+  lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
+  controlledDocumentId: uuid('controlled_document_id').references(() => controlledDocuments.id, { onDelete: 'restrict' }),
   
   isActive: boolean('is_active').default(true),
   
@@ -14134,6 +14149,13 @@ export const templateFields = pgTable('template_fields', {
   defaultValue: text('default_value'),
   validationRules: jsonb('validation_rules'),
   options: jsonb('options'),
+  columns: jsonb('columns'),
+  minimumRows: integer('minimum_rows'),
+  maximumRows: integer('maximum_rows'),
+  allowManualRows: boolean('allow_manual_rows').notNull().default(true),
+  allowImport: boolean('allow_import').notNull().default(false),
+  dataSource: jsonb('data_source'),
+  pdfLayout: jsonb('pdf_layout'),
   
   sectionName: varchar('section_name', { length: 255 }),
   sortOrder: integer('sort_order').default(0),
@@ -14144,6 +14166,45 @@ export const templateFields = pgTable('template_fields', {
 }, (table) => ({
   templateIdx: index('template_fields_template_idx').on(table.templateId),
 }));
+
+export const specSheetRevisions = pgTable('spec_sheet_revisions', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  specSheetId: uuid('spec_sheet_id').references(() => specSheets.id, { onDelete: 'restrict' }).notNull(),
+  controlledDocumentRevisionId: uuid('controlled_document_revision_id').references(() => documentVersionHistory.id, { onDelete: 'restrict' }),
+  revision: text('revision').notNull(),
+  lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
+  templateId: uuid('template_id').references(() => documentTemplates.id, { onDelete: 'restrict' }),
+  templateRevision: text('template_revision').notNull(),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id, { onDelete: 'restrict' }),
+  partRoutingId: uuid('part_routing_id').references(() => partRoutings.id, { onDelete: 'restrict' }),
+  routingRevision: text('routing_revision'),
+  contentSnapshot: jsonb('content_snapshot').notNull(),
+  contentChecksum: text('content_checksum').notNull(),
+  fileUrl: text('file_url'),
+  fileName: text('file_name'),
+  fileChecksum: text('file_checksum'),
+  effectiveDate: date('effective_date'),
+  supersededByRevisionId: uuid('superseded_by_revision_id'),
+  createdByUserId: integer('created_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+  createdBySnapshot: jsonb('created_by_snapshot').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  releasedAt: timestamp('released_at', { withTimezone: true }),
+});
+
+export const specSheetRevisionApprovals = pgTable('spec_sheet_revision_approvals', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  specSheetRevisionId: uuid('spec_sheet_revision_id').references(() => specSheetRevisions.id, { onDelete: 'restrict' }).notNull(),
+  approvalRole: text('approval_role').notNull(),
+  decision: text('decision').notNull(),
+  actorUserId: integer('actor_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
+  actorDisplayName: text('actor_display_name').notNull(),
+  actorRole: text('actor_role').notNull(),
+  actorCapabilities: jsonb('actor_capabilities').notNull().default([]),
+  revisionSnapshot: text('revision_snapshot').notNull(),
+  contentChecksum: text('content_checksum').notNull(),
+  comment: text('comment'),
+  decidedAt: timestamp('decided_at', { withTimezone: true }).notNull().default(sql`now()`),
+});
 
 // Routing Document Links - Links documents to routing steps
 export const routingDocumentLinks = pgTable('routing_document_links', {

@@ -98,6 +98,24 @@ interface ProjectOption {
   title?: string | null;
 }
 
+interface TemplateFieldDefinition {
+  fieldName: string;
+  fieldLabel: string;
+  fieldType: string;
+  sectionName: string;
+  isRequired: boolean;
+  defaultValue: any;
+  columns?: Array<{ key: string; label: string; type?: string; width?: number; required?: boolean }>;
+  minimumRows?: number;
+  maximumRows?: number;
+  allowManualRows?: boolean;
+  allowImport?: boolean;
+  dataSource?: Record<string, unknown>;
+  validationRules?: Record<string, unknown>;
+  pdfLayout?: Record<string, unknown>;
+  sortOrder?: number;
+}
+
 const FORM_DOCUMENT_TYPES = [
   { value: 'work_instruction', label: 'Work Instruction' },
   { value: 'assembly_instruction', label: 'Assembly Instruction' },
@@ -109,7 +127,7 @@ const FORM_DOCUMENT_TYPES = [
   { value: 'training_form', label: 'Training Form' },
   { value: 'procedure', label: 'Procedure' },
   { value: 'quality_procedure', label: 'Quality Procedure' },
-  { value: 'spec_sheet', label: 'Spec Sheet' },
+  { value: 'spec_sheet', label: 'Part Specification Sheet' },
   { value: 'specification', label: 'Specification' },
   { value: 'traveler_template', label: 'Traveler Template' },
   { value: 'reference', label: 'Reference' },
@@ -134,6 +152,88 @@ const TEMPLATE_TYPES = [
 ];
 
 const CNC_SPEC_SHEET_TEMPLATE_NAME = 'CNC Spec Sheet';
+
+const QC_TABLE_COLUMNS = [
+  { key: 'standard', label: 'Characteristic / Standard', required: true, width: 1.8 },
+  { key: 'requirement', label: 'Requirement / Nominal', width: 1.4 },
+  { key: 'tolerance', label: 'Tolerance', width: 0.8 },
+  { key: 'lowerLimit', label: 'Lower Limit', type: 'number', width: 0.65 },
+  { key: 'upperLimit', label: 'Upper Limit', type: 'number', width: 0.65 },
+  { key: 'unit', label: 'Unit', width: 0.55 },
+  { key: 'inspectionMethod', label: 'Inspection Method', width: 1.1 },
+  { key: 'measurementEquipment', label: 'Gage', width: 0.9 },
+  { key: 'inspectionPhase', label: 'Phase', width: 0.65 },
+  { key: 'inspectionCoveragePercent', label: 'Coverage %', type: 'number', width: 0.65 },
+  { key: 'sampleSize', label: 'Sample Size', width: 0.65 },
+  { key: 'acceptanceNumber', label: 'Ac', type: 'number', width: 0.4 },
+  { key: 'rejectionNumber', label: 'Re', type: 'number', width: 0.4 },
+  { key: 'hardQcStop', label: 'Hard Stop', type: 'boolean', width: 0.55 },
+  { key: 'keyCharacteristic', label: 'Key', type: 'boolean', width: 0.4 },
+  { key: 'productSafetyCharacteristic', label: 'Safety', type: 'boolean', width: 0.5 },
+  { key: 'referenceLink', label: 'Reference', width: 1 },
+  { key: 'notes', label: 'Notes', width: 1 },
+];
+
+const CNC_TABLE_COLUMNS = [
+  { key: 'stepNumber', label: 'Sequence', type: 'number' },
+  { key: 'departmentName', label: 'Department' },
+  { key: 'operationName', label: 'Operation', required: true },
+  { key: 'operationType', label: 'Type' },
+  { key: 'workCenter', label: 'Work Center' },
+  { key: 'programId', label: 'Program ID' },
+  { key: 'programName', label: 'Program Name' },
+  { key: 'programRevision', label: 'Program Revision' },
+  { key: 'machineClass', label: 'Machine Class' },
+  { key: 'preferredMachine', label: 'Preferred Machine' },
+  { key: 'fixture', label: 'Fixture' },
+  { key: 'estimatedSetupMinutes', label: 'Setup Minutes', type: 'number' },
+  { key: 'estimatedCycleMinutes', label: 'Cycle Minutes', type: 'number' },
+  { key: 'proveOutRequired', label: 'Prove-out', type: 'boolean' },
+  { key: 'requiresCertification', label: 'Certification', type: 'boolean' },
+  { key: 'requiresSignature', label: 'Signature', type: 'boolean' },
+  { key: 'isOutsideProcess', label: 'Outside Process', type: 'boolean' },
+  { key: 'linkedWorkInstruction', label: 'Work Instruction' },
+  { key: 'notes', label: 'Notes' },
+];
+
+const INVENTORY_TABLE_COLUMNS = [
+  { key: 'quantity', label: 'Quantity', type: 'number', required: true },
+  { key: 'inventoryItemId', label: 'Inventory Item ID' },
+  { key: 'partNumber', label: 'Part Number' },
+  { key: 'description', label: 'Description', required: true },
+  { key: 'materialSpecification', label: 'Material Specification' },
+  { key: 'unitOfMeasure', label: 'UOM' },
+  { key: 'lotTraceabilityRequired', label: 'Lot / Heat / Batch', type: 'boolean' },
+  { key: 'cocRequired', label: 'CoC', type: 'boolean' },
+  { key: 'materialCertificationRequired', label: 'Material Certification', type: 'boolean' },
+  { key: 'shelfLifeControlled', label: 'Shelf Life', type: 'boolean' },
+  { key: 'notes', label: 'Notes' },
+];
+
+const PART_SPECIFICATION_FIELDS: TemplateFieldDefinition[] = [
+  ...['specificationDocumentNumber', 'specificationRevision', 'partNumber', 'partRevision', 'partName', 'sku', 'drawingNumber', 'drawingRevision', 'linkedInventoryItem', 'linkedPartRouting', 'linkedRoutingRevision', 'status', 'effectiveDate', 'preparedBy']
+    .map((fieldName, index) => ({
+      fieldName,
+      fieldLabel: fieldName.replace(/([A-Z])/g, ' $1').replace(/^./, (char) => char.toUpperCase()),
+      fieldType: fieldName === 'effectiveDate' ? 'date' : 'text',
+      sectionName: 'Specification Header',
+      isRequired: ['specificationRevision', 'partNumber', 'partName', 'status', 'preparedBy'].includes(fieldName),
+      defaultValue: '',
+      sortOrder: index,
+    })),
+  { fieldName: 'applicableDocuments', fieldLabel: 'Applicable Documents', fieldType: 'controlled_document_references', sectionName: 'Applicable Documents', isRequired: false, defaultValue: [], columns: [{ key: 'documentId', label: 'Document' }, { key: 'documentNumber', label: 'Number' }, { key: 'revision', label: 'Revision' }, { key: 'title', label: 'Title' }], allowManualRows: true, allowImport: true, dataSource: { type: 'controlled_documents' } },
+  { fieldName: 'materials', fieldLabel: 'Materials and Components', fieldType: 'inventory_items_table', sectionName: 'Materials and Components', isRequired: false, defaultValue: [], columns: INVENTORY_TABLE_COLUMNS, allowManualRows: true, allowImport: true, dataSource: { type: 'inventory_items' }, pdfLayout: { orientation: 'landscape', repeatHeader: true } },
+  { fieldName: 'consumables', fieldLabel: 'Consumables', fieldType: 'inventory_items_table', sectionName: 'Consumables', isRequired: false, defaultValue: [], columns: INVENTORY_TABLE_COLUMNS, allowManualRows: true, allowImport: true, dataSource: { type: 'inventory_items', category: 'consumable' } },
+  { fieldName: 'tools', fieldLabel: 'Tools and Equipment', fieldType: 'inventory_items_table', sectionName: 'Tools and Equipment', isRequired: false, defaultValue: [], columns: INVENTORY_TABLE_COLUMNS, allowManualRows: true, allowImport: true, dataSource: { type: 'inventory_items', category: 'tool' } },
+  { fieldName: 'cncOperations', fieldLabel: 'CNC Operations', fieldType: 'cnc_operations_table', sectionName: 'CNC Operations', isRequired: false, defaultValue: [], columns: CNC_TABLE_COLUMNS, allowManualRows: true, allowImport: true, dataSource: { type: 'part_routing_cnc_operations' }, pdfLayout: { orientation: 'landscape', repeatHeader: true } },
+  { fieldName: 'inProcessVerification', fieldLabel: 'In-Process Verification', fieldType: 'repeatable_table', sectionName: 'In-Process Verification', isRequired: false, defaultValue: [], columns: [{ key: 'phase', label: 'Phase' }, { key: 'requirement', label: 'Requirement', required: true }, { key: 'method', label: 'Method' }, { key: 'record', label: 'Required Record' }], allowManualRows: true },
+  { fieldName: 'additionalProcesses', fieldLabel: 'Additional / Special Processes', fieldType: 'repeatable_table', sectionName: 'Additional/Special Processes', isRequired: false, defaultValue: [], columns: [{ key: 'process', label: 'Process', required: true }, { key: 'supplier', label: 'Approved Supplier' }, { key: 'specification', label: 'Specification' }, { key: 'certification', label: 'Certification Required' }], allowManualRows: true },
+  { fieldName: 'samplingRequirements', fieldLabel: 'Sampling Requirements', fieldType: 'repeatable_table', sectionName: 'Sampling Requirements', isRequired: false, defaultValue: [], columns: [{ key: 'lotSize', label: 'Lot Size' }, { key: 'sampleSize', label: 'Sample Size', required: true }, { key: 'acceptanceNumber', label: 'Ac' }, { key: 'rejectionNumber', label: 'Re' }, { key: 'reference', label: 'Plan / Reference' }], allowManualRows: true },
+  { fieldName: 'qcStandards', fieldLabel: 'QC Standards', fieldType: 'qc_standards_table', sectionName: 'QC Standards', isRequired: true, defaultValue: [], minimumRows: 1, columns: QC_TABLE_COLUMNS, allowManualRows: true, allowImport: true, dataSource: { type: 'part_routing_qc_standards', sourceModes: ['routing', 'blank', 'approved_spec_sheet'] }, validationRules: { acceptanceCriteriaRequired: true, preserveExplicitLimits: true }, pdfLayout: { orientation: 'landscape', repeatHeader: true } },
+  { fieldName: 'traceabilityRecords', fieldLabel: 'Traceability and Required Records', fieldType: 'repeatable_table', sectionName: 'Traceability and Required Records', isRequired: false, defaultValue: [], columns: [{ key: 'record', label: 'Record' }, { key: 'required', label: 'Required', type: 'boolean' }, { key: 'retention', label: 'Retention' }, { key: 'notes', label: 'Notes' }], allowManualRows: true },
+  { fieldName: 'preservationPackaging', fieldLabel: 'Preservation and Packaging', fieldType: 'textarea', sectionName: 'Preservation and Packaging', isRequired: false, defaultValue: '' },
+  { fieldName: 'approvals', fieldLabel: 'Approval Block', fieldType: 'approval_block', sectionName: 'Approval Block', isRequired: true, defaultValue: [], columns: [{ key: 'role', label: 'Role' }, { key: 'decision', label: 'Decision' }, { key: 'displayName', label: 'Approver' }, { key: 'timestamp', label: 'UTC Timestamp' }], allowManualRows: false, dataSource: { type: 'authenticated_approval_evidence', requiredRoles: ['ENGINEERING', 'QUALITY', 'PRODUCTION'] } },
+];
 
 const CNC_SPEC_SHEET_TEMPLATE = {
   templateName: CNC_SPEC_SHEET_TEMPLATE_NAME,
@@ -265,7 +365,10 @@ export default function RoutingDocumentManagement() {
     partName: '',
     sku: '',
     projectId: '',
-    fieldValues: {} as Record<string, string>,
+    partRoutingId: '',
+    routingRevision: '',
+    action: 'SAVE_DRAFT',
+    fieldValues: {} as Record<string, any>,
   });
   const [showGenerateRoutingDialog, setShowGenerateRoutingDialog] = useState(false);
   const [generateRoutingForm, setGenerateRoutingForm] = useState({
@@ -327,7 +430,15 @@ export default function RoutingDocumentManagement() {
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory/items'],
   });
-  const [createTemplateForm, setCreateTemplateForm] = useState({
+  const { data: partRoutings = [] } = useQuery<any[]>({
+    queryKey: ['/api/part-routings'],
+  });
+  const [createTemplateForm, setCreateTemplateForm] = useState<{
+    templateName: string;
+    templateType: string;
+    description: string;
+    fields: TemplateFieldDefinition[];
+  }>({
     templateName: '',
     templateType: 'work_instruction',
     description: '',
@@ -582,6 +693,9 @@ export default function RoutingDocumentManagement() {
           title: data.title,
           fieldValues: data.fieldValues,
           projectId: data.projectId || null,
+          partRoutingId: data.partRoutingId || null,
+          routingRevision: data.routingRevision || null,
+          action: data.action,
         },
         timeout: 120000,
       });
@@ -601,6 +715,40 @@ export default function RoutingDocumentManagement() {
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message || 'Failed to create document from template', variant: 'destructive' });
     },
+  });
+
+  const importRoutingSpecDataMutation = useMutation({
+    mutationFn: async (routingId: string) => apiRequest(`/api/routing-documents/part-routings/${routingId}/spec-import`),
+    onSuccess: (result: any) => {
+      const existingQc = Array.isArray(fillSpecSheetForm.fieldValues.qcStandards) ? fillSpecSheetForm.fieldValues.qcStandards : [];
+      const existingCnc = Array.isArray(fillSpecSheetForm.fieldValues.cncOperations) ? fillSpecSheetForm.fieldValues.cncOperations : [];
+      if ((existingQc.length > 0 || existingCnc.length > 0) && !window.confirm(
+        `Routing refresh comparison:\nQC Standards: ${existingQc.length} current / ${result.qcStandards?.length || 0} imported\nCNC Operations: ${existingCnc.length} current / ${result.cncOperations?.length || 0} imported\n\nReplace imported rows? Manually entered rows will be preserved.`,
+      )) return;
+      setFillSpecSheetForm((current) => ({
+        ...current,
+        routingRevision: result.routing?.revision || '',
+        fieldValues: {
+          ...current.fieldValues,
+          linkedPartRouting: result.routing?.id || current.partRoutingId,
+          linkedRoutingRevision: result.routing?.revision || '',
+          qcStandards: [
+            ...(result.qcStandards || []),
+            ...existingQc.filter((row: any) => row.manuallyEntered === true),
+          ],
+          cncOperations: [
+            ...(result.cncOperations || []),
+            ...existingCnc.filter((row: any) => row.manuallyEntered === true),
+          ],
+          materials: result.materials || current.fieldValues.materials || [],
+        },
+      }));
+      toast({
+        title: 'Routing data imported',
+        description: `Imported ${result.qcStandards?.length || 0} QC standards and ${result.cncOperations?.length || 0} CNC operations with source identifiers.`,
+      });
+    },
+    onError: (error: any) => toast({ title: 'Routing import failed', description: error.message, variant: 'destructive' }),
   });
 
   const generateRoutingMutation = useMutation({
@@ -980,8 +1128,8 @@ export default function RoutingDocumentManagement() {
   };
 
   const openFillSpecSheetDialog = (template: DocumentTemplate) => {
-    const fieldValues = (template.defaultFields || []).reduce((acc: Record<string, string>, field: any) => {
-      acc[field.fieldName] = field.defaultValue || '';
+    const fieldValues = (template.defaultFields || []).reduce((acc: Record<string, any>, field: any) => {
+      acc[field.fieldName] = field.defaultValue ?? (field.fieldType?.includes('table') ? [] : '');
       return acc;
     }, {});
 
@@ -994,6 +1142,9 @@ export default function RoutingDocumentManagement() {
       partName: fieldValues.partName || '',
       sku: fieldValues.sku || '',
       projectId: '',
+      partRoutingId: '',
+      routingRevision: '',
+      action: 'SAVE_DRAFT',
       fieldValues,
     });
     setShowFillSpecSheetDialog(true);
@@ -1027,7 +1178,7 @@ export default function RoutingDocumentManagement() {
     });
   };
 
-  const updateFillSpecSheetField = (fieldName: string, value: string) => {
+  const updateFillSpecSheetField = (fieldName: string, value: any) => {
     setFillSpecSheetForm((prev) => ({
       ...prev,
       partNumber: fieldName === 'partNumber' ? value : prev.partNumber,
@@ -1040,20 +1191,23 @@ export default function RoutingDocumentManagement() {
     }));
   };
 
-  const handleSaveFilledSpecSheet = () => {
+  const handleSaveFilledSpecSheet = (action: 'SAVE_DRAFT' | 'SUBMIT_REVIEW' = 'SAVE_DRAFT') => {
     if (!fillSpecSheetForm.templateId) {
       toast({ title: 'Error', description: 'Please select a template', variant: 'destructive' });
       return;
     }
-    const missingRequired = (selectedTemplate?.defaultFields || []).find((field: any) =>
-      field.isRequired && !String(fillSpecSheetForm.fieldValues[field.fieldName] || '').trim()
-    );
+    const missingRequired = (selectedTemplate?.defaultFields || []).find((field: any) => {
+      const value = fillSpecSheetForm.fieldValues[field.fieldName];
+      return field.isRequired && (
+        value == null || value === '' || (Array.isArray(value) && value.length < (field.minimumRows || 1))
+      );
+    });
     if (missingRequired) {
       toast({ title: 'Required Field', description: `${missingRequired.fieldLabel || missingRequired.fieldName} is required`, variant: 'destructive' });
       return;
     }
 
-    createFilledSpecSheetMutation.mutate(fillSpecSheetForm);
+    createFilledSpecSheetMutation.mutate({ ...fillSpecSheetForm, action });
   };
 
   return (
@@ -1665,7 +1819,12 @@ export default function RoutingDocumentManagement() {
                 <Label>Document Type *</Label>
                 <Select
                   value={createTemplateForm.templateType}
-                  onValueChange={(value) => setCreateTemplateForm({ ...createTemplateForm, templateType: value })}
+                  onValueChange={(value) => setCreateTemplateForm((current) => ({
+                    ...current,
+                    templateType: value,
+                    templateName: value === 'spec_sheet' && !current.templateName ? 'Part Specification Sheet' : current.templateName,
+                    fields: value === 'spec_sheet' ? PART_SPECIFICATION_FIELDS : current.fields,
+                  }))}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1754,6 +1913,12 @@ export default function RoutingDocumentManagement() {
                             <SelectItem value="number">Number</SelectItem>
                             <SelectItem value="date">Date</SelectItem>
                             <SelectItem value="inventory_parts">Inventory Parts List</SelectItem>
+                            <SelectItem value="repeatable_table">Repeatable Table</SelectItem>
+                            <SelectItem value="qc_standards_table">QC Standards Table</SelectItem>
+                            <SelectItem value="cnc_operations_table">CNC Operations Table</SelectItem>
+                            <SelectItem value="inventory_items_table">Inventory Items Table</SelectItem>
+                            <SelectItem value="controlled_document_references">Controlled Document References</SelectItem>
+                            <SelectItem value="approval_block">Approval Block</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1871,6 +2036,45 @@ export default function RoutingDocumentManagement() {
                   }}
                 />
               </div>
+              {selectedTemplate?.templateType === 'spec_sheet' && (
+                <div className="col-span-2 grid grid-cols-[1fr_auto] gap-2 items-end">
+                  <div>
+                    <Label>Linked Part Routing and Revision</Label>
+                    <Select
+                      value={fillSpecSheetForm.partRoutingId || 'none'}
+                      onValueChange={(value) => {
+                        const routing = partRoutings.find((candidate: any) => candidate.id === value);
+                        setFillSpecSheetForm((current) => ({
+                          ...current,
+                          partRoutingId: value === 'none' ? '' : value,
+                          routingRevision: value === 'none' ? '' : String(routing?.routingRevision ?? routing?.routing_revision ?? ''),
+                        }));
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="No routing exists" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No routing exists / start blank</SelectItem>
+                        {partRoutings
+                          .filter((routing: any) => !fillSpecSheetForm.inventoryItemId || String(routing.inventoryItemId ?? routing.inventory_item_id) === fillSpecSheetForm.inventoryItemId)
+                          .map((routing: any) => (
+                            <SelectItem key={routing.id} value={routing.id}>
+                              {routing.routingName ?? routing.routing_name ?? routing.partNumber ?? routing.part_number} — Rev {routing.routingRevision ?? routing.routing_revision ?? 1}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!fillSpecSheetForm.partRoutingId || importRoutingSpecDataMutation.isPending}
+                    onClick={() => importRoutingSpecDataMutation.mutate(fillSpecSheetForm.partRoutingId)}
+                  >
+                    {importRoutingSpecDataMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Route className="h-4 w-4 mr-2" />}
+                    Import QC / CNC
+                  </Button>
+                </div>
+              )}
               <div className="col-span-2">
                 <Label>Attach to Project (optional)</Label>
                 <Select
@@ -1906,13 +2110,80 @@ export default function RoutingDocumentManagement() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     {sectionFields.map((field: any) => {
-                      const value = fillSpecSheetForm.fieldValues[field.fieldName] || '';
+                      const value = fillSpecSheetForm.fieldValues[field.fieldName] ?? field.defaultValue ?? '';
                       const isInventoryParts = field.fieldType === 'inventory_parts';
-                      const isLongField = field.fieldType === 'textarea' || isInventoryParts || value.includes('\n');
+                      const isStructuredTable = ['repeatable_table', 'qc_standards_table', 'cnc_operations_table', 'inventory_items_table', 'controlled_document_references'].includes(field.fieldType);
+                      const isLongField = field.fieldType === 'textarea' || isInventoryParts || isStructuredTable || (typeof value === 'string' && value.includes('\n'));
                       return (
                         <div key={field.fieldName} className={isLongField ? 'col-span-2' : ''}>
                           <Label>{field.fieldLabel || field.fieldName}</Label>
-                          {isInventoryParts ? (
+                          {field.fieldType === 'approval_block' ? (
+                            <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                              Engineering, Quality, and Production approvals are captured after submission from authenticated approval actions and are tied to the exact revision checksum.
+                            </div>
+                          ) : isStructuredTable ? (
+                            <div className="space-y-2 rounded-md border p-2">
+                              <div className="overflow-x-auto">
+                                <Table className="min-w-[900px]">
+                                  <TableHeader>
+                                    <TableRow>
+                                      {(field.columns || []).map((column: any) => <TableHead key={column.key}>{column.label}</TableHead>)}
+                                      {field.allowManualRows !== false && <TableHead className="w-12" />}
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {(Array.isArray(value) ? value : []).map((row: any, rowIndex: number) => (
+                                      <TableRow key={rowIndex}>
+                                        {(field.columns || []).map((column: any) => (
+                                          <TableCell key={column.key} className="p-1">
+                                            {column.type === 'boolean' ? (
+                                              <Checkbox
+                                                checked={row[column.key] === true}
+                                                onCheckedChange={(checked) => {
+                                                  const rows = [...value];
+                                                  rows[rowIndex] = { ...row, [column.key]: checked === true };
+                                                  updateFillSpecSheetField(field.fieldName, rows);
+                                                }}
+                                              />
+                                            ) : (
+                                              <Input
+                                                type={column.type === 'number' ? 'number' : 'text'}
+                                                value={row[column.key] ?? ''}
+                                                onChange={(event) => {
+                                                  const rows = [...value];
+                                                  rows[rowIndex] = { ...row, [column.key]: event.target.value };
+                                                  updateFillSpecSheetField(field.fieldName, rows);
+                                                }}
+                                                className="min-w-[110px]"
+                                              />
+                                            )}
+                                          </TableCell>
+                                        ))}
+                                        {field.allowManualRows !== false && (
+                                          <TableCell className="p-1">
+                                            <Button type="button" variant="ghost" size="icon" onClick={() => updateFillSpecSheetField(field.fieldName, value.filter((_: any, index: number) => index !== rowIndex))}>
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          </TableCell>
+                                        )}
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                              {field.allowManualRows !== false && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => updateFillSpecSheetField(field.fieldName, [...(Array.isArray(value) ? value : []), { manuallyEntered: true }])}
+                                >
+                                  <Plus className="h-4 w-4 mr-2" /> Add Row
+                                </Button>
+                              )}
+                              {field.allowImport && <p className="text-xs text-muted-foreground">Link a routing to import canonical QC/CNC rows; imported source identifiers are retained.</p>}
+                            </div>
+                          ) : isInventoryParts ? (
                             <div className="space-y-2">
                               <Popover open={partsPickerOpen} onOpenChange={setPartsPickerOpen}>
                                 <PopoverTrigger asChild>
@@ -1941,8 +2212,8 @@ export default function RoutingDocumentManagement() {
                                               value={`${partNumber} ${item.name}`}
                                               onSelect={() => {
                                                 const newLine = `1 | ${partNumber} | ${item.name}`;
-                                                const existingLines = value.split('\n').map((line) => line.trim()).filter(Boolean);
-                                                if (!existingLines.some((line) => line.includes(`| ${partNumber} |`))) {
+                                                const existingLines = String(value).split('\n').map((line: string) => line.trim()).filter(Boolean);
+                                                if (!existingLines.some((line: string) => line.includes(`| ${partNumber} |`))) {
                                                   updateFillSpecSheetField(field.fieldName, [...existingLines, newLine].join('\n'));
                                                 }
                                                 setPartsPickerOpen(false);
@@ -1989,13 +2260,16 @@ export default function RoutingDocumentManagement() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowFillSpecSheetDialog(false)}>Cancel</Button>
-            <Button onClick={handleSaveFilledSpecSheet} disabled={createFilledSpecSheetMutation.isPending}>
+            <Button variant="outline" onClick={() => handleSaveFilledSpecSheet('SAVE_DRAFT')} disabled={createFilledSpecSheetMutation.isPending}>
               {createFilledSpecSheetMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
               )}
-              Create and Save Document
+              Save Draft
+            </Button>
+            <Button onClick={() => handleSaveFilledSpecSheet('SUBMIT_REVIEW')} disabled={createFilledSpecSheetMutation.isPending}>
+              Submit for Review
             </Button>
           </DialogFooter>
         </DialogContent>

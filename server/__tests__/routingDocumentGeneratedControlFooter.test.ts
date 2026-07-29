@@ -10,10 +10,12 @@ describe('generated template document configuration-control footer', () => {
 
   it('permanently stamps the MDR control identity into every generated PDF page', () => {
     expect(renderer).toContain('await PDFDocument.load(generatedPdf)');
-    expect(renderer).toContain('for (const page of controlledPdf.getPages())');
-    expect(renderer).toContain('Doc #: ${input.documentNumber}');
-    expect(renderer).toContain('Revision: 1.0');
+    expect(renderer).toContain('pages.forEach((page, index)');
+    expect(renderer).toContain('${input.documentNumber} | Rev ${input.revision');
+    expect(renderer).toContain('${input.status');
+    expect(renderer).toContain('Page ${index + 1} of ${pages.length}');
     expect(renderer).toContain('Configuration Controlled');
+    expect(renderer).toContain('Uncontrolled When Printed');
   });
 
   it('finishes the controlled PDF before it is sent to central storage', () => {

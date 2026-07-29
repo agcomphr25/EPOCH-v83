@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "client/src/pages/RoutingDocumentManagement.tsx",
+    "server/src/routes/routingDocuments.ts",
+    "server/src/lib/partSpecificationSheets.ts",
+    "server/__tests__/partSpecificationSheets.test.ts",
+    "server/schema.ts"
+  ]
+}

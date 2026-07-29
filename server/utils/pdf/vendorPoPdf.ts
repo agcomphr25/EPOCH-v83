@@ -151,12 +151,27 @@ function drawRightTextFit(
   page.drawText(value, { x: Math.max(minX, rightX - widthOf(value, font, fontSize)), y, size: fontSize, font, color });
 }
 
-function wrapText(text: unknown, maxWidth: number, font: PDFFont, fontSize: number): string[] {
+function groupMixedFractionTokens(words: string[]): string[] {
+  const grouped: string[] = [];
+  for (let index = 0; index < words.length; index++) {
+    const word = words[index];
+    const nextWord = words[index + 1];
+    if (/^\d+$/.test(word) && /^\d+\/\d+[),.;:]?$/.test(nextWord || '')) {
+      grouped.push(`${word} ${nextWord}`);
+      index += 1;
+    } else {
+      grouped.push(word);
+    }
+  }
+  return grouped;
+}
+
+export function wrapVendorPoText(text: unknown, maxWidth: number, font: PDFFont, fontSize: number): string[] {
   const paragraphs = cleanText(text).split('\n');
   const lines: string[] = [];
 
   for (const paragraph of paragraphs) {
-    const words = paragraph.trim().split(/\s+/).filter(Boolean);
+    const words = groupMixedFractionTokens(paragraph.trim().split(/\s+/).filter(Boolean));
     if (!words.length) {
       lines.push('');
       continue;
@@ -189,7 +204,7 @@ function drawWrappedText(
   lineHeight: number,
   color = COLOR.PRIMARY_TEXT,
 ): number {
-  const lines = wrapText(text, maxWidth, font, fontSize);
+  const lines = wrapVendorPoText(text, maxWidth, font, fontSize);
   let cursorY = y;
   for (const line of lines) {
     drawText(page, line, x, cursorY, font, fontSize, color);
@@ -357,7 +372,7 @@ function vendorLines(vendor: any, fonts: Fonts): TextLine[] {
 function shipToLines(settings: any, fonts: Fonts): TextLine[] {
   return [
     { text: settings.companyName || 'AG Composites', font: fonts.bold },
-    ...wrapText(settings.companyAddress || '', 210, fonts.regular, FONT_SIZE.BODY).map(text => ({ text })),
+    ...wrapVendorPoText(settings.companyAddress || '', 210, fonts.regular, FONT_SIZE.BODY).map(text => ({ text })),
     { text: settings.companyPhone ? `Ph: ${settings.companyPhone}` : '' },
   ].filter(line => cleanText(line.text));
 }
@@ -394,15 +409,15 @@ function tableColumns() {
   return {
     line: x + 10,
     part: x + 48,
-    description: x + 140,
+    description: x + 116,
     qtyRight: x + 348,
     unit: x + 360,
     priceLeft: x + 386,
     priceRight: x + 446,
     totalLeft: x + 472,
     totalRight: x + 526,
-    descWidth: 154,
-    partWidth: 84,
+    descWidth: 178,
+    partWidth: 60,
   };
 }
 
@@ -421,11 +436,17 @@ function drawItemsTable(state: DrawState, items: any[], startY: number): { y: nu
     const purchaseDetail = item.purchaseQty != null && Number(item.purchaseQty) > 0 && item.purchaseUnit
       ? ` (${formatNumber(item.purchaseQty)} ${item.purchaseUnit} ordered)`
       : '';
+    const partLines = wrapVendorPoText(
+      item.supplierPartNumber || item.agPartNumber || '-',
+      cols.partWidth,
+      state.fonts.regular,
+      FONT_SIZE.SMALL,
+    );
     const descriptionLines = [
-      ...wrapText(`${item.description || item.itemDescription || '-'}${purchaseDetail}`, cols.descWidth, state.fonts.regular, FONT_SIZE.BODY),
-      ...(item.notes ? wrapText(`Details: ${item.notes}`, cols.descWidth, state.fonts.regular, FONT_SIZE.SMALL) : []),
+      ...wrapVendorPoText(`${item.description || item.itemDescription || '-'}${purchaseDetail}`, cols.descWidth, state.fonts.regular, FONT_SIZE.BODY),
+      ...(item.notes ? wrapVendorPoText(`Details: ${item.notes}`, cols.descWidth, state.fonts.regular, FONT_SIZE.SMALL) : []),
     ];
-    const rowHeight = Math.max(32, descriptionLines.length * 12 + 16);
+    const rowHeight = Math.max(32, descriptionLines.length * 12 + 16, partLines.length * 10 + 16);
 
     y = ensureSpace(state, y, rowHeight + 28);
     if (y === PAGE.HEIGHT - PAGE.MARGIN) {
@@ -439,7 +460,11 @@ function drawItemsTable(state: DrawState, items: any[], startY: number): { y: nu
 
     const textY = y - 18;
     drawText(state.page, item.lineNumber ?? i + 1, cols.line, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
-    drawText(state.page, cleanText(item.supplierPartNumber || item.agPartNumber || '-').slice(0, 22), cols.part, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+    let partY = textY;
+    for (const line of partLines) {
+      drawText(state.page, line, cols.part, partY, state.fonts.regular, FONT_SIZE.SMALL, COLOR.PRIMARY_TEXT);
+      partY -= 10;
+    }
 
     let descY = textY;
     for (let index = 0; index < descriptionLines.length; index++) {
@@ -486,7 +511,7 @@ function drawBlock(state: DrawState, y: number, title: string, body: unknown): n
   const text = cleanText(body);
   if (!text) return y;
 
-  const lines = wrapText(text, PRINTABLE_WIDTH, state.fonts.regular, FONT_SIZE.BODY);
+  const lines = wrapVendorPoText(text, PRINTABLE_WIDTH, state.fonts.regular, FONT_SIZE.BODY);
   const requiredHeight = 24 + lines.length * 12;
   y = ensureSpace(state, y, requiredHeight);
   drawText(state.page, title, PAGE.MARGIN, y, state.fonts.bold, FONT_SIZE.SECTION_LABEL, COLOR.PRIMARY_TEXT);

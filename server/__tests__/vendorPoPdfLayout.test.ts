@@ -1,4 +1,4 @@
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { PDFParse } from 'pdf-parse';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,7 +14,7 @@ vi.mock('../storage', () => ({
 }));
 
 import { storage } from '../storage';
-import { generateVendorPoPdf } from '../utils/pdf/vendorPoPdf';
+import { generateVendorPoPdf, wrapVendorPoText } from '../utils/pdf/vendorPoPdf';
 
 describe('vendor PO/RFQ PDF generator', () => {
   beforeEach(() => {
@@ -48,8 +48,8 @@ describe('vendor PO/RFQ PDF generator', () => {
     vi.mocked(storage.getVendorPOItems).mockResolvedValue([
       {
         lineNumber: 1,
-        supplierPartNumber: '201GAJ-Metal',
-        description: "Glenn's Metal Part 1",
+        supplierPartNumber: '227',
+        description: 'Metal, aluminum 1 x 1 1/2 x 3 3/4',
         notes: 'Include mill certs.',
         quantity: '2',
         unitPrice: '12.5',
@@ -119,5 +119,23 @@ describe('vendor PO/RFQ PDF generator', () => {
     } finally {
       await parser.destroy();
     }
+  });
+
+  it('keeps the complete sample metal dimension on one line in the widened description column', async () => {
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const description = 'Metal, aluminum 1 x 1 1/2 x 3 3/4';
+
+    expect(wrapVendorPoText(description, 178, font, 10.5)).toEqual([description]);
+  });
+
+  it('never separates the whole number from its fractional dimension when wrapping', async () => {
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const lines = wrapVendorPoText('Aluminum angle 1 x 1 1/2 x 3 3/4 finished', 118, font, 10.5);
+
+    expect(lines.join('|')).not.toMatch(/3\|3\/4/);
+    expect(lines.some((line) => line.includes('3 3/4'))).toBe(true);
+    expect(lines.join('|')).not.toMatch(/1\|1\/2/);
   });
 });

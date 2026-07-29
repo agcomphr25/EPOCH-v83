@@ -76,6 +76,7 @@ import type { ManufacturedCategory } from '../../schema';
 
 type RouteError = Error & {
   code?: string;
+  errors?: unknown;
   status?: number;
   statusCode?: number;
 };

@@ -59,6 +59,7 @@ type RouteError = Error & {
   code?: string;
   status?: number;
   statusCode?: number;
+  travelerId?: string;
 };
 
 // Work-order routes retain compatibility with legacy JSON and storage records

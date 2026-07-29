@@ -100,6 +100,7 @@ import projectFormsRoutes, {
   designControlProjectFormsRouter,
 } from './projectForms';
 import engineeringChangeRequestsRoutes from './engineeringChangeRequests';
+import changeControlRoutes from './changeControl';
 import engineeringChangeNoticesRoutes from './engineeringChangeNotices';
 import controlledPrintedCopiesRoutes, {
   controlledCopyScopeRouter,
@@ -1378,6 +1379,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/design-control', designControlProjectFormsRouter);
   app.use('/api/project-forms', projectFormsRoutes);
   app.use('/api', engineeringChangeRequestsRoutes);
+  app.use('/api', changeControlRoutes);
   app.use('/api', engineeringChangeNoticesRoutes);
   app.use('/api/controlled-copies', controlledPrintedCopiesRoutes);
   app.use('/api', controlledCopyScopeRouter);

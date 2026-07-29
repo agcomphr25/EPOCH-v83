@@ -93,7 +93,6 @@ beforeAll(async () => {
     [nonPilotProjectId, 'p2_v2'],
     [nullProjectId, null],
     [legacyProjectId, 'legacy_v1'],
-    [unknownProjectId, 'future_v9'],
   ] as const)
     await pool.query(
       `INSERT INTO projects
@@ -612,7 +611,6 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
   it.each([
     [nullProjectId, 'P2_V2_REQUIRED'],
     [legacyProjectId, 'P2_V2_REQUIRED'],
-    [unknownProjectId, 'P2_V2_REQUIRED'],
   ])(
     'rejects legacy/version-isolation fixture %s without rewriting it',
     async (id, code) => {
@@ -627,14 +625,30 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
         [id]
       );
       expect(result.rows[0].workflow_version).toBe(
-        id === nullProjectId
-          ? null
-          : id === legacyProjectId
-            ? 'legacy_v1'
-            : 'future_v9'
+        id === nullProjectId ? null : 'legacy_v1'
       );
     }
   );
+
+  it('rejects unknown workflow versions at the database boundary without creating a project', async () => {
+    await expect(
+      pool.query(
+        `INSERT INTO projects
+           (id,project_code,project_name,customer_id,workflow_version,current_stage,po_id,status)
+         VALUES ($1,'PILOT-UNKNOWN','Synthetic unknown version fixture',
+           'PILOT-CERT','future_v9','PREPRODUCTION_READINESS',$2,'active')`,
+        [unknownProjectId, poId]
+      )
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint: 'projects_workflow_version_check',
+    });
+    const result = await pool.query<{ count: string }>(
+      `SELECT count(*)::text count FROM projects WHERE id=$1`,
+      [unknownProjectId]
+    );
+    expect(result.rows[0].count).toBe('0');
+  });
 
   it('does not backfill or mutate Design Control records', async () => {
     const designBefore = await pool.query<{ count: string }>(

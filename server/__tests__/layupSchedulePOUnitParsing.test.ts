@@ -40,6 +40,17 @@ describe('layup schedule PO progression scope', () => {
     expect(route).not.toContain('WHERE po_number = ANY($1::text[])');
   });
 
+  it('resolves submitted production units by database identity instead of order-ID format', () => {
+    const saveStart = route.indexOf("router.post('/save'");
+    const saveRoute = route.slice(saveStart, route.indexOf("router.get('/current-week'", saveStart));
+
+    expect(saveRoute).toContain('FROM production_orders');
+    expect(saveRoute).toContain('WHERE order_id = ANY($1::text[])');
+    expect(saveRoute).toContain('const productionOrdersById = new Map(');
+    expect(saveRoute).toContain('productionOrdersById.get(orderId)');
+    expect(saveRoute).not.toContain('parseP1POUnitOrderId(orderId)');
+  });
+
   it('does not create demand or silently progress PO units to Barcode while saving', () => {
     const saveStart = route.indexOf("router.post('/save'");
     const saveRoute = route.slice(saveStart, route.indexOf("router.get('/current-week'", saveStart));

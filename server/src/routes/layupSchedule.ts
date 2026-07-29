@@ -770,6 +770,32 @@ router.post('/save', async (req: Request, res: Response) => {
       const orderIdsToReplace = entries
         .map((e: any) => e.orderId)
         .filter(Boolean);
+      const submittedOrderIds = Array.from(new Set(orderIdsToReplace));
+
+      // Production-order IDs are not guaranteed to use the newer
+      // PO-<number>-<item>-<unit> format. Resolve record ownership from the
+      // authoritative table so legacy IDs (for example, department-generated
+      // IDs) are progressed as production orders instead of being mistaken for
+      // regular all_orders rows.
+      const productionOrderResult = submittedOrderIds.length > 0
+        ? await client.query<{
+            order_id: string;
+            po_item_id: number;
+            production_status: string | null;
+            is_fulfilled: boolean | null;
+          }>(
+            `
+            SELECT order_id, po_item_id, production_status, is_fulfilled
+            FROM production_orders
+            WHERE order_id = ANY($1::text[])
+            FOR UPDATE
+            `,
+            [submittedOrderIds],
+          )
+        : { rows: [] };
+      const productionOrdersById = new Map(
+        productionOrderResult.rows.map((row) => [row.order_id, row]),
+      );
 
       // Also derive layup days for logging purposes
       const layupDaysSet = new Set(entries.map((e: any) => {
@@ -855,23 +881,14 @@ router.post('/save', async (req: Request, res: Response) => {
         savedCount++;
         
         // Track PO items to update their order counts
-        const parsedPOUnit = parseP1POUnitOrderId(orderId);
-        if (parsedPOUnit) {
-            const existingUnit = await client.query(
-              `
-              SELECT order_id
-              FROM production_orders
-              WHERE order_id = $1
-                AND po_item_id = $2
-                AND COALESCE(is_fulfilled, false) = false
-                AND UPPER(COALESCE(production_status, 'PENDING')) != 'CANCELLED'
-              FOR UPDATE
-              `,
-              [orderId, parsedPOUnit.poItemId],
-            );
-            if (existingUnit.rows.length !== 1) {
+        const productionOrder = productionOrdersById.get(orderId);
+        if (productionOrder) {
+            if (
+              productionOrder.is_fulfilled
+              || String(productionOrder.production_status || 'PENDING').toUpperCase() === 'CANCELLED'
+            ) {
               throw new Error(
-                `Existing P1 production unit ${orderId} is missing or no longer eligible for scheduling`
+                `Existing P1 production unit ${orderId} is no longer eligible for scheduling`
               );
             }
 
@@ -881,11 +898,17 @@ router.post('/save', async (req: Request, res: Response) => {
               SET current_department = 'Layup/Plugging',
                   updated_at = NOW()
               WHERE order_id = $1
+                AND po_item_id = $2
               RETURNING order_id
               `,
-              [orderId],
+              [orderId, productionOrder.po_item_id],
             );
-            progressedCount += progressionResult.rowCount || 0;
+            if (progressionResult.rowCount !== 1) {
+              throw new Error(
+                `Existing P1 production unit ${orderId} could not be progressed`
+              );
+            }
+            progressedCount += 1;
         } else {
           // Track regular order IDs
           orderIds.push(orderId);

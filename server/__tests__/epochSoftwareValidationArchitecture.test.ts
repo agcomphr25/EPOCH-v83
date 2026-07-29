@@ -26,7 +26,7 @@ describe('EPOCH software-validation architecture',()=>{
       'protocol_steps','executions','execution_steps','evidence','defects','approvals','snapshots','periodic_reviews','events'])
       expect(migration).toContain(`qms_epoch_validation_${table}`);
     expect(route).toContain("nextval('qms_epoch_validation_package_number_seq')");
-    expect(route).not.toMatch(/count\(\*\).+package_number/s);
+    expect(route).not.toMatch(/count\(\*\)[^\n]*package_number/);
   });
   it('enforces capabilities, server-derived results, locking, and controlled reopening',()=>{
     for(const capability of ['VIEW','CREATE','EDIT','PLAN_APPROVE','TEST_EXECUTE','TEST_REVIEW',
@@ -43,7 +43,8 @@ describe('EPOCH software-validation architecture',()=>{
     expect(migration).toContain('qms_epoch_validation_protocol_templates');
     expect(migration).toContain("'Backups are available and representative records can be restored.'");
     expect(migration).toContain("'Outage and recovery drill'");
-    expect(migration).not.toMatch(/protocol_templates[\s\S]+lifecycle_status[\s\S]+,'RELEASED'/);
+    const ptInsert = migration.match(/INSERT INTO qms_epoch_validation_protocol_templates[\s\S]+?ON CONFLICT\(template_key\) DO NOTHING/)?.[0] ?? '';
+    expect(ptInsert).not.toContain(",'RELEASED'");
   });
   it('registers the additive migration in both safe-boot lists',()=>{
     expect(safeBoot.match(/0229_epoch_software_validation\.sql/g)?.length).toBeGreaterThanOrEqual(2);

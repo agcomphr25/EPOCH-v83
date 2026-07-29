@@ -70,6 +70,11 @@ describe('Quality Action next-required-action engine', () => {
       .toBe('IMPLEMENTATION_AUTHORIZATION_REQUIRED');
   });
 
+  it('blocks implementation while production is held', () => {
+    expect(evaluateNextRequiredAction(readyPcr({ productionBlocked: true })).code)
+      .toBe('PRODUCTION_HOLD_ACTIVE');
+  });
+
   it('only reports complete after required verification and effectiveness evidence', () => {
     expect(evaluateNextRequiredAction({
       ...readyPcr({

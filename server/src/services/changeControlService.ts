@@ -104,36 +104,49 @@ export async function listChangeControlRecords(filters: Record<string, unknown>)
   if (text(filters.affected)) {
     values.push(`%${text(filters.affected)}%`);
     where.push(
-      `EXISTS (SELECT 1 FROM change_control_record_links l
+      `(EXISTS (SELECT 1 FROM change_control_record_links l
         WHERE l.change_control_record_id=r.id
           AND (l.linked_record_number ILIKE $${values.length}
-            OR l.description ILIKE $${values.length}))`
+            OR l.description ILIKE $${values.length}))
+       OR EXISTS (
+         SELECT 1 FROM p2_production_changes p
+          WHERE r.authoritative_record_type='PCR'
+            AND r.authoritative_record_id=p.id::text
+            AND (p.part_number ILIKE $${values.length}
+              OR p.proposed_change ILIKE $${values.length})
+       ))`
     );
   }
   if (text(filters.dateFrom)) add('r.updated_at::date>=?', text(filters.dateFrom));
   if (text(filters.dateTo)) add('r.updated_at::date<=?', text(filters.dateTo));
   if (text(filters.overdue) === 'true')
     where.push("COALESCE(r.next_action_due_date,r.due_date) < CURRENT_DATE AND r.status <> 'CLOSED'");
-  if (text(filters.productionBlocked) === 'true') where.push('r.production_blocked=true');
-  if (text(filters.customerDecisionRequired) === 'true')
-    where.push('r.customer_decision_required=true');
+  if (text(filters.overdue) === 'false')
+    where.push("(COALESCE(r.next_action_due_date,r.due_date) >= CURRENT_DATE OR COALESCE(r.next_action_due_date,r.due_date) IS NULL OR r.status='CLOSED')");
+  if (['true', 'false'].includes(text(filters.productionBlocked)))
+    where.push(`r.production_blocked=${text(filters.productionBlocked)}`);
+  if (['true', 'false'].includes(text(filters.customerDecisionRequired)))
+    where.push(`r.customer_decision_required=${text(filters.customerDecisionRequired)}`);
   const result = await pgPool.query(
     `SELECT r.*,u.username AS owner_username,
             (SELECT count(*)::int FROM change_control_record_links l
-              WHERE l.change_control_record_id=r.id) AS affected_items_count
+              WHERE l.change_control_record_id=r.id) AS affected_items_count,
+            (SELECT count(*)::int FROM change_control_record_links l
+              WHERE l.change_control_record_id=r.id
+                AND l.link_type IN ('RELATED_CHANGE','NCR','CAR','PCR','ECR','ECN_ECO'))
+              AS related_record_count
        FROM change_control_records r
        LEFT JOIN users u ON u.id=r.owner_user_id
       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY r.updated_at DESC,r.change_number`,
     values
   );
-  const enriched = await Promise.all(
-    result.rows.map(async (record) => ({
+  const states = await loadQualityActionStates(result.rows);
+  const enriched = result.rows.map((record) => ({
       ...record,
       display_type: record.authoritative_record_type ?? record.change_type,
-      next_action: evaluateNextRequiredAction(await loadQualityActionState(record)),
-    }))
-  );
+      next_action: evaluateNextRequiredAction(states.get(String(record.id))!),
+    }));
   const nextActionCategory = text(filters.nextActionCategory);
   return nextActionCategory
     ? enriched.filter(
@@ -144,21 +157,9 @@ export async function listChangeControlRecords(filters: Record<string, unknown>)
     : enriched;
 }
 
-async function loadQualityActionState(record: any): Promise<QualityActionState> {
-  const assessment = await pgPool.query(
-    `SELECT a.id,a.lifecycle_status,
-            NOT EXISTS (
-              SELECT 1 FROM change_control_assessment_recommendations r
-               WHERE r.assessment_id=a.id AND r.quality_decision IS NULL
-            ) AS recommendations_resolved
-       FROM change_control_assessments a
-      WHERE a.change_control_record_id=$1
-      ORDER BY a.version DESC LIMIT 1`,
-    [record.id]
-  );
-  const latest = assessment.rows[0];
-  const base: QualityActionState = {
-    recordType: (record.authoritative_record_type || 'ECR') as QualityActionState['recordType'],
+function baseQualityActionState(record: any, latest?: any): QualityActionState {
+  return {
+    recordType: (record.authoritative_record_type || record.change_type || 'ECR') as QualityActionState['recordType'],
     status: record.status,
     ownerUserId: record.owner_user_id,
     dueDate: record.due_date,
@@ -167,6 +168,7 @@ async function loadQualityActionState(record: any): Promise<QualityActionState> 
       latest?.lifecycle_status === 'CONFIRMED' && Boolean(latest?.recommendations_resolved),
     customerApprovalRequired: Boolean(record.customer_decision_required),
     customerApprovalComplete: Boolean(record.customer_approval_evidence),
+    productionBlocked: Boolean(record.production_blocked),
     controlledDocumentsRequired: false,
     controlledDocumentsReleased: true,
     wipDispositionRequired: false,
@@ -187,6 +189,194 @@ async function loadQualityActionState(record: any): Promise<QualityActionState> 
     effectivenessRequired: record.authoritative_record_type === 'CAR',
     effectivenessComplete: record.status === 'CLOSED',
   };
+}
+
+async function loadQualityActionStates(records: any[]) {
+  const states = new Map<string, QualityActionState>();
+  if (!records.length) return states;
+  const recordIds = records.map((record) => String(record.id));
+  const authorityIds = (type: string) =>
+    records
+      .filter((record) => record.authoritative_record_type === type)
+      .map((record) => String(record.authoritative_record_id));
+  const [assessments, pcrs, ncrs, cars, ecrs, documentLinks] = await Promise.all([
+    pgPool.query(
+      `SELECT DISTINCT ON (a.change_control_record_id)
+              a.change_control_record_id,a.lifecycle_status,
+              NOT EXISTS (
+                SELECT 1 FROM change_control_assessment_recommendations r
+                 WHERE r.assessment_id=a.id AND r.quality_decision IS NULL
+              ) AS recommendations_resolved
+         FROM change_control_assessments a
+        WHERE a.change_control_record_id=ANY($1::uuid[])
+        ORDER BY a.change_control_record_id,a.version DESC`,
+      [recordIds]
+    ),
+    pgPool.query(
+      `SELECT p.*,
+              COALESCE(jsonb_agg(DISTINCT a.approval_function)
+                FILTER (WHERE a.decision='APPROVED'),'[]'::jsonb) AS approved_functions
+         FROM p2_production_changes p
+         LEFT JOIN pcr_functional_approvals a
+           ON a.pcr_id=p.id AND a.record_revision=p.quality_action_revision
+        WHERE p.id=ANY($1::uuid[])
+        GROUP BY p.id`,
+      [authorityIds('PCR')]
+    ),
+    pgPool.query(
+      'SELECT * FROM nonconformance_records WHERE id=ANY($1::integer[])',
+      [authorityIds('NCR').map(Number).filter(Number.isFinite)]
+    ),
+    pgPool.query('SELECT * FROM capa_records WHERE id=ANY($1::uuid[])', [
+      authorityIds('CAR'),
+    ]),
+    pgPool.query(
+      `SELECT q.id,q.lifecycle_status,count(e.id)::int AS ecn_count
+         FROM engineering_change_requests q
+         LEFT JOIN engineering_change_orders e ON e.source_ecr_id=q.id
+        WHERE q.id=ANY($1::uuid[]) GROUP BY q.id`,
+      [authorityIds('ECR')]
+    ),
+    pgPool.query(
+      `SELECT l.change_control_record_id,count(*)::int AS required_count,
+              count(*) FILTER (
+                WHERE l.replacement_revision_id IS NOT NULL
+                  AND EXISTS (
+                    SELECT 1 FROM document_version_history d
+                     WHERE d.id::text=l.replacement_revision_id
+                       AND d.lifecycle_status='RELEASED'
+                  )
+              )::int AS released_count
+         FROM change_control_record_links l
+        WHERE l.change_control_record_id=ANY($1::uuid[])
+          AND l.link_type IN ('CONTROLLED_DOCUMENT','DOCUMENT_REVISION')
+        GROUP BY l.change_control_record_id`,
+      [recordIds]
+    ),
+  ]);
+  const assessmentByRecord = new Map(
+    assessments.rows.map((row) => [String(row.change_control_record_id), row])
+  );
+  const byId = (rows: any[]) =>
+    new Map(rows.map((row) => [String(row.id), row]));
+  const pcrById = byId(pcrs.rows);
+  const ncrById = byId(ncrs.rows);
+  const carById = byId(cars.rows);
+  const ecrById = byId(ecrs.rows);
+  const documentsByRecord = new Map(
+    documentLinks.rows.map((row) => [String(row.change_control_record_id), row])
+  );
+  for (const record of records) {
+    const authorityId = String(record.authoritative_record_id ?? '');
+    const documentState = documentsByRecord.get(String(record.id));
+    const base = {
+      ...baseQualityActionState(
+      record,
+      assessmentByRecord.get(String(record.id))
+      ),
+      controlledDocumentsRequired: Number(documentState?.required_count ?? 0) > 0,
+      controlledDocumentsReleased:
+        Number(documentState?.required_count ?? 0) ===
+        Number(documentState?.released_count ?? 0),
+    };
+    let state = base;
+    if (record.authoritative_record_type === 'PCR') {
+      const row = pcrById.get(authorityId) ?? {};
+      const approved = new Set<string>(
+        Array.isArray(row.approved_functions) ? row.approved_functions : []
+      );
+      state = {
+        ...base,
+        investigatorAssigned: Boolean(row.investigator_user_id),
+        investigationComplete: Boolean(row.investigation_notes),
+        designImpact: row.design_impact,
+        customerApprovalRequired: Boolean(row.requires_customer_approval),
+        customerApprovalComplete:
+          !row.requires_customer_approval || Boolean(row.customer_approval_evidence_id),
+        wipDispositionRequired: true,
+        wipDispositionComplete: Boolean(row.wip_inventory_disposition_complete),
+        effectivityComplete: Boolean(row.effectivity_established),
+        validationRequired: Boolean(row.impact_assessment?.validationRequired),
+        validationComplete: Boolean(row.validation_testing_complete),
+        faiDetermined: Boolean(row.fai_determination),
+        faiRequired: ['REQUIRED', 'PARTIAL'].includes(row.fai_determination),
+        faiComplete:
+          row.fai_determination === 'NOT_REQUIRED' || Boolean(row.fai_evidence_reference),
+        trainingRequired: Boolean(row.training_required),
+        trainingComplete: !row.training_required || Boolean(row.training_acknowledged),
+        requiredApprovalsComplete: requiredPcrApprovals(row).every((item) => approved.has(item)),
+        implementationAuthorized: Boolean(row.implementation_authorized_at),
+        implementationComplete: Boolean(row.implemented_at),
+        verificationComplete: Boolean(row.verified_at),
+      };
+    } else if (record.authoritative_record_type === 'NCR') {
+      const row = ncrById.get(authorityId) ?? {};
+      state = {
+        ...base,
+        containmentRequired: true,
+        containmentComplete: Boolean(row.containment_completed_at && row.containment_action),
+        rootCauseRequired: Boolean(row.capa_required || row.recurrence_detected),
+        rootCauseComplete: Boolean(row.root_cause),
+        effectivenessRequired: Boolean(row.capa_required),
+        effectivenessComplete: row.effectiveness_status === 'effective',
+      };
+    } else if (record.authoritative_record_type === 'CAR') {
+      const row = carById.get(authorityId) ?? {};
+      state = {
+        ...base,
+        rootCauseRequired: true,
+        rootCauseComplete: Boolean(row.root_cause),
+        effectivenessRequired: true,
+        effectivenessComplete: row.effectiveness_status === 'effective',
+      };
+    } else if (record.authoritative_record_type === 'ECR') {
+      const row = ecrById.get(authorityId) ?? {};
+      state = {
+        ...base,
+        approvedEcr: row.lifecycle_status === 'APPROVED',
+        linkedEcnCount: Number(row.ecn_count ?? 0),
+      };
+    }
+    states.set(String(record.id), state);
+  }
+  return states;
+}
+
+async function loadQualityActionState(record: any): Promise<QualityActionState> {
+  const [assessment, documentLinks] = await Promise.all([pgPool.query(
+    `SELECT a.id,a.lifecycle_status,
+            NOT EXISTS (
+              SELECT 1 FROM change_control_assessment_recommendations r
+               WHERE r.assessment_id=a.id AND r.quality_decision IS NULL
+            ) AS recommendations_resolved
+       FROM change_control_assessments a
+      WHERE a.change_control_record_id=$1
+      ORDER BY a.version DESC LIMIT 1`,
+    [record.id]
+  ), pgPool.query(
+    `SELECT count(*)::int AS required_count,
+            count(*) FILTER (
+              WHERE l.replacement_revision_id IS NOT NULL
+                AND EXISTS (
+                  SELECT 1 FROM document_version_history d
+                   WHERE d.id::text=l.replacement_revision_id
+                     AND d.lifecycle_status='RELEASED'
+                )
+            )::int AS released_count
+       FROM change_control_record_links l
+      WHERE l.change_control_record_id=$1
+        AND l.link_type IN ('CONTROLLED_DOCUMENT','DOCUMENT_REVISION')`,
+    [record.id]
+  )]);
+  const latest = assessment.rows[0];
+  const documentState = documentLinks.rows[0];
+  const base = {
+    ...baseQualityActionState(record, latest),
+    controlledDocumentsRequired: Number(documentState?.required_count ?? 0) > 0,
+    controlledDocumentsReleased:
+      Number(documentState?.required_count ?? 0) ===
+      Number(documentState?.released_count ?? 0),
+  };
   if (record.authoritative_record_type === 'PCR') {
     const [pcr, approvals] = await Promise.all([
       pgPool.query(
@@ -196,7 +386,9 @@ async function loadQualityActionState(record: any): Promise<QualityActionState> 
       pgPool.query(
         `SELECT DISTINCT approval_function
            FROM pcr_functional_approvals
-          WHERE pcr_id=$1 AND decision='APPROVED'`,
+          WHERE pcr_id=$1 AND record_revision=(
+            SELECT quality_action_revision FROM p2_production_changes WHERE id=$1
+          ) AND decision='APPROVED'`,
         [record.authoritative_record_id]
       ),
     ]);
@@ -355,11 +547,166 @@ export async function getChangeControlRecord(id: string) {
     audit: audit.rows,
     assessments: assessments.rows,
   };
+  const state = await loadQualityActionState(result);
+  const latestAssessment = assessments.rows[0]
+    ? await getAssessment(assessments.rows[0].id)
+    : null;
+  const authoritative = await loadAuthoritativeDetail(result);
   return {
     ...result,
     display_type: result.authoritative_record_type ?? result.change_type,
-    next_action: evaluateNextRequiredAction(await loadQualityActionState(result)),
+    next_action: evaluateNextRequiredAction(state),
+    implementation_gate: evaluateImplementationGate(state),
+    latestAssessment,
+    authoritative,
   };
+}
+
+async function loadAuthoritativeDetail(record: any) {
+  const type = record.authoritative_record_type;
+  const id = record.authoritative_record_id;
+  if (!type || !id) return null;
+  if (type === 'PCR') {
+    const [pcr, approvals, events] = await Promise.all([
+      pgPool.query('SELECT * FROM p2_production_changes WHERE id=$1', [id]),
+      pgPool.query(
+        `SELECT * FROM pcr_functional_approvals
+          WHERE pcr_id=$1 ORDER BY decided_at`,
+        [id]
+      ),
+      pgPool.query(
+        `SELECT * FROM pcr_audit_events
+          WHERE pcr_id=$1 ORDER BY occurred_at`,
+        [id]
+      ),
+    ]);
+    const row = pcr.rows[0];
+    return row
+      ? {
+          kind: 'PCR',
+          record: row,
+          approvals: approvals.rows,
+          audit: events.rows,
+          requiredApprovals: requiredPcrApprovals(row),
+        }
+      : null;
+  }
+  const table =
+    type === 'NCR'
+      ? 'nonconformance_records'
+      : type === 'CAR'
+        ? 'capa_records'
+        : type === 'ECR'
+          ? 'engineering_change_requests'
+          : type === 'ECN_ECO'
+            ? 'engineering_change_orders'
+            : null;
+  if (!table) return null;
+  const domain = await pgPool.query(`SELECT * FROM ${table} WHERE id=$1`, [id]);
+  return domain.rows[0] ? { kind: type, record: domain.rows[0] } : null;
+}
+
+export async function searchChangeControlLinks(query: unknown, excludeId?: string) {
+  const value = text(query);
+  if (value.length < 2) return [];
+  return (
+    await pgPool.query(
+      `SELECT id,change_number,title,
+              COALESCE(authoritative_record_type,change_type) AS record_type,
+              source,status
+         FROM change_control_records
+        WHERE ($2::uuid IS NULL OR id<>$2)
+          AND (change_number ILIKE $1 OR title ILIKE $1
+            OR EXISTS (
+              SELECT 1 FROM change_control_record_links l
+               WHERE l.change_control_record_id=change_control_records.id
+                 AND (l.linked_record_number ILIKE $1 OR l.description ILIKE $1)
+            ))
+        ORDER BY updated_at DESC LIMIT 30`,
+      [`%${value}%`, excludeId || null]
+    )
+  ).rows;
+}
+
+export async function listMyPcrs(actor: Actor) {
+  return (
+    await pgPool.query(
+      `SELECT p.id,p.change_number,p.proposed_change,p.quality_action_status,
+              p.investigation_due_date,p.updated_at,
+              r.id AS change_control_record_id,
+              r.next_action_statement,r.next_action_role
+         FROM p2_production_changes p
+         LEFT JOIN change_control_records r
+           ON r.authoritative_record_type='PCR'
+          AND r.authoritative_record_id=p.id::text
+        WHERE p.requester_user_id=$1
+        ORDER BY p.updated_at DESC`,
+      [actor.id]
+    )
+  ).rows;
+}
+
+export async function recordCarEffectiveness(
+  recordId: string,
+  input: HistoricalRow,
+  actor: Actor
+) {
+  if (!actor.capabilities.includes('qms.quality_action.verify_effectiveness'))
+    throw new ChangeControlError(
+      'CAR_EFFECTIVENESS_FORBIDDEN',
+      'CAR effectiveness verification authority is required',
+      403
+    );
+  const outcome = text(input.outcome).toLowerCase();
+  if (!['effective', 'ineffective'].includes(outcome) || !text(input.evidence))
+    throw new ChangeControlError(
+      'CAR_EFFECTIVENESS_INCOMPLETE',
+      'Effectiveness outcome and evidence are required',
+      422
+    );
+  const client = await pgPool.connect();
+  try {
+    await client.query('BEGIN');
+    const register = await client.query(
+      `SELECT * FROM change_control_records
+        WHERE id=$1 AND authoritative_record_type='CAR' FOR UPDATE`,
+      [recordId]
+    );
+    if (!register.rows[0])
+      throw new ChangeControlError('CAR_NOT_FOUND', 'Authoritative CAR not found', 404);
+    const updated = await client.query(
+      `UPDATE capa_records
+          SET effectiveness_status=$2,effectiveness_review=$3,
+              updated_at=now()
+        WHERE id=$1 RETURNING *`,
+      [
+        register.rows[0].authoritative_record_id,
+        outcome,
+        text(input.evidence),
+      ]
+    );
+    await client.query(
+      `INSERT INTO change_control_audit_events (
+        change_control_record_id,event_type,record_revision,actor_user_id,
+        actor_snapshot,reason,after_values
+      ) VALUES ($1,'CAR_EFFECTIVENESS_VERIFIED',$2,$3,$4,$5,$6)`,
+      [
+        recordId,
+        register.rows[0].record_revision,
+        actor.id,
+        actorSnapshot(actor),
+        text(input.reason) || `CAR effectiveness determined ${outcome}`,
+        updated.rows[0],
+      ]
+    );
+    await client.query('COMMIT');
+    return updated.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function addChangeControlLink(
@@ -1004,6 +1351,42 @@ export async function createAssessment(
         nullable(input.overallExplanation),
       ]
     );
+    if (text(input.contextId)) {
+      const contextType = text(input.contextType).toUpperCase();
+      if (
+        ![
+          'WORK_ORDER',
+          'TRAVELER',
+          'ROUTING',
+          'INVENTORY_ITEM',
+          'MAINTENANCE',
+          'CONTROLLED_DOCUMENT',
+          'WORK_INSTRUCTION',
+        ].includes(contextType)
+      )
+        throw new ChangeControlError(
+          'PCR_CONTEXT_TYPE_INVALID',
+          'The submitted PCR context type is not supported',
+          422
+        );
+      await client.query(
+        `INSERT INTO change_control_record_links (
+           change_control_record_id,link_type,linked_record_id,
+           linked_record_number,relationship_role,description,created_by_user_id
+         )
+         SELECT r.id,$2,$3,$3,'ORIGIN_CONTEXT',$4,$5
+           FROM change_control_records r
+          WHERE r.authoritative_record_type='PCR'
+            AND r.authoritative_record_id=$1::text`,
+        [
+          created.rows[0].id,
+          contextType,
+          text(input.contextId),
+          'Context supplied by the PCR requester',
+          actor.id,
+        ]
+      );
+    }
     const normalized: Record<string, string> = {};
     for (const questionKey of ASSESSMENT_QUESTIONS) {
       const answer = byKey.get(questionKey)!;
@@ -1035,7 +1418,8 @@ export async function createAssessment(
         ]
       );
     }
-    for (const recommendation of deriveRecommendations(normalized)) {
+    const recommendations = deriveRecommendations(normalized);
+    for (const recommendation of recommendations) {
       await client.query(
         `INSERT INTO change_control_assessment_recommendations (
            assessment_id,recommendation_code,recommendation,
@@ -1056,6 +1440,12 @@ export async function createAssessment(
         WHERE change_control_record_id=$1 AND id<>$2 AND lifecycle_status<>'SUPERSEDED'`,
       [recordId, created.rows[0].id]
     );
+    if (recommendations.length === 0)
+      await client.query(
+        `UPDATE change_control_assessments
+            SET lifecycle_status='CONFIRMED',confirmed_at=now() WHERE id=$1`,
+        [created.rows[0].id]
+      );
     await client.query(
       `INSERT INTO change_control_audit_events (
          change_control_record_id,event_type,record_revision,actor_user_id,
@@ -1203,7 +1593,7 @@ function requiredPcrApprovals(pcr: any) {
     required.add('PROGRAM_CONTRACTS');
   if (pcr.safety_regulatory_impact) required.add('TECHNICAL_AUTHORITY');
   if (impact.financeApprovalRequired === true) required.add('FINANCE_EXECUTIVE');
-  return [...required];
+  return Array.from(required);
 }
 
 async function pcrEvent(
@@ -1711,6 +2101,97 @@ export async function authorizePcrImplementation(
   }
 }
 
+export async function updatePcrControls(
+  pcrId: string,
+  input: HistoricalRow,
+  actor: Actor
+) {
+  if (!actor.capabilities.includes('qms.quality_action.assess_impact'))
+    throw new ChangeControlError(
+      'PCR_CONTROLS_FORBIDDEN',
+      'Impact assessment authority is required',
+      403
+    );
+  const faiDetermination = text(input.faiDetermination).toUpperCase();
+  if (
+    faiDetermination &&
+    !['REQUIRED', 'PARTIAL', 'NOT_REQUIRED'].includes(faiDetermination)
+  )
+    throw new ChangeControlError(
+      'PCR_FAI_DETERMINATION_INVALID',
+      'FAI determination must be REQUIRED, PARTIAL, or NOT_REQUIRED',
+      422
+    );
+  const client = await pgPool.connect();
+  try {
+    await client.query('BEGIN');
+    const before = await client.query(
+      'SELECT * FROM p2_production_changes WHERE id=$1 FOR UPDATE',
+      [pcrId]
+    );
+    if (!before.rows[0])
+      throw new ChangeControlError('PCR_NOT_FOUND', 'PCR not found', 404);
+    if (
+      ['IMPLEMENTATION_PENDING', 'VERIFICATION', 'CLOSED'].includes(
+        before.rows[0].quality_action_status
+      )
+    )
+      throw new ChangeControlError(
+        'PCR_CONTROLS_IMMUTABLE_AFTER_RELEASE',
+        'Implementation controls cannot be changed after implementation authorization',
+        409
+      );
+    const updated = await client.query(
+      `UPDATE p2_production_changes
+          SET customer_approval_evidence_id=COALESCE($2::uuid,customer_approval_evidence_id),
+              effectivity_established=COALESCE($3,effectivity_established),
+              wip_inventory_disposition_complete=COALESCE($4,wip_inventory_disposition_complete),
+              validation_testing_complete=COALESCE($5,validation_testing_complete),
+              fai_determination=COALESCE($6,fai_determination),
+              fai_evidence_reference=COALESCE($7,fai_evidence_reference),
+              training_required=COALESCE($8,training_required),
+              training_acknowledged=COALESCE($9,training_acknowledged),
+              quality_action_revision=quality_action_revision+1,updated_at=now()
+        WHERE id=$1 RETURNING *`,
+      [
+        pcrId,
+        nullable(input.customerApprovalEvidenceId),
+        typeof input.effectivityEstablished === 'boolean'
+          ? input.effectivityEstablished
+          : null,
+        typeof input.wipInventoryDispositionComplete === 'boolean'
+          ? input.wipInventoryDispositionComplete
+          : null,
+        typeof input.validationTestingComplete === 'boolean'
+          ? input.validationTestingComplete
+          : null,
+        faiDetermination || null,
+        nullable(input.faiEvidenceReference),
+        typeof input.trainingRequired === 'boolean' ? input.trainingRequired : null,
+        typeof input.trainingAcknowledged === 'boolean'
+          ? input.trainingAcknowledged
+          : null,
+      ]
+    );
+    await pcrEvent(
+      client,
+      updated.rows[0],
+      'PCR_IMPLEMENTATION_CONTROLS_UPDATED',
+      actor,
+      text(input.reason) || 'Impact and implementation controls updated',
+      before.rows[0],
+      updated.rows[0]
+    );
+    await client.query('COMMIT');
+    return updated.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function completePcrImplementation(
   pcrId: string,
   input: HistoricalRow,
@@ -1737,6 +2218,24 @@ export async function verifyPcrImplementation(
     throw new ChangeControlError('PCR_VERIFICATION_FORBIDDEN', 'Implementation verification authority is required', 403);
   if (!text(input.results))
     throw new ChangeControlError('PCR_VERIFICATION_RESULTS_REQUIRED', 'Verification results are required', 422);
+  const independence = await pgPool.query(
+    `SELECT requester_user_id,implementation_authorized_by_user_id
+       FROM p2_production_changes WHERE id=$1`,
+    [pcrId]
+  );
+  if (!independence.rows[0])
+    throw new ChangeControlError('PCR_NOT_FOUND', 'PCR not found', 404);
+  if (
+    [independence.rows[0].requester_user_id,
+      independence.rows[0].implementation_authorized_by_user_id]
+      .filter(Boolean)
+      .some((userId) => Number(userId) === actor.id)
+  )
+    throw new ChangeControlError(
+      'PCR_VERIFIER_INDEPENDENCE_REQUIRED',
+      'The requester or implementation authorizer cannot independently verify this PCR',
+      409
+    );
   return updatePcrLifecycle(
     pcrId, 'VERIFICATION', 'VERIFICATION', actor, 'PCR_IMPLEMENTATION_VERIFIED',
     text(input.results), `verified_at=now(),verified_by_user_id=$3,verification_results=$4`,

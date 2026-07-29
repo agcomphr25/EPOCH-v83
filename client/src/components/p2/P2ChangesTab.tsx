@@ -119,6 +119,7 @@ export default function P2ChangesTab() {
   const [showRejectDialog, setShowRejectDialog] = useState<string | null>(null);
   const [showAuthorizeDeviationDialog, setShowAuthorizeDeviationDialog] = useState<any | null>(null);
   const [selectedApprover, setSelectedApprover] = useState('');
+  const [selectedApprovalFunction, setSelectedApprovalFunction] = useState('QUALITY');
   const [rejectionReason, setRejectionReason] = useState('');
   const didPrefillPcfFromUrl = useRef(false);
   const { toast } = useToast();
@@ -139,7 +140,7 @@ export default function P2ChangesTab() {
     queryKey: ['/api/employees'],
   });
 
-  const pcfForm = useForm({
+  const pcfForm = useForm<z.infer<typeof productionChangeSchema>>({
     resolver: zodResolver(productionChangeSchema),
     defaultValues: {
       changeType: '',
@@ -228,7 +229,7 @@ export default function P2ChangesTab() {
   };
 
   const createPCFMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/p2/changes', { method: 'POST', body: data }),
+    mutationFn: (data: any) => apiRequest('/api/change-control/pcrs', { method: 'POST', body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/changes'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/changes/impact'] });
@@ -242,8 +243,16 @@ export default function P2ChangesTab() {
   });
 
   const approvePCFMutation = useMutation({
-    mutationFn: ({ id, approvedById, approvedByName }: any) => 
-      apiRequest(`/api/p2/changes/${id}/approve`, { method: 'POST', body: { approvedById, approvedByName } }),
+    mutationFn: ({ id, approvalFunction }: any) =>
+      apiRequest(`/api/change-control/pcrs/${id}/decisions`, {
+        method: 'POST',
+        body: {
+          approvalFunction,
+          decision: 'APPROVED',
+          reason: 'Approved through the controlled P2 change workspace',
+          signatureMeaning: 'I approve this PCR for my authenticated functional authority',
+        },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/changes'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/changes/impact'] });
@@ -282,8 +291,11 @@ export default function P2ChangesTab() {
   });
 
   const rejectPCFMutation = useMutation({
-    mutationFn: ({ id, rejectedById, rejectedByName, rejectionReason }: any) => 
-      apiRequest(`/api/p2/changes/${id}/reject`, { method: 'POST', body: { rejectedById, rejectedByName, rejectionReason } }),
+    mutationFn: ({ id, rejectionReason }: any) =>
+      apiRequest(`/api/change-control/pcrs/${id}/actions/deny`, {
+        method: 'POST',
+        body: { reason: rejectionReason },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/changes'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/changes/impact'] });
@@ -514,8 +526,11 @@ export default function P2ChangesTab() {
 
                       <div className="rounded-md border p-3 space-y-3">
                         <div>
-                          <p className="text-sm font-medium">Required signatures</p>
-                          <p className="text-xs text-muted-foreground">Mark each signer required or not required, then assign required signatures to EPOCH users.</p>
+                          <p className="text-sm font-medium">Requested reviewers</p>
+                          <p className="text-xs text-muted-foreground">
+                            These are intake suggestions only. Quality determines the authoritative
+                            functional approvals from the completed impact assessment.
+                          </p>
                         </div>
                         <div className="space-y-3">
                           {approvalAssignments.map((assignment: any) => (
@@ -674,7 +689,9 @@ export default function P2ChangesTab() {
                           <TableCell className="max-w-xs truncate">{change.proposedChange}</TableCell>
                           <TableCell>{change.scope}</TableCell>
                           <TableCell>
-                            <Badge className={STATUS_COLORS[change.status]}>{change.status}</Badge>
+                            <Badge className={STATUS_COLORS[change.qualityActionStatus || change.status]}>
+                              {change.qualityActionStatus || change.status}
+                            </Badge>
                           </TableCell>
                           <TableCell>
                             {Array.isArray(change.approvalAssignments) && change.approvalAssignments.length > 0 ? (
@@ -1020,20 +1037,18 @@ export default function P2ChangesTab() {
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Approve Production Change</DialogTitle>
-            <DialogDescription>Select the approving authority for this change.</DialogDescription>
+            <DialogDescription>Your authenticated account must hold the selected functional authority. The requester cannot self-approve.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Approver *</label>
-              <Select value={selectedApprover} onValueChange={setSelectedApprover}>
+              <label className="text-sm font-medium">Functional authority *</label>
+              <Select value={selectedApprovalFunction} onValueChange={setSelectedApprovalFunction}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select approver..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.filter((e: any) => e.isActive !== false).map((emp: any) => (
-                    <SelectItem key={emp.id} value={emp.id.toString()}>
-                      {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim()}
-                    </SelectItem>
+                  {['QUALITY','PRODUCTION','ENGINEERING','PROGRAM_CONTRACTS','TECHNICAL_AUTHORITY','FINANCE_EXECUTIVE'].map((item) => (
+                    <SelectItem key={item} value={item}>{item}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1042,13 +1057,11 @@ export default function P2ChangesTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowApproveDialog(null)}>Cancel</Button>
             <Button 
-              disabled={!selectedApprover || approvePCFMutation.isPending}
+              disabled={!selectedApprovalFunction || approvePCFMutation.isPending}
               onClick={() => {
-                const emp = employees.find((e: any) => e.id.toString() === selectedApprover);
                 approvePCFMutation.mutate({
                   id: showApproveDialog,
-                  approvedById: parseInt(selectedApprover),
-                  approvedByName: emp ? `${emp.firstName || ''} ${emp.lastName || ''}`.trim() : 'Unknown',
+                  approvalFunction: selectedApprovalFunction,
                 });
                 setShowApproveDialog(null);
               }}
@@ -1064,24 +1077,9 @@ export default function P2ChangesTab() {
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Reject Production Change</DialogTitle>
-            <DialogDescription>Provide a reason for rejection and select the rejecting authority.</DialogDescription>
+            <DialogDescription>Your authenticated QMS authority and required reason are recorded in the immutable audit trail.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Rejected By *</label>
-              <Select value={selectedApprover} onValueChange={setSelectedApprover}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select authority..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.filter((e: any) => e.isActive !== false).map((emp: any) => (
-                    <SelectItem key={emp.id} value={emp.id.toString()}>
-                      {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div>
               <label className="text-sm font-medium">Rejection Reason *</label>
               <Textarea 
@@ -1096,13 +1094,10 @@ export default function P2ChangesTab() {
             <Button variant="outline" onClick={() => setShowRejectDialog(null)}>Cancel</Button>
             <Button 
               variant="destructive"
-              disabled={!selectedApprover || !rejectionReason || rejectPCFMutation.isPending}
+              disabled={!rejectionReason || rejectPCFMutation.isPending}
               onClick={() => {
-                const emp = employees.find((e: any) => e.id.toString() === selectedApprover);
                 rejectPCFMutation.mutate({
                   id: showRejectDialog,
-                  rejectedById: parseInt(selectedApprover),
-                  rejectedByName: emp ? `${emp.firstName || ''} ${emp.lastName || ''}`.trim() : 'Unknown',
                   rejectionReason,
                 });
                 setShowRejectDialog(null);

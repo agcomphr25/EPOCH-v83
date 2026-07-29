@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { usePermissions } from '@/hooks/usePermissions';
+import QualityActionWorkspace from '@/components/qms/QualityActionWorkspace';
 
 type ChangeRow = {
   id: string;
@@ -42,6 +43,7 @@ type ChangeRow = {
   owner_username: string | null;
   department: string | null;
   affected_items_count: number;
+  related_record_count: number;
   actual_effective_date: string | null;
   proposed_effective_date: string | null;
   updated_at: string;
@@ -107,6 +109,12 @@ export default function QMSChangeControlPage() {
   const [status, setStatus] = useState('ALL');
   const [department, setDepartment] = useState('');
   const [affected, setAffected] = useState('');
+  const [ownerUserId, setOwnerUserId] = useState('');
+  const [severityRisk, setSeverityRisk] = useState('ALL');
+  const [overdue, setOverdue] = useState('ALL');
+  const [productionBlocked, setProductionBlocked] = useState('ALL');
+  const [customerDecisionRequired, setCustomerDecisionRequired] = useState('ALL');
+  const [nextActionCategory, setNextActionCategory] = useState('ALL');
   const [details, setDetails] = useState<any>(null);
   const [historicalOpen, setHistoricalOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -135,6 +143,8 @@ export default function QMSChangeControlPage() {
     reason: '',
     riskAssessment: '',
     requiresCustomerApproval: false,
+    contextType: 'INVENTORY_ITEM',
+    contextId: '',
   });
 
   const query = useMemo(() => {
@@ -144,8 +154,14 @@ export default function QMSChangeControlPage() {
     if (status !== 'ALL') params.set('status', status);
     if (department.trim()) params.set('department', department.trim());
     if (affected.trim()) params.set('affected', affected.trim());
+    if (ownerUserId.trim()) params.set('ownerUserId', ownerUserId.trim());
+    if (severityRisk !== 'ALL') params.set('severityRisk', severityRisk);
+    if (overdue !== 'ALL') params.set('overdue', overdue);
+    if (productionBlocked !== 'ALL') params.set('productionBlocked', productionBlocked);
+    if (customerDecisionRequired !== 'ALL') params.set('customerDecisionRequired', customerDecisionRequired);
+    if (nextActionCategory !== 'ALL') params.set('nextActionCategory', nextActionCategory);
     return params.toString();
-  }, [affected, department, source, status, type]);
+  }, [affected, customerDecisionRequired, department, nextActionCategory, overdue, ownerUserId, productionBlocked, severityRisk, source, status, type]);
 
   const load = async () => {
     setLoading(true);
@@ -174,6 +190,17 @@ export default function QMSChangeControlPage() {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) return setError(payload.message || 'Unable to load change details');
     setDetails(payload);
+  };
+
+  useEffect(() => {
+    const recordId = new URLSearchParams(window.location.search).get('record');
+    if (recordId) void openDetails(recordId);
+  }, []);
+
+  const refreshDetails = async () => {
+    if (!details?.id) return;
+    await openDetails(details.id);
+    await load();
   };
 
   const importIndividual = async () => {
@@ -310,12 +337,18 @@ export default function QMSChangeControlPage() {
 
       <Card>
         <CardHeader><CardTitle className="text-base">Register Filters</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-5">
+        <CardContent className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
           <FilterSelect value={source} setValue={setSource} values={['IMPORTED_HISTORICAL', 'EPOCH_NATIVE']} placeholder="All sources" />
           <FilterSelect value={type} setValue={setType} values={TYPES} placeholder="All types" />
           <FilterSelect value={status} setValue={setStatus} values={['DRAFT','SUBMITTED','IMPACT_REVIEW','PENDING_APPROVAL','APPROVED','IMPLEMENTATION_IN_PROGRESS','PENDING_VERIFICATION','VERIFIED','CLOSED','REJECTED','CANCELLED','ON_HOLD','HISTORICAL']} placeholder="All statuses" />
           <Input value={department} onChange={(event) => setDepartment(event.target.value)} placeholder="Department" />
           <Input value={affected} onChange={(event) => setAffected(event.target.value)} placeholder="Affected part/document" />
+          <Input value={ownerUserId} onChange={(event) => setOwnerUserId(event.target.value)} placeholder="Owner / investigator user ID" />
+          <FilterSelect value={severityRisk} setValue={setSeverityRisk} values={['LOW', 'NORMAL', 'MEDIUM', 'HIGH', 'CRITICAL']} placeholder="All risk levels" />
+          <FilterSelect value={overdue} setValue={setOverdue} values={['true', 'false']} placeholder="Any due state" />
+          <FilterSelect value={productionBlocked} setValue={setProductionBlocked} values={['true', 'false']} placeholder="Any production state" />
+          <FilterSelect value={customerDecisionRequired} setValue={setCustomerDecisionRequired} values={['true', 'false']} placeholder="Any customer decision" />
+          <FilterSelect value={nextActionCategory} setValue={setNextActionCategory} values={['BLOCKING', 'ADVISORY', 'QUALITY_INITIAL_REVIEW', 'INVESTIGATOR_ASSIGNMENT_REQUIRED', 'ROOT_CAUSE_REQUIRED', 'CUSTOMER_APPROVAL_REQUIRED', 'CONTROLLED_DOCUMENT_RELEASE_REQUIRED', 'WIP_INVENTORY_DISPOSITION_REQUIRED', 'VALIDATION_TESTING_REQUIRED', 'FAI_DETERMINATION_REQUIRED', 'TRAINING_ACKNOWLEDGMENT_REQUIRED', 'FUNCTIONAL_APPROVALS_REQUIRED', 'IMPLEMENTATION_AUTHORIZATION_REQUIRED', 'IMPLEMENTATION_VERIFICATION_REQUIRED', 'EFFECTIVENESS_REVIEW_DUE']} placeholder="All next actions" />
         </CardContent>
       </Card>
 
@@ -339,9 +372,9 @@ export default function QMSChangeControlPage() {
                   <TableCell>{row.production_blocked ? <Badge variant="destructive">Blocked</Badge> : 'Not blocked'}</TableCell>
                   <TableCell>{row.owner_username || '—'}</TableCell>
                   <TableCell><div className="max-w-xs"><Badge variant={row.next_action?.classification === 'BLOCKING' ? 'destructive' : 'outline'}>{row.next_action?.code || '—'}</Badge><div className="mt-1 text-xs text-muted-foreground">{row.next_action?.statement}</div></div></TableCell>
-                  <TableCell>{row.next_action?.dueDate || row.due_date || '—'}</TableCell>
+                  <TableCell>{formatDueAge(row.next_action?.dueDate || row.due_date, row.updated_at, row.status)}</TableCell>
                   <TableCell>{row.affected_items_count}</TableCell>
-                  <TableCell>{row.affected_items_count}</TableCell>
+                  <TableCell>{row.related_record_count}</TableCell>
                   <TableCell>{new Date(row.updated_at).toLocaleDateString()}</TableCell>
                   <TableCell><Button size="sm" variant="outline" onClick={() => void openDetails(row.id)}>View</Button></TableCell>
                 </TableRow>
@@ -422,6 +455,14 @@ export default function QMSChangeControlPage() {
             <Field label="Change type" value={pcr.changeType} onChange={(value) => setPcr({ ...pcr, changeType: value })} />
             <Field label="Scope" value={pcr.scope} onChange={(value) => setPcr({ ...pcr, scope: value })} />
             <Field label="Affected part number" value={pcr.partNumber} onChange={(value) => setPcr({ ...pcr, partNumber: value })} />
+            <Field label="Related record ID (order, traveler, operation, equipment, material, or document)" value={pcr.contextId} onChange={(value) => setPcr({ ...pcr, contextId: value })} />
+            <div className="space-y-2">
+              <Label>Related context type</Label>
+              <Select value={pcr.contextType} onValueChange={(value) => setPcr({ ...pcr, contextType: value })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{['WORK_ORDER','TRAVELER','ROUTING','INVENTORY_ITEM','MAINTENANCE','CONTROLLED_DOCUMENT','WORK_INSTRUCTION'].map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label>Customer decision required</Label>
               <Select value={pcr.requiresCustomerApproval ? 'YES' : 'NO'} onValueChange={(value) => setPcr({ ...pcr, requiresCustomerApproval: value === 'YES' })}>
@@ -463,6 +504,7 @@ export default function QMSChangeControlPage() {
               <DetailSection title="Next Required Action" value={details.next_action ? `${details.next_action.classification}: ${details.next_action.statement}\nResponsible: ${details.next_action.responsibleRole}\nEvidence: ${(details.next_action.evidence || []).join('; ')}\nControl: ${details.next_action.controlReference || 'Not configured'}` : 'Assessment required'} />
               <DetailSection title="AS9100 Workflow Assessment" value={(details.assessments || []).map((assessment: any) => `Version ${assessment.version} · ${assessment.lifecycle_status} · ${assessment.unresolved_recommendations} unresolved recommendations`).join('\n') || 'No versioned assessment submitted'} />
             </div>
+            <QualityActionWorkspace details={details} can={can} onRefresh={refreshDetails} />
           </>}
         </DialogContent>
       </Dialog>
@@ -481,4 +523,10 @@ function Field({ label, value, onChange, type = 'text' }: { label: string; value
 }
 function DetailSection({ title, value }: { title: string; value: string }) {
   return <Card><CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader><CardContent className="whitespace-pre-wrap text-sm text-muted-foreground">{value}</CardContent></Card>;
+}
+function formatDueAge(dueDate: string | null | undefined, updatedAt: string, status: string) {
+  const age = Math.max(0, Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000));
+  if (!dueDate) return `${age}d old`;
+  const overdue = status !== 'CLOSED' && new Date(`${dueDate}T23:59:59`).getTime() < Date.now();
+  return `${dueDate}${overdue ? ' / OVERDUE' : ''} / ${age}d old`;
 }

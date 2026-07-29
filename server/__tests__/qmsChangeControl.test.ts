@@ -74,8 +74,12 @@ describe('QMS Change Control architecture', () => {
   it('previews duplicates and rejects bulk commit before any transaction', () => {
     expect(service).toContain('Duplicate original/change number');
     expect(service).toContain('BULK_IMPORT_VALIDATION_FAILED');
-    expect(service.indexOf("preview.some((row) => !row.valid)")).toBeLessThan(
-      service.indexOf("await client.query('BEGIN')")
+    const bulkImport = service.slice(
+      service.indexOf('export async function importHistoricalRows'),
+      service.indexOf('export async function', service.indexOf('export async function importHistoricalRows') + 1),
+    );
+    expect(bulkImport.indexOf("preview.some((row) => !row.valid)")).toBeLessThan(
+      bulkImport.indexOf("await client.query('BEGIN')")
     );
     expect(service).toContain("await client.query('ROLLBACK')");
   });

@@ -29,6 +29,7 @@ export type QualityActionState = {
   linkedEcnCount?: number;
   customerApprovalRequired?: boolean;
   customerApprovalComplete?: boolean;
+  productionBlocked?: boolean;
   controlledDocumentsRequired?: boolean;
   controlledDocumentsReleased?: boolean;
   trainingRequired?: boolean;
@@ -152,6 +153,14 @@ export function evaluateNextRequiredAction(
       'PROGRAM_CONTRACTS',
       ['Customer/contract approval is required', 'Immutable approval evidence is missing'],
       'Customer and contract authorization control'
+    );
+  if (state.productionBlocked)
+    return blocking(
+      'PRODUCTION_HOLD_ACTIVE',
+      'An active production hold must be dispositioned before implementation.',
+      'QUALITY',
+      ['The unified record is marked production blocked'],
+      'Production hold control'
     );
   if (state.controlledDocumentsRequired && !state.controlledDocumentsReleased)
     return blocking(
@@ -280,6 +289,7 @@ export function evaluateImplementationGate(state: QualityActionState) {
     if (action.code === 'ENGINEERING_REVIEW_REQUIRED') resolved.designImpact = false;
     if (action.code === 'ECN_REQUIRED') resolved.linkedEcnCount = 1;
     if (action.code === 'CUSTOMER_APPROVAL_REQUIRED') resolved.customerApprovalComplete = true;
+    if (action.code === 'PRODUCTION_HOLD_ACTIVE') resolved.productionBlocked = false;
     if (action.code === 'CONTROLLED_DOCUMENT_RELEASE_REQUIRED')
       resolved.controlledDocumentsReleased = true;
     if (action.code === 'WIP_INVENTORY_DISPOSITION_REQUIRED')

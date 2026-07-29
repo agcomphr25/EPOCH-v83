@@ -565,6 +565,20 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
   y = drawTotals(state, tableResult.y, tableResult.subtotal, po);
   drawTermsAndNotes(state, data, settings, y);
 
+  if (po.status === 'Voided' || po.voidedAt) {
+    for (const page of pdfDoc.getPages()) {
+      page.drawText('VOID', {
+        x: 145,
+        y: 320,
+        size: 110,
+        font: fonts.bold,
+        color: rgb(0.75, 0.08, 0.08),
+        opacity: 0.18,
+        rotate: degrees(35),
+      });
+    }
+  }
+
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
 }

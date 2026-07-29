@@ -79,6 +79,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   ShieldX,
+  Ban,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'react-hot-toast';
@@ -463,7 +464,8 @@ type VendorPO = {
     | 'Sent'
     | 'Partially Received'
     | 'Fully Received'
-    | 'Cancelled';
+    | 'Cancelled'
+    | 'Voided';
   orderDate?: string;
   expectedDeliveryDate?: string;
   shipVia?: string;
@@ -495,6 +497,9 @@ type VendorPO = {
   confirmationExpiresAt?: string | null;
   // Archived flag
   archived?: boolean;
+  voidedAt?: string | null;
+  voidedBy?: string | null;
+  voidReason?: string | null;
   // RFQ outcome notes (set when status is Declined or Expired)
   rfqOutcomeNotes?: string | null;
   // Compliance review status (augmented by list endpoint)
@@ -753,6 +758,8 @@ function getStatusColor(status: VendorPO['status']) {
       return 'bg-emerald-100 text-emerald-800';
     case 'Cancelled':
       return 'bg-red-100 text-red-800';
+    case 'Voided':
+      return 'bg-red-200 text-red-900 border-red-400';
     default:
       return 'bg-gray-100 text-gray-800';
   }
@@ -1028,7 +1035,7 @@ function VendorPOAttachments({ vendorPoId }: { vendorPoId: number }) {
 function VendorPOCard({
   vendorPo,
   onEdit,
-  onDelete,
+  onVoid,
   onViewItems,
   onIssuePO,
   onCreateRevision,
@@ -1037,7 +1044,7 @@ function VendorPOCard({
 }: {
   vendorPo: VendorPO;
   onEdit: (vendorPo: VendorPO) => void;
-  onDelete: (id: number) => void;
+  onVoid: (id: number) => void;
   onViewItems: (vendorPo: VendorPO) => void;
   onIssuePO: (id: number, skipEmail?: boolean) => void;
   onCreateRevision: (vendorPo: VendorPO) => void;
@@ -1046,12 +1053,13 @@ function VendorPOCard({
 }) {
   // Check if PO is formally issued (cannot be directly edited) — RFQ Sent remains editable
   const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(vendorPo.status);
+  const isVoided = vendorPo.status === 'Voided' || Boolean(vendorPo.voidedAt);
   const [showAttachments, setShowAttachments] = useState(false);
 
   const { data: attachments = [] } = useQuery<any[]>({
     queryKey: ['/api/vendor-po-attachments/list', vendorPo.id],
     queryFn: () => apiRequest(`/api/vendor-po-attachments/list/${vendorPo.id}`),
-    enabled: isIssued,
+    enabled: isIssued || isVoided,
   });
   
   return (
@@ -1146,7 +1154,7 @@ function VendorPOCard({
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          {isIssued && (
+          {(isIssued || isVoided) && (
             <Button
               variant="outline"
               size="sm"
@@ -1167,7 +1175,7 @@ function VendorPOCard({
             {vendorPo.poNumber ? 'View PO' : 'View RFQ'}
           </Button>
           {/* Show Edit button only for Draft POs */}
-          {!isIssued && (
+          {!isIssued && !isVoided && (
             <Button
               variant="outline"
               size="sm"
@@ -1180,7 +1188,7 @@ function VendorPOCard({
           )}
           {/* Compliance Review button for non-issued POs that haven't been reviewed.
               Hidden for non-P2 POs (complianceStatus === null) — compliance review only applies to P2. */}
-          {!isIssued && onReviewCompliance && vendorPo.complianceStatus != null && vendorPo.complianceStatus !== 'Reviewed' && (
+          {!isIssued && !isVoided && onReviewCompliance && vendorPo.complianceStatus != null && vendorPo.complianceStatus !== 'Reviewed' && (
             <Button
               variant="outline"
               size="sm"
@@ -1217,17 +1225,30 @@ function VendorPOCard({
               Attach Docs{attachments.length > 0 && ` (${attachments.length})`}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDelete(vendorPo.id)}
-            className="text-red-600 hover:text-red-800"
-            data-testid={`button-delete-${vendorPo.id}`}
-          >
-            <Trash2 className="w-4 h-4 mr-1" />
-            Delete
-          </Button>
+          {!isVoided && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onVoid(vendorPo.id)}
+              className="text-red-600 hover:text-red-800"
+              data-testid={`button-void-${vendorPo.id}`}
+            >
+              <Ban className="w-4 h-4 mr-1" />
+              Void
+            </Button>
+          )}
         </div>
+
+        {isVoided && (
+          <div className="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900">
+            <div className="font-semibold">VOID — controlled record retained</div>
+            {vendorPo.voidReason && <div className="mt-1">{vendorPo.voidReason}</div>}
+            <div className="mt-1 text-xs text-red-700">
+              {vendorPo.voidedBy ? `Voided by ${vendorPo.voidedBy}` : 'Voided'}
+              {vendorPo.voidedAt ? ` on ${formatDateOnlyMedium(vendorPo.voidedAt)}` : ''}
+            </div>
+          </div>
+        )}
 
         {vendorPo.notes && (
           <div className="mt-3 pt-3 border-t">
@@ -2535,9 +2556,9 @@ export default function VendorPOManager({
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
   const [revisionReason, setRevisionReason] = useState('');
   const [revisionPO, setRevisionPO] = useState<VendorPO | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteReason, setDeleteReason] = useState('');
-  const [deletePO, setDeletePO] = useState<VendorPO | null>(null);
+  const [showVoidDialog, setShowVoidDialog] = useState(false);
+  const [voidReason, setVoidReason] = useState('');
+  const [voidPO, setVoidPO] = useState<VendorPO | null>(null);
 
   // Compliance review modal state
   const [showComplianceModal, setShowComplianceModal] = useState(false);
@@ -2716,23 +2737,23 @@ export default function VendorPOManager({
     },
   });
 
-  // Delete mutation
-  const deleteMutation = useMutation({
+  // Void mutation
+  const voidMutation = useMutation({
     mutationFn: ({ id, reason }: { id: number; reason: string }) =>
-      apiRequest(`/api/vendor-pos/${id}`, {
-        method: 'DELETE',
+      apiRequest(`/api/vendor-pos/${id}/void`, {
+        method: 'POST',
         body: JSON.stringify({ reason }),
       }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
       invalidateVendorPOTransactions(variables.id);
-      toast.success('Vendor purchase order deleted successfully');
-      setShowDeleteDialog(false);
-      setDeleteReason('');
-      setDeletePO(null);
+      toast.success('Vendor purchase order voided successfully');
+      setShowVoidDialog(false);
+      setVoidReason('');
+      setVoidPO(null);
     },
     onError: (error: any) => {
-      toast.error(error?.message || 'Failed to delete vendor purchase order');
+      toast.error(error?.message || 'Failed to void vendor purchase order');
     },
   });
 
@@ -2913,7 +2934,7 @@ export default function VendorPOManager({
 
   // Filter vendor POs
   const ACTIVE_STATUSES = ['Draft', 'RFQ Sent', 'Quote Received', 'Sent', 'Partially Received'];
-  const CLOSED_STATUSES = ['Declined', 'Expired', 'Cancelled', 'Fully Received'];
+  const CLOSED_STATUSES = ['Declined', 'Expired', 'Cancelled', 'Voided', 'Fully Received'];
 
   const filteredVendorPOs = (vendorPOs || []).filter((vendorPo) => {
     const matchesSearch =
@@ -2957,21 +2978,21 @@ export default function VendorPOManager({
     setActiveTab('details');
   };
 
-  const handleDelete = (id: number) => {
+  const handleVoid = (id: number) => {
     const po = vendorPOs.find((candidate) => candidate.id === id) ?? selectedVendorPO;
-    setDeletePO(po && po.id === id ? po : ({ id } as VendorPO));
-    setDeleteReason('');
-    setShowDeleteDialog(true);
+    setVoidPO(po && po.id === id ? po : ({ id } as VendorPO));
+    setVoidReason('');
+    setShowVoidDialog(true);
   };
 
-  const confirmDelete = () => {
-    if (!deletePO) return;
-    const reason = deleteReason.trim();
+  const confirmVoid = () => {
+    if (!voidPO) return;
+    const reason = voidReason.trim();
     if (reason.length < 10) {
-      toast.error('Enter a delete reason of at least 10 characters');
+      toast.error('Enter a void reason of at least 10 characters');
       return;
     }
-    deleteMutation.mutate({ id: deletePO.id, reason });
+    voidMutation.mutate({ id: voidPO.id, reason });
   };
 
   async function loadRecipientsForPO(poId: number) {
@@ -3211,6 +3232,7 @@ export default function VendorPOManager({
     { value: 'Declined', label: 'Declined' },
     { value: 'Expired', label: 'Expired' },
     { value: 'Cancelled', label: 'Cancelled' },
+    { value: 'Voided', label: 'Voided' },
     { value: 'Fully Received', label: 'Fully Received' },
   ];
   const statusOptions = listTab === 'active' ? activeStatusOptions : listTab === 'closed' ? closedStatusOptions : [];
@@ -4207,7 +4229,7 @@ export default function VendorPOManager({
                 <VendorPOCard
                   vendorPo={vendorPo}
                   onEdit={handleEdit}
-                  onDelete={handleDelete}
+                  onVoid={handleVoid}
                   onViewItems={handleViewItems}
                   onIssuePO={handleIssuePO}
                   onCreateRevision={handleCreateRevision}
@@ -4232,51 +4254,51 @@ export default function VendorPOManager({
         draftBomHandoff={!selectedVendorPO ? draftBomHandoff : null}
       />
 
-      {/* Delete Vendor PO Dialog */}
+      {/* Void Vendor PO Dialog */}
       <AlertDialog
-        open={showDeleteDialog}
+        open={showVoidDialog}
         onOpenChange={(open) => {
-          setShowDeleteDialog(open);
+          setShowVoidDialog(open);
           if (!open) {
-            setDeleteReason('');
-            setDeletePO(null);
+            setVoidReason('');
+            setVoidPO(null);
           }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete {deletePO?.poNumber || (deletePO ? `Draft #${deletePO.id}` : 'Vendor PO')}
+              Void {voidPO?.poNumber || (voidPO ? `Draft #${voidPO.id}` : 'Vendor PO')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes the vendor purchase order. A reason is required and will be saved to the audit ledger.
+              This retains the purchase order and its supporting records, marks it VOID, and prevents future editing, issuance, revision, or receiving. A reason is required and will be saved to the audit ledger.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="vendor-po-delete-reason" className="text-sm font-medium">
-              Delete Reason *
+            <Label htmlFor="vendor-po-void-reason" className="text-sm font-medium">
+              Void Reason *
             </Label>
             <Textarea
-              id="vendor-po-delete-reason"
-              placeholder="Explain why this vendor PO is being deleted..."
-              value={deleteReason}
-              onChange={(e) => setDeleteReason(e.target.value)}
+              id="vendor-po-void-reason"
+              placeholder="Explain why this vendor PO is being voided..."
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
               rows={3}
-              data-testid="input-delete-vendor-po-reason"
+              data-testid="input-void-vendor-po-reason"
             />
             <p className="text-xs text-muted-foreground">
               Minimum 10 characters.
             </p>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete-vendor-po">Cancel</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-void-vendor-po">Cancel</AlertDialogCancel>
             <Button
               variant="destructive"
-              onClick={confirmDelete}
-              disabled={deleteMutation.isPending || deleteReason.trim().length < 10}
-              data-testid="button-confirm-delete-vendor-po"
+              onClick={confirmVoid}
+              disabled={voidMutation.isPending || voidReason.trim().length < 10}
+              data-testid="button-confirm-void-vendor-po"
             >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete PO'}
+              {voidMutation.isPending ? 'Voiding...' : 'Void PO'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

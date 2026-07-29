@@ -4101,7 +4101,7 @@ export const vendorPOs = pgTable('vendor_pos', {
     .references(() => vendors.id)
     .notNull(),
   productionLine: text('production_line'), // P1 | P2 | GENERAL | R_AND_D; P2 requires compliance review before project allocation
-  status: text('status').notNull().default('Draft'), // Draft, RFQ Sent, Quote Received, Declined, Expired, Sent, Partially Received, Fully Received, Cancelled
+  status: text('status').notNull().default('Draft'), // Draft, RFQ Sent, Quote Received, Declined, Expired, Sent, Partially Received, Fully Received, Cancelled, Voided
   orderDate: date('order_date'),
   expectedDeliveryDate: date('expected_delivery_date'),
   actualDeliveryDate: date('actual_delivery_date'),
@@ -4127,6 +4127,9 @@ export const vendorPOs = pgTable('vendor_pos', {
   vendorConfirmedAt: timestamp('vendor_confirmed_at'),
   vendorConfirmedAction: text('vendor_confirmed_action'), // 'confirm' | 'reject' | 'acknowledge'
   archived: boolean('archived').default(false).notNull(),
+  voidedAt: timestamp('voided_at'),
+  voidedBy: text('voided_by'),
+  voidReason: text('void_reason'),
   // Task #83 — Purchasing Controls (Requisition → Approval → PO)
   requisitionId: integer('requisition_id'), // FK to purchase_requisitions; required unless directPoException is set
   competitionMethod: text('competition_method'), // competed | sole-source | small-purchase | exception

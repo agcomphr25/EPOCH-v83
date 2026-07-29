@@ -96,4 +96,28 @@ describe('vendor PO/RFQ PDF generator', () => {
       await parser.destroy();
     }
   });
+
+  it('watermarks every retained voided PO PDF as VOID', async () => {
+    vi.mocked(storage.getVendorPO).mockResolvedValue({
+      id: 42,
+      vendorId: 7,
+      poNumber: 'VPO-26001',
+      orderDate: '2026-06-10',
+      createdAt: '2026-06-10',
+      status: 'Voided',
+      voidedAt: '2026-07-29T12:00:00.000Z',
+      voidReason: 'Created for the wrong supplier',
+      totalCost: 25,
+      shippingCost: 0,
+    } as any);
+
+    const pdfBuffer = await generateVendorPoPdf(42);
+    const parser = new PDFParse({ data: pdfBuffer });
+    try {
+      const extracted = await parser.getText();
+      expect(extracted.text).toContain('VOID');
+    } finally {
+      await parser.destroy();
+    }
+  });
 });

@@ -70,6 +70,7 @@ import customerSatisfactionRoutes from './customerSatisfaction';
 import surveyEngineRoutes from './surveyEngine';
 import poProductsRoutes from './poProducts';
 import p1POQueueRoutes from './p1POQueue';
+import p1POQuantityAdjustmentsRoutes from './p1POQuantityAdjustments';
 import poShippingQCRoutes from './poShippingQC';
 import weeklyScheduleRoutes from './weeklySchedule';
 import refundRoutes from './refunds';
@@ -100,6 +101,7 @@ import projectFormsRoutes, {
   designControlProjectFormsRouter,
 } from './projectForms';
 import engineeringChangeRequestsRoutes from './engineeringChangeRequests';
+import changeControlRoutes from './changeControl';
 import engineeringChangeNoticesRoutes from './engineeringChangeNotices';
 import controlledPrintedCopiesRoutes, {
   controlledCopyScopeRouter,
@@ -1378,6 +1380,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/design-control', designControlProjectFormsRouter);
   app.use('/api/project-forms', projectFormsRoutes);
   app.use('/api', engineeringChangeRequestsRoutes);
+  app.use('/api', changeControlRoutes);
   app.use('/api', engineeringChangeNoticesRoutes);
   app.use('/api/controlled-copies', controlledPrintedCopiesRoutes);
   app.use('/api', controlledCopyScopeRouter);
@@ -1468,6 +1471,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // P1 PO Queue routes
   app.use('/api/p1-po-queue', p1POQueueRoutes);
+  app.use('/api/pos', p1POQuantityAdjustmentsRoutes);
 
   // Product Labels routes
   app.use('/api/product-labels', productLabelsRoutes);
@@ -3955,49 +3959,30 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   });
 
   app.post('/api/p2/changes/:id/approve', softAuth, async (req, res) => {
-    try {
-      const { storage } = await import('../../storage');
-      const { approvedById, approvedByName } = req.body;
-      const change = await storage.updateP2ProductionChange(req.params.id, {
-        status: 'APPROVED',
-        approvedById,
-        approvedByName,
-        approvedAt: new Date(),
-      });
-      res.json(change);
-    } catch (error: any) {
-      console.error('Error approving production change:', error);
-      res.status(500).json({ error: 'Failed to approve production change' });
-    }
+    res.status(409).json({
+      error: 'LEGACY_PCR_DECISION_DISABLED',
+      message:
+        'PCR approval requires the impact-based Quality Action workflow and cannot be completed through the legacy endpoint.',
+      controlledEndpoint: `/api/change-control/pcrs/${req.params.id}/decisions`,
+    });
   });
 
   app.post('/api/p2/changes/:id/reject', softAuth, async (req, res) => {
-    try {
-      const { storage } = await import('../../storage');
-      const { rejectedById, rejectedByName, rejectionReason } = req.body;
-      const change = await storage.updateP2ProductionChange(req.params.id, {
-        status: 'REJECTED',
-        rejectedById,
-        rejectedByName,
-        rejectedAt: new Date(),
-        rejectionReason,
-      });
-      res.json(change);
-    } catch (error: any) {
-      console.error('Error rejecting production change:', error);
-      res.status(500).json({ error: 'Failed to reject production change' });
-    }
+    res.status(409).json({
+      error: 'LEGACY_PCR_DECISION_DISABLED',
+      message:
+        'PCR disposition requires an authenticated Quality Action transition with a reason.',
+      controlledEndpoint: `/api/change-control/pcrs/${req.params.id}/actions/deny`,
+    });
   });
 
   app.put('/api/p2/changes/:id', softAuth, async (req, res) => {
-    try {
-      const { storage } = await import('../../storage');
-      const change = await storage.updateP2ProductionChange(req.params.id, req.body);
-      res.json(change);
-    } catch (error: any) {
-      console.error('Error updating production change:', error);
-      res.status(500).json({ error: 'Failed to update production change' });
-    }
+    res.status(409).json({
+      error: 'LEGACY_PCR_MUTATION_DISABLED',
+      message:
+        'Controlled PCR fields and lifecycle state must be changed through the Quality Action workflow.',
+      controlledEndpoint: `/api/change-control/pcrs/${req.params.id}/actions/:action`,
+    });
   });
 
   // Traveler Changes (Deviations) CRUD
@@ -10143,6 +10128,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         storage.getPurchaseOrderItems(poId),
         storage.getProductionOrdersByPoId(poId),
       ]);
+      const { getP1POReconciliation } = await import(
+        '../services/p1POReconciliationService'
+      );
+      const reconciliationByItemId = new Map(
+        (await getP1POReconciliation(poId)).map((line) => [
+          line.purchaseOrderItemId,
+          line,
+        ]),
+      );
 
       // Build per-item existing count map using active poItemId children.
       // Cancelled rows are history and must not block a safe missing-line backfill.
@@ -10171,14 +10165,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
 
         const alreadyGenerated = existingByItemId.get(item.id) ?? 0;
-        const remaining = item.quantity - alreadyGenerated;
+        const activePoQuantity =
+          reconciliationByItemId.get(item.id)?.activePoQuantity ?? item.quantity;
+        const remaining = activePoQuantity - alreadyGenerated;
 
         if (remaining <= 0) {
-          willSkip.push({ name, quantity: item.quantity, reason: `Already generated (${alreadyGenerated}/${item.quantity})` });
+          willSkip.push({ name, quantity: activePoQuantity, reason: `Already generated (${alreadyGenerated}/${activePoQuantity})` });
           continue;
         }
 
-        willGenerate.push({ name, quantity: item.quantity, orderCount: remaining, alreadyGenerated });
+        willGenerate.push({ name, quantity: activePoQuantity, orderCount: remaining, alreadyGenerated });
       }
 
       const totalOrderCount = willGenerate.reduce((sum, i) => sum + i.orderCount, 0);
@@ -10211,6 +10207,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         storage.getPurchaseOrderItems(poId),
         storage.getProductionOrdersByPoId(poId),
       ]);
+      const { getP1POReconciliation: getGenerationReconciliation } = await import(
+        '../services/p1POReconciliationService'
+      );
+      const generationReconciliationByItemId = new Map(
+        (await getGenerationReconciliation(poId)).map((line) => [
+          line.purchaseOrderItemId,
+          line,
+        ]),
+      );
 
       // Build per-item existing count map from active production children.
       // Cancelled rows remain audit history and do not satisfy the PO line quantity.
@@ -10253,12 +10258,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       for (const item of stockModelItems) {
         // Gap-fill: only create orders for units that haven't been generated yet
         const alreadyGenerated = existingByItemId.get(item.id) ?? 0;
-        const remaining = item.quantity - alreadyGenerated;
+        const activePoQuantity =
+          generationReconciliationByItemId.get(item.id)?.activePoQuantity ??
+          item.quantity;
+        const remaining = activePoQuantity - alreadyGenerated;
         if (remaining <= 0) {
-          console.log(`⏭ Skipping item ${item.id} (${item.itemName || item.stockModelId}): already generated ${alreadyGenerated}/${item.quantity}`);
+          console.log(`⏭ Skipping item ${item.id} (${item.itemName || item.stockModelId}): already generated ${alreadyGenerated}/${activePoQuantity}`);
           continue;
         }
-        console.log(`🏭 Item ${item.id} (${item.itemName || item.stockModelId}): generating ${remaining} of ${item.quantity} (${alreadyGenerated} already exist)`);
+        console.log(`🏭 Item ${item.id} (${item.itemName || item.stockModelId}): generating ${remaining} of ${activePoQuantity} active customer-demand units (${alreadyGenerated} already exist)`);
         for (let i = 0; i < remaining; i++) {
           // Use stockModelId for mold/schedule matching; fall back to itemName (AG part number)
           // or itemId for POs entered with product codes rather than stock model slugs

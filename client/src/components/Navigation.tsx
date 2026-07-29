@@ -959,9 +959,9 @@ export default function Navigation() {
   const qmsItems: NavItemDef[] = [
     {
       path: '/qms/change-control',
-      label: 'Change Control',
+      label: 'Quality Action & Change Control',
       icon: FileSignature,
-      description: 'Controlled change request intake, approvals, and implementation records',
+      description: 'Unified NCR, CAR, PCR, ECR, and ECN action and change control',
     },
     {
       path: '/qms/cars',

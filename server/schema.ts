@@ -5334,6 +5334,41 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+export const purchaseOrderItemQuantityAdjustments = pgTable(
+  'purchase_order_item_quantity_adjustments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    purchaseOrderItemId: integer('purchase_order_item_id')
+      .references(() => purchaseOrderItems.id, { onDelete: 'restrict' })
+      .notNull(),
+    adjustmentType: text('adjustment_type').notNull(),
+    quantity: integer('quantity').notNull(),
+    reason: text('reason').notNull(),
+    effectiveAt: timestamp('effective_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    createdByUserId: integer('created_by_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    createdByDisplayName: text('created_by_display_name').notNull(),
+    source: text('source'),
+    reference: text('reference'),
+    idempotencyKey: text('idempotency_key'),
+  },
+  (table) => ({
+    itemEffectiveIdx: index('po_item_quantity_adjustments_item_effective_idx').on(
+      table.purchaseOrderItemId,
+      table.effectiveAt,
+      table.createdAt,
+    ),
+    itemIdempotencyUnique: uniqueIndex(
+      'purchase_order_item_quantity_adjustments_purchase_order_item_id_idempotency_key_key',
+    ).on(table.purchaseOrderItemId, table.idempotencyKey),
+  }),
+);
+
+export type PurchaseOrderItemQuantityAdjustment =
+  typeof purchaseOrderItemQuantityAdjustments.$inferSelect;
+
 // P2 Customer Management - separate customer database for P2 operations
 export const p2Customers = pgTable('p2_customers', {
   id: integer('id').generatedByDefaultAsIdentity().primaryKey(),

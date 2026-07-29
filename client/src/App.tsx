@@ -84,6 +84,7 @@ const WADSummaryPage = React.lazy(() => import('./pages/WADSummaryPage'));
 const AssetsPage = React.lazy(() => import('./pages/AssetsPage'));
 const AssetDashboardPage = React.lazy(() => import('./pages/AssetDashboardPage'));
 const QMSPlaceholderPage = React.lazy(() => import('./pages/QMSPlaceholderPage'));
+const QMSChangeControlPage = React.lazy(() => import('./pages/QMSChangeControlPage'));
 const QMSDesignControlPage = React.lazy(() => import('./pages/QMSDesignControlPage'));
 const QMSPartsEquipmentPage = React.lazy(() => import('./pages/QMSPartsEquipmentPage'));
 const AS9100AuditReadinessPage = React.lazy(() => import('./pages/AS9100AuditReadinessPage'));
@@ -907,6 +908,7 @@ function App() {
                   <Route path="/qms/as9100-audit-readiness" component={AS9100AuditReadinessPage} />
                   <Route path="/qms/epoch-software-validation" component={EpochSoftwareValidationPage} />
                   <Route path="/qms" component={QMSPlaceholderPage} />
+                  <Route path="/qms/change-control" component={QMSChangeControlPage} />
                   <Route path="/qms/:section">
                     {(params) => <QMSPlaceholderPage params={params} />}
                   </Route>

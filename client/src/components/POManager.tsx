@@ -97,6 +97,31 @@ import AddressInput from './AddressInput';
 import { type AddressData } from '@/utils/addressUtils';
 import { format as formatDate } from 'date-fns';
 import { formatDateOnly } from '@shared/utils/dateNormalization';
+import { usePermissions } from '@/hooks/usePermissions';
+
+interface P1POLineReconciliation {
+  purchaseOrderItemId: number;
+  originalOrderedQuantity: number;
+  canceledDemandQuantity: number;
+  activePoQuantity: number;
+  shippedQuantity: number;
+  workInProgressQuantity: number;
+  pendingQueueQuantity: number;
+  accountedQuantity: number;
+  variance: number;
+  availableToProgressQuantity: number;
+  inProgressDepartmentBreakdown: Record<string, number>;
+  isCanceled: boolean;
+}
+
+interface P1QuantityAdjustmentHistoryEntry {
+  id: string;
+  adjustmentType: 'CANCEL_QUANTITY' | 'RESTORE_QUANTITY';
+  quantity: number;
+  reason: string;
+  effectiveAt: string;
+  createdByDisplayName: string | null;
+}
 
 // Component to display PO quantity
 function POQuantityDisplay({ poId }: { poId: number }) {
@@ -829,6 +854,282 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
   );
 }
 
+export function P1POReconciliationPanel({
+  po,
+  items,
+}: {
+  po: PurchaseOrder;
+  items: PurchaseOrderItem[];
+}) {
+  const queryClient = useQueryClient();
+  const { can } = usePermissions();
+  const canAdjust = can('purchasing.manage_pos');
+  const [dialog, setDialog] = useState<{
+    itemId: number;
+    type: 'CANCEL_QUANTITY' | 'RESTORE_QUANTITY' | 'HISTORY';
+  } | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [reason, setReason] = useState('');
+
+  const { data: lines = [], isLoading } = useQuery<P1POLineReconciliation[]>({
+    queryKey: [`/api/pos/${po.id}/reconciliation`],
+    queryFn: () => apiRequest(`/api/pos/${po.id}/reconciliation`),
+  });
+
+  const historyItemId = dialog?.type === 'HISTORY' ? dialog.itemId : null;
+  const { data: history = [], isLoading: historyLoading } = useQuery<
+    P1QuantityAdjustmentHistoryEntry[]
+  >({
+    queryKey: [
+      `/api/pos/${po.id}/items/${historyItemId}/quantity-adjustments`,
+    ],
+    queryFn: () =>
+      apiRequest(
+        `/api/pos/${po.id}/items/${historyItemId}/quantity-adjustments`,
+      ),
+    enabled: historyItemId != null,
+  });
+
+  const adjustmentMutation = useMutation({
+    mutationFn: async () => {
+      if (!dialog || dialog.type === 'HISTORY') return;
+      return apiRequest(
+        `/api/pos/${po.id}/items/${dialog.itemId}/quantity-adjustments`,
+        {
+          method: 'POST',
+          body: {
+            adjustmentType: dialog.type,
+            quantity,
+            reason,
+            idempotencyKey: crypto.randomUUID(),
+          },
+        },
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/api/pos/${po.id}/reconciliation`],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p1-po-queue/purchase-orders/open'],
+      });
+      toast.success(
+        dialog?.type === 'CANCEL_QUANTITY'
+          ? 'Customer demand canceled.'
+          : 'Customer demand restored.',
+      );
+      setDialog(null);
+      setQuantity(1);
+      setReason('');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Quantity adjustment failed.');
+    },
+  });
+
+  const itemById = useMemo(
+    () => new Map(items.map((item) => [item.id, item])),
+    [items],
+  );
+  const openAdjustment = (
+    itemId: number,
+    type: 'CANCEL_QUANTITY' | 'RESTORE_QUANTITY',
+  ) => {
+    setQuantity(1);
+    setReason('');
+    setDialog({ itemId, type });
+  };
+
+  if (isLoading) {
+    return <span className="text-xs text-muted-foreground">Reconciling…</span>;
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      {lines.map((line) => {
+        const item = itemById.get(line.purchaseOrderItemId);
+        const lineName =
+          item?.itemName || `Line ${line.purchaseOrderItemId}`;
+        return (
+          <div
+            key={line.purchaseOrderItemId}
+            className="rounded-md border bg-muted/20 p-3 text-xs"
+            data-testid={`p1-reconciliation-line-${line.purchaseOrderItemId}`}
+          >
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold">{lineName}</span>
+              <Badge
+                className={
+                  line.isCanceled
+                    ? 'bg-red-100 text-red-800'
+                    : line.variance === 0
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-amber-100 text-amber-800'
+                }
+              >
+                {line.isCanceled
+                  ? 'Canceled'
+                  : line.variance === 0
+                    ? 'Reconciled'
+                    : 'Needs Review'}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-4">
+              <span>Original PO Qty: {line.originalOrderedQuantity}</span>
+              <span>Customer-Canceled Qty: {line.canceledDemandQuantity}</span>
+              <span>Active PO Qty: {line.activePoQuantity}</span>
+              <span>Shipped: {line.shippedQuantity}</span>
+              <span>In Progress: {line.workInProgressQuantity}</span>
+              <span>Pending Queue: {line.pendingQueueQuantity}</span>
+              <span>Available to Progress: {line.availableToProgressQuantity}</span>
+              <span>Variance: {line.variance}</span>
+            </div>
+            {Object.keys(line.inProgressDepartmentBreakdown).length > 0 && (
+              <div className="mt-2 text-muted-foreground">
+                In Progress detail (included above):{' '}
+                {Object.entries(line.inProgressDepartmentBreakdown)
+                  .map(([department, count]) => `${department}: ${count}`)
+                  .join(' · ')}
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {canAdjust && !line.isCanceled && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      openAdjustment(line.purchaseOrderItemId, 'CANCEL_QUANTITY')
+                    }
+                  >
+                    Cancel Remaining Quantity
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={line.canceledDemandQuantity === 0}
+                    onClick={() =>
+                      openAdjustment(line.purchaseOrderItemId, 'RESTORE_QUANTITY')
+                    }
+                  >
+                    Restore Canceled Quantity
+                  </Button>
+                </>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setDialog({
+                    itemId: line.purchaseOrderItemId,
+                    type: 'HISTORY',
+                  })
+                }
+              >
+                View Quantity Adjustment History
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+
+      <Dialog
+        open={dialog != null}
+        onOpenChange={(open) => {
+          if (!open) setDialog(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {dialog?.type === 'HISTORY'
+                ? 'Quantity Adjustment History'
+                : dialog?.type === 'CANCEL_QUANTITY'
+                  ? 'Cancel Remaining Quantity'
+                  : 'Restore Canceled Quantity'}
+            </DialogTitle>
+            <DialogDescription>
+              {dialog?.type === 'HISTORY'
+                ? 'Immutable customer-demand adjustments for this P1 PO line.'
+                : 'This changes customer PO demand only. It does not cancel or create production units.'}
+            </DialogDescription>
+          </DialogHeader>
+          {dialog?.type === 'HISTORY' ? (
+            <div className="max-h-80 space-y-2 overflow-y-auto">
+              {historyLoading ? (
+                <p>Loading…</p>
+              ) : history.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No quantity adjustments recorded.
+                </p>
+              ) : (
+                history.map((entry) => (
+                  <div key={entry.id} className="rounded border p-3 text-sm">
+                    <div className="font-medium">
+                      {entry.adjustmentType === 'CANCEL_QUANTITY'
+                        ? 'Canceled'
+                        : 'Restored'}{' '}
+                      {entry.quantity}
+                    </div>
+                    <div>{entry.reason}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {entry.createdByDisplayName || 'Unknown User'} ·{' '}
+                      {new Date(entry.effectiveAt).toLocaleString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="p1-adjustment-quantity">Quantity</Label>
+                <Input
+                  id="p1-adjustment-quantity"
+                  type="number"
+                  min={1}
+                  value={quantity}
+                  onChange={(event) =>
+                    setQuantity(Math.max(1, Number(event.target.value) || 1))
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="p1-adjustment-reason">Reason</Label>
+                <Textarea
+                  id="p1-adjustment-reason"
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  placeholder="Required"
+                />
+              </div>
+              <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                Confirm that this customer-demand adjustment is intentional.
+                Production units must be resolved separately.
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialog(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  disabled={
+                    adjustmentMutation.isPending ||
+                    quantity < 1 ||
+                    reason.trim().length === 0
+                  }
+                  onClick={() => adjustmentMutation.mutate()}
+                >
+                  {adjustmentMutation.isPending ? 'Saving…' : 'Confirm Adjustment'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 // Component for PO Attachments management
 function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -1157,14 +1458,13 @@ function POCard({
   isLoadingPreview: boolean;
   isGeneratingOrdersForThisPO: boolean;
 }) {
-  const { data: productionOrders = [] } = useQuery({
-    queryKey: [`/api/production-orders/by-po/${po.id}`],
-    queryFn: () => apiRequest(`/api/production-orders/by-po/${po.id}`),
-  });
-
   const { data: poItems = [] } = useQuery({
     queryKey: [`/api/pos/${po.id}/items`],
     queryFn: () => fetchPOItems(po.id),
+  });
+  const { data: reconciliation = [] } = useQuery<P1POLineReconciliation[]>({
+    queryKey: [`/api/pos/${po.id}/reconciliation`],
+    queryFn: () => apiRequest(`/api/pos/${po.id}/reconciliation`),
   });
 
   const totalPoQuantity = (poItems as PurchaseOrderItem[]).reduce(
@@ -1172,9 +1472,18 @@ function POCard({
     0
   );
 
-  const hasOrders = productionOrders.length > 0;
-  const orderCount = productionOrders.length;
-
+  const activePoTotal = reconciliation.reduce(
+    (sum, line) => sum + line.activePoQuantity,
+    0,
+  );
+  const accountedTotal = reconciliation.reduce(
+    (sum, line) => sum + line.accountedQuantity,
+    0,
+  );
+  const availableToProgressTotal = reconciliation.reduce(
+    (sum, line) => sum + line.availableToProgressQuantity,
+    0,
+  );
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'OPEN':
@@ -1213,7 +1522,6 @@ function POCard({
           </div>
           <div className="flex gap-2 flex-wrap">
             <Badge className={getStatusColor(po.status)}>{po.status}</Badge>
-            <ProductionStatusBadge productionOrders={productionOrders} totalPoQuantity={totalPoQuantity} poNumber={po.poNumber} />
             <div className="flex gap-1 flex-wrap">
               <Button
                 variant="outline"
@@ -1251,8 +1559,10 @@ function POCard({
                   Calculate Schedule
                 </Button>
                 {(() => {
-                  const hasGap = hasOrders && orderCount < totalPoQuantity;
-                  const fullyGenerated = hasOrders && orderCount >= totalPoQuantity;
+                  const hasGap = availableToProgressTotal > 0;
+                  const fullyGenerated =
+                    reconciliation.length > 0 &&
+                    availableToProgressTotal === 0;
                   return (
                     <Button
                       variant={hasGap ? 'default' : 'outline'}
@@ -1262,9 +1572,9 @@ function POCard({
                       className={hasGap ? 'bg-amber-500 hover:bg-amber-600 text-white border-0' : ''}
                       title={
                         fullyGenerated
-                          ? `All ${orderCount} production orders already generated`
+                          ? `All ${accountedTotal} active production units accounted for`
                           : hasGap
-                            ? `${totalPoQuantity - orderCount} item(s) missing production orders — click to fill gaps`
+                            ? `${availableToProgressTotal} active customer-demand unit(s) available to generate`
                             : 'Generate production orders from this PO'
                       }
                     >
@@ -1273,9 +1583,9 @@ function POCard({
                         : isLoadingPreview
                           ? 'Loading Preview...'
                           : fullyGenerated
-                            ? `Orders Generated (${orderCount})`
+                            ? `Orders Generated (${accountedTotal}/${activePoTotal})`
                             : hasGap
-                              ? `Fill Missing Orders (${totalPoQuantity - orderCount})`
+                              ? `Fill Missing Orders (${availableToProgressTotal})`
                               : 'Generate Production Orders'}
                     </Button>
                   );
@@ -1294,6 +1604,10 @@ function POCard({
         </div>
       </CardHeader>
       <CardContent>
+        <P1POReconciliationPanel
+          po={po}
+          items={poItems as PurchaseOrderItem[]}
+        />
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="font-medium">PO Date:</span>{' '}

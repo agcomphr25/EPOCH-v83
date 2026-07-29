@@ -1818,24 +1818,14 @@ describe('actual production launch service against PostgreSQL', () => {
         actor
       )
     ).rejects.toMatchObject({ code: 'PROOF_OF_DELIVERY_REQUIRED' });
-    await recordDelivery(
-      fixture.projectId,
-      String(firstAuthorization.id),
-      {
-        status: 'DELIVERED',
-        evidenceSource: 'MANUAL_POD',
-        proofOfDeliveryReference: 'POD-CERT-0001',
-      },
-      actor
-    );
     await expect(
       recordDelivery(
         fixture.projectId,
         String(firstAuthorization.id),
         {
-          status: 'DELIVERY_EXCEPTION',
-          evidenceSource: 'CARRIER',
-          exception: 'Forced POD transaction rollback',
+          status: 'DELIVERED',
+          evidenceSource: 'MANUAL_POD',
+          proofOfDeliveryReference: 'POD-CERT-ROLLBACK',
           certificationFailurePoint: 'AFTER_DELIVERY',
         },
         actor
@@ -1848,7 +1838,17 @@ describe('actual production launch service against PostgreSQL', () => {
           [firstAuthorization.id]
         )
       ).rows[0].status
-    ).toBe('DELIVERED');
+    ).toBe('CONFIRMED');
+    await recordDelivery(
+      fixture.projectId,
+      String(firstAuthorization.id),
+      {
+        status: 'DELIVERED',
+        evidenceSource: 'MANUAL_POD',
+        proofOfDeliveryReference: 'POD-CERT-0001',
+      },
+      actor
+    );
     const afterPartial = await getShippingCloseoutDashboard(fixture.projectId);
     expect(
       afterPartial.links.filter((entry) => entry.status === 'DELIVERED')

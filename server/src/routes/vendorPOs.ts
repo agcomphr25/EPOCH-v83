@@ -418,6 +418,9 @@ function ensureVendorPOReadSchema(): Promise<void> {
               ADD COLUMN IF NOT EXISTS vendor_confirmed_at timestamp,
               ADD COLUMN IF NOT EXISTS vendor_confirmed_action text,
               ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false,
+              ADD COLUMN IF NOT EXISTS voided_at timestamp,
+              ADD COLUMN IF NOT EXISTS voided_by text,
+              ADD COLUMN IF NOT EXISTS void_reason text,
               ADD COLUMN IF NOT EXISTS requisition_id integer,
               ADD COLUMN IF NOT EXISTS competition_method text,
               ADD COLUMN IF NOT EXISTS sole_source_justification text,
@@ -864,7 +867,7 @@ const listVendorPOsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(200),
   search: z.string().optional(),
-  status: z.enum(['Draft', 'RFQ Sent', 'Quote Received', 'Declined', 'Expired', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled', 'any']).default('any'),
+  status: z.enum(['Draft', 'RFQ Sent', 'Quote Received', 'Declined', 'Expired', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled', 'Voided', 'any']).default('any'),
   vendorId: z.coerce.number().int().positive().optional(),
   sort: z.string().default('createdAt:desc'),
   archived: z.enum(['true', 'false', 'any']).default('false'),
@@ -1022,7 +1025,7 @@ router.get('/counts', async (_req: Request, res: Response) => {
     const result = await db.execute(sql`
       SELECT
         SUM(CASE WHEN archived = false AND status IN ('Draft','RFQ Sent','Quote Received','Sent','Partially Received') THEN 1 ELSE 0 END)::int AS active,
-        SUM(CASE WHEN archived = false AND status IN ('Declined','Expired','Cancelled','Fully Received') THEN 1 ELSE 0 END)::int AS closed,
+        SUM(CASE WHEN archived = false AND status IN ('Declined','Expired','Cancelled','Voided','Fully Received') THEN 1 ELSE 0 END)::int AS closed,
         SUM(CASE WHEN archived = true THEN 1 ELSE 0 END)::int AS archived
       FROM vendor_pos
       WHERE is_current_revision = true
@@ -1487,6 +1490,12 @@ router.put('/:id', requirePermission('purchasing.manage_pos'), async (req: Reque
     if (!existingPO) {
       return res.status(404).json({ error: 'Vendor PO not found' });
     }
+    if (existingPO.status === 'Voided' || existingPO.voidedAt) {
+      return res.status(409).json({
+        error: 'Cannot edit a voided vendor PO',
+        message: 'Voided purchase orders are retained as read-only controlled records.',
+      });
+    }
 
     // Block edits on issued POs - except for status changes which are allowed
     const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
@@ -1504,6 +1513,12 @@ router.put('/:id', requirePermission('purchasing.manage_pos'), async (req: Reque
       return res.status(400).json({
         error: 'Cannot set status to Sent directly',
         message: 'Use the POST /api/vendor-pos/:id/issue endpoint to formally issue a PO. This ensures proper PO number generation.',
+      });
+    }
+    if (data.status === 'Voided') {
+      return res.status(400).json({
+        error: 'Cannot set status to Voided directly',
+        message: 'Use POST /api/vendor-pos/:id/void with a required audit reason.',
       });
     }
 
@@ -1581,6 +1596,12 @@ router.post('/:id/revisions', async (req: Request, res: Response) => {
     const originalPO = await storage.getVendorPO(id);
     if (!originalPO) {
       return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+    if (originalPO.status === 'Voided' || originalPO.voidedAt) {
+      return res.status(409).json({
+        error: 'Cannot revise a voided vendor PO',
+        message: 'Voided purchase orders are retained as read-only controlled records.',
+      });
     }
 
     // Only issued POs can be revised (Draft POs can be edited directly)
@@ -1675,40 +1696,60 @@ router.get('/:id/transactions', async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/vendor-pos/:id - Delete a vendor PO
-router.delete('/:id', requirePermission('purchasing.manage_pos'), async (req: Request, res: Response) => {
+// POST /api/vendor-pos/:id/void - Retain and void a vendor PO
+router.post('/:id/void', requirePermission('purchasing.manage_pos'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
 
-    const reason = requireAuditReason((req.body ?? {}).reason, 'Deleting a vendor PO');
+    const reason = requireAuditReason((req.body ?? {}).reason, 'Voiding a vendor PO');
     const existingPO = await storage.getVendorPO(id);
     if (!existingPO) {
       return res.status(404).json({ error: 'Vendor PO not found' });
     }
+    if (existingPO.status === 'Voided' || existingPO.voidedAt) {
+      return res.status(409).json({ error: 'Vendor PO is already voided' });
+    }
 
-    await recordVendorPoAudit(req, id, 'VENDOR_PO_DELETE_REQUESTED', {
-      before: existingPO,
-      reason,
-      meta: { source: 'delete' },
+    const actor = getRequestActor(req);
+    const voidedAt = new Date();
+    const updatedPO = await storage.updateVendorPO(id, {
+      status: 'Voided',
+      voidedAt,
+      voidedBy: actor.username || 'Unknown user',
+      voidReason: reason,
     });
-    await storage.deleteVendorPO(id);
-    await recordVendorPoAudit(req, id, 'VENDOR_PO_DELETED', {
+    await recordVendorPoAudit(req, id, 'VENDOR_PO_VOIDED', {
       before: existingPO,
+      after: updatedPO,
+      fieldsChanged: buildFieldChanges(existingPO, updatedPO, ['status', 'voidedAt', 'voidedBy', 'voidReason']),
       reason,
-      meta: { source: 'delete' },
+      meta: {
+        source: 'void',
+        previousStatus: existingPO.status,
+        preservedPoNumber: existingPO.poNumber ?? null,
+      },
     });
-    res.json({ ok: true, deleted: true });
+    res.json({ ok: true, voided: true, vendorPO: updatedPO });
   } catch (error) {
-    console.error('Delete vendor PO error:', error);
+    console.error('Void vendor PO error:', error);
     return sendApiError(res, error, {
-      fallbackMessage: 'Failed to delete vendor PO',
-      source: 'vendorPO.delete',
+      fallbackMessage: 'Failed to void vendor PO',
+      source: 'vendorPO.void',
       exposeMessage: true,
     });
   }
+});
+
+// Hard deletion is intentionally retired so controlled purchasing records,
+// assigned PO numbers, attachments, and receiving evidence cannot be erased.
+router.delete('/:id', requirePermission('purchasing.manage_pos'), (_req: Request, res: Response) => {
+  return res.status(405).json({
+    error: 'Vendor POs are voided, not deleted',
+    message: 'Use POST /api/vendor-pos/:id/void with a required reason.',
+  });
 });
 
 // GET /api/vendor-pos/:id/items - Get all items for a vendor PO
@@ -1941,6 +1982,20 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
     });
 
     const { receivedQuantity, receivedDate, notes, createdBy, cocLink, documentUrl, units } = receiveSchema.parse(req.body);
+    const receivingItem = await storage.getVendorPOItemById(itemId);
+    if (!receivingItem) {
+      return res.status(404).json({ error: 'Vendor PO item not found' });
+    }
+    const receivingPO = await storage.getVendorPO(receivingItem.vendorPoId);
+    if (!receivingPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+    if (receivingPO.status === 'Voided' || receivingPO.voidedAt) {
+      return res.status(409).json({
+        error: 'Cannot receive against a voided vendor PO',
+        message: 'The PO is retained for traceability but is closed to new receipts.',
+      });
+    }
 
     // Record PO receipt and calculate COGS
     const result = await storage.recordVendorPOReceipt({
@@ -3156,7 +3211,7 @@ router.post('/:id/archive', async (req: Request, res: Response) => {
     }
 
     // Only closed-state records can be archived
-    const closedStatuses = ['Quote Received', 'Declined', 'Expired', 'Cancelled'];
+    const closedStatuses = ['Quote Received', 'Declined', 'Expired', 'Cancelled', 'Voided'];
     if (archived && !closedStatuses.includes(vendorPO.status)) {
       return res.status(400).json({
         error: 'Only closed-state RFQs can be archived',

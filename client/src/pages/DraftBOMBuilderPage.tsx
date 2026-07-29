@@ -15,6 +15,7 @@ import {
   Lock,
   PackagePlus,
   Plus,
+  Printer,
   Save,
   Search,
   Send,
@@ -24,6 +25,11 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import {
+  buildBomDetailsPrintHtml,
+  buildPartsRequestPrintHtml,
+  openPrintDocument,
+} from '@/lib/draftBomPrint';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -2322,6 +2328,33 @@ export default function DraftBOMBuilderPage() {
     return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [partsRequestLines]);
 
+  function printDocument(html: string) {
+    if (openPrintDocument(html)) return;
+    toast({
+      title: 'Print window blocked',
+      description: 'Allow pop-ups for EPOCH, then try printing again.',
+      variant: 'destructive',
+    });
+  }
+
+  function handlePrintBomDetails() {
+    printDocument(buildBomDetailsPrintHtml({
+      draft,
+      lines: assemblySourceLines,
+      summary: totals,
+      customColumns,
+    }));
+  }
+
+  function handlePrintPartsRequest() {
+    printDocument(buildPartsRequestPrintHtml({
+      draft,
+      lines: partsRequestLines,
+      summary: totals,
+      customColumns,
+    }));
+  }
+
   function updateLine(id: string, patch: Partial<BomLine>) {
     setDraft((current) => ({
       ...current,
@@ -3858,10 +3891,18 @@ export default function DraftBOMBuilderPage() {
         <Sheet open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
           <SheetContent className="w-full overflow-y-auto sm:max-w-[480px]">
             <SheetHeader>
-              <SheetTitle>Draft BOM Details</SheetTitle>
-              <SheetDescription>
-                Edit setup fields and review totals for the active draft BOM.
-              </SheetDescription>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <SheetTitle>Draft BOM Details</SheetTitle>
+                  <SheetDescription>
+                    Edit setup fields and review totals for the active draft BOM.
+                  </SheetDescription>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={handlePrintBomDetails}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print
+                </Button>
+              </div>
             </SheetHeader>
             <div className="mt-6 space-y-4">
             <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -4154,6 +4195,18 @@ export default function DraftBOMBuilderPage() {
                   <FolderOpen className="mr-2 h-4 w-4" />
                   Push tab to R&D
                 </Button>
+                {activeWorkspaceTab === 'parts-request' ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePrintPartsRequest}
+                    disabled={partsRequestLines.length === 0}
+                  >
+                    <Printer className="mr-2 h-4 w-4" />
+                    Print Parts Request
+                  </Button>
+                ) : null}
                 {activeWorkspaceTab === 'parts-request' ? (
                   <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm">
                     <Checkbox

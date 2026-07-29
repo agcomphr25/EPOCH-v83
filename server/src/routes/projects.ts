@@ -440,23 +440,25 @@ async function getProjectManufacturingDocumentRefs(
         has_file: !!doc.file_url,
       })
     ),
-    ...specSheetRows.map((doc: LegacyProjectValue): ProjectDocumentRef => ({
-      id: `spec:${doc.id}`,
-      project_id: projectId,
-      label: doc.title,
-      original_file_name: doc.file_name || `${doc.title}.pdf`,
-      file_name: doc.file_name,
-      mime_type: doc.file_type || 'application/pdf',
-      file_size: doc.file_size ?? null,
-      media_library_id: null,
-      uploaded_by: doc.created_by ?? null,
-      created_at: doc.created_at,
-      source: 'spec_sheet',
-      document_type: 'spec_sheet',
-      part_number: doc.part_number,
-      department_name: null,
-      has_file: !!doc.file_url,
-    })),
+    ...specSheetRows.map(
+      (doc: LegacyProjectValue): ProjectDocumentRef => ({
+        id: `spec:${doc.id}`,
+        project_id: projectId,
+        label: doc.title,
+        original_file_name: doc.file_name || `${doc.title}.pdf`,
+        file_name: doc.file_name,
+        mime_type: doc.file_type || 'application/pdf',
+        file_size: doc.file_size ?? null,
+        media_library_id: null,
+        uploaded_by: doc.created_by ?? null,
+        created_at: doc.created_at,
+        source: 'spec_sheet',
+        document_type: 'spec_sheet',
+        part_number: doc.part_number,
+        department_name: null,
+        has_file: !!doc.file_url,
+      })
+    ),
   ];
 }
 

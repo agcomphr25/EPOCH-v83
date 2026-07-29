@@ -358,8 +358,9 @@ export async function runSafeBootMigrations() {
   if (process.env.SAFE_BOOT_MIGRATIONS_ONLY === 'true') return;
 
   try {
-    const { logCriticalSchemaHealth } =
-      await import('../../utils/schemaHealth');
+    const { logCriticalSchemaHealth } = await import(
+      '../../utils/schemaHealth'
+    );
     await logCriticalSchemaHealth();
   } catch (caughtSchemaHealthErr: unknown) {
     const schemaHealthErr = caughtSchemaHealthErr as MigrationError;
@@ -370,8 +371,9 @@ export async function runSafeBootMigrations() {
   }
 
   try {
-    const { migrateVendorDocumentUrls } =
-      await import('../../src/routes/vendors');
+    const { migrateVendorDocumentUrls } = await import(
+      '../../src/routes/vendors'
+    );
     await migrateVendorDocumentUrls();
   } catch (caughtVendorMigrErr: unknown) {
     const vendorMigrErr = caughtVendorMigrErr as MigrationError;

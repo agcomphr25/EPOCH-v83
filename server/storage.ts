@@ -9320,7 +9320,8 @@ export class DatabaseStorage implements IStorage {
           v.contact_person ILIKE '%${searchTerm}%' OR
           v.email ILIKE '%${searchTerm}%' OR
           v.phone ILIKE '%${searchTerm}%' OR
-          v.address ILIKE '%${searchTerm}%'
+          v.address ILIKE '%${searchTerm}%' OR
+          v.notes ILIKE '%${searchTerm}%'
         )`);
       }
 

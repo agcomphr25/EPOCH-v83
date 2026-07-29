@@ -380,7 +380,8 @@ export async function decideQualityReview(
 export async function completeQualityReview(
   projectId: string,
   expectedLockVersion: number,
-  actor: ProductionActor
+  actor: ProductionActor,
+  certificationFailurePoint?: 'AFTER_COMPLETION'
 ) {
   return db.transaction(async (tx) => {
     const model = await evidence(projectId, tx);
@@ -431,6 +432,15 @@ export async function completeQualityReview(
       },
       tx
     );
+    if (
+      certificationFailurePoint === 'AFTER_COMPLETION' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectQualityReleaseError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after Quality-review completion.',
+        409
+      );
     return getQualityDashboard(projectId, tx);
   });
 }
@@ -605,7 +615,8 @@ export async function placeReleaseHold(
   quantity: number,
   serials: string[],
   batches: string[],
-  actor: ProductionActor
+  actor: ProductionActor,
+  certificationFailurePoint?: 'AFTER_HOLD'
 ) {
   return db.transaction(async (tx) => {
     await context(projectId, tx, true);
@@ -639,6 +650,15 @@ export async function placeReleaseHold(
       },
       tx
     );
+    if (
+      certificationFailurePoint === 'AFTER_HOLD' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectQualityReleaseError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after Product Release hold placement.',
+        409
+      );
     return getQualityDashboard(projectId, tx);
   });
 }
@@ -648,7 +668,8 @@ export async function releaseProductHold(
   releaseId: string,
   holdId: string,
   releaseReason: string,
-  actor: ProductionActor
+  actor: ProductionActor,
+  certificationFailurePoint?: 'AFTER_HOLD_RELEASE'
 ) {
   return db.transaction(async (tx) => {
     await context(projectId, tx, true);
@@ -685,6 +706,15 @@ export async function releaseProductHold(
       },
       tx
     );
+    if (
+      certificationFailurePoint === 'AFTER_HOLD_RELEASE' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectQualityReleaseError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after Product Release hold removal.',
+        409
+      );
     return getQualityDashboard(projectId, tx);
   });
 }

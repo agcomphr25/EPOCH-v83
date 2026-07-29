@@ -835,7 +835,8 @@ export async function releaseProductionHold(
 export async function completeProductionStage(
   projectId: string,
   expectedLockVersion: number,
-  actor: ProductionActor
+  actor: ProductionActor,
+  certificationFailurePoint?: 'AFTER_COMPLETION'
 ) {
   return db.transaction(async (tx) => {
     const model = await collectEvidence(projectId, tx);
@@ -913,6 +914,15 @@ export async function completeProductionStage(
       },
       tx
     );
+    if (
+      certificationFailurePoint === 'AFTER_COMPLETION' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectProductionExecutionError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after Production completion.',
+        409
+      );
     return getProductionDashboard(projectId, tx);
   });
 }

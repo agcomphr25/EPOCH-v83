@@ -407,6 +407,7 @@ export type AuthorizeShipmentInput = {
   expectedLockVersion: number;
   idempotencyKey: string;
   signatureMeaning: string;
+  certificationFailurePoint?: 'AFTER_AUTHORIZATION' | 'AFTER_ALLOCATIONS';
 };
 
 export async function authorizeShipment(
@@ -496,6 +497,15 @@ export async function authorizeShipment(
           ${input.idempotencyKey},${requestHash},${actor.userId},${actor.displayName})
         RETURNING *`)
     )[0];
+    if (
+      input.certificationFailurePoint === 'AFTER_AUTHORIZATION' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectShippingCloseoutError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after shipment authorization.',
+        409
+      );
     for (const allocation of selected) {
       const remaining =
         Number(allocation.quantity) - Number(allocation.shipped_quantity);
@@ -507,6 +517,15 @@ export async function authorizeShipment(
           ${allocation.id},${allocation.serial_number},${allocation.batch_lot},
           ${allocation.part_number},${allocation.po_line_id},${remaining})`);
     }
+    if (
+      input.certificationFailurePoint === 'AFTER_ALLOCATIONS' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectShippingCloseoutError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after shipment allocation.',
+        409
+      );
     await recordAuditEvent(
       {
         eventType: 'P2_V2_SHIPMENT_AUTHORIZED',
@@ -746,6 +765,7 @@ export type DeliveryInput = {
   evidenceSource: 'CARRIER' | 'MANUAL_POD' | 'CUSTOMER_CONFIRMATION';
   proofOfDeliveryReference?: string;
   exception?: string;
+  certificationFailurePoint?: 'AFTER_DELIVERY';
 };
 
 export async function recordDelivery(
@@ -825,6 +845,15 @@ export async function recordDelivery(
       },
       tx
     );
+    if (
+      input.certificationFailurePoint === 'AFTER_DELIVERY' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectShippingCloseoutError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after delivery/POD confirmation.',
+        409
+      );
     return getShippingCloseoutDashboard(projectId, tx);
   });
 }
@@ -1218,6 +1247,7 @@ export async function closeProject(
     expectedLockVersion: number;
     idempotencyKey: string;
     signatureMeaning: string;
+    certificationFailurePoint?: 'AFTER_CLOSE';
   },
   actor: ProductionActor
 ) {
@@ -1347,6 +1377,15 @@ export async function closeProject(
       },
       tx
     );
+    if (
+      input.certificationFailurePoint === 'AFTER_CLOSE' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectShippingCloseoutError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after project closing.',
+        409
+      );
     return {
       closeout: rows(
         await tx.execute(sql`
@@ -1359,7 +1398,11 @@ export async function closeProject(
 
 export async function reopenProject(
   projectId: string,
-  input: { reason: string; responsibleOwner: string },
+  input: {
+    reason: string;
+    responsibleOwner: string;
+    certificationFailurePoint?: 'AFTER_REOPEN';
+  },
   actor: ProductionActor
 ) {
   return db.transaction(async (tx) => {
@@ -1427,6 +1470,15 @@ export async function reopenProject(
       },
       tx
     );
+    if (
+      input.certificationFailurePoint === 'AFTER_REOPEN' &&
+      process.env.NODE_ENV === 'test'
+    )
+      throw new ProjectShippingCloseoutError(
+        'CERTIFICATION_FORCED_ROLLBACK',
+        'Forced certification rollback after controlled reopening.',
+        409
+      );
     return getShippingCloseoutDashboard(projectId, tx);
   });
 }

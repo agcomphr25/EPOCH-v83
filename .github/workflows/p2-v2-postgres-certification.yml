@@ -10,6 +10,7 @@ on:
       - 'server/scripts/migrations/runSafeBootMigrations.ts'
       - 'server/src/lib/featureFlags.ts'
       - 'server/src/services/projectPreproductionReadinessService.ts'
+      - 'server/src/services/projectProductionExecutionService.ts'
       - 'server/src/services/projectQualityReleaseService.ts'
       - 'server/src/services/projectShippingCloseoutService.ts'
       - 'server/src/services/projectShippingCloseoutRules.ts'
@@ -53,6 +54,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check out exact main baseline for TypeScript comparison
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: phase10a-main-baseline
+
+      - name: Isolate the TypeScript baseline checkout
+        run: mv phase10a-main-baseline /tmp/phase10a-main-baseline
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -60,6 +70,111 @@ jobs:
 
       - name: Install committed dependencies
         run: npm ci --ignore-scripts
+
+      - name: Run bounded full TypeScript certification
+        shell: bash
+        run: |
+          set +e
+          start_head=$(date +%s)
+          NODE_OPTIONS=--max-old-space-size=6144 npx tsc --noEmit --pretty false \
+            > /tmp/phase10a-head-tsc.log 2>&1
+          head_exit=$?
+          head_duration=$(($(date +%s) - start_head))
+          head_diagnostics=$(grep -c "error TS[0-9]" /tmp/phase10a-head-tsc.log || true)
+          echo "head: heap_mb=6144 duration_seconds=${head_duration} exit_code=${head_exit} diagnostics=${head_diagnostics}"
+          cat /tmp/phase10a-head-tsc.log
+          if [ "$head_exit" -eq 0 ]; then
+            exit 0
+          fi
+
+          ln -s "$GITHUB_WORKSPACE/node_modules" \
+            "/tmp/phase10a-main-baseline/node_modules"
+          pushd "/tmp/phase10a-main-baseline"
+          start_base=$(date +%s)
+          NODE_OPTIONS=--max-old-space-size=6144 "$GITHUB_WORKSPACE/node_modules/.bin/tsc" \
+            --noEmit --pretty false > /tmp/phase10a-base-tsc.log 2>&1
+          base_exit=$?
+          base_duration=$(($(date +%s) - start_base))
+          popd
+          base_diagnostics=$(grep -c "error TS[0-9]" /tmp/phase10a-base-tsc.log || true)
+          echo "base: heap_mb=6144 duration_seconds=${base_duration} exit_code=${base_exit} diagnostics=${base_diagnostics}"
+          cat /tmp/phase10a-base-tsc.log
+          if [ "$base_exit" -eq 0 ]; then
+            echo "Corrective branch introduced TypeScript diagnostics."
+            exit "$head_exit"
+          fi
+          if ! cmp -s /tmp/phase10a-head-tsc.log /tmp/phase10a-base-tsc.log; then
+            echo "Corrective branch TypeScript diagnostics differ from exact main."
+            diff --unified /tmp/phase10a-base-tsc.log /tmp/phase10a-head-tsc.log || true
+            exit 1
+          fi
+          echo "Corrective branch introduces no TypeScript diagnostic beyond exact main."
+          exit 0
+
+      - name: Run focused Phase 9-10A ESLint certification
+        run: >-
+          npx eslint --max-warnings 0
+          client/src/__tests__/P2V2ProductionExecution.component.test.tsx
+          client/src/__tests__/P2V2QualityProductRelease.component.test.tsx
+          client/src/__tests__/P2V2ShippingProjectCloseout.component.test.tsx
+          client/src/__tests__/P2V2ProjectWorkflow.component.test.tsx
+          client/src/components/projects/P2V2ProductionExecution.tsx
+          client/src/components/projects/P2V2QualityProductRelease.tsx
+          client/src/components/projects/P2V2ShippingProjectCloseout.tsx
+          client/src/components/projects/P2V2ProjectWorkflow.tsx
+          server/__tests__/p2V2PostgresCertification.test.ts
+          server/__tests__/projectProductionExecution.test.ts
+          server/__tests__/projectQualityRelease.test.ts
+          server/__tests__/projectShippingCloseout.test.ts
+          server/__tests__/projectPreproductionReadiness.test.ts
+          server/__tests__/projectTechnicalConfigurationReview.test.ts
+          server/scripts/migrations/runSafeBootMigrations.ts
+          server/src/routes/projectProductionExecution.ts
+          server/src/routes/projectQualityRelease.ts
+          server/src/routes/projectShippingCloseout.ts
+          server/src/routes/projects.ts
+          server/src/routes/travelers.ts
+          server/src/routes/workOrders.ts
+          server/src/services/projectProductionExecutionRules.ts
+          server/src/services/projectProductionExecutionService.ts
+          server/src/services/projectQualityReleaseRules.ts
+          server/src/services/projectQualityReleaseService.ts
+          server/src/services/projectShippingCloseoutRules.ts
+          server/src/services/projectShippingCloseoutService.ts
+          server/src/services/projectTechnicalConfigurationReviewService.ts
+
+      - name: Run focused Phase 9-10A formatting certification
+        run: >-
+          npx prettier --check
+          .github/workflows/p2-v2-postgres-certification.yml
+          client/src/__tests__/P2V2ProductionExecution.component.test.tsx
+          client/src/__tests__/P2V2QualityProductRelease.component.test.tsx
+          client/src/__tests__/P2V2ShippingProjectCloseout.component.test.tsx
+          client/src/__tests__/P2V2ProjectWorkflow.component.test.tsx
+          client/src/components/projects/P2V2ProductionExecution.tsx
+          client/src/components/projects/P2V2QualityProductRelease.tsx
+          client/src/components/projects/P2V2ShippingProjectCloseout.tsx
+          client/src/components/projects/P2V2ProjectWorkflow.tsx
+          server/__tests__/p2V2PostgresCertification.test.ts
+          server/__tests__/projectProductionExecution.test.ts
+          server/__tests__/projectQualityRelease.test.ts
+          server/__tests__/projectShippingCloseout.test.ts
+          server/__tests__/projectPreproductionReadiness.test.ts
+          server/__tests__/projectTechnicalConfigurationReview.test.ts
+          server/scripts/migrations/runSafeBootMigrations.ts
+          server/src/routes/projectProductionExecution.ts
+          server/src/routes/projectQualityRelease.ts
+          server/src/routes/projectShippingCloseout.ts
+          server/src/routes/projects.ts
+          server/src/routes/travelers.ts
+          server/src/routes/workOrders.ts
+          server/src/services/projectProductionExecutionRules.ts
+          server/src/services/projectProductionExecutionService.ts
+          server/src/services/projectQualityReleaseRules.ts
+          server/src/services/projectQualityReleaseService.ts
+          server/src/services/projectShippingCloseoutRules.ts
+          server/src/services/projectShippingCloseoutService.ts
+          server/src/services/projectTechnicalConfigurationReviewService.ts
 
       - name: Create schema-push prerequisite
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"

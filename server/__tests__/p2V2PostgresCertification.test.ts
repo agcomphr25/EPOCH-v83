@@ -37,8 +37,12 @@ import {
   submitPreproduction,
 } from '../src/services/projectPreproductionReadinessService';
 import {
+  completeProductionStage,
   createCompletionReview,
+  decideProductionCompletion,
   getProductionDashboard,
+  recalculateProductionReadiness,
+  submitProductionCompletion,
 } from '../src/services/projectProductionExecutionService';
 import {
   completeQualityReview,
@@ -1218,16 +1222,62 @@ describe('actual production launch service against PostgreSQL', () => {
       FROM p2_serialized_items WHERE po_id=$1`,
       [fixture.poId]
     );
-    await query(
-      `UPDATE project_production_stage_reviews SET status='COMPLETE',completed_at=now()
-      WHERE project_id=$1`,
-      [fixture.projectId]
+    const existingProduction = await getProductionDashboard(fixture.projectId);
+    let productionLock = Number(existingProduction.review?.lock_version);
+    const productionReady = await recalculateProductionReadiness(
+      fixture.projectId,
+      productionLock,
+      actor
     );
-    await query(
-      `UPDATE project_workflow_step_instances SET status='COMPLETE',completed_at=now()
-      WHERE project_id=$1 AND step_type='production_quality'`,
-      [fixture.projectId]
+    expect(productionReady.review?.status).toBe(
+      'READY_FOR_COMPLETION_REVIEW'
     );
+    productionLock = Number(productionReady.review?.lock_version);
+    const productionSubmitted = await submitProductionCompletion(
+      fixture.projectId,
+      productionLock,
+      actor
+    );
+    productionLock = Number(productionSubmitted.review?.lock_version);
+    for (const [index, approvalType] of [
+      'OPERATIONS',
+      'QUALITY',
+      'PROJECT_MANAGEMENT',
+    ].entries()) {
+      const productionDecision = await decideProductionCompletion(
+        fixture.projectId,
+        productionLock,
+        approvalType as 'OPERATIONS' | 'QUALITY' | 'PROJECT_MANAGEMENT',
+        'APPROVED',
+        `${approvalType} certifies Production completion`,
+        '',
+        {
+          ...actor,
+          userId: 9050 + index,
+          employeeId: 9050 + index,
+          username: `phase10a-production-${9050 + index}`,
+          displayName: `Phase 10A Production Certifier ${9050 + index}`,
+        }
+      );
+      productionLock = Number(productionDecision.review?.lock_version);
+    }
+    await expect(
+      completeProductionStage(
+        fixture.projectId,
+        productionLock,
+        actor,
+        'AFTER_COMPLETION'
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect(
+      (await getProductionDashboard(fixture.projectId)).review?.status
+    ).toBe('PENDING_APPROVAL');
+    const productionCompleted = await completeProductionStage(
+      fixture.projectId,
+      productionLock,
+      actor
+    );
+    expect(productionCompleted.review?.status).toBe('COMPLETE');
     const stage10Before = await query<{ status: string; updated_at: Date }>(
       `SELECT status,updated_at FROM project_workflow_step_instances
        WHERE project_id=$1 AND step_type='project_closing'`,
@@ -1280,6 +1330,17 @@ describe('actual production launch service against PostgreSQL', () => {
       actor
     );
     lock = Number(qualityDecision.review?.lock_version);
+    await expect(
+      completeQualityReview(
+        fixture.projectId,
+        lock,
+        actor,
+        'AFTER_COMPLETION'
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect((await getQualityDashboard(fixture.projectId)).review?.status).toBe(
+      'READY_FOR_REVIEW'
+    );
     const completed = await completeQualityReview(
       fixture.projectId,
       lock,
@@ -1377,6 +1438,21 @@ describe('actual production launch service against PostgreSQL', () => {
         actor
       )
     ).rejects.toMatchObject({ code: 'RELEASE_EXCEEDS_ELIGIBLE_QUANTITY' });
+    await expect(
+      placeReleaseHold(
+        fixture.projectId,
+        String(firstResult.release.id),
+        'Forced hold-placement rollback',
+        1,
+        [firstSerial],
+        [],
+        actor,
+        'AFTER_HOLD'
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect(
+      (await getQualityDashboard(fixture.projectId)).holds
+    ).toHaveLength(0);
     const held = await placeReleaseHold(
       fixture.projectId,
       String(firstResult.release.id),
@@ -1388,6 +1464,21 @@ describe('actual production launch service against PostgreSQL', () => {
     );
     expect(held.releases[0].shipping_status).toBe('BLOCKED');
     const activeHold = held.holds.find((entry) => entry.status === 'ACTIVE');
+    await expect(
+      releaseProductHold(
+        fixture.projectId,
+        String(firstResult.release.id),
+        String(activeHold?.id),
+        'Forced hold-release rollback',
+        actor,
+        'AFTER_HOLD_RELEASE'
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect(
+      (await getQualityDashboard(fixture.projectId)).holds.find(
+        (entry) => entry.id === activeHold?.id
+      )?.status
+    ).toBe('ACTIVE');
     const holdReleased = await releaseProductHold(
       fixture.projectId,
       String(firstResult.release.id),
@@ -1403,6 +1494,25 @@ describe('actual production launch service against PostgreSQL', () => {
       )
     ).rejects.toThrow(/immutable/i);
     const afterFirst = await getQualityDashboard(fixture.projectId);
+    await expect(
+      releaseProduct(
+        fixture.projectId,
+        {
+          expectedLockVersion: Number(afterFirst.review?.lock_version),
+          idempotencyKey: 'forced-final-release-rollback',
+          partNumber,
+          quantity: 1,
+          serialNumbers: [secondSerial],
+          batchLots: [],
+          signatureMeaning: 'Forced final Product Release rollback',
+          certificationFailurePoint: 'AFTER_ALLOCATIONS',
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect(
+      (await getQualityDashboard(fixture.projectId)).review?.status
+    ).toBe('PARTIALLY_RELEASED');
     const final = await releaseProduct(
       fixture.projectId,
       {
@@ -1539,6 +1649,37 @@ describe('actual production launch service against PostgreSQL', () => {
       signatureMeaning:
         'Shipping authorizes exact partial Product Release allocation',
     };
+    await expect(
+      authorizeShipment(
+        fixture.projectId,
+        {
+          ...authorizationInput,
+          idempotencyKey: 'phase10a-authorization-insert-rollback',
+          certificationFailurePoint: 'AFTER_AUTHORIZATION' as const,
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    await expect(
+      authorizeShipment(
+        fixture.projectId,
+        {
+          ...authorizationInput,
+          idempotencyKey: 'phase10a-allocation-rollback',
+          certificationFailurePoint: 'AFTER_ALLOCATIONS' as const,
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect(
+      (
+        await query(
+          `SELECT id FROM project_shipment_authorizations
+           WHERE idempotency_key IN
+             ('phase10a-authorization-insert-rollback','phase10a-allocation-rollback')`
+        )
+      ).rows
+    ).toHaveLength(0);
     const concurrent = await Promise.allSettled([
       authorizeShipment(fixture.projectId, authorizationInput, actor),
       authorizeShipment(
@@ -1667,6 +1808,27 @@ describe('actual production launch service against PostgreSQL', () => {
       },
       actor
     );
+    await expect(
+      recordDelivery(
+        fixture.projectId,
+        String(firstAuthorization.id),
+        {
+          status: 'DELIVERY_EXCEPTION',
+          evidenceSource: 'CARRIER',
+          exception: 'Forced POD transaction rollback',
+          certificationFailurePoint: 'AFTER_DELIVERY',
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect(
+      (
+        await query<{ status: string }>(
+          `SELECT status FROM project_shipment_authorizations WHERE id=$1`,
+          [firstAuthorization.id]
+        )
+      ).rows[0].status
+    ).toBe('DELIVERED');
     const afterPartial = await getShippingCloseoutDashboard(fixture.projectId);
     expect(
       afterPartial.links.filter((entry) => entry.status === 'DELIVERED')
@@ -1804,6 +1966,21 @@ describe('actual production launch service against PostgreSQL', () => {
       idempotencyKey: 'phase9c-close-project-1',
       signatureMeaning: 'Authorized complete customer-order reconciliation',
     };
+    await expect(
+      closeProject(
+        fixture.projectId,
+        { ...closeInput, certificationFailurePoint: 'AFTER_CLOSE' },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect(
+      (
+        await query<{ status: string }>(
+          `SELECT status FROM projects WHERE id=$1`,
+          [fixture.projectId]
+        )
+      ).rows[0].status
+    ).not.toBe('completed');
     const closed = await closeProject(fixture.projectId, closeInput, {
       ...actor,
       userId: 9105,
@@ -1855,6 +2032,25 @@ describe('actual production launch service against PostgreSQL', () => {
         actor
       )
     ).rejects.toMatchObject({ code: 'WORKFLOW_CLOSED' });
+    await expect(
+      reopenProject(
+        fixture.projectId,
+        {
+          reason: 'Forced controlled-reopen rollback',
+          responsibleOwner: 'Project Management',
+          certificationFailurePoint: 'AFTER_REOPEN',
+        },
+        actor
+      )
+    ).rejects.toMatchObject({ code: 'CERTIFICATION_FORCED_ROLLBACK' });
+    expect(
+      (
+        await query<{ status: string }>(
+          `SELECT status FROM projects WHERE id=$1`,
+          [fixture.projectId]
+        )
+      ).rows[0].status
+    ).toBe('completed');
     const reopened = await reopenProject(
       fixture.projectId,
       {

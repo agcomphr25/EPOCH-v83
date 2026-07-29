@@ -266,14 +266,31 @@ describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('filters out items that are not stock_model type', () => {
-    const po = makePO();
-    const item = makeItem({ itemType: 'custom_model' });
+  it('shows custom_model PO lines when their generated units are waiting in P1', () => {
+    const po = makePO({ poNumber: 'PO-WC-103437', customerName: 'Wilson Combat' });
+    const item = makeItem({
+      itemName: 'C-NULA-STOCK-M20-KR-708',
+      itemType: 'custom_model',
+      specifications: { stockModel: 'C-NULA-STOCK-M20-KR-708' },
+      quantity: 15,
+    });
     const itemsByPoId = new Map([[po.id, [item]]]);
+    const prodRows = Array.from({ length: 15 }, () =>
+      makeProdRow({
+        production_status: 'PENDING',
+        current_department: 'P1 Production Queue',
+      }),
+    );
 
-    const result = computeP1Queue([po], itemsByPoId, []);
+    const result = computeP1Queue([po], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.purchaseOrders[0]?.poNumber).toBe('PO-WC-103437');
+    expect(result[0]?.purchaseOrders[0]?.items[0]).toMatchObject({
+      itemType: 'custom_model',
+      quantity: 15,
+      availableQuantity: 15,
+    });
   });
 
   it('ignores stale cached order_count when no production rows exist', () => {

@@ -175,21 +175,31 @@ export function LayupSchedulePreview({
     // newly generated schedule must be committed before anything is printed;
     // otherwise the paper schedule has no durable history record.
     const printWindow = window.open('', '_blank', 'width=1200,height=800');
-    if (!printWindow) {
+    if (!printWindow && isHistoricalReprint) {
       alert('Please allow popups to print the schedule');
       return;
     }
 
-    if (!isHistoricalReprint) {
+    if (printWindow && !isHistoricalReprint) {
       printWindow.document.write('<p style="font-family: sans-serif; padding: 24px">Saving schedule before printing...</p>');
+    }
 
+    if (!isHistoricalReprint) {
       try {
         await onApprove();
       } catch (error) {
         console.error('Failed to save schedule before printing:', error);
-        printWindow.close();
+        printWindow?.close();
         return;
       }
+    }
+
+    // Popup blocking must never prevent the approved schedule from being
+    // persisted. The user can enable popups and reprint the saved schedule
+    // from history without recreating or progressing the schedule again.
+    if (!printWindow) {
+      alert('Schedule saved. Please allow popups, then reprint it from Schedule History.');
+      return;
     }
     
     printWindow.document.open();

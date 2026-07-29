@@ -85,4 +85,33 @@ describe('LayupSchedulePreview printing', () => {
     expect(printDocument.open).toHaveBeenCalledTimes(1);
     expect(printDocument.close).toHaveBeenCalledTimes(1);
   });
+
+  it('still saves the schedule when the browser blocks the print popup', async () => {
+    vi.spyOn(window, 'open').mockReturnValue(null);
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    const onApprove = vi.fn().mockResolvedValue({ entriesSaved: 1 });
+
+    render(
+      <LayupSchedulePreview
+        open
+        onClose={vi.fn()}
+        scheduledItems={scheduledItems}
+        overflowItems={[]}
+        weekStart="2026-07-20"
+        totalItems={1}
+        onApprove={onApprove}
+        isApproving={false}
+      />
+    );
+
+    await waitFor(() =>
+      expect(document.querySelector('svg rect')).not.toBeNull()
+    );
+    fireEvent.click(screen.getByTestId('button-print-schedule'));
+
+    await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1));
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Schedule saved. Please allow popups, then reprint it from Schedule History.'
+    );
+  });
 });

@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/p2-v2-postgres-certification.yml'
+      - '.github/p2-v2-phase10a-static-manifest.json'
       - 'migrations/**'
       - 'server/schema.ts'
       - 'server/scripts/migrations/runSafeBootMigrations.ts'
@@ -15,9 +16,13 @@ on:
       - 'server/src/services/projectShippingCloseoutService.ts'
       - 'server/src/services/projectShippingCloseoutRules.ts'
       - 'server/src/routes/projectShippingCloseout.ts'
+      - 'server/src/routes/projects.ts'
+      - 'server/src/routes/travelers.ts'
+      - 'server/src/routes/workOrders.ts'
       - 'server/storage.ts'
       - 'server/__tests__/p2V2PostgresCertification.test.ts'
       - 'client/src/__tests__/P2V2*.component.test.tsx'
+      - 'scripts/validate-phase10a-static-manifest.js'
       - 'package.json'
       - 'package-lock.json'
 
@@ -53,6 +58,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Check out exact main baseline for TypeScript comparison
         uses: actions/checkout@v4
@@ -122,144 +130,35 @@ jobs:
       - name: Run focused Phase 9-10A ESLint certification
         shell: bash
         run: |
-          files=(
-            client/src/__tests__/P2V2ProductionExecution.component.test.tsx
-            client/src/__tests__/P2V2QualityProductRelease.component.test.tsx
-            client/src/__tests__/P2V2ShippingProjectCloseout.component.test.tsx
-            client/src/__tests__/P2V2ProjectWorkflow.component.test.tsx
-            client/src/components/projects/P2V2ProductionExecution.tsx
-            client/src/components/projects/P2V2QualityProductRelease.tsx
-            client/src/components/projects/P2V2ShippingProjectCloseout.tsx
-            client/src/components/projects/P2V2ProjectWorkflow.tsx
-            server/__tests__/p2V2PostgresCertification.test.ts
-            server/__tests__/projectProductionExecution.test.ts
-            server/__tests__/projectQualityRelease.test.ts
-            server/__tests__/projectShippingCloseout.test.ts
-            server/__tests__/projectPreproductionReadiness.test.ts
-            server/__tests__/projectTechnicalConfigurationReview.test.ts
-            server/scripts/migrations/runSafeBootMigrations.ts
-            server/src/routes/projectProductionExecution.ts
-            server/src/routes/projectQualityRelease.ts
-            server/src/routes/projectShippingCloseout.ts
-            server/src/routes/projects.ts
-            server/src/routes/travelers.ts
-            server/src/routes/workOrders.ts
-            server/src/services/projectProductionExecutionRules.ts
-            server/src/services/projectProductionExecutionService.ts
-            server/src/services/projectQualityReleaseRules.ts
-            server/src/services/projectQualityReleaseService.ts
-            server/src/services/projectShippingCloseoutRules.ts
-            server/src/services/projectShippingCloseoutService.ts
-            server/src/services/projectTechnicalConfigurationReviewService.ts
+          node scripts/validate-phase10a-static-manifest.js
+          mapfile -t files < <(
+            node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
           )
-          set +e
-          npx eslint --format json "${files[@]}" > /tmp/phase10a-head-eslint.json
-          head_exit=$?
-          pushd /tmp/phase10a-main-baseline
-          "$GITHUB_WORKSPACE/node_modules/.bin/eslint" --format json "${files[@]}" \
-            > /tmp/phase10a-base-eslint.json
-          base_exit=$?
-          popd
-          set -e
-          node -e '
-            const fs = require("fs");
-            const [input, root] = process.argv.slice(1);
-            const reports = JSON.parse(fs.readFileSync(input, "utf8"));
-            const signatures = reports.flatMap((report) => {
-              const file = report.filePath.replaceAll("\\\\", "/")
-                .replace(root.replaceAll("\\\\", "/") + "/", "");
-              return report.messages.map((message) =>
-                JSON.stringify([file, message.ruleId, message.severity, message.message])
-              );
-            }).sort();
-            process.stdout.write(signatures.join("\n") + (signatures.length ? "\n" : ""));
-          ' /tmp/phase10a-head-eslint.json "$GITHUB_WORKSPACE" \
-            > /tmp/phase10a-head-eslint.normalized
-          node -e '
-            const fs = require("fs");
-            const [input, root] = process.argv.slice(1);
-            const reports = JSON.parse(fs.readFileSync(input, "utf8"));
-            const signatures = reports.flatMap((report) => {
-              const file = report.filePath.replaceAll("\\\\", "/")
-                .replace(root.replaceAll("\\\\", "/") + "/", "");
-              return report.messages.map((message) =>
-                JSON.stringify([file, message.ruleId, message.severity, message.message])
-              );
-            }).sort();
-            process.stdout.write(signatures.join("\n") + (signatures.length ? "\n" : ""));
-          ' /tmp/phase10a-base-eslint.json /tmp/phase10a-main-baseline \
-            > /tmp/phase10a-base-eslint.normalized
-          echo "head: exit_code=${head_exit} diagnostics=$(wc -l < /tmp/phase10a-head-eslint.normalized)"
-          echo "base: exit_code=${base_exit} diagnostics=$(wc -l < /tmp/phase10a-base-eslint.normalized)"
-          comm -23 /tmp/phase10a-head-eslint.normalized \
-            /tmp/phase10a-base-eslint.normalized > /tmp/phase10a-new-eslint
-          if [ -s /tmp/phase10a-new-eslint ]; then
-            echo "Corrective branch introduced focused ESLint diagnostics:"
-            cat /tmp/phase10a-new-eslint
-            exit 1
-          fi
-          echo "Corrective branch introduces no focused ESLint diagnostic beyond exact main."
+          start=$(date +%s)
+          npx eslint --max-warnings 0 "${files[@]}"
+          echo "focused_eslint: files=${#files[@]} duration_seconds=$(($(date +%s) - start)) exit_code=0 errors=0 warnings=0"
 
       - name: Run focused Phase 9-10A formatting certification
         shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
-          files=(
-            .github/workflows/p2-v2-postgres-certification.yml
-            client/src/__tests__/P2V2ProductionExecution.component.test.tsx
-            client/src/__tests__/P2V2QualityProductRelease.component.test.tsx
-            client/src/__tests__/P2V2ShippingProjectCloseout.component.test.tsx
-            client/src/__tests__/P2V2ProjectWorkflow.component.test.tsx
-            client/src/components/projects/P2V2ProductionExecution.tsx
-            client/src/components/projects/P2V2QualityProductRelease.tsx
-            client/src/components/projects/P2V2ShippingProjectCloseout.tsx
-            client/src/components/projects/P2V2ProjectWorkflow.tsx
-            server/__tests__/p2V2PostgresCertification.test.ts
-            server/__tests__/projectProductionExecution.test.ts
-            server/__tests__/projectQualityRelease.test.ts
-            server/__tests__/projectShippingCloseout.test.ts
-            server/__tests__/projectPreproductionReadiness.test.ts
-            server/__tests__/projectTechnicalConfigurationReview.test.ts
-            server/scripts/migrations/runSafeBootMigrations.ts
-            server/src/routes/projectProductionExecution.ts
-            server/src/routes/projectQualityRelease.ts
-            server/src/routes/projectShippingCloseout.ts
-            server/src/routes/projects.ts
-            server/src/routes/travelers.ts
-            server/src/routes/workOrders.ts
-            server/src/services/projectProductionExecutionRules.ts
-            server/src/services/projectProductionExecutionService.ts
-            server/src/services/projectQualityReleaseRules.ts
-            server/src/services/projectQualityReleaseService.ts
-            server/src/services/projectShippingCloseoutRules.ts
-            server/src/services/projectShippingCloseoutService.ts
-            server/src/services/projectTechnicalConfigurationReviewService.ts
+          node scripts/validate-phase10a-static-manifest.js
+          mapfile -t files < <(
+            node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
           )
-          set +e
-          npx prettier --list-different "${files[@]}" \
-            | sort > /tmp/phase10a-head-format
-          head_exit=${PIPESTATUS[0]}
-          pushd /tmp/phase10a-main-baseline
-          "$GITHUB_WORKSPACE/node_modules/.bin/prettier" --list-different "${files[@]}" \
-            | sort > /tmp/phase10a-base-format
-          base_exit=${PIPESTATUS[0]}
-          popd
-          set -e
-          echo "head: exit_code=${head_exit} unformatted=$(wc -l < /tmp/phase10a-head-format)"
-          echo "base: exit_code=${base_exit} unformatted=$(wc -l < /tmp/phase10a-base-format)"
-          comm -23 /tmp/phase10a-head-format /tmp/phase10a-base-format \
-            > /tmp/phase10a-new-format
-          if [ -s /tmp/phase10a-new-format ]; then
-            echo "Corrective branch introduced formatting failures:"
-            cat /tmp/phase10a-new-format
+          npx prettier --check "${files[@]}"
+          mapfile -t corrective_files < <(
+            git diff --name-only "$BASE_SHA"...HEAD |
+              grep -E '\.(js|jsx|ts|tsx|json|css|md|ya?ml)$' || true
+          )
+          if [ "${#corrective_files[@]}" -eq 0 ]; then
+            echo "No Prettier-supported corrective files found."
             exit 1
           fi
-          npx prettier --check \
-            .github/workflows/p2-v2-postgres-certification.yml \
-            server/__tests__/p2V2PostgresCertification.test.ts \
-            server/src/services/projectProductionExecutionService.ts \
-            server/src/services/projectQualityReleaseService.ts \
-            server/src/services/projectShippingCloseoutService.ts
-          echo "Corrective files pass formatting; no new full-scope failures."
+          npx prettier --check "${corrective_files[@]}"
+          git diff --check "$BASE_SHA"...HEAD
+          echo "formatting: manifest_files=${#files[@]} corrective_files=${#corrective_files[@]} exit_code=0"
 
       - name: Create schema-push prerequisite
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"

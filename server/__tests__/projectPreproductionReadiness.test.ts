@@ -267,7 +267,7 @@ describe('Phase 8C integration safety contract', () => {
     );
     expect(transaction).toContain('pg_advisory_xact_lock');
     expect(transaction).toContain(
-      "priorLaunch.idempotency_key === idempotencyKey"
+      'priorLaunch.idempotency_key === idempotencyKey'
     );
     expect(transaction).toContain("'PRODUCTION_ALREADY_LAUNCHED'");
     expect(transaction).toContain('validateRelease(projectId, tx)');
@@ -329,7 +329,9 @@ describe('Phase 8C integration safety contract', () => {
     );
     expect(baseMigration).toContain("WHERE status='APPROVED'");
     expect(baseMigration).toContain("WHERE status='COMPLETE'");
-    expect(migration).toContain('forward-only Phase 8C launch-safety correction');
+    expect(migration).toContain(
+      'forward-only Phase 8C launch-safety correction'
+    );
     expect(migration).not.toMatch(/\bUPDATE\s+projects\b/i);
     expect(migration).not.toMatch(/\bINSERT\s+INTO\s+project_steps\b/i);
   });

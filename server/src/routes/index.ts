@@ -70,6 +70,7 @@ import customerSatisfactionRoutes from './customerSatisfaction';
 import surveyEngineRoutes from './surveyEngine';
 import poProductsRoutes from './poProducts';
 import p1POQueueRoutes from './p1POQueue';
+import p1POQuantityAdjustmentsRoutes from './p1POQuantityAdjustments';
 import poShippingQCRoutes from './poShippingQC';
 import weeklyScheduleRoutes from './weeklySchedule';
 import refundRoutes from './refunds';
@@ -1470,6 +1471,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // P1 PO Queue routes
   app.use('/api/p1-po-queue', p1POQueueRoutes);
+  app.use('/api/pos', p1POQuantityAdjustmentsRoutes);
 
   // Product Labels routes
   app.use('/api/product-labels', productLabelsRoutes);
@@ -10145,6 +10147,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         storage.getPurchaseOrderItems(poId),
         storage.getProductionOrdersByPoId(poId),
       ]);
+      const { getP1POReconciliation } = await import(
+        '../services/p1POReconciliationService'
+      );
+      const reconciliationByItemId = new Map(
+        (await getP1POReconciliation(poId)).map((line) => [
+          line.purchaseOrderItemId,
+          line,
+        ]),
+      );
 
       // Build per-item existing count map using active poItemId children.
       // Cancelled rows are history and must not block a safe missing-line backfill.
@@ -10173,14 +10184,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
 
         const alreadyGenerated = existingByItemId.get(item.id) ?? 0;
-        const remaining = item.quantity - alreadyGenerated;
+        const activePoQuantity =
+          reconciliationByItemId.get(item.id)?.activePoQuantity ?? item.quantity;
+        const remaining = activePoQuantity - alreadyGenerated;
 
         if (remaining <= 0) {
-          willSkip.push({ name, quantity: item.quantity, reason: `Already generated (${alreadyGenerated}/${item.quantity})` });
+          willSkip.push({ name, quantity: activePoQuantity, reason: `Already generated (${alreadyGenerated}/${activePoQuantity})` });
           continue;
         }
 
-        willGenerate.push({ name, quantity: item.quantity, orderCount: remaining, alreadyGenerated });
+        willGenerate.push({ name, quantity: activePoQuantity, orderCount: remaining, alreadyGenerated });
       }
 
       const totalOrderCount = willGenerate.reduce((sum, i) => sum + i.orderCount, 0);
@@ -10213,6 +10226,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         storage.getPurchaseOrderItems(poId),
         storage.getProductionOrdersByPoId(poId),
       ]);
+      const { getP1POReconciliation: getGenerationReconciliation } = await import(
+        '../services/p1POReconciliationService'
+      );
+      const generationReconciliationByItemId = new Map(
+        (await getGenerationReconciliation(poId)).map((line) => [
+          line.purchaseOrderItemId,
+          line,
+        ]),
+      );
 
       // Build per-item existing count map from active production children.
       // Cancelled rows remain audit history and do not satisfy the PO line quantity.
@@ -10255,12 +10277,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       for (const item of stockModelItems) {
         // Gap-fill: only create orders for units that haven't been generated yet
         const alreadyGenerated = existingByItemId.get(item.id) ?? 0;
-        const remaining = item.quantity - alreadyGenerated;
+        const activePoQuantity =
+          generationReconciliationByItemId.get(item.id)?.activePoQuantity ??
+          item.quantity;
+        const remaining = activePoQuantity - alreadyGenerated;
         if (remaining <= 0) {
-          console.log(`⏭ Skipping item ${item.id} (${item.itemName || item.stockModelId}): already generated ${alreadyGenerated}/${item.quantity}`);
+          console.log(`⏭ Skipping item ${item.id} (${item.itemName || item.stockModelId}): already generated ${alreadyGenerated}/${activePoQuantity}`);
           continue;
         }
-        console.log(`🏭 Item ${item.id} (${item.itemName || item.stockModelId}): generating ${remaining} of ${item.quantity} (${alreadyGenerated} already exist)`);
+        console.log(`🏭 Item ${item.id} (${item.itemName || item.stockModelId}): generating ${remaining} of ${activePoQuantity} active customer-demand units (${alreadyGenerated} already exist)`);
         for (let i = 0; i < remaining; i++) {
           // Use stockModelId for mold/schedule matching; fall back to itemName (AG part number)
           // or itemId for POs entered with product codes rather than stock model slugs

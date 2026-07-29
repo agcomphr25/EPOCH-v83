@@ -36,6 +36,13 @@ export const CAPABILITY_GATED_ROUTES: Record<string, string | string[]> = {
     'qms.audit_readiness.approve',
     'qms.audit_readiness.admin',
   ],
+  '/qms/epoch-software-validation': [
+    'EPOCH_VALIDATION_VIEW',
+    'EPOCH_VALIDATION_CREATE',
+    'EPOCH_VALIDATION_EDIT',
+    'EPOCH_VALIDATION_TEST_EXECUTE',
+    'EPOCH_VALIDATION_EXPORT',
+  ],
   '/master-document-register': 'documents.view',
 };
 
@@ -170,6 +177,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/qms/nsia-registrar',
   '/qms/design-control',
   '/qms/as9100-audit-readiness',
+  '/qms/epoch-software-validation',
   '/qms/parts-equipment',
   '/assets',
   '/asset-dashboard',

@@ -40,6 +40,7 @@ import pdfTemplatesRoutes from './pdfTemplates';
 import qualityRoutes from './quality';
 import qmsDesignControlRoutes from './qmsDesignControl';
 import auditReadinessRoutes from './auditReadiness';
+import epochSoftwareValidationRoutes from './epochSoftwareValidation';
 import engineeringReleasesRoutes from './engineeringReleases';
 import postReleaseEngineeringReleasesRoutes from './postReleaseEngineeringReleases';
 import documentsRoutes from './documents';
@@ -1266,6 +1267,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/qms/design-control', qmsDesignControlRoutes);
   app.use('/api/engineering-releases', postReleaseEngineeringReleasesRoutes);
   app.use('/api/qms/as9100-audit-readiness', auditReadinessRoutes);
+  app.use('/api/qms/epoch-software-validation', epochSoftwareValidationRoutes);
   app.use('/api/engineering-releases', engineeringReleasesRoutes);
 
   // Asset Management routes

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { pool } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
+import { getAuditReadinessValidationStatus } from './epochSoftwareValidation';
 
 const router = Router();
 router.use(authenticateToken);
@@ -180,7 +181,18 @@ router.get('/:id', requirePermission('qms.audit_readiness.view'), async (req, re
     `SELECT i.*, count(e.id) FILTER (WHERE NOT e.is_removed)::int AS evidence_count
      FROM qms_audit_readiness_items i LEFT JOIN qms_audit_readiness_evidence e ON e.item_id=i.id
      WHERE i.assessment_id=$1 GROUP BY i.id ORDER BY i.sequence`, [assessmentId]);
-  res.json({ assessment, items, readiness: await readiness(assessmentId) });
+  res.json({
+    assessment,
+    items,
+    readiness: await readiness(assessmentId),
+    epochSoftwareValidation: await getAuditReadinessValidationStatus(assessmentId),
+  });
+});
+
+router.get('/:id/epoch-software-validation', requirePermission('qms.audit_readiness.view'), async (req, res) => {
+  const status = await getAuditReadinessValidationStatus(id.parse(req.params.id));
+  if (!status) return res.status(404).json({ error: 'ASSESSMENT_NOT_FOUND' });
+  res.json(status);
 });
 
 router.get('/:id/readiness', requirePermission('qms.audit_readiness.view'), async (req, res) => {
@@ -281,6 +293,15 @@ router.post('/:assessmentId/items/:itemId/verify', requirePermission('qms.audit_
   const assessment=await getAssessment(assessmentId),a=actor(req);
   if(!assessment)return res.status(404).json({error:'ASSESSMENT_NOT_FOUND'});
   if(locked(assessment))return res.status(409).json({error:'ASSESSMENT_LOCKED'});
+  const currentItem=(await rows(`SELECT * FROM qms_audit_readiness_items WHERE id=$1 AND assessment_id=$2`,[itemId,assessmentId]))[0];
+  if(currentItem?.section_key==='02'){
+    const validation=await getAuditReadinessValidationStatus(assessmentId);
+    if(!validation?.complete)return res.status(409).json({
+      error:'EPOCH_VALIDATION_INCOMPLETE',
+      message:'Section 2 is server-derived and cannot be manually completed until the linked EPOCH Software Validation Package is current.',
+      blockers:validation?.blockers||['No linked validation package'],
+    });
+  }
   const updated=(await rows(`UPDATE qms_audit_readiness_items SET status='VERIFIED',verification_result=$1,
    reviewer_comments=$2,verified_by_user_id=$3,verified_by_display_name=$4,verified_at=now(),completed_at=now(),
    completion_percentage=100,row_version=row_version+1,last_updated_by_user_id=$3,updated_at=now()

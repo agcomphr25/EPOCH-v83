@@ -994,6 +994,12 @@ export default function Navigation() {
       description: 'Evidence-based assessment cycles, approvals, auditor view, and controlled exports',
     },
     {
+      path: '/qms/epoch-software-validation',
+      label: 'EPOCH Software Validation',
+      icon: ShieldCheck,
+      description: 'Persistent intended-use validation packages, risk-based testing, evidence, and approvals',
+    },
+    {
       path: '/qms/parts-equipment',
       label: 'Parts and Equipment',
       icon: PackageCheck,

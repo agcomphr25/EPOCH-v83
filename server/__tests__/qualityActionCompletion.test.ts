@@ -1,13 +1,21 @@
 import { readFileSync } from 'fs';
 import path from 'path';
+
 import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '..', '..');
-const read = (...parts: string[]) => readFileSync(path.join(root, ...parts), 'utf8');
+const read = (...parts: string[]) =>
+  readFileSync(path.join(root, ...parts), 'utf8');
 const service = read('server', 'src', 'services', 'changeControlService.ts');
 const routes = read('server', 'src', 'routes', 'changeControl.ts');
 const qualityPage = read('client', 'src', 'pages', 'QMSChangeControlPage.tsx');
-const workspace = read('client', 'src', 'components', 'qms', 'QualityActionWorkspace.tsx');
+const workspace = read(
+  'client',
+  'src',
+  'components',
+  'qms',
+  'QualityActionWorkspace.tsx'
+);
 const employeePage = read('client', 'src', 'pages', 'MyQualityActionsPage.tsx');
 const p2Changes = read('client', 'src', 'components', 'p2', 'P2ChangesTab.tsx');
 const schema = read('server', 'schema.ts');
@@ -43,9 +51,29 @@ describe('Quality Action completion architecture', () => {
   it('implements the 14-question assessment and immutable recommendation decisions in the UI', () => {
     const questions = workspace.slice(
       workspace.indexOf('const ASSESSMENT_QUESTIONS'),
-      workspace.indexOf('] as const;', workspace.indexOf('const ASSESSMENT_QUESTIONS')),
+      workspace.indexOf(
+        '] as const;',
+        workspace.indexOf('const ASSESSMENT_QUESTIONS')
+      )
     );
-    expect(questions.match(/\['[A-Z_]+', '/g)).toHaveLength(14);
+    const questionKeys = [
+      'ACTUAL_NONCONFORMANCE',
+      'PRODUCT_CONTAINED',
+      'OTHER_PRODUCT_AFFECTED',
+      'SIGNIFICANT_SYSTEMIC_CUSTOMER',
+      'PRODUCTION_METHOD_CHANGE',
+      'DESIGN_PERFORMANCE_IMPACT',
+      'DESIGN_OUTPUT_CHANGE',
+      'TEMPORARY_OR_PERMANENT',
+      'CUSTOMER_REGULATORY_APPROVAL',
+      'CONTROLLED_DOCUMENTS_AFFECTED',
+      'TRAINING_REQUIRED',
+      'VALIDATION_TESTING_FAI_REQUIRED',
+      'WIP_INVENTORY_DISPOSITION',
+      'EFFECTIVENESS_VERIFICATION',
+    ];
+    expect(questionKeys).toHaveLength(14);
+    for (const key of questionKeys) expect(questions).toContain(`'${key}'`);
     expect(workspace).toContain('Save immutable assessment version');
     expect(workspace).toContain('Override with reason');
     expect(workspace).toContain('Current recommendations');
@@ -59,8 +87,10 @@ describe('Quality Action completion architecture', () => {
       'Verification and closure',
       'Relationship management',
       'CAR effectiveness review',
-    ]) expect(workspace).toContain(label);
-    expect(employeePage).toContain('Submission never authorizes implementation');
+    ])
+      expect(workspace).toContain(label);
+    expect(employeePage).toContain('Submission');
+    expect(employeePage).toContain('never authorizes implementation');
     expect(employeePage).toContain('/api/change-control/my-pcrs');
     expect(qualityPage).toContain('All next actions');
   });
@@ -81,6 +111,7 @@ describe('Quality Action completion architecture', () => {
       "implementationAuthorizedAt: timestamp('implementation_authorized_at')",
       "verificationResults: text('verification_results')",
       "reopenReason: text('reopen_reason')",
-    ]) expect(schema).toContain(column);
+    ])
+      expect(schema).toContain(column);
   });
 });

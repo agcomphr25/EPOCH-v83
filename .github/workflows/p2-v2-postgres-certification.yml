@@ -15,12 +15,15 @@ on:
       - 'server/src/services/projectQualityReleaseService.ts'
       - 'server/src/services/projectShippingCloseoutService.ts'
       - 'server/src/services/projectShippingCloseoutRules.ts'
+      - 'server/src/services/projectPilotControlService.ts'
+      - 'server/src/routes/projectPilotControl.ts'
       - 'server/src/routes/projectShippingCloseout.ts'
       - 'server/src/routes/projects.ts'
       - 'server/src/routes/travelers.ts'
       - 'server/src/routes/workOrders.ts'
       - 'server/storage.ts'
       - 'server/__tests__/p2V2PostgresCertification.test.ts'
+      - 'server/__tests__/p2V2PilotPostgresCertification.test.ts'
       - 'client/src/__tests__/P2V2*.component.test.tsx'
       - 'scripts/validate-phase10a-static-manifest.js'
       - 'package.json'
@@ -137,14 +140,23 @@ jobs:
 
       - name: Run focused Phase 9-10A ESLint certification
         shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           node scripts/validate-phase10a-static-manifest.js
-          mapfile -t files < <(
+          mapfile -t manifest_files < <(
             node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
+          )
+          mapfile -t corrective_files < <(
+            git diff --name-only "$BASE_SHA"...HEAD |
+              grep -E '\.(js|jsx|ts|tsx)$' || true
+          )
+          mapfile -t files < <(
+            printf '%s\n' "${manifest_files[@]}" "${corrective_files[@]}" | sort -u
           )
           start=$(date +%s)
           npx eslint --max-warnings 0 "${files[@]}"
-          echo "focused_eslint: files=${#files[@]} duration_seconds=$(($(date +%s) - start)) exit_code=0 errors=0 warnings=0"
+          echo "focused_eslint: manifest_files=${#manifest_files[@]} corrective_files=${#corrective_files[@]} unique_files=${#files[@]} duration_seconds=$(($(date +%s) - start)) exit_code=0 errors=0 warnings=0"
 
       - name: Run focused Phase 9-10A formatting certification
         shell: bash
@@ -207,6 +219,15 @@ jobs:
           server/__tests__/p2V2PostgresCertification.test.ts
           --reporter=verbose
 
+      - name: Run controlled pilot PostgreSQL certification
+        env:
+          P2_V2_PILOT_ENVIRONMENT: isolated_test
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/p2V2PilotPostgresCertification.test.ts
+          --reporter=verbose
+
       - name: Run Phase 1-9 focused server regressions
         run: >-
           npx vitest run
@@ -233,4 +254,5 @@ jobs:
           client/src/__tests__/P2V2ProductionExecution.component.test.tsx
           client/src/__tests__/P2V2QualityProductRelease.component.test.tsx
           client/src/__tests__/P2V2ShippingProjectCloseout.component.test.tsx
+          client/src/__tests__/P2V2PilotControlCenter.component.test.tsx
           --reporter=verbose

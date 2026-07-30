@@ -16,6 +16,10 @@ import {
   updatePreproductionDraft,
   type PreproductionActor,
 } from '../services/projectPreproductionReadinessService';
+import {
+  ProjectPilotControlError,
+  requireActivePilotForAction,
+} from '../services/projectPilotControlService';
 
 const router = Router({ mergeParams: true });
 const checklistItem = z.object({
@@ -56,6 +60,10 @@ const decision = expected.extend({
   signatureMeaning: z.string().min(1),
   reason: z.string().optional().default(''),
 });
+const pilotAction = z.object({
+  pilotIdempotencyKey: z.string().min(8).max(200),
+  pilotConfirmation: z.string().min(1),
+});
 
 function actor(req: Request): PreproductionActor {
   if (!req.user?.id || !req.user.username || !req.user.role)
@@ -89,6 +97,10 @@ function fail(res: Response, error: unknown) {
       .status(400)
       .json({ error: 'INVALID_INPUT', details: error.flatten() });
   if (error instanceof ProjectPreproductionError)
+    return res
+      .status(error.status)
+      .json({ error: error.code, message: error.message, ...error.details });
+  if (error instanceof ProjectPilotControlError)
     return res
       .status(error.status)
       .json({ error: error.code, message: error.message, ...error.details });
@@ -260,6 +272,16 @@ router.post('/release/approve', async (req, res) => {
       req,
       'projects.production_release.approve'
     );
+    const pilot = pilotAction.parse(req.body);
+    await requireActivePilotForAction(
+      projectId(req),
+      'PRODUCTION_RELEASE',
+      user,
+      {
+        idempotencyKey: pilot.pilotIdempotencyKey,
+        confirmation: pilot.pilotConfirmation,
+      }
+    );
     res.json(await approveProductionRelease(projectId(req), user));
   } catch (error) {
     fail(res, error);
@@ -272,8 +294,20 @@ router.post('/launch', async (req, res) => {
       'projects.production_launch.launch'
     );
     const body = z
-      .object({ idempotencyKey: z.string().min(8).max(200) })
+      .object({
+        idempotencyKey: z.string().min(8).max(200),
+        pilotConfirmation: z.string().min(1),
+      })
       .parse(req.body);
+    await requireActivePilotForAction(
+      projectId(req),
+      'PRODUCTION_LAUNCH',
+      user,
+      {
+        idempotencyKey: body.idempotencyKey,
+        confirmation: body.pilotConfirmation,
+      }
+    );
     res.json(await launchProduction(projectId(req), body.idempotencyKey, user));
   } catch (error) {
     fail(res, error);

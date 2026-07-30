@@ -892,6 +892,7 @@ describe('Phase 10A ten-stage migration certification', () => {
       '0224_p2_v2_quality_release_hardening.sql',
       '0225_p2_v2_shipping_project_closeout.sql',
       '0226_project_production_launch_composite_key.sql',
+      '0232_p2_v2_controlled_pilot_readiness.sql',
     ])
       expect(safeMigrationFiles).toContain(migration);
     const migration = readFileSync(

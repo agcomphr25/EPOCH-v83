@@ -71,6 +71,16 @@ describe('QMS Change Control architecture', () => {
     }
   });
 
+  it('does not apply Change Control schema readiness to unrelated API routes', () => {
+    expect(routes).toContain(
+      "router.use('/change-control', authenticate, readiness)"
+    );
+    expect(routes).toContain(
+      "router.use('/change-control-dashboard', authenticate, readiness)"
+    );
+    expect(routes).not.toContain('router.use(authenticate, readiness)');
+  });
+
   it('previews duplicates and rejects bulk commit before any transaction', () => {
     expect(service).toContain('Duplicate original/change number');
     expect(service).toContain('BULK_IMPORT_VALIDATION_FAILED');

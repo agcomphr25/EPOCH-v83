@@ -11,6 +11,16 @@ const qualityActionMigration = readFileSync(
   path.join(root, 'migrations', '0232_quality_action_change_control.sql'),
   'utf8'
 );
+const safeBootMigrations = readFileSync(
+  path.join(
+    root,
+    'server',
+    'scripts',
+    'migrations',
+    'runSafeBootMigrations.ts'
+  ),
+  'utf8'
+);
 const routes = readFileSync(
   path.join(root, 'server', 'src', 'routes', 'changeControl.ts'),
   'utf8'
@@ -29,6 +39,17 @@ const legacyRoutes = readFileSync(
 );
 
 describe('QMS Change Control architecture', () => {
+  it('registers both Change Control migrations as critical safe-boot migrations', () => {
+    for (const migrationFile of [
+      '0230_qms_change_control_register.sql',
+      '0231_quality_action_change_control.sql',
+    ]) {
+      expect(
+        safeBootMigrations.match(new RegExp(`'${migrationFile}'`, 'g'))
+      ).toHaveLength(2);
+    }
+  });
+
   it('keeps native ECR and ECN records as the workflow spine', () => {
     expect(migration).toContain(
       'ecr_id uuid UNIQUE REFERENCES engineering_change_requests'

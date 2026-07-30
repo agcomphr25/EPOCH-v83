@@ -24,6 +24,7 @@ import {
   recordRejectedHardDelete,
   transitionControlledRevision,
   updateDraftMetadata,
+  verifyControlledRevisionFile,
 } from '../services/controlledDocumentLifecycleService';
 import {
   assertControlledDocumentSchemaReady,
@@ -154,6 +155,47 @@ const persistControlledDocumentUpload = async (file: Express.Multer.File, entity
     scope: 'controlled-documents',
     entityId,
   });
+
+const readControlledDocumentBytes = async (filePath: string) => {
+  if (filePath.startsWith('/objects/') || filePath.startsWith('/supabase-objects/')) {
+    return getFileStorageProviderForObjectPath(filePath).downloadBuffer(filePath);
+  }
+  const resolvedPath = resolveControlledDocumentFile(filePath);
+  if (!resolvedPath) {
+    throw new ControlledDocumentError(
+      422,
+      'REVISION_FILE_LOCATION_UNSUPPORTED',
+      'Document file path is not a supported app-accessible location'
+    );
+  }
+  try {
+    return await fs.readFile(resolvedPath);
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') {
+      throw new ControlledDocumentError(
+        404,
+        'REVISION_FILE_NOT_ACCESSIBLE',
+        'Document file is not accessible from this server'
+      );
+    }
+    throw error;
+  }
+};
+
+const verifyStoredRevision = async (
+  documentId: string,
+  revision: { id: string },
+  filePath: string,
+  buffer: Buffer,
+  req: Request,
+) => verifyControlledRevisionFile({
+  documentId,
+  revisionId: revision.id,
+  filePath,
+  fileBuffer: buffer,
+  actor: lifecycleActor(req),
+  request: requestEvidence(req),
+});
 
 // Separate multer configuration for CSV imports
 const csvUpload = multer({
@@ -493,7 +535,7 @@ router.get('/:id/revisions/:revisionId/download', requireAuth, requirePermission
            ) LIMIT 1`,
           [state.document.id, actor.username, actor.role]
         );
-        if (!grants?.length) {
+        if (!grants.rows.length) {
           await writeAccessLog({ documentId: state.document.id, userId: actor.username, action: 'denied', ipAddress: requestEvidence(req).ipAddress ?? 'unknown' });
           return res.status(403).json({ error: 'Access denied: insufficient clearance for this revision' });
         }
@@ -504,16 +546,8 @@ router.get('/:id/revisions/:revisionId/download', requireAuth, requirePermission
       await writeAccessLog({ documentId: state.document.id, userId: actor.username, action: 'download', ipAddress: requestEvidence(req).ipAddress ?? 'unknown' });
       return res.redirect(external);
     }
-    let buffer: Buffer;
-    if (revision.filePath.startsWith('/objects/') || revision.filePath.startsWith('/supabase-objects/')) {
-      buffer = await getFileStorageProviderForObjectPath(revision.filePath).downloadBuffer(revision.filePath);
-    } else {
-      const resolvedPath = resolveControlledDocumentFile(revision.filePath);
-      if (!resolvedPath) {
-        return res.status(422).json({ error: 'REVISION_FILE_LOCATION_UNSUPPORTED' });
-      }
-      buffer = await fs.readFile(resolvedPath);
-    }
+    const buffer = await readControlledDocumentBytes(revision.filePath);
+    await verifyStoredRevision(state.document.id, revision, revision.filePath, buffer, req);
     await writeAccessLog({ documentId: state.document.id, userId: actor.username, action: 'download', ipAddress: requestEvidence(req).ipAddress ?? 'unknown' });
     res.setHeader('Content-Type', revision.mediaType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${revision.fileName || `${state.document.documentNumber}-${revision.versionNumber}`}"`);
@@ -546,6 +580,28 @@ const lifecycleHandler = (
   action: 'submit' | 'approve' | 'release' | 'supersede' | 'obsolete' | 'void'
 ) => async (req: Request, res: Response) => {
   try {
+    if (action === 'approve') {
+      const state = await getControlledDocumentState(req.params.id);
+      const requestedRevisionId = typeof req.body?.revisionId === 'string' ? req.body.revisionId : null;
+      const revision = requestedRevisionId
+        ? state.revisions.find((candidate) => candidate.id === requestedRevisionId)
+        : state.currentRevision;
+      if (!revision) {
+        throw new ControlledDocumentError(404, 'REVISION_NOT_FOUND', 'Controlled document revision not found');
+      }
+      const filePath = revision.filePath || state.document.filePath;
+      if (!filePath) {
+        throw new ControlledDocumentError(
+          422,
+          'VERIFIED_CHECKSUM_REQUIRED',
+          'Exact stored file bytes are required before approval'
+        );
+      }
+      if (!getExternalRedirectUrl(filePath)) {
+        const buffer = await readControlledDocumentBytes(filePath);
+        await verifyStoredRevision(state.document.id, revision, filePath, buffer, req);
+      }
+    }
     const result = await transitionControlledRevision({
       documentId: req.params.id,
       revisionId: typeof req.body?.revisionId === 'string' ? req.body.revisionId : undefined,
@@ -746,7 +802,7 @@ router.get('/:id/view', requireAuth, requirePermission('documents.view'), requir
            ) LIMIT 1`,
           [doc.id, actor.username, actor.role]
         );
-        if (!grantCheck || grantCheck.length === 0) {
+        if (grantCheck.rows.length === 0) {
           // Write denied log entry — never silently discard
           await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'denied', ipAddress });
           return res.status(403).json({ error: 'Access denied: insufficient clearance for this document' });
@@ -754,19 +810,25 @@ router.get('/:id/view', requireAuth, requirePermission('documents.view'), requir
       }
     }
 
-    if (!doc.filePath) {
+    const state = await getControlledDocumentState(doc.id);
+    const revision = state.currentRevision;
+    const authoritativeFilePath = revision?.filePath || doc.filePath;
+
+    if (!authoritativeFilePath) {
       return res.status(404).json({ error: 'No file attached to this document' });
     }
 
-    const externalRedirectUrl = getExternalRedirectUrl(doc.filePath);
+    const externalRedirectUrl = getExternalRedirectUrl(authoritativeFilePath);
     if (externalRedirectUrl) {
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
       return res.redirect(externalRedirectUrl);
     }
 
-    if (doc.filePath.startsWith('/objects/') || doc.filePath.startsWith('/supabase-objects/')) {
+    if (authoritativeFilePath.startsWith('/objects/') || authoritativeFilePath.startsWith('/supabase-objects/')) {
+      const buffer = await readControlledDocumentBytes(authoritativeFilePath);
+      if (revision) await verifyStoredRevision(doc.id, revision, authoritativeFilePath, buffer, req);
       const stampedPdf = await addControlledDocumentFooter(
-        await getFileStorageProviderForObjectPath(doc.filePath).downloadBuffer(doc.filePath),
+        buffer,
         doc,
       );
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
@@ -775,7 +837,7 @@ router.get('/:id/view', requireAuth, requirePermission('documents.view'), requir
       return res.send(stampedPdf);
     }
 
-    const filePath = resolveControlledDocumentFile(doc.filePath);
+    const filePath = resolveControlledDocumentFile(authoritativeFilePath);
     if (!filePath) {
       return res.status(422).json({ error: 'Document file path is not a supported app-accessible location' });
     }
@@ -794,14 +856,15 @@ router.get('/:id/view', requireAuth, requirePermission('documents.view'), requir
     // Write view access log entry before sending the file
     await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
 
-    const stampedPdf = await addControlledDocumentFooter(await fs.readFile(filePath), doc);
+    const buffer = await fs.readFile(filePath);
+    if (revision) await verifyStoredRevision(doc.id, revision, authoritativeFilePath, buffer, req);
+    const stampedPdf = await addControlledDocumentFooter(buffer, doc);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
     res.send(stampedPdf);
   } catch (error) {
-    console.error('Error viewing document:', error);
-    res.status(500).json({ error: 'Failed to view document' });
+    sendLifecycleError(res, error, 'Failed to view document');
   }
 });
 
@@ -838,7 +901,7 @@ router.get('/:id/download', requireAuth, requirePermission('documents.view'), re
            ) LIMIT 1`,
           [doc.id, actor.username, actor.role]
         );
-        if (!grantCheck || grantCheck.length === 0) {
+        if (grantCheck.rows.length === 0) {
           // Write denied log entry - never silently discard
           await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'denied', ipAddress });
           return res.status(403).json({ error: 'Access denied: insufficient clearance for this document' });
@@ -846,19 +909,25 @@ router.get('/:id/download', requireAuth, requirePermission('documents.view'), re
       }
     }
 
-    if (!doc.filePath) {
+    const state = await getControlledDocumentState(doc.id);
+    const revision = state.currentRevision;
+    const authoritativeFilePath = revision?.filePath || doc.filePath;
+
+    if (!authoritativeFilePath) {
       return res.status(404).json({ error: 'No file attached to this document' });
     }
 
-    const externalRedirectUrl = getExternalRedirectUrl(doc.filePath);
+    const externalRedirectUrl = getExternalRedirectUrl(authoritativeFilePath);
     if (externalRedirectUrl) {
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
       return res.redirect(externalRedirectUrl);
     }
 
-    if (doc.filePath.startsWith('/objects/') || doc.filePath.startsWith('/supabase-objects/')) {
+    if (authoritativeFilePath.startsWith('/objects/') || authoritativeFilePath.startsWith('/supabase-objects/')) {
+      const buffer = await readControlledDocumentBytes(authoritativeFilePath);
+      if (revision) await verifyStoredRevision(doc.id, revision, authoritativeFilePath, buffer, req);
       const stampedPdf = await addControlledDocumentFooter(
-        await getFileStorageProviderForObjectPath(doc.filePath).downloadBuffer(doc.filePath),
+        buffer,
         doc,
       );
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
@@ -867,7 +936,7 @@ router.get('/:id/download', requireAuth, requirePermission('documents.view'), re
       return res.send(stampedPdf);
     }
 
-    const filePath = resolveControlledDocumentFile(doc.filePath);
+    const filePath = resolveControlledDocumentFile(authoritativeFilePath);
     if (!filePath) {
       return res.status(422).json({ error: 'Document file path is not a supported app-accessible location' });
     }
@@ -883,17 +952,22 @@ router.get('/:id/download', requireAuth, requirePermission('documents.view'), re
     await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
 
     if (path.extname(filePath).toLowerCase() === '.pdf') {
-      const stampedPdf = await addControlledDocumentFooter(await fs.readFile(filePath), doc);
+      const buffer = await fs.readFile(filePath);
+      if (revision) await verifyStoredRevision(doc.id, revision, authoritativeFilePath, buffer, req);
+      const stampedPdf = await addControlledDocumentFooter(buffer, doc);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
       return res.send(stampedPdf);
     }
 
     // Send file with appropriate content type
-    res.download(filePath, path.basename(filePath));
+    const buffer = await fs.readFile(filePath);
+    if (revision) await verifyStoredRevision(doc.id, revision, authoritativeFilePath, buffer, req);
+    res.setHeader('Content-Type', revision?.mediaType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${revision?.fileName || path.basename(filePath)}"`);
+    res.send(buffer);
   } catch (error) {
-    console.error('Error downloading document:', error);
-    res.status(500).json({ error: 'Failed to download document' });
+    sendLifecycleError(res, error, 'Failed to download document');
   }
 });
 

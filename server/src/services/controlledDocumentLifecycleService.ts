@@ -115,6 +115,85 @@ export async function getControlledDocumentState(documentId: string, client: Cli
   return { ...context, approvals };
 }
 
+export async function verifyControlledRevisionFile(input: {
+  documentId: string;
+  revisionId: string;
+  filePath: string;
+  fileBuffer: Buffer;
+  actor: ControlledDocumentActor;
+  request?: RequestEvidence;
+}, client: Client = db) {
+  const evidence = await actorEvidence(input.actor);
+  const observedChecksum = checksumFile(input.fileBuffer);
+
+  const verification = await client.transaction(async (tx) => {
+    const context = await loadDocument(input.documentId, tx as unknown as Client, true);
+    const revision = context.revisions.find((row) => row.id === input.revisionId);
+    if (!revision) {
+      throw new ControlledDocumentError(404, 'REVISION_NOT_FOUND', 'Controlled document revision not found');
+    }
+
+    if (revision.fileChecksum && revision.fileChecksum !== observedChecksum) {
+      return { mismatch: true as const, document: context.document, revision };
+    }
+
+    if (revision.fileChecksum === observedChecksum && revision.checksumStatus === 'VERIFIED') {
+      return { mismatch: false as const, revision };
+    }
+
+    const [verifiedRevision] = await tx.update(documentVersionHistory).set({
+      filePath: revision.filePath || input.filePath,
+      fileChecksum: observedChecksum,
+      checksumStatus: 'VERIFIED',
+      fileSize: input.fileBuffer.length,
+    }).where(and(
+      eq(documentVersionHistory.id, revision.id),
+      eq(documentVersionHistory.documentId, context.document.id),
+    )).returning();
+
+    await audit(
+      'CONTROLLED_DOCUMENT_FILE_CHECKSUM_VERIFIED',
+      context.document,
+      verifiedRevision,
+      input.actor,
+      evidence.capabilities,
+      'Verified the exact stored bytes for this controlled revision',
+      revision.lifecycleStatus as DocumentLifecycle,
+      revision.lifecycleStatus as DocumentLifecycle,
+      input.request ?? {},
+      tx as unknown as Client,
+      {
+        previousChecksumStatus: revision.checksumStatus,
+        verifiedFilePath: revision.filePath || input.filePath,
+        verifiedFileSize: input.fileBuffer.length,
+      }
+    );
+    return { mismatch: false as const, revision: verifiedRevision };
+  });
+
+  if (verification.mismatch) {
+    await audit(
+      'CONTROLLED_DOCUMENT_CHECKSUM_MISMATCH',
+      verification.document,
+      verification.revision,
+      input.actor,
+      evidence.capabilities,
+      'Stored controlled revision bytes do not match the recorded checksum',
+      verification.revision.lifecycleStatus as DocumentLifecycle,
+      verification.revision.lifecycleStatus as DocumentLifecycle,
+      input.request ?? {},
+      client,
+      { observedChecksum }
+    );
+    throw new ControlledDocumentError(
+      409,
+      'CONTROLLED_DOCUMENT_CHECKSUM_MISMATCH',
+      'Stored file does not match the checksum recorded for this revision'
+    );
+  }
+  return verification.revision;
+}
+
 export async function getDocumentNumberConflicts(client: Client = db) {
   return client.select().from(controlledDocumentNumberRegistry)
     .where(eq(controlledDocumentNumberRegistry.status, 'NUMBER_RECONCILIATION_REQUIRED'))

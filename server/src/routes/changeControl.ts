@@ -1,4 +1,9 @@
-import { Router, type NextFunction, type Request, type Response } from 'express';
+import {
+  Router,
+  type NextFunction,
+  type Request,
+  type Response,
+} from 'express';
 import multer from 'multer';
 
 import { pool } from '../../db';
@@ -16,15 +21,20 @@ import {
   completePcrImplementation,
   decideAssessmentRecommendation,
   decidePcr,
+  getAssessment,
   getChangeControlRecord,
   getQualityActionDashboard,
   importHistoricalRecord,
   importHistoricalRows,
   importTemplate,
   listChangeControlRecords,
+  listMyPcrs,
   parseRegister,
   previewHistoricalRows,
+  recordCarEffectiveness,
+  searchChangeControlLinks,
   transitionPcr,
+  updatePcrControls,
   verifyPcrImplementation,
 } from '../services/changeControlService';
 
@@ -34,7 +44,11 @@ const upload = multer({
   limits: { fileSize: 30 * 1024 * 1024 },
 });
 
-const authenticate = async (req: Request, res: Response, next: NextFunction) => {
+const authenticate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const token =
     req.cookies?.sessionToken ||
     req.headers.authorization?.replace('Bearer ', '');
@@ -114,15 +128,34 @@ router.get(
   requirePermission('qms.change_control.view'),
   action((req) => getQualityActionDashboard(req.query))
 );
+router.get(
+  '/change-control/link-candidates',
+  requirePermission('qms.change_control.view'),
+  action((req) =>
+    searchChangeControlLinks(req.query.q, String(req.query.excludeId ?? ''))
+  )
+);
+router.get(
+  '/change-control/my-pcrs',
+  requirePermission('qms.quality_action.pcr_create'),
+  action((req) => listMyPcrs(actor(req)))
+);
 router.post(
   '/change-control/:id/links',
   requirePermission('qms.change_control.create'),
-  action((req) => addChangeControlLink(req.params.id, req.body ?? {}, actor(req)))
+  action((req) =>
+    addChangeControlLink(req.params.id, req.body ?? {}, actor(req))
+  )
 );
 router.post(
   '/change-control/:id/assessments',
   requirePermission('qms.quality_action.screen'),
   action((req) => createAssessment(req.params.id, req.body ?? {}, actor(req)))
+);
+router.get(
+  '/change-control/:id/assessments/:assessmentId',
+  requirePermission('qms.change_control.view'),
+  action((req) => getAssessment(req.params.assessmentId))
 );
 router.post(
   '/change-control/:id/assessments/:assessmentId/recommendations/:recommendationId/decision',
@@ -173,20 +206,38 @@ router.post(
     authorizePcrImplementation(req.params.pcrId, req.body ?? {}, actor(req))
   )
 );
+router.patch(
+  '/change-control/pcrs/:pcrId/controls',
+  requirePermission('qms.quality_action.assess_impact'),
+  action((req) =>
+    updatePcrControls(req.params.pcrId, req.body ?? {}, actor(req))
+  )
+);
 router.post(
   '/change-control/pcrs/:pcrId/complete-implementation',
   requirePermission('qms.quality_action.authorize_implementation'),
-  action((req) => completePcrImplementation(req.params.pcrId, req.body ?? {}, actor(req)))
+  action((req) =>
+    completePcrImplementation(req.params.pcrId, req.body ?? {}, actor(req))
+  )
 );
 router.post(
   '/change-control/pcrs/:pcrId/verify',
   requirePermission('qms.quality_action.verify_implementation'),
-  action((req) => verifyPcrImplementation(req.params.pcrId, req.body ?? {}, actor(req)))
+  action((req) =>
+    verifyPcrImplementation(req.params.pcrId, req.body ?? {}, actor(req))
+  )
 );
 router.post(
   '/change-control/pcrs/:pcrId/close',
   requirePermission('qms.quality_action.close'),
   action((req) => closePcr(req.params.pcrId, req.body ?? {}, actor(req)))
+);
+router.post(
+  '/change-control/:id/car-effectiveness',
+  requirePermission('qms.quality_action.verify_effectiveness'),
+  action((req) =>
+    recordCarEffectiveness(req.params.id, req.body ?? {}, actor(req))
+  )
 );
 router.get(
   '/change-control/:id',

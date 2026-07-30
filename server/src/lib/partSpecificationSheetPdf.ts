@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createRequire } from 'module';
 
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';

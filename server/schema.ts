@@ -5630,7 +5630,6 @@ export const p2SerializedItems = pgTable('p2_serialized_items', {
   buildFamilyKey: text('build_family_key'),
   partRoutingId: varchar('part_routing_id', { length: 255 }),
   partRoutingRevision: integer('part_routing_revision'),
-  specSheetRevisionId: uuid('spec_sheet_revision_id').references(() => specSheetRevisions.id, { onDelete: 'restrict' }),
   sku: text('sku'),
   drawingName: text('drawing_name'),
   customerSerialNumber: text('customer_serial_number'),
@@ -6327,6 +6326,10 @@ export const travelers = pgTable('travelers', {
 
   partRoutingId: varchar('part_routing_id', { length: 255 }),
   partRoutingRevision: integer('part_routing_revision'),
+  specSheetRevisionId: uuid('spec_sheet_revision_id').references(
+    (): AnyPgColumn => specSheetRevisions.id,
+    { onDelete: 'restrict' }
+  ),
 
   // Template traceability — stamped when created from a production control template
   createdFromTemplateId: uuid('created_from_template_id'),
@@ -7715,6 +7718,7 @@ export const insertTravelerSchema = createInsertSchema(travelers)
     status: z.enum(['DRAFT', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED', 'CANCELED']).default('DRAFT'),
     partRoutingId: z.string().uuid().optional().nullable(),
     partRoutingRevision: z.number().int().optional().nullable(),
+    specSheetRevisionId: z.string().uuid().optional().nullable(),
     createdBy: z.string().min(1, 'Created by is required'),
   });
 

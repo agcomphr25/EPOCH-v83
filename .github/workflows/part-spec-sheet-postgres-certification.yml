@@ -1,0 +1,122 @@
+name: Part Specification Sheet PostgreSQL certification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/part-spec-sheet-postgres-certification.yml'
+      - 'migrations/0233_part_specification_sheet_control.sql'
+      - 'server/schema.ts'
+      - 'server/storage.ts'
+      - 'server/src/capabilities.ts'
+      - 'server/src/lib/partSpecificationSheet*.ts'
+      - 'server/src/routes/routingDocuments.ts'
+      - 'server/src/routes/travelers.ts'
+      - 'server/__tests__/partSpecificationSheet*.test.ts'
+      - 'server/scripts/migrations/runSafeBootMigrations.ts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: part-spec-sheet-postgres-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: epoch_cert
+          POSTGRES_PASSWORD: epoch_cert_password
+          POSTGRES_DB: epoch_part_spec_certification
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U epoch_cert -d epoch_part_spec_certification"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql://epoch_cert:epoch_cert_password@127.0.0.1:5432/epoch_part_spec_certification
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: part-spec-main-baseline
+
+      - name: Isolate exact main baseline
+        run: mv part-spec-main-baseline /tmp/part-spec-main-baseline
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install committed dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Create pre-0233 schema from exact main
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
+          ln -s "$GITHUB_WORKSPACE/node_modules" /tmp/part-spec-main-baseline/node_modules
+          pushd /tmp/part-spec-main-baseline
+          "$GITHUB_WORKSPACE/node_modules/.bin/drizzle-kit" push --force --config drizzle.app.config.ts
+          popd
+
+      - name: First safe-boot run through migration 0233
+        env:
+          SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+        run: npm run maintenance:safe-migrations
+
+      # The repository-wide safe-boot runner contains older dependency-ordered
+      # repairs that can converge on the second pass from a drizzle-push schema.
+      # Stabilize those before measuring this migration's idempotency.
+      - name: Stabilize repository safe-boot migrations
+        env:
+          SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+        run: npm run maintenance:safe-migrations
+
+      - name: Capture stabilized normalized schema
+        run: >-
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
+          sed '/^\\\(un\)\?restrict /d' > /tmp/part-spec-schema-first.sql
+
+      - name: Verification safe-boot run
+        env:
+          SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+        run: npm run maintenance:safe-migrations
+
+      - name: Prove safe-boot schema idempotency
+        run: |
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
+            sed '/^\\\(un\)\?restrict /d' > /tmp/part-spec-schema-second.sql
+          diff --unified /tmp/part-spec-schema-first.sql /tmp/part-spec-schema-second.sql
+
+      - name: Run isolated PostgreSQL 16.4 certification
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/partSpecificationSheetPostgresCertification.test.ts
+          --reporter=verbose
+
+      - name: Prove the feature remains inactive
+        shell: bash
+        run: |
+          if grep -R "PART_SPEC.*ENABLED.*true" server client migrations; then
+            echo "Part Specification Sheet activation literal detected."
+            exit 1
+          fi
+          echo "No production activation literal detected."

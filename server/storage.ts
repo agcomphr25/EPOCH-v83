@@ -19064,8 +19064,37 @@ export class DatabaseStorage implements IStorage {
 
   // Travelers
   async createTraveler(data: InsertTraveler): Promise<Traveler> {
-    const [traveler] = await db.insert(travelers).values(data).returning();
-    return traveler;
+    return db.transaction(async (tx) => {
+      let specSheetRevisionId = data.specSheetRevisionId ?? null;
+      if (!specSheetRevisionId && (data.inventoryItemId || data.partNumber)) {
+        const result = await tx.execute(sql`
+          SELECT ssr.id
+          FROM spec_sheet_revisions ssr
+          JOIN spec_sheets ss ON ss.id = ssr.spec_sheet_id
+          WHERE ssr.lifecycle_status = 'RELEASED'
+            AND COALESCE(ssr.effective_date, ss.effective_date, CURRENT_DATE) <= CURRENT_DATE
+            AND (
+              ss.part_number = ${data.partNumber || null}
+              OR (
+                ss.inventory_item_id IS NOT NULL
+                AND ss.inventory_item_id::text = ${String(data.inventoryItemId || '')}
+              )
+            )
+          ORDER BY COALESCE(ssr.effective_date, ss.effective_date) DESC NULLS LAST,
+                   ssr.released_at DESC NULLS LAST,
+                   ssr.created_at DESC
+          LIMIT 1
+        `);
+        specSheetRevisionId = (
+          ((result as any)?.rows || result || []) as any[]
+        )[0]?.id ?? null;
+      }
+      const [traveler] = await tx
+        .insert(travelers)
+        .values({ ...data, specSheetRevisionId })
+        .returning();
+      return traveler;
+    });
   }
 
   async getTravelers(filters?: {
@@ -20979,6 +21008,45 @@ export class DatabaseStorage implements IStorage {
       throw err;
     }
 
+    const specRequirementResult = await db.execute(sql`
+      SELECT COALESCE(spec_sheet_required, false) AS spec_sheet_required
+      FROM wad_production_controls
+      WHERE work_order_id = ${wadId}
+      LIMIT 1
+    `);
+    const specRequired = Boolean(
+      (((specRequirementResult as any)?.rows || specRequirementResult || []) as any[])[0]
+        ?.spec_sheet_required
+    );
+    const effectiveSpecResult = await db.execute(sql`
+      SELECT ssr.id
+      FROM spec_sheet_revisions ssr
+      JOIN spec_sheets ss ON ss.id = ssr.spec_sheet_id
+      WHERE ssr.lifecycle_status = 'RELEASED'
+        AND COALESCE(ssr.effective_date, ss.effective_date, CURRENT_DATE) <= CURRENT_DATE
+        AND (
+          ss.part_number = ${wad.partNumber}
+          OR (
+            ss.inventory_item_id IS NOT NULL
+            AND ss.inventory_item_id::text = ${String(routing.inventoryItemId || '')}
+          )
+        )
+      ORDER BY COALESCE(ssr.effective_date, ss.effective_date) DESC NULLS LAST,
+               ssr.released_at DESC NULLS LAST,
+               ssr.created_at DESC
+      LIMIT 1
+    `);
+    const effectiveSpecRevision = (
+      ((effectiveSpecResult as any)?.rows || effectiveSpecResult || []) as any[]
+    )[0];
+    if (specRequired && !effectiveSpecRevision) {
+      const err = new Error(
+        `A released effective specification is required for part "${wad.partNumber}"`
+      ) as any;
+      err.code = 'SPECIFICATION_REQUIRED';
+      throw err;
+    }
+
     let traveler = await this.generateTravelerFromRouting(routing.id, {
       quantity: wad.quantity,
       createdBy,
@@ -21004,6 +21072,7 @@ export class DatabaseStorage implements IStorage {
         partName: wad.description ?? traveler.partName,
         quantity: wad.quantity,
         wadRevisionId: activeWadRevision?.id ?? null,
+        specSheetRevisionId: effectiveSpecRevision?.id ?? null,
         updatedAt: new Date(),
       })
       .where(eq(travelers.id, traveler.id))

@@ -29,6 +29,21 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
 import { createHash, randomUUID } from 'crypto';
+import {
+  calculateQcLimits,
+  checksumSnapshot,
+  REQUIRED_SPEC_APPROVALS,
+  SPEC_SHEET_TABLE_TYPES,
+  validateQcRows,
+} from '../lib/partSpecificationSheets';
+import {
+  assertSpecTransition,
+  getSpecActor,
+  requireSpecCapability,
+  SPEC_SHEET_CAPABILITIES,
+  specActorSnapshot,
+} from '../lib/partSpecificationSheetControl';
+import { renderPartSpecificationSheetPdf } from '../lib/partSpecificationSheetPdf';
 
 const require = createRequire(import.meta.url);
 const TEMPLATE_UPLOAD_TABLES = new Set([
@@ -39,6 +54,8 @@ const TEMPLATE_UPLOAD_TABLES = new Set([
   'controlled_documents',
   'controlled_document_number_registry',
   'document_version_history',
+  'spec_sheet_revisions',
+  'spec_sheet_revision_approvals',
   'project_documents',
   'media_library',
 ]);
@@ -218,14 +235,17 @@ function sanitizeFileName(fileName: string): string {
   return `${base}-${Date.now()}${ext.toLowerCase()}`;
 }
 
-function normalizeTemplateField(field: any, index: number) {
+function normalizeTemplateField(field: any, index = 0) {
   const label = String(field?.fieldLabel || field?.label || field?.fieldName || `Field ${index + 1}`).trim();
   const rawName = String(field?.fieldName || label)
     .trim()
     .replace(/[^a-z0-9]+/gi, '_')
     .replace(/^_+|_+$/g, '')
     .toLowerCase();
-  const allowedTypes = new Set(['text', 'textarea', 'number', 'date', 'signature', 'barcode', 'checkbox', 'inventory_parts']);
+  const allowedTypes = new Set([
+    'text', 'textarea', 'number', 'date', 'signature', 'barcode', 'checkbox', 'inventory_parts',
+    ...Array.from(SPEC_SHEET_TABLE_TYPES),
+  ]);
 
   return {
     fieldName: rawName || `field_${index + 1}`,
@@ -239,6 +259,13 @@ function normalizeTemplateField(field: any, index: number) {
     aiSuggested: true,
     validationRules: field?.validationRules ?? (field?.fieldType === 'inventory_parts' ? { source: 'inventory_items', multiple: true } : null),
     options: field?.options ?? null,
+    columns: Array.isArray(field?.columns) ? field.columns : null,
+    minimumRows: Number.isFinite(Number(field?.minimumRows)) ? Number(field.minimumRows) : null,
+    maximumRows: Number.isFinite(Number(field?.maximumRows)) ? Number(field.maximumRows) : null,
+    allowManualRows: field?.allowManualRows !== false,
+    allowImport: field?.allowImport === true,
+    dataSource: field?.dataSource ?? null,
+    pdfLayout: field?.pdfLayout ?? null,
   };
 }
 
@@ -457,23 +484,37 @@ async function createGeneratedControlledPdf(params: {
   return Buffer.from(pdfBytes);
 }
 
-async function generateSpecSheetDocumentNumber() {
+async function reserveSpecSheetDocumentNumber(userId?: number | null) {
   const year = new Date().getFullYear();
   const prefix = `SPEC-${year}-`;
-  const result = await db.execute(sql`
-    SELECT document_number
-    FROM controlled_documents
-    WHERE document_number LIKE ${`${prefix}%`}
-    ORDER BY document_number DESC
-    LIMIT 1
-  `);
-  const rows = ((result as any)?.rows || result || []) as any[];
-  const lastSequence = rows
-    .map((row) => Number(String(row.document_number || '').replace(prefix, '')))
-    .filter((value) => Number.isFinite(value))
-    .sort((a, b) => b - a)[0] || 0;
-
-  return `${prefix}${String(lastSequence + 1).padStart(3, '0')}`;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const result = await db.execute(sql`
+      WITH next_number AS (
+        SELECT COALESCE(MAX(
+          CASE WHEN display_number ~ ${`^SPEC-${year}-[0-9]+$`}
+            THEN substring(display_number from '[0-9]+$')::integer ELSE 0 END
+        ), 0) + 1 AS sequence
+        FROM controlled_document_number_registry
+        WHERE display_number LIKE ${`${prefix}%`}
+      )
+      INSERT INTO controlled_document_number_registry (
+        normalized_number, display_number, status, reserved_by_user_id, created_at, updated_at
+      )
+      SELECT
+        ${prefix} || lpad(sequence::text, 3, '0'),
+        ${prefix} || lpad(sequence::text, 3, '0'),
+        'RESERVED',
+        ${userId ?? null},
+        NOW(),
+        NOW()
+      FROM next_number
+      ON CONFLICT (normalized_number) DO NOTHING
+      RETURNING id, display_number
+    `);
+    const row = (((result as any)?.rows || result || []) as any[])[0];
+    if (row) return { registryId: row.id, documentNumber: row.display_number };
+  }
+  throw new Error('Unable to reserve a unique SPEC document number');
 }
 
 function normalizeSpecSheetFileName(title: string, partNumber: string | null | undefined) {
@@ -495,9 +536,21 @@ async function renderSpecSheetPdf(input: {
   templateSections: any[];
   templateFields: any[];
   documentNumber: string;
+  revision?: string;
+  status?: string;
+  effectiveDate?: string | null;
 }) {
+  return renderPartSpecificationSheetPdf(input);
+  /*
+   * Historical inline implementation retained temporarily in this feature
+   * branch for diff review. It is unreachable; production and certification
+   * both execute renderPartSpecificationSheetPdf.
+   */
   const PDFKitDocument = require('pdfkit');
-  const doc = new PDFKitDocument({ margin: 36, size: 'LETTER' });
+  const landscape = input.templateFields.some((field) =>
+    SPEC_SHEET_TABLE_TYPES.has(field.fieldType) && Array.isArray(field.columns) && field.columns.length > 8
+  );
+  const doc = new PDFKitDocument({ margin: 36, size: 'LETTER', layout: landscape ? 'landscape' : 'portrait', bufferPages: true });
   const chunks: Buffer[] = [];
 
   doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -509,6 +562,60 @@ async function renderSpecSheetPdf(input: {
   const writeLine = (label: string, value: any) => {
     doc.font('Helvetica-Bold').text(`${label}: `, { continued: true });
     doc.font('Helvetica').text(value ? String(value) : '-');
+  };
+  const ensureSpace = (height: number) => {
+    if (doc.y + height > doc.page.height - 46) doc.addPage();
+  };
+  const displayCell = (value: any) => {
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (value == null || value === '') return '-';
+    return String(value);
+  };
+  const drawTable = (field: any, rawRows: any[]) => {
+    const columns = Array.isArray(field.columns) ? field.columns : [];
+    if (columns.length === 0) return;
+    const rows = field.fieldType === 'qc_standards_table'
+      ? rawRows.map((row) => calculateQcLimits(row))
+      : rawRows;
+    const totalWeight = columns.reduce((sum: number, column: any) => sum + Number(column.width || 1), 0);
+    const widths = columns.map((column: any) => pageWidth * Number(column.width || 1) / totalWeight);
+    const headerHeight = 26;
+    const drawHeader = () => {
+      ensureSpace(headerHeight + 18);
+      let x = doc.page.margins.left;
+      columns.forEach((column: any, index: number) => {
+        doc.rect(x, doc.y, widths[index], headerHeight).fillAndStroke('#e5e7eb', '#6b7280');
+        doc.fillColor('#111827').font('Helvetica-Bold').fontSize(6.5)
+          .text(column.label || column.key, x + 3, doc.y + 4, { width: widths[index] - 6, height: headerHeight - 6 });
+        x += widths[index];
+      });
+      doc.y += headerHeight;
+    };
+    drawHeader();
+    for (const row of rows) {
+      const heights = columns.map((column: any, index: number) =>
+        doc.heightOfString(displayCell(row?.[column.key]), { width: widths[index] - 6, lineGap: 1 })
+      );
+      const rowHeight = Math.max(18, Math.min(58, Math.max(...heights) + 8));
+      if (doc.y + rowHeight > doc.page.height - 46) {
+        doc.addPage();
+        drawHeader();
+      }
+      let x = doc.page.margins.left;
+      const y = doc.y;
+      columns.forEach((column: any, index: number) => {
+        doc.rect(x, y, widths[index], rowHeight).stroke('#9ca3af');
+        doc.fillColor('#111827').font('Helvetica').fontSize(6.5)
+          .text(displayCell(row?.[column.key]), x + 3, y + 4, {
+            width: widths[index] - 6,
+            height: rowHeight - 7,
+            ellipsis: true,
+            lineGap: 1,
+          });
+        x += widths[index];
+      });
+      doc.y = y + rowHeight;
+    }
   };
 
   doc.font('Helvetica-Bold').fontSize(16).text(input.title, { width: pageWidth });
@@ -537,9 +644,13 @@ async function renderSpecSheetPdf(input: {
 
     for (const field of fields) {
       const rawValue = input.fieldValues[field.fieldName] ?? field.defaultValue ?? '';
-      const value = Array.isArray(rawValue) ? rawValue.join('\n') : String(rawValue || '');
       doc.font('Helvetica-Bold').fontSize(9).text(field.fieldLabel || field.fieldName);
-      doc.font('Helvetica').fontSize(9).text(value || '-', { width: pageWidth, lineGap: 2 });
+      if (SPEC_SHEET_TABLE_TYPES.has(field.fieldType) && Array.isArray(rawValue)) {
+        drawTable(field, rawValue);
+      } else {
+        const value = Array.isArray(rawValue) ? rawValue.join('\n') : String(rawValue || '');
+        doc.font('Helvetica').fontSize(9).text(value || '-', { width: pageWidth, lineGap: 2 });
+      }
       doc.moveDown(0.35);
     }
   }
@@ -550,10 +661,10 @@ async function renderSpecSheetPdf(input: {
   const generatedPdf = await finished;
   const controlledPdf = await PDFDocument.load(generatedPdf);
   const footerFont = await controlledPdf.embedFont(StandardFonts.Helvetica);
-  const footerDate = new Date().toLocaleDateString('en-US');
-  const footerText = `Doc #: ${input.documentNumber} | Revision: 1.0 | Date: ${footerDate} | Configuration Controlled`;
+  const footerDate = input.effectiveDate || new Date().toLocaleDateString('en-US');
+  const pages = controlledPdf.getPages();
 
-  for (const page of controlledPdf.getPages()) {
+  pages.forEach((page, index) => {
     const { width } = page.getSize();
     page.drawRectangle({
       x: 0,
@@ -569,14 +680,17 @@ async function renderSpecSheetPdf(input: {
       thickness: 0.5,
       color: rgb(0.72, 0.72, 0.72),
     });
-    page.drawText(footerText, {
+    page.drawText(
+      `${input.documentNumber} | Rev ${input.revision || '1.0'} | ${input.status || 'DRAFT'} | ${footerDate} | Page ${index + 1} of ${pages.length} | Configuration Controlled | Uncontrolled When Printed`,
+      {
       x: 36,
       y: 8,
-      size: 8,
+      size: 6.5,
       font: footerFont,
       color: rgb(0.2, 0.2, 0.2),
+      maxWidth: width - 72,
     });
-  }
+  });
 
   return Buffer.from(await controlledPdf.save());
 }
@@ -1429,6 +1543,12 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
     const fileBuffer = Buffer.from(fileContent, 'base64');
     const finalTitle = String(title || fileName.replace(/\.[^/.]+$/, '')).trim();
     const finalDocumentType = String(documentType || 'form_template').trim();
+    if (
+      ['spec_sheet', 'specification'].includes(finalDocumentType.toLowerCase()) &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.templateCreate)
+    ) {
+      return;
+    }
     const finalDepartment = String(departmentName || 'Quality').trim();
     const fileUrl = await saveControlledDocumentFile(fileName, fileBuffer);
     const extractedText = await extractPdfText(fileBuffer);
@@ -1582,8 +1702,7 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
     }, ['document_id', 'version_number', 'status', 'created_by']);
     await db.execute(sql`
       UPDATE controlled_documents
-      SET current_revision_id = ${controlledRevision.id},
-          working_draft_revision_id = ${controlledRevision.id},
+      SET working_draft_revision_id = ${controlledRevision.id},
           lifecycle_status = 'DRAFT',
           status = 'draft'
       WHERE id = ${controlledDocument.id}
@@ -1803,6 +1922,12 @@ router.post('/ai-generate', async (req: Request, res: Response) => {
     const finalDocumentType = typeof documentType === 'string' && documentType.trim()
       ? documentType.trim()
       : 'work_instruction';
+    const specActor = ['spec_sheet', 'specification'].includes(finalDocumentType)
+      ? requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.create)
+      : getSpecActor(req);
+    if (['spec_sheet', 'specification'].includes(finalDocumentType) && !specActor) {
+      return;
+    }
     const finalDepartment = typeof departmentName === 'string' && departmentName.trim()
       ? departmentName.trim()
       : 'Manufacturing';
@@ -1994,6 +2119,38 @@ ${templateContent ? `\nTemplate:\n${templateContent}` : ''}`;
       lifecycleStatus: 'DRAFT',
       status: 'draft',
     }).where(eq(controlledDocuments.id, controlledDocument.id));
+    if (specSheet && specActor) {
+      const snapshot = {
+        documentNumber,
+        specificationRevision: '1.0',
+        partNumber,
+        partName,
+        title: documentTitle,
+        fieldValues: generatedContent,
+      };
+      const revisionResult = await db.execute(sql`
+        INSERT INTO spec_sheet_revisions (
+          spec_sheet_id, controlled_document_revision_id, revision, lifecycle_status,
+          template_revision, content_snapshot, content_checksum, file_url, file_name,
+          file_checksum, created_by_user_id, created_by_snapshot
+        ) VALUES (
+          ${specSheet.id}, ${controlledRevision.id}, '1.0', 'DRAFT', '1.0',
+          ${JSON.stringify(snapshot)}::jsonb, ${checksumSnapshot(snapshot)}, ${fileUrl},
+          ${pdfFileName}, ${createHash('sha256').update(pdfBuffer).digest('hex')},
+          ${specActor.id}, ${JSON.stringify(specActorSnapshot(specActor))}::jsonb
+        )
+        RETURNING id
+      `);
+      const specRevision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+      await db.execute(sql`
+        UPDATE spec_sheets
+        SET controlled_document_id = ${controlledDocument.id},
+            working_revision_id = ${specRevision.id},
+            lifecycle_status = 'DRAFT',
+            updated_at = NOW()
+        WHERE id = ${specSheet.id}
+      `);
+    }
     
     res.status(201).json({ document: newDocument, specSheet, controlledDocument, generatedContent });
   } catch (error) {
@@ -2006,6 +2163,12 @@ ${templateContent ? `\nTemplate:\n${templateContent}` : ''}`;
 router.post('/templates/learn', async (req: Request, res: Response) => {
   try {
     const { templateName, templateType, description, referenceDocumentIds } = req.body;
+    if (
+      ['spec_sheet', 'specification'].includes(String(templateType || '').toLowerCase()) &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.templateCreate)
+    ) {
+      return;
+    }
     
     if (!templateName || !templateName.trim()) {
       return res.status(400).json({ error: 'Template name is required' });
@@ -2169,6 +2332,7 @@ Return a JSON object with:
 // Request upload URL for spec sheet
 router.post('/spec-sheets/request-upload-url', async (req: Request, res: Response) => {
   try {
+    if (!requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.create)) return;
     const { name, size, contentType } = req.body;
     
     if (!name) {
@@ -2197,8 +2361,16 @@ router.post('/spec-sheets/request-upload-url', async (req: Request, res: Respons
 // Complete upload for spec sheet
 router.post('/spec-sheets/complete-upload', async (req: Request, res: Response) => {
   try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.create);
+    if (!actor) return;
     const { objectPath, title, originalFileName, fileSize, mimeType, partRoutingId, partNumber, isTemplate, sourceType } = req.body;
-    const user = (req as any).user;
+    const user = actor;
+    if (
+      (isTemplate === true || isTemplate === 'true') &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.templateCreate)
+    ) {
+      return;
+    }
     
     if (!objectPath || !originalFileName) {
       return res.status(400).json({ error: 'Missing required fields: objectPath, originalFileName' });
@@ -2217,18 +2389,49 @@ router.post('/spec-sheets/complete-upload', async (req: Request, res: Response) 
       console.warn('Failed to set ACL policy for spec sheet:', aclError);
     }
     
-    const [sheet] = await db.insert(specSheets).values({
-      title: title || originalFileName,
-      partRoutingId: partRoutingId || null,
-      partNumber: partNumber || null,
-      sourceType: finalSourceType,
-      fileUrl: objectPath,
-      fileName: originalFileName,
-      fileType: mimeType || 'application/octet-stream',
-      fileSize: fileSize || 0,
-      isTemplate: isTemplate === true || isTemplate === 'true',
-      createdBy: user?.username || 'system',
-    }).returning();
+    const sheet = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(specSheets).values({
+        title: title || originalFileName,
+        partRoutingId: partRoutingId || null,
+        partNumber: partNumber || null,
+        sourceType: finalSourceType,
+        fileUrl: objectPath,
+        fileName: originalFileName,
+        fileType: mimeType || 'application/octet-stream',
+        fileSize: fileSize || 0,
+        isTemplate: isTemplate === true || isTemplate === 'true',
+        createdBy: user.username || String(user.id),
+      }).returning();
+      const snapshot = {
+        title: title || originalFileName,
+        partNumber: partNumber || null,
+        sourceType: finalSourceType,
+        uploadedFile: {
+          objectPath,
+          originalFileName,
+          fileSize: fileSize || 0,
+          mimeType: mimeType || 'application/octet-stream',
+        },
+      };
+      const revisionResult = await tx.execute(sql`
+        INSERT INTO spec_sheet_revisions (
+          spec_sheet_id, revision, lifecycle_status, template_revision,
+          part_routing_id, content_snapshot, content_checksum, file_url, file_name,
+          created_by_user_id, created_by_snapshot
+        ) VALUES (
+          ${created.id}, '1.0', 'DRAFT', '1.0', ${partRoutingId || null},
+          ${JSON.stringify(snapshot)}::jsonb, ${checksumSnapshot(snapshot)}, ${objectPath},
+          ${originalFileName}, ${user.id}, ${JSON.stringify(specActorSnapshot(user))}::jsonb
+        )
+        RETURNING id
+      `);
+      const revision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+      await tx.execute(sql`
+        UPDATE spec_sheets SET working_revision_id = ${revision.id}
+        WHERE id = ${created.id}
+      `);
+      return { ...created, workingRevisionId: revision.id };
+    });
     
     res.status(201).json(sheet);
   } catch (error) {
@@ -2252,6 +2455,11 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       fieldValues,
       description,
       projectId,
+      partRoutingId,
+      routingRevision,
+      specificationRevision = '1.0',
+      effectiveDate,
+      action = 'SAVE_DRAFT',
     } = req.body;
     const user = (req as any).user;
     const createdBy = user?.username || 'system';
@@ -2275,7 +2483,7 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
     const defaultFieldByName = new Map(defaultFields.map((field: any) => [field.fieldName ?? field.field_name, field]));
     const templateFields = (((fieldResult as any)?.rows || fieldResult || []) as any[]).map((field) => {
       const fieldName = field.field_name ?? field.fieldName;
-      const defaultField = defaultFieldByName.get(fieldName) ?? {};
+      const defaultField: any = defaultFieldByName.get(fieldName) ?? {};
       return {
         fieldName,
         fieldLabel: field.field_label ?? field.fieldLabel ?? defaultField.fieldLabel ?? defaultField.field_label,
@@ -2284,10 +2492,31 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
         sectionName: field.section_name ?? field.sectionName ?? defaultField.sectionName ?? defaultField.section_name,
         isRequired: field.is_required ?? field.isRequired ?? defaultField.isRequired ?? defaultField.is_required,
         sortOrder: field.sort_order ?? field.sortOrder ?? defaultField.sortOrder ?? defaultField.sort_order,
+        columns: field.columns ?? defaultField.columns ?? null,
+        minimumRows: field.minimum_rows ?? field.minimumRows ?? defaultField.minimumRows ?? null,
+        maximumRows: field.maximum_rows ?? field.maximumRows ?? defaultField.maximumRows ?? null,
+        allowManualRows: field.allow_manual_rows ?? field.allowManualRows ?? defaultField.allowManualRows ?? true,
+        allowImport: field.allow_import ?? field.allowImport ?? defaultField.allowImport ?? false,
+        dataSource: field.data_source ?? field.dataSource ?? defaultField.dataSource ?? null,
+        validationRules: field.validation_rules ?? field.validationRules ?? defaultField.validationRules ?? null,
+        pdfLayout: field.pdf_layout ?? field.pdfLayout ?? defaultField.pdfLayout ?? null,
       };
     });
 
     const values = fieldValues && typeof fieldValues === 'object' ? fieldValues : {};
+    for (const field of templateFields) {
+      const fieldValue = values[field.fieldName];
+      if (field.isRequired && (fieldValue == null || fieldValue === '' || (Array.isArray(fieldValue) && fieldValue.length < (field.minimumRows || 1)))) {
+        return res.status(400).json({ error: `${field.fieldLabel || field.fieldName} is required` });
+      }
+      if (field.fieldType === 'qc_standards_table' && Array.isArray(fieldValue)) {
+        const errors = validateQcRows(fieldValue);
+        if (errors.length > 0) return res.status(400).json({ error: 'Required acceptance criteria missing', details: errors });
+      }
+      if (Array.isArray(fieldValue) && field.maximumRows && fieldValue.length > field.maximumRows) {
+        return res.status(400).json({ error: `${field.fieldLabel || field.fieldName} exceeds the maximum of ${field.maximumRows} rows` });
+      }
+    }
     const finalPartNumber = String(partNumber || values.partNumber || '').trim();
     const finalPartName = String(partName || values.partName || '').trim();
     const finalSku = String(sku || values.sku || '').trim();
@@ -2317,9 +2546,22 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
     const fallbackTitle = `${humanizeDocumentType(templateType)} - ${resolvedPartName || resolvedPartNumber || 'New Document'}`;
     const resolvedTitle = String(title || fallbackTitle).trim();
     const templateSections = Array.isArray(template.sections) ? template.sections : [];
-    const documentNumber = templateType === 'spec_sheet' || templateType === 'specification'
-      ? await generateSpecSheetDocumentNumber()
-      : await generateControlledTemplateNumber();
+    const isSpecSheet = templateType === 'spec_sheet' || templateType === 'specification';
+    if (
+      isSpecSheet &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.create)
+    ) {
+      return;
+    }
+    if (
+      isSpecSheet &&
+      action === 'SUBMIT_REVIEW' &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.submit)
+    ) {
+      return;
+    }
+    const reservedNumber = isSpecSheet ? await reserveSpecSheetDocumentNumber(user?.id) : null;
+    const documentNumber = reservedNumber?.documentNumber ?? await generateControlledTemplateNumber();
     creationStage = 'rendering PDF';
     const pdfBuffer = await renderSpecSheetPdf({
       title: resolvedTitle,
@@ -2331,6 +2573,9 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       templateSections,
       templateFields,
       documentNumber,
+      revision: specificationRevision,
+      status: action === 'SUBMIT_REVIEW' ? 'IN_REVIEW' : 'DRAFT',
+      effectiveDate,
     });
     const fileName = normalizeSpecSheetFileName(resolvedTitle, resolvedPartNumber || templateType);
     creationStage = 'saving PDF to central storage';
@@ -2338,6 +2583,9 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
     const specifications = {
       templateId,
       templateName: template.template_name ?? template.templateName,
+      templateRevision: template.template_revision ?? template.templateRevision ?? '1.0',
+      partRoutingId: partRoutingId || null,
+      routingRevision: routingRevision || null,
       fieldValues: values,
       manufacturedPart: manufacturedPart ? {
         inventoryItemId: manufacturedPart.id,
@@ -2387,13 +2635,21 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
     }, ['title', 'document_type']);
 
     let specSheet = null;
-    if (templateType === 'spec_sheet' || templateType === 'specification') {
+    if (isSpecSheet) {
       specSheet = await insertPublicRowReturning('spec_sheets', {
+        part_routing_id: partRoutingId || null,
         part_number: resolvedPartNumber,
         title: resolvedTitle,
         version: 1,
         description: description || `Filled spec sheet from template ${template.template_name ?? template.templateName}`,
         specifications,
+        template_id: templateId,
+        template_revision: template.template_revision ?? template.templateRevision ?? '1.0',
+        inventory_item_id: manufacturedPart?.id ?? null,
+        routing_revision: routingRevision || null,
+        lifecycle_status: action === 'SUBMIT_REVIEW' ? 'IN_REVIEW' : 'DRAFT',
+        specification_revision: specificationRevision,
+        effective_date: effectiveDate || null,
         source_type: 'generated',
         file_url: fileUrl,
         file_name: path.basename(fileUrl),
@@ -2427,14 +2683,22 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       created_at: new Date(),
       updated_at: new Date(),
     }, ['document_number', 'document_name', 'document_type', 'department', 'current_version', 'status', 'created_by']);
-    await insertPublicRowReturning('controlled_document_number_registry', {
-      normalized_number: documentNumber.trim().toUpperCase(),
-      display_number: documentNumber.trim(),
-      controlled_document_id: controlledDocument.id,
-      status: 'RESERVED',
-      created_at: new Date(),
-      updated_at: new Date(),
-    }, ['normalized_number', 'display_number', 'controlled_document_id']);
+    if (reservedNumber) {
+      await db.execute(sql`
+        UPDATE controlled_document_number_registry
+        SET controlled_document_id = ${controlledDocument.id}, updated_at = NOW()
+        WHERE id = ${reservedNumber.registryId}
+      `);
+    } else {
+      await insertPublicRowReturning('controlled_document_number_registry', {
+        normalized_number: documentNumber.trim().toUpperCase(),
+        display_number: documentNumber.trim(),
+        controlled_document_id: controlledDocument.id,
+        status: 'RESERVED',
+        created_at: new Date(),
+        updated_at: new Date(),
+      }, ['normalized_number', 'display_number', 'controlled_document_id']);
+    }
 
     const controlledRevision = await insertPublicRowReturning('document_version_history', {
       document_id: controlledDocument.id,
@@ -2455,11 +2719,70 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       expiration_date: expirationDate.toISOString().split('T')[0],
       created_at: new Date(),
     }, ['document_id', 'version_number', 'status', 'created_by']);
+    let specSheetRevision = null;
+    if (specSheet) {
+      const snapshot = {
+        documentNumber,
+        specificationRevision,
+        templateId,
+        templateRevision: template.template_revision ?? template.templateRevision ?? '1.0',
+        inventoryItemId: manufacturedPart?.id ?? null,
+        partRoutingId: partRoutingId || null,
+        routingRevision: routingRevision || null,
+        partNumber: resolvedPartNumber,
+        partName: resolvedPartName,
+        sku: resolvedSku,
+        title: resolvedTitle,
+        fields: templateFields,
+        fieldValues: values,
+      };
+      specSheetRevision = await insertPublicRowReturning('spec_sheet_revisions', {
+        id: randomUUID(),
+        spec_sheet_id: specSheet.id,
+        controlled_document_revision_id: controlledRevision.id,
+        revision: specificationRevision,
+        lifecycle_status: action === 'SUBMIT_REVIEW' ? 'IN_REVIEW' : 'DRAFT',
+        template_id: templateId,
+        template_revision: template.template_revision ?? template.templateRevision ?? '1.0',
+        inventory_item_id: manufacturedPart?.id ?? null,
+        part_routing_id: partRoutingId || null,
+        routing_revision: routingRevision || null,
+        content_snapshot: snapshot,
+        content_checksum: checksumSnapshot(snapshot),
+        file_url: fileUrl,
+        file_name: path.basename(fileUrl),
+        file_checksum: createHash('sha256').update(pdfBuffer).digest('hex'),
+        effective_date: effectiveDate || null,
+        created_by_user_id: user?.id ?? null,
+        created_by_snapshot: { id: user?.id ?? null, username: createdBy, displayName: user?.name || user?.displayName || createdBy },
+        created_at: new Date(),
+      }, ['spec_sheet_id', 'revision', 'content_snapshot', 'content_checksum']);
+      await db.execute(sql`
+        UPDATE spec_sheets
+        SET controlled_document_id = ${controlledDocument.id},
+            lifecycle_status = ${action === 'SUBMIT_REVIEW' ? 'IN_REVIEW' : 'DRAFT'},
+            working_revision_id = ${specSheetRevision.id},
+            updated_at = NOW()
+        WHERE id = ${specSheet.id}
+      `);
+      if (action === 'SUBMIT_REVIEW') {
+        await db.execute(sql`
+          INSERT INTO spec_sheet_transition_audit (
+            spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+            actor_user_id, actor_snapshot, content_checksum
+          ) VALUES (
+            ${specSheet.id}, ${specSheetRevision.id}, 'DRAFT', 'IN_REVIEW',
+            'Created and submitted for controlled review', ${user.id},
+            ${JSON.stringify(specActorSnapshot(user))}::jsonb,
+            ${specSheetRevision.content_checksum}
+          )
+        `);
+      }
+    }
     await db.execute(sql`
       UPDATE controlled_documents
-      SET current_revision_id = ${controlledRevision.id},
-          working_draft_revision_id = ${controlledRevision.id},
-          lifecycle_status = 'DRAFT',
+      SET working_draft_revision_id = ${controlledRevision.id},
+          lifecycle_status = ${action === 'SUBMIT_REVIEW' ? 'IN_REVIEW' : 'DRAFT'},
           status = 'draft'
       WHERE id = ${controlledDocument.id}
     `);
@@ -2511,6 +2834,549 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
 
 router.post('/documents/from-template', createDocumentFromTemplate);
 router.post('/spec-sheets/from-template', createDocumentFromTemplate);
+
+router.get('/part-routings/:routingId/spec-import', async (req: Request, res: Response) => {
+  try {
+    const routingResult = await db.execute(sql`
+      SELECT id, part_number, part_name, routing_revision, department_config, qc_standards, materials_config
+      FROM part_routings WHERE id = ${req.params.routingId} LIMIT 1
+    `);
+    const routing = (((routingResult as any)?.rows || routingResult || []) as any[])[0];
+    if (!routing) return res.status(404).json({ error: 'No routing exists' });
+    const qcRows: any[] = [];
+    const departmentConfig = routing.department_config || {};
+    for (const [department, config] of Object.entries(departmentConfig) as [string, any][]) {
+      for (const phase of ['startQcStandards', 'qcStandards', 'finishQcStandards']) {
+        const inspectionPhase = phase === 'startQcStandards' ? 'START' : phase === 'finishQcStandards' ? 'FINISH' : 'WORK';
+        for (const [index, standard] of Array.from((Array.isArray(config?.[phase]) ? config[phase] : []).entries()) as Array<[number, any]>) {
+          qcRows.push({
+            ...standard,
+            department,
+            inspectionPhase,
+            sourceRoutingId: routing.id,
+            sourceRoutingRevision: String(routing.routing_revision),
+            sourceRoutingQcIdentifier: `${routing.id}:${department}:${inspectionPhase}:${index}`,
+          });
+        }
+      }
+    }
+    for (const [index, standard] of (Array.isArray(routing.qc_standards) ? routing.qc_standards : []).entries()) {
+      qcRows.push({
+        ...standard,
+        standard: standard.standard ?? standard.standardName,
+        inspectionPhase: standard.inspectionPhase || 'WORK',
+        sourceRoutingId: routing.id,
+        sourceRoutingRevision: String(routing.routing_revision),
+        sourceRoutingQcIdentifier: `${routing.id}:routing:WORK:${index}`,
+      });
+    }
+    const cncResult = await db.execute(sql`
+      SELECT ro.id AS source_routing_operation_id, ro.step_number, ro.department_name,
+             ro.operation_name, ro.operation_type, ro.work_center, ro.estimated_minutes,
+             ro.requires_signature, ro.requires_certification, ro.is_outside_process, ro.instruction_pack,
+             rco.id AS source_cnc_operation_id, rco.machine_class, rco.preferred_machine_id,
+             rco.program_id, rco.fixture, rco.estimated_setup_minutes, rco.estimated_cycle_minutes,
+             rco.prove_out_required, cp.program_name, cp.program_number, cp.version AS program_revision,
+             cp.machine AS preferred_machine
+      FROM routing_operations ro
+      JOIN routing_cnc_operations rco ON rco.routing_operation_id = ro.id
+      LEFT JOIN cnc_programs cp ON cp.id = rco.program_id
+      WHERE ro.part_routing_id = ${req.params.routingId}
+      ORDER BY ro.step_number, ro.id
+    `);
+    const cncRows = (((cncResult as any)?.rows || cncResult || []) as any[]).map((row) => ({
+      stepNumber: row.step_number,
+      departmentName: row.department_name,
+      operationName: row.operation_name,
+      operationType: row.operation_type,
+      workCenter: row.work_center,
+      programId: row.program_id,
+      programName: row.program_name,
+      programNumber: row.program_number,
+      programRevision: row.program_revision,
+      machineClass: row.machine_class,
+      preferredMachineId: row.preferred_machine_id,
+      preferredMachine: row.preferred_machine,
+      fixture: row.fixture,
+      estimatedMinutes: row.estimated_minutes,
+      estimatedSetupMinutes: row.estimated_setup_minutes,
+      estimatedCycleMinutes: row.estimated_cycle_minutes,
+      proveOutRequired: row.prove_out_required,
+      requiresCertification: row.requires_certification,
+      requiresSignature: row.requires_signature,
+      isOutsideProcess: row.is_outside_process,
+      linkedWorkInstruction: row.instruction_pack?.workInstructionId || row.instruction_pack?.documentId || null,
+      sourceRoutingOperationId: row.source_routing_operation_id,
+      sourceCncOperationId: row.source_cnc_operation_id,
+      sourceRoutingId: routing.id,
+      sourceRoutingRevision: String(routing.routing_revision),
+      manuallyEntered: false,
+    }));
+    res.json({
+      routing: { id: routing.id, partNumber: routing.part_number, partName: routing.part_name, revision: String(routing.routing_revision) },
+      qcStandards: qcRows,
+      cncOperations: cncRows,
+      materials: Array.isArray(routing.materials_config) ? routing.materials_config : [],
+      emptyStates: {
+        qc: qcRows.length === 0 ? 'Routing has no QC standards' : null,
+        cnc: cncRows.length === 0 ? 'Routing has no CNC operations' : null,
+      },
+    });
+  } catch (error) {
+    console.error('Error importing routing data for spec sheet:', error);
+    res.status(500).json({ error: 'Failed to import Routing QC/CNC data' });
+  }
+});
+
+router.put('/spec-sheets/:id/revisions/:revisionId', async (req: Request, res: Response) => {
+  try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.edit);
+    if (!actor) return;
+    const suppliedSnapshot =
+      req.body?.contentSnapshot && typeof req.body.contentSnapshot === 'object'
+        ? req.body.contentSnapshot
+        : null;
+    const suppliedFieldValues =
+      req.body?.fieldValues && typeof req.body.fieldValues === 'object'
+        ? req.body.fieldValues
+        : null;
+    if (!suppliedSnapshot && !suppliedFieldValues) {
+      return res.status(400).json({ error: 'Controlled contentSnapshot or fieldValues is required' });
+    }
+
+    const updated = await db.transaction(async (tx) => {
+      const lockedResult = await tx.execute(sql`
+        SELECT ssr.*, ss.working_revision_id
+        FROM spec_sheet_revisions ssr
+        JOIN spec_sheets ss ON ss.id = ssr.spec_sheet_id
+        WHERE ssr.id = ${req.params.revisionId}
+          AND ssr.spec_sheet_id = ${req.params.id}
+        FOR UPDATE
+      `);
+      const locked = (((lockedResult as any)?.rows || lockedResult || []) as any[])[0];
+      if (!locked) throw Object.assign(new Error('Revision not found'), { status: 404 });
+      if (locked.lifecycle_status !== 'DRAFT' || locked.working_revision_id !== locked.id) {
+        throw Object.assign(
+          new Error('Only the exact working DRAFT revision can be edited'),
+          { status: 409 }
+        );
+      }
+      const nextSnapshot = suppliedSnapshot || {
+        ...locked.content_snapshot,
+        fieldValues: suppliedFieldValues,
+      };
+      const nextChecksum = checksumSnapshot(nextSnapshot);
+      const revisionResult = await tx.execute(sql`
+        UPDATE spec_sheet_revisions
+        SET content_snapshot = ${JSON.stringify(nextSnapshot)}::jsonb,
+            content_checksum = ${nextChecksum}
+        WHERE id = ${locked.id} AND lifecycle_status = 'DRAFT'
+        RETURNING *
+      `);
+      await tx.execute(sql`
+        DELETE FROM spec_sheet_revision_approvals
+        WHERE spec_sheet_revision_id = ${locked.id}
+      `);
+      await tx.execute(sql`
+        UPDATE spec_sheets
+        SET specifications = ${JSON.stringify(nextSnapshot)}::jsonb,
+            updated_at = NOW()
+        WHERE id = ${req.params.id} AND working_revision_id = ${locked.id}
+      `);
+      return (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+    });
+    res.json(updated);
+  } catch (error: any) {
+    const status = Number(error?.status) || 500;
+    if (status < 500) return res.status(status).json({ error: error.message });
+    console.error('Error updating controlled spec-sheet draft:', error);
+    res.status(500).json({ error: 'Failed to update controlled specification draft' });
+  }
+});
+
+router.post('/spec-sheets/:id/revisions/:revisionId/submit', async (req: Request, res: Response) => {
+  try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.submit);
+    if (!actor) return;
+    const reason = String(req.body?.reason || 'Submitted for controlled review').trim();
+    const revision = await db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        SELECT * FROM spec_sheet_revisions
+        WHERE id = ${req.params.revisionId} AND spec_sheet_id = ${req.params.id}
+        FOR UPDATE
+      `);
+      const current = (((result as any)?.rows || result || []) as any[])[0];
+      if (!current) throw Object.assign(new Error('Revision not found'), { status: 404 });
+      assertSpecTransition(current.lifecycle_status, 'IN_REVIEW');
+      await tx.execute(sql`
+        UPDATE spec_sheet_revisions SET lifecycle_status = 'IN_REVIEW'
+        WHERE id = ${current.id}
+      `);
+      await tx.execute(sql`
+        UPDATE spec_sheets SET lifecycle_status = 'IN_REVIEW', updated_at = NOW()
+        WHERE id = ${req.params.id} AND working_revision_id = ${current.id}
+      `);
+      await tx.execute(sql`
+        INSERT INTO spec_sheet_transition_audit (
+          spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+          actor_user_id, actor_snapshot, content_checksum
+        ) VALUES (
+          ${req.params.id}, ${current.id}, ${current.lifecycle_status}, 'IN_REVIEW',
+          ${reason}, ${actor.id}, ${JSON.stringify(specActorSnapshot(actor))}::jsonb,
+          ${current.content_checksum}
+        )
+      `);
+      return { ...current, lifecycle_status: 'IN_REVIEW' };
+    });
+    res.json(revision);
+  } catch (error: any) {
+    const status = Number(error?.status) || (String(error?.message).startsWith('Invalid specification') ? 409 : 500);
+    res.status(status).json({ error: status === 500 ? 'Failed to submit specification' : error.message });
+  }
+});
+
+router.post('/spec-sheets/:id/revisions/:revisionId/approve', async (req: Request, res: Response) => {
+  try {
+    const approvalRole = String(req.body.approvalRole || '').toUpperCase();
+    if (![...REQUIRED_SPEC_APPROVALS, 'CUSTOMER'].includes(approvalRole as any)) {
+      return res.status(400).json({ error: 'Approval role must be Engineering, Quality, Production, or Customer' });
+    }
+    const roleCapability = `spec_sheets.approve.${approvalRole.toLowerCase()}`;
+    const actor = requireSpecCapability(req, res, roleCapability);
+    if (!actor) return;
+    const decision = String(req.body.decision || 'APPROVED').toUpperCase();
+    if (!['APPROVED', 'REJECTED'].includes(decision)) {
+      return res.status(400).json({ error: 'Decision must be APPROVED or REJECTED' });
+    }
+    if (decision === 'REJECTED' && !String(req.body.comment || '').trim()) {
+      return res.status(400).json({ error: 'A rejection comment is required' });
+    }
+    const revisionResult = await db.execute(sql`
+      SELECT * FROM spec_sheet_revisions
+      WHERE id = ${req.params.revisionId} AND spec_sheet_id = ${req.params.id}
+      LIMIT 1
+    `);
+    const revision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+    if (!revision) return res.status(404).json({ error: 'Spec-sheet revision not found' });
+    if (revision.lifecycle_status !== 'IN_REVIEW') {
+      return res.status(409).json({ error: 'Only an IN_REVIEW revision can receive approval evidence' });
+    }
+    const approval = await db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        INSERT INTO spec_sheet_revision_approvals (
+          id, spec_sheet_revision_id, approval_role, decision, actor_user_id,
+          actor_display_name, actor_role, actor_capabilities, revision_snapshot,
+          content_checksum, comment, decided_at
+        ) VALUES (
+          ${randomUUID()}, ${revision.id}, ${approvalRole}, ${decision}, ${actor.id},
+          ${actor.displayName || actor.name || actor.username || `user-${actor.id}`},
+          ${actor.role || 'UNKNOWN'}, ${JSON.stringify(actor.capabilities)}::jsonb,
+          ${revision.revision}, ${revision.content_checksum}, ${req.body.comment || null}, NOW()
+        )
+        RETURNING *
+      `);
+      const inserted = (((result as any)?.rows || result || []) as any[])[0];
+      if (decision === 'REJECTED') {
+        assertSpecTransition(revision.lifecycle_status, 'DRAFT');
+        await tx.execute(sql`
+          UPDATE spec_sheet_revisions SET lifecycle_status = 'DRAFT'
+          WHERE id = ${revision.id} AND lifecycle_status = 'IN_REVIEW'
+        `);
+        await tx.execute(sql`
+          UPDATE spec_sheets
+          SET lifecycle_status = 'DRAFT', working_revision_id = ${revision.id}, updated_at = NOW()
+          WHERE id = ${req.params.id}
+        `);
+        await tx.execute(sql`
+          INSERT INTO spec_sheet_transition_audit (
+            spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+            actor_user_id, actor_snapshot, content_checksum
+          ) VALUES (
+            ${req.params.id}, ${revision.id}, ${revision.lifecycle_status}, 'DRAFT',
+            ${String(req.body.comment)}, ${actor.id},
+            ${JSON.stringify(specActorSnapshot(actor))}::jsonb, ${revision.content_checksum}
+          )
+        `);
+      }
+      return inserted;
+    });
+    res.status(201).json(approval);
+  } catch (error: any) {
+    if (String(error?.message || '').includes('duplicate key')) return res.status(409).json({ error: 'This role already decided this exact revision' });
+    console.error('Error recording spec-sheet approval:', error);
+    res.status(500).json({ error: 'Failed to record approval' });
+  }
+});
+
+router.post('/spec-sheets/:id/revisions/:revisionId/release', async (req: Request, res: Response) => {
+  try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.release);
+    if (!actor) return;
+    const revisionResult = await db.execute(sql`
+      SELECT ssr.*, ss.controlled_document_id, ss.released_revision_id
+      FROM spec_sheet_revisions ssr JOIN spec_sheets ss ON ss.id = ssr.spec_sheet_id
+      WHERE ssr.id = ${req.params.revisionId} AND ssr.spec_sheet_id = ${req.params.id}
+      LIMIT 1
+    `);
+    const revision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+    if (!revision) return res.status(404).json({ error: 'Spec-sheet revision not found' });
+    if (revision.lifecycle_status !== 'IN_REVIEW') {
+      return res.status(409).json({ error: 'Only an IN_REVIEW revision is releasable' });
+    }
+    if (
+      revision.released_revision_id &&
+      revision.released_revision_id !== revision.id &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.supersede)
+    ) {
+      return;
+    }
+    const approvalsResult = await db.execute(sql`
+      SELECT approval_role, decision, content_checksum, revision_snapshot
+      FROM spec_sheet_revision_approvals WHERE spec_sheet_revision_id = ${revision.id}
+    `);
+    const approvals = ((approvalsResult as any)?.rows || approvalsResult || []) as any[];
+    const missing = REQUIRED_SPEC_APPROVALS.filter((role) => !approvals.some((approval) =>
+      approval.approval_role === role && approval.decision === 'APPROVED'
+      && approval.content_checksum === revision.content_checksum && approval.revision_snapshot === revision.revision
+    ));
+    if (missing.length > 0) return res.status(409).json({ error: 'Required approval missing', missingApprovals: missing });
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE spec_sheet_revisions
+        SET lifecycle_status = 'SUPERSEDED', superseded_by_revision_id = ${revision.id}
+        WHERE spec_sheet_id = ${req.params.id} AND lifecycle_status = 'RELEASED' AND id <> ${revision.id}
+      `);
+      await tx.execute(sql`
+        UPDATE spec_sheet_revisions
+        SET lifecycle_status = 'RELEASED', released_at = NOW(), effective_date = COALESCE(effective_date, CURRENT_DATE)
+        WHERE id = ${revision.id}
+      `);
+      await tx.execute(sql`
+        UPDATE spec_sheets
+        SET lifecycle_status = 'RELEASED', released_revision_id = ${revision.id},
+            working_revision_id = NULL,
+            effective_date = COALESCE(${req.body.effectiveDate || null}::date, effective_date, CURRENT_DATE),
+            updated_at = NOW()
+        WHERE id = ${req.params.id}
+      `);
+      await tx.execute(sql`
+        INSERT INTO spec_sheet_transition_audit (
+          spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+          actor_user_id, actor_snapshot, content_checksum
+        ) VALUES (
+          ${req.params.id}, ${revision.id}, ${revision.lifecycle_status}, 'RELEASED',
+          ${String(req.body.reason || 'Approved controlled release')}, ${actor.id},
+          ${JSON.stringify(specActorSnapshot(actor))}::jsonb, ${revision.content_checksum}
+        )
+      `);
+      await tx.execute(sql`
+        UPDATE document_version_history
+        SET lifecycle_status = 'RELEASED', status = 'approved', released_at = NOW(),
+            effective_date = COALESCE(${req.body.effectiveDate || null}::date, effective_date, CURRENT_DATE)
+        WHERE id = ${revision.controlled_document_revision_id}
+      `);
+      await tx.execute(sql`
+        UPDATE controlled_documents
+        SET current_revision_id = ${revision.controlled_document_revision_id},
+            working_draft_revision_id = NULL, lifecycle_status = 'RELEASED', status = 'approved',
+            current_version = ${revision.revision}, updated_at = NOW()
+        WHERE id = ${revision.controlled_document_id}
+      `);
+      await tx.execute(sql`
+        UPDATE controlled_document_number_registry
+        SET status = 'ASSIGNED', updated_at = NOW()
+        WHERE controlled_document_id = ${revision.controlled_document_id}
+      `);
+    });
+    res.json({ id: revision.id, lifecycleStatus: 'RELEASED', revision: revision.revision, contentChecksum: revision.content_checksum });
+  } catch (error) {
+    console.error('Error releasing spec-sheet revision:', error);
+    res.status(500).json({ error: 'Failed to release specification' });
+  }
+});
+
+router.post('/spec-sheets/:id/revisions/:revisionId/reopen', async (req: Request, res: Response) => {
+  try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.reopen);
+    if (!actor) return;
+    const reason = String(req.body?.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'Reopen reason is required' });
+    const reopened = await db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        SELECT * FROM spec_sheet_revisions
+        WHERE id = ${req.params.revisionId} AND spec_sheet_id = ${req.params.id}
+        FOR UPDATE
+      `);
+      const revision = (((result as any)?.rows || result || []) as any[])[0];
+      if (!revision) throw Object.assign(new Error('Revision not found'), { status: 404 });
+      assertSpecTransition(revision.lifecycle_status, 'DRAFT');
+      await tx.execute(sql`
+        UPDATE spec_sheet_revisions SET lifecycle_status = 'DRAFT'
+        WHERE id = ${revision.id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM spec_sheet_revision_approvals
+        WHERE spec_sheet_revision_id = ${revision.id}
+      `);
+      await tx.execute(sql`
+        UPDATE spec_sheets
+        SET lifecycle_status = 'DRAFT', working_revision_id = ${revision.id}, updated_at = NOW()
+        WHERE id = ${req.params.id}
+      `);
+      await tx.execute(sql`
+        INSERT INTO spec_sheet_transition_audit (
+          spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+          actor_user_id, actor_snapshot, content_checksum
+        ) VALUES (
+          ${req.params.id}, ${revision.id}, ${revision.lifecycle_status}, 'DRAFT',
+          ${reason}, ${actor.id}, ${JSON.stringify(specActorSnapshot(actor))}::jsonb,
+          ${revision.content_checksum}
+        )
+      `);
+      return { ...revision, lifecycle_status: 'DRAFT' };
+    });
+    res.json(reopened);
+  } catch (error: any) {
+    const status = Number(error?.status) || (String(error?.message).startsWith('Invalid specification') ? 409 : 500);
+    res.status(status).json({ error: status === 500 ? 'Failed to reopen specification' : error.message });
+  }
+});
+
+router.post('/spec-sheets/:id/revisions/:revisionId/obsolete', async (req: Request, res: Response) => {
+  try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.obsolete);
+    if (!actor) return;
+    const reason = String(req.body?.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'Obsolete reason is required' });
+    const obsolete = await db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        SELECT * FROM spec_sheet_revisions
+        WHERE id = ${req.params.revisionId} AND spec_sheet_id = ${req.params.id}
+        FOR UPDATE
+      `);
+      const revision = (((result as any)?.rows || result || []) as any[])[0];
+      if (!revision) throw Object.assign(new Error('Revision not found'), { status: 404 });
+      assertSpecTransition(revision.lifecycle_status, 'OBSOLETE');
+      await tx.execute(sql`
+        UPDATE spec_sheet_revisions SET lifecycle_status = 'OBSOLETE'
+        WHERE id = ${revision.id}
+      `);
+      await tx.execute(sql`
+        UPDATE spec_sheets
+        SET lifecycle_status = 'OBSOLETE', working_revision_id = NULL, updated_at = NOW()
+        WHERE id = ${req.params.id}
+      `);
+      await tx.execute(sql`
+        INSERT INTO spec_sheet_transition_audit (
+          spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+          actor_user_id, actor_snapshot, content_checksum
+        ) VALUES (
+          ${req.params.id}, ${revision.id}, ${revision.lifecycle_status}, 'OBSOLETE',
+          ${reason}, ${actor.id}, ${JSON.stringify(specActorSnapshot(actor))}::jsonb,
+          ${revision.content_checksum}
+        )
+      `);
+      return { ...revision, lifecycle_status: 'OBSOLETE' };
+    });
+    res.json(obsolete);
+  } catch (error: any) {
+    const status = Number(error?.status) || (String(error?.message).startsWith('Invalid specification') ? 409 : 500);
+    res.status(status).json({ error: status === 500 ? 'Failed to obsolete specification' : error.message });
+  }
+});
+
+router.get('/inventory-items/:inventoryItemId/specifications', async (req: Request, res: Response) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT ss.*, ssr.revision, ssr.file_url AS revision_file_url, ssr.content_checksum,
+             pr.routing_revision AS current_routing_revision,
+             dt.template_revision AS current_template_revision,
+             CASE
+               WHEN ssr.routing_revision IS NOT NULL
+                AND pr.routing_revision::text IS DISTINCT FROM ssr.routing_revision
+               THEN 'REVIEW_REQUIRED'
+               WHEN dt.template_revision IS DISTINCT FROM ssr.template_revision
+               THEN 'REVIEW_REQUIRED'
+               WHEN EXISTS (
+                 SELECT 1
+                 FROM jsonb_array_elements(
+                   COALESCE(
+                     ssr.content_snapshot #> '{fieldValues,cncOperations}',
+                     '[]'::jsonb
+                   )
+                 ) captured
+                 LEFT JOIN routing_cnc_operations rco
+                   ON rco.id::text = captured->>'sourceCncOperationId'
+                 LEFT JOIN cnc_programs cp ON cp.id = rco.program_id
+                 WHERE COALESCE((captured->>'manuallyEntered')::boolean, false) = false
+                   AND captured ? 'sourceCncOperationId'
+                   AND (
+                     rco.id IS NULL
+                     OR rco.program_id::text IS DISTINCT FROM captured->>'programId'
+                     OR cp.version::text IS DISTINCT FROM captured->>'programRevision'
+                   )
+               )
+               THEN 'REVIEW_REQUIRED'
+               ELSE ss.source_change_status
+             END AS effective_source_change_status
+      FROM spec_sheets ss
+      LEFT JOIN spec_sheet_revisions ssr ON ssr.id = ss.released_revision_id
+      LEFT JOIN part_routings pr ON pr.id = ssr.part_routing_id
+      LEFT JOIN document_templates dt ON dt.id = ssr.template_id
+      WHERE ss.inventory_item_id = ${Number(req.params.inventoryItemId)}
+      ORDER BY ss.effective_date DESC NULLS LAST, ss.created_at DESC
+    `);
+    res.json((result as any)?.rows || result || []);
+  } catch (error) {
+    console.error('Error loading inventory specifications:', error);
+    res.status(500).json({ error: 'Failed to load specifications' });
+  }
+});
+
+router.post('/spec-sheets/:id/revisions', async (req: Request, res: Response) => {
+  try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.edit);
+    if (!actor) return;
+    const releasedResult = await db.execute(sql`
+      SELECT ssr.* FROM spec_sheets ss
+      JOIN spec_sheet_revisions ssr ON ssr.id = ss.released_revision_id
+      WHERE ss.id = ${req.params.id} LIMIT 1
+    `);
+    const released = (((releasedResult as any)?.rows || releasedResult || []) as any[])[0];
+    if (!released) return res.status(409).json({ error: 'A released revision is required before creating a successor' });
+    const revision = String(req.body.revision || '').trim();
+    if (!revision || revision === released.revision) return res.status(400).json({ error: 'A distinct new revision is required' });
+    const snapshot = { ...released.content_snapshot, specificationRevision: revision, basedOnRevisionId: released.id };
+    const user = actor;
+    const draft = await insertPublicRowReturning('spec_sheet_revisions', {
+      id: randomUUID(),
+      spec_sheet_id: req.params.id,
+      revision,
+      lifecycle_status: 'DRAFT',
+      template_id: released.template_id,
+      template_revision: released.template_revision,
+      inventory_item_id: released.inventory_item_id,
+      part_routing_id: released.part_routing_id,
+      routing_revision: released.routing_revision,
+      content_snapshot: snapshot,
+      content_checksum: checksumSnapshot(snapshot),
+      created_by_user_id: user.id,
+      created_by_snapshot: { id: user.id, username: user.username, displayName: user.displayName || user.name || user.username },
+      created_at: new Date(),
+    }, ['spec_sheet_id', 'revision', 'content_snapshot', 'content_checksum']);
+    await db.execute(sql`
+      UPDATE spec_sheets
+      SET lifecycle_status = 'DRAFT', working_revision_id = ${draft.id},
+          source_change_status = 'CURRENT', updated_at = NOW()
+      WHERE id = ${req.params.id}
+    `);
+    res.status(201).json(draft);
+  } catch (error: any) {
+    if (String(error?.message || '').includes('duplicate key')) return res.status(409).json({ error: 'That specification revision already exists' });
+    console.error('Error creating spec-sheet revision:', error);
+    res.status(500).json({ error: 'Failed to create revision' });
+  }
+});
 
 // Create Distribution Log
 router.post('/distribution-logs', async (req: Request, res: Response) => {
@@ -2854,22 +3720,49 @@ router.post('/:id/generate-routing', async (req: Request, res: Response) => {
 // Create spec sheet
 router.post('/spec-sheets', async (req: Request, res: Response) => {
   try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.create);
+    if (!actor) return;
     const { partNumber, title, version, description, specifications, sourceType } = req.body;
-    const user = (req as any).user;
 
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
     }
 
-    const [specSheet] = await db.insert(specSheets).values({
-      partNumber: partNumber || null,
-      title,
-      version: version || 1,
-      description: description || null,
-      specifications: specifications || null,
-      sourceType: sourceType || 'uploaded',
-      createdBy: user?.username || 'system',
-    }).returning();
+    const specSheet = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(specSheets).values({
+        partNumber: partNumber || null,
+        title,
+        version: version || 1,
+        description: description || null,
+        specifications: specifications || {},
+        sourceType: sourceType || 'uploaded',
+        createdBy: actor.username || String(actor.id),
+      }).returning();
+      const snapshot = {
+        partNumber: partNumber || null,
+        title,
+        version: version || 1,
+        description: description || null,
+        fieldValues: specifications || {},
+      };
+      const revisionResult = await tx.execute(sql`
+        INSERT INTO spec_sheet_revisions (
+          spec_sheet_id, revision, lifecycle_status, template_revision,
+          content_snapshot, content_checksum, created_by_user_id, created_by_snapshot
+        ) VALUES (
+          ${created.id}, '1.0', 'DRAFT', '1.0',
+          ${JSON.stringify(snapshot)}::jsonb, ${checksumSnapshot(snapshot)}, ${actor.id},
+          ${JSON.stringify(specActorSnapshot(actor))}::jsonb
+        )
+        RETURNING id
+      `);
+      const revision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+      await tx.execute(sql`
+        UPDATE spec_sheets SET working_revision_id = ${revision.id}
+        WHERE id = ${created.id}
+      `);
+      return { ...created, workingRevisionId: revision.id };
+    });
 
     res.status(201).json(specSheet);
   } catch (error) {
@@ -2881,6 +3774,7 @@ router.post('/spec-sheets', async (req: Request, res: Response) => {
 // Convert an existing spec sheet into a reusable fillable template
 router.post('/spec-sheets/:id/create-template', async (req: Request, res: Response) => {
   try {
+    if (!requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.templateCreate)) return;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(req.params.id)) {
       return res.status(400).json({ error: 'Invalid spec sheet ID format' });
@@ -3003,9 +3897,16 @@ router.get('/spec-sheets/:id', async (req: Request, res: Response) => {
 // Update spec sheet
 router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
   try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.edit);
+    if (!actor) return;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(req.params.id)) {
       return res.status(400).json({ error: 'Invalid spec sheet ID format' });
+    }
+    const stateResult = await db.execute(sql`SELECT lifecycle_status FROM spec_sheets WHERE id = ${req.params.id} LIMIT 1`);
+    const state = (((stateResult as any)?.rows || stateResult || []) as any[])[0];
+    if (state && ['RELEASED', 'SUPERSEDED', 'OBSOLETE'].includes(state.lifecycle_status)) {
+      return res.status(409).json({ error: 'Released specifications are immutable; create a new revision' });
     }
 
     const { partNumber, title, version, description, specifications, isTemplate, isActive } = req.body;
@@ -3019,17 +3920,55 @@ router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
     if (isTemplate !== undefined) updateData.isTemplate = isTemplate === true || isTemplate === 'true';
     if (isActive !== undefined) updateData.isActive = isActive === true || isActive === 'true';
 
-    const [updated] = await db.update(specSheets)
-      .set(updateData)
-      .where(eq(specSheets.id, req.params.id))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      const revisionResult = await tx.execute(sql`
+        SELECT ssr.*
+        FROM spec_sheets ss
+        JOIN spec_sheet_revisions ssr ON ssr.id = ss.working_revision_id
+        WHERE ss.id = ${req.params.id}
+        FOR UPDATE
+      `);
+      const workingRevision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+      if (!workingRevision || workingRevision.lifecycle_status !== 'DRAFT') {
+        throw Object.assign(
+          new Error('Legacy updates require an exact controlled working DRAFT revision'),
+          { status: 409 }
+        );
+      }
+      const snapshot = {
+        ...workingRevision.content_snapshot,
+        ...(partNumber !== undefined ? { partNumber } : {}),
+        ...(title !== undefined ? { title } : {}),
+        ...(version !== undefined ? { version } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(specifications !== undefined ? { fieldValues: specifications } : {}),
+      };
+      await tx.execute(sql`
+        UPDATE spec_sheet_revisions
+        SET content_snapshot = ${JSON.stringify(snapshot)}::jsonb,
+            content_checksum = ${checksumSnapshot(snapshot)}
+        WHERE id = ${workingRevision.id} AND lifecycle_status = 'DRAFT'
+      `);
+      await tx.execute(sql`
+        DELETE FROM spec_sheet_revision_approvals
+        WHERE spec_sheet_revision_id = ${workingRevision.id}
+      `);
+      const [row] = await tx.update(specSheets)
+        .set(updateData)
+        .where(eq(specSheets.id, req.params.id))
+        .returning();
+      return row;
+    });
 
     if (!updated) {
       return res.status(404).json({ error: 'Spec sheet not found' });
     }
 
     res.json(updated);
-  } catch (error) {
+  } catch (error: any) {
+    if (Number(error?.status) === 409) {
+      return res.status(409).json({ error: error.message });
+    }
     console.error('Error updating spec sheet:', error);
     res.status(500).json({ error: 'Failed to update spec sheet' });
   }
@@ -3038,9 +3977,15 @@ router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
 // Delete spec sheet (soft delete)
 router.delete('/spec-sheets/:id', async (req: Request, res: Response) => {
   try {
+    if (!requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.delete)) return;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(req.params.id)) {
       return res.status(400).json({ error: 'Invalid spec sheet ID format' });
+    }
+    const stateResult = await db.execute(sql`SELECT lifecycle_status FROM spec_sheets WHERE id = ${req.params.id} LIMIT 1`);
+    const state = (((stateResult as any)?.rows || stateResult || []) as any[])[0];
+    if (state && ['RELEASED', 'SUPERSEDED', 'OBSOLETE'].includes(state.lifecycle_status)) {
+      return res.status(409).json({ error: 'Released specifications cannot be deleted; use the controlled obsolete action' });
     }
 
     const [deleted] = await db.update(specSheets)
@@ -3087,6 +4032,8 @@ router.post('/templates', async (req: Request, res: Response) => {
       structure: structure || { source: 'manual_builder' },
       sections: sections || null,
       default_fields: defaultFields || normalizedFields,
+      template_revision: String(req.body.templateRevision || '1.0'),
+      lifecycle_status: String(req.body.lifecycleStatus || 'DRAFT').toUpperCase(),
       is_active: true,
       created_by: user?.username || 'system',
       created_at: new Date(),
@@ -3105,6 +4052,13 @@ router.post('/templates', async (req: Request, res: Response) => {
         default_value: field.defaultValue,
         validation_rules: field.validationRules,
         options: field.options,
+        columns: field.columns,
+        minimum_rows: field.minimumRows,
+        maximum_rows: field.maximumRows,
+        allow_manual_rows: field.allowManualRows,
+        allow_import: field.allowImport,
+        data_source: field.dataSource,
+        pdf_layout: field.pdfLayout,
         section_name: field.sectionName || 'General',
         sort_order: field.sortOrder,
         ai_suggested: false,

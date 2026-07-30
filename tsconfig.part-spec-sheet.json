@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "client/src/pages/RoutingDocumentManagement.tsx",
+    "server/src/capabilities.ts",
+    "server/src/lib/partSpecificationSheetControl.ts",
+    "server/src/lib/partSpecificationSheetPdf.ts",
+    "server/src/lib/partSpecificationSheets.ts",
+    "server/src/routes/routingDocuments.ts",
+    "server/src/routes/travelers.ts",
+    "server/scripts/renderPartSpecificationSheetEvidence.ts",
+    "server/storage.ts",
+    "server/__tests__/partSpecificationSheetControl.test.ts",
+    "server/__tests__/partSpecificationSheetPostgresCertification.test.ts",
+    "server/__tests__/partSpecificationSheets.test.ts",
+    "server/__tests__/routingDocumentGeneratedControlFooter.test.ts",
+    "server/schema.ts"
+  ]
+}

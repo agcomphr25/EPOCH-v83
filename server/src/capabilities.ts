@@ -48,6 +48,7 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   'documents.edit_draft',
   'documents.submit',
   'documents.approve',
+  'spec_sheets.history.view',
   'documents.release',
   'documents.revise',
   'documents.supersede',

@@ -1773,6 +1773,50 @@ router.post(
   }
 );
 
+// Resolve only the specification revision captured on this historical traveler.
+// Never fall back to the latest specification because that would rewrite execution history.
+router.get(
+  '/:id/specification',
+  requirePermission('spec_sheets.history.view'),
+  async (req: Request, res: Response) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT
+          t.id AS traveler_id,
+          t.spec_sheet_revision_id,
+          ssr.revision,
+          ssr.lifecycle_status,
+          ssr.file_url,
+          ssr.file_checksum,
+          ssr.effective_date,
+          ssr.content_checksum,
+          cd.document_number,
+          cd.document_name
+        FROM travelers t
+        LEFT JOIN spec_sheet_revisions ssr ON ssr.id = t.spec_sheet_revision_id
+        LEFT JOIN spec_sheets ss ON ss.id = ssr.spec_sheet_id
+        LEFT JOIN controlled_documents cd ON cd.id = ss.controlled_document_id
+        WHERE t.id = ${req.params.id}
+        LIMIT 1
+      `);
+      const record = result.rows[0] as Record<string, unknown> | undefined;
+      if (!record) return res.status(404).json({ error: 'Traveler not found' });
+      if (!record.spec_sheet_revision_id) {
+        return res.status(404).json({
+          error: 'Traveler has no captured specification revision',
+          travelerId: req.params.id,
+        });
+      }
+      res.json(record);
+    } catch (error) {
+      console.error('Error loading captured traveler specification:', error);
+      res
+        .status(500)
+        .json({ error: 'Failed to load captured traveler specification' });
+    }
+  }
+);
+
 // Get traveler by ID with full details
 router.get('/:id', async (req: Request, res: Response) => {
   try {

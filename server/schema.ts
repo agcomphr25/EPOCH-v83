@@ -255,7 +255,7 @@ export const allOrders = pgTable('all_orders', {
   qcShippingCompletedAt: timestamp('qc_shipping_completed_at'),
   // Calculated total (used for payment and discount calculations)
   calculatedTotal: numeric('calculated_total'),
-  // Order source as separate column (SALES, PO_RELEASE) — distinct from legacy 'source' column
+  // Order source as separate column (SALES, PO_RELEASE) â€” distinct from legacy 'source' column
   orderSourceV2: text('order_source').default('SALES'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -671,7 +671,7 @@ export const inventoryManufacturingLevelEnum = pgEnum(
   ['COMPONENT', 'INTERMEDIATE', 'FINAL']
 );
 
-// Manufacturing routing mapping — re-exported from canonical shared utility
+// Manufacturing routing mapping â€” re-exported from canonical shared utility
 export type {
   ManufacturedCategory,
   ManufacturingQueueType,
@@ -759,20 +759,20 @@ export const inventoryItems = pgTable('inventory_items', {
   otherDocsFilePath: text('other_docs_file_path'), // Path to uploaded Other Docs PDF file
   assignedToAsset: text('assigned_to_asset'), // Asset this item is assigned to (name + tag from /assets)
   defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO', 'WEBSITE', or 'EMAIL'
-  purchaseUnitId: integer('purchase_unit_id').references(() => units.id), // FK → units (measurement unit for purchasing)
-  usageUnitId: integer('usage_unit_id').references(() => units.id), // FK → units (measurement unit for consumption)
+  purchaseUnitId: integer('purchase_unit_id').references(() => units.id), // FK â†’ units (measurement unit for purchasing)
+  usageUnitId: integer('usage_unit_id').references(() => units.id), // FK â†’ units (measurement unit for consumption)
   // Formal item type classification (replaces loose text `type` field)
   itemType: inventoryItemTypeEnum('item_type'), // PURCHASED | MANUFACTURED
-  // Manufactured items only — category determines production routing
+  // Manufactured items only â€” category determines production routing
   manufacturedCategory: inventoryManufacturedCategoryEnum(
     'manufactured_category'
   ), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY | FINAL_ASSEMBLY | COMPOSITE | COMPONENT
-  // Manufactured items only — production level independent of category
+  // Manufactured items only â€” production level independent of category
   manufacturingLevel: inventoryManufacturingLevelEnum('manufacturing_level'), // COMPONENT | INTERMEDIATE | FINAL
-  // Machined parts only — type of machine required to produce the part
+  // Machined parts only â€” type of machine required to produce the part
   machineType: text('machine_type'),
   machiningTimeMinutes: integer('machining_time_minutes'),
-  // Required receiving documents — enforced on acceptance in Receiving Control Center
+  // Required receiving documents â€” enforced on acceptance in Receiving Control Center
   requiresSds: boolean('requires_sds').notNull().default(false),
   requiresTds: boolean('requires_tds').notNull().default(false),
   requiresCoc: boolean('requires_coc').notNull().default(false), // Certificate of Conformance
@@ -781,7 +781,7 @@ export const inventoryItems = pgTable('inventory_items', {
     .notNull()
     .default(false),
   primaryImageMediaId: uuid('primary_image_media_id'),
-  // Per-field traceability configuration — map of received_units field name → visibility setting
+  // Per-field traceability configuration â€” map of received_units field name â†’ visibility setting
   // Fields: lotNumber, batchNumber, serialNumber, expirationDate, manufactureDate, heatLot, rollNumber, certReference
   // Values: 'required' | 'optional' | 'hidden'
   // When null/absent, all fields are treated as optional (legacy behavior)
@@ -1243,7 +1243,7 @@ export const employees = pgTable('employees', {
   isToleranceAuthorizer: boolean('is_tolerance_authorizer').default(false), // Can approve tolerance deviations for P2 orders
   badgeScanCode: text('badge_scan_code').unique(), // Non-guessable UUID encoded in physical badge barcode - not printed visibly
   isActive: boolean('is_active').default(true),
-  timekeeperPin: text('timekeeper_pin'), // bcrypt-hashed PIN for kiosk authentication — canonical PIN source for timekeeping module
+  timekeeperPin: text('timekeeper_pin'), // bcrypt-hashed PIN for kiosk authentication â€” canonical PIN source for timekeeping module
   timezone: text('timezone').notNull().default('UTC'), // Employee's local timezone for punch time calculations
   supervisorEmployeeId: integer('supervisor_employee_id').references(
     (): AnyPgColumn => employees.id
@@ -2241,13 +2241,13 @@ export const insertLaborApprovalSchema = createInsertSchema(
 export type LaborApproval = typeof laborApprovals.$inferSelect;
 export type InsertLaborApproval = z.infer<typeof insertLaborApprovalSchema>;
 
-// ─── LABOR BUDGET OVERRIDE REQUESTS ─────────────────────────────────────────
+// â”€â”€â”€ LABOR BUDGET OVERRIDE REQUESTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Operators blocked by budget exhaustion can request a shift-level unlock;
 // supervisors approve or deny the request in-app (DCAA-traceable).
 
 export const laborBudgetOverrides = pgTable('labor_budget_overrides', {
   id: serial('id').primaryKey(),
-  // FK to production_work_orders (forward ref — table defined later in schema)
+  // FK to production_work_orders (forward ref â€” table defined later in schema)
   productionWorkOrderId: uuid('production_work_order_id').notNull(),
   // Operator identity (EPOCH standard: ID + display name snapshot)
   operatorEmployeeId: text('operator_employee_id').notNull(),
@@ -2255,9 +2255,9 @@ export const laborBudgetOverrides = pgTable('labor_budget_overrides', {
   // What the operator is requesting
   requestedHours: numeric('requested_hours').notNull(),
   note: text('note'),
-  // Workflow status: PENDING → APPROVED or DENIED
+  // Workflow status: PENDING â†’ APPROVED or DENIED
   status: text('status').notNull().default('PENDING'), // 'PENDING' | 'APPROVED' | 'DENIED'
-  // Supervisor identity — set when resolved
+  // Supervisor identity â€” set when resolved
   supervisorEmployeeId: text('supervisor_employee_id'),
   supervisorDisplayName: text('supervisor_display_name'),
   supervisorNote: text('supervisor_note'),
@@ -2294,16 +2294,16 @@ export type InsertLaborBudgetOverride = z.infer<
   typeof insertLaborBudgetOverrideSchema
 >;
 
-// ── UNIFIED PUNCH LEDGER (Task #1186) ─────────────────────────────────────────
+// â”€â”€ UNIFIED PUNCH LEDGER (Task #1186) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Single source of truth for ALL labor events: Kiosk, Traveler scan, Portal.
 // Replaces the dual-system: public.time_clock_entries + timekeeping.punches.
 // source enum: KIOSK | TRAVELER | PORTAL | TIMETRAKGO_IMPORT | ADMIN
 // laborClass: REGULAR | BREAK
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const punchLedger = pgTable('punch_ledger', {
   id: serial('id').primaryKey(),
 
-  // Employee identity (FK to public.employees — no free-text IDs)
+  // Employee identity (FK to public.employees â€” no free-text IDs)
   employeeId: integer('employee_id')
     .notNull()
     .references((): AnyPgColumn => employees.id),
@@ -2315,7 +2315,7 @@ export const punchLedger = pgTable('punch_ledger', {
   // Capture source
   source: text('source').notNull().default('KIOSK'), // KIOSK | TRAVELER | PORTAL | TIMETRAKGO_IMPORT | ADMIN
 
-  // Labor attribution (nullable FKs — no free-text charge codes)
+  // Labor attribution (nullable FKs â€” no free-text charge codes)
   travelerId: text('traveler_id').references((): AnyPgColumn => travelers.id),
   productionWorkOrderId: uuid('production_work_order_id').references(
     (): AnyPgColumn => productionWorkOrders.id,
@@ -2329,7 +2329,7 @@ export const punchLedger = pgTable('punch_ledger', {
   operation: text('operation'),
   laborClass: text('labor_class').default('REGULAR'), // REGULAR | BREAK
 
-  // WAD/project traceability (Task #1235 — derived server-side, never from client)
+  // WAD/project traceability (Task #1235 â€” derived server-side, never from client)
   projectId: uuid('project_id').references((): AnyPgColumn => projects.id, {
     onDelete: 'set null',
   }),
@@ -2346,7 +2346,7 @@ export const punchLedger = pgTable('punch_ledger', {
   // Budget / approval linkage
   overrideReason: text('override_reason'),
   // Allowed values: PENDING_APPROVAL | APPROVED | REJECTED | APPROVED_OVERRUN | FLAGGED | AUTO
-  // Per Architecture Constitution §5.2 (Task #77): TRAVELER-source punches must enter as
+  // Per Architecture Constitution Â§5.2 (Task #77): TRAVELER-source punches must enter as
   // PENDING_APPROVAL and may only become APPROVED via supervisor sign-off. AUTO is reserved
   // for non-WAD system-reconciliation entries (e.g., salaried draft posting, kiosk/portal
   // punches with no WAD link). A DB CHECK constraint forbids AUTO when source = 'TRAVELER'.
@@ -3749,7 +3749,7 @@ export type InsertCanonicalIdentity = z.infer<
   typeof insertCanonicalIdentitySchema
 >;
 export type CanonicalIdentity = typeof canonicalIdentities.$inferSelect;
-// PunchEvent is a plain DTO interface — not a Drizzle model.
+// PunchEvent is a plain DTO interface â€” not a Drizzle model.
 // The punch_events database table was dropped. This type is retained
 // here so that service files (laborSummary.ts, missedPunchAwareness.ts)
 // that operate on punch-shaped data from other sources keep a shared,
@@ -4654,7 +4654,7 @@ export const vendorPOs = pgTable('vendor_pos', {
   voidedAt: timestamp('voided_at'),
   voidedBy: text('voided_by'),
   voidReason: text('void_reason'),
-  // Task #83 — Purchasing Controls (Requisition → Approval → PO)
+  // Task #83 â€” Purchasing Controls (Requisition â†’ Approval â†’ PO)
   requisitionId: integer('requisition_id'), // FK to purchase_requisitions; required unless directPoException is set
   competitionMethod: text('competition_method'), // competed | sole-source | small-purchase | exception
   soleSourceJustification: text('sole_source_justification'),
@@ -4780,7 +4780,7 @@ export const vendorPoAttachments = pgTable('vendor_po_attachments', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-// Vendor PO Compliance Reviews — Pre-issue compliance gate (FAR/DFARS/DPAS/CoC/MTR etc.)
+// Vendor PO Compliance Reviews â€” Pre-issue compliance gate (FAR/DFARS/DPAS/CoC/MTR etc.)
 export const vendorPoComplianceReviews = pgTable(
   'vendor_po_compliance_reviews',
   {
@@ -4837,7 +4837,7 @@ export type InsertVendorPoComplianceReview = z.infer<
   typeof insertVendorPoComplianceReviewSchema
 >;
 
-// Procurement Compliance Effective Date — stores the date from which mandatory compliance
+// Procurement Compliance Effective Date â€” stores the date from which mandatory compliance
 // enforcement began. POs issued before this date are "legacy pre-policy" and are NOT
 // scored as failures. Each change is appended as a new row for full audit history.
 export const procurementComplianceEffectiveDates = pgTable(
@@ -4869,7 +4869,7 @@ export type InsertProcurementComplianceEffectiveDate = z.infer<
   typeof insertProcurementComplianceEffectiveDateSchema
 >;
 
-// ─── Communication Governance Layer ───────────────────────────────────────────
+// â”€â”€â”€ Communication Governance Layer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const emailTemplates = pgTable('email_templates', {
   id: varchar('id')
@@ -4927,7 +4927,7 @@ export const emailTemplateEditLogs = pgTable('email_template_edit_logs', {
 
 export type EmailTemplateEditLog = typeof emailTemplateEditLogs.$inferSelect;
 
-// ──────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
@@ -4953,7 +4953,7 @@ export const communicationLogs = pgTable('communication_logs', {
   sentAt: timestamp('sent_at'),
   receivedAt: timestamp('received_at'), // For inbound messages
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  // ── Governance columns (Communication Domain) ──
+  // â”€â”€ Governance columns (Communication Domain) â”€â”€
   templateKey: varchar('template_key', { length: 255 }),
   templateVersion: integer('template_version'),
   triggeredBy: varchar('triggered_by'),
@@ -5261,7 +5261,7 @@ export type InsertInventoryTransactionLedger = z.infer<
 export type InventoryTransactionLedger =
   typeof inventoryTransactionLedger.$inferSelect;
 
-// Task #145 — Digital signatures (Phase 3): per-user signing keypair (Ed25519,
+// Task #145 â€” Digital signatures (Phase 3): per-user signing keypair (Ed25519,
 // private key wrapped at rest with AES-256-GCM under a scrypt(password)-derived
 // KEK) and the immutable signature ledger that ties a person + role + canonical
 // payload to a verifiable cryptographic signature. Both tables are append-only;
@@ -6219,7 +6219,7 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
     .notNull()
     .default('authenticated'),
 
-  // Scrap rate tracking — incremented by nonconforming disposition workflow
+  // Scrap rate tracking â€” incremented by nonconforming disposition workflow
   scrappedItemCount: integer('scrapped_item_count').notNull().default(0),
   scrapRatePercent: real('scrap_rate_percent').notNull().default(0),
 
@@ -6518,7 +6518,7 @@ export const partRoutings = pgTable(
     preferredMachine: text('preferred_machine'), // Preferred CNC machine or workstation for this routing
     routingType: routingTypeEnum('routing_type').default('COMPOSITE').notNull(),
     isActive: boolean('is_active').default(true).notNull(),
-    // Template traceability — stamped when created from a production control template
+    // Template traceability â€” stamped when created from a production control template
     createdFromTemplateId: uuid('created_from_template_id'),
     createdFromTemplateVersion: integer('created_from_template_version'),
     createdBy: text('created_by').notNull(), // Username who created routing
@@ -6949,7 +6949,7 @@ export const materialLotTransactions = pgTable(
     fromLocation: text('from_location'),
     toLocation: text('to_location'),
 
-    // Reference — for RECEIVE transactions both receipt and unit are linked
+    // Reference â€” for RECEIVE transactions both receipt and unit are linked
     referenceType: text('reference_type'), // TRAVELER | WORK_ORDER | ADJUSTMENT | SCRAP_REPORT | received_unit
     referenceId: text('reference_id'), // ID of the primary reference object (received_unit.id for RECEIVE)
     receiptId: integer('receipt_id'), // Explicit FK to receiving_receipts for traceability queries
@@ -7022,7 +7022,7 @@ export const travelerMaterialConsumption = pgTable(
     overrideApprovedBy: text('override_approved_by'),
     overrideReason: text('override_reason'),
 
-    // Physical receiving unit linkage (Phase 2 — traveler consumption integration)
+    // Physical receiving unit linkage (Phase 2 â€” traveler consumption integration)
     // Nullable: pre-Phase-2 records and lots without a linked received_unit will be NULL
     receivedUnitId: integer('received_unit_id').references(
       () => receivedUnits.id,
@@ -7066,15 +7066,15 @@ export const materialLotReservations = pgTable(
     materialLotId: uuid('material_lot_id')
       .references(() => materialLots.id, { onDelete: 'cascade' })
       .notNull(),
-    receivedUnitId: integer('received_unit_id'), // nullable — FK to received_units.id
-    travelerId: uuid('traveler_id'), // nullable — which traveler holds this reservation
-    workOrderId: integer('work_order_id'), // nullable — link to production work order
+    receivedUnitId: integer('received_unit_id'), // nullable â€” FK to received_units.id
+    travelerId: uuid('traveler_id'), // nullable â€” which traveler holds this reservation
+    workOrderId: integer('work_order_id'), // nullable â€” link to production work order
 
     // Quantity
     quantityReserved: numeric('quantity_reserved').notNull(),
     unitOfMeasure: text('unit_of_measure').notNull(),
 
-    // Lifecycle: active → fulfilled (on consumption) | cancelled
+    // Lifecycle: active â†’ fulfilled (on consumption) | cancelled
     status: text('status').notNull().default('active'), // active | fulfilled | cancelled
 
     // Routing-step intent (Task #144). Pins the reservation to a specific
@@ -7324,13 +7324,17 @@ export const travelers = pgTable(
 
     partRoutingId: varchar('part_routing_id', { length: 255 }),
     partRoutingRevision: integer('part_routing_revision'),
+    specSheetRevisionId: uuid('spec_sheet_revision_id').references(
+      (): AnyPgColumn => specSheetRevisions.id,
+      { onDelete: 'restrict' }
+    ),
 
-    // Template traceability — stamped when created from a production control template
+    // Template traceability â€” stamped when created from a production control template
     createdFromTemplateId: uuid('created_from_template_id'),
     createdFromTemplateVersion: integer('created_from_template_version'),
 
     // Editable, non-truncated link/notes pasted when an item is completed
-    // off-system from the P2 Production Queue. Mirrors the `Off-system: …`
+    // off-system from the P2 Production Queue. Mirrors the `Off-system: â€¦`
     // summary that is also stamped into `workOrderId` for legacy display.
     offSystemCompletionLink: text('off_system_completion_link'),
 
@@ -7417,7 +7421,7 @@ export const travelerTasks = pgTable(
     completedAt: timestamp('completed_at', { withTimezone: true }),
     completedBy: varchar('completed_by', { length: 255 }),
 
-    // Template traceability — set when checkpoint injected from QC template
+    // Template traceability â€” set when checkpoint injected from QC template
     templateSourceId: uuid('template_source_id'),
   },
   (table) => ({
@@ -7593,7 +7597,7 @@ export const p2SerializedItemCustomData = pgTable(
       .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
       .notNull(),
     department: text('department').notNull(), // Department where custom data was recorded
-    customData: jsonb('custom_data').notNull(), // Object mapping field names to values: { "Temperature": "350°F", "Mold Number": "M-123" }
+    customData: jsonb('custom_data').notNull(), // Object mapping field names to values: { "Temperature": "350Â°F", "Mold Number": "M-123" }
     recordedBy: text('recorded_by').notNull(), // Username who recorded the data
     createdAt: timestamp('created_at').defaultNow(),
   },
@@ -7751,7 +7755,7 @@ export const p2OvenCureLogs = pgTable(
     department: text('department').notNull(),
     ovenId: text('oven_id'), // Equipment identifier
     cycleNumber: text('cycle_number'), // Oven cycle number
-    targetTemperature: real('target_temperature'), // Target temp in °F
+    targetTemperature: real('target_temperature'), // Target temp in Â°F
     actualTemperature: real('actual_temperature'), // Actual recorded temp
     targetDuration: integer('target_duration'), // Target duration in minutes
     actualDuration: integer('actual_duration'), // Actual duration in minutes
@@ -7878,7 +7882,7 @@ export const p2LotNumbers = pgTable(
     customerId: text('customer_id'),
     customerName: text('customer_name'),
     poNumber: text('po_number'), // Kept as denormalized text for display/legacy
-    poId: integer('po_id').references(() => p2PurchaseOrders.id), // Hard FK — replaces fragile text join
+    poId: integer('po_id').references(() => p2PurchaseOrders.id), // Hard FK â€” replaces fragile text join
     poItemId: integer('po_item_id').references(() => p2PurchaseOrderItems.id),
     quantity: integer('quantity').default(1),
     serializedItemIds: jsonb('serialized_item_ids'), // Array of serialized item UUIDs in this lot
@@ -9066,6 +9070,7 @@ export const insertTravelerSchema = createInsertSchema(travelers)
       .default('DRAFT'),
     partRoutingId: z.string().uuid().optional().nullable(),
     partRoutingRevision: z.number().int().optional().nullable(),
+    specSheetRevisionId: z.string().uuid().optional().nullable(),
     createdBy: z.string().min(1, 'Created by is required'),
   });
 
@@ -11808,14 +11813,14 @@ export const manufacturingQueue = pgTable(
       .references(() => inventoryItems.id, { onDelete: 'cascade' })
       .notNull(),
     vendorPoId: integer('vendor_po_id'), // Reference to vendor PO that generated this queue entry
-    vendorPoLineNumber: integer('vendor_po_line_number'), // Line number in the PO (legacy — use vendorPoItemId for new lookups)
+    vendorPoLineNumber: integer('vendor_po_line_number'), // Line number in the PO (legacy â€” use vendorPoItemId for new lookups)
     vendorPoItemId: integer('vendor_po_item_id').references(
       () => vendorPOItems.id,
       { onDelete: 'cascade' }
-    ), // FK to vendor_po_items.id (nullable — backfilled from line number)
+    ), // FK to vendor_po_items.id (nullable â€” backfilled from line number)
     p2PoId: integer('p2_po_id'), // Reference to P2 PO that generated this queue entry
     p2PoItemId: integer('p2_po_item_id'), // Reference to P2 PO item
-    // BOM explosion lineage — set when this record is created by explodeBomDemand
+    // BOM explosion lineage â€” set when this record is created by explodeBomDemand
     parentProductionOrderId: text('parent_production_order_id'), // Production order that triggered this demand (FK to production_orders.order_id)
     department: text('department').notNull(), // Derived from manufactured category routing
     quantityRequested: integer('quantity_requested').notNull().default(1),
@@ -12042,8 +12047,8 @@ export const insertManufacturingQueueSchema = createInsertSchema(
   updatedAt: true,
 });
 
-// Cutting Packet Barcode Aliases — preserves the link between previously-printed
-// MFG-{id}-… barcodes and the surviving manufacturing_queue row after the original
+// Cutting Packet Barcode Aliases â€” preserves the link between previously-printed
+// MFG-{id}-â€¦ barcodes and the surviving manufacturing_queue row after the original
 // row is consolidated by the duplicate-grouping backfill, deleted via the
 // unschedule endpoint, or replaced by a fresh sync. This lets scan-start keep
 // resolving old labels without forcing a reprint every time the queue churns.
@@ -12060,7 +12065,7 @@ export const cuttingPacketBarcodeAliases = pgTable(
     // upsertGroupedCuttingQueueEntry can backfill the successor on the same packet.
     inventoryItemId: integer('inventory_item_id'),
     packetName: text('packet_name'),
-    // 'YYYY-MM-DD' (UTC date-of) or 'null' — same bucket key used by the grouping helper.
+    // 'YYYY-MM-DD' (UTC date-of) or 'null' â€” same bucket key used by the grouping helper.
     dueDateBucket: text('due_date_bucket'),
     reason: text('reason').notNull(), // 'merged' | 'unscheduled' | 'replaced' | 'historical'
     createdAt: timestamp('created_at').defaultNow(),
@@ -12300,14 +12305,13 @@ export type InsertAllocationRequirement = z.infer<
   typeof insertAllocationRequirementSchema
 >;
 
-// mapQueueType — compatibility wrapper around the canonical manufactured category routing map.
+// mapQueueType â€” compatibility wrapper around the canonical manufactured category routing map.
 export type QueueType =
   import('../shared/utils/manufacturingRouting').ManufacturingQueueType;
 
 export function mapQueueType(
   category:
-    | import('../shared/utils/supplySourceDashboard').ManufacturedCategory
-    | null
+    import('../shared/utils/supplySourceDashboard').ManufacturedCategory | null
 ): { queueType: QueueType; department: string } | null {
   const route = resolveManufacturingRouteDefinition(category);
   if (!route?.queueType || !route.department) return null;
@@ -12581,7 +12585,7 @@ export type InsertDocumentVersionHistory = z.infer<
 >;
 
 // ============================================================================
-// OBJECT ACCESS LOG — CMMC Secure Vault
+// OBJECT ACCESS LOG â€” CMMC Secure Vault
 // Immutable append-only log of every view, download, and denied access event
 // for controlled or sensitive documents. Required for CMMC access audit trail.
 // ============================================================================
@@ -13969,8 +13973,8 @@ export const creditMemos = pgTable(
     createdBy: text('created_by'),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
-    // arInvoiceId — FK to ar_invoices; set when this memo is linked to a specific AR invoice
-    // Note: .references() intentionally omitted — the FK constraint exists in the DB under
+    // arInvoiceId â€” FK to ar_invoices; set when this memo is linked to a specific AR invoice
+    // Note: .references() intentionally omitted â€” the FK constraint exists in the DB under
     // a legacy naming convention; removing it here prevents drizzle-kit from renaming it.
     arInvoiceId: uuid('ar_invoice_id'),
   },
@@ -14999,7 +15003,7 @@ export const auditEvents = pgTable(
     userAgent: text('user_agent'), // Optional browser/client info
     timestamp: timestamp('timestamp').defaultNow(), // When the action occurred
     createdAt: timestamp('created_at').defaultNow(),
-    // ── Task #85: unified ledger / hash-chain columns ─────────────────────
+    // â”€â”€ Task #85: unified ledger / hash-chain columns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     subjectType: text('subject_type'),
     subjectId: text('subject_id'),
     payloadJson: jsonb('payload_json'),
@@ -17138,6 +17142,29 @@ export const specSheets = pgTable(
     fileSize: integer('file_size'),
 
     specifications: jsonb('specifications'),
+    templateId: uuid('template_id'),
+    templateRevision: text('template_revision'),
+    inventoryItemId: integer('inventory_item_id').references(
+      () => inventoryItems.id,
+      { onDelete: 'restrict' }
+    ),
+    routingRevision: text('routing_revision'),
+    lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
+    specificationRevision: text('specification_revision')
+      .notNull()
+      .default('1.0'),
+    controlledDocumentId: uuid('controlled_document_id').references(
+      () => controlledDocuments.id,
+      { onDelete: 'restrict' }
+    ),
+    releasedRevisionId: uuid('released_revision_id'),
+    workingRevisionId: uuid('working_revision_id'),
+    supersedesSpecSheetId: uuid('supersedes_spec_sheet_id'),
+    effectiveDate: date('effective_date'),
+    sourceChangeStatus: text('source_change_status')
+      .notNull()
+      .default('CURRENT'),
+    sourceChangeDetails: jsonb('source_change_details').notNull().default({}),
     aiExtractedContent: jsonb('ai_extracted_content'),
     aiExtractedFields: jsonb('ai_extracted_fields'),
     aiProcessedAt: timestamp('ai_processed_at', { withTimezone: true }),
@@ -17181,6 +17208,12 @@ export const documentTemplates = pgTable(
     defaultFields: jsonb('default_fields'),
 
     aiGeneratedPrompt: text('ai_generated_prompt'),
+    templateRevision: text('template_revision').notNull().default('1.0'),
+    lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
+    controlledDocumentId: uuid('controlled_document_id').references(
+      () => controlledDocuments.id,
+      { onDelete: 'restrict' }
+    ),
 
     isActive: boolean('is_active').default(true),
 
@@ -17220,6 +17253,13 @@ export const templateFields = pgTable(
     defaultValue: text('default_value'),
     validationRules: jsonb('validation_rules'),
     options: jsonb('options'),
+    columns: jsonb('columns'),
+    minimumRows: integer('minimum_rows'),
+    maximumRows: integer('maximum_rows'),
+    allowManualRows: boolean('allow_manual_rows').notNull().default(true),
+    allowImport: boolean('allow_import').notNull().default(false),
+    dataSource: jsonb('data_source'),
+    pdfLayout: jsonb('pdf_layout'),
 
     sectionName: varchar('section_name', { length: 255 }),
     sortOrder: integer('sort_order').default(0),
@@ -17234,6 +17274,96 @@ export const templateFields = pgTable(
     templateIdx: index('template_fields_template_idx').on(table.templateId),
   })
 );
+
+export const specSheetRevisions = pgTable('spec_sheet_revisions', {
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  specSheetId: uuid('spec_sheet_id')
+    .references(() => specSheets.id, { onDelete: 'restrict' })
+    .notNull(),
+  controlledDocumentRevisionId: uuid(
+    'controlled_document_revision_id'
+  ).references(() => documentVersionHistory.id, { onDelete: 'restrict' }),
+  revision: text('revision').notNull(),
+  lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
+  templateId: uuid('template_id').references(() => documentTemplates.id, {
+    onDelete: 'restrict',
+  }),
+  templateRevision: text('template_revision').notNull(),
+  inventoryItemId: integer('inventory_item_id').references(
+    () => inventoryItems.id,
+    { onDelete: 'restrict' }
+  ),
+  partRoutingId: uuid('part_routing_id').references(() => partRoutings.id, {
+    onDelete: 'restrict',
+  }),
+  routingRevision: text('routing_revision'),
+  contentSnapshot: jsonb('content_snapshot').notNull(),
+  contentChecksum: text('content_checksum').notNull(),
+  fileUrl: text('file_url'),
+  fileName: text('file_name'),
+  fileChecksum: text('file_checksum'),
+  effectiveDate: date('effective_date'),
+  supersededByRevisionId: uuid('superseded_by_revision_id'),
+  createdByUserId: integer('created_by_user_id').references(() => users.id, {
+    onDelete: 'restrict',
+  }),
+  createdBySnapshot: jsonb('created_by_snapshot').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+  releasedAt: timestamp('released_at', { withTimezone: true }),
+});
+
+export const specSheetRevisionApprovals = pgTable(
+  'spec_sheet_revision_approvals',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    specSheetRevisionId: uuid('spec_sheet_revision_id')
+      .references(() => specSheetRevisions.id, { onDelete: 'restrict' })
+      .notNull(),
+    approvalRole: text('approval_role').notNull(),
+    decision: text('decision').notNull(),
+    actorUserId: integer('actor_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    actorDisplayName: text('actor_display_name').notNull(),
+    actorRole: text('actor_role').notNull(),
+    actorCapabilities: jsonb('actor_capabilities').notNull().default([]),
+    revisionSnapshot: text('revision_snapshot').notNull(),
+    contentChecksum: text('content_checksum').notNull(),
+    comment: text('comment'),
+    decidedAt: timestamp('decided_at', { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+  }
+);
+
+export const specSheetTransitionAudit = pgTable('spec_sheet_transition_audit', {
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  specSheetId: uuid('spec_sheet_id')
+    .references(() => specSheets.id, { onDelete: 'restrict' })
+    .notNull(),
+  specSheetRevisionId: uuid('spec_sheet_revision_id')
+    .references(() => specSheetRevisions.id, { onDelete: 'restrict' })
+    .notNull(),
+  fromStatus: text('from_status').notNull(),
+  toStatus: text('to_status').notNull(),
+  reason: text('reason').notNull(),
+  actorUserId: integer('actor_user_id')
+    .references(() => users.id, { onDelete: 'restrict' })
+    .notNull(),
+  actorSnapshot: jsonb('actor_snapshot').notNull(),
+  contentChecksum: text('content_checksum').notNull(),
+  transitionedAt: timestamp('transitioned_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+});
 
 // Routing Document Links - Links documents to routing steps
 export const routingDocumentLinks = pgTable(
@@ -19792,7 +19922,7 @@ export type InsertDepartmentCapacity = z.infer<
   typeof insertDepartmentCapacitySchema
 >;
 
-// Model Department Stats — Self-Learning Cycle Times
+// Model Department Stats â€” Self-Learning Cycle Times
 export const modelDepartmentStats = pgTable(
   'model_department_stats',
   {
@@ -19824,7 +19954,7 @@ export type InsertModelDepartmentStats = z.infer<
   typeof insertModelDepartmentStatsSchema
 >;
 
-// Cycle Time Drift Log — Anomaly Detection
+// Cycle Time Drift Log â€” Anomaly Detection
 export const cycleTimeDriftLog = pgTable(
   'cycle_time_drift_log',
   {
@@ -19935,7 +20065,7 @@ export type InsertExecutiveRundownItem = z.infer<
 // ACCOUNTING SHADOW LAYER
 // ===========================
 
-// Chart of accounts — canonical account definitions
+// Chart of accounts â€” canonical account definitions
 export const chartOfAccounts = pgTable('chart_of_accounts', {
   id: serial('id').primaryKey(),
   accountNumber: text('account_number').unique(),
@@ -20010,7 +20140,7 @@ export type InsertProductionLineAccountingMap = z.infer<
   typeof insertProductionLineAccountingMapSchema
 >;
 
-// Journal entries — one per transaction event (e.g. a wire payment)
+// Journal entries â€” one per transaction event (e.g. a wire payment)
 export const journalEntries = pgTable('journal_entries', {
   id: serial('id').primaryKey(),
   transactionType: text('transaction_type').notNull(), // WIRE_PAYMENT
@@ -20049,7 +20179,7 @@ export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit(
 export type JournalEntry = typeof journalEntries.$inferSelect;
 export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
 
-// Journal lines — individual debit/credit lines within an entry
+// Journal lines â€” individual debit/credit lines within an entry
 export const journalLines = pgTable('journal_lines', {
   id: serial('id').primaryKey(),
   journalEntryId: integer('journal_entry_id')
@@ -20146,7 +20276,7 @@ export type InsertAccountingPeriod = z.infer<
   typeof insertAccountingPeriodSchema
 >;
 
-// ─── Sign Order Page Settings (singleton) ────────────────────────────────────
+// â”€â”€â”€ Sign Order Page Settings (singleton) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const signOrderPageSettings = pgTable('sign_order_page_settings', {
   id: serial('id').primaryKey(),
   pageTitle: text('page_title').notNull().default('Review & Sign Sales Order'),
@@ -20194,7 +20324,7 @@ export type InsertSignOrderPageSettings = z.infer<
   typeof insertSignOrderPageSettingsSchema
 >;
 
-// ─── Metrics Registry ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Metrics Registry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const metricsRegistry = pgTable('metrics_registry', {
   id: serial('id').primaryKey(),
   slug: text('slug').notNull().unique(),
@@ -20217,7 +20347,7 @@ export const insertMetricsRegistrySchema = createInsertSchema(
 export type MetricsRegistry = typeof metricsRegistry.$inferSelect;
 export type InsertMetricsRegistry = z.infer<typeof insertMetricsRegistrySchema>;
 
-// ─── Metric Snapshots ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Metric Snapshots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const metricSnapshots = pgTable('metric_snapshots', {
   id: serial('id').primaryKey(),
   metricSlug: text('metric_slug').notNull(),
@@ -20236,7 +20366,7 @@ export const insertMetricSnapshotsSchema = createInsertSchema(
 export type MetricSnapshotRow = typeof metricSnapshots.$inferSelect;
 export type InsertMetricSnapshot = z.infer<typeof insertMetricSnapshotsSchema>;
 
-// ─── Unit Families ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Unit Families â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const unitFamilies = pgTable('unit_families', {
   id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
@@ -20250,7 +20380,7 @@ export const insertUnitFamilySchema = createInsertSchema(unitFamilies).omit({
 export type UnitFamily = typeof unitFamilies.$inferSelect;
 export type InsertUnitFamily = z.infer<typeof insertUnitFamilySchema>;
 
-// ─── Units ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Units â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const units = pgTable('units', {
   id: serial('id').primaryKey(),
   symbol: text('symbol').notNull().unique(),
@@ -20268,7 +20398,7 @@ export const insertUnitSchema = createInsertSchema(units).omit({
 export type Unit = typeof units.$inferSelect;
 export type InsertUnit = z.infer<typeof insertUnitSchema>;
 
-// ─── AR Invoices ────────────────────────────────────────────────────────────
+// â”€â”€â”€ AR Invoices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const arInvoices = pgTable(
   'ar_invoices',
   {
@@ -20278,7 +20408,7 @@ export const arInvoices = pgTable(
     invoiceDate: date('invoice_date').notNull(),
     dueDate: date('due_date'),
     terms: text('terms'),
-    poId: text('po_id'), // kept — free-text PO reference from legacy flow
+    poId: text('po_id'), // kept â€” free-text PO reference from legacy flow
     poOverride: text('po_override'),
     subtotal: numeric('subtotal').notNull(),
     discountAmount: numeric('discount_amount').notNull().default('0'),
@@ -20292,14 +20422,14 @@ export const arInvoices = pgTable(
     notes: text('notes'),
     customerVisibleNotes: text('customer_visible_notes'),
     internalNotes: text('internal_notes'),
-    // Shipment traceability — populated when invoice is raised against a specific shipment
+    // Shipment traceability â€” populated when invoice is raised against a specific shipment
     lotId: uuid('lot_id').references(() => p2LotNumbers.id),
     packingSlipId: uuid('packing_slip_id').references(() => p2PackingSlips.id),
     wadId: uuid('wad_id'),
     createdBy: text('created_by'),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
-    // ─── Lifecycle fields ───────────────────────────────────────────────────────
+    // â”€â”€â”€ Lifecycle fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     postedAt: timestamp('posted_at'),
     postedBy: text('posted_by'),
     sentAt: timestamp('sent_at'),
@@ -20312,7 +20442,7 @@ export const arInvoices = pgTable(
     voidReason: text('void_reason'),
     isDisputed: boolean('is_disputed').default(false),
     disputeNote: text('dispute_note'),
-    // creditMemoId — FK to credit_memos, set when a credit memo is applied/linked
+    // creditMemoId â€” FK to credit_memos, set when a credit memo is applied/linked
     creditMemoId: integer('credit_memo_id').references(() => creditMemos.id),
     autoCreated: boolean('auto_created').default(false),
     pricingMismatch: boolean('pricing_mismatch').default(false),
@@ -20338,7 +20468,7 @@ export const insertArInvoiceSchema = createInsertSchema(arInvoices).omit({
 export type ArInvoice = typeof arInvoices.$inferSelect;
 export type InsertArInvoice = z.infer<typeof insertArInvoiceSchema>;
 
-// ─── AR Invoice Lines ───────────────────────────────────────────────────────
+// â”€â”€â”€ AR Invoice Lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const arInvoiceLines = pgTable('ar_invoice_lines', {
   id: uuid('id').defaultRandom().primaryKey(),
   invoiceId: uuid('invoice_id')
@@ -20374,7 +20504,7 @@ export const insertArInvoiceLineSchema = createInsertSchema(
 export type ArInvoiceLine = typeof arInvoiceLines.$inferSelect;
 export type InsertArInvoiceLine = z.infer<typeof insertArInvoiceLineSchema>;
 
-// ─── AR Payments ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ AR Payments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const arPayments = pgTable(
   'ar_payments',
   {
@@ -20404,7 +20534,7 @@ export const insertArPaymentSchema = createInsertSchema(arPayments).omit({
 export type ArPayment = typeof arPayments.$inferSelect;
 export type InsertArPayment = z.infer<typeof insertArPaymentSchema>;
 
-// ─── AR Payment Allocations ──────────────────────────────────────────────────
+// â”€â”€â”€ AR Payment Allocations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const arPaymentAllocations = pgTable(
   'ar_payment_allocations',
   {
@@ -20435,7 +20565,7 @@ export type InsertArPaymentAllocation = z.infer<
   typeof insertArPaymentAllocationSchema
 >;
 
-// ─── AR Relations (declared after all AR tables) ─────────────────────────────
+// â”€â”€â”€ AR Relations (declared after all AR tables) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const arInvoicesRelations = relations(arInvoices, ({ many }) => ({
   lines: many(arInvoiceLines),
   allocations: many(arPaymentAllocations),
@@ -20466,7 +20596,7 @@ export const arPaymentAllocationsRelations = relations(
   })
 );
 
-// ─── AR Payment Attachments ───────────────────────────────────────────────────
+// â”€â”€â”€ AR Payment Attachments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const arPaymentAttachments = pgTable('ar_payment_attachments', {
   id: uuid('id').defaultRandom().primaryKey(),
   paymentId: uuid('payment_id')
@@ -20499,7 +20629,7 @@ export const arPaymentAttachmentsRelations = relations(
   })
 );
 
-// ─── Capability-Based Permission System ───────────────────────────────────────
+// â”€â”€â”€ Capability-Based Permission System â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Distinct from the employee-capability system (capabilities / employeeCapabilities).
 // This drives page access, button visibility, and API enforcement for web users.
 
@@ -20577,7 +20707,7 @@ export type InsertPermUserCapabilityScope = z.infer<
   typeof insertPermUserCapabilityScopeSchema
 >;
 
-// ─── P2 Nonconforming Dispositions ────────────────────────────────────────────
+// â”€â”€â”€ P2 Nonconforming Dispositions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Disposition reports filed for P2 serialized items that have been flagged as
 // nonconforming (status = SCRAPPED on p2_serialized_items). A disposition must
 // be filed before the item can be considered resolved.
@@ -20645,7 +20775,7 @@ export type InsertP2NonconformingDisposition = z.infer<
   typeof insertP2NonconformingDispositionSchema
 >;
 
-// ─── P2 RMAs ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ P2 RMAs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // RMA records created when a disposition type is "Repair". Linked to the
 // disposition record. Tracks traceable materials and shipment.
 
@@ -20697,7 +20827,7 @@ export const insertP2RmaSchema = createInsertSchema(p2Rmas)
 export type P2Rma = typeof p2Rmas.$inferSelect;
 export type InsertP2Rma = z.infer<typeof insertP2RmaSchema>;
 
-// ─── P2 Shipping RMAs ─────────────────────────────────────────────────────────
+// â”€â”€â”€ P2 Shipping RMAs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Structured Return Merchandise Authorization for P2 customer shipments.
 // Created when a customer returns goods after a packing slip has been issued.
 export const p2ShippingRmas = pgTable('p2_shipping_rmas', {
@@ -20726,7 +20856,7 @@ export const insertP2ShippingRmaSchema = createInsertSchema(p2ShippingRmas)
 export type P2ShippingRma = typeof p2ShippingRmas.$inferSelect;
 export type InsertP2ShippingRma = z.infer<typeof insertP2ShippingRmaSchema>;
 
-// ─── QuickNotes ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ QuickNotes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const quickNotes = pgTable('quick_notes', {
   id: serial('id').primaryKey(),
   title: text('title').notNull(),
@@ -20766,7 +20896,7 @@ export const insertQuickNoteShareSchema = createInsertSchema(
 export type QuickNoteShare = typeof quickNoteShares.$inferSelect;
 export type InsertQuickNoteShare = z.infer<typeof insertQuickNoteShareSchema>;
 
-// ─── Improvement Notes ──────────────────────────────────────────────────────
+// â”€â”€â”€ Improvement Notes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Workflow improvement suggestions captured from any page in EPOCH.
 // Promoted from localStorage prototype to a real backed table in 0104.
 export const improvementNotes = pgTable('improvement_notes', {
@@ -20800,7 +20930,7 @@ export const insertImprovementNoteSchema = createInsertSchema(
 export type ImprovementNote = typeof improvementNotes.$inferSelect;
 export type InsertImprovementNote = z.infer<typeof insertImprovementNoteSchema>;
 
-// ─── Schema Governance Audit Log ────────────────────────────────────────────
+// â”€â”€â”€ Schema Governance Audit Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Draft Builder BOM drafts shared across users with Draft Builder access.
 export const draftBomDrafts = pgTable('draft_bom_drafts', {
@@ -20900,10 +21030,10 @@ export const insertSchemaChangeLogSchema = createInsertSchema(
 export type SchemaChangeLog = typeof schemaChangeLog.$inferSelect;
 export type InsertSchemaChangeLog = z.infer<typeof insertSchemaChangeLogSchema>;
 
-// ─── Order Activity Events — canonical append-only audit ledger ──────────────
+// â”€â”€â”€ Order Activity Events â€” canonical append-only audit ledger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
 // Every meaningful mutation to an order writes a row here atomically.
-// If the insert fails the outer DB transaction rolls back — no silent logging.
+// If the insert fails the outer DB transaction rolls back â€” no silent logging.
 //
 // Shadow tables (admin_audit_log, badge_scan_audit_log, departmentHistory,
 // order_department_transitions) remain intact for backward compatibility;
@@ -21037,7 +21167,7 @@ export type InsertP1FulfillmentAttempt = z.infer<
   typeof insertP1FulfillmentAttemptSchema
 >;
 
-// ─── CNC Dashboard ────────────────────────────────────────────────────────────
+// â”€â”€â”€ CNC Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const cncScheduleSettings = pgTable('cnc_schedule_settings', {
   id: serial('id').primaryKey(),
@@ -21085,7 +21215,7 @@ export const insertCncMachineSchema = createInsertSchema(cncMachines).omit({
 export type CncMachine = typeof cncMachines.$inferSelect;
 export type InsertCncMachine = z.infer<typeof insertCncMachineSchema>;
 
-// ── Machined Part Routing Tables ──────────────────────────────────────────────
+// â”€â”€ Machined Part Routing Tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const machinedPartRoutings = pgTable('machined_part_routings', {
   id: serial('id').primaryKey(),
@@ -21184,8 +21314,8 @@ export const cncJobs = pgTable('cnc_jobs', {
   createdByDisplayName: text('created_by_display_name'),
 });
 
-// ─── Receiving Control Center ─────────────────────────────────────────────────
-// Aerospace-grade receiving traceability: receipts → receipt_lines → received_units
+// â”€â”€â”€ Receiving Control Center â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Aerospace-grade receiving traceability: receipts â†’ receipt_lines â†’ received_units
 // Each unit carries its own barcode, disposition, and links to material_lots.
 
 export const receipts = pgTable('receipts', {
@@ -21205,7 +21335,7 @@ export const receipts = pgTable('receipts', {
   // Receiver (EPOCH identity standard)
   receiverUserId: integer('receiver_user_id'),
   receiverDisplayName: text('receiver_display_name'),
-  // Explicit physical-receipt timestamp (separate from DB createdAt — set by receiver during Step 1)
+  // Explicit physical-receipt timestamp (separate from DB createdAt â€” set by receiver during Step 1)
   receivedAt: timestamp('received_at'),
   // Department association (drives auto-fill of location/freezer defaults in putaway)
   departmentId: integer('department_id').references(
@@ -21755,7 +21885,7 @@ export const insertCncQcResultSchema = createInsertSchema(cncQcResults).omit({
 export type CncQcResult = typeof cncQcResults.$inferSelect;
 export type InsertCncQcResult = z.infer<typeof insertCncQcResultSchema>;
 
-// ─── CNC Time Logs (pause/resume event ledger) ────────────────────────────────
+// â”€â”€â”€ CNC Time Logs (pause/resume event ledger) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const cncTimeLogs = pgTable('cnc_time_logs', {
   id: serial('id').primaryKey(),
@@ -21813,7 +21943,7 @@ export const insertReceiptAuditLogSchema = createInsertSchema(
 export type ReceiptAuditLog = typeof receiptAuditLog.$inferSelect;
 export type InsertReceiptAuditLog = z.infer<typeof insertReceiptAuditLogSchema>;
 
-// ─── KENTRO-pattern checklist instance engine ──────────────────────────────────
+// â”€â”€â”€ KENTRO-pattern checklist instance engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const checklistInstances = pgTable(
   'checklist_instances',
@@ -21935,9 +22065,9 @@ export type InsertChecklistInstanceEvent = z.infer<
   typeof insertChecklistInstanceEventSchema
 >;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EPOCH v9 Production Work Order (WAD) — spine linking Project → Traveler → Time
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// EPOCH v9 Production Work Order (WAD) â€” spine linking Project â†’ Traveler â†’ Time
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const productionWorkOrders = pgTable(
   'production_work_orders',
@@ -23510,7 +23640,7 @@ export type InsertProgramAssemblyDependency = z.infer<
   typeof insertProgramAssemblyDependencySchema
 >;
 
-// ─── LABOR THRESHOLD SETTINGS (system-wide singleton) ─────────────────────────
+// â”€â”€â”€ LABOR THRESHOLD SETTINGS (system-wide singleton) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const laborThresholdSettings = pgTable('labor_threshold_settings', {
   id: integer('id').primaryKey().default(1),
@@ -23537,7 +23667,7 @@ export type InsertLaborThresholdSettings = z.infer<
   typeof insertLaborThresholdSettingsSchema
 >;
 
-// ─── ESTIMATING / RFQ BUILDER ─────────────────────────────────────────────────
+// â”€â”€â”€ ESTIMATING / RFQ BUILDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const estimatingRfqs = pgTable('estimating_rfqs', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -24149,10 +24279,10 @@ export type InsertEstimatingDefaults = z.infer<
 >;
 
 // ===========================
-// LABOR → GL POSTING ENGINE
+// LABOR â†’ GL POSTING ENGINE
 // ===========================
 
-// labor_posting_runs — one row per (year, month) calculation or posting run
+// labor_posting_runs â€” one row per (year, month) calculation or posting run
 export const laborPostingRuns = pgTable('labor_posting_runs', {
   id: serial('id').primaryKey(),
   periodYear: integer('period_year').notNull(),
@@ -24169,7 +24299,7 @@ export const insertLaborPostingRunSchema = createInsertSchema(
 export type LaborPostingRun = typeof laborPostingRuns.$inferSelect;
 export type InsertLaborPostingRun = z.infer<typeof insertLaborPostingRunSchema>;
 
-// labor_cost_records — individual cost lines per employee per interval
+// labor_cost_records â€” individual cost lines per employee per interval
 export const laborCostRecords = pgTable('labor_cost_records', {
   id: serial('id').primaryKey(),
   postingRunId: integer('posting_run_id').references(() => laborPostingRuns.id),
@@ -24190,7 +24320,7 @@ export const laborCostRecords = pgTable('labor_cost_records', {
   dollarCost: numeric('dollar_cost', { precision: 12, scale: 2 }).notNull(),
   costType: text('cost_type').notNull(), // DIRECT | OVERHEAD | G_AND_A
   rateSource: text('rate_source').notNull(), // HOURLY_RATE | SALARY | DEFAULT_LABOR_RATE
-  // WAD attribution — nullable; populated when punch session carries a work-order assignment
+  // WAD attribution â€” nullable; populated when punch session carries a work-order assignment
   productionWorkOrderId: uuid('production_work_order_id'),
   projectId: uuid('project_id'),
   clinId: integer('clin_id').references((): AnyPgColumn => projectClins.id, {
@@ -24211,7 +24341,7 @@ export const insertLaborCostRecordSchema = createInsertSchema(
 export type LaborCostRecord = typeof laborCostRecords.$inferSelect;
 export type InsertLaborCostRecord = z.infer<typeof insertLaborCostRecordSchema>;
 
-// labor_account_config — singleton config mapping cost types to chart_of_accounts ids
+// labor_account_config â€” singleton config mapping cost types to chart_of_accounts ids
 export const laborAccountConfig = pgTable('labor_account_config', {
   id: serial('id').primaryKey(),
   directLaborAccountId: integer('direct_labor_account_id')
@@ -24239,7 +24369,7 @@ export type InsertLaborAccountConfig = z.infer<
 >;
 
 // ============================================================================
-// LABOR BURDEN RATES — DCAA indirect cost rate configuration
+// LABOR BURDEN RATES â€” DCAA indirect cost rate configuration
 // Required for FAR 42.703-2 adequate indirect cost rate structure.
 // Each row is a named, dated burden rate applied by cost type.
 // The rateType mirrors costType on labor_cost_records (OVERHEAD, G_AND_A, FRINGE, IR_AND_D, B_AND_P).
@@ -24265,7 +24395,7 @@ export type LaborBurdenRate = typeof laborBurdenRates.$inferSelect;
 export type InsertLaborBurdenRate = z.infer<typeof insertLaborBurdenRateSchema>;
 
 // ============================================================================
-// BURDEN RATES ENGINE — DCAA indirect cost pools, bases, rates, applications
+// BURDEN RATES ENGINE â€” DCAA indirect cost pools, bases, rates, applications
 // See migration 0100_burden_rates_engine.sql for the canonical DDL.
 // ============================================================================
 
@@ -24501,10 +24631,10 @@ export type InsertBurdenRateAccumulationBase = z.infer<
 >;
 
 // ============================================================================
-// CYCLE COUNT SESSIONS — AS9100 Physical Inventory Verification Workflow
+// CYCLE COUNT SESSIONS â€” AS9100 Physical Inventory Verification Workflow
 // ============================================================================
 
-// Variance tolerance policies — used by Task #142 cycle count subsystem to
+// Variance tolerance policies â€” used by Task #142 cycle count subsystem to
 // determine whether a line variance is auto-approved or requires reviewer sign-off.
 export const cycleCountVariancePolicies = pgTable(
   'cycle_count_variance_policies',
@@ -24612,7 +24742,7 @@ export type CycleCountLine = typeof cycleCountLines.$inferSelect;
 export type InsertCycleCountLine = z.infer<typeof insertCycleCountLineSchema>;
 
 // ============================================================================
-// QUOTE EXECUTION FEEDBACK — Quote vs Actual Feedback Loop
+// QUOTE EXECUTION FEEDBACK â€” Quote vs Actual Feedback Loop
 // Stores a computed snapshot comparing quoted estimates to actual execution
 // outcomes for a completed project. Used to close the feedback loop between
 // estimating and production, enabling better future quoting decisions.
@@ -24692,7 +24822,7 @@ export type InsertQuoteExecutionFeedback = z.infer<
 >;
 
 // ============================================================================
-// EDRI — EPOCH DCAA Readiness Index
+// EDRI â€” EPOCH DCAA Readiness Index
 // ============================================================================
 
 export const edriScoreSnapshots = pgTable('edri_score_snapshots', {
@@ -24952,7 +25082,7 @@ export type DcaaScanHistory = typeof dcaaScanHistory.$inferSelect;
 export type InsertDcaaScanHistory = z.infer<typeof insertDcaaScanHistorySchema>;
 
 // ============================================================================
-// DOCUMENT VAULT — CUI Classification
+// DOCUMENT VAULT â€” CUI Classification
 // Secure document storage with classification labels and access control.
 // ============================================================================
 
@@ -25116,7 +25246,7 @@ export type EmployeeMachineQualification =
   typeof employeeMachineQualifications.$inferSelect;
 
 // ============================================================================
-// CMMC 2.0 LEVEL 2 — CONTROL STATUS
+// CMMC 2.0 LEVEL 2 â€” CONTROL STATUS
 // Per-practice status tracking for NIST SP 800-171 Rev 2 (110 practices).
 // Seeded automatically from the evidence mapping; admins can update status,
 // notes, and attach a vault policy document for procedural controls.
@@ -25210,7 +25340,7 @@ export type InsertPdfFormTemplate = z.infer<typeof insertPdfFormTemplateSchema>;
 export type PdfFormField = typeof pdfFormFields.$inferSelect;
 export type InsertPdfFormField = z.infer<typeof insertPdfFormFieldSchema>;
 
-// ── Personal & Shared Calendars ──────────────────────────────────────────────
+// â”€â”€ Personal & Shared Calendars â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const userCalendars = pgTable('user_calendars', {
   id: serial('id').primaryKey(),
@@ -25388,7 +25518,7 @@ export type InsertContinuityAiUpdate = z.infer<
   typeof insertContinuityAiUpdateSchema
 >;
 
-// ─── Proteus Labs — Prompt Library ────────────────────────────────────────────
+// â”€â”€â”€ Proteus Labs â€” Prompt Library â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const proteusPromptCategoryEnum = pgEnum('proteus_prompt_category', [
   'small',
@@ -25468,7 +25598,7 @@ export const proteusPromptTags = pgTable('proteus_prompt_tags', {
 });
 
 // ---------------------------------------------------------------------------
-// Kiosk PIN rate-limit state — persisted so lockouts survive server restarts.
+// Kiosk PIN rate-limit state â€” persisted so lockouts survive server restarts.
 // ---------------------------------------------------------------------------
 export const kioskPinRateLimits = pgTable('kiosk_pin_rate_limits', {
   ip: text('ip').primaryKey(),
@@ -25534,7 +25664,7 @@ export type InsertProteusPromptTag = z.infer<
 >;
 
 // ---------------------------------------------------------------------------
-// Inventory Audit — Cutting Table packet cycle-count scheduling & records
+// Inventory Audit â€” Cutting Table packet cycle-count scheduling & records
 // ---------------------------------------------------------------------------
 
 export const auditFrequencyEnum = pgEnum('audit_frequency', [
@@ -25589,7 +25719,7 @@ export type InsertInventoryAuditRecord = z.infer<
 >;
 
 // ---------------------------------------------------------------------------
-// Production Control Templates — WAD Step 6
+// Production Control Templates â€” WAD Step 6
 // ---------------------------------------------------------------------------
 
 export const productionControlTemplateTypeEnum = pgEnum(
@@ -25964,7 +26094,7 @@ export type InsertEngineeringEcoRevisionLink = z.infer<
 >;
 
 // ---------------------------------------------------------------------------
-// WAD Production Controls — persisted controls + provision record per WAD
+// WAD Production Controls â€” persisted controls + provision record per WAD
 // ---------------------------------------------------------------------------
 
 export const wadProductionControls = pgTable(
@@ -26044,7 +26174,7 @@ export type InsertWadProductionControls = z.infer<
 >;
 
 // ---------------------------------------------------------------------------
-// WAD Document Links — per-artifact traceability for WI, spec sheets, QC, etc.
+// WAD Document Links â€” per-artifact traceability for WI, spec sheets, QC, etc.
 // ---------------------------------------------------------------------------
 
 export const wadDocumentLinks = pgTable('wad_document_links', {
@@ -26065,7 +26195,7 @@ export const wadDocumentLinks = pgTable('wad_document_links', {
 export type WadDocumentLink = typeof wadDocumentLinks.$inferSelect;
 
 // ---------------------------------------------------------------------------
-// Written Policies Library — DCAA-aligned policy versioning + acknowledgments
+// Written Policies Library â€” DCAA-aligned policy versioning + acknowledgments
 // ---------------------------------------------------------------------------
 
 export const policies = pgTable('policies', {
@@ -26163,9 +26293,9 @@ export type Policy = typeof policies.$inferSelect;
 export type PolicyVersion = typeof policyVersions.$inferSelect;
 export type PolicyAcknowledgment = typeof policyAcknowledgments.$inferSelect;
 
-// ─── Purchasing Controls: Requisitions, FAR Flowdowns, Debarment Checks ─────
-// Task #83 — auditable purchasing chain for government-contracting compliance.
-// Pipeline: purchase_requisitions → approvals → vendor_pos (link via requisitionId)
+// â”€â”€â”€ Purchasing Controls: Requisitions, FAR Flowdowns, Debarment Checks â”€â”€â”€â”€â”€
+// Task #83 â€” auditable purchasing chain for government-contracting compliance.
+// Pipeline: purchase_requisitions â†’ approvals â†’ vendor_pos (link via requisitionId)
 //   + FAR flowdown evidence per PO
 //   + Vendor debarment-check events at requisition approval and PO issuance.
 
@@ -26802,7 +26932,7 @@ export type InsertSupplierScorecard = z.infer<
 >;
 
 // ---------------------------------------------------------------------------
-// Task #85 — Audit Evidence Hardening
+// Task #85 â€” Audit Evidence Hardening
 // Hash-chain extension columns on `audit_events` (the unified ledger),
 // plus `audit_anchors` (periodic chain-head checkpoints) and
 // `audit_retention_policies` (per-event-type retention floor).
@@ -26854,9 +26984,9 @@ export type InsertAuditRetentionPolicy = z.infer<
   typeof insertAuditRetentionPolicySchema
 >;
 
-// ─────────────────────────────────────────────────────────────────────────
-// Task #146 — Inventory Anomaly Detection (Phase 3)
-// ─────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Task #146 â€” Inventory Anomaly Detection (Phase 3)
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const inventoryAnomalies = pgTable(
   'inventory_anomalies',
@@ -26957,7 +27087,7 @@ export const anomalyDetectorConfig = pgTable('anomaly_detector_config', {
 
 export type AnomalyDetectorConfig = typeof anomalyDetectorConfig.$inferSelect;
 
-// ─── Task #148 — Approval Escalation Engine ──────────────────────────────────
+// â”€â”€â”€ Task #148 â€” Approval Escalation Engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Generalized cross-domain approval pipeline. Override approvals, NCR
 // dispositions, scrap-over-threshold, quarantine release, and high-severity
 // anomalies all open an `approval_requests` row instead of (or in addition to)
@@ -27195,7 +27325,7 @@ export type EscalationChainLevel = {
   isBackstop?: boolean;
 };
 // ---------------------------------------------------------------------------
-// Task #143 — Operator badge authentication on material issues (Phase 2)
+// Task #143 â€” Operator badge authentication on material issues (Phase 2)
 //
 // Short-lived authenticated operator sessions, distinct from the web user
 // session, that prove WHO is physically scanning material at a shop-floor
@@ -27235,7 +27365,7 @@ export const operatorAuthSessions = pgTable(
     lastReauthAt: timestamp('last_reauth_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
-    // Absolute hard expiry — even with continuous activity, the session dies
+    // Absolute hard expiry â€” even with continuous activity, the session dies
     // here so an unattended badge can't authorize material draws indefinitely.
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     idleTimeoutSeconds: integer('idle_timeout_seconds').notNull().default(900), // 15 min

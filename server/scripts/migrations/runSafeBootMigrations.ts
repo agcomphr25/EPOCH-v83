@@ -262,6 +262,7 @@ export const safeMigrationFiles = [
   '0231_p1_po_item_quantity_adjustments.sql',
   '0232_p2_v2_controlled_pilot_readiness.sql',
   '0233_part_specification_sheet_control.sql',
+  '0234_epoch_validation_readiness_controls.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -306,6 +307,7 @@ export const criticalMigrationFiles = new Set([
   '0231_p1_po_item_quantity_adjustments.sql',
   '0232_p2_v2_controlled_pilot_readiness.sql',
   '0233_part_specification_sheet_control.sql',
+  '0234_epoch_validation_readiness_controls.sql',
 ]);
 
 export async function runSafeBootMigrations() {

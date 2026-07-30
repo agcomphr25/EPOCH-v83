@@ -143,7 +143,7 @@ beforeAll(async () => {
         configuration_revision,effectivity_type,effectivity_reference,
         requirement_source,planning_basis)
      VALUES ($1,$2,$3,1,'RELEASED',$4,1,'PILOT-CERT-PO','CFG-PILOT',
-       'CFG-PILOT-R1','PROJECT',$1,'synthetic-certification',
+       'CFG-PILOT-R1','PROJECT',$1::text,'synthetic-certification',
        'Disposable PostgreSQL certification') RETURNING id`,
     [projectId, workflowId, planningStep.rows[0].id, poId]
   );

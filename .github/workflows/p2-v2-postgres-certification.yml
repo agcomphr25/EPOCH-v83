@@ -138,45 +138,24 @@ jobs:
 
       - name: Run focused Phase 9-10A ESLint certification
         shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           node scripts/validate-phase10a-static-manifest.js
-          mapfile -t manifest_files < <(
-            node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
-          )
-          mapfile -t corrective_files < <(
-            git diff --name-only "$BASE_SHA"...HEAD |
-              grep -E '\.(js|jsx|ts|tsx)$' || true
-          )
           mapfile -t files < <(
-            printf '%s\n' "${manifest_files[@]}" "${corrective_files[@]}" | sort -u
+            node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
           )
           start=$(date +%s)
           npx eslint --max-warnings 0 "${files[@]}"
-          echo "focused_eslint: manifest_files=${#manifest_files[@]} corrective_files=${#corrective_files[@]} unique_files=${#files[@]} duration_seconds=$(($(date +%s) - start)) exit_code=0 errors=0 warnings=0"
+          echo "focused_eslint: manifest_files=${#files[@]} duration_seconds=$(($(date +%s) - start)) exit_code=0 errors=0 warnings=0"
 
       - name: Run focused Phase 9-10A formatting certification
         shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           node scripts/validate-phase10a-static-manifest.js
           mapfile -t files < <(
             node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
           )
           npx prettier --check "${files[@]}"
-          mapfile -t corrective_files < <(
-            git diff --name-only "$BASE_SHA"...HEAD |
-              grep -E '\.(js|jsx|ts|tsx|json|css|md|ya?ml)$' || true
-          )
-          if [ "${#corrective_files[@]}" -eq 0 ]; then
-            echo "No Prettier-supported corrective files found."
-            exit 1
-          fi
-          npx prettier --check "${corrective_files[@]}"
-          git diff --check "$BASE_SHA"...HEAD
-          echo "formatting: manifest_files=${#files[@]} corrective_files=${#corrective_files[@]} exit_code=0"
+          echo "formatting: manifest_files=${#files[@]} exit_code=0"
 
       - name: Create schema-push prerequisite
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"

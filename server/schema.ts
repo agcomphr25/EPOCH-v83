@@ -12306,7 +12306,8 @@ export type QueueType =
 
 export function mapQueueType(
   category:
-    import('../shared/utils/supplySourceDashboard').ManufacturedCategory | null
+    | import('../shared/utils/supplySourceDashboard').ManufacturedCategory
+    | null
 ): { queueType: QueueType; department: string } | null {
   const route = resolveManufacturingRouteDefinition(category);
   if (!route?.queueType || !route.department) return null;

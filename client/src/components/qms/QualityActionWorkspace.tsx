@@ -440,9 +440,11 @@ export default function QualityActionWorkspace({
                     {recommendationHref(recommendation.recommendation_code) && (
                       <a
                         className="mt-2 inline-block"
-                        href={recommendationHref(
-                          recommendation.recommendation_code
-                        )!}
+                        href={
+                          recommendationHref(
+                            recommendation.recommendation_code
+                          )!
+                        }
                       >
                         <Button size="sm" variant="outline">
                           Create or link in authoritative workflow

@@ -568,6 +568,9 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
         approvedPoLines: [
           { poLineId, partNumber: 'PILOT-PART-A', maximumQuantity: 1 },
         ],
+        configurationBaselineRevision: 'CFG-PILOT-R1',
+        productionPlanRevision: 1,
+        wadRevision: 1,
         authorizedParticipants: [
           { userId: admin.userId, functionalRole: 'ADMIN' },
         ],
@@ -583,6 +586,7 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
           {
             risk: 'Synthetic cancellation certification',
             mitigation: 'Cancel without deleting prior evidence',
+            ownerUserId: rolloutOwner.userId,
           },
         ],
       },

@@ -1799,7 +1799,7 @@ router.get(
         WHERE t.id = ${req.params.id}
         LIMIT 1
       `);
-      const record = (((result as any)?.rows || result || []) as any[])[0];
+      const record = result.rows[0] as Record<string, unknown> | undefined;
       if (!record) return res.status(404).json({ error: 'Traveler not found' });
       if (!record.spec_sheet_revision_id) {
         return res.status(404).json({
@@ -1810,7 +1810,9 @@ router.get(
       res.json(record);
     } catch (error) {
       console.error('Error loading captured traveler specification:', error);
-      res.status(500).json({ error: 'Failed to load captured traveler specification' });
+      res
+        .status(500)
+        .json({ error: 'Failed to load captured traveler specification' });
     }
   }
 );

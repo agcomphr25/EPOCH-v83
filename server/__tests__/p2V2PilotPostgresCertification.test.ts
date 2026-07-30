@@ -416,7 +416,7 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
           reason: 'Synthetic negative test',
           idempotencyKey: 'pilot-activate-wrong',
         },
-        admin
+        engineering
       )
     ).rejects.toMatchObject({ code: 'ROLLOUT_OWNER_REQUIRED' });
     model = await transitionPilot(
@@ -468,7 +468,7 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
         idempotencyKey: 'participant-not-trained',
         confirmation: 'Confirm negative training test',
       })
-    ).rejects.toMatchObject({ code: 'PILOT_PARTICIPANT_REQUIRED' });
+    ).rejects.toMatchObject({ code: 'PILOT_TRAINING_REQUIRED' });
     await expect(
       requireActivePilotForAction(projectId, 'PRODUCT_RELEASE', admin, {
         poLineId,

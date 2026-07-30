@@ -140,7 +140,8 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-600 mb-4">
-              Submit a process change request and follow QMS information requests.
+              Submit a process change request and follow QMS information
+              requests.
             </p>
             <Link href="/my-quality-actions">
               <Button className="w-full justify-start" variant="outline">

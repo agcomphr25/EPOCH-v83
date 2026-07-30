@@ -86,11 +86,14 @@ describe('QMS Change Control architecture', () => {
     expect(service).toContain('BULK_IMPORT_VALIDATION_FAILED');
     const bulkImport = service.slice(
       service.indexOf('export async function importHistoricalRows'),
-      service.indexOf('export async function', service.indexOf('export async function importHistoricalRows') + 1),
+      service.indexOf(
+        'export async function',
+        service.indexOf('export async function importHistoricalRows') + 1
+      )
     );
-    expect(bulkImport.indexOf("preview.some((row) => !row.valid)")).toBeLessThan(
-      bulkImport.indexOf("await client.query('BEGIN')")
-    );
+    expect(
+      bulkImport.indexOf('preview.some((row) => !row.valid)')
+    ).toBeLessThan(bulkImport.indexOf("await client.query('BEGIN')"));
     expect(service).toContain("await client.query('ROLLBACK')");
   });
 
@@ -107,15 +110,9 @@ describe('QMS Change Control architecture', () => {
   });
 
   it('blocks controlled-document release when the linked change is unapproved', () => {
-    expect(migration).toContain(
-      'controlled_document_change_disposition_check'
-    );
-    expect(migration).toContain(
-      'controlled_document_change_release_gate'
-    );
-    expect(migration).toContain(
-      "r.status NOT IN (\n            'APPROVED'"
-    );
+    expect(migration).toContain('controlled_document_change_disposition_check');
+    expect(migration).toContain('controlled_document_change_release_gate');
+    expect(migration).toContain("r.status NOT IN (\n            'APPROVED'");
     expect(service).toContain('DOCUMENT_REVISION_DISPOSITION_REQUIRED');
   });
 
@@ -128,9 +125,15 @@ describe('QMS Change Control architecture', () => {
   });
 
   it('projects NCR, CAR, and PCR without replacing their authoritative records', () => {
-    expect(qualityActionMigration).toContain('sync_ncr_quality_action_register');
-    expect(qualityActionMigration).toContain('sync_car_quality_action_register');
-    expect(qualityActionMigration).toContain('sync_pcr_quality_action_register');
+    expect(qualityActionMigration).toContain(
+      'sync_ncr_quality_action_register'
+    );
+    expect(qualityActionMigration).toContain(
+      'sync_car_quality_action_register'
+    );
+    expect(qualityActionMigration).toContain(
+      'sync_pcr_quality_action_register'
+    );
     expect(qualityActionMigration).toContain("'NCR',n.id::text");
     expect(qualityActionMigration).toContain("'CAR',c.id::text");
     expect(qualityActionMigration).toContain("'PCR',p.id::text");
@@ -144,8 +147,12 @@ describe('QMS Change Control architecture', () => {
   });
 
   it('exposes controlled PCR implementation and verification endpoints', () => {
-    expect(routes).toContain("'/change-control/pcrs/:pcrId/authorize-implementation'");
-    expect(routes).toContain("'/change-control/pcrs/:pcrId/complete-implementation'");
+    expect(routes).toContain(
+      "'/change-control/pcrs/:pcrId/authorize-implementation'"
+    );
+    expect(routes).toContain(
+      "'/change-control/pcrs/:pcrId/complete-implementation'"
+    );
     expect(routes).toContain("'/change-control/pcrs/:pcrId/verify'");
     expect(routes).toContain("'/change-control/pcrs/:pcrId/close'");
     expect(service).toContain('PCR_IMPLEMENTATION_GATE_BLOCKED');

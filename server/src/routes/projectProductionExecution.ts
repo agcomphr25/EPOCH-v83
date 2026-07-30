@@ -14,6 +14,10 @@ import {
   submitProductionCompletion,
   type ProductionActor,
 } from '../services/projectProductionExecutionService';
+import {
+  ProjectPilotControlError,
+  requireActivePilotForAction,
+} from '../services/projectPilotControlService';
 
 const router = Router({ mergeParams: true });
 const expected = z.object({ expectedLockVersion: z.number().int().positive() });
@@ -37,6 +41,10 @@ const hold = expected.extend({
   requiredDisposition: z.string().min(1),
 });
 const releaseHold = expected.extend({ releaseReason: z.string().min(1) });
+const pilotAction = expected.extend({
+  pilotIdempotencyKey: z.string().min(8).max(200),
+  pilotConfirmation: z.string().min(1),
+});
 
 function actor(req: Request): ProductionActor {
   if (!req.user?.id || !req.user.username || !req.user.role)
@@ -70,6 +78,10 @@ function fail(res: Response, error: unknown) {
       .status(400)
       .json({ error: 'INVALID_INPUT', details: error.flatten() });
   if (error instanceof ProjectProductionExecutionError)
+    return res
+      .status(error.status)
+      .json({ error: error.code, message: error.message, ...error.details });
+  if (error instanceof ProjectPilotControlError)
     return res
       .status(error.status)
       .json({ error: error.code, message: error.message, ...error.details });
@@ -207,7 +219,16 @@ router.post('/completion-reviews/current/complete', async (req, res) => {
       req,
       'projects.production_stage.manage'
     );
-    const body = expected.parse(req.body);
+    const body = pilotAction.parse(req.body);
+    await requireActivePilotForAction(
+      projectId(req),
+      'PRODUCTION_EXECUTION_COMPLETION',
+      user,
+      {
+        idempotencyKey: body.pilotIdempotencyKey,
+        confirmation: body.pilotConfirmation,
+      }
+    );
     res.json(
       await completeProductionStage(
         projectId(req),

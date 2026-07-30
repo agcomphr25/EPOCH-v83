@@ -5,7 +5,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/part-spec-sheet-postgres-certification.yml'
-      - 'migrations/0232_part_specification_sheet_control.sql'
+      - 'migrations/0233_part_specification_sheet_control.sql'
       - 'server/schema.ts'
       - 'server/storage.ts'
       - 'server/src/capabilities.ts'

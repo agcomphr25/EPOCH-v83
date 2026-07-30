@@ -25,7 +25,7 @@ const client = fs.readFileSync(
   'utf8'
 );
 const migration = fs.readFileSync(
-  path.join(root, 'migrations/0232_part_specification_sheet_control.sql'),
+  path.join(root, 'migrations/0233_part_specification_sheet_control.sql'),
   'utf8'
 );
 

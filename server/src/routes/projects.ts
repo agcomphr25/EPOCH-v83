@@ -53,6 +53,7 @@ import projectPreproductionReadinessRoutes from './projectPreproductionReadiness
 import projectProductionExecutionRoutes from './projectProductionExecution';
 import projectQualityReleaseRoutes from './projectQualityRelease';
 import projectShippingCloseoutRoutes from './projectShippingCloseout';
+import projectPilotControlRoutes from './projectPilotControl';
 import { getTechnicalConfigurationReview } from '../services/projectTechnicalConfigurationReviewService';
 import { getCurrentWadAuthorization } from '../services/projectWadAuthorizationService';
 import { getUserPermissions } from '../services/permissionService';
@@ -1934,6 +1935,7 @@ router.use(
 router.use('/:id/workflow-v2/production', projectProductionExecutionRoutes);
 router.use('/:id/workflow-v2/quality-release', projectQualityReleaseRoutes);
 router.use('/:id/workflow-v2/shipping-closeout', projectShippingCloseoutRoutes);
+router.use('/:id/workflow-v2/pilot-control', projectPilotControlRoutes);
 
 router.get('/:id/workflow-v2/design-applicability', async (req, res) => {
   try {

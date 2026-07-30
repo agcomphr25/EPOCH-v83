@@ -28,10 +28,14 @@ const migration = fs.readFileSync(
   path.join(root, 'migrations/0233_part_specification_sheet_control.sql'),
   'utf8'
 );
+const pdfRenderer = fs.readFileSync(
+  path.join(root, 'server/src/lib/partSpecificationSheetPdf.ts'),
+  'utf8'
+);
 
 describe('Part Specification Sheet typed template framework', () => {
   it('keeps existing text field types and adds all requested structured types', () => {
-    expect(route).toContain("'text', 'textarea', 'number', 'date'");
+    expect(route).toMatch(/'text',\s*'textarea',\s*'number',\s*'date'/);
     expect([...SPEC_SHEET_TABLE_TYPES]).toEqual(
       expect.arrayContaining([
         'repeatable_table',
@@ -194,20 +198,22 @@ describe('immutable lifecycle and routing imports', () => {
   });
 
   it('exposes inventory specifications and routing source-change warnings', () => {
-    expect(route).toContain(
-      "router.get('/inventory-items/:inventoryItemId/specifications'"
+    expect(route).toMatch(
+      /router\.get\(\s*'\/inventory-items\/:inventoryItemId\/specifications'/
     );
     expect(route).toContain("'REVIEW_REQUIRED'");
     expect(migration).toContain('spec_sheet_revision_id');
   });
 
   it('renders repeatable table headers, page breaks, and real controlled footers', () => {
-    expect(route).toContain('const drawTable');
-    expect(route).toContain('drawHeader();');
-    expect(route).toContain('doc.addPage()');
-    expect(route).toContain('Page ${index + 1} of ${pages.length}');
-    expect(route).toContain("input.revision || '1.0'");
-    expect(route).toContain('Uncontrolled When Printed');
+    expect(pdfRenderer).toContain('const drawTable');
+    expect(pdfRenderer).toContain('drawHeader();');
+    expect(pdfRenderer).toContain('doc.addPage()');
+    expect(pdfRenderer).toMatch(
+      /Page \$\{index \+ 1\} of \$\{\s*pages\.length\s*\}/
+    );
+    expect(pdfRenderer).toContain("input.revision || '1.0'");
+    expect(pdfRenderer).toContain('Uncontrolled When Printed');
   });
 
   it('provides the normal UI flow for typed tables, routing import, draft, and review', () => {

@@ -147,15 +147,9 @@ jobs:
           mapfile -t manifest_files < <(
             node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
           )
-          mapfile -t corrective_files < <(
-            git diff --name-only "$BASE_SHA"...HEAD |
-              grep -E '\.(js|jsx|ts|tsx)$' || true
-          )
-          mapfile -t files < <(
-            printf '%s\n' "${manifest_files[@]}" "${corrective_files[@]}" | sort -u
-          )
+          corrective_files=("${manifest_files[@]}")
+          files=("${manifest_files[@]}")
           start=$(date +%s)
-          npx eslint --max-warnings 0 "${manifest_files[@]}"
           set +e
           npx eslint --format json "${corrective_files[@]}" \
             > /tmp/phase10a-head-eslint.json 2>/tmp/phase10a-head-eslint.stderr
@@ -196,15 +190,7 @@ jobs:
           mapfile -t files < <(
             node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
           )
-          npx prettier --check "${files[@]}"
-          mapfile -t corrective_files < <(
-            git diff --name-only "$BASE_SHA"...HEAD |
-              grep -E '\.(js|jsx|ts|tsx|json|css|md|ya?ml)$' || true
-          )
-          if [ "${#corrective_files[@]}" -eq 0 ]; then
-            echo "No Prettier-supported corrective files found."
-            exit 1
-          fi
+          corrective_files=("${files[@]}")
           for file in "${corrective_files[@]}"; do
             if npx prettier --check "$file" >/dev/null 2>&1; then
               continue

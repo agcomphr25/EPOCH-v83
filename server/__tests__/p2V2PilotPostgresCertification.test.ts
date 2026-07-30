@@ -142,7 +142,7 @@ beforeAll(async () => {
         status,po_id,po_revision_number,po_number,configuration_baseline_id,
         configuration_revision,effectivity_type,effectivity_reference,
         requirement_source,planning_basis)
-     VALUES ($1,$2,$3,1,'RELEASED',$4,1,'PILOT-CERT-PO','CFG-PILOT',
+     VALUES ($1::uuid,$2,$3,1,'RELEASED',$4,1,'PILOT-CERT-PO','CFG-PILOT',
        'CFG-PILOT-R1','PROJECT',$1::text,'synthetic-certification',
        'Disposable PostgreSQL certification') RETURNING id`,
     [projectId, workflowId, planningStep.rows[0].id, poId]
@@ -154,8 +154,8 @@ beforeAll(async () => {
         wad_number,wad_revision,status,po_id,po_revision_number,
         configuration_revision,effectivity_reference,inherited_requirements_snapshot,
         budget_snapshot)
-     VALUES ($1,$2,$3,$4,1,$5,'PILOT-WAD-1',1,'RELEASED',$6,1,
-       'CFG-PILOT-R1',$1,'{}'::jsonb,'{}'::jsonb)`,
+     VALUES ($1::uuid,$2,$3,$4,1,$5,'PILOT-WAD-1',1,'RELEASED',$6,1,
+       'CFG-PILOT-R1',$1::text,'{}'::jsonb,'{}'::jsonb)`,
     [
       projectId,
       workflowId,

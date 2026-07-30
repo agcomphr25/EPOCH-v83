@@ -5630,6 +5630,7 @@ export const p2SerializedItems = pgTable('p2_serialized_items', {
   buildFamilyKey: text('build_family_key'),
   partRoutingId: varchar('part_routing_id', { length: 255 }),
   partRoutingRevision: integer('part_routing_revision'),
+  specSheetRevisionId: uuid('spec_sheet_revision_id').references(() => specSheetRevisions.id, { onDelete: 'restrict' }),
   sku: text('sku'),
   drawingName: text('drawing_name'),
   customerSerialNumber: text('customer_serial_number'),
@@ -14121,6 +14122,7 @@ export const specSheets = pgTable('spec_sheets', {
   specificationRevision: text('specification_revision').notNull().default('1.0'),
   controlledDocumentId: uuid('controlled_document_id').references(() => controlledDocuments.id, { onDelete: 'restrict' }),
   releasedRevisionId: uuid('released_revision_id'),
+  workingRevisionId: uuid('working_revision_id'),
   supersedesSpecSheetId: uuid('supersedes_spec_sheet_id'),
   effectiveDate: date('effective_date'),
   sourceChangeStatus: text('source_change_status').notNull().default('CURRENT'),
@@ -14239,6 +14241,19 @@ export const specSheetRevisionApprovals = pgTable('spec_sheet_revision_approvals
   contentChecksum: text('content_checksum').notNull(),
   comment: text('comment'),
   decidedAt: timestamp('decided_at', { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+export const specSheetTransitionAudit = pgTable('spec_sheet_transition_audit', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  specSheetId: uuid('spec_sheet_id').references(() => specSheets.id, { onDelete: 'restrict' }).notNull(),
+  specSheetRevisionId: uuid('spec_sheet_revision_id').references(() => specSheetRevisions.id, { onDelete: 'restrict' }).notNull(),
+  fromStatus: text('from_status').notNull(),
+  toStatus: text('to_status').notNull(),
+  reason: text('reason').notNull(),
+  actorUserId: integer('actor_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
+  actorSnapshot: jsonb('actor_snapshot').notNull(),
+  contentChecksum: text('content_checksum').notNull(),
+  transitionedAt: timestamp('transitioned_at', { withTimezone: true }).notNull().default(sql`now()`),
 });
 
 // Routing Document Links - Links documents to routing steps

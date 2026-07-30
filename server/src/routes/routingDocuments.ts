@@ -36,6 +36,14 @@ import {
   SPEC_SHEET_TABLE_TYPES,
   validateQcRows,
 } from '../lib/partSpecificationSheets';
+import {
+  assertSpecTransition,
+  getSpecActor,
+  requireSpecCapability,
+  SPEC_SHEET_CAPABILITIES,
+  specActorSnapshot,
+} from '../lib/partSpecificationSheetControl';
+import { renderPartSpecificationSheetPdf } from '../lib/partSpecificationSheetPdf';
 
 const require = createRequire(import.meta.url);
 const TEMPLATE_UPLOAD_TABLES = new Set([
@@ -532,6 +540,12 @@ async function renderSpecSheetPdf(input: {
   status?: string;
   effectiveDate?: string | null;
 }) {
+  return renderPartSpecificationSheetPdf(input);
+  /*
+   * Historical inline implementation retained temporarily in this feature
+   * branch for diff review. It is unreachable; production and certification
+   * both execute renderPartSpecificationSheetPdf.
+   */
   const PDFKitDocument = require('pdfkit');
   const landscape = input.templateFields.some((field) =>
     SPEC_SHEET_TABLE_TYPES.has(field.fieldType) && Array.isArray(field.columns) && field.columns.length > 8
@@ -1529,6 +1543,12 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
     const fileBuffer = Buffer.from(fileContent, 'base64');
     const finalTitle = String(title || fileName.replace(/\.[^/.]+$/, '')).trim();
     const finalDocumentType = String(documentType || 'form_template').trim();
+    if (
+      ['spec_sheet', 'specification'].includes(finalDocumentType.toLowerCase()) &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.templateCreate)
+    ) {
+      return;
+    }
     const finalDepartment = String(departmentName || 'Quality').trim();
     const fileUrl = await saveControlledDocumentFile(fileName, fileBuffer);
     const extractedText = await extractPdfText(fileBuffer);
@@ -1902,6 +1922,12 @@ router.post('/ai-generate', async (req: Request, res: Response) => {
     const finalDocumentType = typeof documentType === 'string' && documentType.trim()
       ? documentType.trim()
       : 'work_instruction';
+    const specActor = ['spec_sheet', 'specification'].includes(finalDocumentType)
+      ? requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.create)
+      : getSpecActor(req);
+    if (['spec_sheet', 'specification'].includes(finalDocumentType) && !specActor) {
+      return;
+    }
     const finalDepartment = typeof departmentName === 'string' && departmentName.trim()
       ? departmentName.trim()
       : 'Manufacturing';
@@ -2093,6 +2119,38 @@ ${templateContent ? `\nTemplate:\n${templateContent}` : ''}`;
       lifecycleStatus: 'DRAFT',
       status: 'draft',
     }).where(eq(controlledDocuments.id, controlledDocument.id));
+    if (specSheet && specActor) {
+      const snapshot = {
+        documentNumber,
+        specificationRevision: '1.0',
+        partNumber,
+        partName,
+        title: documentTitle,
+        fieldValues: generatedContent,
+      };
+      const revisionResult = await db.execute(sql`
+        INSERT INTO spec_sheet_revisions (
+          spec_sheet_id, controlled_document_revision_id, revision, lifecycle_status,
+          template_revision, content_snapshot, content_checksum, file_url, file_name,
+          file_checksum, created_by_user_id, created_by_snapshot
+        ) VALUES (
+          ${specSheet.id}, ${controlledRevision.id}, '1.0', 'DRAFT', '1.0',
+          ${JSON.stringify(snapshot)}::jsonb, ${checksumSnapshot(snapshot)}, ${fileUrl},
+          ${pdfFileName}, ${createHash('sha256').update(pdfBuffer).digest('hex')},
+          ${specActor.id}, ${JSON.stringify(specActorSnapshot(specActor))}::jsonb
+        )
+        RETURNING id
+      `);
+      const specRevision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+      await db.execute(sql`
+        UPDATE spec_sheets
+        SET controlled_document_id = ${controlledDocument.id},
+            working_revision_id = ${specRevision.id},
+            lifecycle_status = 'DRAFT',
+            updated_at = NOW()
+        WHERE id = ${specSheet.id}
+      `);
+    }
     
     res.status(201).json({ document: newDocument, specSheet, controlledDocument, generatedContent });
   } catch (error) {
@@ -2105,6 +2163,12 @@ ${templateContent ? `\nTemplate:\n${templateContent}` : ''}`;
 router.post('/templates/learn', async (req: Request, res: Response) => {
   try {
     const { templateName, templateType, description, referenceDocumentIds } = req.body;
+    if (
+      ['spec_sheet', 'specification'].includes(String(templateType || '').toLowerCase()) &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.templateCreate)
+    ) {
+      return;
+    }
     
     if (!templateName || !templateName.trim()) {
       return res.status(400).json({ error: 'Template name is required' });
@@ -2268,6 +2332,7 @@ Return a JSON object with:
 // Request upload URL for spec sheet
 router.post('/spec-sheets/request-upload-url', async (req: Request, res: Response) => {
   try {
+    if (!requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.create)) return;
     const { name, size, contentType } = req.body;
     
     if (!name) {
@@ -2296,8 +2361,16 @@ router.post('/spec-sheets/request-upload-url', async (req: Request, res: Respons
 // Complete upload for spec sheet
 router.post('/spec-sheets/complete-upload', async (req: Request, res: Response) => {
   try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.create);
+    if (!actor) return;
     const { objectPath, title, originalFileName, fileSize, mimeType, partRoutingId, partNumber, isTemplate, sourceType } = req.body;
-    const user = (req as any).user;
+    const user = actor;
+    if (
+      (isTemplate === true || isTemplate === 'true') &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.templateCreate)
+    ) {
+      return;
+    }
     
     if (!objectPath || !originalFileName) {
       return res.status(400).json({ error: 'Missing required fields: objectPath, originalFileName' });
@@ -2316,18 +2389,49 @@ router.post('/spec-sheets/complete-upload', async (req: Request, res: Response) 
       console.warn('Failed to set ACL policy for spec sheet:', aclError);
     }
     
-    const [sheet] = await db.insert(specSheets).values({
-      title: title || originalFileName,
-      partRoutingId: partRoutingId || null,
-      partNumber: partNumber || null,
-      sourceType: finalSourceType,
-      fileUrl: objectPath,
-      fileName: originalFileName,
-      fileType: mimeType || 'application/octet-stream',
-      fileSize: fileSize || 0,
-      isTemplate: isTemplate === true || isTemplate === 'true',
-      createdBy: user?.username || 'system',
-    }).returning();
+    const sheet = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(specSheets).values({
+        title: title || originalFileName,
+        partRoutingId: partRoutingId || null,
+        partNumber: partNumber || null,
+        sourceType: finalSourceType,
+        fileUrl: objectPath,
+        fileName: originalFileName,
+        fileType: mimeType || 'application/octet-stream',
+        fileSize: fileSize || 0,
+        isTemplate: isTemplate === true || isTemplate === 'true',
+        createdBy: user.username || String(user.id),
+      }).returning();
+      const snapshot = {
+        title: title || originalFileName,
+        partNumber: partNumber || null,
+        sourceType: finalSourceType,
+        uploadedFile: {
+          objectPath,
+          originalFileName,
+          fileSize: fileSize || 0,
+          mimeType: mimeType || 'application/octet-stream',
+        },
+      };
+      const revisionResult = await tx.execute(sql`
+        INSERT INTO spec_sheet_revisions (
+          spec_sheet_id, revision, lifecycle_status, template_revision,
+          part_routing_id, content_snapshot, content_checksum, file_url, file_name,
+          created_by_user_id, created_by_snapshot
+        ) VALUES (
+          ${created.id}, '1.0', 'DRAFT', '1.0', ${partRoutingId || null},
+          ${JSON.stringify(snapshot)}::jsonb, ${checksumSnapshot(snapshot)}, ${objectPath},
+          ${originalFileName}, ${user.id}, ${JSON.stringify(specActorSnapshot(user))}::jsonb
+        )
+        RETURNING id
+      `);
+      const revision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+      await tx.execute(sql`
+        UPDATE spec_sheets SET working_revision_id = ${revision.id}
+        WHERE id = ${created.id}
+      `);
+      return { ...created, workingRevisionId: revision.id };
+    });
     
     res.status(201).json(sheet);
   } catch (error) {
@@ -2443,6 +2547,19 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
     const resolvedTitle = String(title || fallbackTitle).trim();
     const templateSections = Array.isArray(template.sections) ? template.sections : [];
     const isSpecSheet = templateType === 'spec_sheet' || templateType === 'specification';
+    if (
+      isSpecSheet &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.create)
+    ) {
+      return;
+    }
+    if (
+      isSpecSheet &&
+      action === 'SUBMIT_REVIEW' &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.submit)
+    ) {
+      return;
+    }
     const reservedNumber = isSpecSheet ? await reserveSpecSheetDocumentNumber(user?.id) : null;
     const documentNumber = reservedNumber?.documentNumber ?? await generateControlledTemplateNumber();
     creationStage = 'rendering PDF';
@@ -2644,9 +2761,23 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
         UPDATE spec_sheets
         SET controlled_document_id = ${controlledDocument.id},
             lifecycle_status = ${action === 'SUBMIT_REVIEW' ? 'IN_REVIEW' : 'DRAFT'},
+            working_revision_id = ${specSheetRevision.id},
             updated_at = NOW()
         WHERE id = ${specSheet.id}
       `);
+      if (action === 'SUBMIT_REVIEW') {
+        await db.execute(sql`
+          INSERT INTO spec_sheet_transition_audit (
+            spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+            actor_user_id, actor_snapshot, content_checksum
+          ) VALUES (
+            ${specSheet.id}, ${specSheetRevision.id}, 'DRAFT', 'IN_REVIEW',
+            'Created and submitted for controlled review', ${user.id},
+            ${JSON.stringify(specActorSnapshot(user))}::jsonb,
+            ${specSheetRevision.content_checksum}
+          )
+        `);
+      }
     }
     await db.execute(sql`
       UPDATE controlled_documents
@@ -2703,13 +2834,6 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
 
 router.post('/documents/from-template', createDocumentFromTemplate);
 router.post('/spec-sheets/from-template', createDocumentFromTemplate);
-
-function hasSpecCapability(req: Request, capability: string) {
-  const user = (req as any).user;
-  const role = String(user?.role || '').toUpperCase();
-  const capabilities = Array.isArray(user?.capabilities) ? user.capabilities.map(String) : [];
-  return role === 'ADMIN' || role === 'OWNER' || capabilities.includes(capability);
-}
 
 router.get('/part-routings/:routingId/spec-import', async (req: Request, res: Response) => {
   try {
@@ -2804,6 +2928,113 @@ router.get('/part-routings/:routingId/spec-import', async (req: Request, res: Re
   }
 });
 
+router.put('/spec-sheets/:id/revisions/:revisionId', async (req: Request, res: Response) => {
+  try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.edit);
+    if (!actor) return;
+    const suppliedSnapshot =
+      req.body?.contentSnapshot && typeof req.body.contentSnapshot === 'object'
+        ? req.body.contentSnapshot
+        : null;
+    const suppliedFieldValues =
+      req.body?.fieldValues && typeof req.body.fieldValues === 'object'
+        ? req.body.fieldValues
+        : null;
+    if (!suppliedSnapshot && !suppliedFieldValues) {
+      return res.status(400).json({ error: 'Controlled contentSnapshot or fieldValues is required' });
+    }
+
+    const updated = await db.transaction(async (tx) => {
+      const lockedResult = await tx.execute(sql`
+        SELECT ssr.*, ss.working_revision_id
+        FROM spec_sheet_revisions ssr
+        JOIN spec_sheets ss ON ss.id = ssr.spec_sheet_id
+        WHERE ssr.id = ${req.params.revisionId}
+          AND ssr.spec_sheet_id = ${req.params.id}
+        FOR UPDATE
+      `);
+      const locked = (((lockedResult as any)?.rows || lockedResult || []) as any[])[0];
+      if (!locked) throw Object.assign(new Error('Revision not found'), { status: 404 });
+      if (locked.lifecycle_status !== 'DRAFT' || locked.working_revision_id !== locked.id) {
+        throw Object.assign(
+          new Error('Only the exact working DRAFT revision can be edited'),
+          { status: 409 }
+        );
+      }
+      const nextSnapshot = suppliedSnapshot || {
+        ...locked.content_snapshot,
+        fieldValues: suppliedFieldValues,
+      };
+      const nextChecksum = checksumSnapshot(nextSnapshot);
+      const revisionResult = await tx.execute(sql`
+        UPDATE spec_sheet_revisions
+        SET content_snapshot = ${JSON.stringify(nextSnapshot)}::jsonb,
+            content_checksum = ${nextChecksum}
+        WHERE id = ${locked.id} AND lifecycle_status = 'DRAFT'
+        RETURNING *
+      `);
+      await tx.execute(sql`
+        DELETE FROM spec_sheet_revision_approvals
+        WHERE spec_sheet_revision_id = ${locked.id}
+      `);
+      await tx.execute(sql`
+        UPDATE spec_sheets
+        SET specifications = ${JSON.stringify(nextSnapshot)}::jsonb,
+            updated_at = NOW()
+        WHERE id = ${req.params.id} AND working_revision_id = ${locked.id}
+      `);
+      return (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+    });
+    res.json(updated);
+  } catch (error: any) {
+    const status = Number(error?.status) || 500;
+    if (status < 500) return res.status(status).json({ error: error.message });
+    console.error('Error updating controlled spec-sheet draft:', error);
+    res.status(500).json({ error: 'Failed to update controlled specification draft' });
+  }
+});
+
+router.post('/spec-sheets/:id/revisions/:revisionId/submit', async (req: Request, res: Response) => {
+  try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.submit);
+    if (!actor) return;
+    const reason = String(req.body?.reason || 'Submitted for controlled review').trim();
+    const revision = await db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        SELECT * FROM spec_sheet_revisions
+        WHERE id = ${req.params.revisionId} AND spec_sheet_id = ${req.params.id}
+        FOR UPDATE
+      `);
+      const current = (((result as any)?.rows || result || []) as any[])[0];
+      if (!current) throw Object.assign(new Error('Revision not found'), { status: 404 });
+      assertSpecTransition(current.lifecycle_status, 'IN_REVIEW');
+      await tx.execute(sql`
+        UPDATE spec_sheet_revisions SET lifecycle_status = 'IN_REVIEW'
+        WHERE id = ${current.id}
+      `);
+      await tx.execute(sql`
+        UPDATE spec_sheets SET lifecycle_status = 'IN_REVIEW', updated_at = NOW()
+        WHERE id = ${req.params.id} AND working_revision_id = ${current.id}
+      `);
+      await tx.execute(sql`
+        INSERT INTO spec_sheet_transition_audit (
+          spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+          actor_user_id, actor_snapshot, content_checksum
+        ) VALUES (
+          ${req.params.id}, ${current.id}, ${current.lifecycle_status}, 'IN_REVIEW',
+          ${reason}, ${actor.id}, ${JSON.stringify(specActorSnapshot(actor))}::jsonb,
+          ${current.content_checksum}
+        )
+      `);
+      return { ...current, lifecycle_status: 'IN_REVIEW' };
+    });
+    res.json(revision);
+  } catch (error: any) {
+    const status = Number(error?.status) || (String(error?.message).startsWith('Invalid specification') ? 409 : 500);
+    res.status(status).json({ error: status === 500 ? 'Failed to submit specification' : error.message });
+  }
+});
+
 router.post('/spec-sheets/:id/revisions/:revisionId/approve', async (req: Request, res: Response) => {
   try {
     const approvalRole = String(req.body.approvalRole || '').toUpperCase();
@@ -2811,8 +3042,14 @@ router.post('/spec-sheets/:id/revisions/:revisionId/approve', async (req: Reques
       return res.status(400).json({ error: 'Approval role must be Engineering, Quality, Production, or Customer' });
     }
     const roleCapability = `spec_sheets.approve.${approvalRole.toLowerCase()}`;
-    if (!hasSpecCapability(req, roleCapability)) {
-      return res.status(403).json({ error: `Not authorized for ${approvalRole} specification approval`, requiredCapability: roleCapability });
+    const actor = requireSpecCapability(req, res, roleCapability);
+    if (!actor) return;
+    const decision = String(req.body.decision || 'APPROVED').toUpperCase();
+    if (!['APPROVED', 'REJECTED'].includes(decision)) {
+      return res.status(400).json({ error: 'Decision must be APPROVED or REJECTED' });
+    }
+    if (decision === 'REJECTED' && !String(req.body.comment || '').trim()) {
+      return res.status(400).json({ error: 'A rejection comment is required' });
     }
     const revisionResult = await db.execute(sql`
       SELECT * FROM spec_sheet_revisions
@@ -2821,22 +3058,48 @@ router.post('/spec-sheets/:id/revisions/:revisionId/approve', async (req: Reques
     `);
     const revision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
     if (!revision) return res.status(404).json({ error: 'Spec-sheet revision not found' });
-    if (!['DRAFT', 'IN_REVIEW'].includes(revision.lifecycle_status)) return res.status(409).json({ error: 'Released revisions cannot receive editable approval evidence' });
-    const user = (req as any).user;
-    const approval = await insertPublicRowReturning('spec_sheet_revision_approvals', {
-      id: randomUUID(),
-      spec_sheet_revision_id: revision.id,
-      approval_role: approvalRole,
-      decision: String(req.body.decision || 'APPROVED').toUpperCase(),
-      actor_user_id: user.id,
-      actor_display_name: user.displayName || user.name || user.username,
-      actor_role: user.role,
-      actor_capabilities: user.capabilities || [],
-      revision_snapshot: revision.revision,
-      content_checksum: revision.content_checksum,
-      comment: req.body.comment || null,
-      decided_at: new Date(),
-    }, ['spec_sheet_revision_id', 'approval_role', 'actor_user_id', 'content_checksum']);
+    if (revision.lifecycle_status !== 'IN_REVIEW') {
+      return res.status(409).json({ error: 'Only an IN_REVIEW revision can receive approval evidence' });
+    }
+    const approval = await db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        INSERT INTO spec_sheet_revision_approvals (
+          id, spec_sheet_revision_id, approval_role, decision, actor_user_id,
+          actor_display_name, actor_role, actor_capabilities, revision_snapshot,
+          content_checksum, comment, decided_at
+        ) VALUES (
+          ${randomUUID()}, ${revision.id}, ${approvalRole}, ${decision}, ${actor.id},
+          ${actor.displayName || actor.name || actor.username || `user-${actor.id}`},
+          ${actor.role || 'UNKNOWN'}, ${JSON.stringify(actor.capabilities)}::jsonb,
+          ${revision.revision}, ${revision.content_checksum}, ${req.body.comment || null}, NOW()
+        )
+        RETURNING *
+      `);
+      const inserted = (((result as any)?.rows || result || []) as any[])[0];
+      if (decision === 'REJECTED') {
+        assertSpecTransition(revision.lifecycle_status, 'DRAFT');
+        await tx.execute(sql`
+          UPDATE spec_sheet_revisions SET lifecycle_status = 'DRAFT'
+          WHERE id = ${revision.id} AND lifecycle_status = 'IN_REVIEW'
+        `);
+        await tx.execute(sql`
+          UPDATE spec_sheets
+          SET lifecycle_status = 'DRAFT', working_revision_id = ${revision.id}, updated_at = NOW()
+          WHERE id = ${req.params.id}
+        `);
+        await tx.execute(sql`
+          INSERT INTO spec_sheet_transition_audit (
+            spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+            actor_user_id, actor_snapshot, content_checksum
+          ) VALUES (
+            ${req.params.id}, ${revision.id}, ${revision.lifecycle_status}, 'DRAFT',
+            ${String(req.body.comment)}, ${actor.id},
+            ${JSON.stringify(specActorSnapshot(actor))}::jsonb, ${revision.content_checksum}
+          )
+        `);
+      }
+      return inserted;
+    });
     res.status(201).json(approval);
   } catch (error: any) {
     if (String(error?.message || '').includes('duplicate key')) return res.status(409).json({ error: 'This role already decided this exact revision' });
@@ -2847,7 +3110,8 @@ router.post('/spec-sheets/:id/revisions/:revisionId/approve', async (req: Reques
 
 router.post('/spec-sheets/:id/revisions/:revisionId/release', async (req: Request, res: Response) => {
   try {
-    if (!hasSpecCapability(req, 'spec_sheets.release')) return res.status(403).json({ error: 'Not authorized to release specifications' });
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.release);
+    if (!actor) return;
     const revisionResult = await db.execute(sql`
       SELECT ssr.*, ss.controlled_document_id, ss.released_revision_id
       FROM spec_sheet_revisions ssr JOIN spec_sheets ss ON ss.id = ssr.spec_sheet_id
@@ -2856,7 +3120,16 @@ router.post('/spec-sheets/:id/revisions/:revisionId/release', async (req: Reques
     `);
     const revision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
     if (!revision) return res.status(404).json({ error: 'Spec-sheet revision not found' });
-    if (!['DRAFT', 'IN_REVIEW'].includes(revision.lifecycle_status)) return res.status(409).json({ error: 'Revision is not releasable' });
+    if (revision.lifecycle_status !== 'IN_REVIEW') {
+      return res.status(409).json({ error: 'Only an IN_REVIEW revision is releasable' });
+    }
+    if (
+      revision.released_revision_id &&
+      revision.released_revision_id !== revision.id &&
+      !requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.supersede)
+    ) {
+      return;
+    }
     const approvalsResult = await db.execute(sql`
       SELECT approval_role, decision, content_checksum, revision_snapshot
       FROM spec_sheet_revision_approvals WHERE spec_sheet_revision_id = ${revision.id}
@@ -2881,9 +3154,20 @@ router.post('/spec-sheets/:id/revisions/:revisionId/release', async (req: Reques
       await tx.execute(sql`
         UPDATE spec_sheets
         SET lifecycle_status = 'RELEASED', released_revision_id = ${revision.id},
+            working_revision_id = NULL,
             effective_date = COALESCE(${req.body.effectiveDate || null}::date, effective_date, CURRENT_DATE),
             updated_at = NOW()
         WHERE id = ${req.params.id}
+      `);
+      await tx.execute(sql`
+        INSERT INTO spec_sheet_transition_audit (
+          spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+          actor_user_id, actor_snapshot, content_checksum
+        ) VALUES (
+          ${req.params.id}, ${revision.id}, ${revision.lifecycle_status}, 'RELEASED',
+          ${String(req.body.reason || 'Approved controlled release')}, ${actor.id},
+          ${JSON.stringify(specActorSnapshot(actor))}::jsonb, ${revision.content_checksum}
+        )
       `);
       await tx.execute(sql`
         UPDATE document_version_history
@@ -2911,6 +3195,96 @@ router.post('/spec-sheets/:id/revisions/:revisionId/release', async (req: Reques
   }
 });
 
+router.post('/spec-sheets/:id/revisions/:revisionId/reopen', async (req: Request, res: Response) => {
+  try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.reopen);
+    if (!actor) return;
+    const reason = String(req.body?.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'Reopen reason is required' });
+    const reopened = await db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        SELECT * FROM spec_sheet_revisions
+        WHERE id = ${req.params.revisionId} AND spec_sheet_id = ${req.params.id}
+        FOR UPDATE
+      `);
+      const revision = (((result as any)?.rows || result || []) as any[])[0];
+      if (!revision) throw Object.assign(new Error('Revision not found'), { status: 404 });
+      assertSpecTransition(revision.lifecycle_status, 'DRAFT');
+      await tx.execute(sql`
+        UPDATE spec_sheet_revisions SET lifecycle_status = 'DRAFT'
+        WHERE id = ${revision.id}
+      `);
+      await tx.execute(sql`
+        DELETE FROM spec_sheet_revision_approvals
+        WHERE spec_sheet_revision_id = ${revision.id}
+      `);
+      await tx.execute(sql`
+        UPDATE spec_sheets
+        SET lifecycle_status = 'DRAFT', working_revision_id = ${revision.id}, updated_at = NOW()
+        WHERE id = ${req.params.id}
+      `);
+      await tx.execute(sql`
+        INSERT INTO spec_sheet_transition_audit (
+          spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+          actor_user_id, actor_snapshot, content_checksum
+        ) VALUES (
+          ${req.params.id}, ${revision.id}, ${revision.lifecycle_status}, 'DRAFT',
+          ${reason}, ${actor.id}, ${JSON.stringify(specActorSnapshot(actor))}::jsonb,
+          ${revision.content_checksum}
+        )
+      `);
+      return { ...revision, lifecycle_status: 'DRAFT' };
+    });
+    res.json(reopened);
+  } catch (error: any) {
+    const status = Number(error?.status) || (String(error?.message).startsWith('Invalid specification') ? 409 : 500);
+    res.status(status).json({ error: status === 500 ? 'Failed to reopen specification' : error.message });
+  }
+});
+
+router.post('/spec-sheets/:id/revisions/:revisionId/obsolete', async (req: Request, res: Response) => {
+  try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.obsolete);
+    if (!actor) return;
+    const reason = String(req.body?.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'Obsolete reason is required' });
+    const obsolete = await db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        SELECT * FROM spec_sheet_revisions
+        WHERE id = ${req.params.revisionId} AND spec_sheet_id = ${req.params.id}
+        FOR UPDATE
+      `);
+      const revision = (((result as any)?.rows || result || []) as any[])[0];
+      if (!revision) throw Object.assign(new Error('Revision not found'), { status: 404 });
+      assertSpecTransition(revision.lifecycle_status, 'OBSOLETE');
+      await tx.execute(sql`
+        UPDATE spec_sheet_revisions SET lifecycle_status = 'OBSOLETE'
+        WHERE id = ${revision.id}
+      `);
+      await tx.execute(sql`
+        UPDATE spec_sheets
+        SET lifecycle_status = 'OBSOLETE', working_revision_id = NULL, updated_at = NOW()
+        WHERE id = ${req.params.id}
+      `);
+      await tx.execute(sql`
+        INSERT INTO spec_sheet_transition_audit (
+          spec_sheet_id, spec_sheet_revision_id, from_status, to_status, reason,
+          actor_user_id, actor_snapshot, content_checksum
+        ) VALUES (
+          ${req.params.id}, ${revision.id}, ${revision.lifecycle_status}, 'OBSOLETE',
+          ${reason}, ${actor.id}, ${JSON.stringify(specActorSnapshot(actor))}::jsonb,
+          ${revision.content_checksum}
+        )
+      `);
+      return { ...revision, lifecycle_status: 'OBSOLETE' };
+    });
+    res.json(obsolete);
+  } catch (error: any) {
+    const status = Number(error?.status) || (String(error?.message).startsWith('Invalid specification') ? 409 : 500);
+    res.status(status).json({ error: status === 500 ? 'Failed to obsolete specification' : error.message });
+  }
+});
+
 router.get('/inventory-items/:inventoryItemId/specifications', async (req: Request, res: Response) => {
   try {
     const result = await db.execute(sql`
@@ -2922,6 +3296,26 @@ router.get('/inventory-items/:inventoryItemId/specifications', async (req: Reque
                 AND pr.routing_revision::text IS DISTINCT FROM ssr.routing_revision
                THEN 'REVIEW_REQUIRED'
                WHEN dt.template_revision IS DISTINCT FROM ssr.template_revision
+               THEN 'REVIEW_REQUIRED'
+               WHEN EXISTS (
+                 SELECT 1
+                 FROM jsonb_array_elements(
+                   COALESCE(
+                     ssr.content_snapshot #> '{fieldValues,cncOperations}',
+                     '[]'::jsonb
+                   )
+                 ) captured
+                 LEFT JOIN routing_cnc_operations rco
+                   ON rco.id::text = captured->>'sourceCncOperationId'
+                 LEFT JOIN cnc_programs cp ON cp.id = rco.program_id
+                 WHERE COALESCE((captured->>'manuallyEntered')::boolean, false) = false
+                   AND captured ? 'sourceCncOperationId'
+                   AND (
+                     rco.id IS NULL
+                     OR rco.program_id::text IS DISTINCT FROM captured->>'programId'
+                     OR cp.version::text IS DISTINCT FROM captured->>'programRevision'
+                   )
+               )
                THEN 'REVIEW_REQUIRED'
                ELSE ss.source_change_status
              END AS effective_source_change_status
@@ -2941,7 +3335,8 @@ router.get('/inventory-items/:inventoryItemId/specifications', async (req: Reque
 
 router.post('/spec-sheets/:id/revisions', async (req: Request, res: Response) => {
   try {
-    if (!hasSpecCapability(req, 'spec_sheets.edit')) return res.status(403).json({ error: 'Not authorized to revise specifications' });
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.edit);
+    if (!actor) return;
     const releasedResult = await db.execute(sql`
       SELECT ssr.* FROM spec_sheets ss
       JOIN spec_sheet_revisions ssr ON ssr.id = ss.released_revision_id
@@ -2952,7 +3347,7 @@ router.post('/spec-sheets/:id/revisions', async (req: Request, res: Response) =>
     const revision = String(req.body.revision || '').trim();
     if (!revision || revision === released.revision) return res.status(400).json({ error: 'A distinct new revision is required' });
     const snapshot = { ...released.content_snapshot, specificationRevision: revision, basedOnRevisionId: released.id };
-    const user = (req as any).user;
+    const user = actor;
     const draft = await insertPublicRowReturning('spec_sheet_revisions', {
       id: randomUUID(),
       spec_sheet_id: req.params.id,
@@ -2970,7 +3365,9 @@ router.post('/spec-sheets/:id/revisions', async (req: Request, res: Response) =>
       created_at: new Date(),
     }, ['spec_sheet_id', 'revision', 'content_snapshot', 'content_checksum']);
     await db.execute(sql`
-      UPDATE spec_sheets SET lifecycle_status = 'DRAFT', source_change_status = 'CURRENT', updated_at = NOW()
+      UPDATE spec_sheets
+      SET lifecycle_status = 'DRAFT', working_revision_id = ${draft.id},
+          source_change_status = 'CURRENT', updated_at = NOW()
       WHERE id = ${req.params.id}
     `);
     res.status(201).json(draft);
@@ -3323,22 +3720,49 @@ router.post('/:id/generate-routing', async (req: Request, res: Response) => {
 // Create spec sheet
 router.post('/spec-sheets', async (req: Request, res: Response) => {
   try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.create);
+    if (!actor) return;
     const { partNumber, title, version, description, specifications, sourceType } = req.body;
-    const user = (req as any).user;
 
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
     }
 
-    const [specSheet] = await db.insert(specSheets).values({
-      partNumber: partNumber || null,
-      title,
-      version: version || 1,
-      description: description || null,
-      specifications: specifications || null,
-      sourceType: sourceType || 'uploaded',
-      createdBy: user?.username || 'system',
-    }).returning();
+    const specSheet = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(specSheets).values({
+        partNumber: partNumber || null,
+        title,
+        version: version || 1,
+        description: description || null,
+        specifications: specifications || {},
+        sourceType: sourceType || 'uploaded',
+        createdBy: actor.username || String(actor.id),
+      }).returning();
+      const snapshot = {
+        partNumber: partNumber || null,
+        title,
+        version: version || 1,
+        description: description || null,
+        fieldValues: specifications || {},
+      };
+      const revisionResult = await tx.execute(sql`
+        INSERT INTO spec_sheet_revisions (
+          spec_sheet_id, revision, lifecycle_status, template_revision,
+          content_snapshot, content_checksum, created_by_user_id, created_by_snapshot
+        ) VALUES (
+          ${created.id}, '1.0', 'DRAFT', '1.0',
+          ${JSON.stringify(snapshot)}::jsonb, ${checksumSnapshot(snapshot)}, ${actor.id},
+          ${JSON.stringify(specActorSnapshot(actor))}::jsonb
+        )
+        RETURNING id
+      `);
+      const revision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+      await tx.execute(sql`
+        UPDATE spec_sheets SET working_revision_id = ${revision.id}
+        WHERE id = ${created.id}
+      `);
+      return { ...created, workingRevisionId: revision.id };
+    });
 
     res.status(201).json(specSheet);
   } catch (error) {
@@ -3350,6 +3774,7 @@ router.post('/spec-sheets', async (req: Request, res: Response) => {
 // Convert an existing spec sheet into a reusable fillable template
 router.post('/spec-sheets/:id/create-template', async (req: Request, res: Response) => {
   try {
+    if (!requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.templateCreate)) return;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(req.params.id)) {
       return res.status(400).json({ error: 'Invalid spec sheet ID format' });
@@ -3472,6 +3897,8 @@ router.get('/spec-sheets/:id', async (req: Request, res: Response) => {
 // Update spec sheet
 router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
   try {
+    const actor = requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.edit);
+    if (!actor) return;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(req.params.id)) {
       return res.status(400).json({ error: 'Invalid spec sheet ID format' });
@@ -3493,17 +3920,55 @@ router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
     if (isTemplate !== undefined) updateData.isTemplate = isTemplate === true || isTemplate === 'true';
     if (isActive !== undefined) updateData.isActive = isActive === true || isActive === 'true';
 
-    const [updated] = await db.update(specSheets)
-      .set(updateData)
-      .where(eq(specSheets.id, req.params.id))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      const revisionResult = await tx.execute(sql`
+        SELECT ssr.*
+        FROM spec_sheets ss
+        JOIN spec_sheet_revisions ssr ON ssr.id = ss.working_revision_id
+        WHERE ss.id = ${req.params.id}
+        FOR UPDATE
+      `);
+      const workingRevision = (((revisionResult as any)?.rows || revisionResult || []) as any[])[0];
+      if (!workingRevision || workingRevision.lifecycle_status !== 'DRAFT') {
+        throw Object.assign(
+          new Error('Legacy updates require an exact controlled working DRAFT revision'),
+          { status: 409 }
+        );
+      }
+      const snapshot = {
+        ...workingRevision.content_snapshot,
+        ...(partNumber !== undefined ? { partNumber } : {}),
+        ...(title !== undefined ? { title } : {}),
+        ...(version !== undefined ? { version } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(specifications !== undefined ? { fieldValues: specifications } : {}),
+      };
+      await tx.execute(sql`
+        UPDATE spec_sheet_revisions
+        SET content_snapshot = ${JSON.stringify(snapshot)}::jsonb,
+            content_checksum = ${checksumSnapshot(snapshot)}
+        WHERE id = ${workingRevision.id} AND lifecycle_status = 'DRAFT'
+      `);
+      await tx.execute(sql`
+        DELETE FROM spec_sheet_revision_approvals
+        WHERE spec_sheet_revision_id = ${workingRevision.id}
+      `);
+      const [row] = await tx.update(specSheets)
+        .set(updateData)
+        .where(eq(specSheets.id, req.params.id))
+        .returning();
+      return row;
+    });
 
     if (!updated) {
       return res.status(404).json({ error: 'Spec sheet not found' });
     }
 
     res.json(updated);
-  } catch (error) {
+  } catch (error: any) {
+    if (Number(error?.status) === 409) {
+      return res.status(409).json({ error: error.message });
+    }
     console.error('Error updating spec sheet:', error);
     res.status(500).json({ error: 'Failed to update spec sheet' });
   }
@@ -3512,6 +3977,7 @@ router.put('/spec-sheets/:id', async (req: Request, res: Response) => {
 // Delete spec sheet (soft delete)
 router.delete('/spec-sheets/:id', async (req: Request, res: Response) => {
   try {
+    if (!requireSpecCapability(req, res, SPEC_SHEET_CAPABILITIES.delete)) return;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(req.params.id)) {
       return res.status(400).json({ error: 'Invalid spec sheet ID format' });

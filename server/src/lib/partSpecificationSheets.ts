@@ -262,3 +262,72 @@ export function canonicalSnapshot(value: unknown): string {
 export function checksumSnapshot(value: unknown) {
   return createHash('sha256').update(canonicalSnapshot(value)).digest('hex');
 }
+
+const SOURCE_ID_KEYS = [
+  'sourceRoutingQcIdentifier',
+  'sourceRoutingOperationId',
+  'sourceCncOperationId',
+  'programId',
+] as const;
+
+function sourceRowIdentity(row: Record<string, any>): string | null {
+  for (const key of SOURCE_ID_KEYS) {
+    if (row[key] != null && String(row[key]).trim()) {
+      return `${key}:${String(row[key]).trim()}`;
+    }
+  }
+  return null;
+}
+
+export function compareSpecSourceRows(
+  capturedRows: Record<string, any>[],
+  currentRows: Record<string, any>[]
+) {
+  const currentBySource = new Map(
+    currentRows
+      .map((row) => [sourceRowIdentity(row), row] as const)
+      .filter((entry): entry is readonly [string, Record<string, any>] => Boolean(entry[0]))
+  );
+  const changes: Array<{
+    sourceIdentity: string;
+    status: 'CHANGED' | 'REMOVED';
+    captured: Record<string, any>;
+    current: Record<string, any> | null;
+  }> = [];
+  for (const captured of capturedRows) {
+    if (captured.manuallyEntered === true) continue;
+    const identity = sourceRowIdentity(captured);
+    if (!identity) continue;
+    const current = currentBySource.get(identity) || null;
+    if (!current) {
+      changes.push({
+        sourceIdentity: identity,
+        status: 'REMOVED',
+        captured,
+        current,
+      });
+    } else if (canonicalSnapshot(captured) !== canonicalSnapshot(current)) {
+      changes.push({
+        sourceIdentity: identity,
+        status: 'CHANGED',
+        captured,
+        current,
+      });
+    }
+  }
+  return {
+    status: changes.length ? ('REVIEW_REQUIRED' as const) : ('CURRENT' as const),
+    changes,
+  };
+}
+
+export function refreshSpecSourceRowsPreservingManual(
+  capturedRows: Record<string, any>[],
+  currentRows: Record<string, any>[]
+) {
+  const manualRows = capturedRows.filter((row) => row.manuallyEntered === true);
+  return [
+    ...currentRows.map((row) => ({ ...row, manuallyEntered: false })),
+    ...manualRows,
+  ];
+}

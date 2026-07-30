@@ -301,3 +301,171 @@ jobs:
           client/src/__tests__/P2V2ShippingProjectCloseout.component.test.tsx
           client/src/__tests__/P2V2PilotControlCenter.component.test.tsx
           --reporter=verbose
+
+  synthetic-pilot-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: synthetic_pilot
+          POSTGRES_PASSWORD: synthetic_pilot_disposable_password
+          POSTGRES_DB: epoch_p2_v2_synthetic_pilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U synthetic_pilot -d epoch_p2_v2_synthetic_pilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql://synthetic_pilot:synthetic_pilot_disposable_password@127.0.0.1:5432/epoch_p2_v2_synthetic_pilot
+      NODE_ENV: test
+      P2_V2_PILOT_ENVIRONMENT: isolated_test
+      P2_V2_PRODUCTION_LAUNCH_ENABLED: 'true'
+      P2_V2_SYNTHETIC_DATA_MARKER: SYNTHETIC_TEST_DATA_NOT_FOR_PRODUCTION
+      P2_V2_OUTBOUND_EVIDENCE_FILE: /tmp/p2-v2-synthetic-outbound-attempts.log
+      EMAIL_ENABLED: 'false'
+      SMS_ENABLED: 'false'
+      WEBHOOKS_ENABLED: 'false'
+      SHIPPING_CARRIER_ENABLED: 'false'
+      SHIPPING_LABELS_ENABLED: 'false'
+      PURCHASING_OUTBOUND_ENABLED: 'false'
+      EXTERNAL_UPLOADS_ENABLED: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install committed dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Prove disposable isolation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$P2_V2_PILOT_ENVIRONMENT" = "isolated_test"
+          test "$P2_V2_PRODUCTION_LAUNCH_ENABLED" = "true"
+          node - <<'NODE'
+          const url = new URL(process.env.DATABASE_URL);
+          if (url.hostname !== '127.0.0.1') throw new Error('Shared database host rejected');
+          if (url.pathname !== '/epoch_p2_v2_synthetic_pilot') {
+            throw new Error('Unexpected disposable database name');
+          }
+          console.log('database_host=127.0.0.1');
+          console.log(`database_name=${url.pathname.slice(1)}`);
+          console.log(`pilot_environment=${process.env.P2_V2_PILOT_ENVIRONMENT}`);
+          console.log(`synthetic_marker=${process.env.P2_V2_SYNTHETIC_DATA_MARKER}`);
+          console.log('shared_database_contacted=false');
+          NODE
+          psql "$DATABASE_URL" -Atc \
+            "SELECT 'postgresql_version=' || current_setting('server_version')"
+          : > "$P2_V2_OUTBOUND_EVIDENCE_FILE"
+
+      - name: Create supported application schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "CREATE SEQUENCE rts_item_number_seq"
+          npx drizzle-kit push --force --config drizzle.app.config.ts
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -f migrations/0069_timekeeping_schema.sql
+
+      - name: Run complete safe boot twice and prove schema idempotency
+        shell: bash
+        env:
+          SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+        run: |
+          set -euo pipefail
+          npm run maintenance:safe-migrations
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
+            sed '/^\\\(un\)\?restrict /d' > /tmp/synthetic-schema-first.sql
+          npm run maintenance:safe-migrations
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
+            sed '/^\\\(un\)\?restrict /d' > /tmp/synthetic-schema-second.sql
+          diff --unified \
+            /tmp/synthetic-schema-first.sql \
+            /tmp/synthetic-schema-second.sql
+          node - <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const source = readFileSync(
+            'server/scripts/migrations/runSafeBootMigrations.ts',
+            'utf8'
+          );
+          const ordered = [
+            '0232_p2_v2_controlled_pilot_readiness.sql',
+            '0233_part_specification_sheet_control.sql',
+            '0234_epoch_validation_readiness_controls.sql',
+          ];
+          let cursor = -1;
+          for (const migration of ordered) {
+            const next = source.indexOf(migration);
+            if (next <= cursor) throw new Error(`Non-deterministic migration order: ${migration}`);
+            cursor = next;
+          }
+          console.log(`safe_boot_order=${ordered.join(' -> ')}`);
+          console.log('safe_boot_replay=passed');
+          console.log('schema_idempotency=passed');
+          NODE
+
+      - name: Run existing Phase 10A PostgreSQL lifecycle
+        env:
+          NODE_OPTIONS: --require=./scripts/p2-v2-synthetic-outbound-guard.cjs
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/p2V2PostgresCertification.test.ts
+          --reporter=verbose
+
+      - name: Run exact Phase 10B synthetic pilot authorization
+        env:
+          NODE_OPTIONS: --require=./scripts/p2-v2-synthetic-outbound-guard.cjs
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/p2V2PilotPostgresCertification.test.ts
+          --reporter=verbose
+
+      - name: Run Phase 9A-9C and isolation regressions
+        env:
+          NODE_OPTIONS: --require=./scripts/p2-v2-synthetic-outbound-guard.cjs
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/projectProductionExecution.test.ts
+          server/__tests__/projectQualityRelease.test.ts
+          server/__tests__/projectShippingCloseout.test.ts
+          server/__tests__/p2V2ProductionLaunchFeatureGate.test.ts
+          --reporter=verbose
+
+      - name: Run P2 V2 UI component certification
+        env:
+          NODE_OPTIONS: --require=./scripts/p2-v2-synthetic-outbound-guard.cjs
+        run: >-
+          npx vitest run
+          --config vitest.config.client.ts
+          client/src/__tests__/P2V2ProjectWorkflow.component.test.tsx
+          client/src/__tests__/P2V2ProductionExecution.component.test.tsx
+          client/src/__tests__/P2V2QualityProductRelease.component.test.tsx
+          client/src/__tests__/P2V2ShippingProjectCloseout.component.test.tsx
+          client/src/__tests__/P2V2PilotControlCenter.component.test.tsx
+          --reporter=verbose
+
+      - name: Prove zero outbound attempts
+        shell: bash
+        run: |
+          if [ -s "$P2_V2_OUTBOUND_EVIDENCE_FILE" ]; then
+            echo "Blocked outbound attempts were detected:"
+            sed -E 's/[[:space:]].*$/ [redacted]/' \
+              "$P2_V2_OUTBOUND_EVIDENCE_FILE"
+            exit 1
+          fi
+          echo "outbound_attempts=0"

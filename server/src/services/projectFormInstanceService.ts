@@ -204,6 +204,40 @@ async function selectableTemplateForStep(stepKey: string, client: any) {
   return { template, revision, documentRevision };
 }
 
+export async function getProjectFormTemplateReadiness(
+  recordId: string,
+  client: any = db
+) {
+  await authoritativeContext(recordId, '1', client);
+  const steps = [];
+  for (let index = 1; index <= 12; index += 1) {
+    const stepKey = String(index);
+    try {
+      const selection = await selectableTemplateForStep(stepKey, client);
+      steps.push({
+        stepKey,
+        ready: true,
+        reason: null,
+        templateKey: selection.template.templateKey,
+        templateRevisionId: selection.revision.id,
+        documentRevisionId: selection.documentRevision.id,
+      });
+    } catch (error) {
+      if (!(error instanceof ProjectFormError)) throw error;
+      steps.push({
+        stepKey,
+        ready: false,
+        reason: error.message,
+        errorCode: error.code,
+        templateKey: null,
+        templateRevisionId: null,
+        documentRevisionId: null,
+      });
+    }
+  }
+  return { steps };
+}
+
 async function loadInstance(instanceId: string, client: any) {
   const [instance] = await client
     .select()

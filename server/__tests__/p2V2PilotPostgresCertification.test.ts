@@ -510,14 +510,14 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
       projectId,
       [
         {
-          category: 'QUALITY_RELEASE',
+          category: 'product_release',
           authoritativeRecordType: 'synthetic_quality_release',
           authoritativeRecordId: projectId,
           authoritativeRevision: '1',
           evidenceReference: 'postgres://synthetic/quality-release',
         },
         {
-          category: 'SHIPPING_RECONCILIATION',
+          category: 'quantity_reconciliation',
           authoritativeRecordType: 'synthetic_shipping_reconciliation',
           authoritativeRecordId: projectId,
           authoritativeRevision: '1',

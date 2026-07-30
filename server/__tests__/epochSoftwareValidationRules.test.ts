@@ -3,6 +3,10 @@ import {
   calculateReadiness,
   canTransition,
   deriveExecutionResult,
+  hasMeaningfulNotes,
+  packageReadinessBlockers,
+  productionIdentifierStatus,
+  type PackageReadinessItem,
   type ReadinessCounts,
 } from '../src/services/epochSoftwareValidation';
 
@@ -46,5 +50,30 @@ describe('EPOCH software-validation control rules', () => {
     expect(blocked.ready).toBe(false);
     expect(blocked.blockers).toContain('Critical validation defects remain open');
     expect(blocked.blockers).toContain('Restore testing has not passed');
+  });
+
+  it('accepts exact production identifiers and rejects PR-only references', () => {
+    expect(productionIdentifierStatus('8f14e45fceea167a5a36dedd4bea2543ad6d0f21').valid).toBe(true);
+    expect(productionIdentifierStatus('v8.3.0').valid).toBe(true);
+    expect(productionIdentifierStatus('deploy-2026-07-30').valid).toBe(true);
+    expect(productionIdentifierStatus('pull request #1576')).toEqual({
+      valid: false,
+      code: 'PRODUCTION_IDENTIFIER_AMBIGUOUS',
+    });
+    expect(productionIdentifierStatus('1576').valid).toBe(false);
+  });
+
+  it('rejects placeholder notes and returns structured package blockers', () => {
+    expect(hasMeaningfulNotes('TBD')).toBe(false);
+    expect(hasMeaningfulNotes('Validated against the controlled production release.')).toBe(true);
+    const items: PackageReadinessItem[] = [
+      { key: 'OWNER', label: 'Owner', field: 'ownerId', state: 'MISSING' },
+      { key: 'DATE', label: 'Date', field: 'date', state: 'REQUIRES_CONFIRMATION' },
+      { key: 'RISK', label: 'Risk', field: 'risk', state: 'COMPLETE' },
+    ];
+    expect(packageReadinessBlockers(items)).toEqual([
+      { field: 'ownerId', code: 'OWNER_INCOMPLETE', message: 'Owner is incomplete.' },
+      { field: 'date', code: 'DATE_INCOMPLETE', message: 'Date is incomplete.' },
+    ]);
   });
 });

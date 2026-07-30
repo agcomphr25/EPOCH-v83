@@ -5,7 +5,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -16,7 +16,10 @@ import { useToast } from '@/hooks/use-toast';
 
 type Package = {
   id:string;package_number:string;title:string;system_name:string;validation_type:string;status:string;
-  production_version:string;commit_or_release_identifier?:string;validation_environment:string;
+  production_version:string;commit_or_release_identifier?:string;validation_environment:string;production_deployment_date?:string;
+  production_environment_reference:string;environment_differences?:string;notes?:string;row_version:number;
+  software_owner_employee_id?:number;quality_owner_employee_id?:number;validation_lead_employee_id?:number;
+  audit_readiness_assessment_id?:string;deployment_date_confirmed?:boolean;environment_separation_confirmed?:boolean;
   planned_start_date:string;planned_completion_date:string;locked_at?:string;
   requirement_count?:number;execution_count?:number;open_defect_count?:number;
 };
@@ -24,7 +27,10 @@ type Detail = {
   package:Package;intendedUse:any[];requirements:any[];risks:any[];plans:any[];protocols:any[];
   executions:any[];defects:any[];approvals:any[];periodicReviews:any[];events:any[];
   readiness:Record<string,any>&{ready:boolean;blockers:string[]};
+  packageReadiness:{items:Array<{key:string;label:string;state:string;field:string;message?:string}>;executionReady:boolean;blockers:any[]};
 };
+type Employee={id:number;name:string};
+type Assessment={id:string;assessment_number:string;title:string};
 const sections=[
   ['01','Intended Use','Controlled scope and dual authenticated approval'],
   ['02','Software Requirements','Normalized, revision-controlled requirements baseline'],
@@ -44,6 +50,7 @@ const tone=(v:string)=>v.includes('APPROVED')||v==='PASSED'||v==='CLOSED'?'bg-em
 export default function EpochSoftwareValidationPage(){
   const [selected,setSelected]=useState<string>();
   const [createOpen,setCreateOpen]=useState(false);
+  const [editOpen,setEditOpen]=useState(false);
   const [auditor,setAuditor]=useState(false);
   const [activeSection,setActiveSection]=useState('01');
   const qc=useQueryClient(),{toast}=useToast();
@@ -51,12 +58,33 @@ export default function EpochSoftwareValidationPage(){
     queryFn:async()=>(await apiRequest('/api/qms/epoch-software-validation')).json()});
   const detail=useQuery<Detail>({queryKey:['/api/qms/epoch-software-validation',selected],enabled:Boolean(selected),
     queryFn:async()=>(await apiRequest(`/api/qms/epoch-software-validation/${selected}`)).json()});
+  const employees=useQuery<Employee[]>({queryKey:['/api/employees'],queryFn:async()=>(await apiRequest('/api/employees')).json()});
+  const assessments=useQuery<Assessment[]>({queryKey:['/api/qms/as9100-audit-readiness'],
+    queryFn:async()=>(await apiRequest('/api/qms/as9100-audit-readiness')).json()});
   const create=useMutation({mutationFn:async(form:HTMLFormElement)=>{
     const f=new FormData(form);const body=Object.fromEntries(f.entries());
     return (await apiRequest('/api/qms/epoch-software-validation',{method:'POST',body})).json();
   },onSuccess:(p:Package)=>{qc.invalidateQueries({queryKey:['/api/qms/epoch-software-validation']});
     setCreateOpen(false);setSelected(p.id);toast({title:`${p.package_number} created`});},
     onError:(e:Error)=>toast({title:'Package was not created',description:e.message,variant:'destructive'})});
+  const refresh=()=>qc.invalidateQueries({queryKey:['/api/qms/epoch-software-validation',selected]});
+  const edit=useMutation({mutationFn:async(form:HTMLFormElement)=>{
+    const f=new FormData(form),num=(name:string)=>{const value=f.get(name);return value&&value!=='NONE'?Number(value):null;};
+    const assessment=f.get('auditReadinessAssessmentId');
+    return (await apiRequest(`/api/qms/epoch-software-validation/${selected}`,{method:'PATCH',body:{
+      rowVersion:detail.data!.package.row_version,commitOrReleaseIdentifier:f.get('commitOrReleaseIdentifier')||null,
+      productionDeploymentDate:f.get('productionDeploymentDate')||null,validationEnvironment:f.get('validationEnvironment'),
+      productionEnvironmentReference:f.get('productionEnvironmentReference'),environmentDifferences:f.get('environmentDifferences')||null,
+      softwareOwnerEmployeeId:num('softwareOwnerEmployeeId'),qualityOwnerEmployeeId:num('qualityOwnerEmployeeId'),
+      validationLeadEmployeeId:num('validationLeadEmployeeId'),auditReadinessAssessmentId:assessment==='NONE'||assessment===null?null:String(assessment),
+      notes:f.get('notes')||null,
+    }})).json();
+  },onSuccess:()=>{refresh();setEditOpen(false);toast({title:'Controlled package fields updated'});},
+    onError:(e:Error)=>toast({title:'Package update blocked',description:e.message,variant:'destructive'})});
+  const confirm=useMutation({mutationFn:async(kind:'deployment-date'|'environment-separation')=>
+    (await apiRequest(`/api/qms/epoch-software-validation/${selected}/confirm-${kind}`,{method:'POST',body:{}})).json(),
+    onSuccess:()=>{refresh();toast({title:'Authenticated confirmation recorded'});},
+    onError:(e:Error)=>toast({title:'Confirmation blocked',description:e.message,variant:'destructive'})});
   const progress=useMemo(()=>{
     const d=detail.data;if(!d)return 0;let complete=0;
     if(d.readiness.intendedUseApproved)complete++;
@@ -79,6 +107,7 @@ export default function EpochSoftwareValidationPage(){
         <h1 className="text-2xl font-bold">{p.package_number} · {p.title}</h1>
         <p className="text-sm text-muted-foreground">EPOCH {p.production_version} · {pretty(p.validation_type)} · {p.validation_environment}</p>
       </div><div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={()=>setEditOpen(true)}>Edit package readiness</Button>
         <Button variant={auditor?'default':'outline'} onClick={()=>setAuditor(v=>!v)}><ShieldCheck className="mr-2 h-4 w-4"/>Auditor View</Button>
         <ExportMenu id={p.id}/>
       </div></div>
@@ -93,6 +122,15 @@ export default function EpochSoftwareValidationPage(){
         <Metric label="Overall readiness" value={d.readiness.ready?'Ready':'Blocked'} ok={d.readiness.ready} danger={!d.readiness.ready}/>
       </div>
       <Progress value={progress}/>
+      <Card id="package-readiness" className={d.packageReadiness.executionReady?'border-emerald-300':'border-amber-300'}>
+        <CardHeader><CardTitle className="flex items-center justify-between gap-3 text-base"><span>Package readiness</span>
+          <Badge className={d.packageReadiness.executionReady?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-900'}>
+            {d.packageReadiness.executionReady?'Execution ready':'Action required'}</Badge></CardTitle></CardHeader>
+        <CardContent className="grid gap-2 md:grid-cols-2">{d.packageReadiness.items.map(item=><button key={item.key}
+          type="button" onClick={()=>setEditOpen(true)} className="flex items-start justify-between gap-3 rounded-md border p-3 text-left hover:bg-muted">
+          <span><span className="block text-sm font-medium">{item.label}</span>{item.message&&<span className="text-xs text-muted-foreground">{item.message}</span>}</span>
+          <Badge variant="outline">{pretty(item.state)}</Badge></button>)}</CardContent>
+      </Card>
       {!d.readiness.ready&&<Card className="border-red-300"><CardHeader><CardTitle className="flex items-center gap-2 text-base text-red-800"><AlertTriangle className="h-4 w-4"/>Readiness blockers</CardTitle></CardHeader>
         <CardContent><ul className="list-disc space-y-1 pl-5 text-sm">{d.readiness.blockers.map(x=><li key={x}>{x}</li>)}</ul></CardContent></Card>}
       <div className="grid gap-4 lg:grid-cols-[310px_1fr]">
@@ -104,6 +142,35 @@ export default function EpochSoftwareValidationPage(){
         </CardContent></Card>
         <SectionWorkspace section={activeSection} detail={d} auditor={auditor}/>
       </div>
+      <Dialog open={editOpen} onOpenChange={setEditOpen}><DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+        <DialogHeader><DialogTitle>Edit package readiness</DialogTitle><DialogDescription>
+          Complete controlled metadata for the exact production deployment. Saving does not record either authenticated confirmation.
+        </DialogDescription></DialogHeader>
+        <form className="grid gap-4 md:grid-cols-2" onSubmit={e=>{e.preventDefault();edit.mutate(e.currentTarget)}}>
+          <div><Field name="commitOrReleaseIdentifier" label="Production commit SHA, release tag, or deployment identifier" defaultValue={p.commit_or_release_identifier||''}/>
+            <p className="mt-1 text-xs text-muted-foreground">Enter the exact deployed commit SHA, release tag, or deployment ID. A PR number alone is not sufficient.</p></div>
+          <Field name="productionDeploymentDate" label="Production deployment date" type="date" defaultValue={p.production_deployment_date?.slice(0,10)||''}/>
+          <EmployeePick name="softwareOwnerEmployeeId" label="Software owner" value={p.software_owner_employee_id} employees={employees.data||[]}/>
+          <EmployeePick name="qualityOwnerEmployeeId" label="Quality owner" value={p.quality_owner_employee_id} employees={employees.data||[]}/>
+          <EmployeePick name="validationLeadEmployeeId" label="Validation lead" value={p.validation_lead_employee_id} employees={employees.data||[]}/>
+          <div><Label>Audit readiness assessment</Label><Select name="auditReadinessAssessmentId" defaultValue={p.audit_readiness_assessment_id||'NONE'}>
+            <SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="NONE">Not linked</SelectItem>
+              {assessments.data?.map(a=><SelectItem key={a.id} value={a.id}>{a.assessment_number} · {a.title}</SelectItem>)}</SelectContent></Select></div>
+          <Field name="validationEnvironment" label="Validation environment reference" defaultValue={p.validation_environment||''}/>
+          <Field name="productionEnvironmentReference" label="Production environment reference" defaultValue={p.production_environment_reference||''}/>
+          <div className="md:col-span-2"><Label>Validation-to-production environment differences</Label>
+            <Textarea name="environmentDifferences" defaultValue={p.environment_differences||''}/></div>
+          <div className="md:col-span-2"><Label>Package notes</Label><Textarea name="notes" defaultValue={p.notes||''}
+            placeholder="Describe package-specific validation context; replace generic placeholder text."/></div>
+          <DialogFooter className="md:col-span-2"><Button type="submit" disabled={edit.isPending}>Save controlled fields</Button></DialogFooter>
+        </form>
+        <div className="grid gap-3 border-t pt-4 md:grid-cols-2">
+          <div><Button type="button" variant="outline" disabled={confirm.isPending||!p.production_deployment_date}
+            onClick={()=>confirm.mutate('deployment-date')}>Confirm deployment date</Button></div>
+          <div><Button type="button" variant="outline" disabled={confirm.isPending||!p.environment_differences}
+            onClick={()=>confirm.mutate('environment-separation')}>Confirm environment separation</Button></div>
+        </div>
+      </DialogContent></Dialog>
       {auditor&&<Card><CardHeader><CardTitle className="flex items-center gap-2"><History className="h-5 w-5"/>Immutable audit history</CardTitle></CardHeader>
         <CardContent><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Action</TableHead><TableHead>Actor</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
           <TableBody>{d.events.map(e=><TableRow key={e.id}><TableCell>{new Date(e.created_at).toLocaleString()}</TableCell><TableCell>{pretty(e.action)}</TableCell><TableCell>{e.actor_display_name} · {e.actor_role}</TableCell><TableCell>{e.reason||'—'}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>}
@@ -114,12 +181,14 @@ export default function EpochSoftwareValidationPage(){
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-bold">EPOCH Software Validation</h1>
       <p className="text-muted-foreground">Objective evidence that EPOCH is suitable for its approved, documented QMS intended use.</p></div>
       <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4"/>New validation package</Button></DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Create EPOCH Software Validation Package</DialogTitle></DialogHeader>
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Create EPOCH Software Validation Package</DialogTitle>
+        <DialogDescription>Create a controlled draft. Production evidence and authenticated confirmations are completed after creation.</DialogDescription></DialogHeader>
         <form className="grid gap-4 md:grid-cols-2" onSubmit={e=>{e.preventDefault();create.mutate(e.currentTarget)}}>
           <Field name="title" label="Package title" required/><Field name="systemName" label="System name" defaultValue="EPOCH" required/>
           <Pick name="validationType" label="Validation type" values={['INITIAL_INTENDED_USE','MAJOR_RELEASE','CRITICAL_CHANGE','DATABASE_MIGRATION','SECURITY_ACCESS_CONTROL','BACKUP_RECOVERY','PERIODIC_REVIEW','PRE_AUDIT_REVALIDATION','CORRECTIVE_REVALIDATION']}/>
           <Field name="productionVersion" label="Production version being validated" required/>
-          <Field name="commitOrReleaseIdentifier" label="Commit SHA or release identifier"/>
+          <div><Field name="commitOrReleaseIdentifier" label="Production commit SHA, release tag, or deployment identifier"/>
+            <p className="mt-1 text-xs text-muted-foreground">Enter the exact deployed commit SHA, release tag, or deployment ID. A PR number alone is not sufficient.</p></div>
           <Field name="productionDeploymentDate" label="Production deployment date" type="date"/>
           <Field name="validationEnvironment" label="Validation environment" required/>
           <Field name="productionEnvironmentReference" label="Production environment reference" required/>
@@ -169,3 +238,7 @@ function ExportMenu({id}:{id:string}){return <Select onValueChange={v=>window.op
 </SelectContent></Select>;}
 function Field({name,label,type='text',required,defaultValue}:{name:string;label:string;type?:string;required?:boolean;defaultValue?:string}){return <div><Label htmlFor={name}>{label}</Label><Input id={name} name={name} type={type} required={required} defaultValue={defaultValue}/></div>;}
 function Pick({name,label,values}:{name:string;label:string;values:string[]}){return <div><Label>{label}</Label><Select name={name} defaultValue={values[0]}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{values.map(v=><SelectItem key={v} value={v}>{pretty(v)}</SelectItem>)}</SelectContent></Select></div>;}
+function EmployeePick({name,label,value,employees}:{name:string;label:string;value?:number;employees:Employee[]}){return <div><Label>{label}</Label>
+  <Select name={name} defaultValue={value?String(value):'NONE'}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>
+    <SelectItem value="NONE">Not assigned</SelectItem>{employees.map(e=><SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
+  </SelectContent></Select></div>;}

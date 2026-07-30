@@ -5,6 +5,8 @@ import { authenticateToken } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
 import {
   calculateReadiness, canTransition, checksum, deriveExecutionResult,
+  hasMeaningfulNotes, packageReadinessBlockers, productionIdentifierStatus,
+  type PackageReadinessItem,
   type ReadinessCounts, type ValidationStatus,
 } from '../services/epochSoftwareValidation';
 
@@ -95,6 +97,122 @@ router.post('/',requirePermission('EPOCH_VALIDATION_CREATE'),async(req,res)=>{
   res.status(201).json(created);
 });
 
+async function packageReadiness(p:any):Promise<{items:PackageReadinessItem[];executionReady:boolean;blockers:any[]}>{
+  const identifier=productionIdentifierStatus(p.commit_or_release_identifier);
+  const facts=(await query(`SELECT
+    EXISTS(SELECT 1 FROM qms_epoch_validation_intended_use_revisions u WHERE u.package_id=$1
+      AND nullif(trim(u.intended_use_statement),'') IS NOT NULL) intended_use,
+    EXISTS(SELECT 1 FROM qms_epoch_validation_risks r WHERE r.package_id=$1) risk_exists,
+    EXISTS(SELECT 1 FROM qms_epoch_validation_protocols x WHERE x.package_id=$1) protocols_exist,
+    NOT EXISTS(SELECT 1 FROM qms_epoch_validation_protocols x WHERE x.package_id=$1 AND
+      (nullif(trim(x.overall_acceptance_criteria),'') IS NULL OR
+       NOT EXISTS(SELECT 1 FROM qms_epoch_validation_protocol_steps s WHERE s.protocol_id=x.id) OR
+       EXISTS(SELECT 1 FROM qms_epoch_validation_protocol_steps s WHERE s.protocol_id=x.id
+         AND nullif(trim(s.expected_result),'') IS NULL))) protocols_complete,
+    EXISTS(SELECT 1 FROM qms_audit_readiness_assessments a WHERE a.id=$2) assessment_exists`,
+    [p.id,p.audit_readiness_assessment_id||null]))[0];
+  const item=(key:string,label:string,state:PackageReadinessItem['state'],field:string,message?:string):PackageReadinessItem=>
+    ({key,label,state,field,message});
+  const items=[
+    item('PRODUCTION_IDENTIFIER','Exact production identifier',identifier.valid?'COMPLETE':'MISSING','commitOrReleaseIdentifier',
+      identifier.code==='PRODUCTION_IDENTIFIER_AMBIGUOUS'?'A pull-request number alone does not uniquely identify the deployed build.':'Enter a full commit SHA, controlled release tag, or documented deployment ID.'),
+    item('DEPLOYMENT_CONFIRMATION','Deployment-date confirmation',p.deployment_date_confirmed?'COMPLETE':'REQUIRES_CONFIRMATION','deploymentDateConfirmed'),
+    item('SOFTWARE_OWNER','Software owner',p.software_owner_employee_id?'COMPLETE':'MISSING','softwareOwnerEmployeeId','Assign an active Software owner.'),
+    item('QUALITY_OWNER','Quality owner',p.quality_owner_employee_id?'COMPLETE':'MISSING','qualityOwnerEmployeeId','Assign an active Quality owner.'),
+    item('VALIDATION_LEAD','Validation lead',p.validation_lead_employee_id?'COMPLETE':'MISSING','validationLeadEmployeeId','Assign an active Validation lead.'),
+    item('INTENDED_USE','Intended-use statement',facts.intended_use?'COMPLETE':'MISSING','intendedUse'),
+    item('VALIDATION_REASON','Reason for validation',String(p.reason_for_validation||'').trim().length>=3?'COMPLETE':'MISSING','reasonForValidation'),
+    item('VALIDATION_ENVIRONMENT','Validation-environment reference',String(p.validation_environment||'').trim()?'COMPLETE':'MISSING','validationEnvironment'),
+    item('PRODUCTION_ENVIRONMENT','Production-environment reference',String(p.production_environment_reference||'').trim()?'COMPLETE':'MISSING','productionEnvironmentReference'),
+    item('ENVIRONMENT_CONFIRMATION','Environment-separation confirmation',p.environment_separation_confirmed?'COMPLETE':'REQUIRES_CONFIRMATION','environmentSeparationConfirmed'),
+    item('ENVIRONMENT_DIFFERENCES','Environment-differences statement',String(p.environment_differences||'').trim().length>=10?'COMPLETE':'MISSING','environmentDifferences'),
+    item('NOTES','Meaningful notes',hasMeaningfulNotes(p.notes)?'COMPLETE':'MISSING','notes'),
+    item('AUDIT_READINESS','Audit-readiness assessment or justified N/A',
+      facts.assessment_exists?'COMPLETE':p.audit_readiness_not_applicable&&p.audit_readiness_na_approved_at?'NOT_APPLICABLE':'MISSING',
+      'auditReadinessAssessmentId'),
+    item('RISK_ASSESSMENT','Risk assessment',facts.risk_exists?'COMPLETE':'MISSING','riskAssessment'),
+    item('VALIDATION_PROTOCOLS','Validation protocols',facts.protocols_exist?'COMPLETE':'MISSING','protocols'),
+    item('EXPECTED_RESULTS','Expected results',facts.protocols_exist&&facts.protocols_complete?'COMPLETE':'MISSING','protocols'),
+    item('ACCEPTANCE_CRITERIA','Acceptance criteria',facts.protocols_exist&&facts.protocols_complete?'COMPLETE':'MISSING','protocols'),
+  ];
+  const blockers=packageReadinessBlockers(items);
+  return {items,executionReady:blockers.length===0,blockers};
+}
+
+const packageUpdateSchema=z.object({
+  rowVersion:z.number().int().positive(),commitOrReleaseIdentifier:z.string().max(240).nullable().optional(),
+  productionDeploymentDate:z.string().date().nullable().optional(),validationEnvironment:z.string().min(1).optional(),
+  productionEnvironmentReference:z.string().min(1).optional(),environmentDifferences:z.string().max(10000).nullable().optional(),
+  softwareOwnerEmployeeId:z.number().int().positive().nullable().optional(),qualityOwnerEmployeeId:z.number().int().positive().nullable().optional(),
+  validationLeadEmployeeId:z.number().int().positive().nullable().optional(),
+  auditReadinessAssessmentId:z.string().uuid().nullable().optional(),notes:z.string().max(20000).nullable().optional(),
+});
+router.patch('/:id',requirePermission('EPOCH_VALIDATION_EDIT'),async(req,res)=>{
+  const p=await editable(req,res);if(!p)return;const v=packageUpdateSchema.parse(req.body),a=actor(req);
+  const ownerIds=[v.softwareOwnerEmployeeId,v.qualityOwnerEmployeeId,v.validationLeadEmployeeId].filter((x):x is number=>Boolean(x));
+  if(ownerIds.length){
+    const active=await query(`SELECT id FROM employees WHERE id=ANY($1::int[]) AND is_active=true`,[ownerIds]);
+    const activeIds=new Set(active.map(x=>Number(x.id))),invalid=ownerIds.filter(x=>!activeIds.has(x));
+    if(invalid.length)return res.status(409).json({error:'INACTIVE_EMPLOYEE_ASSIGNMENT',fields:invalid});
+  }
+  if(v.auditReadinessAssessmentId&&!(await query(`SELECT 1 FROM qms_audit_readiness_assessments WHERE id=$1`,[v.auditReadinessAssessmentId])).length)
+    return res.status(409).json({error:'AUDIT_READINESS_ASSESSMENT_NOT_FOUND',field:'auditReadinessAssessmentId'});
+  const identifierChanged=v.commitOrReleaseIdentifier!==undefined&&v.commitOrReleaseIdentifier!==p.commit_or_release_identifier;
+  const dateChanged=v.productionDeploymentDate!==undefined&&v.productionDeploymentDate!==p.production_deployment_date;
+  const updated=(await query(`UPDATE qms_epoch_validation_packages SET
+    commit_or_release_identifier=CASE WHEN $1 THEN $2 ELSE commit_or_release_identifier END,
+    production_deployment_date=CASE WHEN $3 THEN $4::date ELSE production_deployment_date END,
+    validation_environment=COALESCE($5,validation_environment),production_environment_reference=COALESCE($6,production_environment_reference),
+    environment_differences=CASE WHEN $7 THEN $8 ELSE environment_differences END,
+    software_owner_employee_id=CASE WHEN $9 THEN $10 ELSE software_owner_employee_id END,
+    quality_owner_employee_id=CASE WHEN $11 THEN $12 ELSE quality_owner_employee_id END,
+    validation_lead_employee_id=CASE WHEN $13 THEN $14 ELSE validation_lead_employee_id END,
+    audit_readiness_assessment_id=CASE WHEN $15 THEN $16::uuid ELSE audit_readiness_assessment_id END,
+    audit_readiness_not_applicable=CASE WHEN $15 AND $16::uuid IS NOT NULL THEN false ELSE audit_readiness_not_applicable END,
+    notes=CASE WHEN $17 THEN $18 ELSE notes END,
+    deployment_date_confirmed=CASE WHEN $19 THEN false ELSE deployment_date_confirmed END,
+    deployment_date_confirmed_by_user_id=CASE WHEN $19 THEN NULL ELSE deployment_date_confirmed_by_user_id END,
+    deployment_date_confirmed_by_display_name=CASE WHEN $19 THEN NULL ELSE deployment_date_confirmed_by_display_name END,
+    deployment_date_confirmed_at=CASE WHEN $19 THEN NULL ELSE deployment_date_confirmed_at END,
+    row_version=row_version+1,revision=revision+1,updated_by_user_id=$20,updated_by_display_name=$21,updated_at=now()
+    WHERE id=$22 AND row_version=$23 RETURNING *`,
+    [v.commitOrReleaseIdentifier!==undefined,v.commitOrReleaseIdentifier??null,v.productionDeploymentDate!==undefined,v.productionDeploymentDate??null,
+     v.validationEnvironment,v.productionEnvironmentReference,v.environmentDifferences!==undefined,v.environmentDifferences??null,
+     v.softwareOwnerEmployeeId!==undefined,v.softwareOwnerEmployeeId??null,v.qualityOwnerEmployeeId!==undefined,v.qualityOwnerEmployeeId??null,
+     v.validationLeadEmployeeId!==undefined,v.validationLeadEmployeeId??null,v.auditReadinessAssessmentId!==undefined,v.auditReadinessAssessmentId??null,
+     v.notes!==undefined,v.notes??null,identifierChanged||dateChanged,a.id,a.name,p.id,v.rowVersion]))[0];
+  if(!updated)return res.status(409).json({error:'STALE_RECORD'});
+  await invalidateApprovals(p.id,'Validation package fields changed');
+  await logEvent(req,updated,'PACKAGE','PACKAGE_FIELDS_UPDATED',{previous:p,next:updated});
+  res.json({package:updated,readiness:await packageReadiness(updated)});
+});
+router.post('/:id/confirm-deployment-date',requirePermission('EPOCH_VALIDATION_EDIT'),async(req,res)=>{
+  const p=await editable(req,res);if(!p)return;const a=actor(req);
+  if(!productionIdentifierStatus(p.commit_or_release_identifier).valid||!p.production_deployment_date)
+    return res.status(409).json({error:'DEPLOYMENT_CONFIRMATION_BLOCKED',fields:['commitOrReleaseIdentifier','productionDeploymentDate']});
+  const updated=(await query(`UPDATE qms_epoch_validation_packages SET deployment_date_confirmed=true,
+    deployment_date_confirmed_by_user_id=$1,deployment_date_confirmed_by_display_name=$2,deployment_date_confirmed_at=now(),
+    row_version=row_version+1,updated_by_user_id=$1,updated_by_display_name=$2,updated_at=now() WHERE id=$3 RETURNING *`,[a.id,a.name,p.id]))[0];
+  await logEvent(req,updated,'PACKAGE','DEPLOYMENT_DATE_CONFIRMED',{next:{confirmed:true}});res.json(updated);
+});
+router.post('/:id/confirm-environment-separation',requirePermission('EPOCH_VALIDATION_EDIT'),async(req,res)=>{
+  const p=await editable(req,res);if(!p)return;const a=actor(req);
+  if(String(p.environment_differences||'').trim().length<10)return res.status(409).json({error:'ENVIRONMENT_DIFFERENCES_REQUIRED',field:'environmentDifferences'});
+  const updated=(await query(`UPDATE qms_epoch_validation_packages SET environment_separation_confirmed=true,
+    environment_separation_confirmed_by_user_id=$1,environment_separation_confirmed_by_display_name=$2,environment_separation_confirmed_at=now(),
+    row_version=row_version+1,updated_by_user_id=$1,updated_by_display_name=$2,updated_at=now() WHERE id=$3 RETURNING *`,[a.id,a.name,p.id]))[0];
+  await logEvent(req,updated,'PACKAGE','ENVIRONMENT_SEPARATION_CONFIRMED',{next:{confirmed:true}});res.json(updated);
+});
+router.post('/:id/audit-readiness-na',requirePermission('EPOCH_VALIDATION_FINAL_APPROVE'),async(req,res)=>{
+  const p=await editable(req,res);if(!p)return;const body=z.object({justification:z.string().min(20)}).parse(req.body),a=actor(req);
+  if(p.audit_readiness_assessment_id)return res.status(409).json({error:'ASSESSMENT_ALREADY_LINKED'});
+  const updated=(await query(`UPDATE qms_epoch_validation_packages SET audit_readiness_not_applicable=true,
+    audit_readiness_na_justification=$1,audit_readiness_na_approved_by_user_id=$2,audit_readiness_na_approved_by_display_name=$3,
+    audit_readiness_na_approved_at=now(),row_version=row_version+1,updated_by_user_id=$2,updated_by_display_name=$3,updated_at=now()
+    WHERE id=$4 RETURNING *`,[body.justification,a.id,a.name,p.id]))[0];
+  await logEvent(req,updated,'PACKAGE','AUDIT_READINESS_NOT_APPLICABLE_APPROVED',{reason:body.justification});res.json(updated);
+});
+
 async function counts(packageId:string):Promise<ReadinessCounts>{
   const r=(await query(`SELECT
     EXISTS(SELECT 1 FROM qms_epoch_validation_intended_use_revisions u WHERE u.package_id=$1 AND u.approval_status='APPROVED') intended_use,
@@ -154,7 +272,7 @@ async function detail(packageId:string){
   ]);
   const c=await counts(packageId),r=calculateReadiness(c);
   return {package:p,intendedUse,requirements,risks,plans,protocols,executions,defects,approvals,periodicReviews:reviews,events,
-    readiness:{...c,...r}};
+    readiness:{...c,...r},packageReadiness:await packageReadiness(p)};
 }
 router.get('/:id',requirePermission('EPOCH_VALIDATION_VIEW'),async(req,res)=>{
   const d=await detail(uuid.parse(req.params.id)); if(!d)return res.status(404).json({error:'VALIDATION_PACKAGE_NOT_FOUND'});res.json(d);
@@ -167,6 +285,10 @@ router.post('/:id/status',requirePermission('EPOCH_VALIDATION_EDIT'),async(req,r
   const body=z.object({status:z.string(),reason:z.string().min(3)}).parse(req.body);
   if(!canTransition(p.status as ValidationStatus,body.status as ValidationStatus))
     return res.status(409).json({error:'ILLEGAL_STATUS_TRANSITION',from:p.status,to:body.status});
+  if(['PLAN_APPROVED','TESTING','RETESTING','READY_FOR_FINAL_REVIEW'].includes(body.status)){
+    const gate=await packageReadiness(p);
+    if(!gate.executionReady)return res.status(409).json({error:'PACKAGE_STATUS_READINESS_BLOCKED',blockers:gate.blockers});
+  }
   if(body.status==='TESTING'&&!await query(`SELECT 1 FROM qms_epoch_validation_plans WHERE package_id=$1 AND status='APPROVED'`,[p.id]).then(x=>x.length))
     return res.status(409).json({error:'VALIDATION_PLAN_APPROVAL_REQUIRED'});
   if(body.status==='READY_FOR_FINAL_REVIEW'){
@@ -351,6 +473,8 @@ router.post('/:id/protocols/:recordId/approve',requirePermission('EPOCH_VALIDATI
 
 router.post('/:id/protocols/:recordId/executions',requirePermission('EPOCH_VALIDATION_TEST_EXECUTE'),async(req,res)=>{
   const p=await editable(req,res);if(!p)return;const protocolId=uuid.parse(req.params.recordId),a=actor(req);
+  const packageGate=await packageReadiness(p);
+  if(!packageGate.executionReady)return res.status(409).json({error:'PACKAGE_EXECUTION_READINESS_BLOCKED',blockers:packageGate.blockers});
   if(!['PLAN_APPROVED','TESTING','TESTING_BLOCKED','RETESTING','CORRECTIONS_REQUIRED'].includes(p.status))
     return res.status(409).json({error:'FORMAL_TEST_EXECUTION_NOT_ALLOWED',message:'The Validation Plan must be approved before execution.'});
   const protocol=(await query('SELECT * FROM qms_epoch_validation_protocols WHERE id=$1 AND package_id=$2',[protocolId,p.id]))[0];
@@ -492,6 +616,18 @@ router.post('/:id/final-approvals',requirePermission('EPOCH_VALIDATION_FINAL_APP
   const body=z.object({approvalRole:z.enum(['EPOCH_IT_OWNER','VALIDATION_LEAD','QUALITY_APPROVER','PROCESS_OWNER','TOP_MANAGEMENT']),
     outcome:z.enum(['APPROVED_FOR_INTENDED_USE','APPROVED_WITH_LIMITATIONS','REJECTED','RETURNED_FOR_CORRECTION']),
     comments:z.string().min(1),approvedLimitations:z.string().optional()}).parse(req.body);
+  const packageGate=await packageReadiness(p);
+  if(!packageGate.executionReady)return res.status(409).json({error:'PACKAGE_FINAL_READINESS_BLOCKED',blockers:packageGate.blockers});
+  const incompleteProtocols=await query(`SELECT p.test_id,
+    NOT EXISTS(SELECT 1 FROM qms_epoch_validation_executions e WHERE e.protocol_id=p.id
+      AND e.overall_result IN ('PASSED','PASSED_WITH_APPROVED_DEVIATION')
+      AND e.review_decision='APPROVED' AND e.snapshot_checksum IS NOT NULL) incomplete
+    FROM qms_epoch_validation_protocols p WHERE p.package_id=$1 AND p.status='APPROVED'`,[p.id]);
+  const missing=incompleteProtocols.filter(x=>x.incomplete).map(x=>x.test_id);
+  if(missing.length)return res.status(409).json({error:'PROTOCOL_EXECUTION_OR_REVIEW_INCOMPLETE',protocols:missing});
+  const unresolvedDeviations=await query(`SELECT execution_id FROM qms_epoch_validation_executions
+    WHERE package_id=$1 AND overall_result='PASSED_WITH_APPROVED_DEVIATION' AND review_decision<>'APPROVED'`,[p.id]);
+  if(unresolvedDeviations.length)return res.status(409).json({error:'UNRESOLVED_PROTOCOL_DEVIATIONS',executions:unresolvedDeviations.map(x=>x.execution_id)});
   const finalCounts=await counts(p.id); finalCounts.approvalsCurrent=true;
   const r=calculateReadiness(finalCounts);
   if(!r.ready&&body.outcome.startsWith('APPROVED'))return res.status(409).json({error:'FINAL_READINESS_BLOCKED',...r});

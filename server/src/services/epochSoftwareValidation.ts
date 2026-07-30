@@ -87,3 +87,33 @@ export function calculateReadiness(counts: ReadinessCounts) {
 export function checksum(value: unknown) {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
+
+const PLACEHOLDER_NOTES = /^(?:n\/?a|none|test|tbd)$/i;
+const FULL_SHA = /^[0-9a-f]{40}$/i;
+const RELEASE_TAG = /^(?:v|release[-_/])?[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:[-+][0-9a-z.-]+)?$/i;
+const DEPLOYMENT_ID = /^(?=.*\d)(?=.*[-_:])[a-z0-9][a-z0-9._:/-]{7,}$/i;
+const PR_ONLY = /^(?:merged\s+)?pull\s+request\s+#?\d+$/i;
+
+export function productionIdentifierStatus(value: unknown) {
+  const identifier=String(value??'').trim();
+  if(!identifier)return {valid:false,code:'PRODUCTION_IDENTIFIER_MISSING'};
+  if(PR_ONLY.test(identifier)||/^#?\d+$/.test(identifier))
+    return {valid:false,code:'PRODUCTION_IDENTIFIER_AMBIGUOUS'};
+  return {valid:FULL_SHA.test(identifier)||RELEASE_TAG.test(identifier)||DEPLOYMENT_ID.test(identifier),
+    code:'PRODUCTION_IDENTIFIER_INVALID'};
+}
+
+export function hasMeaningfulNotes(value: unknown) {
+  const notes=String(value??'').trim();
+  return notes.length>=20&&!PLACEHOLDER_NOTES.test(notes);
+}
+
+export type PackageReadinessItem = {
+  key:string;label:string;state:'COMPLETE'|'MISSING'|'REQUIRES_CONFIRMATION'|'NOT_APPLICABLE';
+  field:string;message?:string;
+};
+
+export function packageReadinessBlockers(items:PackageReadinessItem[]) {
+  return items.filter(item=>item.state==='MISSING'||item.state==='REQUIRES_CONFIRMATION')
+    .map(item=>({field:item.field,code:`${item.key}_INCOMPLETE`,message:item.message||`${item.label} is incomplete.`}));
+}

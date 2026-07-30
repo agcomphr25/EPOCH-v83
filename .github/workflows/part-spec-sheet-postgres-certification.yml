@@ -67,7 +67,7 @@ jobs:
       - name: Install committed dependencies
         run: npm ci --ignore-scripts
 
-      - name: Create pre-0232 schema from exact main
+      - name: Create pre-0233 schema from exact main
         shell: bash
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
@@ -76,17 +76,25 @@ jobs:
           "$GITHUB_WORKSPACE/node_modules/.bin/drizzle-kit" push --force --config drizzle.app.config.ts
           popd
 
-      - name: First safe-boot run through migration 0232
+      - name: First safe-boot run through migration 0233
         env:
           SAFE_BOOT_MIGRATIONS_ONLY: 'true'
         run: npm run maintenance:safe-migrations
 
-      - name: Capture first-run normalized schema
+      # The repository-wide safe-boot runner contains older dependency-ordered
+      # repairs that can converge on the second pass from a drizzle-push schema.
+      # Stabilize those before measuring this migration's idempotency.
+      - name: Stabilize repository safe-boot migrations
+        env:
+          SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+        run: npm run maintenance:safe-migrations
+
+      - name: Capture stabilized normalized schema
         run: >-
           pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
           sed '/^\\\(un\)\?restrict /d' > /tmp/part-spec-schema-first.sql
 
-      - name: Second safe-boot run
+      - name: Verification safe-boot run
         env:
           SAFE_BOOT_MIGRATIONS_ONLY: 'true'
         run: npm run maintenance:safe-migrations

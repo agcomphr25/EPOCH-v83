@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
 import path from 'path';
+
 import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '..', '..');
@@ -8,7 +9,7 @@ const migration = readFileSync(
   'utf8'
 );
 const qualityActionMigration = readFileSync(
-  path.join(root, 'migrations', '0232_quality_action_change_control.sql'),
+  path.join(root, 'migrations', '0235_quality_action_change_control.sql'),
   'utf8'
 );
 const safeBootMigrations = readFileSync(
@@ -42,7 +43,7 @@ describe('QMS Change Control architecture', () => {
   it('registers both Change Control migrations as critical safe-boot migrations', () => {
     for (const migrationFile of [
       '0230_qms_change_control_register.sql',
-      '0231_quality_action_change_control.sql',
+      '0235_quality_action_change_control.sql',
     ]) {
       expect(
         safeBootMigrations.match(new RegExp(`'${migrationFile}'`, 'g'))

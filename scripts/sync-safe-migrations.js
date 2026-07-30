@@ -20,7 +20,13 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const MIGRATIONS_DIR = path.join(ROOT, 'migrations');
-const SERVER_INDEX = path.join(ROOT, 'server', 'index.ts');
+const SERVER_INDEX = path.join(
+  ROOT,
+  'server',
+  'scripts',
+  'migrations',
+  'runSafeBootMigrations.ts'
+);
 
 const CHECK_MODE = process.argv.includes('--check');
 
@@ -36,13 +42,15 @@ if (diskFiles.length === 0) {
 }
 
 // ── 2. Read server/index.ts ───────────────────────────────────────────────
-let src = fs.readFileSync(SERVER_INDEX, 'utf-8');
+const src = fs.readFileSync(SERVER_INDEX, 'utf-8');
 
 // ── 3. Locate the safeFiles array in the source ───────────────────────────
-const ARRAY_START = /const safeFiles\s*=\s*\[/;
+const ARRAY_START = /export const safeMigrationFiles\s*=\s*\[/;
 const startMatch = ARRAY_START.exec(src);
 if (!startMatch) {
-  console.error('ERROR: Could not find "const safeFiles = [" in server/index.ts');
+  console.error(
+    'ERROR: Could not find "const safeFiles = [" in server/index.ts'
+  );
   process.exit(1);
 }
 
@@ -72,34 +80,37 @@ while ((m = entryRegex.exec(arrayBody)) !== null) {
 const missing = diskFiles.filter((f) => !existingSet.has(f));
 
 if (missing.length === 0) {
-  console.log(`✅ safeFiles is already up-to-date (${existingSet.size} entries).`);
+  console.log(
+    `✅ safeFiles is already up-to-date (${existingSet.size} entries).`
+  );
   process.exit(0);
 }
 
 // ── 6. Check mode: report drift and exit non-zero ─────────────────────────
 if (CHECK_MODE) {
-  console.error(`❌ safeFiles is OUT OF SYNC — ${missing.length} migration(s) on disk are not listed:`);
+  console.error(
+    `❌ safeFiles is OUT OF SYNC — ${missing.length} migration(s) on disk are not listed:`
+  );
   missing.forEach((f) => console.error(`   missing: ${f}`));
   console.error('Run: node scripts/sync-safe-migrations.js   to fix this.');
   process.exit(1);
 }
 
 // ── 7. Mutate mode: add missing entries ───────────────────────────────────
-console.log(`Adding ${missing.length} missing migration(s) to safeFiles:`);
+console.log(
+  `Adding ${missing.length} missing migration(s) to safeMigrationFiles:`
+);
 missing.forEach((f) => console.log(`  + ${f}`));
 
 const allEntries = Array.from(existingSet).concat(missing).sort();
 
-const indent = '          '; // 10 spaces to match existing indentation
+const indent = '  '; // 2 spaces to match existing indentation in runSafeBootMigrations.ts
 const newBody =
-  '\n' +
-  allEntries.map((f) => `${indent}'${f}',`).join('\n') +
-  '\n        ';
+  '\n' + allEntries.map((f) => `${indent}'${f}',`).join('\n') + '\n';
 
-const newSrc =
-  src.slice(0, arrayOpenIdx) +
-  newBody +
-  src.slice(arrayCloseIdx);
+const newSrc = src.slice(0, arrayOpenIdx) + newBody + src.slice(arrayCloseIdx);
 
 fs.writeFileSync(SERVER_INDEX, newSrc, 'utf-8');
-console.log(`✅ server/index.ts updated — safeFiles now has ${allEntries.length} entries.`);
+console.log(
+  `✅ runSafeBootMigrations.ts updated — safeMigrationFiles now has ${allEntries.length} entries.`
+);

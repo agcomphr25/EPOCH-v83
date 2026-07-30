@@ -77,7 +77,7 @@ const readiness = async (_req: Request, res: Response, next: NextFunction) => {
     return res.status(503).json({
       error: 'CHANGE_CONTROL_SCHEMA_NOT_READY',
       requiredMigration:
-        '0230_qms_change_control_register.sql and 0232_quality_action_change_control.sql',
+        '0230_qms_change_control_register.sql and 0235_quality_action_change_control.sql',
     });
   next();
 };

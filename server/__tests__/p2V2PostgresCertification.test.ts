@@ -76,10 +76,13 @@ import {
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL is required');
 const databaseUrl = new URL(connectionString);
-if (
-  databaseUrl.hostname !== '127.0.0.1' ||
-  databaseUrl.pathname !== '/epoch_p2_v2_certification'
-) {
+const allowedDisposableDatabase =
+  databaseUrl.pathname === '/epoch_p2_v2_certification' ||
+  (databaseUrl.pathname === '/epoch_p2_v2_synthetic_pilot' &&
+    process.env.P2_V2_PILOT_ENVIRONMENT === 'isolated_test' &&
+    process.env.P2_V2_SYNTHETIC_DATA_MARKER ===
+      'SYNTHETIC_TEST_DATA_NOT_FOR_PRODUCTION');
+if (databaseUrl.hostname !== '127.0.0.1' || !allowedDisposableDatabase) {
   throw new Error(
     `Refusing non-disposable database ${databaseUrl.hostname}${databaseUrl.pathname}`
   );

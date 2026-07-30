@@ -22,10 +22,13 @@ import {
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL is required');
 const databaseUrl = new URL(connectionString);
-if (
-  databaseUrl.hostname !== '127.0.0.1' ||
-  databaseUrl.pathname !== '/epoch_p2_v2_certification'
-)
+const allowedDisposableDatabase =
+  databaseUrl.pathname === '/epoch_p2_v2_certification' ||
+  (databaseUrl.pathname === '/epoch_p2_v2_synthetic_pilot' &&
+    process.env.P2_V2_PILOT_ENVIRONMENT === 'isolated_test' &&
+    process.env.P2_V2_SYNTHETIC_DATA_MARKER ===
+      'SYNTHETIC_TEST_DATA_NOT_FOR_PRODUCTION');
+if (databaseUrl.hostname !== '127.0.0.1' || !allowedDisposableDatabase)
   throw new Error(
     `Refusing non-disposable database ${databaseUrl.hostname}${databaseUrl.pathname}`
   );
@@ -40,6 +43,8 @@ const legacyProjectId = '00000000-0000-4000-8000-0000000010b4';
 const unknownProjectId = '00000000-0000-4000-8000-0000000010b5';
 let poId = 0;
 let poLineId = 0;
+let cncPoLineId = 0;
+let purchasedPoLineId = 0;
 let workflowId = '';
 
 const actor = (userId: number, role: string): PilotActor => ({
@@ -50,44 +55,77 @@ const actor = (userId: number, role: string): PilotActor => ({
   role,
 });
 
-const admin = actor(9401, 'ADMIN');
-const quality = actor(9402, 'QUALITY');
-const operations = actor(9403, 'OPERATIONS');
-const projectManagement = actor(9404, 'PROJECT_MANAGER');
-const rolloutOwner = actor(9405, 'OWNER');
+const projectManagement = actor(9401, 'PROJECT_MANAGER');
+const engineering = actor(9402, 'ENGINEERING');
+const quality = actor(9403, 'QUALITY');
+const operations = actor(9404, 'OPERATIONS');
+const production = actor(9405, 'PRODUCTION');
+const shipping = actor(9406, 'SHIPPING');
+const admin = actor(9407, 'ADMIN');
+const rolloutOwner = admin;
+const rollbackOwner = actor(9408, 'OWNER');
+
+const syntheticNames = [
+  'Synthetic Project Manager',
+  'Synthetic Engineering Approver',
+  'Synthetic Quality Approver',
+  'Synthetic Operations Approver',
+  'Synthetic Production Technician',
+  'Synthetic Shipping User',
+  'Synthetic System Administrator',
+  'Synthetic Rollback Owner',
+] as const;
 
 beforeAll(async () => {
   await pool.query(
     `INSERT INTO employees(id,employee_code,name,user_role)
-     SELECT value,'PILOT-'||value,'Pilot Certifier '||value,'ADMIN'
-     FROM generate_series(9401,9405) value ON CONFLICT (id) DO NOTHING`
+     SELECT 9401+ordinality-1,'SYNTH-'||(9401+ordinality-1),name,'ADMIN'
+     FROM unnest($1::text[]) WITH ORDINALITY names(name,ordinality)
+     ON CONFLICT (id) DO NOTHING`,
+    [[...syntheticNames]]
   );
   await pool.query(
     `INSERT INTO users(id,username,password_hash,role,employee_id)
      SELECT value,'pilot-certifier-'||value,'not-used','ADMIN',value
-     FROM generate_series(9401,9405) value ON CONFLICT (id) DO NOTHING`
+     FROM generate_series(9401,9408) value ON CONFLICT (id) DO NOTHING`
   );
   await pool.query(
     `INSERT INTO p2_customers(customer_id,customer_name,rfq_prefix)
-     VALUES ('PILOT-CERT','Synthetic Pilot Customer','PLC') ON CONFLICT DO NOTHING`
+     VALUES ('SYNTHETIC-NOT-REAL','EPOCH SYNTHETIC TEST CUSTOMER — NOT REAL','SYN')
+     ON CONFLICT DO NOTHING`
   );
   const po = await pool.query<{ id: number }>(
     `INSERT INTO p2_purchase_orders
        (po_number,customer_id,customer_name,po_date,expected_delivery,status,
         revision_number,is_current_revision)
-     VALUES ('PILOT-CERT-PO','PILOT-CERT','Synthetic Pilot Customer',
+     VALUES ('TEST-P2V2-0001','SYNTHETIC-NOT-REAL',
+       'EPOCH SYNTHETIC TEST CUSTOMER — NOT REAL',
        CURRENT_DATE,CURRENT_DATE+30,'READY_FOR_P2_RELEASE',1,true)
      RETURNING id`
   );
   poId = po.rows[0].id;
-  const line = await pool.query<{ id: number }>(
+  const lines = await pool.query<{ id: number; part_number: string }>(
     `INSERT INTO p2_purchase_order_items
        (po_id,part_number,part_name,quantity,specifications)
-     VALUES ($1,'PILOT-PART-A','Synthetic Pilot Part',2,'Synthetic certification only')
-     RETURNING id`,
+     VALUES
+       ($1,'TEST-ASM-100','Synthetic Assembly Part',2,
+        'SYNTHETIC TEST DATA — NOT FOR PRODUCTION; serialized; Assembly first'),
+       ($1,'TEST-CNC-200','Synthetic CNC Part',2,
+        'SYNTHETIC TEST DATA — NOT FOR PRODUCTION; serialized; CNC first'),
+       ($1,'TEST-BUY-300','Synthetic Purchased Component',2,
+        'SYNTHETIC TEST DATA — NOT FOR PRODUCTION; purchased; do not manufacture')
+     RETURNING id,part_number`,
     [poId]
   );
-  poLineId = line.rows[0].id;
+  poLineId = Number(
+    lines.rows.find((line) => line.part_number === 'TEST-ASM-100')?.id
+  );
+  cncPoLineId = Number(
+    lines.rows.find((line) => line.part_number === 'TEST-CNC-200')?.id
+  );
+  purchasedPoLineId = Number(
+    lines.rows.find((line) => line.part_number === 'TEST-BUY-300')?.id
+  );
   for (const [id, version] of [
     [projectId, 'p2_v2'],
     [nonPilotProjectId, 'p2_v2'],
@@ -97,11 +135,14 @@ beforeAll(async () => {
     await pool.query(
       `INSERT INTO projects
          (id,project_code,project_name,customer_id,workflow_version,current_stage,po_id,status)
-       VALUES ($1,$2,$3,'PILOT-CERT',$4,'PREPRODUCTION_READINESS',$5,'active')`,
+       VALUES ($1,$2,$3,'SYNTHETIC-NOT-REAL',$4,
+         'PREPRODUCTION_READINESS',$5,'active')`,
       [
         id,
         `PILOT-${id.slice(-4)}`,
-        `Synthetic ${version ?? 'NULL'} fixture`,
+        id === projectId
+          ? 'P2 V2 Synthetic Pilot Dry Run'
+          : `Synthetic ${version ?? 'NULL'} fixture`,
         version,
         poId,
       ]
@@ -132,7 +173,7 @@ beforeAll(async () => {
   const workOrder = await pool.query<{ id: string }>(
     `INSERT INTO production_work_orders
        (work_order_number,project_id,part_number,quantity,status,wad_status)
-     VALUES ('PILOT-WAD-1',$1,'PILOT-PART-A',2,'RELEASED','RELEASED')
+     VALUES ('PILOT-WAD-1',$1,'TEST-ASM-100',2,'RELEASED','RELEASED')
      RETURNING id`,
     [projectId]
   );
@@ -142,7 +183,7 @@ beforeAll(async () => {
         status,po_id,po_revision_number,po_number,configuration_baseline_id,
         configuration_revision,effectivity_type,effectivity_reference,
         requirement_source,planning_basis)
-     VALUES ($1::uuid,$2,$3,1,'RELEASED',$4,1,'PILOT-CERT-PO','CFG-PILOT',
+     VALUES ($1::uuid,$2,$3,1,'RELEASED',$4,1,'TEST-P2V2-0001','CFG-PILOT',
        'CFG-PILOT-R1','PROJECT',$1::text,'synthetic-certification',
        'Disposable PostgreSQL certification') RETURNING id`,
     [projectId, workflowId, planningStep.rows[0].id, poId]
@@ -185,15 +226,35 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
         environment: 'isolated_test',
         workflowInstanceId: workflowId,
         customerPoId: poId,
-        customerPoNumber: 'PILOT-CERT-PO',
+        customerPoNumber: 'TEST-P2V2-0001',
         approvedPoLines: [
-          { poLineId, partNumber: 'PILOT-PART-A', maximumQuantity: 2 },
+          { poLineId, partNumber: 'TEST-ASM-100', maximumQuantity: 2 },
+          {
+            poLineId: cncPoLineId,
+            partNumber: 'TEST-CNC-200',
+            maximumQuantity: 2,
+          },
+          {
+            poLineId: purchasedPoLineId,
+            partNumber: 'TEST-BUY-300',
+            maximumQuantity: 2,
+          },
         ],
         configurationBaselineRevision: 'CFG-PILOT-R1',
         productionPlanRevision: 1,
         wadRevision: 1,
         authorizedParticipants: [
+          {
+            userId: projectManagement.userId,
+            functionalRole: 'PROJECT_MANAGER',
+          },
+          { userId: engineering.userId, functionalRole: 'ENGINEERING' },
+          { userId: quality.userId, functionalRole: 'QUALITY' },
+          { userId: operations.userId, functionalRole: 'OPERATIONS' },
+          { userId: production.userId, functionalRole: 'PRODUCTION' },
+          { userId: shipping.userId, functionalRole: 'SHIPPING' },
           { userId: admin.userId, functionalRole: 'SYSTEM_ADMINISTRATOR' },
+          { userId: rollbackOwner.userId, functionalRole: 'ROLLBACK_OWNER' },
         ],
         qualityApproverUserId: quality.userId,
         operationsApproverUserId: operations.userId,
@@ -201,7 +262,7 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
         rolloutOwnerUserId: rolloutOwner.userId,
         pilotStartDate: new Date().toISOString().slice(0, 10),
         reviewExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
-        rollbackOwnerUserId: rolloutOwner.userId,
+        rollbackOwnerUserId: rollbackOwner.userId,
         rollbackPlanReference:
           'docs/p2-v2-pilot-rollback-recovery.md#before-production-launch',
         risksAndMitigations: [
@@ -216,6 +277,33 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
     );
     expect(model.pilot.status).toBe('DRAFT');
     expect(model.pilot.approved_scope_hash).toBeNull();
+  });
+
+  it('uses only distinct synthetic identities and excludes the purchased line from manufacturing', async () => {
+    const identities = await pool.query<{ id: number; name: string }>(
+      `SELECT id,name FROM employees WHERE id BETWEEN 9401 AND 9408 ORDER BY id`
+    );
+    expect(identities.rows.map((row) => row.name)).toEqual([...syntheticNames]);
+    expect(new Set(identities.rows.map((row) => row.id)).size).toBe(8);
+    const scopedLines = await pool.query<{
+      part_number: string;
+      quantity: number;
+    }>(
+      `SELECT part_number,quantity FROM p2_purchase_order_items
+       WHERE po_id=$1 ORDER BY part_number`,
+      [poId]
+    );
+    expect(scopedLines.rows).toEqual([
+      { part_number: 'TEST-ASM-100', quantity: 2 },
+      { part_number: 'TEST-BUY-300', quantity: 2 },
+      { part_number: 'TEST-CNC-200', quantity: 2 },
+    ]);
+    const purchasedProduction = await pool.query(
+      `SELECT id FROM production_work_orders
+       WHERE project_id=$1 AND part_number='TEST-BUY-300'`,
+      [projectId]
+    );
+    expect(purchasedProduction.rows).toHaveLength(0);
   });
 
   it('fails closed for direct status mutation and incomplete readiness', async () => {
@@ -328,7 +416,7 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
           reason: 'Synthetic negative test',
           idempotencyKey: 'pilot-activate-wrong',
         },
-        admin
+        engineering
       )
     ).rejects.toMatchObject({ code: 'ROLLOUT_OWNER_REQUIRED' });
     model = await transitionPilot(
@@ -357,7 +445,7 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
     await expect(
       requireActivePilotForAction(projectId, 'PRODUCT_RELEASE', admin, {
         poLineId,
-        partNumber: 'PILOT-PART-A',
+        partNumber: 'TEST-ASM-100',
         quantity: 3,
         idempotencyKey: 'quantity-over-limit',
         confirmation: 'Confirm negative quantity test',
@@ -375,16 +463,16 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
     await expect(
       requireActivePilotForAction(projectId, 'PRODUCT_RELEASE', quality, {
         poLineId,
-        partNumber: 'PILOT-PART-A',
+        partNumber: 'TEST-ASM-100',
         quantity: 1,
         idempotencyKey: 'participant-not-trained',
         confirmation: 'Confirm negative training test',
       })
-    ).rejects.toMatchObject({ code: 'PILOT_PARTICIPANT_REQUIRED' });
+    ).rejects.toMatchObject({ code: 'PILOT_TRAINING_REQUIRED' });
     await expect(
       requireActivePilotForAction(projectId, 'PRODUCT_RELEASE', admin, {
         poLineId,
-        partNumber: 'PILOT-PART-A',
+        partNumber: 'TEST-ASM-100',
         quantity: 2,
         idempotencyKey: 'authorized-pilot-action',
         confirmation: 'I confirm the exact authorized synthetic pilot action',
@@ -398,7 +486,7 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
     await expect(
       requireActivePilotForAction(projectId, 'PRODUCT_RELEASE', admin, {
         poLineId,
-        partNumber: 'PILOT-PART-A',
+        partNumber: 'TEST-ASM-100',
         quantity: 1,
         idempotencyKey: 'expired-pilot-action',
         confirmation: 'Confirm negative expired authorization test',
@@ -473,7 +561,7 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
     );
     const request = {
       poLineId,
-      partNumber: 'PILOT-PART-A',
+      partNumber: 'TEST-ASM-100',
       quantity: 1,
       idempotencyKey: 'concurrent-pilot-action',
       confirmation: 'Confirm concurrent synthetic pilot action',
@@ -564,9 +652,9 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
         environment: 'isolated_test',
         workflowInstanceId: workflowId,
         customerPoId: poId,
-        customerPoNumber: 'PILOT-CERT-PO',
+        customerPoNumber: 'TEST-P2V2-0001',
         approvedPoLines: [
-          { poLineId, partNumber: 'PILOT-PART-A', maximumQuantity: 1 },
+          { poLineId, partNumber: 'TEST-ASM-100', maximumQuantity: 1 },
         ],
         configurationBaselineRevision: 'CFG-PILOT-R1',
         productionPlanRevision: 1,
@@ -580,7 +668,7 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
         rolloutOwnerUserId: rolloutOwner.userId,
         pilotStartDate: '2026-07-29',
         reviewExpiresAt: '2026-08-29T00:00:00.000Z',
-        rollbackOwnerUserId: rolloutOwner.userId,
+        rollbackOwnerUserId: rollbackOwner.userId,
         rollbackPlanReference: 'docs/p2-v2-pilot-rollback-recovery.md',
         risksAndMitigations: [
           {

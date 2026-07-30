@@ -119,11 +119,19 @@ jobs:
             -e 's#/tmp/phase10a-main-baseline/##g' \
             -e 's/\([0-9]+,[0-9]+\):/:/' \
             /tmp/phase10a-base-tsc.log | sort > /tmp/phase10a-base-tsc.normalized
-          if ! cmp -s /tmp/phase10a-head-tsc.normalized /tmp/phase10a-base-tsc.normalized; then
-            echo "Corrective branch TypeScript diagnostics differ from exact main."
-            diff --unified /tmp/phase10a-base-tsc.normalized /tmp/phase10a-head-tsc.normalized || true
+          comm -13 \
+            /tmp/phase10a-base-tsc.normalized \
+            /tmp/phase10a-head-tsc.normalized \
+            > /tmp/phase10a-new-tsc-diagnostics
+          if [ -s /tmp/phase10a-new-tsc-diagnostics ]; then
+            echo "Corrective branch introduces TypeScript diagnostics beyond exact main."
+            cat /tmp/phase10a-new-tsc-diagnostics
             exit 1
           fi
+          removed_diagnostics=$(comm -23 \
+            /tmp/phase10a-base-tsc.normalized \
+            /tmp/phase10a-head-tsc.normalized | wc -l)
+          echo "Corrective branch removed ${removed_diagnostics} baseline TypeScript diagnostic(s)."
           echo "Corrective branch introduces no TypeScript diagnostic beyond exact main."
           exit 0
 

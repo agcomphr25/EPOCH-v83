@@ -526,7 +526,7 @@ describe('Phase 10B controlled pilot PostgreSQL certification', () => {
       ],
       quality
     );
-    expect(model.manifest).toHaveLength(2);
+    expect(model.evidenceManifest).toHaveLength(2);
     await pool.query(
       `UPDATE project_production_plans
        SET revision_number=2 WHERE project_id=$1`,

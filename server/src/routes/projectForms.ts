@@ -17,6 +17,7 @@ import {
   decideProjectForm,
   getProjectForm,
   getProjectFormReleaseReadiness,
+  getProjectFormTemplateReadiness,
   listProjectForms,
   ProjectFormError,
   renderProjectForm,
@@ -137,6 +138,17 @@ designControlProjectFormsRouter.get(
   async (req, res) => {
     try {
       res.json(await getProjectFormReleaseReadiness(req.params.recordId));
+    } catch (error) {
+      sendError(res, error);
+    }
+  }
+);
+designControlProjectFormsRouter.get(
+  '/:recordId/forms/template-readiness',
+  requirePermission('design.forms.view'),
+  async (req, res) => {
+    try {
+      res.json(await getProjectFormTemplateReadiness(req.params.recordId));
     } catch (error) {
       sendError(res, error);
     }

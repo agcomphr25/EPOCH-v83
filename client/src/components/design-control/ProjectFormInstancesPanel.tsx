@@ -53,6 +53,16 @@ type Props = {
   oversightMode?: boolean;
 };
 
+type TemplateReadiness = {
+  stepKey: string;
+  ready: boolean;
+  reason: string | null;
+  errorCode?: string;
+  templateKey: string | null;
+  templateRevisionId: string | null;
+  documentRevisionId: string | null;
+};
+
 const emptyContent = (): ProjectFormContent => ({
   fields: {},
   sections: {},
@@ -98,6 +108,9 @@ export function ProjectFormInstancesPanel({
   const { can } = usePermissions();
   const [catalog, setCatalog] = useState<DesignControlFormDefinition[]>([]);
   const [forms, setForms] = useState<ProjectFormInstance[]>([]);
+  const [templateReadiness, setTemplateReadiness] = useState<
+    Map<string, TemplateReadiness>
+  >(new Map());
   const [editing, setEditing] = useState<ProjectFormInstance | null>(null);
   const [content, setContent] = useState<ProjectFormContent>(emptyContent);
   const [message, setMessage] = useState('');
@@ -108,15 +121,19 @@ export function ProjectFormInstancesPanel({
   );
 
   const load = async () => {
-    const [catalogResponse, formsResponse] = await Promise.all([
-      fetch('/api/design-control-form-templates/catalog', {
-        credentials: 'include',
-      }),
-      fetch(`/api/design-control/${recordId}/forms`, {
-        credentials: 'include',
-      }),
-    ]);
-    if (!catalogResponse.ok || !formsResponse.ok) {
+    const [catalogResponse, formsResponse, readinessResponse] =
+      await Promise.all([
+        fetch('/api/design-control-form-templates/catalog', {
+          credentials: 'include',
+        }),
+        fetch(`/api/design-control/${recordId}/forms`, {
+          credentials: 'include',
+        }),
+        fetch(`/api/design-control/${recordId}/forms/template-readiness`, {
+          credentials: 'include',
+        }),
+      ]);
+    if (!catalogResponse.ok || !formsResponse.ok || !readinessResponse.ok) {
       throw new Error('Unable to load controlled Project Form Instances');
     }
     const definitions =
@@ -125,6 +142,12 @@ export function ProjectFormInstancesPanel({
       definitions.filter((item) => item.formCategory === 'DESIGN_CONTROL_STEP')
     );
     setForms(await formsResponse.json());
+    const readiness = (await readinessResponse.json()) as {
+      steps: TemplateReadiness[];
+    };
+    setTemplateReadiness(
+      new Map(readiness.steps.map((item) => [item.stepKey, item]))
+    );
   };
 
   useEffect(() => {
@@ -168,7 +191,7 @@ export function ProjectFormInstancesPanel({
       return payload;
     } catch (error: any) {
       setMessage(error.message);
-      throw error;
+      return null;
     } finally {
       setBusy(false);
     }
@@ -230,7 +253,7 @@ export function ProjectFormInstancesPanel({
 
   const saveDraft = async () => {
     if (!editing) return;
-    await mutate(
+    const result = await mutate(
       `/api/project-forms/${editing.id}/draft`,
       {
         method: 'PATCH',
@@ -241,7 +264,7 @@ export function ProjectFormInstancesPanel({
       },
       'Draft saved with audit evidence'
     );
-    setEditing(null);
+    if (result) setEditing(null);
   };
 
   const uploadPaper = async (file: File) => {
@@ -255,12 +278,12 @@ export function ProjectFormInstancesPanel({
         originalRemainsAuthoritative: true,
       })
     );
-    await mutate(
+    const result = await mutate(
       `/api/project-forms/${paperTarget.id}/upload-paper`,
       { method: 'POST', body },
       'Immutable original paper scan uploaded'
     );
-    setPaperTarget(null);
+    if (result) setPaperTarget(null);
   };
 
   return (
@@ -277,7 +300,7 @@ export function ProjectFormInstancesPanel({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => load()}
+          onClick={() => load().catch((error) => setMessage(error.message))}
           disabled={busy}
         >
           <RefreshCw className="mr-2 h-4 w-4" />
@@ -292,6 +315,9 @@ export function ProjectFormInstancesPanel({
         )}
         {catalog.map((definition) => {
           const form = formsByStep.get(definition.workflowStepKey ?? '');
+          const readiness = templateReadiness.get(
+            definition.workflowStepKey ?? ''
+          );
           return (
             <div
               key={definition.templateKey}
@@ -304,7 +330,9 @@ export function ProjectFormInstancesPanel({
                 <div className="text-xs text-muted-foreground">
                   {form
                     ? `${form.instanceNumber} · ${form.completionMethod} · template Rev ${form.templateRevisionSnapshot}`
-                    : `${definition.documentNumber} · released template required`}
+                    : readiness?.ready
+                      ? `${definition.documentNumber} · released template ready`
+                      : `${definition.documentNumber} · ${readiness?.reason ?? 'released template readiness unavailable'}`}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -315,7 +343,7 @@ export function ProjectFormInstancesPanel({
                 >
                   {form?.lifecycleStatus ?? 'NOT STARTED'}
                 </Badge>
-                {!form && can('design.forms.create') && (
+                {!form && can('design.forms.create') && readiness?.ready && (
                   <>
                     <Button
                       size="sm"
@@ -334,6 +362,19 @@ export function ProjectFormInstancesPanel({
                       Paper
                     </Button>
                   </>
+                )}
+                {!form && can('design.forms.create') && !readiness?.ready && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled
+                    title={
+                      readiness?.reason ??
+                      'A released template revision is required'
+                    }
+                  >
+                    Template not released
+                  </Button>
                 )}
                 {form &&
                   form.completionMethod === 'ELECTRONIC' &&

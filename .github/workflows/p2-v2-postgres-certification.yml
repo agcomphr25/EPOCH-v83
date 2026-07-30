@@ -115,47 +115,115 @@ jobs:
           sed -E \
             -e "s#$GITHUB_WORKSPACE/##g" \
             -e 's#/tmp/phase10a-main-baseline/##g' \
-            -e 's#\\#/#g' \
             -e 's/\([0-9]+,[0-9]+\):/:/' \
-            /tmp/phase10a-head-tsc.log | sort -u > /tmp/phase10a-head-tsc.normalized
+            /tmp/phase10a-head-tsc.log | sort > /tmp/phase10a-head-tsc.normalized
           sed -E \
             -e "s#$GITHUB_WORKSPACE/##g" \
             -e 's#/tmp/phase10a-main-baseline/##g' \
-            -e 's#\\#/#g' \
             -e 's/\([0-9]+,[0-9]+\):/:/' \
-            /tmp/phase10a-base-tsc.log | sort -u > /tmp/phase10a-base-tsc.normalized
+            /tmp/phase10a-base-tsc.log | sort > /tmp/phase10a-base-tsc.normalized
           comm -13 \
             /tmp/phase10a-base-tsc.normalized \
             /tmp/phase10a-head-tsc.normalized \
-            > /tmp/phase10a-head-tsc.introduced
-          if [ -s /tmp/phase10a-head-tsc.introduced ]; then
-            echo "Corrective branch introduced TypeScript diagnostics beyond exact main:"
-            cat /tmp/phase10a-head-tsc.introduced
+            > /tmp/phase10a-new-tsc-diagnostics
+          if [ -s /tmp/phase10a-new-tsc-diagnostics ]; then
+            echo "Corrective branch introduces TypeScript diagnostics beyond exact main."
+            cat /tmp/phase10a-new-tsc-diagnostics
             exit 1
           fi
+          removed_diagnostics=$(comm -23 \
+            /tmp/phase10a-base-tsc.normalized \
+            /tmp/phase10a-head-tsc.normalized | wc -l)
+          echo "Corrective branch removed ${removed_diagnostics} baseline TypeScript diagnostic(s)."
           echo "Corrective branch introduces no TypeScript diagnostic beyond exact main."
           exit 0
 
       - name: Run focused Phase 9-10A ESLint certification
         shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           node scripts/validate-phase10a-static-manifest.js
-          mapfile -t files < <(
+          mapfile -t manifest_files < <(
             node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
           )
+          mapfile -t corrective_files < <(
+            git diff --name-only "$BASE_SHA"...HEAD |
+              grep -E '\.(js|jsx|ts|tsx)$' || true
+          )
+          mapfile -t files < <(
+            printf '%s\n' "${manifest_files[@]}" "${corrective_files[@]}" | sort -u
+          )
           start=$(date +%s)
-          npx eslint --max-warnings 0 "${files[@]}"
-          echo "focused_eslint: manifest_files=${#files[@]} duration_seconds=$(($(date +%s) - start)) exit_code=0 errors=0 warnings=0"
+          npx eslint --max-warnings 0 "${manifest_files[@]}"
+          set +e
+          npx eslint --format json "${corrective_files[@]}" \
+            > /tmp/phase10a-head-eslint.json 2>/tmp/phase10a-head-eslint.stderr
+          head_eslint_exit=$?
+          mapfile -t baseline_files < <(
+            for file in "${corrective_files[@]}"; do
+              if [ -f "/tmp/phase10a-main-baseline/$file" ]; then
+                printf '%s\n' "$file"
+              fi
+            done
+          )
+          if [ "${#baseline_files[@]}" -eq 0 ]; then
+            printf '[]\n' > /tmp/phase10a-base-eslint.json
+            base_eslint_exit=0
+          else
+            pushd "/tmp/phase10a-main-baseline"
+            "$GITHUB_WORKSPACE/node_modules/.bin/eslint" --format json \
+              "${baseline_files[@]}" > /tmp/phase10a-base-eslint.json \
+              2>/tmp/phase10a-base-eslint.stderr
+            base_eslint_exit=$?
+            popd
+          fi
+          set -e
+          echo "eslint_compare: head_exit=${head_eslint_exit} base_exit=${base_eslint_exit}"
+          node scripts/compare-eslint-baseline.mjs \
+            /tmp/phase10a-head-eslint.json \
+            /tmp/phase10a-base-eslint.json \
+            "$GITHUB_WORKSPACE" \
+            /tmp/phase10a-main-baseline
+          echo "focused_eslint: manifest_files=${#manifest_files[@]} corrective_files=${#corrective_files[@]} unique_files=${#files[@]} duration_seconds=$(($(date +%s) - start)) exit_code=0 new_errors=0 new_warnings=0"
 
       - name: Run focused Phase 9-10A formatting certification
         shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           node scripts/validate-phase10a-static-manifest.js
           mapfile -t files < <(
             node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
           )
           npx prettier --check "${files[@]}"
-          echo "formatting: manifest_files=${#files[@]} exit_code=0"
+          mapfile -t corrective_files < <(
+            git diff --name-only "$BASE_SHA"...HEAD |
+              grep -E '\.(js|jsx|ts|tsx|json|css|md|ya?ml)$' || true
+          )
+          if [ "${#corrective_files[@]}" -eq 0 ]; then
+            echo "No Prettier-supported corrective files found."
+            exit 1
+          fi
+          for file in "${corrective_files[@]}"; do
+            if npx prettier --check "$file" >/dev/null 2>&1; then
+              continue
+            fi
+            if [ ! -f "/tmp/phase10a-main-baseline/$file" ]; then
+              echo "New corrective file is not formatted: $file"
+              npx prettier --check "$file"
+              exit 1
+            fi
+            if "$GITHUB_WORKSPACE/node_modules/.bin/prettier" \
+              --check "/tmp/phase10a-main-baseline/$file" >/dev/null 2>&1; then
+              echo "Corrective file regressed from a formatted baseline: $file"
+              npx prettier --check "$file"
+              exit 1
+            fi
+            echo "Corrective file retains pre-existing formatting debt: $file"
+          done
+          git diff --check "$BASE_SHA"...HEAD
+          echo "formatting: manifest_files=${#files[@]} corrective_files=${#corrective_files[@]} exit_code=0"
 
       - name: Create schema-push prerequisite
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"

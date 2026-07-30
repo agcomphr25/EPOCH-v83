@@ -29,6 +29,7 @@ export type QualityActionState = {
   linkedEcnCount?: number;
   customerApprovalRequired?: boolean;
   customerApprovalComplete?: boolean;
+  productionBlocked?: boolean;
   controlledDocumentsRequired?: boolean;
   controlledDocumentsReleased?: boolean;
   trainingRequired?: boolean;
@@ -78,10 +79,14 @@ export function evaluateNextRequiredAction(
   ) {
     return {
       code: 'NO_FURTHER_ACTION',
-      statement: 'No further action; record is closed with required effectiveness evidence.',
+      statement:
+        'No further action; record is closed with required effectiveness evidence.',
       responsibleRole: 'QUALITY',
       classification: 'COMPLETE',
-      evidence: ['Record status is closed', 'Required effectiveness review is complete or not applicable'],
+      evidence: [
+        'Record status is closed',
+        'Required effectiveness review is complete or not applicable',
+      ],
       controlReference: 'QMS closure control',
     };
   }
@@ -101,12 +106,19 @@ export function evaluateNextRequiredAction(
       ['One or more assessment recommendations lack a Quality decision'],
       'QMS assessment decision control'
     );
-  if (state.recordType === 'NCR' && state.containmentRequired && !state.containmentComplete)
+  if (
+    state.recordType === 'NCR' &&
+    state.containmentRequired &&
+    !state.containmentComplete
+  )
     return blocking(
       'CONTAINMENT_EVIDENCE_REQUIRED',
       'Containment evidence is missing.',
       'QUALITY',
-      ['The NCR requires containment', 'Containment completion evidence is absent'],
+      [
+        'The NCR requires containment',
+        'Containment completion evidence is absent',
+      ],
       'Nonconforming output control',
       state.dueDate,
       state.ownerUserId
@@ -116,7 +128,9 @@ export function evaluateNextRequiredAction(
       'ROOT_CAUSE_REQUIRED',
       'Root-cause analysis is required.',
       'INVESTIGATOR',
-      ['The issue is significant, recurring, systemic, audit-related, or customer-facing'],
+      [
+        'The issue is significant, recurring, systemic, audit-related, or customer-facing',
+      ],
       'Corrective action root-cause control',
       state.dueDate,
       state.ownerUserId
@@ -150,15 +164,29 @@ export function evaluateNextRequiredAction(
       'CUSTOMER_APPROVAL_REQUIRED',
       'Customer or design-authority approval evidence is required before disposition or implementation.',
       'PROGRAM_CONTRACTS',
-      ['Customer/contract approval is required', 'Immutable approval evidence is missing'],
+      [
+        'Customer/contract approval is required',
+        'Immutable approval evidence is missing',
+      ],
       'Customer and contract authorization control'
+    );
+  if (state.productionBlocked)
+    return blocking(
+      'PRODUCTION_HOLD_ACTIVE',
+      'An active production hold must be dispositioned before implementation.',
+      'QUALITY',
+      ['The unified record is marked production blocked'],
+      'Production hold control'
     );
   if (state.controlledDocumentsRequired && !state.controlledDocumentsReleased)
     return blocking(
       'CONTROLLED_DOCUMENT_RELEASE_REQUIRED',
       'Affected controlled documents must be revised and released.',
       'DOCUMENT_CONTROL',
-      ['Controlled documents are affected', 'A required replacement revision is not released'],
+      [
+        'Controlled documents are affected',
+        'A required replacement revision is not released',
+      ],
       'Controlled documented information'
     );
   if (state.wipDispositionRequired && !state.wipDispositionComplete)
@@ -206,7 +234,10 @@ export function evaluateNextRequiredAction(
       'TRAINING_ACKNOWLEDGMENT_REQUIRED',
       'Affected employees require completed training acknowledgments.',
       'TRAINING_OWNER',
-      ['Training was determined required', 'Acknowledgment evidence is incomplete'],
+      [
+        'Training was determined required',
+        'Acknowledgment evidence is incomplete',
+      ],
       'Competence and awareness control'
     );
   if (!state.requiredApprovalsComplete)
@@ -271,32 +302,46 @@ export function evaluateImplementationGate(state: QualityActionState) {
     blockers.push(action);
     seen.add(action.code);
     const resolved: Partial<QualityActionState> = {};
-    if (action.code === 'QUALITY_INITIAL_REVIEW') resolved.assessmentSubmitted = true;
+    if (action.code === 'QUALITY_INITIAL_REVIEW')
+      resolved.assessmentSubmitted = true;
     if (action.code === 'QUALITY_RECOMMENDATIONS_UNRESOLVED')
       resolved.assessmentRecommendationsResolved = true;
-    if (action.code === 'CONTAINMENT_EVIDENCE_REQUIRED') resolved.containmentComplete = true;
-    if (action.code === 'ROOT_CAUSE_REQUIRED') resolved.rootCauseComplete = true;
-    if (action.code === 'INVESTIGATOR_ASSIGNMENT_REQUIRED') resolved.investigatorAssigned = true;
-    if (action.code === 'ENGINEERING_REVIEW_REQUIRED') resolved.designImpact = false;
+    if (action.code === 'CONTAINMENT_EVIDENCE_REQUIRED')
+      resolved.containmentComplete = true;
+    if (action.code === 'ROOT_CAUSE_REQUIRED')
+      resolved.rootCauseComplete = true;
+    if (action.code === 'INVESTIGATOR_ASSIGNMENT_REQUIRED')
+      resolved.investigatorAssigned = true;
+    if (action.code === 'ENGINEERING_REVIEW_REQUIRED')
+      resolved.designImpact = false;
     if (action.code === 'ECN_REQUIRED') resolved.linkedEcnCount = 1;
-    if (action.code === 'CUSTOMER_APPROVAL_REQUIRED') resolved.customerApprovalComplete = true;
+    if (action.code === 'CUSTOMER_APPROVAL_REQUIRED')
+      resolved.customerApprovalComplete = true;
+    if (action.code === 'PRODUCTION_HOLD_ACTIVE')
+      resolved.productionBlocked = false;
     if (action.code === 'CONTROLLED_DOCUMENT_RELEASE_REQUIRED')
       resolved.controlledDocumentsReleased = true;
     if (action.code === 'WIP_INVENTORY_DISPOSITION_REQUIRED')
       resolved.wipDispositionComplete = true;
-    if (action.code === 'EFFECTIVITY_REQUIRED') resolved.effectivityComplete = true;
-    if (action.code === 'VALIDATION_TESTING_REQUIRED') resolved.validationComplete = true;
-    if (action.code === 'FAI_DETERMINATION_REQUIRED') resolved.faiDetermined = true;
+    if (action.code === 'EFFECTIVITY_REQUIRED')
+      resolved.effectivityComplete = true;
+    if (action.code === 'VALIDATION_TESTING_REQUIRED')
+      resolved.validationComplete = true;
+    if (action.code === 'FAI_DETERMINATION_REQUIRED')
+      resolved.faiDetermined = true;
     if (action.code === 'FAI_EVIDENCE_REQUIRED') resolved.faiComplete = true;
-    if (action.code === 'TRAINING_ACKNOWLEDGMENT_REQUIRED') resolved.trainingComplete = true;
+    if (action.code === 'TRAINING_ACKNOWLEDGMENT_REQUIRED')
+      resolved.trainingComplete = true;
     if (action.code === 'FUNCTIONAL_APPROVALS_REQUIRED')
       resolved.requiredApprovalsComplete = true;
     if (action.code === 'IMPLEMENTATION_AUTHORIZATION_REQUIRED')
       resolved.implementationAuthorized = true;
-    if (action.code === 'IMPLEMENTATION_INCOMPLETE') resolved.implementationComplete = true;
+    if (action.code === 'IMPLEMENTATION_INCOMPLETE')
+      resolved.implementationComplete = true;
     if (action.code === 'IMPLEMENTATION_VERIFICATION_REQUIRED')
       resolved.verificationComplete = true;
-    if (action.code === 'EFFECTIVENESS_REVIEW_DUE') resolved.effectivenessComplete = true;
+    if (action.code === 'EFFECTIVENESS_REVIEW_DUE')
+      resolved.effectivenessComplete = true;
     cursor = { ...cursor, ...resolved };
   }
   return { allowed: blockers.length === 0, blockers };

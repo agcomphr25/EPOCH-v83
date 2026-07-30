@@ -6,7 +6,9 @@ import {
   type QualityActionState,
 } from '../src/services/qualityActionEngine';
 
-const readyPcr = (overrides: Partial<QualityActionState> = {}): QualityActionState => ({
+const readyPcr = (
+  overrides: Partial<QualityActionState> = {}
+): QualityActionState => ({
   recordType: 'PCR',
   status: 'APPROVED',
   assessmentSubmitted: true,
@@ -38,48 +40,63 @@ const readyPcr = (overrides: Partial<QualityActionState> = {}): QualityActionSta
 
 describe('Quality Action next-required-action engine', () => {
   it('fails closed when no submitted assessment exists', () => {
-    expect(evaluateNextRequiredAction(readyPcr({ assessmentSubmitted: false })).code)
-      .toBe('QUALITY_INITIAL_REVIEW');
+    expect(
+      evaluateNextRequiredAction(readyPcr({ assessmentSubmitted: false })).code
+    ).toBe('QUALITY_INITIAL_REVIEW');
   });
 
   it('routes possible design impact to Engineering instead of PCR release', () => {
-    expect(evaluateNextRequiredAction(readyPcr({ designImpact: null })).code)
-      .toBe('ENGINEERING_REVIEW_REQUIRED');
+    expect(
+      evaluateNextRequiredAction(readyPcr({ designImpact: null })).code
+    ).toBe('ENGINEERING_REVIEW_REQUIRED');
   });
 
   it('reports every implementation prerequisite, not only the first', () => {
-    const gate = evaluateImplementationGate(readyPcr({
-      customerApprovalRequired: true,
-      customerApprovalComplete: false,
-      wipDispositionComplete: false,
-      effectivityComplete: false,
-      faiDetermined: false,
-      requiredApprovalsComplete: false,
-    }));
-    expect(gate.blockers.map((item) => item.code)).toEqual(expect.arrayContaining([
-      'CUSTOMER_APPROVAL_REQUIRED',
-      'WIP_INVENTORY_DISPOSITION_REQUIRED',
-      'EFFECTIVITY_REQUIRED',
-      'FAI_DETERMINATION_REQUIRED',
-      'FUNCTIONAL_APPROVALS_REQUIRED',
-    ]));
+    const gate = evaluateImplementationGate(
+      readyPcr({
+        customerApprovalRequired: true,
+        customerApprovalComplete: false,
+        wipDispositionComplete: false,
+        effectivityComplete: false,
+        faiDetermined: false,
+        requiredApprovalsComplete: false,
+      })
+    );
+    expect(gate.blockers.map((item) => item.code)).toEqual(
+      expect.arrayContaining([
+        'CUSTOMER_APPROVAL_REQUIRED',
+        'WIP_INVENTORY_DISPOSITION_REQUIRED',
+        'EFFECTIVITY_REQUIRED',
+        'FAI_DETERMINATION_REQUIRED',
+        'FUNCTIONAL_APPROVALS_REQUIRED',
+      ])
+    );
   });
 
   it('requires immutable implementation authorization after prerequisites pass', () => {
-    expect(evaluateNextRequiredAction(readyPcr()).code)
-      .toBe('IMPLEMENTATION_AUTHORIZATION_REQUIRED');
+    expect(evaluateNextRequiredAction(readyPcr()).code).toBe(
+      'IMPLEMENTATION_AUTHORIZATION_REQUIRED'
+    );
+  });
+
+  it('blocks implementation while production is held', () => {
+    expect(
+      evaluateNextRequiredAction(readyPcr({ productionBlocked: true })).code
+    ).toBe('PRODUCTION_HOLD_ACTIVE');
   });
 
   it('only reports complete after required verification and effectiveness evidence', () => {
-    expect(evaluateNextRequiredAction({
-      ...readyPcr({
-        status: 'CLOSED',
-        implementationAuthorized: true,
-        implementationComplete: true,
-        verificationComplete: true,
-        effectivenessRequired: true,
-        effectivenessComplete: true,
-      }),
-    }).classification).toBe('COMPLETE');
+    expect(
+      evaluateNextRequiredAction({
+        ...readyPcr({
+          status: 'CLOSED',
+          implementationAuthorized: true,
+          implementationComplete: true,
+          verificationComplete: true,
+          effectivenessRequired: true,
+          effectivenessComplete: true,
+        }),
+      }).classification
+    ).toBe('COMPLETE');
   });
 });

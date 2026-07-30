@@ -131,6 +131,27 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-amber-600" />
+              My Quality Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600 mb-4">
+              Submit a process change request and follow QMS information
+              requests.
+            </p>
+            <Link href="/my-quality-actions">
+              <Button className="w-full justify-start" variant="outline">
+                <FileText className="h-4 w-4 mr-2" />
+                Process Change Requests
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
         {/* Employee Portal */}
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="pb-3">

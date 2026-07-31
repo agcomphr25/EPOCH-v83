@@ -400,6 +400,7 @@ export default function RFQBuilderPage() {
   const [createdQuoteId, setCreatedQuoteId] = useState<string | null>(null);
   const [createdQuoteNumber, setCreatedQuoteNumber] = useState<string | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
+  const [isSavingApproval, setIsSavingApproval] = useState(false);
   const [controlMessage, setControlMessage] = useState("");
   const [versionSummary, setVersionSummary] = useState("");
   const [assumptionDraft, setAssumptionDraft] = useState({
@@ -413,7 +414,6 @@ export default function RFQBuilderPage() {
   const [approvalDraft, setApprovalDraft] = useState({
     approvalRole: "ESTIMATOR",
     approvalStatus: "APPROVED",
-    signerDisplayName: "",
     digitalSignature: "",
     approvalComments: "",
   });
@@ -630,8 +630,7 @@ export default function RFQBuilderPage() {
       materialSpec: p.materialSpec, processFamily: p.processFamily,
       makeBuyType: p.makeBuyType, partType: p.partType, notes: p.notes,
     }));
-    await apiRequest(`/api/estimating/rfqs/${id}/parts`, { method: "DELETE" });
-    for (const p of valid) await apiRequest(`/api/estimating/rfqs/${id}/parts`, { method: "POST", body: p });
+    await apiRequest(`/api/estimating/rfqs/${id}/parts`, { method: "PUT", body: { parts: valid } });
   };
 
   const handleHeaderChange = (field: keyof RfqHeader, value: string) =>
@@ -1394,16 +1393,24 @@ export default function RFQBuilderPage() {
 
   const saveApproval = async () => {
     if (!rfqId) { setControlMessage("Save the RFQ before recording approvals."); return; }
-    await apiRequest(`/api/estimating/rfqs/${rfqId}/approvals`, { method: "POST", body: {
-      ...approvalDraft,
-      estimateVersionId: latestVersion?.id ?? null,
-      signerDisplayName: approvalDraft.signerDisplayName || null,
-      digitalSignature: approvalDraft.digitalSignature || null,
-      approvalComments: approvalDraft.approvalComments || null,
-    } });
-    setApprovalDraft((prev) => ({ ...prev, digitalSignature: "", approvalComments: "" }));
-    setControlMessage(`${approvalDraft.approvalRole} approval ${approvalDraft.approvalStatus.toLowerCase()} and audit event recorded.`);
-    await refreshControls();
+    setIsSavingApproval(true);
+    setControlMessage("");
+    try {
+      await apiRequest(`/api/estimating/rfqs/${rfqId}/approvals`, { method: "POST", body: {
+        approvalRole: approvalDraft.approvalRole,
+        approvalStatus: approvalDraft.approvalStatus,
+        estimateVersionId: latestVersion?.id ?? null,
+        digitalSignature: approvalDraft.digitalSignature || null,
+        approvalComments: approvalDraft.approvalComments || null,
+      } });
+      setApprovalDraft((prev) => ({ ...prev, digitalSignature: "", approvalComments: "" }));
+      setControlMessage(`${approvalDraft.approvalRole} approval ${approvalDraft.approvalStatus.toLowerCase()} under your authenticated identity.`);
+      await refreshControls();
+    } catch (error: any) {
+      setControlMessage(error?.message || `You are not authorized to record the ${approvalDraft.approvalRole} decision.`);
+    } finally {
+      setIsSavingApproval(false);
+    }
   };
 
   const ensureRiskAssessment = async () => {
@@ -1484,6 +1491,7 @@ export default function RFQBuilderPage() {
 
   const isSaving = createRfqMutation.isPending || updateRfqMutation.isPending;
   const isLoading = rfqQuery.isLoading || partsQuery.isLoading;
+  const linkedQuoteId = createdQuoteId ?? (rfqQuery.data as any)?.quoteId ?? null;
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -2330,11 +2338,13 @@ export default function RFQBuilderPage() {
                   <select className="border rounded px-3 py-2 text-sm" value={approvalDraft.approvalStatus} onChange={(e) => setApprovalDraft((prev) => ({ ...prev, approvalStatus: e.target.value }))}>
                     {["PENDING", "APPROVED", "REJECTED", "CHANGES_REQUESTED"].map((status) => <option key={status} value={status}>{status}</option>)}
                   </select>
-                  <input className="border rounded px-3 py-2 text-sm" placeholder="Signer display name" value={approvalDraft.signerDisplayName} onChange={(e) => setApprovalDraft((prev) => ({ ...prev, signerDisplayName: e.target.value }))} />
+                  <div className="border rounded px-3 py-2 text-sm text-muted-foreground">Signer identity comes from your authenticated account.</div>
                   <input className="border rounded px-3 py-2 text-sm" placeholder="Digital signature / initials" value={approvalDraft.digitalSignature} onChange={(e) => setApprovalDraft((prev) => ({ ...prev, digitalSignature: e.target.value }))} />
                 </div>
                 <textarea className="w-full border rounded px-3 py-2 text-sm min-h-[64px]" placeholder="Approval comments" value={approvalDraft.approvalComments} onChange={(e) => setApprovalDraft((prev) => ({ ...prev, approvalComments: e.target.value }))} />
-                <button type="button" className="border rounded px-3 py-2 text-sm" onClick={saveApproval}>Save Approval</button>
+                <button type="button" className="border rounded px-3 py-2 text-sm disabled:opacity-50" onClick={saveApproval} disabled={isSavingApproval}>
+                  {isSavingApproval ? "Saving decision…" : "Save Approval"}
+                </button>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {(approvalsQuery.data ?? []).map((approval) => (
                     <div key={approval.id} className="rounded border px-3 py-2 text-sm">
@@ -2415,13 +2425,18 @@ export default function RFQBuilderPage() {
                 <button
                   className="bg-primary text-primary-foreground rounded px-4 py-2 text-sm disabled:opacity-50"
                   onClick={createDraftQuoteFromRfq}
-                  disabled={!rfqId || !pricingSnapshotRows.length || isHandingOff || !releaseReadiness?.readyForQuoteRelease}
+                  disabled={!rfqId || !pricingSnapshotRows.length || isHandingOff || Boolean(linkedQuoteId) || !releaseReadiness?.readyForQuoteRelease}
                   type="button"
                 >
-                  {isHandingOff ? "Creating…" : "Create Draft Quote"}
+                  {isHandingOff ? "Creating…" : linkedQuoteId ? "Draft Quote Created" : "Create Draft Quote"}
                 </button>
               </div>
             </div>
+            {linkedQuoteId && (
+              <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                Linked draft quote: {createdQuoteNumber ?? linkedQuoteId}
+              </div>
+            )}
 
             {/* Quote summary table per break */}
             {pricingMatrix.length === 0 ? (

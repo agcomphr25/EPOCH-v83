@@ -1,13 +1,19 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { pool, pgPool } from '../../db';
+import { db, pool, pgPool } from '../../db';
 import { storage } from '../../storage';
 import { DEFAULT_ESTIMATING_RFQS_LIMIT, MAX_ESTIMATING_RFQS_LIMIT } from '../constants/estimating';
 import { recordAuditEvent } from '../services/auditLedgerService';
+import { getUserPermissions } from '../services/permissionService';
+import { eq, sql } from 'drizzle-orm';
 import {
+  estimatingPricingSnapshots,
+  estimatingRfqParts,
+  estimatingRfqs,
   insertEstimatingRfqSchema,
   insertEstimatingRfqPartSchema,
   insertEstimatingToolingSchema,
+  quotes,
 } from '../../schema';
 
 const router = Router();
@@ -28,10 +34,23 @@ const approvalSchema = z.object({
   approvalRole: z.enum(['ESTIMATOR', 'ENGINEERING', 'FINANCE', 'EXECUTIVE']),
   approvalStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED']).default('PENDING'),
   approvalThreshold: z.union([z.string(), z.number()]).nullable().optional(),
-  signerUserId: z.number().int().nullable().optional(),
-  signerDisplayName: z.string().nullable().optional(),
-  digitalSignature: z.string().nullable().optional(),
+  digitalSignature: z.string().trim().min(1).nullable().optional(),
   approvalComments: z.string().nullable().optional(),
+});
+
+const approvalCapabilities = {
+  ESTIMATOR: 'estimating.approve.estimator',
+  ENGINEERING: 'estimating.approve.engineering',
+  FINANCE: 'estimating.approve.finance',
+  EXECUTIVE: 'estimating.approve.executive',
+} as const;
+
+const replacePartsSchema = z.object({
+  parts: z.array(
+    insertEstimatingRfqPartSchema.omit({ rfqId: true, lineNumber: true }).extend({
+      lineNumber: insertEstimatingRfqPartSchema.shape.lineNumber.optional(),
+    })
+  ),
 });
 
 const riskAssessmentSchema = z.object({
@@ -87,6 +106,27 @@ function getActor(req: any) {
     username: req.user?.username ?? req.session?.user?.username ?? null,
     role: req.user?.role ?? req.session?.user?.role ?? null,
   };
+}
+
+async function requireEstimatingApprovalAuthority(req: any, approvalRole: keyof typeof approvalCapabilities) {
+  const actor = getActor(req);
+  if (!actor.id || !actor.username || !actor.role) {
+    const error = new Error('Authenticated actor identity is required.') as Error & { status?: number; code?: string };
+    error.status = 401;
+    error.code = 'ACTOR_REQUIRED';
+    throw error;
+  }
+  const capability = approvalCapabilities[approvalRole];
+  if (actor.role !== 'ADMIN' && actor.role !== 'OWNER') {
+    const { permissionSet } = await getUserPermissions(actor.id, actor.role);
+    if (!permissionSet.has(capability)) {
+      const error = new Error(`The ${capability} capability is required.`) as Error & { status?: number; code?: string };
+      error.status = 403;
+      error.code = 'ESTIMATING_APPROVAL_FORBIDDEN';
+      throw error;
+    }
+  }
+  return { ...actor, capability };
 }
 
 function money(value: unknown): number {
@@ -390,6 +430,30 @@ router.post('/rfqs/:id/parts', async (req, res) => {
   }
 });
 
+router.put('/rfqs/:id/parts', async (req, res) => {
+  try {
+    const data = replacePartsSchema.parse(req.body);
+    const saved = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT id FROM estimating_rfqs WHERE id = ${req.params.id} FOR UPDATE`);
+      const [rfq] = await tx.select({ id: estimatingRfqs.id }).from(estimatingRfqs).where(eq(estimatingRfqs.id, req.params.id));
+      if (!rfq) {
+        const error = new Error('RFQ not found') as Error & { status?: number };
+        error.status = 404;
+        throw error;
+      }
+      await tx.delete(estimatingRfqParts).where(eq(estimatingRfqParts.rfqId, req.params.id));
+      if (data.parts.length === 0) return [];
+      return tx.insert(estimatingRfqParts).values(data.parts.map((part, index) => ({
+        ...part, rfqId: req.params.id, lineNumber: part.lineNumber ?? index + 1,
+      }))).returning();
+    });
+    res.json(saved);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
 // ── Tooling ───────────────────────────────────────────────────────────────────
 
 router.get('/rfqs/:id/tooling', async (req, res) => {
@@ -619,78 +683,77 @@ router.post('/rfqs/:id/pricing-snapshots', async (req, res) => {
 router.post('/rfqs/:id/create-draft-quote', async (req, res) => {
   try {
     const rfqId = req.params.id;
-    const rfq = await storage.getEstimatingRfqById(rfqId);
-    if (!rfq) return res.status(404).json({ error: 'RFQ not found' });
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT id FROM estimating_rfqs WHERE id = ${rfqId} FOR UPDATE`);
+      const [rfq] = await tx.select().from(estimatingRfqs).where(eq(estimatingRfqs.id, rfqId));
+      if (!rfq) {
+        const error = new Error('RFQ not found') as Error & { status?: number };
+        error.status = 404;
+        throw error;
+      }
+      if (rfq.quoteId) {
+        const [existingQuote] = await tx.select().from(quotes).where(eq(quotes.id, rfq.quoteId));
+        if (!existingQuote) {
+          const error = new Error('RFQ references a quote that no longer exists.') as Error & { status?: number; code?: string };
+          error.status = 409;
+          error.code = 'ESTIMATING_QUOTE_LINK_BROKEN';
+          throw error;
+        }
+        return { quoteId: existingQuote.id, quoteNumber: existingQuote.quoteNumber, reused: true };
+      }
 
-    const readiness = await getEstimatingReleaseReadiness(rfqId, {
-      requiresExecutiveApproval: Boolean(req.body?.requiresExecutiveApproval),
-    });
-    if (!readiness.readyForQuoteRelease) {
-      return res.status(409).json({
-        error: 'RFQ estimating controls are not complete. Resolve approvals and risk assessment before quote release.',
-        readiness,
+      const readiness = await getEstimatingReleaseReadiness(rfqId, {
+        requiresExecutiveApproval: Boolean(req.body?.requiresExecutiveApproval),
       });
-    }
+      if (!readiness.readyForQuoteRelease) {
+        const error = new Error('RFQ estimating controls are not complete. Resolve approvals and risk assessment before quote release.') as Error & { status?: number; readiness?: unknown };
+        error.status = 409;
+        error.readiness = readiness;
+        throw error;
+      }
 
-    const parts = await storage.getEstimatingRfqParts(rfqId);
-    const snapshots = await storage.getEstimatingPricingSnapshots(rfqId);
+      const parts = await tx.select().from(estimatingRfqParts).where(eq(estimatingRfqParts.rfqId, rfqId));
+      const snapshots = await tx.select().from(estimatingPricingSnapshots).where(eq(estimatingPricingSnapshots.rfqId, rfqId));
+      const breakTotals: Record<string, number> = {};
+      for (const snapshot of snapshots) {
+        breakTotals[snapshot.quantityBreakId] = (breakTotals[snapshot.quantityBreakId] ?? 0) + Number(snapshot.extendedPrice);
+      }
+      const totalAmount = Object.values(breakTotals).reduce((max, value) => Math.max(max, value), 0);
+      if (!snapshots.length || totalAmount <= 0) {
+        const error = new Error('Positive pricing snapshots are required before quote handoff.') as Error & { status?: number; code?: string };
+        error.status = 409;
+        error.code = 'ESTIMATING_PRICING_REQUIRED';
+        throw error;
+      }
 
-    // Group snapshots by quantity break and sum extended prices
-    const breakTotals: Record<string, number> = {};
-    for (const snap of snapshots) {
-      const key = snap.quantityBreakId;
-      breakTotals[key] = (breakTotals[key] ?? 0) + Number(snap.extendedPrice);
-    }
-
-    // Use largest break total as the quote total amount
-    const totalAmount = Object.values(breakTotals).reduce((max, v) => Math.max(max, v), 0);
-
-    const partNumberList = parts.map((p) => p.partNumber).join(', ');
-    const description = rfq.notes
-      ? `${partNumberList} — ${rfq.notes}`
-      : partNumberList || rfq.rfqNumber;
-
-    const validUntil = new Date();
-    validUntil.setDate(validUntil.getDate() + 30);
-
-    const quote = await storage.createQuote({
-      quoteNumber: `Q-${rfq.rfqNumber}`,
-      customerId: rfq.customerId ? String(rfq.customerId) : 'ESTIMATING',
-      customerName: rfq.customerNameSnapshot ?? rfq.rfqNumber,
-      description,
-      totalAmount,
-      status: 'DRAFT',
-      validUntil,
-      quotedBy: null,
-      notes: `Generated from RFQ ${rfq.rfqNumber}. Assumptions: ${rfq.assumptions ?? 'N/A'}.`,
-      // Carry the integer FK directly from the RFQ so the customer link is explicit
-      customersIntegerId: rfq.customerId ?? null,
+      const partNumberList = parts.map((part) => part.partNumber).join(', ');
+      const validUntil = new Date();
+      validUntil.setDate(validUntil.getDate() + 30);
+      const [quote] = await tx.insert(quotes).values({
+        quoteNumber: `Q-${rfq.rfqNumber}`,
+        customerId: rfq.customerId ? String(rfq.customerId) : 'ESTIMATING',
+        customerName: rfq.customerNameSnapshot ?? rfq.rfqNumber,
+        description: rfq.notes ? `${partNumberList} — ${rfq.notes}` : partNumberList || rfq.rfqNumber,
+        totalAmount,
+        status: 'DRAFT',
+        validUntil,
+        quotedBy: getActor(req).username,
+        notes: `Generated from RFQ ${rfq.rfqNumber}. Assumptions: ${rfq.assumptions ?? 'N/A'}.`,
+        customersIntegerId: rfq.customerId ?? null,
+      }).returning();
+      await tx.update(estimatingRfqs).set({ quoteId: quote.id, status: 'QUOTED', updatedAt: new Date() }).where(eq(estimatingRfqs.id, rfqId));
+      await recordAuditEvent({
+        eventType: 'ESTIMATING_QUOTE_RELEASED', subjectType: 'estimating_rfq', subjectId: rfqId,
+        sourceService: 'estimating.routes', actor: getActor(req),
+        payload: { quoteId: quote.id, quoteNumber: quote.quoteNumber, readiness: readiness as any },
+        reason: 'RFQ approval-readiness and risk controls satisfied before quote handoff',
+        ipAddress: req.ip, userAgent: req.get('user-agent') ?? null,
+      }, tx);
+      return { quoteId: quote.id, quoteNumber: quote.quoteNumber, reused: false };
     });
-
-    await pool.query(
-      `UPDATE estimating_rfqs SET quote_id = $2, status = 'QUOTED', updated_at = NOW() WHERE id = $1`,
-      [rfqId, quote.id]
-    );
-
-    await recordAuditEvent({
-      eventType: 'ESTIMATING_QUOTE_RELEASED',
-      subjectType: 'estimating_rfq',
-      subjectId: rfqId,
-      sourceService: 'estimating.routes',
-      actor: getActor(req),
-      payload: {
-        quoteId: quote.id,
-        quoteNumber: quote.quoteNumber,
-        readiness: readiness as any,
-      },
-      reason: 'RFQ approval-readiness and risk controls satisfied before quote handoff',
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent') ?? null,
-    });
-
-    res.json({ quoteId: quote.id, quoteNumber: quote.quoteNumber });
+    res.json(result);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status ?? 500).json({ error: err.message, code: err.code, readiness: err.readiness });
   }
 });
 
@@ -969,7 +1032,14 @@ router.get('/rfqs/:id/approvals', async (req, res) => {
 router.post('/rfqs/:id/approvals', async (req, res) => {
   try {
     const data = approvalSchema.parse(req.body);
-    const signedAt = data.approvalStatus === 'APPROVED' ? new Date() : null;
+    const actor = await requireEstimatingApprovalAuthority(req, data.approvalRole);
+    if (data.approvalStatus !== 'PENDING' && !data.digitalSignature) {
+      return res.status(400).json({
+        error: 'Digital signature or initials are required for an approval decision.',
+        code: 'ESTIMATING_SIGNATURE_REQUIRED',
+      });
+    }
+    const signedAt = data.approvalStatus === 'PENDING' ? null : new Date();
     const rows = await pool.query(
       `INSERT INTO estimating_approvals
         (rfq_id, estimate_version_id, approval_role, approval_status, approval_threshold, signer_user_id,
@@ -992,8 +1062,8 @@ router.post('/rfqs/:id/approvals', async (req, res) => {
         data.approvalRole,
         data.approvalStatus,
         data.approvalThreshold ?? null,
-        data.signerUserId ?? null,
-        data.signerDisplayName ?? null,
+        actor.id,
+        actor.username,
         data.digitalSignature ?? null,
         data.approvalComments ?? null,
         signedAt,
@@ -1014,8 +1084,9 @@ router.post('/rfqs/:id/approvals', async (req, res) => {
         estimateVersionId: data.estimateVersionId ?? null,
         approvalRole: data.approvalRole,
         approvalStatus: data.approvalStatus,
-        signerUserId: data.signerUserId ?? null,
-        signerDisplayName: data.signerDisplayName ?? null,
+        signerUserId: actor.id,
+        signerDisplayName: actor.username,
+        authorityCapability: actor.capability,
       },
       reason: data.approvalComments ?? null,
       ipAddress: req.ip,
@@ -1024,7 +1095,7 @@ router.post('/rfqs/:id/approvals', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
-    res.status(500).json({ error: err.message });
+    res.status(err.status ?? 500).json({ error: err.message, code: err.code });
   }
 });
 

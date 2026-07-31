@@ -14,6 +14,8 @@ describe('Project Form template readiness UI', () => {
     expect(routes).toContain('/:recordId/forms/template-readiness');
     expect(routes).toContain("requirePermission('design.forms.view')");
     expect(service).toContain('getProjectFormTemplateReadiness');
+    expect(service).toContain("await loadRecordStep(recordId, '1', client)");
+    expect(service).not.toContain('authoritativeContext(');
     expect(service).toContain('selectableTemplateForStep(stepKey, client)');
     expect(service).toContain('ready: false');
     expect(service).toContain('reason: error.message');

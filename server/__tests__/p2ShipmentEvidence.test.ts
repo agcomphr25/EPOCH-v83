@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { indexP2ShippedSerializedItemIds } from '../src/lib/p2ShipmentEvidence';
+import {
+  indexP2ShippedSerializedItemIds,
+  normalizeP2ShipmentSerialIdentity,
+} from '../src/lib/p2ShipmentEvidence';
 import {
   countDistinctP2DemandUnits,
   isHistoricalP2Unit,
 } from '../src/lib/p2SchedulingReconciliation';
 
 describe('P2 shipment and scheduling reconciliation', () => {
+  it('matches customer-facing serials to replacement-suffixed production identities', () => {
+    expect(normalizeP2ShipmentSerialIdentity(' ROC2600034-RMA-2 ')).toBe('ROC2600034');
+    expect(normalizeP2ShipmentSerialIdentity('roc2600034-r2')).toBe('ROC2600034');
+    expect(normalizeP2ShipmentSerialIdentity('ROC2600034')).toBe('ROC2600034');
+  });
+
   it('deduplicates recovered shipment membership by PO and item id', () => {
     const indexed = indexP2ShippedSerializedItemIds([
       { poId: 14332, serializedItemId: 'ABC' },

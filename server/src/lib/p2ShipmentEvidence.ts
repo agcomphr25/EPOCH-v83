@@ -3,9 +3,27 @@ export const P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL = `
     SELECT
       lot.po_id,
       COALESCE(lot.serialized_item_ids, '[]'::jsonb) AS serialized_item_ids,
-      slip.line_items
+      slip.line_items,
+      certificate.serial_numbers AS certificate_serial_numbers
     FROM p2_lot_numbers lot
-    LEFT JOIN p2_packing_slips slip ON slip.id = lot.packing_slip_id
+    LEFT JOIN LATERAL (
+      SELECT candidate.*
+      FROM p2_packing_slips candidate
+      WHERE candidate.id = lot.packing_slip_id
+         OR candidate.lot_number_id = lot.id
+      ORDER BY
+        CASE WHEN candidate.id = lot.packing_slip_id THEN 0 ELSE 1 END,
+        candidate.created_at DESC NULLS LAST
+      LIMIT 1
+    ) slip ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT candidate.serial_numbers
+      FROM p2_certificates_of_conformance candidate
+      WHERE candidate.id = lot.certificate_id
+         OR candidate.lot_number_id = lot.id
+      ORDER BY candidate.created_at DESC NULLS LAST
+      LIMIT 1
+    ) certificate ON TRUE
     WHERE lot.po_id = ANY($1)
       AND (
         COALESCE(UPPER(lot.status), '') = 'SHIPPED'
@@ -21,30 +39,80 @@ export const P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL = `
   ), packing_slip_serials AS (
     SELECT
       lot.po_id AS "poId",
-      UPPER(TRIM(serial.value)) AS "serialNumber"
+      REGEXP_REPLACE(
+        UPPER(TRIM(serial.value)),
+        '-(?:RMA-[0-9]+|R[0-9]+)$',
+        '',
+        'i'
+      ) AS "serialNumber"
     FROM shipped_lots lot
     CROSS JOIN LATERAL jsonb_array_elements(
       CASE WHEN jsonb_typeof(lot.line_items) = 'array' THEN lot.line_items ELSE '[]'::jsonb END
     ) AS line_item(value)
     CROSS JOIN LATERAL jsonb_array_elements_text(
       CASE
-        WHEN jsonb_typeof(line_item.value -> 'serialNumbers') = 'array'
-          THEN line_item.value -> 'serialNumbers'
+        WHEN jsonb_typeof(COALESCE(
+          line_item.value -> 'serialNumbers',
+          line_item.value -> 'serial_numbers'
+        )) = 'array'
+          THEN COALESCE(
+            line_item.value -> 'serialNumbers',
+            line_item.value -> 'serial_numbers'
+          )
         ELSE '[]'::jsonb
       END
     ) AS serial(value)
+  ), certificate_serials AS (
+    SELECT
+      lot.po_id AS "poId",
+      REGEXP_REPLACE(
+        UPPER(TRIM(serial.value)),
+        '-(?:RMA-[0-9]+|R[0-9]+)$',
+        '',
+        'i'
+      ) AS "serialNumber"
+    FROM shipped_lots lot
+    CROSS JOIN LATERAL jsonb_array_elements_text(
+      CASE
+        WHEN jsonb_typeof(lot.certificate_serial_numbers) = 'array'
+          THEN lot.certificate_serial_numbers
+        ELSE '[]'::jsonb
+      END
+    ) AS serial(value)
+  ), shipment_serials AS (
+    SELECT "poId", "serialNumber" FROM packing_slip_serials
+    UNION
+    SELECT "poId", "serialNumber" FROM certificate_serials
   ), packing_slip_membership AS (
     SELECT DISTINCT
       evidence."poId",
       item.id::text AS "serializedItemId"
-    FROM packing_slip_serials evidence
+    FROM shipment_serials evidence
+    JOIN p2_purchase_orders evidence_po
+      ON evidence_po.id = evidence."poId"
     JOIN p2_serialized_items item
-      ON UPPER(TRIM(item.serial_number)) = evidence."serialNumber"
+      ON evidence."serialNumber" = ANY(ARRAY[
+        REGEXP_REPLACE(UPPER(TRIM(item.serial_number)), '-(?:RMA-[0-9]+|R[0-9]+)$', '', 'i'),
+        REGEXP_REPLACE(UPPER(TRIM(item.customer_serial_number)), '-(?:RMA-[0-9]+|R[0-9]+)$', '', 'i'),
+        REGEXP_REPLACE(UPPER(TRIM(item.barcode)), '-(?:RMA-[0-9]+|R[0-9]+)$', '', 'i'),
+        REGEXP_REPLACE(UPPER(TRIM(item.traveler_barcode)), '-(?:RMA-[0-9]+|R[0-9]+)$', '', 'i')
+      ])
+    JOIN p2_purchase_orders item_po
+      ON item_po.id = item.po_id
+     AND COALESCE(item_po.parent_po_id, item_po.id)
+       = COALESCE(evidence_po.parent_po_id, evidence_po.id)
   )
   SELECT "poId", "serializedItemId" FROM explicit_membership
   UNION
   SELECT "poId", "serializedItemId" FROM packing_slip_membership
 `;
+
+export function normalizeP2ShipmentSerialIdentity(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/-(?:RMA-\d+|R\d+)$/i, '');
+}
 
 export function indexP2ShippedSerializedItemIds(
   rows: readonly { poId?: unknown; serializedItemId?: unknown }[],

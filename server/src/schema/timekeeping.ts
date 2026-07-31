@@ -280,6 +280,20 @@ export const indirectCodesTable = timekeepingSchema.table("indirect_codes", {
 
 export type IndirectCode = typeof indirectCodesTable.$inferSelect;
 
+export const salariedHolidaysTable = timekeepingSchema.table("salaried_holidays", {
+  id: serial("id").primaryKey(),
+  holidayDate: text("holiday_date").notNull().unique(),
+  name: text("name").notNull(),
+  hours: doublePrecision("hours").notNull().default(8),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: integer("created_by"),
+  updatedBy: integer("updated_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export type SalariedHoliday = typeof salariedHolidaysTable.$inferSelect;
+
 export const salariedTimesheetsTable = timekeepingSchema.table("salaried_timesheets", {
   id: serial("id").primaryKey(),
   employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),

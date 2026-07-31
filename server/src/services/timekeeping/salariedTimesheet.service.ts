@@ -25,6 +25,7 @@ import {
   employeesTable,
   leaveEntriesTable,
   laborEntryDraftsTable,
+  salariedHolidaysTable,
 } from "../../schema/timekeeping";
 import { chargeCodes, employees, travelers } from "../../../schema";
 import { eq, and, gte, lte, asc, desc, isNull, inArray, sql } from "drizzle-orm";
@@ -319,15 +320,40 @@ export async function injectHolidayLines(
   const holidayCode = requireIndirectCode(indirectMap, "HOLIDAY", "holiday line");
 
   const days = weekDays(weekStart, weekEnd);
-  const years = [...new Set(days.map((d) => Number(d.slice(0, 4))))];
-  const holidays = years.flatMap(usHolidaysForYear);
-  const holidayMap = new Map(holidays.map((h) => [h.date, h.name]));
+  const holidays = await db
+    .select()
+    .from(salariedHolidaysTable)
+    .where(and(
+      eq(salariedHolidaysTable.isActive, true),
+      gte(salariedHolidaysTable.holidayDate, weekStart),
+      lte(salariedHolidaysTable.holidayDate, weekEnd),
+    ));
+  const holidayMap = new Map(holidays.map((h) => [h.holidayDate, h]));
+
+  const [sheet] = await db.select({ status: salariedTimesheetsTable.status })
+    .from(salariedTimesheetsTable)
+    .where(eq(salariedTimesheetsTable.id, timesheetId))
+    .limit(1);
+  const isEditable = Boolean(sheet && ["OPEN", "REOPENED"].includes(sheet.status));
+  if (isEditable) {
+    const autoLines = await db.select({ id: salariedTimesheetLinesTable.id, date: salariedTimesheetLinesTable.date })
+      .from(salariedTimesheetLinesTable)
+      .where(and(
+        eq(salariedTimesheetLinesTable.timesheetId, timesheetId),
+        eq(salariedTimesheetLinesTable.source, "HOLIDAY_AUTO"),
+      ));
+    for (const line of autoLines) {
+      if (!holidayMap.has(line.date)) {
+        await db.delete(salariedTimesheetLinesTable).where(eq(salariedTimesheetLinesTable.id, line.id));
+      }
+    }
+  }
 
   const created: (typeof salariedTimesheetLinesTable.$inferSelect)[] = [];
 
   for (const day of days) {
-    const holidayName = holidayMap.get(day);
-    if (!holidayName) continue;
+    const holiday = holidayMap.get(day);
+    if (!holiday) continue;
 
     // Check if a HOLIDAY line already exists for this date
     const existing = await db
@@ -343,9 +369,25 @@ export async function injectHolidayLines(
       .limit(1);
 
     if (existing.length > 0) {
-      created.push(existing[0]!);
+      const current = existing[0]!;
+      if (isEditable && current.source === "HOLIDAY_AUTO") {
+        const [updated] = await db.update(salariedTimesheetLinesTable).set({
+          hours: holiday.hours,
+          note: holiday.name,
+          chargeCodeId: holidayCode.chargeCodeId,
+          indirectCodeId: holidayCode.id,
+        }).where(eq(salariedTimesheetLinesTable.id, current.id)).returning();
+        created.push(updated!);
+      } else {
+        created.push(current);
+      }
       continue;
     }
+
+    // A calendar edit must never mutate a submitted or approved record merely
+    // because somebody viewed it.  New auto-lines are added only while the
+    // employee can still edit the weekly timesheet.
+    if (!isEditable) continue;
 
     const [line] = await db
       .insert(salariedTimesheetLinesTable)
@@ -355,9 +397,9 @@ export async function injectHolidayLines(
         lineType: "HOLIDAY",
         indirectCodeId: holidayCode.id,
         chargeCodeId: holidayCode.chargeCodeId,
-        hours: 8,
+        hours: holiday.hours,
         source: "HOLIDAY_AUTO",
-        note: holidayName,
+        note: holiday.name,
         isLocked: true,
       })
       .returning();

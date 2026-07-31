@@ -68,6 +68,19 @@ describe('Master Document Register lifecycle hardening', () => {
     expect(route).toContain('controlled_document_number_registry');
   });
 
+  it('serves and verifies authoritative revision bytes before approval', () => {
+    const route = read('server/src/routes/controlledDocuments.ts');
+    const service = read('server/src/services/controlledDocumentLifecycleService.ts');
+    expect(route).toContain('const authoritativeFilePath = revision?.filePath || doc.filePath');
+    expect(route).toContain('await verifyStoredRevision(state.document.id, revision, filePath, buffer, req)');
+    expect(route).toContain("if (action === 'approve')");
+    expect(service).toContain('CONTROLLED_DOCUMENT_FILE_CHECKSUM_VERIFIED');
+    expect(service).toContain('CONTROLLED_DOCUMENT_CHECKSUM_MISMATCH');
+    expect(service).toContain("checksumStatus: 'VERIFIED'");
+    expect(service).toContain('eq(documentVersionHistory.id, revision.id)');
+    expect(service).toContain('eq(documentVersionHistory.documentId, context.document.id)');
+  });
+
   it('does not alter P2 or Phase 2B Design Control approval implementation', () => {
     const designControl = read('server/src/services/designControlApprovalService.ts');
     expect(designControl).toContain('AUTHENTICATED_VERSION_BOUND_APPROVAL');

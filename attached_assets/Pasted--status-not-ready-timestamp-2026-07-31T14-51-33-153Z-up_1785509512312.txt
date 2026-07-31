@@ -1,0 +1,52 @@
+{
+    "status": "not_ready",
+    "timestamp": "2026-07-31T14:51:33.153Z",
+    "uptimeSeconds": 120,
+    "database": {
+        "ok": true,
+        "status": "healthy",
+        "checkedAt": "2026-07-31T14:51:33.153Z",
+        "latencyMs": 29,
+        "error": null,
+        "target": {
+            "source": "FORCE_DATABASE_URL",
+            "host": "ep-wispy-sun-adm062ft.c-2.us-east-1.aws.neon.tech",
+            "database": "neondb",
+            "user": "neondb_owner",
+            "redactedUrl": "postgresql://neondb_owner:***@ep-wispy-sun-adm062ft.c-2.us-east-1.aws.neon.tech/neondb"
+        }
+    },
+    "buildVersion": "2026-01-27-v2",
+    "startedAt": "2026-07-31T14:49:37.520Z",
+    "pid": 44,
+    "routesReady": false,
+    "routeRegistration": {
+        "status": "failed",
+        "startedAt": "2026-07-31T14:49:37.526Z",
+        "completedAt": "2026-07-31T14:50:16.235Z",
+        "error": {
+            "message": "relation \"capa_records\" does not exist",
+            "stack": "error: relation \"capa_records\" does not exist\n    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async runSafeBootMigrations (/home/runner/workspace/server/scripts/migrations/runSafeBootMigrations.ts:373:9)\n    at async <anonymous> (/home/runner/workspace/server/index.ts:444:7)"
+        }
+    },
+    "schemaMigrations": {
+        "status": "failed",
+        "startedAt": "2026-07-31T14:49:37.526Z",
+        "completedAt": "2026-07-31T14:50:16.209Z",
+        "error": {
+            "message": "relation \"capa_records\" does not exist",
+            "stack": "error: relation \"capa_records\" does not exist\n    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async runSafeBootMigrations (/home/runner/workspace/server/scripts/migrations/runSafeBootMigrations.ts:373:9)\n    at async <anonymous> (/home/runner/workspace/server/index.ts:444:7)"
+        }
+    },
+    "backgroundServices": {
+        "status": "pending"
+    },
+    "fatalErrors": [
+        {
+            "type": "routeRegistration",
+            "message": "relation \"capa_records\" does not exist",
+            "stack": "error: relation \"capa_records\" does not exist\n    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async runSafeBootMigrations (/home/runner/workspace/server/scripts/migrations/runSafeBootMigrations.ts:373:9)\n    at async <anonymous> (/home/runner/workspace/server/index.ts:444:7)",
+            "at": "2026-07-31T14:50:16.235Z"
+        }
+    ]
+}

@@ -297,6 +297,7 @@ export const safeMigrationFiles = [
   '0233a_spec_sheets_base_table.sql',
   '0233_part_specification_sheet_control.sql',
   '0234_epoch_validation_readiness_controls.sql',
+  '0129a_capa_records_base_table.sql',
   '0235_quality_action_change_control.sql',
   'investigation_308_order_duplication.sql',
 ];
@@ -346,6 +347,8 @@ export const criticalMigrationFiles = new Set([
   '0233a_spec_sheets_base_table.sql',
   '0233_part_specification_sheet_control.sql',
   '0234_epoch_validation_readiness_controls.sql',
+  '0129a_capa_records_base_table.sql',
+  '0235_quality_action_change_control.sql',
 ]);
 
 export async function runSafeBootMigrations() {

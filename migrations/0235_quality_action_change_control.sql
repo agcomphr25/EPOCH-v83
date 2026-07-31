@@ -362,9 +362,7 @@ SELECT COALESCE(n.rma_number,'NCR-'||n.id::text),'NCR','NCR: '||left(n.issue_cau
        'NCR',n.id::text,CASE WHEN n.recurrence_detected THEN 'HIGH' ELSE NULL END,
        n.customer_id IS NOT NULL,n.containment_due_date,n.created_at,n.updated_at
   FROM nonconformance_records n
-ON CONFLICT(authoritative_record_type,authoritative_record_id) WHERE
-  authoritative_record_type IS NOT NULL AND authoritative_record_id IS NOT NULL
-DO NOTHING;
+ON CONFLICT (change_number) DO NOTHING;
 
 INSERT INTO change_control_records(
   change_number,change_type,title,description,source,status,priority,owner_user_id,
@@ -377,9 +375,7 @@ SELECT c.capa_number,'CAR',c.title,c.problem_statement,'EPOCH_NATIVE',
        'CAR',c.id::text,CASE WHEN c.recurrence_detected THEN 'HIGH' ELSE NULL END,
        c.due_date,c.created_by_user_id,c.created_at,c.updated_at,c.closed_at,c.closed_by_user_id
   FROM capa_records c
-ON CONFLICT(authoritative_record_type,authoritative_record_id) WHERE
-  authoritative_record_type IS NOT NULL AND authoritative_record_id IS NOT NULL
-DO NOTHING;
+ON CONFLICT (change_number) DO NOTHING;
 
 INSERT INTO change_control_records(
   change_number,change_type,title,description,reason_for_change,source,status,priority,
@@ -400,9 +396,7 @@ SELECT p.change_number,'PCR','PCR: '||left(p.proposed_change,180),p.proposed_cha
        COALESCE(p.safety_regulatory_impact,false),COALESCE(p.contract_customer_impact,false),
        p.requester_user_id,p.created_at,p.updated_at
   FROM p2_production_changes p
-ON CONFLICT(authoritative_record_type,authoritative_record_id) WHERE
-  authoritative_record_type IS NOT NULL AND authoritative_record_id IS NOT NULL
-DO NOTHING;
+ON CONFLICT (change_number) DO NOTHING;
 
 UPDATE change_control_records SET authoritative_record_type='ECR',authoritative_record_id=ecr_id::text
  WHERE ecr_id IS NOT NULL AND authoritative_record_type IS NULL;

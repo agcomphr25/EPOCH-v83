@@ -9,6 +9,7 @@ import {
   Snowflake,
   Thermometer,
   Trash2,
+  RotateCcw,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +23,14 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -56,6 +65,13 @@ type TemperatureLog = {
   notes: string | null;
   recordedByDisplayName: string;
   createdAt: string;
+  updatedAt?: string | null;
+  updatedByDisplayName?: string | null;
+  voidedAt?: string | null;
+  voidedByDisplayName?: string | null;
+  voidReason?: string | null;
+  restoredAt?: string | null;
+  restoredByDisplayName?: string | null;
   readings: TemperatureReading[];
 };
 
@@ -64,6 +80,12 @@ const EMPTY_LOCATIONS: TemperatureLocation[] = [];
 function currentLocalDateTime() {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function toLocalDateTime(value: string) {
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
 }
 
@@ -94,6 +116,13 @@ export default function FreezerTemperatureLogPage() {
     null
   );
   const [editingLocationName, setEditingLocationName] = useState('');
+  const [showVoided, setShowVoided] = useState(false);
+  const [editingLog, setEditingLog] = useState<TemperatureLog | null>(null);
+  const [editRecordedAt, setEditRecordedAt] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editReadings, setEditReadings] = useState<Record<string, string>>({});
+  const [deletingLog, setDeletingLog] = useState<TemperatureLog | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
 
   const {
     data: locationsData,
@@ -112,9 +141,9 @@ export default function FreezerTemperatureLogPage() {
     isLoading: logsLoading,
     isError: logsError,
   } = useQuery<TemperatureLog[]>({
-    queryKey: ['/api/quality/freezer-temperature-logs'],
+    queryKey: ['/api/quality/freezer-temperature-logs', showVoided],
     queryFn: () =>
-      apiRequest('/api/quality/freezer-temperature-logs?limit=250'),
+      apiRequest(`/api/quality/freezer-temperature-logs?limit=250&includeVoided=${showVoided}`),
   });
 
   const locations = locationsData ?? EMPTY_LOCATIONS;
@@ -126,6 +155,7 @@ export default function FreezerTemperatureLogPage() {
     const result = new Map<string, TemperatureReading>();
     const today = localDayKey(new Date());
     for (const log of logs) {
+      if (log.voidedAt) continue;
       if (localDayKey(log.recordedAt) !== today) continue;
       for (const reading of log.readings) {
         if (!result.has(reading.locationId))
@@ -276,6 +306,60 @@ export default function FreezerTemperatureLogPage() {
         variant: 'destructive',
       });
     },
+  });
+
+  const beginEditLog = (log: TemperatureLog) => {
+    setEditingLog(log);
+    setEditRecordedAt(toLocalDateTime(log.recordedAt));
+    setEditNotes(log.notes ?? '');
+    setEditReadings(Object.fromEntries(log.readings.map((reading) => [
+      reading.locationId,
+      reading.isNotApplicable ? 'N/A' : String(reading.temperature ?? ''),
+    ])));
+  };
+
+  const editedReadingPayload = Object.entries(editReadings).flatMap(([locationId, raw]) => {
+    const value = raw.trim();
+    if (!value) return [];
+    return [{ locationId, temperature: value === 'N/A' ? null : value, isNotApplicable: value === 'N/A' }];
+  });
+  const editHasNa = editedReadingPayload.some((reading) => reading.isNotApplicable);
+  const canUpdateLog = Boolean(editRecordedAt) && editedReadingPayload.length > 0 &&
+    editedReadingPayload.every((reading) => reading.isNotApplicable || Number.isFinite(Number(reading.temperature))) &&
+    (!editHasNa || Boolean(editNotes.trim()));
+
+  const updateLog = useMutation({
+    mutationFn: () => apiRequest(`/api/quality/freezer-temperature-logs/${editingLog!.id}`, {
+      method: 'PUT',
+      body: {
+        recordedAt: new Date(editRecordedAt).toISOString(),
+        notes: editNotes.trim() || null,
+        readings: editedReadingPayload,
+      },
+    }),
+    onSuccess: () => {
+      setEditingLog(null);
+      invalidateFreezerData();
+      toast({ title: 'Temperature check updated', description: 'The correction and employee identity were recorded.' });
+    },
+    onError: (error: Error) => toast({ title: 'Could not update temperature check', description: error.message, variant: 'destructive' }),
+  });
+
+  const voidLog = useMutation({
+    mutationFn: () => apiRequest(`/api/quality/freezer-temperature-logs/${deletingLog!.id}`, {
+      method: 'DELETE', body: { reason: deleteReason.trim() },
+    }),
+    onSuccess: () => {
+      setDeletingLog(null); setDeleteReason(''); invalidateFreezerData();
+      toast({ title: 'Temperature check deleted', description: 'The record was retained as voided for audit history.' });
+    },
+    onError: (error: Error) => toast({ title: 'Could not delete temperature check', description: error.message, variant: 'destructive' }),
+  });
+
+  const restoreLog = useMutation({
+    mutationFn: (id: number) => apiRequest(`/api/quality/freezer-temperature-logs/${id}/restore`, { method: 'POST' }),
+    onSuccess: () => { invalidateFreezerData(); toast({ title: 'Temperature check restored' }); },
+    onError: (error: Error) => toast({ title: 'Could not restore temperature check', description: error.message, variant: 'destructive' }),
   });
 
   return (
@@ -487,10 +571,16 @@ export default function FreezerTemperatureLogPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Temperature history</CardTitle>
-              <CardDescription>
-                Most recent 250 employee-recorded checks.
-              </CardDescription>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle>Temperature history</CardTitle>
+                  <CardDescription>Most recent 250 employee-recorded checks. Records can be corrected or voided with an audit trail.</CardDescription>
+                </div>
+                <Label className="flex items-center gap-2 text-sm font-normal">
+                  <Checkbox checked={showVoided} onCheckedChange={(checked) => setShowVoided(checked === true)} />
+                  Show deleted records
+                </Label>
+              </div>
             </CardHeader>
             <CardContent>
               {logsLoading ? (
@@ -523,6 +613,7 @@ export default function FreezerTemperatureLogPage() {
                         ))}
                         <TableHead>Employee</TableHead>
                         <TableHead>Notes</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -534,7 +625,7 @@ export default function FreezerTemperatureLogPage() {
                           ])
                         );
                         return (
-                          <TableRow key={log.id}>
+                          <TableRow key={log.id} className={log.voidedAt ? 'bg-red-50/60 text-muted-foreground' : undefined}>
                             <TableCell className="whitespace-nowrap font-medium">
                               {new Date(log.recordedAt).toLocaleString()}
                             </TableCell>
@@ -550,7 +641,22 @@ export default function FreezerTemperatureLogPage() {
                               {log.recordedByDisplayName}
                             </TableCell>
                             <TableCell className="min-w-48">
-                              {log.notes || '--'}
+                              <div>{log.notes || '--'}</div>
+                              {log.updatedAt && <div className="mt-1 text-xs text-muted-foreground">Corrected by {log.updatedByDisplayName || 'employee'} on {new Date(log.updatedAt).toLocaleString()}</div>}
+                              {log.restoredAt && !log.voidedAt && <div className="mt-1 text-xs text-muted-foreground">Restored by {log.restoredByDisplayName || 'employee'} on {new Date(log.restoredAt).toLocaleString()}</div>}
+                              {log.voidedAt && <div className="mt-1 text-xs text-red-700"><strong>Deleted:</strong> {log.voidReason} — {log.voidedByDisplayName || 'employee'}</div>}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-right">
+                              {log.voidedAt ? (
+                                <Button size="sm" variant="outline" onClick={() => restoreLog.mutate(log.id)} disabled={restoreLog.isPending}>
+                                  <RotateCcw className="mr-1 h-3.5 w-3.5" /> Restore
+                                </Button>
+                              ) : (
+                                <div className="flex justify-end gap-2">
+                                  <Button size="sm" variant="outline" onClick={() => beginEditLog(log)}><Edit className="mr-1 h-3.5 w-3.5" /> Edit</Button>
+                                  <Button size="sm" variant="destructive" onClick={() => setDeletingLog(log)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button>
+                                </div>
+                              )}
                             </TableCell>
                           </TableRow>
                         );
@@ -707,6 +813,39 @@ export default function FreezerTemperatureLogPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={editingLog !== null} onOpenChange={(open) => { if (!open) setEditingLog(null); }}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit temperature check</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2"><Label>Date / time</Label><Input type="datetime-local" value={editRecordedAt} onChange={(event) => setEditRecordedAt(event.target.value)} /></div>
+            <div className="overflow-x-auto rounded border">
+              <Table><TableHeader><TableRow><TableHead>Freezer</TableHead><TableHead>Temperature</TableHead><TableHead className="w-28">N/A</TableHead><TableHead className="w-24">Remove</TableHead></TableRow></TableHeader>
+                <TableBody>{locations.map((location) => {
+                  const value = editReadings[location.id] ?? '';
+                  return <TableRow key={location.id}>
+                    <TableCell>{location.name}{!location.isActive && <Badge variant="secondary" className="ml-2">Archived</Badge>}</TableCell>
+                    <TableCell><Input type="number" inputMode="decimal" min="-200" max="200" step="0.1" disabled={value === 'N/A'} value={value === 'N/A' ? '' : value} onChange={(event) => setEditReadings((current) => ({ ...current, [location.id]: event.target.value }))} /></TableCell>
+                    <TableCell><Button size="sm" type="button" variant={value === 'N/A' ? 'default' : 'outline'} onClick={() => setEditReadings((current) => ({ ...current, [location.id]: value === 'N/A' ? '' : 'N/A' }))}>{value === 'N/A' ? 'N/A' : 'Mark N/A'}</Button></TableCell>
+                    <TableCell><Button size="sm" type="button" variant="ghost" disabled={!value} onClick={() => setEditReadings((current) => ({ ...current, [location.id]: '' }))}>Clear</Button></TableCell>
+                  </TableRow>;
+                })}</TableBody>
+              </Table>
+            </div>
+            <div className="space-y-2"><Label>Notes or corrective action {editHasNa ? '(required for N/A)' : '(optional)'}</Label><Textarea maxLength={2000} value={editNotes} onChange={(event) => setEditNotes(event.target.value)} /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditingLog(null)}>Cancel</Button><Button onClick={() => updateLog.mutate()} disabled={!canUpdateLog || updateLog.isPending}>{updateLog.isPending ? 'Saving...' : 'Save correction'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deletingLog !== null} onOpenChange={(open) => { if (!open) { setDeletingLog(null); setDeleteReason(''); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete temperature check?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This removes the check from normal history and today&apos;s completion status, but retains it as a voided audit record.</p>
+          <div className="space-y-2"><Label>Reason for deletion (required)</Label><Textarea value={deleteReason} maxLength={500} onChange={(event) => setDeleteReason(event.target.value)} placeholder="Explain why this record must be deleted." /></div>
+          <DialogFooter><Button variant="outline" onClick={() => setDeletingLog(null)}>Cancel</Button><Button variant="destructive" onClick={() => voidLog.mutate()} disabled={deleteReason.trim().length < 3 || voidLog.isPending}>{voidLog.isPending ? 'Deleting...' : 'Delete record'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

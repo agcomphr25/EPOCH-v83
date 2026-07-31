@@ -21,6 +21,11 @@ const naMigration = fs.readFileSync(
   path.resolve(process.cwd(), 'migrations', naMigrationName),
   'utf8'
 );
+const crudMigrationName = '0237_freezer_temperature_log_crud.sql';
+const crudMigration = fs.readFileSync(
+  path.resolve(process.cwd(), 'migrations', crudMigrationName),
+  'utf8'
+);
 
 const legacyRequiredColumns = [
   'freezer_1_temperature',
@@ -66,6 +71,14 @@ describe('freezer temperature migrations', () => {
     expect(naMigration).toContain(
       'freezer_temperature_readings_value_or_na_check'
     );
+  });
+
+  it('registers controlled CRUD audit columns as safe and critical', () => {
+    expect(safeMigrationFiles).toContain(crudMigrationName);
+    expect(criticalMigrationFiles.has(crudMigrationName)).toBe(true);
+    expect(crudMigration).toContain('ADD COLUMN IF NOT EXISTS "updated_at"');
+    expect(crudMigration).toContain('ADD COLUMN IF NOT EXISTS "voided_at"');
+    expect(crudMigration).toContain('freezer_temperature_logs_void_reason_required');
   });
 });
 

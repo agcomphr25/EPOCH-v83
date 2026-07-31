@@ -1322,8 +1322,16 @@ export function LineItemsStep({ receipt, onNext, onUpdate }: {
     <div className="space-y-3">
       <LineItemsBanner lines={lines} />
       {lines.length > 0 && (
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
+        <div className="space-y-2">
+          <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100">
+            <Pencil className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              <strong>Enter the quantity received for each line.</strong>{' '}
+              Click the quantity in the <strong>Qty Received</strong> column, type the amount that arrived, then select the checkmark to save.
+            </span>
+          </div>
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-xs">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
                 <th className="text-left p-2 font-medium">
@@ -1343,7 +1351,7 @@ export function LineItemsStep({ receipt, onNext, onUpdate }: {
                 </th>
                 <th className="text-right p-2 font-medium">
                   <button className="flex items-center justify-end w-full hover:text-blue-600 transition-colors" onClick={() => handleHeaderClick('received')}>
-                    Received<SortIcon col="received" />
+                    Qty Received<SortIcon col="received" />
                   </button>
                 </th>
                 <th className="text-center p-2 font-medium">
@@ -1388,14 +1396,17 @@ export function LineItemsStep({ receipt, onNext, onUpdate }: {
                           </Button>
                         </div>
                       ) : (
-                        <span
+                        <button
+                          type="button"
                           data-testid={`line-qty-display-${line.id}`}
-                          className={`cursor-pointer hover:underline ${isComplete ? 'opacity-60' : ''}`}
+                          className={`ml-auto inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 font-medium text-blue-700 transition-colors hover:border-blue-400 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/60 ${isComplete ? 'opacity-60' : ''}`}
                           onClick={() => { setEditingLineId(line.id); setEditQty(String(rcv)); }}
-                          title="Click to edit received qty"
+                          title="Enter quantity received"
+                          aria-label={`Enter quantity received for ${line.agPartNumber}. Current quantity: ${rcv} ${line.uom}`}
                         >
                           {rcv} {line.uom}
-                        </span>
+                          <Pencil className="h-3 w-3" aria-hidden="true" />
+                        </button>
                       )}
                     </td>
                     <td className="p-2 text-center">
@@ -1405,7 +1416,8 @@ export function LineItemsStep({ receipt, onNext, onUpdate }: {
                 );
               })}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
       )}
 

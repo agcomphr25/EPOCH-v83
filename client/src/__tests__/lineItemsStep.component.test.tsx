@@ -81,6 +81,17 @@ describe('LineItemsStep — updateReceivedQtyMutation', () => {
     vi.clearAllMocks();
   });
 
+  it('clearly identifies the received quantity as an editable field', () => {
+    const lineId = 41;
+    renderLineItemsStep(makeReceipt([{ id: lineId, orderedQty: '10', receivedQty: '0' }]));
+
+    expect(screen.getByText('Enter the quantity received for each line.')).toBeTruthy();
+    expect(screen.getByText('Qty Received')).toBeTruthy();
+    expect(screen.getByRole('button', {
+      name: 'Enter quantity received for PART-A. Current quantity: 0 EA',
+    })).toBeTruthy();
+  });
+
   it('happy path: clicking a qty and saving calls PATCH with correct body and calls onUpdate', async () => {
     const lineId = 42;
     const updatedReceipt = makeReceipt([{ id: lineId, orderedQty: '10', receivedQty: '8' }]);

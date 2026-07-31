@@ -236,6 +236,7 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
   const [signature, setSignature] = useState('');
   const [activeTab, setActiveTab] = useState(query.get('tab') === 'revisions' ? 'revisions' : 'summary');
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(query.get('createRevision') === '1');
+  const [editingRevisionId, setEditingRevisionId] = useState<string | null>(null);
   const [revisionReason, setRevisionReason] = useState<(typeof WAD_REVISION_REASONS)[number]>('PO quantity change');
   const [revisionNotes, setRevisionNotes] = useState('');
   const [revisionEffectiveDate, setRevisionEffectiveDate] = useState('');
@@ -325,6 +326,7 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
   const canCreateRevision = revisionReason && (!revisionNotesRequired || revisionNotes.trim().length > 0);
 
   const resetRevisionForm = () => {
+    setEditingRevisionId(null);
     setRevisionReason('PO quantity change');
     setRevisionNotes('');
     setRevisionEffectiveDate('');
@@ -340,10 +342,28 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
     });
   };
 
-  const createRevisionMutation = useMutation({
+  const editRevision = (revision: WadRevision) => {
+    setEditingRevisionId(revision.id);
+    setRevisionReason(revision.revisionReason as (typeof WAD_REVISION_REASONS)[number]);
+    setRevisionNotes(revision.reasonNotes ?? '');
+    setRevisionEffectiveDate(revision.effectiveDate?.slice(0, 10) ?? '');
+    setRevisionImpacts({
+      impactReleasedTravelers: revision.impactReleasedTravelers,
+      impactCompletedWork: revision.impactCompletedWork,
+      impactMaterialIssued: revision.impactMaterialIssued,
+      impactInspection: revision.impactInspection,
+      impactLaborBudget: revision.impactLaborBudget,
+      impactDeliveryDate: revision.impactDeliveryDate,
+      impactCustomerApproval: revision.impactCustomerApproval,
+      requiresProductionHold: revision.requiresProductionHold,
+    });
+    setRevisionDialogOpen(true);
+  };
+
+  const saveRevisionMutation = useMutation({
     mutationFn: () =>
-      apiRequest(`/api/wads/${wadId}/revisions`, {
-        method: 'POST',
+      apiRequest(editingRevisionId ? `/api/wad-revisions/${editingRevisionId}` : `/api/wads/${wadId}/revisions`, {
+        method: editingRevisionId ? 'PATCH' : 'POST',
         body: JSON.stringify({
           revisionReason,
           reasonNotes: revisionNotes.trim() || null,
@@ -356,10 +376,13 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
       setRevisionDialogOpen(false);
       setActiveTab('revisions');
       resetRevisionForm();
-      toast({ title: 'WAD revision created', description: 'Draft revision is ready for review.' });
+      toast({
+        title: editingRevisionId ? 'WAD revision saved' : 'WAD revision created',
+        description: editingRevisionId ? 'Draft revision changes were saved.' : 'Draft revision is ready for review.',
+      });
     },
     onError: (err: Error) => {
-      toast({ title: 'Could not create WAD revision', description: err.message, variant: 'destructive' });
+      toast({ title: 'Could not save WAD revision', description: err.message, variant: 'destructive' });
     },
   });
 
@@ -815,13 +838,23 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
                           })}
                         </div>
                         {latestRevision.status === 'draft' && (
-                          <Button
-                            onClick={() => submitRevisionMutation.mutate(latestRevision.id)}
-                            disabled={submitRevisionMutation.isPending}
-                          >
-                            {submitRevisionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Submit Revision For Approval
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant="outline"
+                              onClick={() => editRevision(latestRevision)}
+                              data-testid="button-edit-wad-revision"
+                            >
+                              <PenLine className="mr-2 h-4 w-4" />
+                              Edit Draft Revision
+                            </Button>
+                            <Button
+                              onClick={() => submitRevisionMutation.mutate(latestRevision.id)}
+                              disabled={submitRevisionMutation.isPending}
+                            >
+                              {submitRevisionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Submit Revision For Approval
+                            </Button>
+                          </div>
                         )}
                         {latestRevision.status === 'pending_approval' && (
                           <div className="grid gap-3 rounded-md border bg-white p-4 md:grid-cols-2">
@@ -897,12 +930,17 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
         </Card>
       </main>
 
-      <Dialog open={revisionDialogOpen} onOpenChange={setRevisionDialogOpen}>
+      <Dialog open={revisionDialogOpen} onOpenChange={(open) => {
+        setRevisionDialogOpen(open);
+        if (!open) resetRevisionForm();
+      }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create WAD Revision</DialogTitle>
+            <DialogTitle>{editingRevisionId ? 'Edit WAD Revision' : 'Create WAD Revision'}</DialogTitle>
             <DialogDescription>
-              Start a draft revision from the currently approved WAD authorization.
+              {editingRevisionId
+                ? 'Update this draft revision before submitting it for approval.'
+                : 'Start a draft revision from the currently approved WAD authorization.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-5">
@@ -963,12 +1001,12 @@ export default function WADSummaryPage({ params }: WADSummaryPageProps) {
               Cancel
             </Button>
             <Button
-              onClick={() => createRevisionMutation.mutate()}
-              disabled={!canCreateRevision || createRevisionMutation.isPending}
+              onClick={() => saveRevisionMutation.mutate()}
+              disabled={!canCreateRevision || saveRevisionMutation.isPending}
               data-testid="button-submit-wad-revision"
             >
-              {createRevisionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Draft Revision
+              {saveRevisionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editingRevisionId ? 'Save Draft Revision' : 'Create Draft Revision'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -40,6 +40,7 @@ import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import ShipmentSummaryModal from './ShipmentSummaryModal';
 import P2InvoicePreviewButton from './P2InvoicePreviewButton';
+import { isHistoricalP2InventoryUnit } from '@/lib/p2ShippingUnitStatus';
 
 type SerializedUnit = {
   id: string;
@@ -304,6 +305,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
         };
       }
       groups[key].units.push(unit);
+      if (isHistoricalP2InventoryUnit(unit)) continue;
       groups[key].totalUnits++;
       if (unit.finalizedAt && unit.sku && unit.drawingName) {
         groups[key].finalizedCount++;
@@ -672,10 +674,11 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   const summary = useMemo(() => {
     let totalUnits = 0, finalized = 0, readyToShip = 0, needsFinalization = 0;
     for (const g of poGroups) {
-      totalUnits += g.totalUnits;
+      const currentUnits = g.units.filter((u) => !isHistoricalP2InventoryUnit(u));
+      totalUnits += currentUnits.length;
       finalized += g.finalizedCount;
       readyToShip += g.readyToShip;
-      needsFinalization += g.units.filter(
+      needsFinalization += currentUnits.filter(
         (u) => u.completedAt && (!u.finalizedAt || !u.sku || !u.drawingName)
       ).length;
     }
@@ -940,9 +943,11 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
 
                     {/* ── Unit table grouped by status ── */}
                     {(() => {
-                      const inProductionUnits = group.units.filter((u) => !u.completedAt);
+                      const historicalInventoryUnits = group.units.filter(isHistoricalP2InventoryUnit);
+                      const currentUnits = group.units.filter((u) => !isHistoricalP2InventoryUnit(u));
+                      const inProductionUnits = currentUnits.filter((u) => !u.completedAt);
                       const needsFinalizationUnits = group.units.filter(
-                        (u) => u.completedAt && !(u.finalizedAt && u.sku && u.drawingName)
+                        (u) => !isHistoricalP2InventoryUnit(u) && u.completedAt && !(u.finalizedAt && u.sku && u.drawingName)
                       );
 
                       // Build status sections — only render non-empty ones
@@ -951,6 +956,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                       if (needsFinalizationUnits.length > 0) sections.push({ label: 'Needs Finalization', units: needsFinalizationUnits, key: 'needs-finalization' });
                       if (shipments.length === 0 && finalizedUnits.length > 0) sections.push({ label: 'Ready to Ship', units: finalizedUnits, key: 'ready-to-ship' });
                       if (shipments.length > 0 && finalizedUnits.length > 0) sections.push({ label: 'Shipment Created', units: finalizedUnits, key: 'shipment-created' });
+                      if (historicalInventoryUnits.length > 0) sections.push({ label: 'Historical Nonconforming Inventory', units: historicalInventoryUnits, key: 'historical-inventory' });
 
                       const renderTableRows = (units: SerializedUnit[]) =>
                         units.map((unit) => {

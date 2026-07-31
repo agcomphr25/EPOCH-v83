@@ -39,7 +39,7 @@ const department = (row: P2SerializedUnitLedgerRow) =>
     .replace(/\s+/g, ' ');
 
 const isScheduledDepartment = (value: string) =>
-  value === 'LAYUP' || value === 'PENDING LAYUP' || value === 'SCHEDULED';
+  value === 'LAYUP' || value === 'SCHEDULED';
 
 const isExcludedHistoricalRecord = (row: P2SerializedUnitLedgerRow) => {
   const status = normalized(row.status);
@@ -63,6 +63,7 @@ const classify = (
   if (['SCRAP', 'SCRAPPED', 'CANCELED', 'CANCELLED', 'VOID'].includes(status)) {
     return null;
   }
+  if (dept === 'PENDING LAYUP') return null;
   if (isScheduledDepartment(dept)) return 'scheduled';
   if (
     dept

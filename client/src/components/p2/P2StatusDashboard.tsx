@@ -370,7 +370,7 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                           {(po.missingItems ?? po.pendingItems) > 0 && (
                             <span className="flex items-center gap-1 text-amber-600">
                               <AlertCircle className="h-3 w-3" />
-                              {po.missingItems ?? po.pendingItems} missing
+                              {po.missingItems ?? po.pendingItems} available to schedule
                             </span>
                           )}
                         </div>

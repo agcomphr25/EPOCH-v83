@@ -1,0 +1,52 @@
+{
+    "status": "not_ready",
+    "timestamp": "2026-07-31T15:09:17.468Z",
+    "uptimeSeconds": 59,
+    "database": {
+        "ok": true,
+        "status": "healthy",
+        "checkedAt": "2026-07-31T15:09:17.468Z",
+        "latencyMs": 28,
+        "error": null,
+        "target": {
+            "source": "FORCE_DATABASE_URL",
+            "host": "ep-wispy-sun-adm062ft.c-2.us-east-1.aws.neon.tech",
+            "database": "neondb",
+            "user": "neondb_owner",
+            "redactedUrl": "postgresql://neondb_owner:***@ep-wispy-sun-adm062ft.c-2.us-east-1.aws.neon.tech/neondb"
+        }
+    },
+    "buildVersion": "2026-01-27-v2",
+    "startedAt": "2026-07-31T15:08:21.491Z",
+    "pid": 43,
+    "routesReady": false,
+    "routeRegistration": {
+        "status": "failed",
+        "startedAt": "2026-07-31T15:08:21.495Z",
+        "completedAt": "2026-07-31T15:09:07.219Z",
+        "error": {
+            "message": "duplicate key value violates unique constraint \"change_control_records_change_number_key\"",
+            "stack": "error: duplicate key value violates unique constraint \"change_control_records_change_number_key\"\n    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async runSafeBootMigrations (/home/runner/workspace/server/scripts/migrations/runSafeBootMigrations.ts:376:9)\n    at async <anonymous> (/home/runner/workspace/server/index.ts:444:7)"
+        }
+    },
+    "schemaMigrations": {
+        "status": "failed",
+        "startedAt": "2026-07-31T15:08:21.495Z",
+        "completedAt": "2026-07-31T15:09:07.203Z",
+        "error": {
+            "message": "duplicate key value violates unique constraint \"change_control_records_change_number_key\"",
+            "stack": "error: duplicate key value violates unique constraint \"change_control_records_change_number_key\"\n    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async runSafeBootMigrations (/home/runner/workspace/server/scripts/migrations/runSafeBootMigrations.ts:376:9)\n    at async <anonymous> (/home/runner/workspace/server/index.ts:444:7)"
+        }
+    },
+    "backgroundServices": {
+        "status": "pending"
+    },
+    "fatalErrors": [
+        {
+            "type": "routeRegistration",
+            "message": "duplicate key value violates unique constraint \"change_control_records_change_number_key\"",
+            "stack": "error: duplicate key value violates unique constraint \"change_control_records_change_number_key\"\n    at /home/runner/workspace/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async runSafeBootMigrations (/home/runner/workspace/server/scripts/migrations/runSafeBootMigrations.ts:376:9)\n    at async <anonymous> (/home/runner/workspace/server/index.ts:444:7)",
+            "at": "2026-07-31T15:09:07.219Z"
+        }
+    ]
+}

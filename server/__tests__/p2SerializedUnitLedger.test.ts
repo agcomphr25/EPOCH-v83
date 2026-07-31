@@ -93,4 +93,24 @@ describe('buildP2SerializedUnitLedger', () => {
     expect(ledger.shipped).toBe(0);
     expect(ledger.missing).toBe(1);
   });
+
+  it('treats Pending Layup placeholders as available capacity, not scheduled work', () => {
+    const ledger = buildP2SerializedUnitLedger(3, [
+      {
+        id: 'pending-1',
+        serialNumber: 'SERIAL-1',
+        status: 'ACTIVE',
+        currentDepartment: 'Pending Layup',
+      },
+      {
+        id: 'scheduled-1',
+        serialNumber: 'SERIAL-2',
+        status: 'ACTIVE',
+        currentDepartment: 'Layup',
+      },
+    ], []);
+
+    expect(ledger.scheduled).toBe(1);
+    expect(ledger.missing).toBe(2);
+  });
 });

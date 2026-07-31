@@ -21,6 +21,14 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { buildP2SerializedUnitLedger } from '../lib/p2SerializedUnitLedger';
+import {
+  P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL,
+  indexP2ShippedSerializedItemIds,
+} from '../lib/p2ShipmentEvidence';
+import {
+  countDistinctP2DemandUnits,
+  isHistoricalP2Unit,
+} from '../lib/p2SchedulingReconciliation';
 import { softAuth, authenticateToken, sessionAwareAuth, requireAdminOrOwner } from '../../middleware/auth';
 import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
 import employeesRoutes from './employees';
@@ -4513,6 +4521,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const familyRootId = familyRootByPoId.get(poId) ?? poId;
         return currentPoIdByFamilyRoot.get(familyRootId)?.poId ?? poId;
       };
+
       const familyPoIdsByDisplayPoId = new Map<number, number[]>();
       for (const poId of allPoIds) {
         const displayPoId = displayPoIdForPoId(poId);
@@ -4856,32 +4865,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const shippedSerializedItemRows = allPoIds.length > 0
         ? await optionalP2Rows(
             'shipped serialized-unit membership',
-            dbPool.query(
-              `SELECT
-                 lot.po_id AS "poId",
-                 shipped_item.id AS "serializedItemId"
-               FROM p2_lot_numbers lot
-               CROSS JOIN LATERAL jsonb_array_elements_text(
-                 COALESCE(lot.serialized_item_ids, '[]'::jsonb)
-               ) AS shipped_item(id)
-               WHERE lot.po_id = ANY($1)
-                 AND (
-                   COALESCE(UPPER(lot.status), '') = 'SHIPPED'
-                   OR lot.shipped_at IS NOT NULL
-                 )`,
-              [allPoIds]
-            )
+            dbPool.query(P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL, [allPoIds])
           )
         : [];
-      const shippedSerializedItemIdsByPoId = new Map<number, Set<string>>();
-      for (const row of shippedSerializedItemRows) {
-        const poId = Number(row.poId);
-        const serializedItemId = String(row.serializedItemId ?? '').trim().toLowerCase();
-        if (!Number.isFinite(poId) || !serializedItemId) continue;
-        const ids = shippedSerializedItemIdsByPoId.get(poId) ?? new Set<string>();
-        ids.add(serializedItemId);
-        shippedSerializedItemIdsByPoId.set(poId, ids);
-      }
+      const shippedSerializedItemIdsByPoId = indexP2ShippedSerializedItemIds(
+        shippedSerializedItemRows
+      );
       
       p2StatusStage = 'building P2 status response';
       const poStatuses = pos.map((po: any) => {
@@ -5005,6 +4994,18 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return currentPoIdByFamilyRoot.get(familyRootId)?.poId ?? poId;
       };
 
+      const shippedMembershipRows = poFamilyRows.length > 0
+        ? p2ControlRows(await dbPool.query(
+            P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL,
+            [poFamilyRows.map((po: any) => Number(po.id)).filter(Number.isFinite)]
+          ))
+        : [];
+      const shippedItemIdsByPoId = indexP2ShippedSerializedItemIds(shippedMembershipRows);
+      const shippedItemIds = new Set<string>();
+      for (const ids of shippedItemIdsByPoId.values()) {
+        for (const id of ids) shippedItemIds.add(id);
+      }
+
       const poItemResult = await dbPool.query(
         `SELECT
            poi.id AS "poItemId",
@@ -5043,7 +5044,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const poItemId = Number(poItem.poItemId);
         const orderedQuantity = Number(poItem.orderedQuantity) || 0;
         const existingItems = serializedByPoItemId.get(poItemId) ?? [];
-        const missingCount = Math.max(0, orderedQuantity - existingItems.length);
+        const nonHistoricalItems = existingItems.filter((item: any) => !isHistoricalP2Unit(item));
+        const missingCount = Math.max(0, orderedQuantity - nonHistoricalItems.length);
 
         if (missingCount === 0) continue;
 
@@ -5059,13 +5061,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         (Number(a.sequenceNumber) || 0) - (Number(b.sequenceNumber) || 0) ||
         String(a.id).localeCompare(String(b.id));
 
-      const consumesCurrentRevisionCapacity = (s: any) => {
-        if (s.status === 'COMPLETED' || s.status === 'SCRAPPED') return true;
-        if (s.status !== 'ACTIVE') return false;
-        const dept = String(s.currentDepartment || '').trim();
-        return dept !== '' && dept !== 'Pending Layup';
-      };
-
       const poItemsByDisplayPoId = new Map<number, any[]>();
       for (const poItem of poItems) {
         const displayPoId = displayPoIdForPoId(Number(poItem.poId));
@@ -5077,12 +5072,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       const consumedCapacityByPoItemId = new Map<number, number>();
       for (const [displayPoId, poLineItems] of poItemsByDisplayPoId.entries()) {
-        let consumedRevisionFamilyCount = (serializedItems as any[])
-          .filter((s: any) =>
-            displayPoIdForPoId(Number(s.poId)) === displayPoId &&
-            consumesCurrentRevisionCapacity(s)
-          )
-          .length;
+        const familyItems = (serializedItems as any[]).filter(
+          (s: any) => displayPoIdForPoId(Number(s.poId)) === displayPoId
+        );
+        let consumedRevisionFamilyCount = countDistinctP2DemandUnits(
+          familyItems,
+          shippedItemIds
+        );
 
         for (const poItem of poLineItems) {
           const poItemId = Number(poItem.poItemId);

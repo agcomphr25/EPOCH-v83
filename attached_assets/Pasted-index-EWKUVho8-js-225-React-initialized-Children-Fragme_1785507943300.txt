@@ -1,0 +1,188 @@
+index-EWKUVho8.js:225 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-EWKUVho8.js:225 React hooks: {useState: ƒ, useEffect: ƒ}
+index-EWKUVho8.js:225 [EPOCH SYNC] Sync engine starting
+index-EWKUVho8.js:225 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-EWKUVho8.js:222 App component is rendering...
+index-EWKUVho8.js:222 Environment: production
+index-EWKUVho8.js:222 Base URL: /
+index-EWKUVho8.js:189 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-EWKUVho8.js:189 [EPOCH] Install prompt captured and ready
+login:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-EWKUVho8.js:189  GET https://agcompepoch.xyz/api/auth/session 503 (Service Unavailable)
+Ai @ index-EWKUVho8.js:189
+(anonymous) @ index-EWKUVho8.js:189
+a @ vendor-query-BPlGaSCj.js:9
+M @ vendor-query-BPlGaSCj.js:9
+start @ vendor-query-BPlGaSCj.js:9
+fetch @ vendor-query-BPlGaSCj.js:9
+jt @ vendor-query-BPlGaSCj.js:9
+onSubscribe @ vendor-query-BPlGaSCj.js:9
+subscribe @ vendor-query-BPlGaSCj.js:9
+(anonymous) @ vendor-query-BPlGaSCj.js:9
+oa @ vendor-react-D1EEdWjZ.js:30
+ol @ vendor-react-D1EEdWjZ.js:32
+Xt @ vendor-react-D1EEdWjZ.js:32
+Ii @ vendor-react-D1EEdWjZ.js:32
+pt @ vendor-react-D1EEdWjZ.js:30
+id @ vendor-react-D1EEdWjZ.js:32
+yt @ vendor-react-D1EEdWjZ.js:32
+Ua @ vendor-react-D1EEdWjZ.js:32
+E @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+pl @ vendor-react-D1EEdWjZ.js:17
+e.unstable_scheduleCallback @ vendor-react-D1EEdWjZ.js:17
+Qa @ vendor-react-D1EEdWjZ.js:32
+de @ vendor-react-D1EEdWjZ.js:32
+Re @ vendor-react-D1EEdWjZ.js:32
+al @ vendor-react-D1EEdWjZ.js:32
+fl.render.zo.render @ vendor-react-D1EEdWjZ.js:32
+(anonymous) @ index-EWKUVho8.js:225
+index-EWKUVho8.js:194  GET https://agcompepoch.xyz/api/auth/session 503 (Service Unavailable)
+queryFn @ index-EWKUVho8.js:194
+a @ vendor-query-BPlGaSCj.js:9
+M @ vendor-query-BPlGaSCj.js:9
+start @ vendor-query-BPlGaSCj.js:9
+fetch @ vendor-query-BPlGaSCj.js:9
+jt @ vendor-query-BPlGaSCj.js:9
+onSubscribe @ vendor-query-BPlGaSCj.js:9
+subscribe @ vendor-query-BPlGaSCj.js:9
+(anonymous) @ vendor-query-BPlGaSCj.js:9
+oa @ vendor-react-D1EEdWjZ.js:30
+ol @ vendor-react-D1EEdWjZ.js:32
+Xt @ vendor-react-D1EEdWjZ.js:32
+Ii @ vendor-react-D1EEdWjZ.js:32
+pt @ vendor-react-D1EEdWjZ.js:30
+id @ vendor-react-D1EEdWjZ.js:32
+yt @ vendor-react-D1EEdWjZ.js:32
+Ua @ vendor-react-D1EEdWjZ.js:32
+E @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+pl @ vendor-react-D1EEdWjZ.js:17
+e.unstable_scheduleCallback @ vendor-react-D1EEdWjZ.js:17
+Qa @ vendor-react-D1EEdWjZ.js:32
+de @ vendor-react-D1EEdWjZ.js:32
+Re @ vendor-react-D1EEdWjZ.js:32
+al @ vendor-react-D1EEdWjZ.js:32
+fl.render.zo.render @ vendor-react-D1EEdWjZ.js:32
+(anonymous) @ index-EWKUVho8.js:225
+index-EWKUVho8.js:189  GET https://agcompepoch.xyz/api/boot-status 503 (Service Unavailable)
+Ip @ index-EWKUVho8.js:189
+Ai @ index-EWKUVho8.js:189
+await in Ai
+(anonymous) @ index-EWKUVho8.js:189
+a @ vendor-query-BPlGaSCj.js:9
+M @ vendor-query-BPlGaSCj.js:9
+start @ vendor-query-BPlGaSCj.js:9
+fetch @ vendor-query-BPlGaSCj.js:9
+jt @ vendor-query-BPlGaSCj.js:9
+onSubscribe @ vendor-query-BPlGaSCj.js:9
+subscribe @ vendor-query-BPlGaSCj.js:9
+(anonymous) @ vendor-query-BPlGaSCj.js:9
+oa @ vendor-react-D1EEdWjZ.js:30
+ol @ vendor-react-D1EEdWjZ.js:32
+Xt @ vendor-react-D1EEdWjZ.js:32
+Ii @ vendor-react-D1EEdWjZ.js:32
+pt @ vendor-react-D1EEdWjZ.js:30
+id @ vendor-react-D1EEdWjZ.js:32
+yt @ vendor-react-D1EEdWjZ.js:32
+Ua @ vendor-react-D1EEdWjZ.js:32
+E @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+pl @ vendor-react-D1EEdWjZ.js:17
+e.unstable_scheduleCallback @ vendor-react-D1EEdWjZ.js:17
+Qa @ vendor-react-D1EEdWjZ.js:32
+de @ vendor-react-D1EEdWjZ.js:32
+Re @ vendor-react-D1EEdWjZ.js:32
+al @ vendor-react-D1EEdWjZ.js:32
+fl.render.zo.render @ vendor-react-D1EEdWjZ.js:32
+(anonymous) @ index-EWKUVho8.js:225
+index-EWKUVho8.js:189  GET https://agcompepoch.xyz/api/boot-status 503 (Service Unavailable)
+Ip @ index-EWKUVho8.js:189
+(anonymous) @ index-EWKUVho8.js:194
+setTimeout
+(anonymous) @ index-EWKUVho8.js:194
+ol @ vendor-react-D1EEdWjZ.js:32
+Xt @ vendor-react-D1EEdWjZ.js:32
+Ii @ vendor-react-D1EEdWjZ.js:32
+pt @ vendor-react-D1EEdWjZ.js:30
+id @ vendor-react-D1EEdWjZ.js:32
+yt @ vendor-react-D1EEdWjZ.js:32
+Ua @ vendor-react-D1EEdWjZ.js:32
+E @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+un @ vendor-react-D1EEdWjZ.js:17
+postMessage
+on @ vendor-react-D1EEdWjZ.js:17
+pl @ vendor-react-D1EEdWjZ.js:17
+e.unstable_scheduleCallback @ vendor-react-D1EEdWjZ.js:17
+Qa @ vendor-react-D1EEdWjZ.js:32
+de @ vendor-react-D1EEdWjZ.js:32
+Re @ vendor-react-D1EEdWjZ.js:32
+al @ vendor-react-D1EEdWjZ.js:32
+fl.render.zo.render @ vendor-react-D1EEdWjZ.js:32
+(anonymous) @ index-EWKUVho8.js:225
+index-EWKUVho8.js:189  POST https://agcompepoch.xyz/api/auth/login 503 (Service Unavailable)
+Ai @ index-EWKUVho8.js:189
+T @ index-EWKUVho8.js:222
+Pf @ vendor-react-D1EEdWjZ.js:29
+zf @ vendor-react-D1EEdWjZ.js:29
+Tf @ vendor-react-D1EEdWjZ.js:29
+ui @ vendor-react-D1EEdWjZ.js:29
+Ws @ vendor-react-D1EEdWjZ.js:29
+(anonymous) @ vendor-react-D1EEdWjZ.js:29
+Eo @ vendor-react-D1EEdWjZ.js:32
+ms @ vendor-react-D1EEdWjZ.js:29
+Rl @ vendor-react-D1EEdWjZ.js:29
+Gu @ vendor-react-D1EEdWjZ.js:29
+Qf @ vendor-react-D1EEdWjZ.js:29
+index-EWKUVho8.js:189  GET https://agcompepoch.xyz/api/boot-status 503 (Service Unavailable)
+Ip @ index-EWKUVho8.js:189
+Ai @ index-EWKUVho8.js:189
+await in Ai
+T @ index-EWKUVho8.js:222
+Pf @ vendor-react-D1EEdWjZ.js:29
+zf @ vendor-react-D1EEdWjZ.js:29
+Tf @ vendor-react-D1EEdWjZ.js:29
+ui @ vendor-react-D1EEdWjZ.js:29
+Ws @ vendor-react-D1EEdWjZ.js:29
+(anonymous) @ vendor-react-D1EEdWjZ.js:29
+Eo @ vendor-react-D1EEdWjZ.js:32
+ms @ vendor-react-D1EEdWjZ.js:29
+Rl @ vendor-react-D1EEdWjZ.js:29
+Gu @ vendor-react-D1EEdWjZ.js:29
+Qf @ vendor-react-D1EEdWjZ.js:29
+index-EWKUVho8.js:225 Login error: Error: relation "spec_sheets" does not exist
+    at Ip (index-EWKUVho8.js:189:6805)
+    at async Ai (index-EWKUVho8.js:189:7202)
+    at async T (index-EWKUVho8.js:222:23940)
+console.error @ index-EWKUVho8.js:225
+T @ index-EWKUVho8.js:222
+await in T
+Pf @ vendor-react-D1EEdWjZ.js:29
+zf @ vendor-react-D1EEdWjZ.js:29
+Tf @ vendor-react-D1EEdWjZ.js:29
+ui @ vendor-react-D1EEdWjZ.js:29
+Ws @ vendor-react-D1EEdWjZ.js:29
+(anonymous) @ vendor-react-D1EEdWjZ.js:29
+Eo @ vendor-react-D1EEdWjZ.js:32
+ms @ vendor-react-D1EEdWjZ.js:29
+Rl @ vendor-react-D1EEdWjZ.js:29
+Gu @ vendor-react-D1EEdWjZ.js:29
+Qf @ vendor-react-D1EEdWjZ.js:29

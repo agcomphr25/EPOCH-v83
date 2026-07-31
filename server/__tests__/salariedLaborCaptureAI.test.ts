@@ -75,13 +75,10 @@ vi.mock("../src/services/timekeeping/laborCaptureAI.service", () => ({
 // ---------------------------------------------------------------------------
 // Mock OpenAI — use vi.fn() inline; access via vi.mocked() after import
 // ---------------------------------------------------------------------------
+const openAIMocks = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock("openai", () => ({
   default: vi.fn().mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: vi.fn(),
-      },
-    },
+    chat: { completions: { create: openAIMocks.create } },
   })),
 }));
 
@@ -179,11 +176,7 @@ function setupDB(
  * the service was first imported.
  */
 function getOpenAICreate(): ReturnType<typeof vi.fn> {
-  const OpenAIConstructor = vi.mocked(OpenAI);
-  const instance = OpenAIConstructor.mock.results[0]?.value as {
-    chat: { completions: { create: ReturnType<typeof vi.fn> } };
-  };
-  return instance.chat.completions.create;
+  return openAIMocks.create;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +232,7 @@ describe("buildSalariedSystemPrompt", () => {
 // ---------------------------------------------------------------------------
 describe("parseSalariedNarrative", () => {
   beforeEach(() => {
+    process.env.OPENAI_API_KEY = "test-key";
     getOpenAICreate().mockReset();
   });
 

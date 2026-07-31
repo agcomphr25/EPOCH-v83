@@ -31,7 +31,7 @@ import {
   type NextFunction,
   type RequestHandler,
 } from "express";
-import { authenticateToken, authenticatePortalToken } from "../../../middleware/auth";
+import { authenticateToken, authenticatePortalToken, requireRole } from "../../../middleware/auth";
 import { requirePermission } from "../../../middleware/requirePermission";
 import { getOrCreateSettings } from "../../services/timekeeping/settings.service";
 import * as svc from "../../services/timekeeping/salariedTimesheet.service";
@@ -46,8 +46,9 @@ import {
   salariedTimesheetAuditTable,
   laborEntryDraftsTable,
   employeesTable,
+  salariedHolidaysTable,
 } from "../../schema/timekeeping";
-import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, desc } from "drizzle-orm";
 
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
   return (req, res, next) => fn(req, res, next).catch((err) => {
@@ -59,6 +60,7 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
 const router: IRouter = Router();
 
 const WEEK_START_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ---------------------------------------------------------------------------
 // Feature-flag guard — returns 404 if salaried_timesheet_enabled = false.
@@ -214,6 +216,82 @@ router.get(
     }));
   }),
 );
+
+router.get(
+  "/salaried-timesheet/:id/review-detail",
+  authenticateToken,
+  requirePermission("timekeeping.salaried.view_review_queue"),
+  h(async (req, res): Promise<void> => {
+    if (!(await requireFeatureFlag(req, res))) return;
+    const id = Number(req.params.id);
+    if (!id) { res.status(400).json({ error: "Invalid timesheet ID" }); return; }
+    const ts = await loadTimesheet(id, res);
+    if (!ts) return;
+    const user = (req as any).user;
+    const isAdminOwner = user?.role === "ADMIN" || user?.role === "OWNER";
+    const [employee] = await db.select({ name: employees.name, department: employees.department, supervisorEmployeeId: employees.supervisorEmployeeId })
+      .from(employees).where(eq(employees.id, ts.employeeId)).limit(1);
+    const assignedSupervisor = ts.supervisorEmployeeId ?? employee?.supervisorEmployeeId ?? null;
+    if (!isAdminOwner && assignedSupervisor !== (user?.employeeId ?? null)) {
+      res.status(403).json({ error: "You are not authorized to review this salaried timesheet." }); return;
+    }
+    const view = await svc.getSalariedTimesheetView(ts.employeeId, ts.periodStart);
+    const audit = await db.select().from(salariedTimesheetAuditTable)
+      .where(eq(salariedTimesheetAuditTable.timesheetId, id))
+      .orderBy(desc(salariedTimesheetAuditTable.timestamp), desc(salariedTimesheetAuditTable.id));
+    const [tkEmployee] = await db.select({ id: employeesTable.id }).from(employeesTable)
+      .where(eq(employeesTable.epochEmployeeId, ts.employeeId)).limit(1);
+    const drafts = tkEmployee ? await db.select({
+      id: laborEntryDraftsTable.id,
+      entryDate: laborEntryDraftsTable.entryDate,
+      status: laborEntryDraftsTable.status,
+      totalHours: laborEntryDraftsTable.totalHours,
+      source: laborEntryDraftsTable.source,
+      validationErrors: laborEntryDraftsTable.validationErrors,
+    }).from(laborEntryDraftsTable).where(and(
+      eq(laborEntryDraftsTable.employeeId, tkEmployee.id),
+      gte(laborEntryDraftsTable.entryDate, ts.periodStart),
+      lte(laborEntryDraftsTable.entryDate, ts.periodEnd),
+    )).orderBy(laborEntryDraftsTable.entryDate) : [];
+    res.json({ ...view, employee: { id: ts.employeeId, name: employee?.name ?? `Employee #${ts.employeeId}`, department: employee?.department ?? null }, audit, drafts });
+  }),
+);
+
+const holidayBodySchema = z.object({
+  holidayDate: z.string().regex(DATE_RE, "holidayDate must be YYYY-MM-DD"),
+  name: z.string().trim().min(2).max(200),
+  hours: z.coerce.number().positive().max(24).default(8),
+  isActive: z.boolean().default(true),
+});
+
+router.get("/salaried-holidays", authenticateToken, requireRole("ADMIN", "OWNER"), h(async (_req, res) => {
+  res.json(await db.select().from(salariedHolidaysTable).orderBy(salariedHolidaysTable.holidayDate));
+}));
+
+router.post("/salaried-holidays", authenticateToken, requireRole("ADMIN", "OWNER"), h(async (req, res) => {
+  const parsed = holidayBodySchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid holiday", details: parsed.error.flatten() }); return; }
+  const user = (req as any).user;
+  const [row] = await db.insert(salariedHolidaysTable).values({ ...parsed.data, createdBy: user?.id ?? null, updatedBy: user?.id ?? null }).returning();
+  res.status(201).json(row);
+}));
+
+router.patch("/salaried-holidays/:id", authenticateToken, requireRole("ADMIN", "OWNER"), h(async (req, res) => {
+  const id = Number(req.params.id);
+  const parsed = holidayBodySchema.partial().safeParse(req.body);
+  if (!id || !parsed.success) { res.status(400).json({ error: "Invalid holiday update" }); return; }
+  const [row] = await db.update(salariedHolidaysTable).set({ ...parsed.data, updatedBy: (req as any).user?.id ?? null, updatedAt: new Date() }).where(eq(salariedHolidaysTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "Holiday not found" }); return; }
+  res.json(row);
+}));
+
+router.delete("/salaried-holidays/:id", authenticateToken, requireRole("ADMIN", "OWNER"), h(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid holiday ID" }); return; }
+  const [row] = await db.update(salariedHolidaysTable).set({ isActive: false, updatedBy: (req as any).user?.id ?? null, updatedAt: new Date() }).where(eq(salariedHolidaysTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "Holiday not found" }); return; }
+  res.json(row);
+}));
 
 // ---------------------------------------------------------------------------
 // GET /api/timekeeping/salaried-timesheet/:id/cost-audit

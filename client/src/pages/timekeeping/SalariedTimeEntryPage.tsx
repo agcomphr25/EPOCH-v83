@@ -45,8 +45,8 @@ import { Link } from "wouter";
 const STATUS_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   DRAFT: { label: "Draft", variant: "secondary" },
   NEEDS_REVIEW: { label: "Needs Review", variant: "destructive" },
-  CONFIRMED: { label: "Ready to Submit", variant: "default" },
-  POSTED: { label: "Submitted", variant: "outline" },
+  CONFIRMED: { label: "Ready to Add", variant: "default" },
+  POSTED: { label: "Added to Weekly Timesheet", variant: "outline" },
   VOIDED: { label: "Voided", variant: "destructive" },
 };
 
@@ -482,7 +482,7 @@ export default function SalariedTimeEntryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/timekeeping/labor-entry-drafts/portal/${portalId}`] });
       setValidationErrors(null);
-      toast({ title: "Submitted", description: "Your time entry has been confirmed and queued for posting." });
+      toast({ title: "Entry confirmed", description: "This daily entry is ready to be added to your weekly timesheet. Weekly certification is still required." });
       setLocation(`/employee-portal/${portalId}/drafts`);
     },
     onError: (err: any) => {
@@ -562,6 +562,13 @@ export default function SalariedTimeEntryPage() {
         <div className="flex-1" />
         <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
       </div>
+
+      <Alert>
+        <AlertDescription>
+          This daily entry helps populate your weekly timesheet. Confirming it does not submit time
+          for approval; review and certify the weekly timesheet when the week is complete.
+        </AlertDescription>
+      </Alert>
 
       <Card>
         <CardHeader>
@@ -1047,7 +1054,7 @@ export default function SalariedTimeEntryPage() {
                       ) : (
                         <Send className="h-4 w-4 mr-1" />
                       )}
-                      Submit
+                      Confirm Daily Entry
                     </Button>
                   </div>
                 </div>

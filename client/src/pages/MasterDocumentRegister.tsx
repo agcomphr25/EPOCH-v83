@@ -213,6 +213,7 @@ export default function MasterDocumentRegister() {
   const [pendingDocumentAccess, setPendingDocumentAccess] = useState<{
     doc: ControlledDocument;
     mode: 'view' | 'download';
+    apiPath?: string;
   } | null>(null);
   const [stepUpPassword, setStepUpPassword] = useState('');
   const [stepUpError, setStepUpError] = useState<string | null>(null);
@@ -366,6 +367,20 @@ export default function MasterDocumentRegister() {
   });
 
   const getStatusBadge = (doc: ControlledDocument) => {
+    const compatibilityStatus = (doc as any).compatibilityStatus as string | undefined;
+    if (compatibilityStatus === 'Released and Verified') {
+      return <Badge className="bg-emerald-700">Released and Verified</Badge>;
+    }
+    if (compatibilityStatus === 'Legacy Approved — Verification Required') {
+      return <Badge variant="outline" className="border-amber-500 text-amber-700">Legacy Approved — Verification Required</Badge>;
+    }
+    if (compatibilityStatus === 'File Reconciliation Required') {
+      return <Badge variant="destructive">File Reconciliation Required</Badge>;
+    }
+    if (compatibilityStatus === 'Awaiting Approval') {
+      return <Badge variant="outline" className="border-blue-500 text-blue-700">Awaiting Approval</Badge>;
+    }
+
     if (isExpired(doc)) {
       return (
         <Badge variant="destructive" className="flex items-center gap-1">
@@ -444,8 +459,15 @@ export default function MasterDocumentRegister() {
   const isPdfDocument = (doc: ControlledDocument) =>
     Boolean(doc.filePath?.toLowerCase().endsWith('.pdf'));
 
-  const isExternalDocument = (doc: ControlledDocument) =>
-    Boolean(doc.filePath && /^https?:\/\//i.test(doc.filePath));
+  const getFileTypeLabel = (filePath?: string | null) => {
+    if (!filePath) return 'No file';
+    if (/^https?:\/\//i.test(filePath)) return 'External reference';
+    const extension = filePath.split(/[?#]/)[0].split('.').pop()?.toUpperCase();
+    if (extension === 'PDF') return 'PDF';
+    if (['DOC', 'DOCX'].includes(extension || '')) return 'Word document';
+    if (['XLS', 'XLSX'].includes(extension || '')) return 'Excel workbook';
+    return extension ? `${extension} file` : 'Original file';
+  };
 
   const getAuthHeaders = (): Record<string, string> => {
     const storedToken = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
@@ -481,13 +503,13 @@ export default function MasterDocumentRegister() {
     URL.revokeObjectURL(blobUrl);
   };
 
-  const openDocumentFile = async (doc: ControlledDocument, mode: 'view' | 'download', targetWindowOverride?: Window | null) => {
-    if (isExternalDocument(doc)) {
-      window.open(doc.filePath!, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    const path = `/api/controlled-documents/${doc.id}/${mode}`;
+  const openDocumentFile = async (
+    doc: ControlledDocument,
+    mode: 'view' | 'download',
+    targetWindowOverride?: Window | null,
+    apiPathOverride?: string,
+  ) => {
+    const path = apiPathOverride || `/api/controlled-documents/${doc.id}/${mode}`;
     const targetWindow =
       targetWindowOverride ?? (mode === 'view'
         ? window.open('', '_blank')
@@ -514,7 +536,7 @@ export default function MasterDocumentRegister() {
 
         if (response.status === 401 && errorData?.requireStepUp) {
           targetWindow?.close();
-          setPendingDocumentAccess({ doc, mode });
+          setPendingDocumentAccess({ doc, mode, apiPath: apiPathOverride });
           setStepUpPassword('');
           setStepUpError(null);
           setIsStepUpOpen(true);
@@ -522,7 +544,7 @@ export default function MasterDocumentRegister() {
         }
 
         targetWindow?.close();
-        throw new Error(errorData?.error || `Failed to ${mode} document`);
+        throw new Error(errorData?.message || errorData?.error || `Failed to ${mode} document`);
       }
 
       const blob = await response.blob();
@@ -540,6 +562,27 @@ export default function MasterDocumentRegister() {
       });
     } finally {
       setOpeningDocumentId(null);
+    }
+  };
+
+  const downloadLegacyAuditReport = async () => {
+    try {
+      const response = await fetch('/api/controlled-documents/legacy-audit', {
+        credentials: 'include',
+        headers: getAuthHeaders(),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || payload.error || 'Failed to generate legacy audit report');
+      const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `controlled-document-legacy-audit-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error: any) {
+      toast({ title: 'Unable to generate audit report', description: error.message, variant: 'destructive' });
     }
   };
 
@@ -588,7 +631,7 @@ export default function MasterDocumentRegister() {
       setIsStepUpOpen(false);
       setPendingDocumentAccess(null);
       setStepUpPassword('');
-      await openDocumentFile(access.doc, access.mode, targetWindow);
+      await openDocumentFile(access.doc, access.mode, targetWindow, access.apiPath);
     } catch (error: any) {
       setStepUpError(error.message || 'Credential verification failed');
     } finally {
@@ -833,8 +876,14 @@ export default function MasterDocumentRegister() {
                 Controlled documents for P1 and P2 operations
               </p>
             </div>
-            {canCreateEdit && (
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              {can('documents.number_admin') && (
+                <Button variant="outline" onClick={downloadLegacyAuditReport}>
+                  Legacy Audit Report
+                </Button>
+              )}
+              {canCreateEdit && (
+                <>
                 <Button
                   variant="outline"
                   className="flex items-center gap-2"
@@ -856,8 +905,9 @@ export default function MasterDocumentRegister() {
                   <Plus className="h-4 w-4" />
                   New Document
                 </Button>
-              </div>
-            )}
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1137,13 +1187,14 @@ export default function MasterDocumentRegister() {
                           <div className="flex items-center gap-2">
                             {doc.filePath && (
                               <>
-                                {(isPdfDocument(doc) || isExternalDocument(doc)) && (
+                                <span className="text-xs text-muted-foreground">{getFileTypeLabel(doc.filePath)}</span>
+                                {isPdfDocument(doc) && (
                                   <Badge
                                     variant="outline"
                                     role="button"
                                     tabIndex={0}
                                     className="h-8 cursor-pointer gap-1 border-blue-300 px-2 text-blue-700 hover:bg-blue-50"
-                                    title={isExternalDocument(doc) ? 'Open linked document' : 'View PDF'}
+                                    title="View PDF"
                                     data-testid={`badge-view-pdf-${doc.id}`}
                                     onClick={() => openDocumentFile(doc, 'view')}
                                     onKeyDown={(event) => {
@@ -1154,14 +1205,14 @@ export default function MasterDocumentRegister() {
                                     }}
                                   >
                                     <Eye className="h-3.5 w-3.5" />
-                                    {openingDocumentId === doc.id ? 'Opening' : isExternalDocument(doc) ? 'Open' : 'View'}
+                                    {openingDocumentId === doc.id ? 'Opening' : 'View'}
                                   </Badge>
                                 )}
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   className="h-8 w-8 p-0"
-                                  title={isExternalDocument(doc) ? 'Open linked document' : 'Download'}
+                                  title="Download Original"
                                   disabled={openingDocumentId === doc.id}
                                   onClick={() => openDocumentFile(doc, 'download')}
                                   data-testid={`button-download-${doc.id}`}
@@ -1810,13 +1861,14 @@ export default function MasterDocumentRegister() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => window.open(
+                            onClick={() => openDocumentFile(
+                              selectedDocument,
+                              'download',
+                              null,
                               `/api/controlled-documents/${selectedDocument.id}/revisions/${version.id}/download`,
-                              '_blank',
-                              'noopener,noreferrer'
                             )}
                           >
-                            Exact Revision
+                            Download Exact Revision
                           </Button>
                         )}
                       </TableCell>

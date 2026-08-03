@@ -8,6 +8,7 @@ import {
   countDistinctP2DemandUnits,
   countDistinctP2SerializedUnits,
   isHistoricalP2Unit,
+  p2PendingUnitDeficit,
 } from '../src/lib/p2SchedulingReconciliation';
 
 describe('P2 shipment and scheduling reconciliation', () => {
@@ -59,6 +60,12 @@ describe('P2 shipment and scheduling reconciliation', () => {
 
     expect(generated).toBe(2);
     expect(3 - generated).toBe(1);
+  });
+
+  it('places a nine-unit family gap on the remaining PO line without duplicating pending rows', () => {
+    expect(p2PendingUnitDeficit(90, 81, 0)).toBe(9);
+    expect(p2PendingUnitDeficit(90, 81, 9)).toBe(0);
+    expect(p2PendingUnitDeficit(90, 81, 12)).toBe(0);
   });
 
   it('counts shipped, finalization, active, and scheduled units once by serial', () => {

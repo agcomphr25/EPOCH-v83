@@ -26,6 +26,15 @@ export function countDistinctP2SerializedUnits(
   return identities.size;
 }
 
+export function p2PendingUnitDeficit(
+  orderedQuantity: number,
+  consumedQuantity: number,
+  existingPendingQuantity: number,
+): number {
+  const earlyStageCapacity = Math.max(0, orderedQuantity - consumedQuantity);
+  return Math.max(0, earlyStageCapacity - existingPendingQuantity);
+}
+
 export function p2UnitConsumesOrderedDemand(
   row: P2SerializedUnitLedgerRow,
   shippedItemIds: ReadonlySet<string>,

@@ -27,7 +27,7 @@ import {
 } from '../lib/p2ShipmentEvidence';
 import {
   countDistinctP2DemandUnits,
-  countDistinctP2SerializedUnits,
+  p2PendingUnitDeficit,
 } from '../lib/p2SchedulingReconciliation';
 import { softAuth, authenticateToken, sessionAwareAuth, requireAdminOrOwner } from '../../middleware/auth';
 import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
@@ -5040,23 +5040,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         serializedByPoItemId.get(poItemId)!.push(item);
       }
 
-      for (const poItem of poItems) {
-        const poItemId = Number(poItem.poItemId);
-        const orderedQuantity = Number(poItem.orderedQuantity) || 0;
-        const existingItems = serializedByPoItemId.get(poItemId) ?? [];
-        const generatedUnitCount = countDistinctP2SerializedUnits(existingItems, shippedItemIds);
-        const missingCount = Math.max(0, orderedQuantity - generatedUnitCount);
-
-        if (missingCount === 0) continue;
-
-        // Historical POs can have ordered quantity that outruns generated
-        // serialized units, which makes pending work disappear from Schedule.
-        const createdItems = await storage.addP2SerializedItemsForPoItem(poItemId, missingCount);
-        if (createdItems.length > 0) {
-          serializedByPoItemId.set(poItemId, [...existingItems, ...createdItems]);
-        }
-      }
-
       const sortBySequence = (a: any, b: any) =>
         (Number(a.sequenceNumber) || 0) - (Number(b.sequenceNumber) || 0) ||
         String(a.id).localeCompare(String(b.id));
@@ -5091,22 +5074,36 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       const schedulingList: any[] = [];
       for (const poItem of poItems) {
-        const items = (serializedByPoItemId.get(Number(poItem.poItemId)) ?? [])
+        const poItemId = Number(poItem.poItemId);
+        let items = (serializedByPoItemId.get(poItemId) ?? [])
           .sort(sortBySequence);
-        if (items.length === 0) continue;
 
         const orderedQuantity = Number(poItem.orderedQuantity) || 0;
-        const completedCount = consumedCapacityByPoItemId.get(Number(poItem.poItemId)) ?? 0;
+        const completedCount = consumedCapacityByPoItemId.get(poItemId) ?? 0;
         const earlyStageCapacity = Math.max(
           0,
           orderedQuantity - completedCount
         );
 
-        const pendingItems = items.filter((s: any) => {
+        let pendingItems = items.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
           const dept = String(s.currentDepartment || '').trim();
           return dept === '' || dept === 'Pending Layup';
         });
+
+        const pendingDeficit = p2PendingUnitDeficit(
+          orderedQuantity,
+          completedCount,
+          pendingItems.length,
+        );
+        if (pendingDeficit > 0) {
+          const createdItems = await storage.addP2SerializedItemsForPoItem(poItemId, pendingDeficit);
+          if (createdItems.length > 0) {
+            items = [...items, ...createdItems].sort(sortBySequence);
+            pendingItems = [...pendingItems, ...createdItems].sort(sortBySequence);
+            serializedByPoItemId.set(poItemId, items);
+          }
+        }
 
         const pendingToShow = pendingItems.slice(0, earlyStageCapacity);
 

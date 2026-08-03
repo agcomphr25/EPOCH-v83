@@ -4,7 +4,7 @@ export const VALIDATION_STATUSES = [
   'DRAFT', 'PLANNING', 'READY_FOR_APPROVAL', 'PLAN_APPROVED', 'TESTING',
   'TESTING_BLOCKED', 'CORRECTIONS_REQUIRED', 'RETESTING',
   'READY_FOR_FINAL_REVIEW', 'APPROVED_FOR_INTENDED_USE',
-  'APPROVED_WITH_LIMITATIONS', 'REJECTED', 'SUPERSEDED', 'CANCELLED',
+  'APPROVED_WITH_LIMITATIONS', 'REJECTED', 'SUPERSEDED', 'CANCELLED', 'VOID_DUPLICATE',
 ] as const;
 
 export type ValidationStatus = typeof VALIDATION_STATUSES[number];
@@ -27,6 +27,7 @@ export const LEGAL_TRANSITIONS: Record<ValidationStatus, readonly ValidationStat
   REJECTED: ['PLANNING', 'CANCELLED'],
   SUPERSEDED: [],
   CANCELLED: [],
+  VOID_DUPLICATE: [],
 };
 
 export function canTransition(from: ValidationStatus, to: ValidationStatus) {

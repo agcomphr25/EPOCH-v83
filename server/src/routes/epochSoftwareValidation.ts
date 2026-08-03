@@ -1,4 +1,5 @@
 import { Router, type Request } from 'express';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { pool } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
@@ -27,7 +28,7 @@ const actor = (req: Request) => {
     name: String(u.displayName || u.name || u.username), role: String(u.role) };
 };
 const isLocked = (p: any) => Boolean(p.locked_at) ||
-  ['APPROVED_FOR_INTENDED_USE','APPROVED_WITH_LIMITATIONS','SUPERSEDED'].includes(p.status);
+  ['APPROVED_FOR_INTENDED_USE','APPROVED_WITH_LIMITATIONS','SUPERSEDED','VOID_DUPLICATE'].includes(p.status);
 const getPackage = async (id: string, q: Query = query) =>
   (await q('SELECT * FROM qms_epoch_validation_packages WHERE id=$1',[id]))[0];
 async function logEvent(req: Request, p: any, entityType: string, action: string,
@@ -75,8 +76,22 @@ router.get('/',requirePermission('EPOCH_VALIDATION_VIEW'),async(_req,res)=>{
 router.post('/',requirePermission('EPOCH_VALIDATION_CREATE'),async(req,res)=>{
   const parsed=createSchema.safeParse(req.body);
   if(!parsed.success)return res.status(400).json({error:'VALIDATION_ERROR',details:parsed.error.flatten()});
-  const v=parsed.data,a=actor(req);
-  const created=await tx(async q=>{
+  const key=z.string().uuid().safeParse(req.header('Idempotency-Key'));
+  if(!key.success)return res.status(400).json({error:'IDEMPOTENCY_KEY_REQUIRED',message:'A unique Idempotency-Key is required for package creation.'});
+  const v=parsed.data,a=actor(req),requestHash=crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
+  const result=await tx(async q=>{
+    const claimed=await q(`INSERT INTO qms_epoch_validation_create_requests
+      (operation,actor_user_id,idempotency_key,request_hash)
+      VALUES('CREATE_PACKAGE',$1,$2,$3) ON CONFLICT (operation,actor_user_id,idempotency_key) DO NOTHING RETURNING id`,
+      [a.id,key.data,requestHash]);
+    const request=(await q(`SELECT * FROM qms_epoch_validation_create_requests
+      WHERE operation='CREATE_PACKAGE' AND actor_user_id=$1 AND idempotency_key=$2 FOR UPDATE`,[a.id,key.data]))[0];
+    if(request.request_hash!==requestHash)return {conflict:true as const};
+    if(!claimed.length){
+      const existing=(await q(`SELECT p.* FROM qms_epoch_validation_packages p
+        JOIN qms_epoch_validation_create_requests r ON r.package_id=p.id WHERE r.id=$1`,[request.id]))[0];
+      if(existing)return {package:existing,replay:true,conflict:false as const};
+    }
     const seq=(await q(`SELECT nextval('qms_epoch_validation_package_number_seq') value`))[0].value;
     const number=`ESV-${new Date().getUTCFullYear()}-${String(seq).padStart(4,'0')}`;
     const p=(await q(`INSERT INTO qms_epoch_validation_packages
@@ -92,9 +107,29 @@ router.post('/',requirePermission('EPOCH_VALIDATION_CREATE'),async(req,res)=>{
        v.plannedStartDate,v.plannedCompletionDate,v.reasonForValidation,v.previousApprovedPackageId||null,
        v.auditReadinessAssessmentId||null,v.notes||null,a.id,a.name]))[0];
     await logEvent(req,p,'PACKAGE','PACKAGE_CREATED',{next:{packageNumber:number,productionVersion:v.productionVersion}},q);
-    return p;
+    await q(`UPDATE qms_epoch_validation_create_requests SET package_id=$1,completed_at=now() WHERE id=$2`,[p.id,request.id]);
+    return {package:p,replay:false,conflict:false as const};
   });
-  res.status(201).json(created);
+  if(result.conflict)return res.status(409).json({error:'IDEMPOTENCY_KEY_REUSE_CONFLICT',message:'This idempotency key was already used with a different package payload.'});
+  res.status(result.replay?200:201).json(result.package);
+});
+
+router.post('/:id/void-duplicate',requirePermission('EPOCH_VALIDATION_ADMIN'),async(req,res)=>{
+  const p=await getPackage(uuid.parse(req.params.id));
+  if(!p)return res.status(404).json({error:'VALIDATION_PACKAGE_NOT_FOUND'});
+  if(p.status!=='DRAFT')return res.status(409).json({error:'DUPLICATE_VOID_DRAFT_ONLY'});
+  const body=z.object({reason:z.string().trim().min(10).max(2000)}).parse(req.body),a=actor(req);
+  const updated=await tx(async q=>{
+    const locked=(await q(`SELECT * FROM qms_epoch_validation_packages WHERE id=$1 FOR UPDATE`,[p.id]))[0];
+    if(locked.status!=='DRAFT')return null;
+    const next=(await q(`UPDATE qms_epoch_validation_packages SET status='VOID_DUPLICATE',locked_at=now(),
+      row_version=row_version+1,revision=revision+1,updated_by_user_id=$2,updated_by_display_name=$3,updated_at=now()
+      WHERE id=$1 RETURNING *`,[p.id,a.id,a.name]))[0];
+    await logEvent(req,next,'PACKAGE','PACKAGE_VOIDED_DUPLICATE',{previous:p.status,next:'VOID_DUPLICATE',reason:body.reason},q);
+    return next;
+  });
+  if(!updated)return res.status(409).json({error:'DUPLICATE_VOID_DRAFT_ONLY'});
+  res.json(updated);
 });
 
 async function packageReadiness(p:any):Promise<{items:PackageReadinessItem[];executionReady:boolean;blockers:any[]}>{

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, CheckCircle2, FileCheck2, History, Lock, Plus, ShieldCheck } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
@@ -53,6 +53,7 @@ export default function EpochSoftwareValidationPage(){
   const [editOpen,setEditOpen]=useState(false);
   const [auditor,setAuditor]=useState(false);
   const [activeSection,setActiveSection]=useState('01');
+  const createSubmission=useRef<string|null>(null);
   const qc=useQueryClient(),{toast}=useToast();
   const list=useQuery<Package[]>({queryKey:['/api/qms/epoch-software-validation'],
     queryFn:async()=>(await apiRequest('/api/qms/epoch-software-validation')).json()});
@@ -61,12 +62,18 @@ export default function EpochSoftwareValidationPage(){
   const employees=useQuery<Employee[]>({queryKey:['/api/employees'],queryFn:async()=>(await apiRequest('/api/employees')).json()});
   const assessments=useQuery<Assessment[]>({queryKey:['/api/qms/as9100-audit-readiness'],
     queryFn:async()=>(await apiRequest('/api/qms/as9100-audit-readiness')).json()});
-  const create=useMutation({mutationFn:async(form:HTMLFormElement)=>{
-    const f=new FormData(form);const body=Object.fromEntries(f.entries());
-    return (await apiRequest('/api/qms/epoch-software-validation',{method:'POST',body})).json();
+  const create=useMutation({retry:false,mutationFn:async(input:{body:Record<string,FormDataEntryValue>;idempotencyKey:string})=>{
+    return (await apiRequest('/api/qms/epoch-software-validation',{method:'POST',body:input.body,
+      headers:{'Idempotency-Key':input.idempotencyKey}})).json();
   },onSuccess:(p:Package)=>{qc.invalidateQueries({queryKey:['/api/qms/epoch-software-validation']});
-    setCreateOpen(false);setSelected(p.id);toast({title:`${p.package_number} created`});},
-    onError:(e:Error)=>toast({title:'Package was not created',description:e.message,variant:'destructive'})});
+    createSubmission.current=null;setCreateOpen(false);setSelected(p.id);toast({title:`${p.package_number} created`});},
+    onError:(e:Error)=>{createSubmission.current=null;toast({title:'Package was not created',description:e.message,variant:'destructive'});}});
+  const submitCreate=(form:HTMLFormElement)=>{
+    if(createSubmission.current)return;
+    const idempotencyKey=crypto.randomUUID();
+    createSubmission.current=idempotencyKey;
+    create.mutate({body:Object.fromEntries(new FormData(form).entries()),idempotencyKey});
+  };
   const refresh=()=>qc.invalidateQueries({queryKey:['/api/qms/epoch-software-validation',selected]});
   const edit=useMutation({mutationFn:async(form:HTMLFormElement)=>{
     const f=new FormData(form),num=(name:string)=>{const value=f.get(name);return value&&value!=='NONE'?Number(value):null;};
@@ -183,7 +190,7 @@ export default function EpochSoftwareValidationPage(){
       <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4"/>New validation package</Button></DialogTrigger>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Create EPOCH Software Validation Package</DialogTitle>
         <DialogDescription>Create a controlled draft. Production evidence and authenticated confirmations are completed after creation.</DialogDescription></DialogHeader>
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={e=>{e.preventDefault();create.mutate(e.currentTarget)}}>
+        <form className="grid gap-4 md:grid-cols-2" onSubmit={e=>{e.preventDefault();submitCreate(e.currentTarget)}}>
           <Field name="title" label="Package title" required/><Field name="systemName" label="System name" defaultValue="EPOCH" required/>
           <Pick name="validationType" label="Validation type" values={['INITIAL_INTENDED_USE','MAJOR_RELEASE','CRITICAL_CHANGE','DATABASE_MIGRATION','SECURITY_ACCESS_CONTROL','BACKUP_RECOVERY','PERIODIC_REVIEW','PRE_AUDIT_REVALIDATION','CORRECTIVE_REVALIDATION']}/>
           <Field name="productionVersion" label="Production version being validated" required/>
@@ -196,7 +203,8 @@ export default function EpochSoftwareValidationPage(){
           <Field name="plannedStartDate" label="Planned start" type="date" required/><Field name="plannedCompletionDate" label="Planned completion" type="date" required/>
           <div className="md:col-span-2"><Label>Reason for validation</Label><Textarea name="reasonForValidation" required/></div>
           <div className="md:col-span-2"><Label>Notes</Label><Textarea name="notes"/></div>
-          <DialogFooter className="md:col-span-2"><Button type="submit" disabled={create.isPending}>Create controlled draft</Button></DialogFooter>
+          <DialogFooter className="md:col-span-2"><Button type="submit" disabled={create.isPending||Boolean(createSubmission.current)}>
+            {create.isPending||createSubmission.current?'Creating package\u2026':'Create controlled draft'}</Button></DialogFooter>
         </form></DialogContent></Dialog>
     </div>
     <Card><CardContent className="pt-6 text-sm text-muted-foreground">This workflow does not assert that AS9100 requires a commercial ERP or a named validation format. It preserves objective evidence for EPOCH's defined QMS intended use.</CardContent></Card>

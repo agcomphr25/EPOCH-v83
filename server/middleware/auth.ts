@@ -247,7 +247,7 @@ export function requireStepUp(maxAgeMs: number = 30 * 60 * 1000) {
 
       if (!sessionToken) {
         res.setHeader('WWW-Authenticate', 'StepUp');
-        return res.status(401).json({ error: 'Step-up authentication required', requireStepUp: true });
+        return res.status(401).json({ error: 'Step-up authentication required', code: 'STEP_UP_REQUIRED', requireStepUp: true });
       }
 
       const result = await pool.query(
@@ -258,7 +258,7 @@ export function requireStepUp(maxAgeMs: number = 30 * 60 * 1000) {
 
       if (!row || !row.last_credential_verified_at) {
         res.setHeader('WWW-Authenticate', 'StepUp');
-        return res.status(401).json({ error: 'Step-up authentication required', requireStepUp: true });
+        return res.status(401).json({ error: 'Step-up authentication required', code: 'STEP_UP_REQUIRED', requireStepUp: true });
       }
 
       const verifiedAt = new Date(row.last_credential_verified_at).getTime();
@@ -266,6 +266,7 @@ export function requireStepUp(maxAgeMs: number = 30 * 60 * 1000) {
         res.setHeader('WWW-Authenticate', 'StepUp');
         return res.status(401).json({
           error: 'Credential verification has expired. Please re-authenticate.',
+          code: 'STEP_UP_REQUIRED',
           requireStepUp: true,
         });
       }
@@ -274,7 +275,7 @@ export function requireStepUp(maxAgeMs: number = 30 * 60 * 1000) {
     } catch (err) {
       console.error('requireStepUp error:', err);
       res.setHeader('WWW-Authenticate', 'StepUp');
-      return res.status(401).json({ error: 'Step-up authentication required', requireStepUp: true });
+      return res.status(401).json({ error: 'Step-up authentication required', code: 'STEP_UP_REQUIRED', requireStepUp: true });
     }
   };
 }

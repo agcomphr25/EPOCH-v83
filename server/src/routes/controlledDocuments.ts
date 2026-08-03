@@ -1,10 +1,10 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { db } from '../../../server/db';
 import { pool } from '../../../server/db';
 import { requirePermission } from '../../../server/middleware/requirePermission';
-import { controlledDocumentNumberRegistry, controlledDocuments, documentVersionHistory, insertControlledDocumentSchema, insertDocumentVersionHistorySchema } from '../../../server/schema';
+import { controlledDocumentNumberRegistry, controlledDocumentRevisionApprovals, controlledDocuments, documentVersionHistory, insertControlledDocumentSchema, insertDocumentVersionHistorySchema } from '../../../server/schema';
 import { eq, desc, and, inArray, sql } from 'drizzle-orm';
 import fs from 'fs/promises';
 import { z } from 'zod';
@@ -166,8 +166,8 @@ const readControlledDocumentBytes = async (filePath: string) => {
   if (!resolvedPath) {
     throw new ControlledDocumentError(
       422,
-      'REVISION_FILE_LOCATION_UNSUPPORTED',
-      'Document file path is not a supported app-accessible location'
+      'FILE_NOT_ACCESSIBLE',
+      'The file reference is not supported by this EPOCH server'
     );
   }
   try {
@@ -176,8 +176,8 @@ const readControlledDocumentBytes = async (filePath: string) => {
     if (error?.code === 'ENOENT') {
       throw new ControlledDocumentError(
         404,
-        'REVISION_FILE_NOT_ACCESSIBLE',
-        'Document file is not accessible from this server'
+        'FILE_NOT_ACCESSIBLE',
+        'The referenced file is not accessible from this EPOCH server'
       );
     }
     throw error;
@@ -472,6 +472,72 @@ const resolveControlledDocumentFile = (filePath: string | null | undefined) => {
   return null;
 };
 
+const getControlledFileReferenceType = (filePath: string | null | undefined) => {
+  const value = String(filePath || '').trim();
+  if (!value) return 'NONE';
+  if (getExternalRedirectUrl(value)) return 'EXTERNAL_MUTABLE_URL';
+  if (value.startsWith('/objects/')) return 'OBJECT_STORAGE';
+  if (value.startsWith('/supabase-objects/')) return 'SUPABASE_OBJECT_STORAGE';
+  if (value.startsWith('/api/media/file/') || /uploads[\\/]media-library/i.test(value)) return 'CENTRAL_MEDIA_LIBRARY';
+  if (/^\/?assets\/documents\//i.test(value)) return 'ASSETS_DOCUMENTS';
+  if (/^file:\/\//i.test(value)) return 'FILE_URI';
+  if (isUncPath(value)) return 'UNC_PATH';
+  if (isWindowsAbsolutePath(value) || path.isAbsolute(value)) return 'LEGACY_LOCAL_PATH';
+  return 'UNSUPPORTED_REFERENCE';
+};
+
+const controlledDocumentRequiresStepUp = (doc: typeof controlledDocuments.$inferSelect) => {
+  const classification = String(doc.classification || 'internal').toLowerCase();
+  const accessRule = String(doc.accessRule || 'authenticated').toLowerCase();
+  return Boolean(
+    doc.mfaRequired
+    || ['restricted', 'classified', 'cui', 'itar'].includes(classification)
+    || accessRule === 'explicit_grant'
+    || accessRule === 'admin_only'
+    || doc.cuiCategory
+    || doc.itarCategory
+  );
+};
+
+const hasPolicyVaultGrant = async (documentId: string, username: string, role: string) => {
+  const result = await pool.query<{ id: number }>(
+    `SELECT id FROM vault_access_grants WHERE document_id = $1 AND (
+       (grantee_type = 'user' AND grantee_name = $2)
+       OR (grantee_type = 'role' AND grantee_name = $3)
+     ) LIMIT 1`,
+    [documentId, username, role],
+  );
+  return result.rows.length > 0;
+};
+
+const controlledDocumentAccessPolicy = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const actor = lifecycleActor(req);
+    const [doc] = await db.select().from(controlledDocuments)
+      .where(eq(controlledDocuments.id, req.params.id)).limit(1);
+    if (!doc) return res.status(404).json({ error: 'REVISION_RECORD_MISSING', message: 'Controlled document record was not found' });
+
+    const privileged = actor.role === 'ADMIN' || actor.role === 'OWNER';
+    const classification = String(doc.classification || 'internal').toLowerCase();
+    const accessRule = String(doc.accessRule || 'authenticated').toLowerCase();
+    const grantRequired = accessRule === 'explicit_grant'
+      || ['restricted', 'classified', 'cui', 'itar'].includes(classification)
+      || Boolean(doc.cuiCategory || doc.itarCategory);
+    const allowed = privileged || (accessRule !== 'admin_only'
+      && (!grantRequired || await hasPolicyVaultGrant(doc.id, actor.username, actor.role)));
+    if (!allowed) {
+      await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'denied', ipAddress: requestEvidence(req).ipAddress ?? 'unknown' });
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'The document access policy does not permit this request' });
+    }
+
+    (req as any).controlledDocument = doc;
+    if (!controlledDocumentRequiresStepUp(doc)) return next();
+    return requireStepUp()(req, res, next);
+  } catch (error) {
+    sendLifecycleError(res, error, 'Failed to evaluate controlled document access policy');
+  }
+};
+
 const formatControlledDocumentFooterDate = (value: Date | string | null | undefined) => {
   if (!value) return 'N/A';
   const date = value instanceof Date
@@ -596,7 +662,33 @@ router.use(async (_req, res, next) => {
 router.get('/', requireAuth, requirePermission('documents.view'), async (req: Request, res: Response) => {
   try {
     const docs = await db.select().from(controlledDocuments).orderBy(desc(controlledDocuments.createdAt));
-    res.json(docs);
+    const revisionIds = docs.map((doc) => doc.currentReleasedRevisionId).filter((id): id is string => Boolean(id));
+    const releasedRevisions = revisionIds.length
+      ? await db.select().from(documentVersionHistory).where(inArray(documentVersionHistory.id, revisionIds))
+      : [];
+    const releasedById = new Map(releasedRevisions.map((revision) => [revision.id, revision]));
+    res.json(docs.map((doc) => {
+      const released = doc.currentReleasedRevisionId ? releasedById.get(doc.currentReleasedRevisionId) : null;
+      const releasedVerified = released?.documentId === doc.id
+        && released.checksumStatus === 'VERIFIED'
+        && Boolean(released.filePath)
+        && !getExternalRedirectUrl(released.filePath)
+        && String(released.lifecycleStatus || released.status || '').toUpperCase() === 'RELEASED';
+      const legacyApproved = ['approved', 'active'].includes(String(doc.status || '').toLowerCase())
+        || String(doc.lifecycleStatus || '').toUpperCase() === 'RELEASED';
+      return {
+        ...doc,
+        compatibilityStatus: releasedVerified
+          ? 'Released and Verified'
+          : legacyApproved && doc.filePath ? 'Legacy Approved — Verification Required'
+          : legacyApproved ? 'File Reconciliation Required'
+          : String(doc.lifecycleStatus || '').toUpperCase() === 'IN_REVIEW' ? 'Awaiting Approval'
+          : doc.lifecycleStatus === 'SUPERSEDED' ? 'Superseded'
+          : doc.lifecycleStatus === 'OBSOLETE' ? 'Obsolete'
+          : doc.lifecycleStatus === 'VOID' ? 'Void'
+          : 'Draft',
+      };
+    }));
   } catch (error) {
     console.error('Error fetching controlled documents:', error);
     res.status(500).json({ error: 'Failed to fetch controlled documents' });
@@ -608,6 +700,133 @@ router.get('/number-conflicts', requireAuth, requirePermission('documents.number
     res.json({ conflicts: await getDocumentNumberConflicts() });
   } catch (error) {
     sendLifecycleError(res, error, 'Failed to load controlled document number conflicts');
+  }
+});
+
+router.get('/legacy-audit', requireAuth, requirePermission('documents.number_admin'), async (_req: Request, res: Response) => {
+  try {
+    const [documents, revisions, approvals] = await Promise.all([
+      db.select().from(controlledDocuments).orderBy(desc(controlledDocuments.createdAt)),
+      db.select().from(documentVersionHistory).orderBy(desc(documentVersionHistory.createdAt)),
+      db.select().from(controlledDocumentRevisionApprovals),
+    ]);
+    const revisionsByDocument = new Map<string, typeof revisions>();
+    const revisionById = new Map(revisions.map((revision) => [revision.id, revision]));
+    const normalizedCounts = new Map<string, number>();
+    for (const document of documents) {
+      const normalized = String(document.documentNumber || '').trim().toUpperCase();
+      normalizedCounts.set(normalized, (normalizedCounts.get(normalized) || 0) + 1);
+    }
+    for (const revision of revisions) {
+      const rows = revisionsByDocument.get(revision.documentId) || [];
+      rows.push(revision);
+      revisionsByDocument.set(revision.documentId, rows);
+    }
+
+    const report = await Promise.all(documents.map(async (document) => {
+      const documentRevisions = revisionsByDocument.get(document.id) || [];
+      const releasedRevision = document.currentReleasedRevisionId
+        ? revisionById.get(document.currentReleasedRevisionId)
+        : null;
+      const currentRevision = document.currentRevisionId
+        ? revisionById.get(document.currentRevisionId)
+        : documentRevisions[0] || null;
+      const workingRevision = document.workingDraftRevisionId
+        ? revisionById.get(document.workingDraftRevisionId)
+        : null;
+      const authoritativeReference = releasedRevision?.documentId === document.id
+        ? releasedRevision.filePath
+        : currentRevision?.documentId === document.id
+          ? currentRevision.filePath
+          : document.filePath;
+      const fileReferenceType = getControlledFileReferenceType(authoritativeReference);
+      let fileAccessibility: 'ACCESSIBLE' | 'INACCESSIBLE' | 'EXTERNAL_MUTABLE' | 'MISSING' = 'MISSING';
+      if (fileReferenceType === 'EXTERNAL_MUTABLE_URL') {
+        fileAccessibility = 'EXTERNAL_MUTABLE';
+      } else if (authoritativeReference) {
+        try {
+          if (authoritativeReference.startsWith('/objects/') || authoritativeReference.startsWith('/supabase-objects/')) {
+            await getFileStorageProviderForObjectPath(authoritativeReference).downloadBuffer(authoritativeReference);
+          } else {
+            const resolved = resolveControlledDocumentFile(authoritativeReference);
+            if (!resolved) throw new Error('unsupported reference');
+            await fs.access(resolved);
+          }
+          fileAccessibility = 'ACCESSIBLE';
+        } catch {
+          fileAccessibility = 'INACCESSIBLE';
+        }
+      }
+
+      const activeWorkingRevisions = documentRevisions.filter((revision) =>
+        ['DRAFT', 'IN_REVIEW', 'APPROVED'].includes(String(revision.lifecycleStatus || revision.status || '').toUpperCase()));
+      const approvalRows = approvals.filter((approval) => approval.controlledDocumentId === document.id);
+      const approvalEvidenceState = approvalRows.length > 0
+        && approvalRows.every((approval) => approval.actorUsernameSnapshot && approval.createdAt)
+        ? 'PRESENT'
+        : approvalRows.length > 0 ? 'INCOMPLETE' : 'MISSING';
+      const pointerState = {
+        released: !document.currentReleasedRevisionId ? 'MISSING' : releasedRevision?.documentId === document.id ? 'MATCH' : 'CROSS_DOCUMENT',
+        current: !document.currentRevisionId ? 'MISSING' : currentRevision?.documentId === document.id ? 'MATCH' : 'CROSS_DOCUMENT',
+        working: !document.workingDraftRevisionId ? 'NONE' : workingRevision?.documentId === document.id ? 'MATCH' : 'CROSS_DOCUMENT',
+      };
+      const lifecycle = String(document.lifecycleStatus || '').toUpperCase();
+      const legacyStatus = String(document.status || '').toLowerCase();
+      const releasedAndVerified = lifecycle === 'RELEASED'
+        && pointerState.released === 'MATCH'
+        && releasedRevision?.checksumStatus === 'VERIFIED'
+        && fileAccessibility === 'ACCESSIBLE';
+      const compatibilityStatus = releasedAndVerified
+        ? 'Released and Verified'
+        : ['approved', 'active'].includes(legacyStatus) || lifecycle === 'RELEASED'
+          ? fileAccessibility === 'ACCESSIBLE' ? 'Legacy Approved — Verification Required' : 'File Reconciliation Required'
+          : lifecycle === 'IN_REVIEW' || lifecycle === 'APPROVED' ? 'Awaiting Approval'
+          : lifecycle === 'SUPERSEDED' ? 'Superseded'
+          : lifecycle === 'OBSOLETE' ? 'Obsolete'
+          : lifecycle === 'VOID' ? 'Void'
+          : 'Draft';
+      const categories = [
+        pointerState.released === 'MATCH' && 'HAS_MATCHING_RELEASE_POINTER',
+        lifecycle === 'RELEASED' && pointerState.released === 'MISSING' && 'RELEASED_MISSING_POINTER',
+        ['approved', 'active'].includes(legacyStatus) && lifecycle !== 'RELEASED' && 'LEGACY_APPROVED_OR_ACTIVE',
+        Boolean(document.filePath) && documentRevisions.length === 0 && 'PARENT_FILE_WITHOUT_REVISION',
+        documentRevisions.some((revision) => !revision.fileChecksum) && 'REVISION_CHECKSUM_MISSING',
+        fileAccessibility === 'ACCESSIBLE' && 'FILE_ACCESSIBLE',
+        fileAccessibility === 'INACCESSIBLE' && 'FILE_INACCESSIBLE',
+        fileAccessibility === 'EXTERNAL_MUTABLE' && 'EXTERNAL_MUTABLE_URL',
+        (normalizedCounts.get(String(document.documentNumber || '').trim().toUpperCase()) || 0) > 1 && 'DUPLICATE_NORMALIZED_DOCUMENT_NUMBER',
+        Object.values(pointerState).includes('CROSS_DOCUMENT') && 'CROSS_DOCUMENT_POINTER',
+        activeWorkingRevisions.length > 1 && 'MULTIPLE_ACTIVE_WORKING_REVISIONS',
+        approvalEvidenceState !== 'PRESENT' && 'MISSING_APPROVAL_IDENTITY_OR_DATE',
+        Boolean(document.expirationDate && new Date(document.expirationDate) < new Date()) && 'EXPIRED_OR_REVIEW_DUE',
+        !authoritativeReference && 'NO_FILE_ATTACHED',
+      ].filter(Boolean);
+      return {
+        documentId: document.id,
+        documentNumber: document.documentNumber,
+        title: document.documentName,
+        legacyStatus: document.status,
+        lifecycleStatus: document.lifecycleStatus,
+        version: document.currentVersion,
+        pointerState,
+        fileReferenceType,
+        fileAccessibility,
+        checksumState: releasedRevision?.checksumStatus || currentRevision?.checksumStatus || 'MISSING',
+        approvalEvidenceState,
+        compatibilityStatus,
+        categories,
+        recommendedReconciliationAction: releasedAndVerified
+          ? 'No reconciliation required'
+          : fileAccessibility === 'EXTERNAL_MUTABLE' ? 'Upload an immutable EPOCH-managed copy and verify its checksum'
+          : fileAccessibility !== 'ACCESSIBLE' ? 'Locate or upload the authoritative file before lifecycle reconciliation'
+          : pointerState.released !== 'MATCH' ? 'Review lifecycle evidence and assign the released revision through an authorized reconciliation workflow'
+          : 'Verify checksum and approval evidence without rewriting history',
+      };
+    }));
+
+    res.json({ generatedAt: new Date().toISOString(), readOnly: true, total: report.length, report });
+  } catch (error) {
+    sendLifecycleError(res, error, 'Failed to generate legacy controlled-document audit');
   }
 });
 
@@ -666,11 +885,12 @@ router.get('/:id/revisions/:revisionId', requireAuth, requirePermission('documen
   }
 });
 
-router.get('/:id/revisions/:revisionId/download', requireAuth, requirePermission('documents.view'), requireStepUp(), async (req: Request, res: Response) => {
+router.get('/:id/revisions/:revisionId/download', requireAuth, requirePermission('documents.view'), controlledDocumentAccessPolicy, async (req: Request, res: Response) => {
   try {
     const state = await getControlledDocumentState(req.params.id);
     const revision = state.revisions.find((candidate) => candidate.id === req.params.revisionId);
-    if (!revision?.filePath) return res.status(404).json({ error: 'REVISION_FILE_NOT_FOUND' });
+    if (!revision) return res.status(404).json({ error: 'REVISION_RECORD_MISSING', message: 'The requested revision record does not exist for this document' });
+    if (!revision.filePath) return res.status(422).json({ error: 'FILE_REFERENCE_MISSING', message: 'This revision has no file reference' });
     const actor = await authorizeControlledDocumentAccess(req, state.document);
     try {
       await assertExactRevisionPermission(actor, revision);
@@ -679,7 +899,8 @@ router.get('/:id/revisions/:revisionId/download', requireAuth, requirePermission
       throw error;
     }
     if (getExternalRedirectUrl(revision.filePath)) {
-      throw new ControlledDocumentError(422, 'IMMUTABLE_REVISION_FILE_REQUIRED', 'External references are not authoritative controlled revision files; upload an immutable verified copy');
+      await writeAccessLog({ documentId: state.document.id, userId: actor.username, action: 'denied', ipAddress: requestEvidence(req).ipAddress ?? 'unknown' });
+      return res.status(422).json({ error: 'EXTERNAL_REFERENCE_REQUIRES_RECONCILIATION', message: 'This external reference must be reconciled to an EPOCH-managed file before controlled access is available' });
     }
     const buffer = await readControlledDocumentBytes(revision.filePath);
     await verifyStoredRevision(state.document.id, revision, revision.filePath, buffer, req);
@@ -917,7 +1138,7 @@ router.post('/:id/approve', requireAuth, requirePermission('documents.approve'),
 
 // View PDF document file inline - requires authentication + step-up re-auth (credentials verified within 30 min)
 // ACL enforcement: restricted/classified docs require an explicit vault access grant or admin/owner role
-const legacyViewHandler = async (req: Request, res: Response) => {
+router.get('/:id/view', requireAuth, requirePermission('documents.view'), controlledDocumentAccessPolicy, async (req: Request, res: Response) => {
   const actor = (req as any).user as { id: number; username: string; role: string };
   const ipAddress = (
     (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
@@ -957,27 +1178,28 @@ const legacyViewHandler = async (req: Request, res: Response) => {
     }
 
     const state = await getControlledDocumentState(doc.id);
-    const revision = state.currentRevision;
-    const authoritativeFilePath = revision?.filePath || doc.filePath;
+    const revision = doc.currentReleasedRevisionId
+      ? await getReleasedRevisionForControlledUse(req, doc, state.revisions)
+      : state.currentRevision;
+    const authoritativeFilePath = revision?.filePath
+      || (!doc.currentReleasedRevisionId ? doc.filePath : null);
 
     if (!authoritativeFilePath) {
-      return res.status(404).json({ error: 'No file attached to this document' });
+      return res.status(422).json({ error: 'FILE_REFERENCE_MISSING', message: 'No file reference is attached to this document' });
     }
 
     const externalRedirectUrl = getExternalRedirectUrl(authoritativeFilePath);
     if (externalRedirectUrl) {
-      await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
-      return res.redirect(externalRedirectUrl);
+      await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'denied', ipAddress });
+      return res.status(422).json({ error: 'EXTERNAL_REFERENCE_REQUIRES_RECONCILIATION', message: 'This external reference must be reconciled to an EPOCH-managed file before controlled access is available' });
     }
 
     if (authoritativeFilePath.startsWith('/objects/') || authoritativeFilePath.startsWith('/supabase-objects/')) {
       const buffer = await readControlledDocumentBytes(authoritativeFilePath);
       if (revision) await verifyStoredRevision(doc.id, revision, authoritativeFilePath, buffer, req);
-      const stampedPdf = await addControlledDocumentFooter(
-        buffer,
-        doc,
-        revision!,
-      );
+      const stampedPdf = revision
+        ? await addControlledDocumentFooter(buffer, doc, revision)
+        : buffer;
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `inline; filename="${doc.documentNumber}.pdf"`);
@@ -986,26 +1208,26 @@ const legacyViewHandler = async (req: Request, res: Response) => {
 
     const filePath = resolveControlledDocumentFile(authoritativeFilePath);
     if (!filePath) {
-      return res.status(422).json({ error: 'Document file path is not a supported app-accessible location' });
+      return res.status(422).json({ error: 'FILE_NOT_ACCESSIBLE', message: 'The file reference is not supported by this EPOCH server' });
     }
     
     // Check if file exists
     try {
       await fs.access(filePath);
     } catch {
-      return res.status(404).json({ error: 'Document file is not accessible from this server' });
+      return res.status(404).json({ error: 'FILE_NOT_ACCESSIBLE', message: 'The referenced file is not accessible from this EPOCH server' });
     }
 
     if (path.extname(filePath).toLowerCase() !== '.pdf') {
-      return res.status(415).json({ error: 'Only PDF documents can be viewed inline' });
+      return res.status(415).json({ error: 'UNSUPPORTED_PREVIEW_TYPE', message: 'This file type cannot be previewed; use Download Original' });
     }
-
-    // Write view access log entry before sending the file
-    await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
 
     const buffer = await fs.readFile(filePath);
     if (revision) await verifyStoredRevision(doc.id, revision, authoritativeFilePath, buffer, req);
-    const stampedPdf = await addControlledDocumentFooter(buffer, doc, revision!);
+    const stampedPdf = revision
+      ? await addControlledDocumentFooter(buffer, doc, revision)
+      : buffer;
+    await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
@@ -1017,7 +1239,7 @@ const legacyViewHandler = async (req: Request, res: Response) => {
 
 // Download document file - requires authentication + step-up re-auth (credentials verified within 30 min)
 // ACL enforcement: restricted/classified docs require an explicit vault access grant or admin/owner role
-const legacyDownloadHandler = async (req: Request, res: Response) => {
+router.get('/:id/download', requireAuth, requirePermission('documents.view'), controlledDocumentAccessPolicy, async (req: Request, res: Response) => {
   const actor = (req as any).user as { id: number; username: string; role: string };
   const ipAddress = (
     (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
@@ -1057,60 +1279,56 @@ const legacyDownloadHandler = async (req: Request, res: Response) => {
     }
 
     const state = await getControlledDocumentState(doc.id);
-    const revision = state.currentRevision;
-    const authoritativeFilePath = revision?.filePath || doc.filePath;
+    const revision = doc.currentReleasedRevisionId
+      ? await getReleasedRevisionForControlledUse(req, doc, state.revisions)
+      : state.currentRevision;
+    const authoritativeFilePath = revision?.filePath
+      || (!doc.currentReleasedRevisionId ? doc.filePath : null);
 
     if (!authoritativeFilePath) {
-      return res.status(404).json({ error: 'No file attached to this document' });
+      return res.status(422).json({ error: 'FILE_REFERENCE_MISSING', message: 'No file reference is attached to this document' });
     }
 
     const externalRedirectUrl = getExternalRedirectUrl(authoritativeFilePath);
     if (externalRedirectUrl) {
-      await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
-      return res.redirect(externalRedirectUrl);
+      await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'denied', ipAddress });
+      return res.status(422).json({ error: 'EXTERNAL_REFERENCE_REQUIRES_RECONCILIATION', message: 'This external reference must be reconciled to an EPOCH-managed file before controlled access is available' });
     }
 
     if (authoritativeFilePath.startsWith('/objects/') || authoritativeFilePath.startsWith('/supabase-objects/')) {
       const buffer = await readControlledDocumentBytes(authoritativeFilePath);
       if (revision) await verifyStoredRevision(doc.id, revision, authoritativeFilePath, buffer, req);
-      const stampedPdf = await addControlledDocumentFooter(
-        buffer,
-        doc,
-        revision!,
-      );
       await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${doc.documentNumber}.pdf"`);
-      return res.send(stampedPdf);
+      res.setHeader('Content-Type', revision?.mediaType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${revision?.fileName || doc.documentNumber}"`);
+      return res.send(buffer);
     }
 
     const filePath = resolveControlledDocumentFile(authoritativeFilePath);
     if (!filePath) {
-      return res.status(422).json({ error: 'Document file path is not a supported app-accessible location' });
+      return res.status(422).json({ error: 'FILE_NOT_ACCESSIBLE', message: 'The file reference is not supported by this EPOCH server' });
     }
 
     // Check if file exists
     try {
       await fs.access(filePath);
     } catch {
-      return res.status(404).json({ error: 'Document file is not accessible from this server' });
+      return res.status(404).json({ error: 'FILE_NOT_ACCESSIBLE', message: 'The referenced file is not accessible from this EPOCH server' });
     }
-
-    // Write download access log entry before sending the file
-    await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
 
     if (path.extname(filePath).toLowerCase() === '.pdf') {
       const buffer = await fs.readFile(filePath);
       if (revision) await verifyStoredRevision(doc.id, revision, authoritativeFilePath, buffer, req);
-      const stampedPdf = await addControlledDocumentFooter(buffer, doc, revision!);
+      await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
-      return res.send(stampedPdf);
+      return res.send(buffer);
     }
 
     // Send file with appropriate content type
     const buffer = await fs.readFile(filePath);
     if (revision) await verifyStoredRevision(doc.id, revision, authoritativeFilePath, buffer, req);
+    await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
     res.setHeader('Content-Type', revision?.mediaType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${revision?.fileName || path.basename(filePath)}"`);
     res.send(buffer);
@@ -1118,52 +1336,6 @@ const legacyDownloadHandler = async (req: Request, res: Response) => {
     sendLifecycleError(res, error, 'Failed to download document');
   }
 };
-
-// These former handlers are intentionally unregistered; controlled-use routes below
-// replace them with a single released-revision implementation.
-void legacyViewHandler;
-void legacyDownloadHandler;
-
-const serveReleasedControlledDocument = (mode: 'view' | 'download') => async (req: Request, res: Response) => {
-  try {
-    const state = await getControlledDocumentState(req.params.id);
-    const actor = await authorizeControlledDocumentAccess(req, state.document);
-    const revision = await getReleasedRevisionForControlledUse(req, state.document, state.revisions);
-    if (!revision.filePath) {
-      throw new ControlledDocumentError(422, 'RELEASED_REVISION_FILE_NOT_FOUND', 'The released revision has no immutable file attached');
-    }
-    if (getExternalRedirectUrl(revision.filePath)) {
-      throw new ControlledDocumentError(422, 'IMMUTABLE_REVISION_FILE_REQUIRED', 'External references cannot be used for controlled View or Download; upload an immutable verified copy');
-    }
-
-    const buffer = await readControlledDocumentBytes(revision.filePath);
-    await verifyStoredRevision(state.document.id, revision, revision.filePath, buffer, req);
-    const isPdf = revision.mediaType === 'application/pdf'
-      || revision.fileName?.toLowerCase().endsWith('.pdf')
-      || revision.filePath.toLowerCase().endsWith('.pdf');
-    if (mode === 'view' && !isPdf) {
-      throw new ControlledDocumentError(415, 'PDF_VIEW_REQUIRED', 'Only released PDF revisions can be viewed inline');
-    }
-    const responseBytes = isPdf
-      ? await addControlledDocumentFooter(buffer, state.document, revision)
-      : buffer;
-    await writeAccessLog({
-      documentId: state.document.id,
-      userId: actor.username,
-      action: mode,
-      ipAddress: requestEvidence(req).ipAddress ?? 'unknown',
-    });
-    const filename = revision.fileName || `${state.document.documentNumber}-${revision.versionNumber}${isPdf ? '.pdf' : ''}`;
-    res.setHeader('Content-Type', isPdf ? 'application/pdf' : revision.mediaType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `${mode === 'view' ? 'inline' : 'attachment'}; filename="${path.basename(filename)}"`);
-    res.send(responseBytes);
-  } catch (error) {
-    sendLifecycleError(res, error, `Failed to ${mode} released controlled document`);
-  }
-};
-
-router.get('/:id/view', requireAuth, requirePermission('documents.view'), requireStepUp(), serveReleasedControlledDocument('view'));
-router.get('/:id/download', requireAuth, requirePermission('documents.view'), requireStepUp(), serveReleasedControlledDocument('download'));
 
 // Delete document (admin/owner only)
 router.delete('/:id', requireAdminOrOwner, async (req: Request, res: Response) => {

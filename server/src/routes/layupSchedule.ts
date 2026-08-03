@@ -617,9 +617,6 @@ router.post('/generate', async (req: Request, res: Response) => {
       });
     });
     
-    // Round-robin day index for even distribution
-    let currentDayIndex = 0;
-    
     // Try to schedule each item
     for (const item of allItems) {
       let scheduled = false;
@@ -651,15 +648,12 @@ router.post('/generate', async (req: Request, res: Response) => {
         continue;
       }
       
-      // Try to find a slot using round-robin distribution across all selected days
-      // Start from current day index and try all days in rotation
-      const attemptOrder = [...workDays];
-      const rotatedDays = [
-        ...attemptOrder.slice(currentDayIndex),
-        ...attemptOrder.slice(0, currentDayIndex)
-      ];
+      // Fill the earliest selected day's compatible mold capacity before moving
+      // forward. Rotating after every unit under-used parallel molds and made a
+      // four-mold stock model appear capped below its actual daily capacity.
+      const daysInScheduleOrder = [...workDays].sort((a, b) => a - b);
       
-      for (const day of rotatedDays) {
+      for (const day of daysInScheduleOrder) {
         if (scheduled) break;
         
         for (const mold of compatibleMolds) {
@@ -698,8 +692,6 @@ router.post('/generate', async (req: Request, res: Response) => {
             scheduled = true;
             console.log(`✅ Scheduled ${item.orderId} → ${mold.moldId} on ${['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][day]}`);
             
-            // Move to next day in rotation for balanced distribution
-            currentDayIndex = (currentDayIndex + 1) % workDays.length;
             break;
           }
         }

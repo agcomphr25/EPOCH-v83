@@ -87,6 +87,15 @@ describe('layup schedule PO progression scope', () => {
     expect(route).toContain("errorCode: 'NO_AVAILABLE_CAPACITY'");
   });
 
+  it('fills parallel mold capacity on the earliest selected day before advancing', () => {
+    expect(route).toContain(
+      'const daysInScheduleOrder = [...workDays].sort((a, b) => a - b)'
+    );
+    expect(route).toContain('for (const day of daysInScheduleOrder)');
+    expect(route).not.toContain('currentDayIndex');
+    expect(route).not.toContain('rotatedDays');
+  });
+
   it('preserves snake-case and camel-case action length and inlet fields', () => {
     expect(route).toContain('features.action_length || features.actionLength');
     expect(route).toContain('features.action_inlet || features.actionInlet');

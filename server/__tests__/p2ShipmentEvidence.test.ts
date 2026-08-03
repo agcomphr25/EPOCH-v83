@@ -6,6 +6,7 @@ import {
 } from '../src/lib/p2ShipmentEvidence';
 import {
   countDistinctP2DemandUnits,
+  countDistinctP2SerializedUnits,
   isHistoricalP2Unit,
 } from '../src/lib/p2SchedulingReconciliation';
 
@@ -45,6 +46,19 @@ describe('P2 shipment and scheduling reconciliation', () => {
       { id: 'scrap-1', serialNumber: 'S-001', status: 'SCRAPPED' },
       { id: 'remake-1', serialNumber: 'S-002', status: 'COMPLETED' },
     ], new Set())).toBe(1);
+  });
+
+  it('creates pending capacity for duplicate historical serialized rows', () => {
+    const generated = countDistinctP2SerializedUnits([
+      { id: 'original', serialNumber: 'ROC2600001', status: 'ACTIVE', currentDepartment: 'Layup' },
+      { id: 'duplicate', serialNumber: 'ROC2600001', status: 'ACTIVE', currentDepartment: 'Layup' },
+      { id: 'active', serialNumber: 'ROC2600002', status: 'ACTIVE' },
+      { id: 'scrap', serialNumber: 'ROC2600003', status: 'SCRAPPED' },
+      { id: 'historical', serialNumber: 'ROC2600004', status: 'COMPLETED', currentDepartment: 'Inventory' },
+    ], new Set());
+
+    expect(generated).toBe(2);
+    expect(3 - generated).toBe(1);
   });
 
   it('counts shipped, finalization, active, and scheduled units once by serial', () => {

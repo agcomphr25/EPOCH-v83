@@ -71,7 +71,9 @@ describe('Master Document Register lifecycle hardening', () => {
   it('serves and verifies authoritative revision bytes before approval', () => {
     const route = read('server/src/routes/controlledDocuments.ts');
     const service = read('server/src/services/controlledDocumentLifecycleService.ts');
-    expect(route).toContain('const authoritativeFilePath = revision?.filePath || doc.filePath');
+    expect(route).toContain('getReleasedRevisionForControlledUse');
+    expect(route).toContain('document.currentReleasedRevisionId');
+    expect(route).not.toMatch(/if \(action === 'approve' \|\| action === 'release'\)[\s\S]{0,700}revision\.filePath \|\| state\.document\.filePath/);
     expect(route).toContain('await verifyStoredRevision(state.document.id, revision, filePath, buffer, req)');
     expect(route).toContain("if (action === 'approve')");
     expect(service).toContain('CONTROLLED_DOCUMENT_FILE_CHECKSUM_VERIFIED');

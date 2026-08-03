@@ -8,7 +8,7 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 describe('ROM Builder hardening', () => {
   const route = read('server/src/routes/estimating.ts');
   const page = read('client/src/pages/RFQBuilderPage.tsx');
-  const migration = read('migrations/0236_rom_builder_approval_authority.sql');
+  const migration = read('migrations/0240_rom_builder_approval_authority.sql');
 
   it('binds controlled approvals to capability-authorized authenticated actors', () => {
     expect(route).toContain('requireEstimatingApprovalAuthority');

@@ -299,8 +299,8 @@ export const safeMigrationFiles = [
   '0234_epoch_validation_readiness_controls.sql',
   '0129a_capa_records_base_table.sql',
   '0235_quality_action_change_control.sql',
-  '0236_rom_builder_approval_authority.sql',
   '0236_salaried_holiday_calendar.sql',
+  '0240_rom_builder_approval_authority.sql',
   '0237_freezer_temperature_log_crud.sql',
   '0238_reverse_0167_fulfilled_orders.sql',
   '0239_correct_0238_non_unique_id_collateral.sql',
@@ -360,7 +360,7 @@ export const criticalMigrationFiles = new Set([
   '0234_epoch_validation_readiness_controls.sql',
   '0129a_capa_records_base_table.sql',
   '0235_quality_action_change_control.sql',
-  '0236_rom_builder_approval_authority.sql',
+  '0240_rom_builder_approval_authority.sql',
 ]);
 
 export async function runSafeBootMigrations() {

@@ -27,7 +27,7 @@ import {
 } from '../lib/p2ShipmentEvidence';
 import {
   countDistinctP2DemandUnits,
-  isHistoricalP2Unit,
+  countDistinctP2SerializedUnits,
 } from '../lib/p2SchedulingReconciliation';
 import { softAuth, authenticateToken, sessionAwareAuth, requireAdminOrOwner } from '../../middleware/auth';
 import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
@@ -5044,8 +5044,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const poItemId = Number(poItem.poItemId);
         const orderedQuantity = Number(poItem.orderedQuantity) || 0;
         const existingItems = serializedByPoItemId.get(poItemId) ?? [];
-        const nonHistoricalItems = existingItems.filter((item: any) => !isHistoricalP2Unit(item));
-        const missingCount = Math.max(0, orderedQuantity - nonHistoricalItems.length);
+        const generatedUnitCount = countDistinctP2SerializedUnits(existingItems, shippedItemIds);
+        const missingCount = Math.max(0, orderedQuantity - generatedUnitCount);
 
         if (missingCount === 0) continue;
 

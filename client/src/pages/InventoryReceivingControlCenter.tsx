@@ -733,6 +733,7 @@ function LeftPanel({
                       <div className="text-gray-500 mt-0.5 truncate">
                         {receipt.vendorName ?? 'Manual receipt'} {receipt.vendorPoNumber ? `· PO ${receipt.vendorPoNumber}` : ''}
                       </div>
+                      <div className="text-blue-600 mt-1">Open documents</div>
                     </button>
                     <Button
                       size="sm"
@@ -958,7 +959,7 @@ function CenterPanel({
               <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto" />
               <div>
                 <div className="text-sm font-semibold">Receipt Complete</div>
-                <div className="text-xs text-gray-500 mt-1">Reopen this receipt before correcting quantities, traceability, documents, or putaway details.</div>
+                <div className="text-xs text-gray-500 mt-1">Use the Docs tab to attach a CoC or other receiving record. Reopen only when receiving data itself needs correction.</div>
               </div>
               <Button size="sm" onClick={() => reopenActiveReceiptMutation.mutate()} disabled={reopenActiveReceiptMutation.isPending}>
                 {reopenActiveReceiptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
@@ -3435,11 +3436,15 @@ function DocumentsTab({ receipt, onUpdate }: { receipt: Receipt; onUpdate: (r: R
   const units = receipt.units ?? [];
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [docType, setDocType] = useState('other');
+  const [docType, setDocType] = useState(receipt.status === 'complete' ? 'CoC' : 'other');
   const [docNotes, setDocNotes] = useState('');
   const RECEIPT_LEVEL = '__receipt_level__';
   const [assignToUnit, setAssignToUnit] = useState(RECEIPT_LEVEL);
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    setDocType(receipt.status === 'complete' ? 'CoC' : 'other');
+  }, [receipt.id, receipt.status]);
 
   const handleUpload = async (file: File) => {
     setUploading(true);
@@ -3824,6 +3829,16 @@ export default function InventoryReceivingControlCenter() {
 
   const handleUpdate = (r: Receipt) => setActiveReceipt(r);
 
+  const handleSelectReceipt = async (receipt: Receipt) => {
+    try {
+      const fullReceipt = await apiRequest(`/api/receipts/${receipt.id}`) as Receipt;
+      setActiveReceipt(fullReceipt);
+      setMobileTab('sidebar');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to open receipt documents');
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-120px)] flex flex-col">
       {/* Header */}
@@ -3881,7 +3896,7 @@ export default function InventoryReceivingControlCenter() {
         {/* Desktop grid */}
         <div className="hidden md:grid h-full" style={{ gridTemplateColumns: '280px 1fr 320px' }}>
           <div className="border-r overflow-hidden">
-            <LeftPanel onStartReceipt={handleStartReceipt} onSelectReceipt={handleUpdate} activeReceiptId={activeReceipt?.id ?? null} />
+            <LeftPanel onStartReceipt={handleStartReceipt} onSelectReceipt={handleSelectReceipt} activeReceiptId={activeReceipt?.id ?? null} />
           </div>
           <div className="overflow-hidden border-r">
             {showSupervisorQueue ? (
@@ -3904,7 +3919,7 @@ export default function InventoryReceivingControlCenter() {
         {/* Mobile single-panel */}
         <div className="md:hidden h-full overflow-hidden">
           {mobileTab === 'pos' && (
-            <LeftPanel onStartReceipt={handleStartReceipt} onSelectReceipt={handleUpdate} activeReceiptId={activeReceipt?.id ?? null} />
+            <LeftPanel onStartReceipt={handleStartReceipt} onSelectReceipt={handleSelectReceipt} activeReceiptId={activeReceipt?.id ?? null} />
           )}
           {mobileTab === 'workflow' && (
             showSupervisorQueue ? (

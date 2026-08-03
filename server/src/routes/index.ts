@@ -33,6 +33,7 @@ import {
   countDistinctP2PendingUnits,
   isP2PhysicalProjectWorkOrder,
   p2PhysicalSerializedIdentity,
+  takeP2PriorRevisionPendingForLine,
 } from '../lib/p2ControlCenterReconciliation';
 import { softAuth, authenticateToken, sessionAwareAuth, requireAdminOrOwner } from '../../middleware/auth';
 import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
@@ -5039,9 +5040,32 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       );
 
       const serializedByPoItemId = new Map<number, any[]>();
+      const priorRevisionPendingByPoAndPart = new Map<string, any[]>();
       for (const item of serializedItems as any[]) {
         const poItemId = Number(item.poItemId);
-        if (!poItemById.has(poItemId)) continue;
+        if (!poItemById.has(poItemId)) {
+          const status = String(item.status ?? '').trim().toUpperCase();
+          const department = String(
+            item.currentDepartment ?? item.current_department ?? ''
+          ).trim().toUpperCase();
+          const sourcePoId = Number(item.poId ?? item.po_id);
+          const partKey = normalizeP2ControlPartKey(
+            item.partNumber ?? item.part_number
+          );
+          if (
+            status === 'ACTIVE'
+            && (department === '' || department === 'PENDING LAYUP')
+            && Number.isFinite(sourcePoId)
+            && partKey
+          ) {
+            const poolKey = `${displayPoIdForPoId(sourcePoId)}:${partKey}`;
+            if (!priorRevisionPendingByPoAndPart.has(poolKey)) {
+              priorRevisionPendingByPoAndPart.set(poolKey, []);
+            }
+            priorRevisionPendingByPoAndPart.get(poolKey)!.push(item);
+          }
+          continue;
+        }
         if (!serializedByPoItemId.has(poItemId)) {
           serializedByPoItemId.set(poItemId, []);
         }
@@ -5098,6 +5122,21 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           const dept = String(s.currentDepartment || '').trim();
           return dept === '' || dept === 'Pending Layup';
         });
+
+        const priorRevisionPoolKey = `${displayPoIdForPoId(Number(poItem.poId))}:${normalizeP2ControlPartKey(poItem.partNumber)}`;
+        const priorRevisionPending = (
+          priorRevisionPendingByPoAndPart.get(priorRevisionPoolKey) ?? []
+        ).sort(sortBySequence);
+        const pooledPending = takeP2PriorRevisionPendingForLine(
+          pendingItems,
+          priorRevisionPending,
+          earlyStageCapacity,
+        );
+        pendingItems = pooledPending.pendingItems.sort(sortBySequence);
+        priorRevisionPendingByPoAndPart.set(
+          priorRevisionPoolKey,
+          pooledPending.remainingPriorRevisionPending,
+        );
 
         const pendingDeficit = p2PendingUnitDeficit(
           orderedQuantity,

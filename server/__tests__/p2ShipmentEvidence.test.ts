@@ -14,6 +14,7 @@ import {
   countDistinctP2PendingUnits,
   isP2PhysicalProjectWorkOrder,
   p2PhysicalSerializedIdentity,
+  takeP2PriorRevisionPendingForLine,
 } from '../src/lib/p2ControlCenterReconciliation';
 
 describe('P2 shipment and scheduling reconciliation', () => {
@@ -80,6 +81,31 @@ describe('P2 shipment and scheduling reconciliation', () => {
       { id: 'pending-2', serialNumber: 'ROC-2', status: 'ACTIVE', currentDepartment: '' },
       { id: 'active', serialNumber: 'ROC-3', status: 'ACTIVE', currentDepartment: 'Oven/Cure' },
     ])).toBe(2);
+  });
+
+  it('exposes prior-revision pending serials on the current line without exceeding capacity', () => {
+    const priorRevisionPending = ['old-1', 'old-2', 'old-3', 'old-4'];
+    const exhaustedLine = takeP2PriorRevisionPendingForLine(
+      [],
+      priorRevisionPending,
+      0,
+    );
+    expect(exhaustedLine.pendingItems).toEqual([]);
+    expect(exhaustedLine.remainingPriorRevisionPending).toEqual(priorRevisionPending);
+
+    const currentLine = takeP2PriorRevisionPendingForLine(
+      ['current-1'],
+      exhaustedLine.remainingPriorRevisionPending,
+      5,
+    );
+    expect(currentLine.pendingItems).toEqual([
+      'current-1',
+      'old-1',
+      'old-2',
+      'old-3',
+      'old-4',
+    ]);
+    expect(currentLine.remainingPriorRevisionPending).toEqual([]);
   });
 
   it('keeps WAD context out of the physical serialized production queue', () => {

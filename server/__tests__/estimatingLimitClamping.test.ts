@@ -32,8 +32,6 @@ vi.mock('../middleware/auth', () => ({
   requireRole: vi.fn(() => (_req: Request, _res: Response, next: NextFunction) => next()),
 }));
 
-vi.mock('../schema', () => ({}));
-
 import { pool } from '../db';
 
 describe('GET /api/estimating/rfqs – limit clamping', () => {

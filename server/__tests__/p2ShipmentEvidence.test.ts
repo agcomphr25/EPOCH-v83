@@ -13,6 +13,7 @@ import {
 import {
   countDistinctP2PendingUnits,
   isP2PhysicalProjectWorkOrder,
+  p2PhysicalSerializedIdentity,
 } from '../src/lib/p2ControlCenterReconciliation';
 
 describe('P2 shipment and scheduling reconciliation', () => {
@@ -85,6 +86,13 @@ describe('P2 shipment and scheduling reconciliation', () => {
     expect(isP2PhysicalProjectWorkOrder({ workOrderNumber: 'WAD-PRJ002-702823' })).toBe(false);
     expect(isP2PhysicalProjectWorkOrder({ workOrderNumber: 'WO-100', wadStatus: 'READY' })).toBe(false);
     expect(isP2PhysicalProjectWorkOrder({ workOrderNumber: 'WO-100' })).toBe(true);
+  });
+
+  it('deduplicates visible production rows by physical serial identity', () => {
+    expect(p2PhysicalSerializedIdentity({ id: 'one', serialNumber: ' roc2601001 ' }))
+      .toBe('ROC2601001');
+    expect(p2PhysicalSerializedIdentity({ id: 'fallback', serialNumber: null }))
+      .toBe('ID:fallback');
   });
 
   it('counts shipped, finalization, active, and scheduled units once by serial', () => {

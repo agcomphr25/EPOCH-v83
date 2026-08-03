@@ -24,3 +24,9 @@ export function isP2PhysicalProjectWorkOrder(row: {
   return !normalized(row.workOrderNumber).startsWith('WAD-')
     && normalized(row.wadStatus) === '';
 }
+
+export function p2PhysicalSerializedIdentity(row: P2SerializedUnitLedgerRow): string {
+  const serial = normalized(row.serialNumber ?? row.serial_number);
+  const id = String(row.id ?? '').trim().toLowerCase();
+  return serial || (id ? `ID:${id}` : '');
+}

@@ -32,6 +32,7 @@ import {
 import {
   countDistinctP2PendingUnits,
   isP2PhysicalProjectWorkOrder,
+  p2PhysicalSerializedIdentity,
 } from '../lib/p2ControlCenterReconciliation';
 import { softAuth, authenticateToken, sessionAwareAuth, requireAdminOrOwner } from '../../middleware/auth';
 import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
@@ -5253,62 +5254,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       }
       const visibleStatuses = new Set(['ACTIVE']);
       const activeSerializedItems = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
-      const poItemQuantityRows = await optionalP2Rows(
-        'PO item quantity',
-        dbPool.query(
-          `SELECT
-             poi.id AS "poItemId",
-             poi.quantity AS "orderedQuantity"
-           FROM p2_purchase_order_items poi
-           JOIN p2_purchase_orders po ON po.id = poi.po_id
-           WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')`
-        )
-      );
-      const orderedQuantityByPoItemId = new Map<number, number>(
-        poItemQuantityRows.map((row: any) => [
-          Number(row.poItemId),
-          Math.max(0, Number(row.orderedQuantity) || 0),
-        ])
-      );
-      const isPastLayupQueueStage = (item: any) => {
-        const dept = normalizeP2ControlDepartment(item.currentDepartment);
-        return dept !== '' && dept !== 'Pending Layup' && dept !== 'Layup';
-      };
-      const consumedPastLayupByPoItemId = new Map<number, number>();
-      for (const item of allItems || []) {
-        const poItemId = Number(item.poItemId ?? item.po_item_id);
-        if (!Number.isFinite(poItemId)) continue;
-
-        if (item.status === 'COMPLETED' || (item.status === 'ACTIVE' && isPastLayupQueueStage(item))) {
-          consumedPastLayupByPoItemId.set(
-            poItemId,
-            (consumedPastLayupByPoItemId.get(poItemId) ?? 0) + 1
-          );
-        }
-      }
-      const layupShownByPoItemId = new Map<number, number>();
+      const shownPhysicalIdentities = new Set<string>();
       const items = activeSerializedItems.filter((item: any) => {
         const dept = normalizeP2ControlDepartment(item.currentDepartment);
         if (dept === '' || dept === 'Pending Layup') {
           return false;
         }
 
-        const poItemId = Number(item.poItemId ?? item.po_item_id);
-        const orderedQuantity = orderedQuantityByPoItemId.get(poItemId);
-        if (!orderedQuantity || dept !== 'Layup') {
-          return true;
-        }
-
-        const remainingLayupCapacity = Math.max(
-          0,
-          orderedQuantity - (consumedPastLayupByPoItemId.get(poItemId) ?? 0)
-        );
-        const shownForLine = layupShownByPoItemId.get(poItemId) ?? 0;
-        if (shownForLine >= remainingLayupCapacity) {
-          return false;
-        }
-
-        layupShownByPoItemId.set(poItemId, shownForLine + 1);
+        const identity = p2PhysicalSerializedIdentity(item);
+        if (!identity || shownPhysicalIdentities.has(identity)) return false;
+        shownPhysicalIdentities.add(identity);
         return true;
       });
       const legacyProductionRows: any[] = [];

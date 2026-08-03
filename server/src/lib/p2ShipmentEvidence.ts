@@ -25,8 +25,11 @@ export const P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL = `
       LIMIT 1
     ) certificate ON TRUE
     WHERE lot.po_id = ANY($1)
+      AND COALESCE(UPPER(lot.status), '') <> 'VOID'
       AND (
-        COALESCE(UPPER(lot.status), '') = 'SHIPPED'
+        lot.packing_slip_id IS NOT NULL
+        OR slip.id IS NOT NULL
+        OR COALESCE(UPPER(lot.status), '') = 'SHIPPED'
         OR lot.shipped_at IS NOT NULL
         OR COALESCE(UPPER(slip.status), '') = 'SHIPPED'
       )

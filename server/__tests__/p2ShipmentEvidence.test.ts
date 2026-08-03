@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL,
   indexP2ShippedSerializedItemIds,
   normalizeP2ShipmentSerialIdentity,
 } from '../src/lib/p2ShipmentEvidence';
@@ -9,6 +10,18 @@ import {
 } from '../src/lib/p2SchedulingReconciliation';
 
 describe('P2 shipment and scheduling reconciliation', () => {
+  it('treats a durable non-void packing slip as shipment evidence', () => {
+    expect(P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL).toContain(
+      'lot.packing_slip_id IS NOT NULL',
+    );
+    expect(P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL).toContain(
+      'OR slip.id IS NOT NULL',
+    );
+    expect(P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL).toContain(
+      "COALESCE(UPPER(lot.status), '') <> 'VOID'",
+    );
+  });
+
   it('matches customer-facing serials to replacement-suffixed production identities', () => {
     expect(normalizeP2ShipmentSerialIdentity(' ROC2600034-RMA-2 ')).toBe('ROC2600034');
     expect(normalizeP2ShipmentSerialIdentity('roc2600034-r2')).toBe('ROC2600034');

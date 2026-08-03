@@ -1,10 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+
 import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const route = read('server/src/routes/epochSoftwareValidation.ts');
+const compactRoute = route.replace(/\s+/g, '');
 const migration = read(
   'migrations/0234_epoch_validation_readiness_controls.sql'
 );
@@ -28,17 +30,17 @@ describe('EPOCH validation package-readiness architecture', () => {
       'FROM employees WHERE id=ANY($1::int[]) AND is_active=true'
     );
     expect(route).toContain('qms_audit_readiness_assessments');
-    expect(route).toContain("error:'INACTIVE_EMPLOYEE_ASSIGNMENT'");
-    expect(route).toContain(
+    expect(compactRoute).toContain("error:'INACTIVE_EMPLOYEE_ASSIGNMENT'");
+    expect(compactRoute).toContain(
       "router.post('/:id/audit-readiness-na',requirePermission('EPOCH_VALIDATION_FINAL_APPROVE')"
     );
   });
 
   it('requires authenticated confirmations and invalidates stale deployment confirmation', () => {
-    expect(route).toContain(
+    expect(compactRoute).toContain(
       "router.post('/:id/confirm-deployment-date',requirePermission('EPOCH_VALIDATION_EDIT')"
     );
-    expect(route).toContain(
+    expect(compactRoute).toContain(
       "router.post('/:id/confirm-environment-separation',requirePermission('EPOCH_VALIDATION_EDIT')"
     );
     expect(route).toContain(
@@ -49,9 +51,13 @@ describe('EPOCH validation package-readiness architecture', () => {
   });
 
   it('blocks execution and final approval on incomplete package or protocol evidence', () => {
-    expect(route).toContain("error:'PACKAGE_EXECUTION_READINESS_BLOCKED'");
-    expect(route).toContain("error:'PACKAGE_FINAL_READINESS_BLOCKED'");
-    expect(route).toContain("error:'PROTOCOL_EXECUTION_OR_REVIEW_INCOMPLETE'");
+    expect(compactRoute).toContain(
+      "error:'PACKAGE_EXECUTION_READINESS_BLOCKED'"
+    );
+    expect(compactRoute).toContain("error:'PACKAGE_FINAL_READINESS_BLOCKED'");
+    expect(compactRoute).toContain(
+      "error:'PROTOCOL_EXECUTION_OR_REVIEW_INCOMPLETE'"
+    );
     expect(route).toContain(
       "e.overall_result IN ('PASSED','PASSED_WITH_APPROVED_DEVIATION')"
     );

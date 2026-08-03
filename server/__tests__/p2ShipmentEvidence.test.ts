@@ -10,6 +10,10 @@ import {
   isHistoricalP2Unit,
   p2PendingUnitDeficit,
 } from '../src/lib/p2SchedulingReconciliation';
+import {
+  countDistinctP2PendingUnits,
+  isP2PhysicalProjectWorkOrder,
+} from '../src/lib/p2ControlCenterReconciliation';
 
 describe('P2 shipment and scheduling reconciliation', () => {
   it('treats a durable non-void packing slip as shipment evidence', () => {
@@ -66,6 +70,21 @@ describe('P2 shipment and scheduling reconciliation', () => {
     expect(p2PendingUnitDeficit(90, 81, 0)).toBe(9);
     expect(p2PendingUnitDeficit(90, 81, 9)).toBe(0);
     expect(p2PendingUnitDeficit(90, 81, 12)).toBe(0);
+  });
+
+  it('reports the distinct pending units that are actually exposed to Scheduling', () => {
+    expect(countDistinctP2PendingUnits([
+      { id: 'pending-1', serialNumber: 'ROC-1', status: 'ACTIVE', currentDepartment: 'Pending Layup' },
+      { id: 'duplicate', serialNumber: 'ROC-1', status: 'ACTIVE', currentDepartment: 'Pending Layup' },
+      { id: 'pending-2', serialNumber: 'ROC-2', status: 'ACTIVE', currentDepartment: '' },
+      { id: 'active', serialNumber: 'ROC-3', status: 'ACTIVE', currentDepartment: 'Oven/Cure' },
+    ])).toBe(2);
+  });
+
+  it('keeps WAD context out of the physical serialized production queue', () => {
+    expect(isP2PhysicalProjectWorkOrder({ workOrderNumber: 'WAD-PRJ002-702823' })).toBe(false);
+    expect(isP2PhysicalProjectWorkOrder({ workOrderNumber: 'WO-100', wadStatus: 'READY' })).toBe(false);
+    expect(isP2PhysicalProjectWorkOrder({ workOrderNumber: 'WO-100' })).toBe(true);
   });
 
   it('counts shipped, finalization, active, and scheduled units once by serial', () => {

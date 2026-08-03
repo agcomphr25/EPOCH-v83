@@ -29,6 +29,10 @@ import {
   countDistinctP2DemandUnits,
   p2PendingUnitDeficit,
 } from '../lib/p2SchedulingReconciliation';
+import {
+  countDistinctP2PendingUnits,
+  isP2PhysicalProjectWorkOrder,
+} from '../lib/p2ControlCenterReconciliation';
 import { softAuth, authenticateToken, sessionAwareAuth, requireAdminOrOwner } from '../../middleware/auth';
 import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
 import employeesRoutes from './employees';
@@ -4912,7 +4916,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const completedItems = ledger.shipped;
         const scheduledItems = ledger.scheduled;
         const inProductionItems = ledger.activeProduction;
-        const pendingItems = ledger.missing;
+        const pendingSerializedItems = countDistinctP2PendingUnits(poItems);
+        const pendingItems = pendingSerializedItems > 0
+          ? Math.min(ledger.missing, pendingSerializedItems)
+          : ledger.missing;
         
         const rawStatus = normalizeP2Status(po.status) || 'OPEN';
 
@@ -4933,7 +4940,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           scheduledItems,
           inProductionItems,
           productionPipelineItems: ledger.productionPipeline,
-          missingItems: ledger.missing,
+          missingItems: pendingItems,
           scrappedItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
@@ -5560,6 +5567,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return (!key || !serializedPoItemKeys.has(key)) && !isComplete;
       });
       const activeLegacyProjectProductionRows = legacyProjectProductionRows.filter((row: any) => {
+        if (!isP2PhysicalProjectWorkOrder(row)) return false;
         const key = row.poId && row.poItemId ? `${row.poId}:${row.poItemId}` : null;
         const normalizedStatus = String(row.status || '').toUpperCase();
         return (!key || !serializedPoItemKeys.has(key))

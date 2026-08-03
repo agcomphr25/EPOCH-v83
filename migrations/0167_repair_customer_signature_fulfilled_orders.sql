@@ -27,6 +27,17 @@ WHERE (
 DO $$
 BEGIN
   IF to_regclass('public.order_activity_events') IS NOT NULL THEN
+    -- Never reopen an order whose erroneous 0167 move has already been
+    -- explicitly reversed. Safe-boot executes this historical migration on
+    -- every deploy, so the compensating audit event is the durable guard.
+    DELETE FROM tmp_customer_signature_fulfilled_repair candidate
+    WHERE EXISTS (
+      SELECT 1
+      FROM order_activity_events reversal
+      WHERE reversal.order_id = candidate.order_id
+        AND reversal.reason_code = 'REVERSE_0167_FULFILLED_RESTORE'
+    );
+
     INSERT INTO order_activity_events (
       order_id,
       event_type,

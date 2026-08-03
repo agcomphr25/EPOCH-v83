@@ -1235,7 +1235,7 @@ router.get('/:id/view', requireAuth, requirePermission('documents.view'), contro
   } catch (error) {
     sendLifecycleError(res, error, 'Failed to view document');
   }
-};
+});
 
 // Download document file - requires authentication + step-up re-auth (credentials verified within 30 min)
 // ACL enforcement: restricted/classified docs require an explicit vault access grant or admin/owner role
@@ -1335,7 +1335,7 @@ router.get('/:id/download', requireAuth, requirePermission('documents.view'), co
   } catch (error) {
     sendLifecycleError(res, error, 'Failed to download document');
   }
-};
+});
 
 // Delete document (admin/owner only)
 router.delete('/:id', requireAdminOrOwner, async (req: Request, res: Response) => {

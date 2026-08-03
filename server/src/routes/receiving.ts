@@ -368,7 +368,7 @@ async function getOpenReceivingProjectTargets(): Promise<Array<{
         p.id::text AS id,
         p.project_code AS "projectCode",
         p.project_name AS "projectName",
-        p.status,
+        p.status::text AS status,
         p.customer_name_snapshot AS "customerName",
         'project'::text AS "targetType",
         p.created_at AS "createdAt"

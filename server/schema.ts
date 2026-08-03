@@ -2160,6 +2160,16 @@ export const freezerTemperatureLogs = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }),
+    updatedByUserId: integer('updated_by_user_id').references(() => users.id),
+    updatedByDisplayName: text('updated_by_display_name'),
+    voidedAt: timestamp('voided_at', { withTimezone: true }),
+    voidedByUserId: integer('voided_by_user_id').references(() => users.id),
+    voidedByDisplayName: text('voided_by_display_name'),
+    voidReason: text('void_reason'),
+    restoredAt: timestamp('restored_at', { withTimezone: true }),
+    restoredByUserId: integer('restored_by_user_id').references(() => users.id),
+    restoredByDisplayName: text('restored_by_display_name'),
   },
   (table) => ({
     recordedAtIdx: index('freezer_temperature_logs_recorded_at_idx').on(
@@ -3445,6 +3455,16 @@ export const insertFreezerTemperatureLogSchema = createInsertSchema(
     recordedByUserId: true,
     recordedByDisplayName: true,
     createdAt: true,
+    updatedAt: true,
+    updatedByUserId: true,
+    updatedByDisplayName: true,
+    voidedAt: true,
+    voidedByUserId: true,
+    voidedByDisplayName: true,
+    voidReason: true,
+    restoredAt: true,
+    restoredByUserId: true,
+    restoredByDisplayName: true,
   })
   .extend({
     recordedAt: z.coerce.date(),

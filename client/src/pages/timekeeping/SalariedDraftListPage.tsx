@@ -24,8 +24,8 @@ import {
 const STATUS_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode }> = {
   DRAFT: { label: "Draft", variant: "secondary", icon: <FileText className="h-3 w-3" /> },
   NEEDS_REVIEW: { label: "Needs Review", variant: "destructive", icon: <AlertCircle className="h-3 w-3" /> },
-  CONFIRMED: { label: "Ready to Submit", variant: "default", icon: <CheckCircle2 className="h-3 w-3" /> },
-  POSTED: { label: "Submitted", variant: "outline", icon: <CheckCircle2 className="h-3 w-3" /> },
+  CONFIRMED: { label: "Ready to Add", variant: "default", icon: <CheckCircle2 className="h-3 w-3" /> },
+  POSTED: { label: "Added to Weekly Timesheet", variant: "outline", icon: <CheckCircle2 className="h-3 w-3" /> },
   VOIDED: { label: "Voided", variant: "destructive", icon: <AlertCircle className="h-3 w-3" /> },
 };
 
@@ -159,6 +159,14 @@ export default function SalariedDraftListPage() {
           </Button>
         </Link>
       </div>
+
+      <Alert>
+        <AlertDescription>
+          Daily entries are a convenient way to build your time. They must still be added to and
+          certified on the weekly timesheet, which is the controlled record sent to your supervisor
+          and payroll for approval.
+        </AlertDescription>
+      </Alert>
 
       <Card>
         <CardHeader className="pb-3">

@@ -11,7 +11,7 @@ import {
   insertFreezerTemperatureLocationSchema,
   insertFreezerTemperatureLogSchema,
 } from '@shared/schema';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { db } from '../../db';
 import {
@@ -614,17 +614,29 @@ router.get('/freezer-temperature-logs', async (req: Request, res: Response) => {
       ? Math.min(Math.max(requestedLimit, 1), 500)
       : 100;
 
-    const logs = await db
+    const includeVoided = String(req.query.includeVoided ?? '') === 'true';
+    const logQuery = db
       .select({
         id: freezerTemperatureLogs.id,
         recordedAt: freezerTemperatureLogs.recordedAt,
         notes: freezerTemperatureLogs.notes,
         recordedByDisplayName: freezerTemperatureLogs.recordedByDisplayName,
         createdAt: freezerTemperatureLogs.createdAt,
+        updatedAt: freezerTemperatureLogs.updatedAt,
+        updatedByDisplayName: freezerTemperatureLogs.updatedByDisplayName,
+        voidedAt: freezerTemperatureLogs.voidedAt,
+        voidedByDisplayName: freezerTemperatureLogs.voidedByDisplayName,
+        voidReason: freezerTemperatureLogs.voidReason,
+        restoredAt: freezerTemperatureLogs.restoredAt,
+        restoredByDisplayName: freezerTemperatureLogs.restoredByDisplayName,
       })
       .from(freezerTemperatureLogs)
+      .$dynamic()
       .orderBy(desc(freezerTemperatureLogs.recordedAt))
       .limit(limit);
+    const logs = includeVoided
+      ? await logQuery
+      : await logQuery.where(isNull(freezerTemperatureLogs.voidedAt));
 
     if (logs.length === 0) return res.json([]);
 
@@ -655,6 +667,29 @@ router.get('/freezer-temperature-logs', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Get freezer temperature logs error:', error);
     res.status(500).json({ error: 'Failed to fetch freezer temperature logs' });
+  }
+});
+
+router.get('/freezer-temperature-logs/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid temperature log ID' });
+    const [log] = await db.select().from(freezerTemperatureLogs)
+      .where(eq(freezerTemperatureLogs.id, id)).limit(1);
+    if (!log) return res.status(404).json({ error: 'Temperature log not found' });
+    const readings = await db.select({
+      locationId: freezerTemperatureReadings.locationId,
+      locationName: freezerTemperatureReadings.locationNameSnapshot,
+      sortOrder: freezerTemperatureReadings.locationSortOrderSnapshot,
+      temperature: freezerTemperatureReadings.temperature,
+      isNotApplicable: freezerTemperatureReadings.isNotApplicable,
+    }).from(freezerTemperatureReadings)
+      .where(eq(freezerTemperatureReadings.logId, id))
+      .orderBy(asc(freezerTemperatureReadings.locationSortOrderSnapshot));
+    res.json({ ...log, readings });
+  } catch (error) {
+    console.error('Get freezer temperature log error:', error);
+    res.status(500).json({ error: 'Failed to fetch freezer temperature log' });
   }
 });
 
@@ -724,6 +759,103 @@ router.post('/freezer-temperature-logs', async (req: Request, res: Response) => 
   } catch (error) {
     console.error('Create freezer temperature log error:', error);
     res.status(500).json({ error: 'Failed to create freezer temperature log' });
+  }
+});
+
+router.put('/freezer-temperature-logs/:id', async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ error: 'Authentication is required' });
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid temperature log ID' });
+    const parsed = insertFreezerTemperatureLogSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid freezer temperature entry', issues: parsed.error.issues });
+
+    const [existing] = await db.select().from(freezerTemperatureLogs)
+      .where(eq(freezerTemperatureLogs.id, id)).limit(1);
+    if (!existing) return res.status(404).json({ error: 'Temperature log not found' });
+    if (existing.voidedAt) return res.status(409).json({ error: 'Restore this voided record before editing it' });
+    if (parsed.data.readings.some((reading) => reading.isNotApplicable) && !parsed.data.notes) {
+      return res.status(400).json({ error: 'Add a note explaining any N/A freezer' });
+    }
+
+    const locationIds = parsed.data.readings.map((reading) => reading.locationId);
+    const locations = await db.select().from(freezerTemperatureLocations)
+      .where(inArray(freezerTemperatureLocations.id, locationIds));
+    if (locations.length !== locationIds.length) {
+      return res.status(400).json({ error: 'One or more selected freezers no longer exist' });
+    }
+    const byLocation = new Map(parsed.data.readings.map((reading) => [reading.locationId, reading]));
+    const actor = await resolveUserSnapshot(req.user.id);
+    const updated = await db.transaction(async (tx) => {
+      const [log] = await tx.update(freezerTemperatureLogs).set({
+        recordedAt: parsed.data.recordedAt,
+        notes: parsed.data.notes || null,
+        updatedAt: new Date(),
+        updatedByUserId: actor.userId,
+        updatedByDisplayName: actor.displayName,
+      }).where(eq(freezerTemperatureLogs.id, id)).returning();
+      await tx.delete(freezerTemperatureReadings).where(eq(freezerTemperatureReadings.logId, id));
+      await tx.insert(freezerTemperatureReadings).values(locations.map((location) => {
+        const reading = byLocation.get(location.id)!;
+        return {
+          logId: id,
+          locationId: location.id,
+          locationNameSnapshot: location.name,
+          locationSortOrderSnapshot: location.sortOrder,
+          temperature: reading.isNotApplicable ? null : String(reading.temperature),
+          isNotApplicable: reading.isNotApplicable,
+        };
+      }));
+      return log;
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('Update freezer temperature log error:', error);
+    res.status(500).json({ error: 'Failed to update freezer temperature log' });
+  }
+});
+
+router.delete('/freezer-temperature-logs/:id', async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ error: 'Authentication is required' });
+    const id = Number.parseInt(req.params.id, 10);
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid temperature log ID' });
+    if (reason.length < 3 || reason.length > 500) {
+      return res.status(400).json({ error: 'A deletion reason of 3 to 500 characters is required' });
+    }
+    const actor = await resolveUserSnapshot(req.user.id);
+    const [log] = await db.update(freezerTemperatureLogs).set({
+      voidedAt: new Date(),
+      voidedByUserId: actor.userId,
+      voidedByDisplayName: actor.displayName,
+      voidReason: reason,
+    }).where(and(eq(freezerTemperatureLogs.id, id), isNull(freezerTemperatureLogs.voidedAt))).returning();
+    if (!log) return res.status(404).json({ error: 'Active temperature log not found' });
+    res.json(log);
+  } catch (error) {
+    console.error('Delete freezer temperature log error:', error);
+    res.status(500).json({ error: 'Failed to delete freezer temperature log' });
+  }
+});
+
+router.post('/freezer-temperature-logs/:id/restore', async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ error: 'Authentication is required' });
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid temperature log ID' });
+    const actor = await resolveUserSnapshot(req.user.id);
+    const [log] = await db.update(freezerTemperatureLogs).set({
+      voidedAt: null,
+      restoredAt: new Date(),
+      restoredByUserId: actor.userId,
+      restoredByDisplayName: actor.displayName,
+    }).where(and(eq(freezerTemperatureLogs.id, id), isNotNull(freezerTemperatureLogs.voidedAt))).returning();
+    if (!log) return res.status(404).json({ error: 'Voided temperature log not found' });
+    res.json(log);
+  } catch (error) {
+    console.error('Restore freezer temperature log error:', error);
+    res.status(500).json({ error: 'Failed to restore freezer temperature log' });
   }
 });
 

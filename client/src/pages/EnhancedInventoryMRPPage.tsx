@@ -448,16 +448,18 @@ export default function EnhancedInventoryMRPPage() {
       {/* ── Modals ─────────────────────────────────────────────────────────────── */}
 
       <Dialog open={isInventoryItemsModalOpen} onOpenChange={handleInventoryItemsModalOpenChange}>
-        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="shrink-0 pr-8">
             <DialogTitle className="flex items-center gap-2 text-xl">
               <Package className="h-5 w-5" />
               Inventory Items Management
             </DialogTitle>
           </DialogHeader>
-          {isInventoryItemsModalOpen && (
-            <InventoryItemsCard initialSearchTerm={initialPartNumber} />
-          )}
+          <div className="min-h-0 flex-1 overflow-auto">
+            {isInventoryItemsModalOpen && (
+              <InventoryItemsCard initialSearchTerm={initialPartNumber} />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

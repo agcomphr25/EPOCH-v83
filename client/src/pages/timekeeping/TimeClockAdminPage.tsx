@@ -4,6 +4,7 @@ import { runDeletePunch, buildDeletePunchFetchDep } from '@/lib/deletePunchHandl
 import { runCreatePunch, buildAddPunchFetchDep } from '@/lib/addPunchHandler';
 import { AuditTrailPanel } from '@/components/timekeeping/AuditTrailPanel';
 import { ComplianceExceptionDashboard } from '@/components/timekeeping/ComplianceExceptionDashboard';
+import { SalariedTimesheetAdminPanel as SalariedTimesheetWorkflowPanel } from '@/components/timekeeping/SalariedTimesheetAdminPanel';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { apiRequest } from '@/lib/queryClient';
@@ -3699,7 +3700,7 @@ export default function TimeClockAdminPage() {
 
         {/* ── SALARIED TIMESHEETS TAB ── */}
         <TabsContent value="salaried" className="space-y-4">
-          <SalariedTimesheetsAdminPanel />
+          <SalariedTimesheetWorkflowPanel />
         </TabsContent>
 
         {/* ── LABOR APPROVALS TAB ── */}

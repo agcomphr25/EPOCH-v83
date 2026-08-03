@@ -86,7 +86,9 @@ describe('LineItemsStep — updateReceivedQtyMutation', () => {
     renderLineItemsStep(makeReceipt([{ id: lineId, orderedQty: '10', receivedQty: '0' }]));
 
     expect(screen.getByText('Enter the quantity received for each line.')).toBeTruthy();
-    expect(screen.getByText('Qty Received')).toBeTruthy();
+    // The column header renders as a sortable <button> inside a <th>, so both
+    // elements share the same text content. Use getAllByText and assert at least one.
+    expect(screen.getAllByText('Qty Received').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', {
       name: 'Enter quantity received for PART-A. Current quantity: 0 EA',
     })).toBeTruthy();

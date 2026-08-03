@@ -30,3 +30,19 @@ export function p2PhysicalSerializedIdentity(row: P2SerializedUnitLedgerRow): st
   const id = String(row.id ?? '').trim().toLowerCase();
   return serial || (id ? `ID:${id}` : '');
 }
+
+export function takeP2PriorRevisionPendingForLine<T>(
+  currentPending: readonly T[],
+  priorRevisionPending: readonly T[],
+  earlyStageCapacity: number,
+): { pendingItems: T[]; remainingPriorRevisionPending: T[] } {
+  const availableCapacity = Math.max(
+    0,
+    Math.floor(Number(earlyStageCapacity) || 0) - currentPending.length,
+  );
+  const adopted = priorRevisionPending.slice(0, availableCapacity);
+  return {
+    pendingItems: [...currentPending, ...adopted],
+    remainingPriorRevisionPending: priorRevisionPending.slice(adopted.length),
+  };
+}

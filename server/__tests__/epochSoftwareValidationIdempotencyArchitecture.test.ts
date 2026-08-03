@@ -1,10 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+
 import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const route = read('server/src/routes/epochSoftwareValidation.ts');
+const compactRoute = route.replace(/\s+/g, '');
 const migration = read(
   'migrations/0242_epoch_validation_create_idempotency.sql'
 );
@@ -30,20 +32,22 @@ describe('EPOCH validation package create idempotency architecture', () => {
     );
     expect(lock).toBeGreaterThan(0);
     expect(allocation).toBeGreaterThan(lock);
-    expect(route).toContain('if(existing)return {package:existing,replay:true');
-    expect(route).toContain('res.status(result.replay?200:201)');
+    expect(compactRoute).toContain(
+      'if(existing)return{package:existing,replay:true'
+    );
+    expect(compactRoute).toContain('res.status(result.replay?200:201)');
   });
 
   it('keeps allocation, package creation, event logging, and request completion in one transaction', () => {
-    const create = route.slice(
-      route.indexOf("router.post('/',"),
-      route.indexOf("router.post('/:id/void-duplicate'")
+    const create = compactRoute.slice(
+      compactRoute.indexOf("router.post('/',"),
+      compactRoute.indexOf("router.post('/:id/void-duplicate'")
     );
-    expect(create).toContain('const result=await tx(async q=>');
-    expect(create).toContain('INSERT INTO qms_epoch_validation_packages');
+    expect(create).toContain('constresult=awaittx(async(q)=>');
+    expect(create).toContain('INSERTINTOqms_epoch_validation_packages');
     expect(create).toContain("'PACKAGE_CREATED'");
     expect(create).toContain(
-      'UPDATE qms_epoch_validation_create_requests SET package_id=$1,completed_at=now()'
+      'UPDATEqms_epoch_validation_create_requestsSETpackage_id=$1,completed_at=now()'
     );
     expect(create).not.toMatch(/count\(\*\)[^\n]*package_number/);
   });
@@ -58,7 +62,7 @@ describe('EPOCH validation package create idempotency architecture', () => {
     expect(route).toContain("requirePermission('EPOCH_VALIDATION_ADMIN')");
     expect(route).toContain("status='VOID_DUPLICATE',locked_at=now()");
     expect(route).toContain("'PACKAGE_VOIDED_DUPLICATE'");
-    expect(route).toContain("'VOID_DUPLICATE'].includes(p.status)");
+    expect(compactRoute).toContain("'VOID_DUPLICATE',].includes(p.status)");
     expect(migration).toContain("'VOID_DUPLICATE'");
   });
 });

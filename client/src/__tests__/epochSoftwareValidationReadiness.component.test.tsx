@@ -1,17 +1,19 @@
 import fs from 'fs';
 import path from 'path';
+
 import { describe, expect, it } from 'vitest';
 
 const source = fs.readFileSync(
   path.resolve(import.meta.dirname, '../pages/EpochSoftwareValidationPage.tsx'),
   'utf8'
 );
+const compact = source.replace(/\s+/g, '');
 
 describe('EPOCH software validation readiness UI', () => {
   it('renders the server-derived checklist and opens controlled editing', () => {
     expect(source).toContain('d.packageReadiness.items.map');
     expect(source).toContain('Edit package readiness');
-    expect(source).toContain("method:'PATCH'");
+    expect(compact).toContain("method:'PATCH'");
   });
 
   it('provides exact identifier guidance and separate authenticated confirmations', () => {
@@ -25,8 +27,8 @@ describe('EPOCH software validation readiness UI', () => {
   });
 
   it('uses active employee and Audit Readiness option sources', () => {
-    expect(source).toContain("queryKey:['/api/employees']");
-    expect(source).toContain("queryKey:['/api/qms/as9100-audit-readiness']");
+    expect(compact).toContain("queryKey:['/api/employees']");
+    expect(compact).toContain("queryKey:['/api/qms/as9100-audit-readiness']");
     expect(source).toContain('Software owner');
     expect(source).toContain('Quality owner');
     expect(source).toContain('Validation lead');

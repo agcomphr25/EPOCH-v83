@@ -444,9 +444,6 @@ export default function MasterDocumentRegister() {
   const isPdfDocument = (doc: ControlledDocument) =>
     Boolean(doc.filePath?.toLowerCase().endsWith('.pdf'));
 
-  const isExternalDocument = (doc: ControlledDocument) =>
-    Boolean(doc.filePath && /^https?:\/\//i.test(doc.filePath));
-
   const getAuthHeaders = (): Record<string, string> => {
     const storedToken = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
     return storedToken ? { Authorization: `Bearer ${storedToken}` } : {};
@@ -482,11 +479,6 @@ export default function MasterDocumentRegister() {
   };
 
   const openDocumentFile = async (doc: ControlledDocument, mode: 'view' | 'download', targetWindowOverride?: Window | null) => {
-    if (isExternalDocument(doc)) {
-      window.open(doc.filePath!, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
     const path = `/api/controlled-documents/${doc.id}/${mode}`;
     const targetWindow =
       targetWindowOverride ?? (mode === 'view'
@@ -522,7 +514,7 @@ export default function MasterDocumentRegister() {
         }
 
         targetWindow?.close();
-        throw new Error(errorData?.error || `Failed to ${mode} document`);
+        throw new Error(errorData?.message || errorData?.error || `Failed to ${mode} document`);
       }
 
       const blob = await response.blob();

@@ -302,6 +302,8 @@ export const safeMigrationFiles = [
   '0236_rom_builder_approval_authority.sql',
   '0236_salaried_holiday_calendar.sql',
   '0237_freezer_temperature_log_crud.sql',
+  '0238_reverse_0167_fulfilled_orders.sql',
+  '0239_correct_0238_non_unique_id_collateral.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -347,6 +349,8 @@ export const criticalMigrationFiles = new Set([
   '0235_quality_action_change_control.sql',
   '0236_salaried_holiday_calendar.sql',
   '0237_freezer_temperature_log_crud.sql',
+  '0238_reverse_0167_fulfilled_orders.sql',
+  '0239_correct_0238_non_unique_id_collateral.sql',
   '0231_p1_po_item_quantity_adjustments.sql',
   '0232_p2_v2_controlled_pilot_readiness.sql',
   '0233a_spec_sheets_base_table.sql',

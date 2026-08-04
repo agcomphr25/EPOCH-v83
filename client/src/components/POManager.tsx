@@ -2510,26 +2510,46 @@ export default function POManager() {
                           </div>
                         </AccordionTrigger>
                         <AccordionContent>
-                          <div className="grid gap-4 pt-2 pb-2">
+                          <Accordion type="multiple" className="space-y-3 pt-2 pb-2">
                             {group.pos.map((po) => (
-                              <POCard
+                              <AccordionItem
                                 key={po.id}
-                                po={po}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                                onViewItems={handleViewItems}
-                                onCalculateSchedule={handleCalculateSchedule}
-                                onGenerateProductionOrders={handleGenerateProductionOrders}
-                                onReassignCustomer={(po) => {
-                                  setReassignPO(po);
-                                  setReassignTargetCustomer(null);
-                                  setReassignCustomerSearch('');
-                                }}
-                                isLoadingPreview={loadingPreviewPoId === po.id}
-                                isGeneratingOrdersForThisPO={isGeneratingOrders && previewPoId === po.id}
-                              />
+                                value={`po-${po.id}`}
+                                className="rounded-lg border bg-white px-4 dark:bg-gray-950"
+                              >
+                                <AccordionTrigger className="py-4 hover:no-underline">
+                                  <div className="flex min-w-0 flex-1 items-center justify-between gap-4 pr-3 text-left">
+                                    <div className="min-w-0">
+                                      <div className="font-semibold text-gray-900 dark:text-gray-100">
+                                        PO {po.poNumber}
+                                      </div>
+                                      <div className="mt-1 text-sm font-normal text-muted-foreground">
+                                        {formatDateOnly(po.poDate)} · Expected {formatDateOnly(po.expectedDelivery)}
+                                      </div>
+                                    </div>
+                                    <Badge className={getStatusColor(po.status)}>{po.status}</Badge>
+                                  </div>
+                                </AccordionTrigger>
+                                <AccordionContent className="pb-4">
+                                  <POCard
+                                    po={po}
+                                    onEdit={handleEdit}
+                                    onDelete={handleDelete}
+                                    onViewItems={handleViewItems}
+                                    onCalculateSchedule={handleCalculateSchedule}
+                                    onGenerateProductionOrders={handleGenerateProductionOrders}
+                                    onReassignCustomer={(po) => {
+                                      setReassignPO(po);
+                                      setReassignTargetCustomer(null);
+                                      setReassignCustomerSearch('');
+                                    }}
+                                    isLoadingPreview={loadingPreviewPoId === po.id}
+                                    isGeneratingOrdersForThisPO={isGeneratingOrders && previewPoId === po.id}
+                                  />
+                                </AccordionContent>
+                              </AccordionItem>
                             ))}
-                          </div>
+                          </Accordion>
                         </AccordionContent>
                       </AccordionItem>
                     ))}

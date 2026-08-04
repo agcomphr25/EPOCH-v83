@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Package, Plus, Trash2, Edit2, Eye, Barcode, Save, Loader2 } from 'lucide-react';
+import { Package, Plus, Trash2, Edit2, Eye, Barcode, Save, Loader2, Search, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -119,6 +119,7 @@ export default function POItemsManager({
   const [editItem, setEditItem] = useState<POItem | null>(null);
   const [editForm, setEditForm] = useState({ itemName: '', quantity: 1, unitPrice: 0, notes: '', stockModelId: '' });
   const [barcodeItemId, setBarcodeItemId] = useState<string | null>(null);
+  const [itemSearch, setItemSearch] = useState('');
   const { toast } = useToast();
 
   // Fetch PO items
@@ -304,6 +305,22 @@ export default function POItemsManager({
     return item.itemType;
   };
 
+  const normalizedItemSearch = itemSearch.trim().toLowerCase();
+  const filteredPoItems = normalizedItemSearch
+    ? poItems.filter((item) => {
+        const searchableValues = [
+          item.itemName,
+          item.itemId,
+          getProductTypeForItem(item),
+          item.notes,
+          ...Object.values(item.specifications || {}),
+        ];
+        return searchableValues.some((value) =>
+          String(value ?? '').toLowerCase().includes(normalizedItemSearch)
+        );
+      })
+    : poItems;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -361,6 +378,37 @@ export default function POItemsManager({
         </div>
       </div>
 
+      {poItems.length > 0 && (
+        <div className="relative max-w-xl">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={itemSearch}
+            onChange={(event) => setItemSearch(event.target.value)}
+            placeholder="Search this PO's line items..."
+            className="pl-10 pr-10"
+            aria-label={`Search line items in PO ${poNumber || poId}`}
+            data-testid="input-po-line-item-search"
+          />
+          {itemSearch && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setItemSearch('')}
+              className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 p-0"
+              aria-label="Clear line item search"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+          {normalizedItemSearch && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Showing {filteredPoItems.length} of {poItems.length} line items
+            </p>
+          )}
+        </div>
+      )}
+
       {poItems.length === 0 ? (
         <Card>
           <CardContent className="py-8">
@@ -376,6 +424,19 @@ export default function POItemsManager({
             </div>
           </CardContent>
         </Card>
+      ) : filteredPoItems.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <Search className="mx-auto mb-3 h-10 w-10 text-gray-400" />
+            <h3 className="text-lg font-medium text-gray-900">No matching line items</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Try a different item name, ID, type, note, or specification.
+            </p>
+            <Button variant="outline" className="mt-4" onClick={() => setItemSearch('')}>
+              Clear Search
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardHeader>
@@ -383,7 +444,7 @@ export default function POItemsManager({
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {poItems.map((item) => (
+              {filteredPoItems.map((item) => (
                 <div
                   key={item.id}
                   className="flex items-center justify-between p-4 border rounded-lg hover:shadow-sm transition-shadow"

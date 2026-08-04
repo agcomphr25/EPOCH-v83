@@ -792,7 +792,7 @@ function PayrollReviewPanel({
         <div className="flex h-48 items-center justify-center rounded-lg border bg-card">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : !batch ? (
+      ) : !batch?.summary ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">No payroll review data loaded.</CardContent>
         </Card>
@@ -2157,7 +2157,7 @@ export default function TimeClockAdminPage() {
       label: 'Payroll Review',
       icon: FileText,
       tabs: ['payroll-review'],
-      count: payrollReview?.summary.blockedCount ?? 0,
+      count: payrollReview?.summary?.blockedCount ?? 0,
     },
     {
       id: 'command',

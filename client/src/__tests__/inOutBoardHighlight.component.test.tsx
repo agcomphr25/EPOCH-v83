@@ -146,10 +146,9 @@ async function renderAndShowOverview() {
   await act(async () => {
     await renderPage();
   });
-  // The Compliance tab is now the default. Navigate to Overview so the In/Out Board rows are in the DOM.
-  // Radix UI Tabs switches on mouseDown, not click.
+  // Attendance is a sidebar section; selecting it opens its Overview sub-page.
   await act(async () => {
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /^overview$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^attendance$/i }));
   });
 }
 
@@ -256,6 +255,7 @@ describe('In/Out Board — row highlight on punch_recorded', () => {
   });
 
   it('resolves punch review employee names from canonical employee ids', async () => {
+    vi.useRealTimers();
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/timekeeping/punches')) {
@@ -273,7 +273,7 @@ describe('In/Out Board — row highlight on punch_recorded', () => {
               editNote: null,
               costCode: null,
               note: null,
-              hasMissingClockOut: false,
+              hasMissingClockOut: true,
             },
           ]),
         } as Response);
@@ -289,7 +289,10 @@ describe('In/Out Board — row highlight on punch_recorded', () => {
     });
 
     await act(async () => {
-      fireEvent.mouseDown(screen.getByRole('tab', { name: /^punch review$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^attendance$/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^punch review$/i }));
     });
 
     expect(await screen.findByText('Alice Nguyen')).toBeInTheDocument();

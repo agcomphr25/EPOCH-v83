@@ -25,8 +25,8 @@ const pool = new Pool({ connectionString, max: 4 });
 const fixturePrefix = 'LEGACY-CERT-';
 const customerId = 'LEGACY-CERT-CUSTOMER';
 const actor = {
-  userId: 9901,
-  employeeId: 9901,
+  userId: 9101,
+  employeeId: 9101,
   username: 'legacy-preservation-certifier',
   displayName: 'Legacy Preservation Certifier',
   role: 'ADMIN',

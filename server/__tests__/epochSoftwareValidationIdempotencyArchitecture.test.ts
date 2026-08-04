@@ -25,6 +25,13 @@ describe('EPOCH validation package create idempotency architecture', () => {
     expect(migration).toContain('request_hash text NOT NULL');
   });
 
+  it('accepts omitted or blank optional create identifiers and dates', () => {
+    expect(route).toContain("value === '' ? undefined : value");
+    expect(route).toContain('productionDeploymentDate: optionalCreateDate');
+    expect(route).toContain('previousApprovedPackageId: optionalCreateUuid');
+    expect(route).toContain('auditReadinessAssessmentId: optionalCreateUuid');
+  });
+
   it('serializes same-key requests before allocating a package number', () => {
     const lock = route.indexOf('idempotency_key=$2 FOR UPDATE');
     const allocation = route.indexOf(

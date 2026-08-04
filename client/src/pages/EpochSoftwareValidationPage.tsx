@@ -211,12 +211,22 @@ export default function EpochSoftwareValidationPage() {
   const submitCreate = (form: HTMLFormElement) => {
     if (createSubmission.current) return;
     const idempotencyKey = crypto.randomUUID();
+    const body = Object.fromEntries(new FormData(form).entries()) as Record<
+      string,
+      string
+    >;
+    for (const field of [
+      'commitOrReleaseIdentifier',
+      'productionDeploymentDate',
+      'previousApprovedPackageId',
+      'auditReadinessAssessmentId',
+      'notes',
+    ]) {
+      if (!body[field]?.trim()) delete body[field];
+    }
     createSubmission.current = idempotencyKey;
     create.mutate({
-      body: Object.fromEntries(new FormData(form).entries()) as Record<
-        string,
-        string
-      >,
+      body,
       idempotencyKey,
     });
   };

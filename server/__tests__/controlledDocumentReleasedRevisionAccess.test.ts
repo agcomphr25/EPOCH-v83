@@ -61,7 +61,7 @@ describe('Master Document Register released-revision access', () => {
 
   it('verifies the selected revision checksum before recording allowed access', () => {
     const verifyIndex = releasedHandler.indexOf('await verifyStoredRevision');
-    const logIndex = releasedHandler.indexOf('await writeAccessLog');
+    const logIndex = releasedHandler.indexOf("action: 'view'");
     expect(verifyIndex).toBeGreaterThan(-1);
     expect(logIndex).toBeGreaterThan(verifyIndex);
     expect(lifecycleService).toContain("'CONTROLLED_DOCUMENT_CHECKSUM_MISMATCH'");

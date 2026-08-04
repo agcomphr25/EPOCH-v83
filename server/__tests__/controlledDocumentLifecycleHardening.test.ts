@@ -75,7 +75,7 @@ describe('Master Document Register lifecycle hardening', () => {
     expect(route).toContain('document.currentReleasedRevisionId');
     expect(route).not.toMatch(/if \(action === 'approve' \|\| action === 'release'\)[\s\S]{0,700}revision\.filePath \|\| state\.document\.filePath/);
     expect(route).toContain('await verifyStoredRevision(state.document.id, revision, filePath, buffer, req)');
-    expect(route).toContain("if (action === 'approve')");
+    expect(route).toContain("if (action === 'approve' || action === 'release')");
     expect(service).toContain('CONTROLLED_DOCUMENT_FILE_CHECKSUM_VERIFIED');
     expect(service).toContain('CONTROLLED_DOCUMENT_CHECKSUM_MISMATCH');
     expect(service).toContain("checksumStatus: 'VERIFIED'");

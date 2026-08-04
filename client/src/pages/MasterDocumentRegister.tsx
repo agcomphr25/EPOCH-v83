@@ -49,6 +49,7 @@ import type { ControlledDocument, DocumentVersionHistory } from '@shared/schema'
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { ControlledDocumentReconciliationWorkspace } from '@/components/ControlledDocumentReconciliationWorkspace';
 
 const DOCUMENT_TYPE_OPTIONS = [
   { value: 'POSTER', label: 'Poster', codeToken: 'Poster' },
@@ -882,6 +883,7 @@ export default function MasterDocumentRegister() {
                   Legacy Audit Report
                 </Button>
               )}
+              <ControlledDocumentReconciliationWorkspace />
               {canCreateEdit && (
                 <>
                 <Button

@@ -262,6 +262,7 @@ jobs:
         run: >-
           npx vitest run
           --config vitest.config.server.ts
+          --no-file-parallelism
           server/__tests__/p2V2PostgresCertification.test.ts
           server/__tests__/designProjectConfigurationSecurityPostgres.test.ts
           --reporter=verbose

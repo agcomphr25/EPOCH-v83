@@ -260,10 +260,20 @@ describe('Design Project configuration PostgreSQL ownership and atomicity', () =
   });
 
   it('leaves no extra item when a uniqueness failure rolls back creation', async () => {
+    const seed = await request(app)
+      .post(`/api/rd-projects/${projectA}/configuration/items`)
+      .send({
+        configurationItemNumber: 'DUPLICATE-CONFIG',
+        partNumber: 'DUPLICATE-SEED',
+        title: 'Duplicate constraint seed',
+        itemType: 'PRODUCT',
+      });
+    expect(seed.status).toBe(201);
+
     const response = await request(app)
       .post(`/api/rd-projects/${projectA}/configuration/items`)
       .send({
-        configurationItemNumber: 'ATOMIC-OK',
+        configurationItemNumber: 'DUPLICATE-CONFIG',
         partNumber: 'DUPLICATE-ROLLBACK',
         title: 'Duplicate configuration number',
         itemType: 'MANUFACTURED_PART',

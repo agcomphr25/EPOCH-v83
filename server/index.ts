@@ -266,12 +266,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve attached assets (PDFs, documents, etc.) - Must be before other routes
-// In production, dist/attached_assets is a symlink to the root attached_assets dir (created by build script)
-// In development, assets are in the root attached_assets folder directly
-const assetsPath = process.env.NODE_ENV === 'production'
-  ? path.join(process.cwd(), 'dist', 'attached_assets')
-  : path.join(process.cwd(), 'attached_assets');
+// Serve assets directly from the repository-root directory in both development
+// and production. Replit publishes the workspace snapshot, so no build-time
+// copy into dist is required.
+const assetsPath = path.join(process.cwd(), 'attached_assets');
 
 console.log('📁 Assets path configuration:', {
   NODE_ENV: process.env.NODE_ENV,

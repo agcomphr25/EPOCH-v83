@@ -9,6 +9,7 @@ export const requiredDesignControlMigrations = [
   '0192_engineering_packages.sql',
   '0207_design_control_authority_foundation.sql',
   '0208_design_control_authenticated_approvals.sql',
+  '0248_design_project_manufacturing_configuration.sql',
 ] as const;
 
 export const requiredDesignControlTables = [
@@ -30,6 +31,14 @@ export const requiredDesignControlTables = [
   'engineering_release_approvals',
   'engineering_packages',
   'engineering_package_items',
+  'design_project_configuration_items',
+  'design_project_configuration_item_relationships',
+  'design_project_part_revisions',
+  'design_project_document_applicability',
+  'design_project_part_revision_artifacts',
+  'routing_operation_work_instruction_revisions',
+  'design_project_configuration_reconciliation_queue',
+  'design_project_configuration_reconciliation_events',
 ] as const;
 
 type ReadinessClient = Pick<typeof db, 'execute'>;
@@ -44,14 +53,21 @@ export class DesignControlSchemaNotReadyError extends Error {
     super('Required Design Control migrations have not completed.');
     this.name = 'DesignControlSchemaNotReadyError';
     this.missingObjects = missingObjects;
-    this.causeMessage = cause instanceof Error ? cause.message : cause ? String(cause) : undefined;
+    this.causeMessage =
+      cause instanceof Error
+        ? cause.message
+        : cause
+          ? String(cause)
+          : undefined;
   }
 }
 
 let schemaReady = false;
 let readinessPromise: Promise<void> | null = null;
 
-export function designControlSchemaNotReadyPayload(error?: DesignControlSchemaNotReadyError) {
+export function designControlSchemaNotReadyPayload(
+  error?: DesignControlSchemaNotReadyError
+) {
   return {
     error: 'DESIGN_CONTROL_SCHEMA_NOT_READY',
     message: 'Required Design Control migrations have not completed.',
@@ -60,22 +76,35 @@ export function designControlSchemaNotReadyPayload(error?: DesignControlSchemaNo
   };
 }
 
-export function isDesignControlSchemaNotReadyError(error: unknown): error is DesignControlSchemaNotReadyError {
-  return error instanceof DesignControlSchemaNotReadyError
-    || (typeof error === 'object' && error !== null && (error as { code?: string }).code === 'DESIGN_CONTROL_SCHEMA_NOT_READY');
+export function isDesignControlSchemaNotReadyError(
+  error: unknown
+): error is DesignControlSchemaNotReadyError {
+  return (
+    error instanceof DesignControlSchemaNotReadyError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      (error as { code?: string }).code === 'DESIGN_CONTROL_SCHEMA_NOT_READY')
+  );
 }
 
 function isMissingSchemaError(error: unknown) {
-  const code = typeof error === 'object' && error !== null ? (error as { code?: string }).code : undefined;
+  const code =
+    typeof error === 'object' && error !== null
+      ? (error as { code?: string }).code
+      : undefined;
   const message = error instanceof Error ? error.message : String(error ?? '');
 
-  return code === '42P01'
-    || code === '42703'
-    || /relation .* does not exist/i.test(message)
-    || /column .* does not exist/i.test(message);
+  return (
+    code === '42P01' ||
+    code === '42703' ||
+    /relation .* does not exist/i.test(message) ||
+    /column .* does not exist/i.test(message)
+  );
 }
 
-export async function assertDesignControlSchemaReady(client: ReadinessClient = db) {
+export async function assertDesignControlSchemaReady(
+  client: ReadinessClient = db
+) {
   if (client === db && schemaReady) return;
   if (client === db && readinessPromise) return readinessPromise;
 
@@ -102,16 +131,28 @@ export async function assertDesignControlSchemaReady(client: ReadinessClient = d
           'superseded_by_record_id', 'record_version'
         )
     `);
-    const columnRows = ((authorityColumns as any)?.rows ?? authorityColumns) as Array<{ column_name?: string }>;
-    const presentColumns = new Set(Array.isArray(columnRows) ? columnRows.map((row) => row.column_name) : []);
+    const columnRows = ((authorityColumns as any)?.rows ??
+      authorityColumns) as Array<{ column_name?: string }>;
+    const presentColumns = new Set(
+      Array.isArray(columnRows) ? columnRows.map((row) => row.column_name) : []
+    );
     const requiredColumns = [
-      'authority_status', 'designated_authoritative_at', 'designated_authoritative_by',
-      'superseded_at', 'superseded_by', 'supersession_reason',
-      'superseded_by_record_id', 'record_version',
+      'authority_status',
+      'designated_authoritative_at',
+      'designated_authoritative_by',
+      'superseded_at',
+      'superseded_by',
+      'supersession_reason',
+      'superseded_by_record_id',
+      'record_version',
     ];
-    const missingColumns = requiredColumns.filter((column) => !presentColumns.has(column));
+    const missingColumns = requiredColumns.filter(
+      (column) => !presentColumns.has(column)
+    );
     if (missingColumns.length > 0) {
-      throw new DesignControlSchemaNotReadyError(missingColumns.map((column) => `design_control_records.${column}`));
+      throw new DesignControlSchemaNotReadyError(
+        missingColumns.map((column) => `design_control_records.${column}`)
+      );
     }
 
     const authorityIndex = await client.execute(sql`
@@ -124,7 +165,9 @@ export async function assertDesignControlSchemaReady(client: ReadinessClient = d
     `);
     const indexRows = (authorityIndex as any)?.rows ?? authorityIndex;
     if (!Array.isArray(indexRows) || indexRows.length === 0) {
-      throw new DesignControlSchemaNotReadyError(['design_control_records_authoritative_rd_project_unique']);
+      throw new DesignControlSchemaNotReadyError([
+        'design_control_records_authoritative_rd_project_unique',
+      ]);
     }
 
     const authorityConstraints = await client.execute(sql`
@@ -135,13 +178,20 @@ export async function assertDesignControlSchemaReady(client: ReadinessClient = d
         'design_control_records_superseded_by_record_fk'
       )
     `);
-    const constraintRows = ((authorityConstraints as any)?.rows ?? authorityConstraints) as Array<{ conname?: string }>;
-    const presentConstraints = new Set(Array.isArray(constraintRows) ? constraintRows.map((row) => row.conname) : []);
+    const constraintRows = ((authorityConstraints as any)?.rows ??
+      authorityConstraints) as Array<{ conname?: string }>;
+    const presentConstraints = new Set(
+      Array.isArray(constraintRows)
+        ? constraintRows.map((row) => row.conname)
+        : []
+    );
     const requiredConstraints = [
       'design_control_records_authority_status_check',
       'design_control_records_superseded_by_record_fk',
     ];
-    const missingConstraints = requiredConstraints.filter((name) => !presentConstraints.has(name));
+    const missingConstraints = requiredConstraints.filter(
+      (name) => !presentConstraints.has(name)
+    );
     if (missingConstraints.length > 0) {
       throw new DesignControlSchemaNotReadyError(missingConstraints);
     }
@@ -156,13 +206,20 @@ export async function assertDesignControlSchemaReady(client: ReadinessClient = d
           'submitted_at', 'submitted_by_user_id', 'submitted_by_snapshot'
         )
     `);
-    const approvalColumnRows = ((approvalColumns as any)?.rows ?? approvalColumns) as Array<{ column_name?: string }>;
+    const approvalColumnRows = ((approvalColumns as any)?.rows ??
+      approvalColumns) as Array<{ column_name?: string }>;
     const presentApprovalColumns = new Set(
-      Array.isArray(approvalColumnRows) ? approvalColumnRows.map((row) => row.column_name) : []
+      Array.isArray(approvalColumnRows)
+        ? approvalColumnRows.map((row) => row.column_name)
+        : []
     );
     const requiredApprovalColumns = [
-      'current_content_version_id', 'content_version', 'approval_mode',
-      'submitted_at', 'submitted_by_user_id', 'submitted_by_snapshot',
+      'current_content_version_id',
+      'content_version',
+      'approval_mode',
+      'submitted_at',
+      'submitted_by_user_id',
+      'submitted_by_snapshot',
     ];
     const missingApprovalColumns = requiredApprovalColumns.filter(
       (column) => !presentApprovalColumns.has(column)
@@ -190,9 +247,12 @@ export async function assertDesignControlSchemaReady(client: ReadinessClient = d
           'prevent_design_control_step_approval_delete'
         )
     `);
-    const structureRows = ((approvalStructures as any)?.rows ?? approvalStructures) as Array<{ object_name?: string }>;
+    const structureRows = ((approvalStructures as any)?.rows ??
+      approvalStructures) as Array<{ object_name?: string }>;
     const presentStructures = new Set(
-      Array.isArray(structureRows) ? structureRows.map((row) => row.object_name) : []
+      Array.isArray(structureRows)
+        ? structureRows.map((row) => row.object_name)
+        : []
     );
     const requiredStructures = [
       'design_control_step_content_versions_step_version_unique',
@@ -200,7 +260,9 @@ export async function assertDesignControlSchemaReady(client: ReadinessClient = d
       'prevent_design_control_step_version_delete',
       'prevent_design_control_step_approval_delete',
     ];
-    const missingStructures = requiredStructures.filter((name) => !presentStructures.has(name));
+    const missingStructures = requiredStructures.filter(
+      (name) => !presentStructures.has(name)
+    );
     if (missingStructures.length > 0) {
       throw new DesignControlSchemaNotReadyError(missingStructures);
     }

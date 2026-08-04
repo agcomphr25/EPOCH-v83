@@ -26015,6 +26015,33 @@ export const engineeringControlledRevisions = pgTable(
 
 // Design Project manufacturing-configuration foundation. These identities are
 // deliberately separate from P2 projects and from part_routings.project_id.
+export const designProjectConfigurationWorkspaces = pgTable(
+  'design_project_configuration_workspaces',
+  {
+    rdProjectId: text('rd_project_id')
+      .primaryKey()
+      .references(() => rdProjects.id, { onDelete: 'restrict' }),
+    configurationStatus: text('configuration_status').notNull().default('DRAFT'),
+    activatedByUserId: integer('activated_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    activatedBySnapshot: jsonb('activated_by_snapshot')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    activatedAt: timestamp('activated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    statusIdx: index('design_project_configuration_workspaces_status_idx').on(
+      table.configurationStatus
+    ),
+  })
+);
+
 export const designProjectConfigurationItems = pgTable(
   'design_project_configuration_items',
   {
@@ -26204,6 +26231,7 @@ export const designProjectDocumentApplicability = pgTable(
     requirementRole: text('requirement_role').notNull(),
     decision: text('decision').notNull().default('REQUIRED'),
     justification: text('justification'),
+    approvalStatus: text('approval_status').notNull().default('NOT_REQUIRED'),
     approvedByUserId: integer('approved_by_user_id').references(
       () => users.id,
       { onDelete: 'restrict' }

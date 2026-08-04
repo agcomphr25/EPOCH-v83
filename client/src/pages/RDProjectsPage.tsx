@@ -51,6 +51,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { DesignHistoryFilePanel } from '@/components/design-control/DesignHistoryFilePanel';
 import { DesignControlWorkspace } from '@/features/design-control/DesignControlWorkspace';
+import { DesignProjectConfigurationWorkspace } from '@/features/design-control/DesignProjectConfigurationWorkspace';
 
 interface EmployeeOption {
   id: number;
@@ -1661,7 +1662,7 @@ export default function RDProjectsPage() {
                 </CardHeader>
                 <CardContent>
                   <Tabs value={activeProjectTab} onValueChange={changeProjectTab} className="space-y-4">
-                    <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-12">
+                    <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-13">
                       <TabsTrigger value="overview">Overview</TabsTrigger>
                       <TabsTrigger value="requirements">Requirements</TabsTrigger>
                       <TabsTrigger value="risks">Risks</TabsTrigger>
@@ -1677,6 +1678,9 @@ export default function RDProjectsPage() {
                       </TabsTrigger>
                       <TabsTrigger value="engineering-release">
                         Engineering Release
+                      </TabsTrigger>
+                      <TabsTrigger value="configuration">
+                        Part &amp; Assembly Configuration
                       </TabsTrigger>
                     </TabsList>
 
@@ -2581,6 +2585,13 @@ export default function RDProjectsPage() {
                           )}
                         </CardContent>
                       </Card>
+                    </TabsContent>
+                    <TabsContent value="configuration" className="space-y-4">
+                      <DesignProjectConfigurationWorkspace
+                        projectId={selectedProject.id}
+                        projectName={selectedProject.projectName}
+                        designControlReadiness={selectedDesignControlPayload?.state ?? 'NOT_INITIALIZED'}
+                      />
                     </TabsContent>
                   </Tabs>
                 </CardContent>

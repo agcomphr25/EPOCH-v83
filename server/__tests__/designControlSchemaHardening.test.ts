@@ -30,6 +30,8 @@ const migrationFiles = [
   'migrations/0192_engineering_packages.sql',
   'migrations/0207_design_control_authority_foundation.sql',
   'migrations/0208_design_control_authenticated_approvals.sql',
+  'migrations/0248_design_project_manufacturing_configuration.sql',
+  'migrations/0251_design_project_configuration_workspace.sql',
 ];
 
 const originalDatabaseUrl = process.env.DATABASE_URL;

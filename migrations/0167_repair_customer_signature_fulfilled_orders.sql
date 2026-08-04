@@ -38,6 +38,23 @@ BEGIN
         AND reversal.reason_code = 'REVERSE_0167_FULFILLED_RESTORE'
     );
 
+    -- A fulfilled/shipping value can be collateral from a legacy duplicate-ID
+    -- repair. Preserve the structured workflow truth when the order still has
+    -- an open transition in an active manufacturing department.
+    DELETE FROM tmp_customer_signature_fulfilled_repair candidate
+    WHERE EXISTS (
+      SELECT 1
+      FROM order_department_transitions transition
+      WHERE transition.entity_type = 'p1_order'
+        AND transition.entity_id = candidate.order_id
+        AND transition.exited_at IS NULL
+        AND transition.department NOT IN (
+          'Awaiting Customer Signature',
+          'P1 Production Queue',
+          'Shipping Management'
+        )
+    );
+
     INSERT INTO order_activity_events (
       order_id,
       event_type,
@@ -86,7 +103,7 @@ SET
   current_department = 'P1 Production Queue',
   updated_at = NOW()
 FROM tmp_customer_signature_fulfilled_repair tmp
-WHERE ao.id = tmp.id;
+WHERE ao.order_id = tmp.order_id;
 
 UPDATE production_orders po
 SET

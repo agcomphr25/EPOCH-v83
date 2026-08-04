@@ -306,6 +306,8 @@ export const safeMigrationFiles = [
   '0238_reverse_0167_fulfilled_orders.sql',
   '0239_correct_0238_non_unique_id_collateral.sql',
   '0240_restore_0167_replay_orders.sql',
+  '0243_restore_open_paint_orders_after_0167_collateral.sql',
+  '0244_restore_shipped_orders_after_0167_id_collision.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -354,6 +356,8 @@ export const criticalMigrationFiles = new Set([
   '0238_reverse_0167_fulfilled_orders.sql',
   '0239_correct_0238_non_unique_id_collateral.sql',
   '0240_restore_0167_replay_orders.sql',
+  '0243_restore_open_paint_orders_after_0167_collateral.sql',
+  '0244_restore_shipped_orders_after_0167_id_collision.sql',
   '0231_p1_po_item_quantity_adjustments.sql',
   '0232_p2_v2_controlled_pilot_readiness.sql',
   '0233a_spec_sheets_base_table.sql',

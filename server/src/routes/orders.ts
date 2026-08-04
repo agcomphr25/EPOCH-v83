@@ -3370,6 +3370,48 @@ router.post('/cancel/:orderId', requirePermission('orders.cancel'), async (req: 
           productionStatus: 'CANCELLED',
           updatedAt: new Date(),
         });
+
+        const actor = {
+          id: (req as any).user?.id,
+          username: (req as any).user?.username || 'System',
+          role: (req as any).user?.role || 'system',
+        };
+
+        // PO/OEM production orders live in production_orders rather than
+        // all_orders, but require the same actor-attributed cancellation trail.
+        await auditService.logEvent({
+          entityType: 'p1_order',
+          entityId: orderId,
+          action: 'PRODUCTION_ORDER_CANCELLED',
+          actor,
+          reason: reason || 'No reason provided',
+          fieldsChanged: {
+            productionStatus: {
+              before: productionOrder.productionStatus,
+              after: 'CANCELLED',
+            },
+          },
+          meta: {
+            source: 'production-order-cancellation',
+            orderType: 'p1_po_oem',
+            productionOrderId: productionOrder.id,
+            poId: productionOrder.poId ?? null,
+            poItemId: productionOrder.poItemId ?? null,
+            poNumber: productionOrder.poNumber ?? null,
+            itemName: productionOrder.itemName ?? null,
+            currentDepartment: productionOrder.currentDepartment ?? null,
+            sendToRts: false,
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent') || undefined,
+        });
+
+        await auditService.closeDepartmentTransition(
+          orderId,
+          (req as any).user?.id,
+          'cancelled'
+        );
+
         console.log('🔧 Production order cancelled successfully:', orderId);
         return res.json({
           success: true,

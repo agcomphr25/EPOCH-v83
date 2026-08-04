@@ -258,6 +258,45 @@ export async function getP1POReconciliation(
   }
 }
 
+export function shouldCloseP1POFromReconciliation(
+  lines: P1POLineReconciliation[]
+): boolean {
+  return (
+    lines.length > 0 &&
+    lines.some((line) => line.activePoQuantity > 0) &&
+    lines.every(
+      (line) =>
+        line.activePoQuantity === 0 ||
+        (line.shippedQuantity >= line.activePoQuantity &&
+          line.workInProgressQuantity === 0 &&
+          line.pendingQueueQuantity === 0 &&
+          line.availableToProgressQuantity === 0)
+    )
+  );
+}
+
+/** Close an OPEN P1 PO when all active customer demand has shipped. */
+export async function reconcileAndCloseP1PO(purchaseOrderId: number): Promise<{
+  closed: boolean;
+  eligible: boolean;
+  lines: P1POLineReconciliation[];
+}> {
+  const lines = await getP1POReconciliation(purchaseOrderId);
+  const eligible = shouldCloseP1POFromReconciliation(lines);
+  if (!eligible) return { closed: false, eligible, lines };
+
+  const result = await pool.query(
+    `UPDATE purchase_orders
+        SET status = 'CLOSED', updated_at = NOW()
+      WHERE id = $1
+        AND UPPER(COALESCE(status, '')) = 'OPEN'
+      RETURNING id`,
+    [purchaseOrderId]
+  );
+
+  return { closed: result.rowCount === 1, eligible, lines };
+}
+
 export async function getP1QuantityAdjustmentHistory(
   purchaseOrderItemId: number,
   expectedPurchaseOrderId?: number

@@ -18,46 +18,24 @@ import {
 import { buildRevenueDimensionTags } from '../services/productionLineAccounting';
 import { deriveP1ProductionStatus } from '../utils/p1ProductionStatus';
 import { isP1FlatTop } from '../utils/p1FlatTop';
+import { reconcileAndCloseP1PO } from '../services/p1POReconciliationService';
 
 const router = Router();
 
-// Auto-close a PO when all non-cancelled production orders are SHIPPED
-async function autoClosePOIfFullyShipped(poId: number): Promise<void> {
+async function tryReconcileAndCloseP1PO(poId: number): Promise<void> {
   try {
-    const rows = await pool.query<{
-      total: string;
-      shipped: string;
-      cancelled: string;
-    }>(
-      `SELECT
-         COUNT(*) AS total,
-         COUNT(*) FILTER (WHERE production_status = 'SHIPPED') AS shipped,
-         COUNT(*) FILTER (WHERE production_status = 'CANCELLED') AS cancelled
-       FROM production_orders
-       WHERE po_id = $1`,
-      [poId]
-    );
-    const row = rowsOf<{
-      total: string;
-      shipped: string;
-      cancelled: string;
-    }>(rows)[0];
-    if (!row) return;
-    const total = parseInt(row.total, 10);
-    const shipped = parseInt(row.shipped, 10);
-    const cancelled = parseInt(row.cancelled, 10);
-    const active = total - cancelled;
-    if (active > 0 && shipped >= active) {
-      await pool.query(
-        `UPDATE purchase_orders SET status = 'CLOSED' WHERE id = $1 AND status = 'OPEN'`,
-        [poId]
-      );
+    const completion = await reconcileAndCloseP1PO(poId);
+    if (completion.closed) {
       console.log(
-        `✅ PO id=${poId} auto-closed — all ${active} active order(s) shipped`
+        `✅ PO id=${poId} auto-closed — all active customer demand shipped`
       );
     }
   } catch (err: any) {
-    console.warn(`⚠️ Auto-close check for PO ${poId} failed: ${err.message}`);
+    // Completion reconciliation is best-effort after fulfillment persistence;
+    // a transient close failure must not report the shipment itself as failed.
+    console.warn(
+      `⚠️ Reconciled auto-close check for PO ${poId} failed: ${err.message}`
+    );
   }
 }
 
@@ -2989,7 +2967,7 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
 
     // Auto-close any POs where all active production orders are now SHIPPED
     for (const poId of shippedPoIds) {
-      await autoClosePOIfFullyShipped(poId);
+      await tryReconcileAndCloseP1PO(poId);
     }
 
     // Note: Shipment records are created by process-shipment endpoint, not here
@@ -3911,7 +3889,11 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     }
 
     // 9. UPDATE ORDER/ITEM STATUSES TO SHIPPED
-    const mainShipPoIds = new Set<number>();
+    const affectedPoIds = new Set<number>(
+      orderDetails
+        .map((detail) => Number(detail.po?.id))
+        .filter((poId) => Number.isInteger(poId) && poId > 0)
+    );
     const fulfillmentUpdateFailures: Array<{ orderId: string; error: string }> = [];
     for (const detail of orderDetails) {
       try {
@@ -3931,8 +3913,6 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             fulfilledDate: shippedAt,
           });
           console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
-          const poId = detail.order?.poId ?? (detail.order as any)?.po_id;
-          if (poId) mainShipPoIds.add(Number(poId));
         }
       } catch (updateError: any) {
         console.error(
@@ -3953,9 +3933,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       );
     }
 
-    // Auto-close any POs where all active production orders are now SHIPPED
-    for (const poId of mainShipPoIds) {
-      await autoClosePOIfFullyShipped(poId);
+    // Close fully reconciled POs, including direct-shipped accessory-only POs
+    // that intentionally have no production_orders rows.
+    for (const poId of affectedPoIds) {
+      await tryReconcileAndCloseP1PO(poId);
     }
 
     // 10. BUILD PACKING SLIP RESPONSE (reuse PDFs already generated in step 8)

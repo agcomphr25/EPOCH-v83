@@ -9,6 +9,7 @@ vi.mock('../db', () => ({
 import {
   P1QuantityAdjustmentConflict,
   reconcileP1POLine,
+  shouldCloseP1POFromReconciliation,
   validateP1QuantityAdjustment,
   type P1ProductionUnitRow,
 } from '../src/services/p1POReconciliationService';
@@ -175,5 +176,43 @@ describe('P1 PO quantity-adjustment validation', () => {
     expect(() =>
       validateP1QuantityAdjustment(current, 'CANCEL_QUANTITY', 3)
     ).toThrow('below shipped, in-progress, and pending units');
+  });
+});
+
+describe('P1 PO completion eligibility', () => {
+  const reconciledLine = (quantity: number, shipped: number) =>
+    reconcileP1POLine({
+      purchaseOrderItemId: 10,
+      originalOrderedQuantity: quantity,
+      canceledDemandQuantity: 0,
+      purchaseOrderStatus: 'OPEN',
+      productionUnits: Array.from({ length: shipped }, (_, index) =>
+        unit(`DIRECT-SHIP-${index}`, 'Shipped', {
+          productionStatus: 'SHIPPED',
+          hasShipment: true,
+        })
+      ),
+    });
+
+  it('closes a fully shipped direct-fulfillment PO without requiring production work', () => {
+    expect(
+      shouldCloseP1POFromReconciliation([
+        reconciledLine(2, 2),
+        reconciledLine(2, 2),
+      ])
+    ).toBe(true);
+  });
+
+  it('keeps a partially shipped PO open', () => {
+    expect(
+      shouldCloseP1POFromReconciliation([
+        reconciledLine(2, 2),
+        reconciledLine(2, 1),
+      ])
+    ).toBe(false);
+  });
+
+  it('does not close a PO with no active customer demand', () => {
+    expect(shouldCloseP1POFromReconciliation([])).toBe(false);
   });
 });

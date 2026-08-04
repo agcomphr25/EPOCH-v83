@@ -1,0 +1,74 @@
+Choose neither A nor B. Both include unrelated changes.
+Use option C: create a clean branch from origin/main and reproduce only the intended three asset changes. This excludes:
+The two unrelated lint edits.
+The pasted audit text file.
+Both Replit-only commits from the PR history.
+Paste this into Replit:
+Choose option C: create a clean branch from origin/main containing only the intended asset deployment change.
+
+Do not reset, force-push, cherry-pick 67071b108, or include commit 2e63d7c77.
+
+1. Preserve the existing Replit commits where they are, then create a clean branch:
+
+git switch -c codex/avoid-attached-assets-build-copy origin/main
+
+2. Make only these changes:
+
+package.json:
+- Remove creation of dist/attached_assets.
+- Remove all cp, rm, or symlink handling for attached_assets.
+- Keep vite build, dist/public creation, and logo_updated.png copying intact.
+
+The final build command should be:
+
+"build": "vite build && mkdir -p dist/public && ( [ -f client/public/logo_updated.png ] && cp client/public/logo_updated.png dist/public/logo_updated.png || true )"
+
+server/index.ts:
+- Replace the environment-dependent assetsPath with:
+
+// Serve assets directly from the repository-root directory in both development
+// and production. Replit publishes the workspace snapshot, so no build-time
+// copy into dist is required.
+const assetsPath = path.join(process.cwd(), 'attached_assets');
+
+3. Do not change:
+- dropSql
+- _fkErr
+- any other lint finding
+- migrations
+- attached_assets contents
+- production data
+- any audit text files
+
+4. Verify the exact scope:
+
+git status --short
+git diff --check
+git diff --stat
+git diff -- package.json server/index.ts
+
+The diff must contain only the package.json build command and the assetsPath/comment change.
+
+5. Run:
+npm run build
+
+Then verify:
+test -d attached_assets
+test ! -e dist/attached_assets
+
+Start the server and verify one known /attached_assets/... PDF returns HTTP 200 with application/pdf.
+
+6. Commit only the two files:
+
+git add package.json server/index.ts
+git diff --cached --check
+git diff --cached
+git commit --no-verify -m "Avoid copying attached assets during builds"
+
+7. Push:
+
+git push -u origin codex/avoid-attached-assets-build-copy
+
+8. Open a draft PR targeting main and report the URL.
+
+Do not merge or republish.

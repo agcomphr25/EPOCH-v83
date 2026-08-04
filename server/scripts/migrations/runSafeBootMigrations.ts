@@ -303,6 +303,7 @@ export const safeMigrationFiles = [
   '0241_rom_builder_approval_authority.sql',
   '0242_epoch_validation_create_idempotency.sql',
   '0243_close_direct_shipped_p1_purchase_orders.sql',
+  '0245_controlled_document_legacy_reconciliation.sql',
   '0237_freezer_temperature_log_crud.sql',
   '0238_reverse_0167_fulfilled_orders.sql',
   '0239_correct_0238_non_unique_id_collateral.sql',
@@ -368,6 +369,7 @@ export const criticalMigrationFiles = new Set([
   '0235_quality_action_change_control.sql',
   '0241_rom_builder_approval_authority.sql',
   '0242_epoch_validation_create_idempotency.sql',
+  '0245_controlled_document_legacy_reconciliation.sql',
 ]);
 
 export async function runSafeBootMigrations() {

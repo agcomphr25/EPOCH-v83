@@ -1,5 +1,42 @@
 import { Request, Response, NextFunction } from 'express';
+
 import { getUserPermissions } from '../src/services/permissionService';
+import { recordAuditEvent } from '../src/services/auditLedgerService';
+
+async function recordReconciliationAuthorization(
+  req: Request,
+  capabilityKey: string,
+  decision: 'ALLOWED' | 'DENIED'
+) {
+  if (!capabilityKey.startsWith('documents.reconciliation_')) return;
+  const user = req.user as any;
+  try {
+    await recordAuditEvent({
+      eventType: `CONTROLLED_DOCUMENT_RECONCILIATION_ACCESS_${decision}`,
+      subjectType: 'controlled_document_reconciliation',
+      subjectId: capabilityKey,
+      sourceService: 'requirePermission.middleware',
+      actor: user
+        ? {
+            id: Number(user.id),
+            username: String(user.username || ''),
+            role: String(user.role || ''),
+          }
+        : undefined,
+      payload: { capabilityKey, method: req.method, path: req.originalUrl },
+      ipAddress:
+        (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+        req.socket.remoteAddress ||
+        null,
+      userAgent: req.headers['user-agent'] || null,
+    });
+  } catch (error) {
+    console.error(
+      '[requirePermission] Failed to record controlled-document reconciliation authorization',
+      error
+    );
+  }
+}
 
 /**
  * Factory that returns Express middleware enforcing a capability key.
@@ -30,6 +67,7 @@ export function requirePermission(capabilityKey: string) {
 
     // Superuser roles bypass all capability checks
     if (role === 'ADMIN' || role === 'OWNER') {
+      await recordReconciliationAuthorization(req, capabilityKey, 'ALLOWED');
       return next();
     }
 
@@ -37,15 +75,18 @@ export function requirePermission(capabilityKey: string) {
       const { permissionSet } = await getUserPermissions(id, role);
 
       if (!permissionSet.has(capabilityKey)) {
+        await recordReconciliationAuthorization(req, capabilityKey, 'DENIED');
         return res.status(403).json({
           error: 'Forbidden',
           requiredCapability: capabilityKey,
         });
       }
 
+      await recordReconciliationAuthorization(req, capabilityKey, 'ALLOWED');
       next();
     } catch (err) {
       console.error('[requirePermission] Error checking permissions:', err);
+      await recordReconciliationAuthorization(req, capabilityKey, 'DENIED');
       // Fail closed — deny on error
       return res.status(403).json({ error: 'Permission check failed' });
     }

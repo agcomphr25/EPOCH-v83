@@ -277,6 +277,20 @@ jobs:
           server/__tests__/p2V2LegacyPreservationPostgres.test.ts
           --reporter=verbose
 
+      - name: Run action-by-action legacy continuation PostgreSQL certification
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/p2V2LegacyContinuationPostgres.test.ts
+          --reporter=verbose
+
+      - name: Run safe snapshot mismatch reporting certification
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/legacySnapshotDiff.test.ts
+          --reporter=verbose
+
       - name: Run controlled pilot PostgreSQL certification
         env:
           P2_V2_PILOT_ENVIRONMENT: isolated_test

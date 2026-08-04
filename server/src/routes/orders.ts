@@ -4,7 +4,7 @@ import { DEFAULT_ORDERS_LIMIT, MAX_ORDERS_LIMIT } from '../constants/orders';
 import { db } from '../../db';
 import { pool } from '../../db';
 import { payments, allOrders, orders, customerAddresses, communicationLogs } from '../../../shared/schema';
-import { journalEntries, journalLines } from '../../schema';
+import { journalEntries, journalLines, potentialOrderDuplicateReviews } from '../../schema';
 import { eq, sql, desc, and, or } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
@@ -45,8 +45,31 @@ import {
 } from '../../utils/notifications';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 import { consumeP1PacketInventoryForOrder } from '../utils/p1PacketInventory';
+import {
+  DUPLICATE_REVIEW_RESOLUTION_CODES,
+  findPotentialDuplicateOrders,
+  recordPotentialDuplicateReviews,
+} from '../services/potentialDuplicateOrderService';
 
 const router = Router();
+
+const duplicateReviewPreflightSchema = z.object({
+  orderId: z.string().trim().min(1),
+  customerId: z.string().trim().nullable().optional(),
+  customerName: z.string().trim().nullable().optional(),
+  modelId: z.string().trim().nullable().optional(),
+  features: z.record(z.unknown()).nullable().optional(),
+  handedness: z.string().trim().nullable().optional(),
+  isFlattop: z.boolean().nullable().optional(),
+  isReplacement: z.boolean().nullable().optional(),
+  replacedOrderId: z.string().trim().nullable().optional(),
+});
+
+const duplicateReviewDecisionSchema = z.object({
+  code: z.enum(DUPLICATE_REVIEW_RESOLUTION_CODES),
+  note: z.string().trim().max(1000).nullable().optional(),
+  candidateOrderId: z.string().trim().min(1).nullable().optional(),
+});
 
 const IMMUTABLE_DUE_DATE_ERROR = 'Due date is locked after order creation';
 
@@ -940,12 +963,88 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
 // each blocked attempt is written to order_activity_events for observability.
 const ordersBeingFinalized = new Set<string>();
 
+// Advisory duplicate-stock preflight. The first rollout is deliberately
+// shadow mode: surface and audit candidates, but never block order creation.
+router.post('/duplicate-review/preflight', requirePermission('orders.create'), async (req: Request, res: Response) => {
+  try {
+    const input = duplicateReviewPreflightSchema.parse(req.body);
+    const candidates = await findPotentialDuplicateOrders(input);
+    return res.json({ mode: 'SHADOW', candidates });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors.map(item => item.message).join(', ') });
+    }
+    console.error('Potential duplicate order preflight failed:', error);
+    return res.status(500).json({ error: 'Potential duplicate review is temporarily unavailable' });
+  }
+});
+
+router.post('/duplicate-review/record', requirePermission('orders.create'), async (req: Request, res: Response) => {
+  try {
+    const input = duplicateReviewPreflightSchema.parse(req.body?.order);
+    const decision = duplicateReviewDecisionSchema.parse(req.body?.decision);
+    const candidates = await findPotentialDuplicateOrders(input);
+    const user = (req as any).user;
+    const reviews = await recordPotentialDuplicateReviews({
+      newOrderId: input.orderId,
+      candidates,
+      resolution: decision,
+      actor: {
+        id: Number.isInteger(Number(user?.id)) ? Number(user.id) : null,
+        displayName: user?.displayName || user?.username || null,
+      },
+    });
+    return res.json({ mode: 'SHADOW', reviews });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors.map(item => item.message).join(', ') });
+    }
+    console.error('Potential duplicate review recording failed:', error);
+    return res.status(500).json({ error: 'Failed to record potential duplicate review' });
+  }
+});
+
+router.post('/duplicate-review/:reviewId/resolve', requirePermission('orders.create'), async (req: Request, res: Response) => {
+  try {
+    const reviewId = Number(req.params.reviewId);
+    if (!Number.isInteger(reviewId) || reviewId <= 0) {
+      return res.status(400).json({ error: 'Valid review ID is required' });
+    }
+    const decision = duplicateReviewDecisionSchema.parse(req.body);
+    const user = (req as any).user;
+    const [updated] = await db.update(potentialOrderDuplicateReviews)
+      .set({
+        status: 'RESOLVED',
+        resolutionCode: decision.code,
+        resolutionNote: decision.note || null,
+        reviewedByUserId: Number.isInteger(Number(user?.id)) ? Number(user.id) : null,
+        reviewedByDisplayName: user?.displayName || user?.username || null,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(potentialOrderDuplicateReviews.id, reviewId))
+      .returning();
+    if (!updated) return res.status(404).json({ error: 'Duplicate review not found' });
+    return res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors.map(item => item.message).join(', ') });
+    }
+    console.error('Potential duplicate review resolution failed:', error);
+    return res.status(500).json({ error: 'Failed to resolve potential duplicate review' });
+  }
+});
+
 // Create order directly into the P1 production queue.
 router.post('/finalized', async (req: Request, res: Response) => {
   // Declare outside try so finally can release the guard reliably
   let incomingOrderId: string | null = null;
   try {
-    const orderData = insertAllOrderSchema.parse(req.body);
+    const duplicateReviewDecision = req.body?.duplicateReviewDecision
+      ? duplicateReviewDecisionSchema.parse(req.body.duplicateReviewDecision)
+      : null;
+    const { duplicateReviewDecision: _duplicateReviewDecision, ...rawOrderData } = req.body || {};
+    const orderData = insertAllOrderSchema.parse(rawOrderData);
     incomingOrderId = orderData.orderId || null;
 
     // Reject concurrent duplicate requests for the same order_id with HTTP 409
@@ -987,13 +1086,70 @@ router.post('/finalized', async (req: Request, res: Response) => {
       });
     }
 
+    let potentialDuplicates: Awaited<ReturnType<typeof findPotentialDuplicateOrders>> = [];
+    try {
+      potentialDuplicates = await findPotentialDuplicateOrders(orderData);
+    } catch (duplicateLookupError) {
+      console.warn('Potential duplicate lookup skipped during finalization:', duplicateLookupError);
+    }
+
+    const requestedReplacementCandidateId = duplicateReviewDecision?.candidateOrderId;
+    const replacementCandidateId = duplicateReviewDecision?.code === 'REPLACEMENT_REBUILD'
+      ? potentialDuplicates.find(candidate => candidate.candidateOrderId === requestedReplacementCandidateId)?.candidateOrderId ||
+        potentialDuplicates[0]?.candidateOrderId ||
+        null
+      : null;
     const order = await storage.createFinalizedOrder({
       ...orderData,
       dueDate: orderData.dueDate ? normalizeDueDateForStorage(orderData.dueDate) : orderData.dueDate,
       status: orderStatus,
       currentDepartment: orderDepartment,
       bottomMetalSource,
+      ...(replacementCandidateId
+        ? { isReplacement: true, replacedOrderId: replacementCandidateId }
+        : {}),
     });
+
+    if (potentialDuplicates.length > 0) {
+      const user = (req as any).user;
+      try {
+        await recordPotentialDuplicateReviews({
+          newOrderId: order.orderId,
+          candidates: potentialDuplicates,
+          resolution: duplicateReviewDecision,
+          actor: {
+            id: Number.isInteger(Number(user?.id)) ? Number(user.id) : null,
+            displayName: user?.displayName || user?.username || null,
+          },
+        });
+        await db.insert(orderActivityEvents).values({
+          orderId: order.orderId,
+          eventType: duplicateReviewDecision ? 'POTENTIAL_DUPLICATE_REVIEWED' : 'POTENTIAL_DUPLICATE_DETECTED',
+          eventCategory: 'production',
+          source: 'server',
+          sourceRoute: 'POST /api/orders/finalized',
+          actorId: Number.isInteger(Number(user?.id)) ? Number(user.id) : null,
+          actorType: user ? 'user' : 'system',
+          actorDisplayName: user?.displayName || user?.username || 'System',
+          reasonCode: duplicateReviewDecision?.code || null,
+          reasonText: duplicateReviewDecision?.note || null,
+          relatedEntityType: replacementCandidateId ? 'p1_order' : null,
+          relatedEntityId: replacementCandidateId,
+          metadata: {
+            mode: 'SHADOW',
+            candidateCount: potentialDuplicates.length,
+            candidates: potentialDuplicates.map(candidate => ({
+              orderId: candidate.candidateOrderId,
+              riskScore: candidate.riskScore,
+              riskLevel: candidate.riskLevel,
+              matchedSignals: candidate.matchedSignals.map(signal => signal.code),
+            })),
+          },
+        });
+      } catch (duplicateAuditError) {
+        console.warn('Potential duplicate review audit could not be recorded:', duplicateAuditError);
+      }
+    }
 
     if (order.currentDepartment === 'P1 Production Queue') {
       try {

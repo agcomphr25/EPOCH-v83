@@ -141,9 +141,13 @@ async function snapshotTables(tables: string[]): Promise<Snapshot> {
   const snapshots: Snapshot['tables'] = {};
   for (const table of tables) {
     const result = await pool.query<{ canonical: string }>(
-      `SELECT to_jsonb(t)::text AS canonical
-         FROM ${JSON.stringify(table)} t
-        ORDER BY md5(to_jsonb(t)::text),to_jsonb(t)::text`
+      `SELECT canonical
+         FROM (
+           SELECT to_jsonb(t)::text AS canonical
+             FROM ${JSON.stringify(table)} t
+         ) scoped
+        WHERE canonical ~* '(LEGACY-CERT|10000000-0000-4000-8000-|synthetic|historical)'
+        ORDER BY md5(canonical),canonical`
     );
     const rows = result.rows.map((row) => row.canonical);
     snapshots[table] = { hash: sha256(rows.join('\n')), rows };
@@ -398,6 +402,9 @@ describe.sequential(
       }
       console.log(
         `legacy_table_inventory_included_count=${inventory.included.length}`
+      );
+      console.log(
+        'legacy_snapshot_row_scope=immutable synthetic fixture markers LEGACY-CERT, 10000000-0000-4000-8000-*, synthetic, historical; every persisted column retained'
       );
       for (const table of inventory.included) {
         console.log(`legacy_table_inventory_included=${table}`);

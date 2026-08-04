@@ -14,6 +14,11 @@ import { normalizeToTuesday } from '@shared/utils/dateNormalization';
 import { syncEmployeeRoles, findRoleMismatches } from '../migrations/syncEmployeeRoles';
 import { recordAuditEvent } from '../services/auditLedgerService';
 import { resolveItemDisplayName } from '../utils/resolveItemDisplayName';
+import {
+  executePurePrecisionExpedite,
+  previewPurePrecisionExpedite,
+  PURE_PRECISION_EXPEDITE_IDS,
+} from '../services/p1ExpediteService';
 
 const router = Router();
 
@@ -2248,6 +2253,32 @@ router.get('/item-code-lookup', async (req: Request, res: Response) => {
 // ─── Order Override — glennj only ─────────────────────────────────────────
 
 const OVERRIDE_ONLY_USER = 'glennj';
+
+router.post('/p1-expedite/preview', authenticateToken, async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if (!user || user.username !== OVERRIDE_ONLY_USER) return res.status(403).json({ error: 'Access restricted to glennj' });
+  try {
+    res.json(await previewPurePrecisionExpedite(req.body?.ids ?? PURE_PRECISION_EXPEDITE_IDS));
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/p1-expedite/execute', authenticateToken, async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if (!user || user.username !== OVERRIDE_ONLY_USER) return res.status(403).json({ error: 'Access restricted to glennj' });
+  try {
+    res.json(await executePurePrecisionExpedite({
+      ids: req.body?.ids ?? PURE_PRECISION_EXPEDITE_IDS,
+      reason: String(req.body?.reason ?? ''),
+      actor: { id: typeof user.id === 'number' ? user.id : null, username: user.username, role: user.role },
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? null,
+    }));
+  } catch (error: any) {
+    res.status(error.statusCode ?? 400).json({ error: error.message, preview: error.preview });
+  }
+});
 
 // Columns that must NEVER be touched via override (system-managed / calculated)
 const PERMANENTLY_BLOCKED_COLUMNS = new Set([

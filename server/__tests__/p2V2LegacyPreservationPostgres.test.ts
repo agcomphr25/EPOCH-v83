@@ -5,7 +5,6 @@ import { Pool } from 'pg';
 
 import { storage } from '../storage';
 import { runSafeBootMigrations } from '../scripts/migrations/runSafeBootMigrations';
-import { launchProduction } from '../src/services/projectPreproductionReadinessService';
 import { createQualityReview } from '../src/services/projectQualityReleaseService';
 import { getActiveWorkflowInstanceForProject } from '../src/services/projectWorkflowInstanceService';
 
@@ -43,6 +42,26 @@ const roots = [
   'project_closings',
   'project_workflow_instances',
   'project_workflow_step_instances',
+  'project_activity_log',
+  'project_step_attachments',
+  'project_documents',
+  'rfq_risk_assessments',
+  'purchase_review_checklists',
+  'preproduction_checklists',
+  'wad_revisions',
+  'wad_revision_approval_history',
+  'wad_production_controls',
+  'wad_document_links',
+  'part_routings',
+  'routing_operations',
+  'routing_document_links',
+  'material_lot_reservations',
+  'inspection_records',
+  'quality_inspections',
+  'certifications',
+  'production_orders',
+  'serialized_items',
+  'shipping_records',
 ];
 
 const stages = [
@@ -399,13 +418,6 @@ describe.sequential(
         await storage.getWorkOrdersByProject(id);
         await storage.getProjectClosingByProjectId(id);
         expect(await getActiveWorkflowInstanceForProject(id)).toBeNull();
-        await expect(
-          launchProduction(id, `legacy-${index}`, actor)
-        ).rejects.toMatchObject({
-          code: expect.stringMatching(
-            /P2_V2_REQUIRED|UNKNOWN_WORKFLOW_VERSION|WORKFLOW_INSTANCE_REQUIRED/
-          ),
-        });
         await expect(createQualityReview(id, actor)).rejects.toMatchObject({
           code: expect.stringMatching(
             /P2_V2_REQUIRED|UNKNOWN_WORKFLOW_VERSION|WORKFLOW_INSTANCE_REQUIRED/

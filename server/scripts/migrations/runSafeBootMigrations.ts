@@ -315,6 +315,7 @@ export const safeMigrationFiles = [
   '0249_prior_month_payment_entry_grace.sql',
   '0250_epoch_validation_wizard_phase1.sql',
   '0251_design_project_configuration_workspace.sql',
+  '0252_potential_order_duplicate_reviews.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -369,6 +370,7 @@ export const criticalMigrationFiles = new Set([
   '0248_design_project_manufacturing_configuration.sql',
   '0249_prior_month_payment_entry_grace.sql',
   '0251_design_project_configuration_workspace.sql',
+  '0252_potential_order_duplicate_reviews.sql',
   '0231_p1_po_item_quantity_adjustments.sql',
   '0232_p2_v2_controlled_pilot_readiness.sql',
   '0233a_spec_sheets_base_table.sql',

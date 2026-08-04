@@ -73,11 +73,11 @@ export function diffSnapshots(
 ): SnapshotDifference[] {
   const differences: SnapshotDifference[] = [];
   const tables = new Set([...Object.keys(before), ...Object.keys(after)]);
-  for (const table of [...tables].sort()) {
+  for (const table of Array.from(tables).sort()) {
     const left = before[table] ?? {};
     const right = after[table] ?? {};
     const identities = new Set([...Object.keys(left), ...Object.keys(right)]);
-    for (const identity of [...identities].sort()) {
+    for (const identity of Array.from(identities).sort()) {
       const beforeRow = left[identity];
       const afterRow = right[identity];
       if (!beforeRow) {
@@ -110,7 +110,7 @@ export function diffSnapshots(
         ...Object.keys(beforeRow),
         ...Object.keys(afterRow),
       ]);
-      for (const field of [...fields].sort()) {
+      for (const field of Array.from(fields).sort()) {
         if (canonical(beforeRow[field]) === canonical(afterRow[field]))
           continue;
         differences.push({

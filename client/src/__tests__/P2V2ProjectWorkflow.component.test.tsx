@@ -97,13 +97,41 @@ function renderWorkflow(response: object) {
     vi.fn().mockImplementation(async (input: Parameters<typeof fetch>[0]) =>
       String(input).endsWith('/workflow-v2')
         ? { ok: true, json: async () => response }
-        : {
-            ok: false,
-            status: 404,
-            json: async () => ({
-              message: 'Endpoint not mocked in summary test',
-            }),
-          }
+        : String(input).endsWith('/p2-handoff')
+          ? {
+              ok: true,
+              json: async () => ({
+                p2PoNumber: 'PO-V3',
+                state: 'Partially Shipped',
+                currentP2Status: 'IN_PRODUCTION',
+                quantityRequired: 10,
+                quantityPending: 4,
+                quantityInProduction: 2,
+                quantityCompleted: 6,
+                quantityDispositioned: 0,
+                quantityAcceptedByQuality: 6,
+                quantityReleased: 5,
+                quantityShipped: 3,
+                productionHolds: 0,
+                qualityHolds: 0,
+                shippingHolds: 0,
+                openNcrs: 0,
+                certificationStatus: 'Incomplete',
+                shippingStatus: 'Partial',
+                executionComplete: false,
+                closingUnlocked: false,
+                blockers: ['4 unit(s) not complete'],
+                nextAction: 'Continue work in the P2 Control Center.',
+                links: { controlCenter: '/p2-control-center' },
+              }),
+            }
+          : {
+              ok: false,
+              status: 404,
+              json: async () => ({
+                message: 'Endpoint not mocked in summary test',
+              }),
+            }
     )
   );
   const client = new QueryClient({
@@ -210,6 +238,69 @@ describe('P2V2ProjectWorkflow', () => {
     ).toHaveTextContent('Workflow not initialized');
     expect(
       screen.queryByRole('button', { name: /initialize/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders prospective definition v3 in three sections without duplicate execution workspaces', async () => {
+    const labels = [
+      'RFQ Review',
+      'Estimate & Quote',
+      'Purchase/Contract Review',
+      'Technical & Configuration Review',
+      'Production Planning',
+      'WAD Authorization',
+      'Preproduction Readiness',
+      'Approve and Release to P2',
+      'P2 Execution',
+      'Project Closing',
+    ];
+    const types = [
+      'rfq_risk_assessment',
+      'estimate_quote',
+      'contract_review',
+      'technical_configuration_review',
+      'production_planning',
+      'wad_authorization',
+      'preproduction_release',
+      'p2_release',
+      'p2_execution',
+      'project_closing',
+    ];
+    renderWorkflow({
+      ...initialized,
+      definitionVersion: 3,
+      integrityStatus: 'VALID',
+      integrityErrors: [],
+      stages: labels.map((label, index) => ({
+        ...stages[index],
+        id: `v3-${index}`,
+        stepType: types[index],
+        label,
+        stepOrder: index + 1,
+        blockedReason: null,
+      })),
+    });
+    for (const label of labels)
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    expect(
+      screen.getByText('A. Planning and Authorization')
+    ).toBeInTheDocument();
+    expect(screen.getByText('B. P2 Handoff and Execution')).toBeInTheDocument();
+    expect(screen.getByText('C. Completion')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('link', { name: /Open P2 Control Center/i })
+    ).toHaveAttribute('href', '/p2-control-center');
+    expect(screen.getByTestId('p2-v2-execution-summary')).toHaveTextContent(
+      'Partially Shipped'
+    );
+    expect(screen.getByTestId('p2-v2-project-closing')).toHaveTextContent(
+      'Not Ready'
+    );
+    expect(
+      screen.queryByText('Shipping & Project Closing')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Shipping readiness and packaging')
     ).not.toBeInTheDocument();
   });
 });

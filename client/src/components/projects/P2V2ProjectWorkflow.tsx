@@ -20,6 +20,8 @@ import P2V2ProductionExecution from './P2V2ProductionExecution';
 import P2V2QualityProductRelease from './P2V2QualityProductRelease';
 import P2V2ShippingProjectCloseout from './P2V2ShippingProjectCloseout';
 import P2V2PilotControlCenter from './P2V2PilotControlCenter';
+import P2V2HandoffExecution from './P2V2HandoffExecution';
+import P2V2ProjectClosingSummary from './P2V2ProjectClosingSummary';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -288,7 +290,9 @@ export default function P2V2ProjectWorkflow({
           </div>
         </CardContent>
       </Card>
-      <P2V2PilotControlCenter projectId={projectId} />
+      {data.definitionVersion !== 3 && (
+        <P2V2PilotControlCenter projectId={projectId} />
+      )}
       {data.integrityStatus !== 'VALID' && (
         <Card
           className="border-red-400 bg-red-50"
@@ -314,135 +318,182 @@ export default function P2V2ProjectWorkflow({
       )}
       <div className="space-y-3" aria-label="P2 V2 workflow stages">
         {data.stages.map((stage) => (
-          <Card
-            key={stage.id}
-            className={stage.status === 'BLOCKED' ? 'border-red-300' : ''}
-            data-testid={`v2-stage-${stage.stepOrder}`}
-          >
-            <CardContent className="p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 gap-3">
-                  <StatusIcon status={stage.status} />
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Stage {stage.stepOrder}
-                    </p>
-                    <h3 className="font-semibold">{stage.label}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {stage.description}
-                    </p>
+          <div key={stage.id} className="space-y-3">
+            {data.definitionVersion === 3 &&
+              [1, 8, 10].includes(stage.stepOrder) && (
+                <div
+                  className="rounded border-l-4 border-blue-600 bg-blue-50 p-3"
+                  data-testid={`v2-workflow-section-${stage.stepOrder}`}
+                >
+                  <h2 className="font-semibold text-blue-950">
+                    {stage.stepOrder === 1
+                      ? 'A. Planning and Authorization'
+                      : stage.stepOrder === 8
+                        ? 'B. P2 Handoff and Execution'
+                        : 'C. Completion'}
+                  </h2>
+                  <p className="text-sm text-blue-900">
+                    {stage.stepOrder === 1
+                      ? 'Stages 1–7 prepare, review, and authorize the customer order.'
+                      : stage.stepOrder === 8
+                        ? 'Stage 8 authorizes the handoff; Stage 9 reports authoritative P2 Control Center execution.'
+                        : 'Stage 10 is the separate controlled Project Closing workspace.'}
+                  </p>
+                </div>
+              )}
+            <Card
+              key={stage.id}
+              className={stage.status === 'BLOCKED' ? 'border-red-300' : ''}
+              data-testid={`v2-stage-${stage.stepOrder}`}
+            >
+              <CardContent className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 gap-3">
+                    <StatusIcon status={stage.status} />
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Stage {stage.stepOrder}
+                      </p>
+                      <h3 className="font-semibold">{stage.label}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {stage.description}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className={statusStyle[stage.status] || ''}>
+                      {stage.status.replaceAll('_', ' ')}
+                    </Badge>
+                    <Badge variant="outline">
+                      {stage.applicability.replaceAll('_', ' ')}
+                    </Badge>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge className={statusStyle[stage.status] || ''}>
-                    {stage.status.replaceAll('_', ' ')}
-                  </Badge>
-                  <Badge variant="outline">
-                    {stage.applicability.replaceAll('_', ' ')}
-                  </Badge>
+                {stage.blockedReason && (
+                  <p
+                    className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700"
+                    data-testid="v2-blocked-reason"
+                  >
+                    Blocked: {stage.blockedReason}
+                  </p>
+                )}
+                <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+                  <span>
+                    Owner:{' '}
+                    {stage.ownerDisplayName || stage.ownerRole || 'Unassigned'}
+                  </span>
+                  <span>Due: {stage.dueDate || 'Not set'}</span>
+                  <span>
+                    Links / evidence / approvals: {stage.activeLinks.length} /{' '}
+                    {stage.evidenceCount} / {stage.approvals.length}
+                  </span>
+                  <span>Updated: {dateLabel(stage.lastUpdated)}</span>
+                  <span>Revision: {stage.revisionReference || 'None'}</span>
+                  <span>
+                    Effectivity: {stage.effectivityReference || 'None'}
+                  </span>
+                  <span>
+                    Completion: {stage.completedByDisplayName || 'Not complete'}
+                  </span>
                 </div>
-              </div>
-              {stage.blockedReason && (
-                <p
-                  className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700"
-                  data-testid="v2-blocked-reason"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setSelectedStage(stage)}
+                  data-testid={`v2-stage-details-${stage.stepOrder}`}
                 >
-                  Blocked: {stage.blockedReason}
-                </p>
-              )}
-              <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
-                <span>
-                  Owner:{' '}
-                  {stage.ownerDisplayName || stage.ownerRole || 'Unassigned'}
-                </span>
-                <span>Due: {stage.dueDate || 'Not set'}</span>
-                <span>
-                  Links / evidence / approvals: {stage.activeLinks.length} /{' '}
-                  {stage.evidenceCount} / {stage.approvals.length}
-                </span>
-                <span>Updated: {dateLabel(stage.lastUpdated)}</span>
-                <span>Revision: {stage.revisionReference || 'None'}</span>
-                <span>Effectivity: {stage.effectivityReference || 'None'}</span>
-                <span>
-                  Completion: {stage.completedByDisplayName || 'Not complete'}
-                </span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => setSelectedStage(stage)}
-                data-testid={`v2-stage-details-${stage.stepOrder}`}
-              >
-                <Eye className="mr-1 h-4 w-4" />
-                Details
-              </Button>
-              {(
-                [
-                  'rfq_risk_assessment',
-                  'estimate_quote',
-                  'contract_review',
-                ] as const
-              ).includes(
-                stage.stepType as
-                  | 'rfq_risk_assessment'
-                  | 'estimate_quote'
-                  | 'contract_review'
-              ) && (
-                <div className="mt-3">
-                  <P2V2CommercialReview
-                    projectId={projectId}
-                    stage={
-                      stage.stepType as
-                        | 'rfq_risk_assessment'
-                        | 'estimate_quote'
-                        | 'contract_review'
-                    }
-                  />
-                </div>
-              )}
-              {stage.stepType === 'design_applicability' && (
-                <div className="mt-3">
-                  <P2V2DesignApplicability projectId={projectId} />
-                </div>
-              )}
-              {stage.stepType === 'technical_configuration_review' && (
-                <div className="mt-3">
-                  <P2V2TechnicalConfigurationReview projectId={projectId} />
-                </div>
-              )}
-              {stage.stepType === 'production_planning' && (
-                <div className="mt-3">
-                  <P2V2ProductionPlanning projectId={projectId} />
-                </div>
-              )}
-              {stage.stepType === 'wad_authorization' && (
-                <div className="mt-3">
-                  <P2V2WadAuthorization projectId={projectId} />
-                </div>
-              )}
-              {stage.stepType === 'preproduction_release' && (
-                <div className="mt-3">
-                  <P2V2PreproductionReadiness projectId={projectId} />
-                </div>
-              )}
-              {stage.stepType === 'production_quality' && (
-                <div className="mt-3">
-                  <P2V2ProductionExecution projectId={projectId} />
-                </div>
-              )}
-              {stage.stepType === 'final_release_shipping' && (
-                <div className="mt-3">
-                  <P2V2QualityProductRelease projectId={projectId} />
-                </div>
-              )}
-              {stage.stepType === 'project_closing' && (
-                <div className="mt-3">
-                  <P2V2ShippingProjectCloseout projectId={projectId} />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  <Eye className="mr-1 h-4 w-4" />
+                  Details
+                </Button>
+                {(
+                  [
+                    'rfq_risk_assessment',
+                    'estimate_quote',
+                    'contract_review',
+                  ] as const
+                ).includes(
+                  stage.stepType as
+                    'rfq_risk_assessment' | 'estimate_quote' | 'contract_review'
+                ) && (
+                  <div className="mt-3">
+                    <P2V2CommercialReview
+                      projectId={projectId}
+                      stage={
+                        stage.stepType as
+                          | 'rfq_risk_assessment'
+                          | 'estimate_quote'
+                          | 'contract_review'
+                      }
+                    />
+                  </div>
+                )}
+                {stage.stepType === 'design_applicability' && (
+                  <div className="mt-3">
+                    <P2V2DesignApplicability projectId={projectId} />
+                  </div>
+                )}
+                {stage.stepType === 'technical_configuration_review' && (
+                  <div className="mt-3">
+                    <P2V2TechnicalConfigurationReview projectId={projectId} />
+                  </div>
+                )}
+                {stage.stepType === 'production_planning' && (
+                  <div className="mt-3">
+                    <P2V2ProductionPlanning projectId={projectId} />
+                  </div>
+                )}
+                {stage.stepType === 'wad_authorization' && (
+                  <div className="mt-3">
+                    <P2V2WadAuthorization projectId={projectId} />
+                  </div>
+                )}
+                {stage.stepType === 'preproduction_release' && (
+                  <div className="mt-3">
+                    <P2V2PreproductionReadiness projectId={projectId} />
+                  </div>
+                )}
+                {stage.stepType === 'p2_release' && (
+                  <div className="mt-3">
+                    <P2V2HandoffExecution
+                      projectId={projectId}
+                      mode="handoff"
+                    />
+                  </div>
+                )}
+                {stage.stepType === 'p2_execution' && (
+                  <div className="mt-3">
+                    <P2V2HandoffExecution
+                      projectId={projectId}
+                      mode="execution"
+                    />
+                  </div>
+                )}
+                {stage.stepType === 'production_quality' && (
+                  <div className="mt-3">
+                    <P2V2ProductionExecution projectId={projectId} />
+                  </div>
+                )}
+                {stage.stepType === 'final_release_shipping' && (
+                  <div className="mt-3">
+                    <P2V2QualityProductRelease projectId={projectId} />
+                  </div>
+                )}
+                {stage.stepType === 'project_closing' &&
+                  data.definitionVersion !== 3 && (
+                    <div className="mt-3">
+                      <P2V2ShippingProjectCloseout projectId={projectId} />
+                    </div>
+                  )}
+                {stage.stepType === 'project_closing' &&
+                  data.definitionVersion === 3 && (
+                    <div className="mt-3">
+                      <P2V2ProjectClosingSummary projectId={projectId} />
+                    </div>
+                  )}
+              </CardContent>
+            </Card>
+          </div>
         ))}
       </div>
       <Dialog

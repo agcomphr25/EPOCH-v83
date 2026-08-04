@@ -314,6 +314,7 @@ jobs:
           server/__tests__/projectProductionPlanning.test.ts
           server/__tests__/projectWadAuthorization.test.ts
           server/__tests__/projectPreproductionReadiness.test.ts
+          server/__tests__/projectP2Handoff.test.ts
           server/__tests__/projectProductionExecution.test.ts
           server/__tests__/projectQualityRelease.test.ts
           server/__tests__/projectShippingCloseout.test.ts

@@ -145,10 +145,10 @@ async function context(
         : 'An active V2 workflow instance is required.',
       409
     );
-  if (Number(instances[0].definition_version) !== 2)
+  if (![2, 3].includes(Number(instances[0].definition_version)))
     throw new ProjectTechnicalConfigurationReviewError(
       'TECHNICAL_REVIEW_DEFINITION_REQUIRED',
-      'Technical & Configuration Review is available only to p2_v2 definition version 2.',
+      'Technical & Configuration Review requires a compatible p2_v2 definition.',
       409
     );
   const steps = rows(

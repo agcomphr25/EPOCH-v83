@@ -46,6 +46,6 @@ describe('Design Control client authority foundation', () => {
     expect(source).toContain('const projects = sharedProjects');
     expect(source).toContain('Browser-local project data needs review');
     expect(source).toContain('Review and import');
-    expect(source).toContain('No record was selected automatically');
+    expect(source).toContain('was selected automatically.');
   });
 });

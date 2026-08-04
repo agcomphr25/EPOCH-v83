@@ -63,6 +63,8 @@ describe('EPOCH validation wizard Phase 1 architecture', () => {
     expect(route).toContain('WHERE id=$1 FOR SHARE');
     expect(route).toContain('packageRevision: packageRow.revision');
     expect(route).toContain('productionVersion: packageRow.production_version');
+    expect(route).toContain('e.job_title AS position');
+    expect(route).not.toContain('e.position');
   });
 
   it('requires edit authorization and optimistic locking for Phase 1 changes', () => {
@@ -87,6 +89,11 @@ describe('EPOCH validation wizard Phase 1 architecture', () => {
     expect(decisionRoute).not.toContain(
       "requirePermission('EPOCH_VALIDATION_EDIT')"
     );
+  });
+
+  it('keeps controlled duplicate dispositions out of the active package list', () => {
+    expect(route).toContain("WHERE p.status<>'VOID_DUPLICATE'");
+    expect(route).toContain("'PACKAGE_VOIDED_DUPLICATE'");
   });
 
   it('registers migration 0250 in both safe and critical boot lists', () => {

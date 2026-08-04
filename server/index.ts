@@ -267,8 +267,8 @@ app.use((req, res, next) => {
 });
 
 // Serve attached assets (PDFs, documents, etc.) - Must be before other routes
-// In production, assets are copied to dist/attached_assets via build script
-// In development, assets are in the root attached_assets folder
+// In production, dist/attached_assets is a symlink to the root attached_assets dir (created by build script)
+// In development, assets are in the root attached_assets folder directly
 const assetsPath = process.env.NODE_ENV === 'production'
   ? path.join(process.cwd(), 'dist', 'attached_assets')
   : path.join(process.cwd(), 'attached_assets');

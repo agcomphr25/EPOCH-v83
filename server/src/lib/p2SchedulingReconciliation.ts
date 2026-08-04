@@ -1,4 +1,8 @@
-import type { P2SerializedUnitLedgerRow } from './p2SerializedUnitLedger';
+import {
+  buildP2SerializedUnitLedger,
+  countP2LedgerAccountedUnits,
+  type P2SerializedUnitLedgerRow,
+} from './p2SerializedUnitLedger';
 
 const normalized = (value: unknown) => String(value ?? '').trim().toUpperCase();
 
@@ -39,29 +43,12 @@ export function p2UnitConsumesOrderedDemand(
   row: P2SerializedUnitLedgerRow,
   shippedItemIds: ReadonlySet<string>,
 ): boolean {
-  const id = String(row.id ?? '').trim().toLowerCase();
-  if (id && shippedItemIds.has(id)) return true;
-  if (isHistoricalP2Unit(row)) return false;
-  if (row.finalizedAt ?? row.finalized_at) return true;
-
-  const status = normalized(row.status);
-  if (['COMPLETE', 'COMPLETED', 'CLOSED'].includes(status)) return true;
-  if (status !== 'ACTIVE') return false;
-
-  const department = normalized(row.currentDepartment ?? row.current_department);
-  return department !== '' && department !== 'PENDING LAYUP';
+  return buildP2SerializedUnitLedger(1, [row], shippedItemIds).accounted > 0;
 }
 
 export function countDistinctP2DemandUnits(
   rows: readonly P2SerializedUnitLedgerRow[],
   shippedItemIds: ReadonlySet<string>,
 ): number {
-  const identities = new Set<string>();
-  for (const row of rows) {
-    if (!p2UnitConsumesOrderedDemand(row, shippedItemIds)) continue;
-    const serial = normalized(row.serialNumber ?? row.serial_number);
-    const id = String(row.id ?? '').trim().toLowerCase();
-    if (serial || id) identities.add(serial || `ID:${id}`);
-  }
-  return identities.size;
+  return countP2LedgerAccountedUnits(rows, shippedItemIds);
 }

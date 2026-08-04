@@ -55,6 +55,15 @@ describe('P2 shipment and scheduling reconciliation', () => {
     ], new Set())).toBe(1);
   });
 
+  it('uses the status ledger rules when allocating scheduling demand', () => {
+    expect(countDistinctP2DemandUnits([
+      { id: 'inventory-history', serialNumber: 'S-001', status: 'COMPLETED', currentDepartment: 'Inventory' },
+      { id: 'active', serialNumber: 'S-002', status: 'ACTIVE', currentDepartment: 'Oven/Cure' },
+      { id: 'scheduled', serialNumber: 'S-003', status: 'ACTIVE', currentDepartment: 'Layup' },
+      { id: 'pending', serialNumber: 'S-004', status: 'ACTIVE', currentDepartment: 'Pending Layup' },
+    ], new Set())).toBe(2);
+  });
+
   it('creates pending capacity for duplicate historical serialized rows', () => {
     const generated = countDistinctP2SerializedUnits([
       { id: 'original', serialNumber: 'ROC2600001', status: 'ACTIVE', currentDepartment: 'Layup' },

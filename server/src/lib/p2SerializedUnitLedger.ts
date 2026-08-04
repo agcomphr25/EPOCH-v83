@@ -75,20 +75,15 @@ const classify = (
   return null;
 };
 
-export function buildP2SerializedUnitLedger(
-  orderedQuantity: number,
+const bucketP2SerializedUnits = (
   rows: readonly P2SerializedUnitLedgerRow[],
-  shippedSerializedItemIds: Iterable<string>,
-): P2SerializedUnitLedger {
-  const total = Math.max(0, Math.trunc(Number(orderedQuantity) || 0));
+  shippedItemIds: Iterable<string>,
+) => {
   const shippedIds = new Set(
-    Array.from(shippedSerializedItemIds, (id) => String(id).trim().toLowerCase())
+    Array.from(shippedItemIds, (id) => String(id).trim().toLowerCase())
       .filter(Boolean),
   );
   const bucketBySerial = new Map<string, P2SerializedUnitBucket>();
-
-  // A serial can have historical duplicate rows. Evaluate every row and retain
-  // only the highest-precedence legitimate state for that physical unit.
   const precedence: Record<P2SerializedUnitBucket, number> = {
     shipped: 4,
     finalization: 3,
@@ -97,7 +92,7 @@ export function buildP2SerializedUnitLedger(
   };
   for (const row of rows) {
     const serial = serialKey(row);
-    if (!serial) continue; // excludes nonserialized/quantity-only ghost rows
+    if (!serial) continue;
     const bucket = classify(row, shippedIds);
     if (!bucket) continue;
     const existing = bucketBySerial.get(serial);
@@ -105,6 +100,25 @@ export function buildP2SerializedUnitLedger(
       bucketBySerial.set(serial, bucket);
     }
   }
+  return bucketBySerial;
+};
+
+export function countP2LedgerAccountedUnits(
+  rows: readonly P2SerializedUnitLedgerRow[],
+  shippedItemIds: Iterable<string>,
+): number {
+  return bucketP2SerializedUnits(rows, shippedItemIds).size;
+}
+
+export function buildP2SerializedUnitLedger(
+  orderedQuantity: number,
+  rows: readonly P2SerializedUnitLedgerRow[],
+  shippedSerializedItemIds: Iterable<string>,
+): P2SerializedUnitLedger {
+  const total = Math.max(0, Math.trunc(Number(orderedQuantity) || 0));
+  // A serial can have historical duplicate rows. Evaluate every row and retain
+  // only the highest-precedence legitimate state for that physical unit.
+  const bucketBySerial = bucketP2SerializedUnits(rows, shippedSerializedItemIds);
 
   const counts = {
     shipped: 0,

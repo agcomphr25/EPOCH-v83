@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest';
 const root = path.resolve(import.meta.dirname, '../..');
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const route = read('server/src/routes/epochSoftwareValidation.ts');
+const decisionService = read(
+  'server/src/services/epochValidationResponsibilityDecision.ts'
+);
 const compactRoute = route.replace(/\s+/g, '');
 const migration = read('migrations/0250_epoch_validation_wizard_phase1.sql');
 const safeBoot = read('server/scripts/migrations/runSafeBootMigrations.ts');
@@ -48,12 +51,15 @@ describe('EPOCH validation wizard Phase 1 architecture', () => {
     );
     expect(route).toContain('WHERE id=ANY($1::int[]) AND is_active=true');
     expect(route).toContain("assignment_status='SUPERSEDED'");
-    expect(route).toContain('ASSIGNEE_ACCEPTANCE_REQUIRED');
+    expect(decisionService).toContain('ASSIGNEE_DECISION_REQUIRED');
     expect(route).toContain(
       'if (previousKeys.has(`${assignment.role}:${assignment.employeeId}`))'
     );
     expect(route).toContain("'RESPONSIBILITIES_ASSIGNED'");
     expect(route).toContain("'RESPONSIBILITY_ACCEPTED'");
+    expect(route).toContain("'RESPONSIBILITY_DECLINED'");
+    expect(route).toContain('responsibilityDecisionIdentityError');
+    expect(route).toContain('authenticatedEmployeeId');
   });
 
   it('requires edit authorization and optimistic locking for Phase 1 changes', () => {
@@ -64,6 +70,20 @@ describe('EPOCH validation wizard Phase 1 architecture', () => {
     expect(route).toContain('WHERE id=$14 AND row_version=$15 RETURNING *');
     expect(route).toContain("error: 'STALE_RECORD'");
     expect(route).toContain("'WIZARD_SETUP_SAVED'");
+    const assignmentRoute = compactRoute.slice(
+      compactRoute.indexOf("router.put('/:id/responsibilities'"),
+      compactRoute.indexOf('asyncfunctiondecideResponsibility')
+    );
+    const decisionRoute = compactRoute.slice(
+      compactRoute.indexOf('asyncfunctiondecideResponsibility'),
+      compactRoute.indexOf('constintendedUseSchema')
+    );
+    expect(assignmentRoute).toContain(
+      "requirePermission('EPOCH_VALIDATION_EDIT')"
+    );
+    expect(decisionRoute).not.toContain(
+      "requirePermission('EPOCH_VALIDATION_EDIT')"
+    );
   });
 
   it('registers migration 0250 in both safe and critical boot lists', () => {

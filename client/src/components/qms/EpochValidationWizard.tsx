@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -104,6 +104,14 @@ type Props = {
   employees: Employee[];
   onBack: () => void;
 };
+
+type SaveIntent = 'continue' | 'exit';
+const stepFormId = (step: number) => `epoch-validation-step-${step}`;
+const submittedIntent = (event: FormEvent<HTMLFormElement>) =>
+  ((event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)
+    ?.value === 'exit'
+    ? 'exit'
+    : 'continue';
 
 const requestJson = <T,>(
   url: string,
@@ -225,6 +233,7 @@ export function EpochValidationWizard({ detail, employees, onBack }: Props) {
   const firstIncomplete = !setupComplete ? 1 : !intendedComplete ? 2 : 3;
   const [currentStep, setCurrentStep] = useState(firstIncomplete);
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const implementedComplete = [
     setupComplete,
     intendedComplete,
@@ -275,6 +284,38 @@ export function EpochValidationWizard({ detail, employees, onBack }: Props) {
       return;
     setDirty(false);
     setCurrentStep(step);
+  };
+  const finishSave = async (intent: SaveIntent, nextStep?: number) => {
+    setDirty(false);
+    let refreshed = true;
+    try {
+      await refresh();
+    } catch {
+      refreshed = false;
+      toast({
+        title: 'Draft saved, but the screen could not be refreshed.',
+        description: 'Reopen the package to continue with current data.',
+        variant: 'destructive',
+      });
+    }
+    if (intent === 'exit') {
+      toast({ title: 'Draft saved successfully.' });
+      onBack();
+    } else if (refreshed && nextStep) setCurrentStep(nextStep);
+  };
+  const submitCurrentStep = (intent: SaveIntent) => {
+    if (saving) return;
+    if (!dirty) {
+      if (intent === 'exit') onBack();
+      else if (currentStep < 3) setCurrentStep(currentStep + 1);
+      return;
+    }
+    const form = document.getElementById(stepFormId(currentStep));
+    const submitter = form?.querySelector<HTMLButtonElement>(
+      `button[type="submit"][value="${intent}"]`
+    );
+    if (form instanceof HTMLFormElement && submitter)
+      form.requestSubmit(submitter);
   };
 
   const nextAction = !setupComplete
@@ -381,22 +422,16 @@ export function EpochValidationWizard({ detail, employees, onBack }: Props) {
             <SetupStep
               detail={detail}
               onDirty={() => setDirty(true)}
-              onSaved={async () => {
-                setDirty(false);
-                await refresh();
-                setCurrentStep(2);
-              }}
+              onSavingChange={setSaving}
+              onSaved={(intent) => finishSave(intent, 2)}
             />
           )}
           {currentStep === 2 && (
             <IntendedUseStep
               detail={detail}
               onDirty={() => setDirty(true)}
-              onSaved={async () => {
-                setDirty(false);
-                await refresh();
-                setCurrentStep(3);
-              }}
+              onSavingChange={setSaving}
+              onSaved={(intent) => finishSave(intent, 3)}
             />
           )}
           {currentStep === 3 && (
@@ -404,10 +439,8 @@ export function EpochValidationWizard({ detail, employees, onBack }: Props) {
               detail={detail}
               employees={activeEmployees}
               onDirty={() => setDirty(true)}
-              onSaved={async () => {
-                setDirty(false);
-                await refresh();
-              }}
+              onSavingChange={setSaving}
+              onSaved={(intent) => finishSave(intent)}
             />
           )}
           {currentStep > 3 && <UnavailableStep step={currentStep} />}
@@ -417,7 +450,7 @@ export function EpochValidationWizard({ detail, employees, onBack }: Props) {
       <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t bg-background/95 py-3 backdrop-blur">
         <Button
           variant="outline"
-          disabled={currentStep === 1}
+          disabled={currentStep === 1 || saving}
           onClick={() => navigate(currentStep - 1)}
         >
           <ChevronLeft className="mr-2 h-4 w-4" /> Previous
@@ -428,22 +461,14 @@ export function EpochValidationWizard({ detail, employees, onBack }: Props) {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => {
-              if (dirty) {
-                toast({
-                  title: 'Save this step before exiting',
-                  variant: 'destructive',
-                });
-                return;
-              }
-              onBack();
-            }}
+            disabled={saving}
+            onClick={() => submitCurrentStep('exit')}
           >
-            Save and exit
+            {saving ? 'Saving…' : 'Save and exit'}
           </Button>
           <Button
-            disabled={currentStep >= 3}
-            onClick={() => navigate(currentStep + 1)}
+            disabled={currentStep >= 3 || saving}
+            onClick={() => submitCurrentStep('continue')}
           >
             Continue <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
@@ -456,14 +481,18 @@ export function EpochValidationWizard({ detail, employees, onBack }: Props) {
 function SetupStep({
   detail,
   onDirty,
+  onSavingChange,
   onSaved,
 }: {
   detail: Detail;
   onDirty: () => void;
-  onSaved: () => Promise<void>;
+  onSavingChange: (saving: boolean) => void;
+  onSaved: (intent: SaveIntent) => Promise<void>;
 }) {
   const p = detail.package;
   const { toast } = useToast();
+  const submissionGuard = useRef(false);
+  const saveIntent = useRef<SaveIntent>('continue');
   const save = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       requestJson(`/api/qms/epoch-software-validation/${p.id}/wizard/setup`, {
@@ -471,8 +500,9 @@ function SetupStep({
         body,
       }),
     onSuccess: async () => {
-      toast({ title: 'Controlled draft saved' });
-      await onSaved();
+      if (saveIntent.current === 'continue')
+        toast({ title: 'Controlled draft saved' });
+      await onSaved(saveIntent.current);
     },
     onError: (error: Error) =>
       toast({
@@ -480,6 +510,10 @@ function SetupStep({
         description: error.message,
         variant: 'destructive',
       }),
+    onSettled: () => {
+      submissionGuard.current = false;
+      onSavingChange(false);
+    },
   });
   const technicalMissing =
     !p.commit_or_release_identifier || !p.production_deployment_date;
@@ -501,10 +535,15 @@ function SetupStep({
           </div>
         )}
         <form
+          id={stepFormId(1)}
           className="grid gap-4 md:grid-cols-2"
           onChange={onDirty}
           onSubmit={(event) => {
             event.preventDefault();
+            if (submissionGuard.current) return;
+            submissionGuard.current = true;
+            saveIntent.current = submittedIntent(event);
+            onSavingChange(true);
             const form = new FormData(event.currentTarget);
             save.mutate({
               rowVersion: p.row_version,
@@ -637,11 +676,17 @@ function SetupStep({
             </div>
           </details>
           <div className="md:col-span-2 flex justify-end">
-            <Button type="submit" disabled={save.isPending}>
+            <Button
+              type="submit"
+              name="saveIntent"
+              value="continue"
+              disabled={save.isPending}
+            >
               {save.isPending
                 ? 'Saving…'
                 : 'Save controlled draft and continue'}
             </Button>
+            <button type="submit" name="saveIntent" value="exit" hidden />
           </div>
         </form>
       </CardContent>
@@ -652,15 +697,19 @@ function SetupStep({
 function IntendedUseStep({
   detail,
   onDirty,
+  onSavingChange,
   onSaved,
 }: {
   detail: Detail;
   onDirty: () => void;
-  onSaved: () => Promise<void>;
+  onSavingChange: (saving: boolean) => void;
+  onSaved: (intent: SaveIntent) => Promise<void>;
 }) {
   const p = detail.package;
   const prior = detail.intendedUse[0] || {};
   const { toast } = useToast();
+  const submissionGuard = useRef(false);
+  const saveIntent = useRef<SaveIntent>('continue');
   const [functions, setFunctions] = useState<Record<string, FunctionSelection>>(
     Object.fromEntries(
       detail.intendedUseFunctions.map((item) => [item.function_key, item])
@@ -673,8 +722,9 @@ function IntendedUseStep({
         body,
       }),
     onSuccess: async () => {
-      toast({ title: 'Intended Use revision saved as DRAFT' });
-      await onSaved();
+      if (saveIntent.current === 'continue')
+        toast({ title: 'Intended Use revision saved as DRAFT' });
+      await onSaved(saveIntent.current);
     },
     onError: (error: Error) =>
       toast({
@@ -682,6 +732,10 @@ function IntendedUseStep({
         description: error.message,
         variant: 'destructive',
       }),
+    onSettled: () => {
+      submissionGuard.current = false;
+      onSavingChange(false);
+    },
   });
   const updateFunction = (key: string, patch: Partial<FunctionSelection>) => {
     onDirty();
@@ -712,10 +766,15 @@ function IntendedUseStep({
       </CardHeader>
       <CardContent>
         <form
+          id={stepFormId(2)}
           className="space-y-5"
           onChange={onDirty}
           onSubmit={(event) => {
             event.preventDefault();
+            if (submissionGuard.current) return;
+            submissionGuard.current = true;
+            saveIntent.current = submittedIntent(event);
+            onSavingChange(true);
             const form = new FormData(event.currentTarget);
             save.mutate({
               systemName: p.system_name,
@@ -930,10 +989,13 @@ function IntendedUseStep({
           <div className="flex justify-end">
             <Button
               type="submit"
+              name="saveIntent"
+              value="continue"
               disabled={save.isPending || !Object.keys(functions).length}
             >
               {save.isPending ? 'Saving…' : 'Save Intended Use and continue'}
             </Button>
+            <button type="submit" name="saveIntent" value="exit" hidden />
           </div>
         </form>
       </CardContent>
@@ -945,15 +1007,22 @@ function ResponsibilitiesStep({
   detail,
   employees,
   onDirty,
+  onSavingChange,
   onSaved,
 }: {
   detail: Detail;
   employees: Employee[];
   onDirty: () => void;
-  onSaved: () => Promise<void>;
+  onSavingChange: (saving: boolean) => void;
+  onSaved: (intent: SaveIntent) => Promise<void>;
 }) {
   const p = detail.package;
   const { toast } = useToast();
+  const submissionGuard = useRef(false);
+  const saveIntent = useRef<SaveIntent>('continue');
+  const [declineReasons, setDeclineReasons] = useState<Record<string, string>>(
+    {}
+  );
   const currentUser = useQuery<{ employeeId?: number | null }>({
     queryKey: ['/api/auth/session'],
     queryFn: () => requestJson('/api/auth/session'),
@@ -976,11 +1045,12 @@ function ResponsibilitiesStep({
         }
       ),
     onSuccess: async () => {
-      toast({
-        title: 'Responsibilities saved',
-        description: 'New assignments are awaiting acceptance.',
-      });
-      await onSaved();
+      if (saveIntent.current === 'continue')
+        toast({
+          title: 'Responsibilities saved',
+          description: 'New assignments are awaiting acceptance.',
+        });
+      await onSaved(saveIntent.current);
     },
     onError: (error: Error) =>
       toast({
@@ -988,20 +1058,33 @@ function ResponsibilitiesStep({
         description: error.message,
         variant: 'destructive',
       }),
+    onSettled: () => {
+      submissionGuard.current = false;
+      onSavingChange(false);
+    },
   });
-  const accept = useMutation({
-    mutationFn: (assignmentId: string) =>
+  const decide = useMutation({
+    mutationFn: (input: {
+      assignmentId: string;
+      decision: 'ACCEPTED' | 'DECLINED';
+      reason?: string;
+    }) =>
       requestJson(
-        `/api/qms/epoch-software-validation/${p.id}/responsibilities/${assignmentId}/accept`,
-        { method: 'POST', body: {} }
+        `/api/qms/epoch-software-validation/${p.id}/responsibilities/${input.assignmentId}/decision`,
+        { method: 'POST', body: input }
       ),
-    onSuccess: async () => {
-      toast({ title: 'Responsibility accepted' });
-      await onSaved();
+    onSuccess: async (_result, input) => {
+      toast({
+        title:
+          input.decision === 'ACCEPTED'
+            ? 'Responsibility accepted'
+            : 'Responsibility declined',
+      });
+      await onSaved('continue');
     },
     onError: (error: Error) =>
       toast({
-        title: 'Acceptance blocked',
+        title: 'Responsibility decision blocked',
         description: error.message,
         variant: 'destructive',
       }),
@@ -1025,115 +1108,179 @@ function ResponsibilitiesStep({
           assignee must accept with their own identity.
         </p>
       </CardHeader>
-      <CardContent className="space-y-5">
-        {responsibilityDefinitions.map((definition) => {
-          const assigned = assignments.filter(
-            (item) => item.role === definition.role
-          );
-          const records = detail.responsibilities.filter(
-            (item) => item.responsibility_role === definition.role
-          );
-          return (
-            <div key={definition.role} className="rounded-md border p-4">
-              <div className="mb-3">
-                <h3 className="font-medium">{definition.label}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {definition.help}
-                </p>
-              </div>
-              <EmployeeSearch
-                employees={employees.filter(
-                  (employee) =>
-                    definition.multiple ||
-                    !assignments.some(
+      <CardContent>
+        <form
+          id={stepFormId(3)}
+          className="space-y-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (submissionGuard.current) return;
+            submissionGuard.current = true;
+            saveIntent.current = submittedIntent(event);
+            onSavingChange(true);
+            save.mutate();
+          }}
+        >
+          {responsibilityDefinitions.map((definition) => {
+            const assigned = assignments.filter(
+              (item) => item.role === definition.role
+            );
+            const records = detail.responsibilities.filter(
+              (item) => item.responsibility_role === definition.role
+            );
+            return (
+              <div key={definition.role} className="rounded-md border p-4">
+                <div className="mb-3">
+                  <h3 className="font-medium">{definition.label}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {definition.help}
+                  </p>
+                </div>
+                <EmployeeSearch
+                  employees={employees.filter(
+                    (employee) =>
+                      definition.multiple ||
+                      !assignments.some(
+                        (item) =>
+                          item.role === definition.role &&
+                          item.employeeId === employee.id
+                      )
+                  )}
+                  value={
+                    definition.multiple ? undefined : assigned[0]?.employeeId
+                  }
+                  onSelect={(employeeId) => {
+                    if (definition.multiple) {
+                      if (!employeeId) return;
+                      onDirty();
+                      setAssignments((current) => [
+                        ...current,
+                        { role: definition.role, employeeId },
+                      ]);
+                    } else setSingle(definition.role, employeeId);
+                  }}
+                />
+                <div className="mt-3 space-y-2">
+                  {assigned.map((assignment) => {
+                    const employee = employees.find(
+                      (item) => item.id === assignment.employeeId
+                    );
+                    const record = records.find(
                       (item) =>
-                        item.role === definition.role &&
-                        item.employeeId === employee.id
-                    )
-                )}
-                value={
-                  definition.multiple ? undefined : assigned[0]?.employeeId
-                }
-                onSelect={(employeeId) => {
-                  if (definition.multiple) {
-                    if (!employeeId) return;
-                    onDirty();
-                    setAssignments((current) => [
-                      ...current,
-                      { role: definition.role, employeeId },
-                    ]);
-                  } else setSingle(definition.role, employeeId);
-                }}
-              />
-              <div className="mt-3 space-y-2">
-                {assigned.map((assignment) => {
-                  const employee = employees.find(
-                    (item) => item.id === assignment.employeeId
-                  );
-                  const record = records.find(
-                    (item) => Number(item.employee_id) === assignment.employeeId
-                  );
-                  return (
-                    <div
-                      key={`${definition.role}-${assignment.employeeId}`}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded bg-muted p-2 text-sm"
-                    >
-                      <span>
-                        {employee?.name || `Employee ${assignment.employeeId}`}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">
-                          {record
-                            ? pretty(record.assignment_status)
-                            : 'Unsaved'}
-                        </Badge>
-                        {record?.assignment_status === 'AWAITING_ACCEPTANCE' &&
-                          Number(currentUser.data?.employeeId) ===
-                            assignment.employeeId && (
-                            <Button
-                              size="sm"
-                              type="button"
-                              disabled={accept.isPending}
-                              onClick={() => accept.mutate(record.id)}
-                            >
-                              Accept responsibility
-                            </Button>
-                          )}
-                        <Button
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            onDirty();
-                            setAssignments((current) =>
-                              current.filter(
-                                (item) =>
-                                  !(
-                                    item.role === definition.role &&
-                                    item.employeeId === assignment.employeeId
-                                  )
-                              )
-                            );
-                          }}
-                        >
-                          Remove
-                        </Button>
+                        Number(item.employee_id) === assignment.employeeId
+                    );
+                    return (
+                      <div
+                        key={`${definition.role}-${assignment.employeeId}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded bg-muted p-2 text-sm"
+                      >
+                        <span>
+                          {employee?.name ||
+                            `Employee ${assignment.employeeId}`}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">
+                            {record
+                              ? pretty(record.assignment_status)
+                              : 'Unsaved'}
+                          </Badge>
+                          {record?.assignment_status ===
+                            'AWAITING_ACCEPTANCE' &&
+                            Number(currentUser.data?.employeeId) ===
+                              assignment.employeeId && (
+                              <Button
+                                size="sm"
+                                type="button"
+                                disabled={decide.isPending}
+                                onClick={() =>
+                                  decide.mutate({
+                                    assignmentId: record.id,
+                                    decision: 'ACCEPTED',
+                                  })
+                                }
+                              >
+                                Accept responsibility
+                              </Button>
+                            )}
+                          {record?.assignment_status ===
+                            'AWAITING_ACCEPTANCE' &&
+                            Number(currentUser.data?.employeeId) ===
+                              assignment.employeeId && (
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  aria-label={`Reason for declining ${definition.label}`}
+                                  placeholder="Reason required to decline"
+                                  value={declineReasons[record.id] || ''}
+                                  onChange={(event) =>
+                                    setDeclineReasons((current) => ({
+                                      ...current,
+                                      [record.id]: event.target.value,
+                                    }))
+                                  }
+                                />
+                                <Button
+                                  size="sm"
+                                  type="button"
+                                  variant="outline"
+                                  disabled={
+                                    decide.isPending ||
+                                    (declineReasons[record.id] || '').trim()
+                                      .length < 10
+                                  }
+                                  onClick={() =>
+                                    decide.mutate({
+                                      assignmentId: record.id,
+                                      decision: 'DECLINED',
+                                      reason: declineReasons[record.id],
+                                    })
+                                  }
+                                >
+                                  Decline
+                                </Button>
+                              </div>
+                            )}
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                            onClick={() => {
+                              onDirty();
+                              setAssignments((current) =>
+                                current.filter(
+                                  (item) =>
+                                    !(
+                                      item.role === definition.role &&
+                                      item.employeeId === assignment.employeeId
+                                    )
+                                )
+                              );
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {!assigned.length && (
-                  <p className="text-sm text-amber-700">Missing</p>
-                )}
+                    );
+                  })}
+                  {!assigned.length && (
+                    <p className="text-sm text-amber-700">Missing</p>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-        <div className="flex justify-end">
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? 'Saving…' : 'Save responsibilities'}
-          </Button>
-        </div>
+            );
+          })}
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              name="saveIntent"
+              value="continue"
+              disabled={save.isPending}
+            >
+              {save.isPending ? 'Saving…' : 'Save responsibilities'}
+            </Button>
+            <button type="submit" name="saveIntent" value="exit" hidden />
+          </div>
+        </form>
       </CardContent>
     </Card>
   );

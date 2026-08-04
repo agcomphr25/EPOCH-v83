@@ -12481,51 +12481,87 @@ export const controlledDocumentRevisionApprovals = pgTable(
   }
 );
 
-export const controlledDocumentReconciliationPreviews = pgTable('controlled_document_reconciliation_previews', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  previewHash: text('preview_hash').notNull(),
-  policyVersion: text('policy_version').notNull(),
-  selectedDocumentIds: jsonb('selected_document_ids').notNull().default([]),
-  assessmentSnapshot: jsonb('assessment_snapshot').notNull(),
-  actorUserId: integer('actor_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
-  actorSnapshot: jsonb('actor_snapshot').notNull(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const controlledDocumentReconciliationPreviews = pgTable(
+  'controlled_document_reconciliation_previews',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    previewHash: text('preview_hash').notNull(),
+    policyVersion: text('policy_version').notNull(),
+    selectedDocumentIds: jsonb('selected_document_ids').notNull().default([]),
+    assessmentSnapshot: jsonb('assessment_snapshot').notNull(),
+    actorUserId: integer('actor_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    actorSnapshot: jsonb('actor_snapshot').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  }
+);
 
-export const controlledDocumentReconciliationEvents = pgTable('controlled_document_reconciliation_events', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  previewId: uuid('preview_id').references(() => controlledDocumentReconciliationPreviews.id, { onDelete: 'restrict' }),
-  controlledDocumentId: uuid('controlled_document_id').references(() => controlledDocuments.id, { onDelete: 'restrict' }).notNull(),
-  revisionId: uuid('revision_id').references(() => documentVersionHistory.id, { onDelete: 'restrict' }),
-  idempotencyKey: text('idempotency_key').notNull().unique(),
-  eventType: text('event_type').notNull(),
-  provenance: text('provenance').notNull().default('LEGACY_MIGRATION_VERIFIED'),
-  policyVersion: text('policy_version').notNull(),
-  originalSnapshot: jsonb('original_snapshot').notNull(),
-  proposedChanges: jsonb('proposed_changes').notNull(),
-  completedChanges: jsonb('completed_changes').notNull(),
-  actorUserId: integer('actor_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
-  actorSnapshot: jsonb('actor_snapshot').notNull(),
-  reason: text('reason').notNull(),
-  checksum: text('checksum'),
-  fileIdentity: text('file_identity'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const controlledDocumentReconciliationEvents = pgTable(
+  'controlled_document_reconciliation_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    previewId: uuid('preview_id').references(
+      () => controlledDocumentReconciliationPreviews.id,
+      { onDelete: 'restrict' }
+    ),
+    controlledDocumentId: uuid('controlled_document_id')
+      .references(() => controlledDocuments.id, { onDelete: 'restrict' })
+      .notNull(),
+    revisionId: uuid('revision_id').references(
+      () => documentVersionHistory.id,
+      { onDelete: 'restrict' }
+    ),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    eventType: text('event_type').notNull(),
+    provenance: text('provenance')
+      .notNull()
+      .default('LEGACY_MIGRATION_VERIFIED'),
+    policyVersion: text('policy_version').notNull(),
+    originalSnapshot: jsonb('original_snapshot').notNull(),
+    proposedChanges: jsonb('proposed_changes').notNull(),
+    completedChanges: jsonb('completed_changes').notNull(),
+    actorUserId: integer('actor_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    actorSnapshot: jsonb('actor_snapshot').notNull(),
+    reason: text('reason').notNull(),
+    checksum: text('checksum'),
+    fileIdentity: text('file_identity'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  }
+);
 
-export const controlledDocumentReconciliationEvidence = pgTable('controlled_document_reconciliation_evidence', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  controlledDocumentId: uuid('controlled_document_id').references(() => controlledDocuments.id, { onDelete: 'restrict' }).notNull(),
-  revisionId: uuid('revision_id').references(() => documentVersionHistory.id, { onDelete: 'restrict' }),
-  evidenceType: text('evidence_type').notNull(),
-  evidencePayload: jsonb('evidence_payload').notNull(),
-  immutableFilePath: text('immutable_file_path'),
-  immutableFileChecksum: text('immutable_file_checksum'),
-  actorUserId: integer('actor_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
-  actorSnapshot: jsonb('actor_snapshot').notNull(),
-  reason: text('reason').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const controlledDocumentReconciliationEvidence = pgTable(
+  'controlled_document_reconciliation_evidence',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    controlledDocumentId: uuid('controlled_document_id')
+      .references(() => controlledDocuments.id, { onDelete: 'restrict' })
+      .notNull(),
+    revisionId: uuid('revision_id').references(
+      () => documentVersionHistory.id,
+      { onDelete: 'restrict' }
+    ),
+    evidenceType: text('evidence_type').notNull(),
+    evidencePayload: jsonb('evidence_payload').notNull(),
+    immutableFilePath: text('immutable_file_path'),
+    immutableFileChecksum: text('immutable_file_checksum'),
+    actorUserId: integer('actor_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    actorSnapshot: jsonb('actor_snapshot').notNull(),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  }
+);
 
 export const designControlFormTemplates = pgTable(
   'design_control_form_templates',
@@ -20323,7 +20359,9 @@ export const accountingPeriods = pgTable(
     periodYear: integer('period_year').notNull(),
     periodMonth: integer('period_month').notNull(),
     status: text('status').notNull().default('MIGRATION'), // OPEN | MIGRATION | SOFT_CLOSED | HARD_CLOSED | FINAL_LOCKED
-    paymentEntryGraceBusinessDays: integer('payment_entry_grace_business_days').notNull().default(3),
+    paymentEntryGraceBusinessDays: integer('payment_entry_grace_business_days')
+      .notNull()
+      .default(3),
     hardLockEnforcedAt: timestamp('hard_lock_enforced_at'),
     closedBy: text('closed_by'),
     closedAt: timestamp('closed_at'),
@@ -26015,6 +26053,38 @@ export const engineeringControlledRevisions = pgTable(
 
 // Design Project manufacturing-configuration foundation. These identities are
 // deliberately separate from P2 projects and from part_routings.project_id.
+export const designProjectConfigurationWorkspaces = pgTable(
+  'design_project_configuration_workspaces',
+  {
+    rdProjectId: text('rd_project_id')
+      .primaryKey()
+      .references(() => rdProjects.id, { onDelete: 'restrict' }),
+    configurationStatus: text('configuration_status')
+      .notNull()
+      .default('DRAFT'),
+    activatedByUserId: integer('activated_by_user_id').references(
+      () => users.id,
+      {
+        onDelete: 'restrict',
+      }
+    ),
+    activatedBySnapshot: jsonb('activated_by_snapshot')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    activatedAt: timestamp('activated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    statusIdx: index('design_project_configuration_workspaces_status_idx').on(
+      table.configurationStatus
+    ),
+  })
+);
+
 export const designProjectConfigurationItems = pgTable(
   'design_project_configuration_items',
   {
@@ -26204,6 +26274,7 @@ export const designProjectDocumentApplicability = pgTable(
     requirementRole: text('requirement_role').notNull(),
     decision: text('decision').notNull().default('REQUIRED'),
     justification: text('justification'),
+    approvalStatus: text('approval_status').notNull().default('NOT_REQUIRED'),
     approvedByUserId: integer('approved_by_user_id').references(
       () => users.id,
       { onDelete: 'restrict' }

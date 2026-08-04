@@ -10,6 +10,7 @@ export const requiredDesignControlMigrations = [
   '0207_design_control_authority_foundation.sql',
   '0208_design_control_authenticated_approvals.sql',
   '0248_design_project_manufacturing_configuration.sql',
+  '0251_design_project_configuration_workspace.sql',
 ] as const;
 
 export const requiredDesignControlTables = [
@@ -39,6 +40,7 @@ export const requiredDesignControlTables = [
   'routing_operation_work_instruction_revisions',
   'design_project_configuration_reconciliation_queue',
   'design_project_configuration_reconciliation_events',
+  'design_project_configuration_workspaces',
 ] as const;
 
 type ReadinessClient = Pick<typeof db, 'execute'>;

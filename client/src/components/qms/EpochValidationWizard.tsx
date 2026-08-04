@@ -311,9 +311,12 @@ export function EpochValidationWizard({ detail, employees, onBack }: Props) {
       return;
     }
     const form = document.getElementById(stepFormId(currentStep));
-    const submitter = form?.querySelector<HTMLButtonElement>(
-      `button[type="submit"][value="${intent}"]`
-    );
+    const selector = `button[type="submit"][value="${intent}"]`;
+    const submitter =
+      form?.querySelector<HTMLButtonElement>(selector) ||
+      document.querySelector<HTMLButtonElement>(
+        `${selector}[form="${stepFormId(currentStep)}"]`
+      );
     if (form instanceof HTMLFormElement && submitter)
       form.requestSubmit(submitter);
   };
@@ -1108,10 +1111,9 @@ function ResponsibilitiesStep({
           assignee must accept with their own identity.
         </p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-5">
         <form
           id={stepFormId(3)}
-          className="space-y-5"
           onSubmit={(event) => {
             event.preventDefault();
             if (submissionGuard.current) return;
@@ -1120,167 +1122,169 @@ function ResponsibilitiesStep({
             onSavingChange(true);
             save.mutate();
           }}
-        >
-          {responsibilityDefinitions.map((definition) => {
-            const assigned = assignments.filter(
-              (item) => item.role === definition.role
-            );
-            const records = detail.responsibilities.filter(
-              (item) => item.responsibility_role === definition.role
-            );
-            return (
-              <div key={definition.role} className="rounded-md border p-4">
-                <div className="mb-3">
-                  <h3 className="font-medium">{definition.label}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {definition.help}
-                  </p>
-                </div>
-                <EmployeeSearch
-                  employees={employees.filter(
-                    (employee) =>
-                      definition.multiple ||
-                      !assignments.some(
-                        (item) =>
-                          item.role === definition.role &&
-                          item.employeeId === employee.id
-                      )
-                  )}
-                  value={
-                    definition.multiple ? undefined : assigned[0]?.employeeId
-                  }
-                  onSelect={(employeeId) => {
-                    if (definition.multiple) {
-                      if (!employeeId) return;
-                      onDirty();
-                      setAssignments((current) => [
-                        ...current,
-                        { role: definition.role, employeeId },
-                      ]);
-                    } else setSingle(definition.role, employeeId);
-                  }}
-                />
-                <div className="mt-3 space-y-2">
-                  {assigned.map((assignment) => {
-                    const employee = employees.find(
-                      (item) => item.id === assignment.employeeId
-                    );
-                    const record = records.find(
+        />
+        {responsibilityDefinitions.map((definition) => {
+          const assigned = assignments.filter(
+            (item) => item.role === definition.role
+          );
+          const records = detail.responsibilities.filter(
+            (item) => item.responsibility_role === definition.role
+          );
+          return (
+            <div key={definition.role} className="rounded-md border p-4">
+              <div className="mb-3">
+                <h3 className="font-medium">{definition.label}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {definition.help}
+                </p>
+              </div>
+              <EmployeeSearch
+                employees={employees.filter(
+                  (employee) =>
+                    definition.multiple ||
+                    !assignments.some(
                       (item) =>
-                        Number(item.employee_id) === assignment.employeeId
-                    );
-                    return (
-                      <div
-                        key={`${definition.role}-${assignment.employeeId}`}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded bg-muted p-2 text-sm"
-                      >
-                        <span>
-                          {employee?.name ||
-                            `Employee ${assignment.employeeId}`}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">
-                            {record
-                              ? pretty(record.assignment_status)
-                              : 'Unsaved'}
-                          </Badge>
-                          {record?.assignment_status ===
-                            'AWAITING_ACCEPTANCE' &&
-                            Number(currentUser.data?.employeeId) ===
-                              assignment.employeeId && (
+                        item.role === definition.role &&
+                        item.employeeId === employee.id
+                    )
+                )}
+                value={
+                  definition.multiple ? undefined : assigned[0]?.employeeId
+                }
+                onSelect={(employeeId) => {
+                  if (definition.multiple) {
+                    if (!employeeId) return;
+                    onDirty();
+                    setAssignments((current) => [
+                      ...current,
+                      { role: definition.role, employeeId },
+                    ]);
+                  } else setSingle(definition.role, employeeId);
+                }}
+              />
+              <div className="mt-3 space-y-2">
+                {assigned.map((assignment) => {
+                  const employee = employees.find(
+                    (item) => item.id === assignment.employeeId
+                  );
+                  const record = records.find(
+                    (item) => Number(item.employee_id) === assignment.employeeId
+                  );
+                  return (
+                    <div
+                      key={`${definition.role}-${assignment.employeeId}`}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded bg-muted p-2 text-sm"
+                    >
+                      <span>
+                        {employee?.name || `Employee ${assignment.employeeId}`}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">
+                          {record
+                            ? pretty(record.assignment_status)
+                            : 'Unsaved'}
+                        </Badge>
+                        {record?.assignment_status === 'AWAITING_ACCEPTANCE' &&
+                          Number(currentUser.data?.employeeId) ===
+                            assignment.employeeId && (
+                            <Button
+                              size="sm"
+                              type="button"
+                              disabled={decide.isPending}
+                              onClick={() =>
+                                decide.mutate({
+                                  assignmentId: record.id,
+                                  decision: 'ACCEPTED',
+                                })
+                              }
+                            >
+                              Accept responsibility
+                            </Button>
+                          )}
+                        {record?.assignment_status === 'AWAITING_ACCEPTANCE' &&
+                          Number(currentUser.data?.employeeId) ===
+                            assignment.employeeId && (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                aria-label={`Reason for declining ${definition.label}`}
+                                placeholder="Reason required to decline"
+                                value={declineReasons[record.id] || ''}
+                                onChange={(event) =>
+                                  setDeclineReasons((current) => ({
+                                    ...current,
+                                    [record.id]: event.target.value,
+                                  }))
+                                }
+                              />
                               <Button
                                 size="sm"
                                 type="button"
-                                disabled={decide.isPending}
+                                variant="outline"
+                                disabled={
+                                  decide.isPending ||
+                                  (declineReasons[record.id] || '').trim()
+                                    .length < 10
+                                }
                                 onClick={() =>
                                   decide.mutate({
                                     assignmentId: record.id,
-                                    decision: 'ACCEPTED',
+                                    decision: 'DECLINED',
+                                    reason: declineReasons[record.id],
                                   })
                                 }
                               >
-                                Accept responsibility
+                                Decline
                               </Button>
-                            )}
-                          {record?.assignment_status ===
-                            'AWAITING_ACCEPTANCE' &&
-                            Number(currentUser.data?.employeeId) ===
-                              assignment.employeeId && (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  aria-label={`Reason for declining ${definition.label}`}
-                                  placeholder="Reason required to decline"
-                                  value={declineReasons[record.id] || ''}
-                                  onChange={(event) =>
-                                    setDeclineReasons((current) => ({
-                                      ...current,
-                                      [record.id]: event.target.value,
-                                    }))
-                                  }
-                                />
-                                <Button
-                                  size="sm"
-                                  type="button"
-                                  variant="outline"
-                                  disabled={
-                                    decide.isPending ||
-                                    (declineReasons[record.id] || '').trim()
-                                      .length < 10
-                                  }
-                                  onClick={() =>
-                                    decide.mutate({
-                                      assignmentId: record.id,
-                                      decision: 'DECLINED',
-                                      reason: declineReasons[record.id],
-                                    })
-                                  }
-                                >
-                                  Decline
-                                </Button>
-                              </div>
-                            )}
-                          <Button
-                            size="sm"
-                            type="button"
-                            variant="ghost"
-                            onClick={() => {
-                              onDirty();
-                              setAssignments((current) =>
-                                current.filter(
-                                  (item) =>
-                                    !(
-                                      item.role === definition.role &&
-                                      item.employeeId === assignment.employeeId
-                                    )
-                                )
-                              );
-                            }}
-                          >
-                            Remove
-                          </Button>
-                        </div>
+                            </div>
+                          )}
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                          onClick={() => {
+                            onDirty();
+                            setAssignments((current) =>
+                              current.filter(
+                                (item) =>
+                                  !(
+                                    item.role === definition.role &&
+                                    item.employeeId === assignment.employeeId
+                                  )
+                              )
+                            );
+                          }}
+                        >
+                          Remove
+                        </Button>
                       </div>
-                    );
-                  })}
-                  {!assigned.length && (
-                    <p className="text-sm text-amber-700">Missing</p>
-                  )}
-                </div>
+                    </div>
+                  );
+                })}
+                {!assigned.length && (
+                  <p className="text-sm text-amber-700">Missing</p>
+                )}
               </div>
-            );
-          })}
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              name="saveIntent"
-              value="continue"
-              disabled={save.isPending}
-            >
-              {save.isPending ? 'Saving…' : 'Save responsibilities'}
-            </Button>
-            <button type="submit" name="saveIntent" value="exit" hidden />
-          </div>
-        </form>
+            </div>
+          );
+        })}
+        <div className="flex justify-end">
+          <Button
+            type="submit"
+            form={stepFormId(3)}
+            name="saveIntent"
+            value="continue"
+            disabled={save.isPending}
+          >
+            {save.isPending ? 'Saving…' : 'Save responsibilities'}
+          </Button>
+          <button
+            type="submit"
+            form={stepFormId(3)}
+            name="saveIntent"
+            value="exit"
+            hidden
+          />
+        </div>
       </CardContent>
     </Card>
   );

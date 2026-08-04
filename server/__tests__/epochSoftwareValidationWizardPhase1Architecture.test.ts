@@ -60,6 +60,9 @@ describe('EPOCH validation wizard Phase 1 architecture', () => {
     expect(route).toContain("'RESPONSIBILITY_DECLINED'");
     expect(route).toContain('responsibilityDecisionIdentityError');
     expect(route).toContain('authenticatedEmployeeId');
+    expect(route).toContain('WHERE id=$1 FOR SHARE');
+    expect(route).toContain('packageRevision: packageRow.revision');
+    expect(route).toContain('productionVersion: packageRow.production_version');
   });
 
   it('requires edit authorization and optimistic locking for Phase 1 changes', () => {

@@ -1177,6 +1177,15 @@ async function decideResponsibility(
   );
   const a = actor(req);
   const result = await tx(async (q) => {
+    const packageRow = (
+      await q(
+        `SELECT * FROM qms_epoch_validation_packages
+         WHERE id=$1 FOR SHARE`,
+        [p.id]
+      )
+    )[0];
+    if (!packageRow || isLocked(packageRow))
+      return { packageLocked: true as const };
     const identity = (
       await q(
         `SELECT u.id AS user_id,u.employee_id,e.is_active AS employee_active
@@ -1232,7 +1241,7 @@ async function decideResponsibility(
     )[0];
     await logEvent(
       req,
-      p,
+      packageRow,
       'RESPONSIBILITY',
       body.decision === 'ACCEPTED'
         ? 'RESPONSIBILITY_ACCEPTED'
@@ -1247,7 +1256,8 @@ async function decideResponsibility(
           authenticatedEmployeeId: Number(identity.employee_id),
           decision: body.decision,
           decidedAt: updated.decided_at,
-          packageRevision: p.revision,
+          packageRevision: packageRow.revision,
+          productionVersion: packageRow.production_version,
         },
         reason: body.reason,
       },
@@ -1257,6 +1267,8 @@ async function decideResponsibility(
   });
   if ('missing' in result)
     return res.status(404).json({ error: 'RESPONSIBILITY_NOT_FOUND' });
+  if ('packageLocked' in result)
+    return res.status(409).json({ error: 'VALIDATION_PACKAGE_LOCKED' });
   if ('identityError' in result)
     return res.status(403).json({ error: result.identityError });
   if ('conflict' in result)

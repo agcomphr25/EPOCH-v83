@@ -166,6 +166,28 @@ interface DepartmentNoteEntry {
   departments: string[];
 }
 
+interface PotentialDuplicateCandidate {
+  candidateOrderId: string;
+  candidateCustomerName: string | null;
+  orderDate: string;
+  status: string | null;
+  currentDepartment: string | null;
+  modelId: string | null;
+  riskScore: number;
+  riskLevel: 'MEDIUM' | 'HIGH';
+  matchedSignals: Array<{ code: string; label: string; points: number }>;
+  configurationDifferences: Array<{ field: string; incoming: unknown; candidate: unknown }>;
+}
+
+type DuplicateReviewResolutionCode =
+  | 'INTENDED_ADDITIONAL_STOCK'
+  | 'MULTIPLE_STOCKS_SAME_ORDER'
+  | 'REORDER_AFTER_RECEIPT'
+  | 'REPLACEMENT_REBUILD'
+  | 'DIFFERENT_CUSTOMER'
+  | 'UNNECESSARY_DUPLICATE'
+  | 'CUSTOMER_CONFIRMATION_NEEDED';
+
 const TIKKA_BARREL_OPTIONS = [
   'tikka_proof_sendero',
   'tikka_proof_sendero_lite',
@@ -475,6 +497,19 @@ export default function OrderEntry() {
   const [qdSameSideConfirmedBy, setQdSameSideConfirmedBy] = useState<string | null>(null);
   const [qdSameSideConfirmedAt, setQdSameSideConfirmedAt] = useState<Date | null>(null);
   const [pendingOrderSubmit, setPendingOrderSubmit] = useState<{ saveAsDraft: boolean } | null>(null);
+  const [showDuplicateReviewModal, setShowDuplicateReviewModal] = useState(false);
+  const [duplicateCandidates, setDuplicateCandidates] = useState<PotentialDuplicateCandidate[]>([]);
+  const [duplicateResolutionCode, setDuplicateResolutionCode] = useState<DuplicateReviewResolutionCode | ''>('');
+  const [duplicateResolutionNote, setDuplicateResolutionNote] = useState('');
+  const [pendingDuplicateSubmit, setPendingDuplicateSubmit] = useState<{
+    saveAsDraft: boolean;
+    qdConfirmation: {
+      qdSameSideConfirmed: boolean;
+      qdSameSideConfirmedBy: string | null;
+      qdSameSideConfirmedAt: Date | null;
+    };
+    preflightOrder: Record<string, unknown>;
+  } | null>(null);
 
   // Alt Ship To Address state
   const [hasAltShipTo, setHasAltShipTo] = useState(false);
@@ -2671,6 +2706,102 @@ export default function OrderEntry() {
     return false;
   }, [features.handedness, features.qd_accessory]);
 
+  const buildDuplicatePreflightOrder = useCallback(() => ({
+    orderId,
+    customerId: customer?.id?.toString() || null,
+    customerName: customer?.name || null,
+    modelId,
+    features: { ...features, miscItems },
+    handedness: features.handedness || null,
+    isFlattop,
+  }), [orderId, customer, modelId, features, miscItems, isFlattop]);
+
+  const runDuplicatePreflightAndSubmit = async (
+    saveAsDraft: boolean,
+    qdConfirmation: {
+      qdSameSideConfirmed: boolean;
+      qdSameSideConfirmedBy: string | null;
+      qdSameSideConfirmedAt: Date | null;
+    }
+  ) => {
+    // Draft saves and edits are not a new final release in this UI. The backend
+    // repeats this check for every new finalized order so other clients cannot bypass it.
+    if (saveAsDraft || isEditMode) {
+      await executeOrderSubmit(saveAsDraft, qdConfirmation);
+      return;
+    }
+
+    const preflightOrder = buildDuplicatePreflightOrder();
+    try {
+      const result = await apiRequest('/api/orders/duplicate-review/preflight', {
+        method: 'POST',
+        body: JSON.stringify(preflightOrder),
+      }) as { candidates?: PotentialDuplicateCandidate[] };
+      const candidates = result?.candidates || [];
+      if (candidates.length > 0) {
+        setDuplicateCandidates(candidates);
+        setDuplicateResolutionCode('');
+        setDuplicateResolutionNote('');
+        setPendingDuplicateSubmit({ saveAsDraft, qdConfirmation, preflightOrder });
+        setShowDuplicateReviewModal(true);
+        return;
+      }
+    } catch (error) {
+      console.warn('Potential duplicate preflight unavailable; continuing in shadow mode:', error);
+      toast({
+        title: 'Duplicate Check Unavailable',
+        description: 'The order can still be created; the server will retry the duplicate check.',
+      });
+    }
+
+    await executeOrderSubmit(saveAsDraft, qdConfirmation);
+  };
+
+  const handleDuplicateReviewDecision = async () => {
+    if (!pendingDuplicateSubmit || !duplicateResolutionCode) return;
+    const decision = {
+      code: duplicateResolutionCode,
+      note: duplicateResolutionNote.trim() || null,
+      candidateOrderId: duplicateCandidates[0]?.candidateOrderId || null,
+    };
+    const shouldPauseCreation =
+      duplicateResolutionCode === 'UNNECESSARY_DUPLICATE' ||
+      duplicateResolutionCode === 'CUSTOMER_CONFIRMATION_NEEDED';
+
+    setIsSubmitting(true);
+    try {
+      if (shouldPauseCreation) {
+        await apiRequest('/api/orders/duplicate-review/record', {
+          method: 'POST',
+          body: JSON.stringify({ order: pendingDuplicateSubmit.preflightOrder, decision }),
+        });
+        toast({
+          title: duplicateResolutionCode === 'UNNECESSARY_DUPLICATE'
+            ? 'Potential Duplicate Recorded'
+            : 'Customer Confirmation Required',
+          description: 'The order was not released to production. The form remains open for follow-up.',
+        });
+      } else {
+        await executeOrderSubmit(
+          pendingDuplicateSubmit.saveAsDraft,
+          pendingDuplicateSubmit.qdConfirmation,
+          decision
+        );
+      }
+      setShowDuplicateReviewModal(false);
+      setPendingDuplicateSubmit(null);
+      setDuplicateCandidates([]);
+    } catch (error: any) {
+      toast({
+        title: 'Unable to Record Review',
+        description: error?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Handle QD same-side confirmation and proceed with order submission
   const handleQdConfirmAndSubmit = async () => {
     setShowQdSameSideModal(false);
@@ -2686,7 +2817,7 @@ export default function OrderEntry() {
     if (pendingOrderSubmit) {
       setIsSubmitting(true);
       try {
-        await executeOrderSubmit(pendingOrderSubmit.saveAsDraft, {
+        await runDuplicatePreflightAndSubmit(pendingOrderSubmit.saveAsDraft, {
           qdSameSideConfirmed: true,
           qdSameSideConfirmedBy: confirmedBy,
           qdSameSideConfirmedAt: confirmedAt,
@@ -2810,7 +2941,7 @@ export default function OrderEntry() {
       }
 
       // Proceed with order submission
-      await executeOrderSubmit(saveAsDraft, {
+      await runDuplicatePreflightAndSubmit(saveAsDraft, {
         qdSameSideConfirmed: qdSameSideConfirmed,
         qdSameSideConfirmedBy: qdSameSideConfirmedBy,
         qdSameSideConfirmedAt: qdSameSideConfirmedAt,
@@ -2842,6 +2973,11 @@ export default function OrderEntry() {
       qdSameSideConfirmed: boolean;
       qdSameSideConfirmedBy: string | null;
       qdSameSideConfirmedAt: Date | null;
+    },
+    duplicateReviewDecision?: {
+      code: DuplicateReviewResolutionCode;
+      note: string | null;
+      candidateOrderId?: string | null;
     }
   ) => {
     // Ensure customer is selected (validation already done in handleSubmit)
@@ -2991,7 +3127,11 @@ export default function OrderEntry() {
           : '/api/orders/finalized';
         response = await apiRequest(endpoint, {
           method: 'POST',
-          body: JSON.stringify(orderData),
+          body: JSON.stringify(
+            !saveAsDraft && duplicateReviewDecision
+              ? { ...orderData, duplicateReviewDecision }
+              : orderData
+          ),
         });
 
         if (saveAsDraft) {
@@ -3142,6 +3282,11 @@ export default function OrderEntry() {
     setQdSameSideConfirmed(false);
     setQdSameSideConfirmedBy(null);
     setQdSameSideConfirmedAt(null);
+    setShowDuplicateReviewModal(false);
+    setDuplicateCandidates([]);
+    setDuplicateResolutionCode('');
+    setDuplicateResolutionNote('');
+    setPendingDuplicateSubmit(null);
     generateOrderId();
   };
 
@@ -7261,6 +7406,121 @@ export default function OrderEntry() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={showDuplicateReviewModal} onOpenChange={(open) => {
+        setShowDuplicateReviewModal(open);
+        if (!open) {
+          setPendingDuplicateSubmit(null);
+          setDuplicateCandidates([]);
+        }
+      }}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-potential-duplicate-stock">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-5 w-5" />
+              Potential Unnecessary Duplicate Stock
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              EPOCH found prior demand with the same stock model and a similar customer or core configuration.
+              Review the comparison before releasing this order to production.
+            </p>
+
+            <div className="space-y-3">
+              {duplicateCandidates.map(candidate => (
+                <Card key={candidate.candidateOrderId} className="border-amber-200 dark:border-amber-900">
+                  <CardHeader className="pb-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="text-base">
+                        {candidate.candidateOrderId} · {candidate.candidateCustomerName || 'Unknown customer'}
+                      </CardTitle>
+                      <Badge variant={candidate.riskLevel === 'HIGH' ? 'destructive' : 'secondary'}>
+                        {candidate.riskLevel} · {candidate.riskScore}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <p>
+                      Ordered {new Date(candidate.orderDate).toLocaleDateString()} ·{' '}
+                      {candidate.currentDepartment || candidate.status || 'Unknown status'} · {candidate.modelId}
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {candidate.matchedSignals.map(signal => (
+                        <Badge key={signal.code} variant="outline">{signal.label}</Badge>
+                      ))}
+                    </div>
+                    {candidate.configurationDifferences.length > 0 && (
+                      <div className="rounded-md bg-muted p-2">
+                        <p className="mb-1 font-medium">Configuration differences</p>
+                        {candidate.configurationDifferences.map(difference => (
+                          <p key={difference.field} className="text-xs text-muted-foreground">
+                            {difference.field}: {String(difference.candidate ?? 'not selected')} → {String(difference.incoming ?? 'not selected')}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Employee validation</Label>
+              <Select
+                value={duplicateResolutionCode}
+                onValueChange={(value) => setDuplicateResolutionCode(value as DuplicateReviewResolutionCode)}
+              >
+                <SelectTrigger data-testid="select-duplicate-review-resolution">
+                  <SelectValue placeholder="Select why this order is or is not needed" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="INTENDED_ADDITIONAL_STOCK">Customer intentionally ordered an additional stock</SelectItem>
+                  <SelectItem value="MULTIPLE_STOCKS_SAME_ORDER">Multiple stocks were ordered together</SelectItem>
+                  <SelectItem value="REORDER_AFTER_RECEIPT">Customer reordered after receiving the prior stock</SelectItem>
+                  <SelectItem value="REPLACEMENT_REBUILD">This is a replacement or rebuild</SelectItem>
+                  <SelectItem value="DIFFERENT_CUSTOMER">Different customer / false identity match</SelectItem>
+                  <SelectItem value="UNNECESSARY_DUPLICATE">Duplicate is unnecessary — do not release</SelectItem>
+                  <SelectItem value="CUSTOMER_CONFIRMATION_NEEDED">Pause and confirm with customer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="duplicate-review-note">Review note (optional)</Label>
+              <Textarea
+                id="duplicate-review-note"
+                value={duplicateResolutionNote}
+                onChange={(event) => setDuplicateResolutionNote(event.target.value)}
+                placeholder="Add the customer conversation, related order, or other context."
+                rows={3}
+                data-testid="textarea-duplicate-review-note"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowDuplicateReviewModal(false)}
+              >
+                Return to Order
+              </Button>
+              <Button
+                type="button"
+                onClick={handleDuplicateReviewDecision}
+                disabled={!duplicateResolutionCode || isSubmitting}
+                data-testid="button-record-duplicate-review"
+              >
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {duplicateResolutionCode === 'UNNECESSARY_DUPLICATE' || duplicateResolutionCode === 'CUSTOMER_CONFIRMATION_NEEDED'
+                  ? 'Record & Do Not Release'
+                  : 'Record & Continue'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* QD Same-Side Confirmation Modal */}
       <AlertDialog open={showQdSameSideModal} onOpenChange={setShowQdSameSideModal}>

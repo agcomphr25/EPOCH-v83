@@ -339,6 +339,56 @@ export const linkedOrders = pgTable('linked_orders', {
   addedAt: timestamp('added_at').defaultNow(),
 });
 
+// Human-reviewed signals that a newly entered customer stock may duplicate
+// demand already in progress or recently fulfilled. Detection is advisory by
+// default; the review record preserves why it was surfaced and what an
+// employee decided without overloading the order's production status.
+export const potentialOrderDuplicateReviews = pgTable(
+  'potential_order_duplicate_reviews',
+  {
+    id: serial('id').primaryKey(),
+    newOrderId: text('new_order_id').notNull(),
+    candidateOrderId: text('candidate_order_id').notNull(),
+    riskScore: integer('risk_score').notNull(),
+    riskLevel: text('risk_level').notNull(), // MEDIUM | HIGH
+    matchedSignals: jsonb('matched_signals')
+      .$type<Array<{ code: string; label: string; points: number }>>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    configurationDifferences: jsonb('configuration_differences')
+      .$type<Array<{ field: string; incoming: unknown; candidate: unknown }>>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    status: text('status').notNull().default('PENDING'), // PENDING | RESOLVED
+    resolutionCode: text('resolution_code'),
+    resolutionNote: text('resolution_note'),
+    reviewedByUserId: integer('reviewed_by_user_id'),
+    reviewedByDisplayName: text('reviewed_by_display_name'),
+    reviewedAt: timestamp('reviewed_at'),
+    detectedAt: timestamp('detected_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    orderPairUnique: uniqueIndex('potential_order_duplicate_reviews_pair_unique').on(
+      table.newOrderId,
+      table.candidateOrderId
+    ),
+    newOrderIdx: index('potential_order_duplicate_reviews_new_order_idx').on(table.newOrderId),
+    candidateOrderIdx: index('potential_order_duplicate_reviews_candidate_order_idx').on(table.candidateOrderId),
+    statusRiskIdx: index('potential_order_duplicate_reviews_status_risk_idx').on(
+      table.status,
+      table.riskLevel
+    ),
+  })
+);
+
+export const insertPotentialOrderDuplicateReviewSchema = createInsertSchema(
+  potentialOrderDuplicateReviews
+).omit({ id: true, createdAt: true, updatedAt: true });
+export type PotentialOrderDuplicateReview = typeof potentialOrderDuplicateReviews.$inferSelect;
+export type InsertPotentialOrderDuplicateReview = z.infer<typeof insertPotentialOrderDuplicateReviewSchema>;
+
 // Follow-up Orders - New orders that require customer signature before production
 export const followupOrders = pgTable('followup_orders', {
   id: serial('id').primaryKey(),

@@ -17405,7 +17405,12 @@ export const specSheetRevisionApprovals = pgTable(
     decidedAt: timestamp('decided_at', { withTimezone: true })
       .notNull()
       .default(sql`now()`),
-  }
+  },
+  (table) => ({
+    revisionRoleUnique: uniqueIndex(
+      'spec_sheet_revision_approvals_role_unique'
+    ).on(table.specSheetRevisionId, table.approvalRole),
+  })
 );
 
 export const specSheetTransitionAudit = pgTable('spec_sheet_transition_audit', {
@@ -23229,6 +23234,35 @@ export const engineeringReleaseBaselineItems = pgTable(
       .notNull(),
     sourceChecksum: text('source_checksum'),
     immutableSnapshotId: text('immutable_snapshot_id'),
+    configurationItemId: uuid('configuration_item_id').references(
+      () => designProjectConfigurationItems.id,
+      { onDelete: 'restrict' }
+    ),
+    partRevisionId: uuid('part_revision_id').references(
+      () => designProjectPartRevisions.id,
+      { onDelete: 'restrict' }
+    ),
+    artifactRole: text('artifact_role'),
+    controlledRevisionId: uuid('controlled_revision_id').references(
+      () => engineeringControlledRevisions.id,
+      { onDelete: 'restrict' }
+    ),
+    artifactNumber: text('artifact_number'),
+    artifactRevision: text('artifact_revision'),
+    artifactChecksum: text('artifact_checksum'),
+    approvalReleaseStatus: text('approval_release_status'),
+    effectivitySnapshot: jsonb('effectivity_snapshot')
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
+    applicabilityDecision: text('applicability_decision'),
+    omissionJustification: text('omission_justification'),
+    // engineering_change_requests is migration-managed and has no Drizzle
+    // table declaration; the SQL migration owns this RESTRICT foreign key.
+    ecrId: uuid('ecr_id'),
+    ecnId: uuid('ecn_id').references(() => engineeringChangeOrders.id, {
+      onDelete: 'restrict',
+    }),
     metadata: jsonb('metadata')
       .$type<Record<string, unknown>>()
       .default(sql`'{}'::jsonb`)
@@ -25972,6 +26006,394 @@ export const engineeringControlledRevisions = pgTable(
       table.revision
     ),
   })
+);
+
+// Design Project manufacturing-configuration foundation. These identities are
+// deliberately separate from P2 projects and from part_routings.project_id.
+export const designProjectConfigurationItems = pgTable(
+  'design_project_configuration_items',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    rdProjectId: text('rd_project_id')
+      .notNull()
+      .references(() => rdProjects.id, { onDelete: 'restrict' }),
+    configurationItemNumber: text('configuration_item_number').notNull(),
+    partNumber: text('part_number').notNull(),
+    title: text('title').notNull(),
+    itemType: text('item_type').notNull(),
+    makeBuyDesignation: text('make_buy_designation')
+      .notNull()
+      .default('UNDETERMINED'),
+    designResponsibility: text('design_responsibility'),
+    inventoryItemId: integer('inventory_item_id').references(
+      () => inventoryItems.id,
+      { onDelete: 'restrict' }
+    ),
+    lifecycleStatus: text('lifecycle_status').notNull().default('DRAFT'),
+    conversionStatus: text('conversion_status').notNull().default('NATIVE'),
+    createdByUserId: integer('created_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    createdBySnapshot: jsonb('created_by_snapshot')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    projectNumberUnique: uniqueIndex(
+      'design_project_configuration_items_project_number_unique'
+    ).on(table.rdProjectId, table.configurationItemNumber),
+    projectIdx: index('design_project_configuration_items_project_idx').on(
+      table.rdProjectId
+    ),
+    inventoryIdx: index('design_project_configuration_items_inventory_idx').on(
+      table.inventoryItemId
+    ),
+  })
+);
+
+export const designProjectConfigurationItemRelationships = pgTable(
+  'design_project_configuration_item_relationships',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    rdProjectId: text('rd_project_id')
+      .notNull()
+      .references(() => rdProjects.id, { onDelete: 'restrict' }),
+    parentConfigurationItemId: uuid('parent_configuration_item_id')
+      .notNull()
+      .references(() => designProjectConfigurationItems.id, {
+        onDelete: 'restrict',
+      }),
+    childConfigurationItemId: uuid('child_configuration_item_id')
+      .notNull()
+      .references(() => designProjectConfigurationItems.id, {
+        onDelete: 'restrict',
+      }),
+    quantity: numeric('quantity', { precision: 18, scale: 6 }).notNull(),
+    unitOfMeasure: text('unit_of_measure').notNull(),
+    referenceDesignator: text('reference_designator'),
+    effectivityStart: text('effectivity_start'),
+    effectivityEnd: text('effectivity_end'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdByUserId: integer('created_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    createdBySnapshot: jsonb('created_by_snapshot')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    relationshipUnique: uniqueIndex(
+      'design_project_configuration_relationship_unique'
+    ).on(
+      table.parentConfigurationItemId,
+      table.childConfigurationItemId,
+      table.effectivityStart,
+      table.effectivityEnd
+    ),
+    parentIdx: index('design_project_configuration_relationship_parent_idx').on(
+      table.parentConfigurationItemId
+    ),
+    childIdx: index('design_project_configuration_relationship_child_idx').on(
+      table.childConfigurationItemId
+    ),
+  })
+);
+
+export const designProjectPartRevisions = pgTable(
+  'design_project_part_revisions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    configurationItemId: uuid('configuration_item_id')
+      .notNull()
+      .references(() => designProjectConfigurationItems.id, {
+        onDelete: 'restrict',
+      }),
+    revisionIdentifier: text('revision_identifier').notNull(),
+    revisionSequence: integer('revision_sequence').notNull(),
+    lifecycleState: text('lifecycle_state').notNull().default('DRAFT'),
+    changeSummary: text('change_summary').notNull(),
+    effectivityStart: text('effectivity_start'),
+    effectivityEnd: text('effectivity_end'),
+    predecessorRevisionId: uuid('predecessor_revision_id'),
+    // engineering_change_requests is migration-managed and has no Drizzle
+    // table declaration; the SQL migration owns this RESTRICT foreign key.
+    sourceEcrId: uuid('source_ecr_id'),
+    sourceEcnId: uuid('source_ecn_id').references(
+      () => engineeringChangeOrders.id,
+      { onDelete: 'restrict' }
+    ),
+    contentChecksum: text('content_checksum'),
+    approvalReferenceId: uuid('approval_reference_id').references(
+      () => designControlStepApprovals.id,
+      { onDelete: 'restrict' }
+    ),
+    releaseReferenceId: uuid('release_reference_id').references(
+      () => engineeringReleases.id,
+      { onDelete: 'restrict' }
+    ),
+    createdByUserId: integer('created_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    createdBySnapshot: jsonb('created_by_snapshot')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    approvedByUserId: integer('approved_by_user_id').references(
+      () => users.id,
+      { onDelete: 'restrict' }
+    ),
+    approvedBySnapshot: jsonb('approved_by_snapshot').$type<
+      Record<string, unknown>
+    >(),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    releasedByUserId: integer('released_by_user_id').references(
+      () => users.id,
+      { onDelete: 'restrict' }
+    ),
+    releasedBySnapshot: jsonb('released_by_snapshot').$type<
+      Record<string, unknown>
+    >(),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
+  },
+  (table) => ({
+    itemIdentifierUnique: uniqueIndex(
+      'design_project_part_revisions_item_identifier_unique'
+    ).on(table.configurationItemId, table.revisionIdentifier),
+    itemSequenceUnique: uniqueIndex(
+      'design_project_part_revisions_item_sequence_unique'
+    ).on(table.configurationItemId, table.revisionSequence),
+    predecessorSuccessorUnique: uniqueIndex(
+      'design_project_part_revisions_predecessor_successor_unique'
+    )
+      .on(table.predecessorRevisionId)
+      .where(sql`predecessor_revision_id IS NOT NULL`),
+    itemIdx: index('design_project_part_revisions_item_idx').on(
+      table.configurationItemId
+    ),
+  })
+);
+
+export const designProjectDocumentApplicability = pgTable(
+  'design_project_document_applicability',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    configurationItemId: uuid('configuration_item_id').references(
+      () => designProjectConfigurationItems.id,
+      { onDelete: 'restrict' }
+    ),
+    partRevisionId: uuid('part_revision_id').references(
+      () => designProjectPartRevisions.id,
+      { onDelete: 'restrict' }
+    ),
+    requirementRole: text('requirement_role').notNull(),
+    decision: text('decision').notNull().default('REQUIRED'),
+    justification: text('justification'),
+    approvedByUserId: integer('approved_by_user_id').references(
+      () => users.id,
+      { onDelete: 'restrict' }
+    ),
+    approvedBySnapshot: jsonb('approved_by_snapshot').$type<
+      Record<string, unknown>
+    >(),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    createdByUserId: integer('created_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    createdBySnapshot: jsonb('created_by_snapshot')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  }
+);
+
+export const designProjectPartRevisionArtifacts = pgTable(
+  'design_project_part_revision_artifacts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    partRevisionId: uuid('part_revision_id')
+      .notNull()
+      .references(() => designProjectPartRevisions.id, {
+        onDelete: 'restrict',
+      }),
+    artifactRole: text('artifact_role').notNull(),
+    sourceModule: text('source_module').notNull(),
+    sourceRecordId: text('source_record_id').notNull(),
+    controlledRevisionId: uuid('controlled_revision_id')
+      .notNull()
+      .references(() => engineeringControlledRevisions.id, {
+        onDelete: 'restrict',
+      }),
+    artifactNumber: text('artifact_number').notNull(),
+    revisionSnapshot: text('revision_snapshot').notNull(),
+    checksumSnapshot: text('checksum_snapshot').notNull(),
+    lifecycleStateSnapshot: text('lifecycle_state_snapshot').notNull(),
+    effectivityStart: text('effectivity_start'),
+    effectivityEnd: text('effectivity_end'),
+    requirementDesignation: text('requirement_designation')
+      .notNull()
+      .default('REQUIRED'),
+    linkedByUserId: integer('linked_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    linkedBySnapshot: jsonb('linked_by_snapshot')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    linkedAt: timestamp('linked_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    artifactUnique: uniqueIndex(
+      'design_project_part_revision_artifacts_unique'
+    ).on(table.partRevisionId, table.artifactRole, table.controlledRevisionId),
+    revisionIdx: index(
+      'design_project_part_revision_artifacts_revision_idx'
+    ).on(table.partRevisionId),
+    controlledIdx: index(
+      'design_project_part_revision_artifacts_controlled_idx'
+    ).on(table.controlledRevisionId),
+  })
+);
+
+export const routingOperationWorkInstructionRevisions = pgTable(
+  'routing_operation_work_instruction_revisions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    routingControlledRevisionId: uuid('routing_controlled_revision_id')
+      .notNull()
+      .references(() => engineeringControlledRevisions.id, {
+        onDelete: 'restrict',
+      }),
+    routingOperationId: integer('routing_operation_id').references(
+      () => routingOperations.id,
+      { onDelete: 'restrict' }
+    ),
+    routingOperationKey: text('routing_operation_key').notNull(),
+    workInstructionControlledRevisionId: uuid(
+      'work_instruction_controlled_revision_id'
+    )
+      .notNull()
+      .references(() => engineeringControlledRevisions.id, {
+        onDelete: 'restrict',
+      }),
+    workInstructionNumber: text('work_instruction_number').notNull(),
+    workInstructionRevisionSnapshot: text(
+      'work_instruction_revision_snapshot'
+    ).notNull(),
+    workInstructionChecksumSnapshot: text(
+      'work_instruction_checksum_snapshot'
+    ).notNull(),
+    usageType: text('usage_type').notNull().default('EXECUTION'),
+    isPrimary: boolean('is_primary').notNull().default(false),
+    displaySequence: integer('display_sequence').notNull().default(0),
+    effectivityStart: text('effectivity_start'),
+    effectivityEnd: text('effectivity_end'),
+    linkedByUserId: integer('linked_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    linkedBySnapshot: jsonb('linked_by_snapshot')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    linkedAt: timestamp('linked_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    linkUnique: uniqueIndex('routing_operation_work_instruction_unique').on(
+      table.routingControlledRevisionId,
+      table.routingOperationKey,
+      table.workInstructionControlledRevisionId
+    ),
+    primaryUnique: uniqueIndex(
+      'routing_operation_work_instruction_primary_unique'
+    )
+      .on(table.routingControlledRevisionId, table.routingOperationKey)
+      .where(sql`is_primary`),
+  })
+);
+
+export const designProjectConfigurationReconciliationQueue = pgTable(
+  'design_project_configuration_reconciliation_queue',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    sourceTable: text('source_table').notNull(),
+    sourceRecordId: text('source_record_id').notNull(),
+    candidateRdProjectId: text('candidate_rd_project_id').references(
+      () => rdProjects.id,
+      { onDelete: 'restrict' }
+    ),
+    candidateConfigurationItemId: uuid(
+      'candidate_configuration_item_id'
+    ).references(() => designProjectConfigurationItems.id, {
+      onDelete: 'restrict',
+    }),
+    candidateReason: text('candidate_reason').notNull(),
+    sourceProvenance: jsonb('source_provenance')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    ambiguityStatus: text('ambiguity_status')
+      .notNull()
+      .default('PENDING_REVIEW'),
+    reviewerUserId: integer('reviewer_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    reviewerSnapshot:
+      jsonb('reviewer_snapshot').$type<Record<string, unknown>>(),
+    disposition: text('disposition'),
+    dispositionJustification: text('disposition_justification'),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    sourceUnique: uniqueIndex(
+      'design_project_configuration_reconciliation_source_unique'
+    ).on(table.sourceTable, table.sourceRecordId),
+  })
+);
+
+export const designProjectConfigurationReconciliationEvents = pgTable(
+  'design_project_configuration_reconciliation_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    reconciliationId: uuid('reconciliation_id')
+      .notNull()
+      .references(() => designProjectConfigurationReconciliationQueue.id, {
+        onDelete: 'restrict',
+      }),
+    eventType: text('event_type').notNull(),
+    actorUserId: integer('actor_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    actorSnapshot: jsonb('actor_snapshot')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    eventPayload: jsonb('event_payload')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    occurredAt: timestamp('occurred_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  }
 );
 
 export const engineeringChangeOrders = pgTable(

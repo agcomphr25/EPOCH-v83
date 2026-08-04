@@ -74,8 +74,24 @@ const relationshipPayloadSchema = z.object({
   sortOrder: z.number().int().min(0).default(0),
 });
 
+const createItemPayloadSchema = itemPayloadSchema.extend({
+  parentConfigurationItemId: z.string().uuid().nullable().optional(),
+  quantity: z.coerce.number().positive().optional(),
+  unitOfMeasure: z.string().trim().min(1).optional(),
+  referenceDesignator: z.string().trim().nullable().optional(),
+  effectivityStart: z.string().trim().nullable().optional(),
+  effectivityEnd: z.string().trim().nullable().optional(),
+  sortOrder: z.number().int().min(0).optional(),
+});
+
 function rowsOf<T>(result: unknown): T[] {
   return (((result as any)?.rows ?? result) || []) as T[];
+}
+
+function errorCode(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code)
+    : null;
 }
 
 function requestEvidence(req: Request) {
@@ -771,34 +787,108 @@ router.post(
   requirePermission('design.configuration.edit'),
   async (req, res) => {
     try {
-      const parsed = itemPayloadSchema.parse(req.body);
+      const parsed = createItemPayloadSchema.parse(req.body);
       const evidence = requestEvidence(req);
-      const [workspace] = await db
-        .select()
-        .from(designProjectConfigurationWorkspaces)
-        .where(
-          eq(
-            designProjectConfigurationWorkspaces.rdProjectId,
-            req.params.projectId
+      const created = await db.transaction(async (tx) => {
+        const [workspace] = await tx
+          .select()
+          .from(designProjectConfigurationWorkspaces)
+          .where(
+            eq(
+              designProjectConfigurationWorkspaces.rdProjectId,
+              req.params.projectId
+            )
           )
-        )
-        .limit(1);
-      if (!workspace)
-        return res.status(409).json({ error: 'CONFIGURATION_NOT_ESTABLISHED' });
-      const [item] = await db
-        .insert(designProjectConfigurationItems)
-        .values({
-          rdProjectId: req.params.projectId,
-          ...parsed,
-          createdByUserId: evidence.actor.id,
-          createdBySnapshot: evidence.snapshot,
-        })
-        .returning();
-      res.status(201).json(item);
+          .limit(1);
+        if (!workspace)
+          throw Object.assign(new Error('Configuration not established'), {
+            code: 'CONFIGURATION_NOT_ESTABLISHED',
+          });
+
+        if (parsed.parentConfigurationItemId) {
+          const [parent] = await tx
+            .select({ id: designProjectConfigurationItems.id })
+            .from(designProjectConfigurationItems)
+            .where(
+              and(
+                eq(
+                  designProjectConfigurationItems.id,
+                  parsed.parentConfigurationItemId
+                ),
+                eq(
+                  designProjectConfigurationItems.rdProjectId,
+                  req.params.projectId
+                )
+              )
+            )
+            .limit(1);
+          if (!parent)
+            throw Object.assign(new Error('Parent not found'), {
+              code: 'PARENT_NOT_FOUND',
+            });
+        }
+
+        const {
+          parentConfigurationItemId,
+          quantity,
+          unitOfMeasure,
+          referenceDesignator,
+          effectivityStart,
+          effectivityEnd,
+          sortOrder,
+          ...itemValues
+        } = parsed;
+        const [item] = await tx
+          .insert(designProjectConfigurationItems)
+          .values({
+            rdProjectId: req.params.projectId,
+            ...itemValues,
+            createdByUserId: evidence.actor.id,
+            createdBySnapshot: evidence.snapshot,
+          })
+          .returning();
+
+        let relationship:
+          | typeof designProjectConfigurationItemRelationships.$inferSelect
+          | null = null;
+        if (parentConfigurationItemId) {
+          if (quantity === undefined || !unitOfMeasure)
+            throw Object.assign(new Error('Parent relationship incomplete'), {
+              code: 'PARENT_RELATIONSHIP_REQUIRED_FIELDS',
+            });
+          [relationship] = await tx
+            .insert(designProjectConfigurationItemRelationships)
+            .values({
+              rdProjectId: req.params.projectId,
+              parentConfigurationItemId,
+              childConfigurationItemId: item.id,
+              quantity: String(quantity),
+              unitOfMeasure,
+              referenceDesignator,
+              effectivityStart,
+              effectivityEnd,
+              sortOrder: sortOrder ?? 0,
+              createdByUserId: evidence.actor.id,
+              createdBySnapshot: evidence.snapshot,
+            })
+            .returning();
+        }
+        return { item, relationship };
+      });
+      res.status(201).json(created);
     } catch (error) {
       if (error instanceof z.ZodError)
         return res.status(400).json({ error: error.errors[0]?.message });
-      if ((error as any)?.code === '23505')
+      const code = errorCode(error);
+      if (code === 'CONFIGURATION_NOT_ESTABLISHED')
+        return res.status(409).json({ error: 'CONFIGURATION_NOT_ESTABLISHED' });
+      if (
+        ['PARENT_NOT_FOUND', 'PARENT_RELATIONSHIP_REQUIRED_FIELDS'].includes(
+          code ?? ''
+        )
+      )
+        return res.status(409).json({ error: code });
+      if (code === '23505')
         return res.status(409).json({ error: 'DUPLICATE_CONFIGURATION_ITEM' });
       res.status(500).json({ error: 'Failed to create configuration item' });
     }
@@ -921,7 +1011,7 @@ router.post(
     } catch (error) {
       if (error instanceof z.ZodError)
         return res.status(400).json({ error: error.errors[0]?.message });
-      if ((error as any)?.code === '23505')
+      if (errorCode(error) === '23505')
         return res.status(409).json({ error: 'DUPLICATE_CURRENT_CHILD' });
       res.status(500).json({ error: 'Failed to add relationship' });
     }
@@ -966,9 +1056,15 @@ router.patch(
         .update(designProjectConfigurationItemRelationships)
         .set({ ...parsed, quantity: String(parsed.quantity) })
         .where(
-          eq(
-            designProjectConfigurationItemRelationships.id,
-            req.params.relationshipId
+          and(
+            eq(
+              designProjectConfigurationItemRelationships.id,
+              req.params.relationshipId
+            ),
+            eq(
+              designProjectConfigurationItemRelationships.rdProjectId,
+              req.params.projectId
+            )
           )
         )
         .returning();
@@ -993,6 +1089,26 @@ router.put(
         })
         .parse(req.body);
       await db.transaction(async (tx) => {
+        const [parent] = await tx
+          .select({ id: designProjectConfigurationItems.id })
+          .from(designProjectConfigurationItems)
+          .where(
+            and(
+              eq(
+                designProjectConfigurationItems.id,
+                parsed.parentConfigurationItemId
+              ),
+              eq(
+                designProjectConfigurationItems.rdProjectId,
+                req.params.projectId
+              )
+            )
+          )
+          .limit(1);
+        if (!parent)
+          throw Object.assign(new Error('Invalid reorder scope'), {
+            code: 'INVALID_REORDER_SCOPE',
+          });
         const rows = await tx
           .select()
           .from(designProjectConfigurationItemRelationships)
@@ -1016,17 +1132,31 @@ router.put(
           throw Object.assign(new Error('Invalid reorder scope'), {
             code: 'INVALID_REORDER_SCOPE',
           });
-        for (const [sortOrder, id] of parsed.relationshipIds.entries())
+        for (
+          let sortOrder = 0;
+          sortOrder < parsed.relationshipIds.length;
+          sortOrder += 1
+        ) {
+          const id = parsed.relationshipIds[sortOrder];
           await tx
             .update(designProjectConfigurationItemRelationships)
             .set({ sortOrder })
-            .where(eq(designProjectConfigurationItemRelationships.id, id));
+            .where(
+              and(
+                eq(designProjectConfigurationItemRelationships.id, id),
+                eq(
+                  designProjectConfigurationItemRelationships.rdProjectId,
+                  req.params.projectId
+                )
+              )
+            );
+        }
       });
       res.json({ reordered: parsed.relationshipIds.length });
     } catch (error) {
       if (error instanceof z.ZodError)
         return res.status(400).json({ error: error.errors[0]?.message });
-      if ((error as any)?.code === 'INVALID_REORDER_SCOPE')
+      if (errorCode(error) === 'INVALID_REORDER_SCOPE')
         return res.status(409).json({ error: 'INVALID_REORDER_SCOPE' });
       res.status(500).json({ error: 'Failed to reorder relationships' });
     }
@@ -1142,10 +1272,10 @@ router.post(
         return res.status(400).json({ error: error.errors[0]?.message });
       if (
         ['ITEM_NOT_FOUND', 'PREDECESSOR_NOT_FOUND'].includes(
-          (error as any)?.code
+          errorCode(error) ?? ''
         )
       )
-        return res.status(409).json({ error: (error as any).code });
+        return res.status(409).json({ error: errorCode(error) });
       res.status(500).json({ error: 'Failed to create draft revision' });
     }
   }
@@ -1199,20 +1329,46 @@ router.post(
   '/:projectId/configuration/applicability/:applicabilityId/submit',
   requirePermission('design.configuration.edit'),
   async (req, res) => {
-    const [row] = await db
-      .update(designProjectDocumentApplicability)
-      .set({ approvalStatus: 'PENDING', updatedAt: new Date() })
-      .where(
-        and(
-          eq(designProjectDocumentApplicability.id, req.params.applicabilityId),
-          eq(designProjectDocumentApplicability.decision, 'NOT_APPLICABLE'),
-          eq(designProjectDocumentApplicability.approvalStatus, 'DRAFT')
-        )
+    const outcome = await db.transaction(async (tx) => {
+      const scoped = await tx.execute(sql`
+        SELECT a.id, a.decision, a.approval_status, a.justification
+        FROM design_project_document_applicability a
+        JOIN design_project_configuration_items i ON i.id = a.configuration_item_id
+        WHERE a.id = ${req.params.applicabilityId}
+          AND i.rd_project_id = ${req.params.projectId}
+        FOR UPDATE OF a
+      `);
+      const applicability = rowsOf<{
+        decision: string;
+        approval_status: string;
+        justification: string | null;
+      }>(scoped)[0];
+      if (!applicability) return { status: 'not_found' as const };
+      if (
+        applicability.decision !== 'NOT_APPLICABLE' ||
+        applicability.approval_status !== 'DRAFT' ||
+        !applicability.justification?.trim()
       )
-      .returning();
-    if (!row)
+        return { status: 'not_ready' as const };
+      const result = await tx.execute(sql`
+        UPDATE design_project_document_applicability a
+        SET approval_status = 'PENDING', updated_at = now()
+        FROM design_project_configuration_items i
+        WHERE a.id = ${req.params.applicabilityId}
+          AND a.configuration_item_id = i.id
+          AND i.rd_project_id = ${req.params.projectId}
+          AND a.decision = 'NOT_APPLICABLE'
+          AND a.approval_status = 'DRAFT'
+          AND nullif(btrim(a.justification), '') IS NOT NULL
+        RETURNING a.*
+      `);
+      return { status: 'submitted' as const, row: rowsOf(result)[0] };
+    });
+    if (outcome.status === 'not_found')
+      return res.status(404).json({ error: 'Applicability not found' });
+    if (outcome.status === 'not_ready')
       return res.status(409).json({ error: 'NOT_APPLICABLE_NOT_SUBMITTABLE' });
-    res.json(row);
+    res.json(outcome.row);
   }
 );
 
@@ -1221,19 +1377,41 @@ router.post(
   requirePermission('design.configuration.applicability.approve'),
   async (req, res) => {
     const evidence = requestEvidence(req);
-    const result = await db.execute(sql`
-    UPDATE design_project_document_applicability a SET approval_status = 'APPROVED',
-      approved_by_user_id = ${evidence.actor.id}, approved_by_snapshot = ${JSON.stringify(evidence.snapshot)}::jsonb,
-      approved_at = now(), updated_at = now()
-    FROM design_project_configuration_items i
-    WHERE a.id = ${req.params.applicabilityId} AND a.configuration_item_id = i.id
-      AND i.rd_project_id = ${req.params.projectId} AND a.decision = 'NOT_APPLICABLE'
-      AND a.approval_status = 'PENDING' RETURNING a.*
-  `);
-    const row = rowsOf(result)[0];
-    if (!row)
+    const outcome = await db.transaction(async (tx) => {
+      const scoped = await tx.execute(sql`
+        SELECT a.id, a.decision, a.approval_status, a.justification
+        FROM design_project_document_applicability a
+        JOIN design_project_configuration_items i ON i.id = a.configuration_item_id
+        WHERE a.id = ${req.params.applicabilityId}
+          AND i.rd_project_id = ${req.params.projectId}
+        FOR UPDATE OF a
+      `);
+      const applicability = rowsOf<{
+        decision: string;
+        approval_status: string;
+      }>(scoped)[0];
+      if (!applicability) return { status: 'not_found' as const };
+      if (
+        applicability.decision !== 'NOT_APPLICABLE' ||
+        applicability.approval_status !== 'PENDING'
+      )
+        return { status: 'not_ready' as const };
+      const result = await tx.execute(sql`
+        UPDATE design_project_document_applicability a SET approval_status = 'APPROVED',
+          approved_by_user_id = ${evidence.actor.id}, approved_by_snapshot = ${JSON.stringify(evidence.snapshot)}::jsonb,
+          approved_at = now(), updated_at = now()
+        FROM design_project_configuration_items i
+        WHERE a.id = ${req.params.applicabilityId} AND a.configuration_item_id = i.id
+          AND i.rd_project_id = ${req.params.projectId} AND a.decision = 'NOT_APPLICABLE'
+          AND a.approval_status = 'PENDING' RETURNING a.*
+      `);
+      return { status: 'approved' as const, row: rowsOf(result)[0] };
+    });
+    if (outcome.status === 'not_found')
+      return res.status(404).json({ error: 'Applicability not found' });
+    if (outcome.status === 'not_ready')
       return res.status(409).json({ error: 'NOT_APPLICABLE_NOT_APPROVABLE' });
-    res.json(row);
+    res.json(outcome.row);
   }
 );
 

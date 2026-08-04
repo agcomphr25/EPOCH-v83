@@ -143,10 +143,32 @@ describe('Design Project configuration workspace Phase 2', () => {
 
   it('uses transactions for multi-record tree mutations', () => {
     expect(routeSource).toMatch(
+      /configuration\/items'[\s\S]{0,500}db\.transaction/
+    );
+    expect(routeSource).toMatch(
       /relationships\/reorder[\s\S]{0,500}db\.transaction/
     );
     expect(routeSource).toMatch(
       /items\/:itemId\/revisions[\s\S]{0,700}db\.transaction/
+    );
+  });
+
+  it('uses one client request for item and parent creation', () => {
+    expect(uiSource).toContain('parentConfigurationItemId: itemForm.parentId');
+    expect(uiSource).not.toMatch(
+      /if \(created && itemForm\.parentId\)[\s\S]{0,300}configuration\/relationships/
+    );
+    expect(uiSource).toContain('setSelectedItemId(created.item.id)');
+  });
+
+  it('project-scopes applicability submit and approval transitions', () => {
+    expect(routeSource.match(/FOR UPDATE OF a/g)).toHaveLength(2);
+    expect(routeSource).toContain(
+      'AND i.rd_project_id = ${req.params.projectId}'
+    );
+    expect(routeSource).toContain("applicability.approval_status !== 'DRAFT'");
+    expect(routeSource).toContain(
+      "applicability.approval_status !== 'PENDING'"
     );
   });
 

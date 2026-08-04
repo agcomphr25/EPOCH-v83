@@ -296,22 +296,16 @@ export function DesignProjectConfigurationWorkspace({
             : itemForm.itemType === 'MANUFACTURED_PART'
               ? 'MAKE'
               : 'UNDETERMINED',
+        parentConfigurationItemId: itemForm.parentId || null,
+        quantity: itemForm.parentId ? Number(itemForm.quantity) : undefined,
+        unitOfMeasure: itemForm.parentId ? itemForm.unitOfMeasure : undefined,
+        sortOrder: itemForm.parentId
+          ? (childrenByParent.get(itemForm.parentId)?.length ?? 0)
+          : undefined,
       }
     );
-    if (created && itemForm.parentId)
-      await mutate(
-        `/api/rd-projects/${encodeURIComponent(projectId)}/configuration/relationships`,
-        'POST',
-        {
-          parentConfigurationItemId: itemForm.parentId,
-          childConfigurationItemId: created.id,
-          quantity: Number(itemForm.quantity),
-          unitOfMeasure: itemForm.unitOfMeasure,
-          sortOrder: childrenByParent.get(itemForm.parentId)?.length ?? 0,
-        }
-      );
     if (created) {
-      setSelectedItemId(created.id);
+      setSelectedItemId(created.item.id);
       setItemForm({
         configurationItemNumber: '',
         partNumber: '',

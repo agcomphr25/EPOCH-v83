@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, Search, ShieldAlert, CheckCircle2, Pencil, X, Clock } from 'lucide-react';
+import { AlertTriangle, Search, ShieldAlert, CheckCircle2, Pencil, X, Clock, FastForward } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 
@@ -27,6 +27,19 @@ interface PendingEdit {
   new_value: string;
   reason: string;
 }
+
+interface ExpediteRow {
+  requestedId: string;
+  orderId: string | null;
+  customerName: string | null;
+  currentDepartment: string | null;
+  productionDepartment: string | null;
+  eligible: boolean;
+  alreadyAtShippingQc: boolean;
+  blockers: string[];
+}
+
+const PURE_PRECISION_IDS = Array.from({ length: 16 }, (_, index) => `FB${250 + index}`);
 
 const TIER_BADGE: Record<Tier, JSX.Element> = {
   safe: <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">Safe</Badge>,
@@ -70,6 +83,10 @@ export default function OrderOverridePage() {
   const [filterText, setFilterText] = useState('');
   const [savingColumn, setSavingColumn] = useState<string | null>(null);
   const [savedColumns, setSavedColumns] = useState<Set<string>>(new Set());
+  const [expediteOrderIds, setExpediteOrderIds] = useState(PURE_PRECISION_IDS.join('\n'));
+  const [expediteReason, setExpediteReason] = useState('Temporary abbreviated Pure Precision stock process');
+  const [expeditePreview, setExpeditePreview] = useState<ExpediteRow[] | null>(null);
+  const parsedExpediteIds = useMemo(() => [...new Set(expediteOrderIds.split(/[\s,]+/).map(value => value.trim().toUpperCase()).filter(Boolean))], [expediteOrderIds]);
 
   const { data: currentUser } = useQuery<any>({ queryKey: ['currentUser'], staleTime: 60_000 });
   const isAuthorized = currentUser?.username === 'glennj';
@@ -128,6 +145,26 @@ export default function OrderOverridePage() {
       setSavingColumn(null);
       toast({ title: 'Error', description: err.message ?? 'Update failed', variant: 'destructive' });
     },
+  });
+
+  const previewExpedite = useMutation({
+    mutationFn: () => apiRequest('/api/admin/p1-expedite/preview', {
+      method: 'POST', body: JSON.stringify({ ids: parsedExpediteIds }),
+    }),
+    onSuccess: (data: any) => setExpeditePreview(data.rows),
+    onError: (err: any) => toast({ title: 'Preview failed', description: err.message, variant: 'destructive' }),
+  });
+
+  const executeExpedite = useMutation({
+    mutationFn: () => apiRequest('/api/admin/p1-expedite/execute', {
+      method: 'POST', body: JSON.stringify({ ids: parsedExpediteIds, reason: expediteReason }),
+    }),
+    onSuccess: (data: any) => {
+      toast({ title: 'Fast track complete', description: `${data.changed.length} orders moved to Shipping QC. Batch ${data.correlationId}` });
+      previewExpedite.mutate();
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (err: any) => toast({ title: 'Nothing was changed', description: err.message, variant: 'destructive' }),
   });
 
   const { grouped, ungrouped } = useMemo(() => {
@@ -389,6 +426,66 @@ export default function OrderOverridePage() {
           glennj only
         </Badge>
       </div>
+
+      <Card className="border-blue-200">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FastForward className="w-4 h-4 text-blue-600" /> Pure Precision Fast Track
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Move FB250–FB265 directly to Shipping QC without completing or signing skipped department steps.
+            The normal P1 route is not changed.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="expedite-orders">Order IDs ({parsedExpediteIds.length})</Label>
+            <Textarea id="expedite-orders" value={expediteOrderIds} onChange={event => { setExpediteOrderIds(event.target.value); setExpeditePreview(null); }} className="mt-1 font-mono min-h-28" />
+            <p className="text-xs text-muted-foreground mt-1">One per line or comma-separated. This first batch is prefilled with FB250–FB265.</p>
+          </div>
+          <div>
+            <Label htmlFor="expedite-reason">Audit reason</Label>
+            <Textarea id="expedite-reason" value={expediteReason} onChange={event => setExpediteReason(event.target.value)} className="mt-1" />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => previewExpedite.mutate()} disabled={previewExpedite.isPending}>
+              {previewExpedite.isPending ? 'Checking…' : `Preview ${parsedExpediteIds.length} Orders`}
+            </Button>
+            <Button
+              onClick={() => {
+                if (window.confirm('Move every eligible order in this batch to Shipping QC? This action is audited.')) executeExpedite.mutate();
+              }}
+              disabled={!expeditePreview || expeditePreview.some(row => !row.eligible) || expediteReason.trim().length < 10 || executeExpedite.isPending}
+            >
+              {executeExpedite.isPending ? 'Moving…' : 'Move Batch to Shipping QC'}
+            </Button>
+          </div>
+          {expeditePreview && (
+            <div className="border rounded-md overflow-hidden">
+              <div className="grid grid-cols-[90px_1fr_1fr_2fr] gap-3 bg-muted px-3 py-2 text-xs font-semibold">
+                <span>Order</span><span>Customer</span><span>Current department</span><span>Validation</span>
+              </div>
+              <div className="divide-y max-h-80 overflow-y-auto">
+                {expeditePreview.map(row => (
+                  <div key={row.requestedId} className="grid grid-cols-[90px_1fr_1fr_2fr] gap-3 px-3 py-2 text-xs items-center">
+                    <span className="font-mono font-semibold">{row.requestedId}</span>
+                    <span>{row.customerName ?? '—'}</span>
+                    <span>{row.currentDepartment ?? '—'}</span>
+                    {row.eligible ? (
+                      <span className="text-green-700 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> {row.alreadyAtShippingQc ? 'Already at Shipping QC' : 'Ready'}</span>
+                    ) : (
+                      <span className="text-red-600">{row.blockers.join('; ')}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {expeditePreview?.some(row => !row.eligible) && (
+            <p className="text-xs text-amber-700 flex gap-1"><AlertTriangle className="w-3.5 h-3.5" /> The batch is locked until every validation issue is resolved; no partial updates are allowed.</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Order Search */}
       <Card>

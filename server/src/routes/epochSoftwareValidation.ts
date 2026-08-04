@@ -121,6 +121,15 @@ async function editable(req: Request, res: any) {
   return p;
 }
 
+const optionalCreateDate = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().date().optional()
+);
+const optionalCreateUuid = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().uuid().optional()
+);
+
 const createSchema = z.object({
   title: z.string().min(3).max(240),
   systemName: z.string().min(1).default('EPOCH'),
@@ -137,7 +146,7 @@ const createSchema = z.object({
   ]),
   productionVersion: z.string().min(1),
   commitOrReleaseIdentifier: z.string().max(240).optional(),
-  productionDeploymentDate: z.string().date().optional(),
+  productionDeploymentDate: optionalCreateDate,
   validationEnvironment: z.string().min(1),
   productionEnvironmentReference: z.string().min(1),
   databaseProvider: z.string().min(1),
@@ -148,8 +157,8 @@ const createSchema = z.object({
   plannedStartDate: z.string().date(),
   plannedCompletionDate: z.string().date(),
   reasonForValidation: z.string().min(3),
-  previousApprovedPackageId: z.string().uuid().optional(),
-  auditReadinessAssessmentId: z.string().uuid().optional(),
+  previousApprovedPackageId: optionalCreateUuid,
+  auditReadinessAssessmentId: optionalCreateUuid,
   notes: z.string().max(20000).optional(),
 });
 router.get(

@@ -23,7 +23,7 @@ describe('EPOCH software validation create submission', () => {
     expect(compact).toContain('createSubmission.current=idempotencyKey;');
     expect(
       compact.indexOf('createSubmission.current=idempotencyKey;')
-    ).toBeLessThan(compact.indexOf('create.mutate({body:'));
+    ).toBeLessThan(compact.indexOf('create.mutate({body,'));
   });
 
   it('uses a fresh key per deliberate action and disables the pending submit', () => {
@@ -37,5 +37,11 @@ describe('EPOCH software validation create submission', () => {
     );
     expect(compact).toContain("'Creatingpackage\\u2026'");
     expect(compact).toContain('setSelected(p.id)');
+  });
+
+  it('omits blank optional values before creating a package', () => {
+    expect(compact).toContain("'productionDeploymentDate'");
+    expect(compact).toContain('if(!body[field]?.trim())deletebody[field]');
+    expect(compact).toContain('create.mutate({body,idempotencyKey,})');
   });
 });

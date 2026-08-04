@@ -216,8 +216,10 @@ async function createFixtures() {
     [po.rows[0].id]
   );
 
+  let canonicalPoProjectId: string | undefined;
   for (const [index, [name, workflowVersion, stage]] of stages.entries()) {
     const id = `10000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`;
+    if (name === 'PO') canonicalPoProjectId = id;
     await pool.query(
       `INSERT INTO projects
          (id,project_code,project_name,customer_id,workflow_version,current_stage,
@@ -269,6 +271,16 @@ async function createFixtures() {
       );
     }
   }
+
+  if (!canonicalPoProjectId) {
+    throw new Error(
+      'Legacy fixture inventory is missing the canonical PO stage'
+    );
+  }
+  await pool.query(`UPDATE p2_purchase_orders SET project_id=$1 WHERE id=$2`, [
+    canonicalPoProjectId,
+    po.rows[0].id,
+  ]);
 
   const evidenceId = '10000000-0000-4000-8000-000000000016';
   const step = await pool.query<{ id: string }>(

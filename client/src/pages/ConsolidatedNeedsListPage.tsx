@@ -2131,7 +2131,7 @@ export default function ConsolidatedNeedsListPage() {
                 ) : (
                   <div className="divide-y">
                     {readyRequests.map((request) => (
-                      <div key={request.id} className="grid gap-3 p-4 sm:grid-cols-[auto_minmax(160px,1.5fr)_55px_minmax(100px,0.8fr)_105px_auto] sm:items-center">
+                      <div key={request.id} className="grid gap-3 p-4 sm:grid-cols-[auto_minmax(160px,1.5fr)_55px_minmax(100px,0.8fr)_90px_105px_auto] sm:items-center">
                         <Checkbox aria-label={`Select ${request.partName}`} checked={selectedVendorRequests.has(request.id)} onCheckedChange={() => toggleRequestSelection(request.id)} />
                         <button type="button" onClick={() => openInventoryProfile(request)} className="min-w-0 text-left">
                           <span className="block truncate text-sm font-medium hover:underline">{request.partName}</span>
@@ -2139,6 +2139,10 @@ export default function ConsolidatedNeedsListPage() {
                         </button>
                         <div className="text-sm">{getRemainingRequestQuantity(request)}</div>
                         <div className="text-sm"><span className="block text-xs text-muted-foreground">Department</span>{request.department}</div>
+                        <div className="text-sm" title={request.requestDate ? new Date(request.requestDate).toLocaleString() : undefined}>
+                          <span className="block text-xs text-muted-foreground">Created</span>
+                          {formatRequestDate(request.requestDate)}
+                        </div>
                         <div className="text-sm font-medium">{request.estimatedCost ? `$${request.estimatedCost.toFixed(2)}` : <span className="text-amber-700">Cost missing</span>}</div>
                         <Button size="sm" variant="ghost" onClick={() => setDetailRequest(request)}><Eye className="mr-1 h-4 w-4" />View</Button>
                       </div>
@@ -2160,13 +2164,17 @@ export default function ConsolidatedNeedsListPage() {
                 ) : (
                   <div className="divide-y divide-amber-100">
                     {blockedRequests.map((request) => (
-                      <div key={request.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(160px,1fr)_70px_minmax(100px,0.7fr)_auto] sm:items-center">
+                      <div key={request.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(160px,1fr)_70px_minmax(100px,0.7fr)_90px_auto] sm:items-center">
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium">{request.partName}</div>
                           <div className="truncate text-xs text-muted-foreground">{getVendorSkuDisplay(request) || 'SKU missing'} · requested by {request.requestedBy}</div>
                         </div>
                         <div className="text-sm">{request.quantity} units</div>
                         <div className="text-sm">{request.department}</div>
+                        <div className="text-sm" title={request.requestDate ? new Date(request.requestDate).toLocaleString() : undefined}>
+                          <span className="block text-xs text-muted-foreground">Created</span>
+                          {formatRequestDate(request.requestDate)}
+                        </div>
                         <div className="flex justify-end gap-2">
                           <Button size="sm" variant="outline" onClick={() => handleAction(request, 'reject')}>Reject</Button>
                           <Button size="sm" onClick={() => handleAction(request, 'approve')}>Approve</Button>

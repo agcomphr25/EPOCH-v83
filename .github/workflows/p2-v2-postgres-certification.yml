@@ -24,6 +24,11 @@ on:
       - 'server/storage.ts'
       - 'server/__tests__/p2V2PostgresCertification.test.ts'
       - 'server/__tests__/p2V2PilotPostgresCertification.test.ts'
+      - 'server/__tests__/projectWorkflowVersion.test.ts'
+      - 'server/__tests__/projectWorkflowRegistry.test.ts'
+      - 'server/__tests__/projectWorkflowInstance.test.ts'
+      - 'server/__tests__/projectWorkflowV2ReadModel.test.ts'
+      - 'server/__tests__/projectClosingGate.test.ts'
       - 'client/src/__tests__/P2V2*.component.test.tsx'
       - 'scripts/validate-phase10a-static-manifest.js'
       - 'package.json'
@@ -277,6 +282,11 @@ jobs:
         run: >-
           npx vitest run
           --config vitest.config.server.ts
+          server/__tests__/projectWorkflowVersion.test.ts
+          server/__tests__/projectWorkflowRegistry.test.ts
+          server/__tests__/projectWorkflowInstance.test.ts
+          server/__tests__/projectWorkflowV2ReadModel.test.ts
+          server/__tests__/projectClosingGate.test.ts
           server/__tests__/projectCommercialReview.test.ts
           server/__tests__/projectTechnicalConfigurationReview.test.ts
           server/__tests__/projectProductionPlanning.test.ts
@@ -286,6 +296,7 @@ jobs:
           server/__tests__/projectQualityRelease.test.ts
           server/__tests__/projectShippingCloseout.test.ts
           server/__tests__/p2V2ProductionLaunchFeatureGate.test.ts
+          --hookTimeout=30000
           --reporter=verbose
 
       - name: Run P2 V2 ten-stage component regressions

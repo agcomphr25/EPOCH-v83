@@ -94,7 +94,9 @@ describe('legacy creation and response compatibility guards', () => {
   ])(
     '%s creation explicitly stores the prospective workflow selection',
     (_name, source) => {
-      expect(source).toContain('const workflowVersion = getWorkflowVersionForNewProject()');
+      expect(source).toContain(
+        'const workflowVersion = getWorkflowVersionForNewProject()'
+      );
       expect(source).toContain('workflowVersion,');
     }
   );
@@ -119,11 +121,16 @@ describe('legacy creation and response compatibility guards', () => {
   it.each([
     ['manual', projectsRoute],
     ['accepted quote', quotesRoute],
-  ])('%s creation initializes V2 inside the project transaction', (_name, source) => {
-    expect(source).toContain('initializeV2Workflow(');
-    expect(source).toContain(', tx);');
-    expect(source).toContain("workflowVersion === 'legacy_v1' ? PROJECT_STEP_TYPES : []");
-  });
+  ])(
+    '%s creation initializes V2 inside the project transaction',
+    (_name, source) => {
+      expect(source).toContain('initializeV2Workflow(');
+      expect(source).toMatch(/initializeV2Workflow\([\s\S]*?,\s*tx\s*\);/);
+      expect(source).toMatch(
+        /workflowVersion\s*===\s*'legacy_v1'\s*\?\s*PROJECT_STEP_TYPES\s*:\s*\[\]/
+      );
+    }
+  );
 
   it('adds version serialization without replacing existing project response fields', () => {
     expect(

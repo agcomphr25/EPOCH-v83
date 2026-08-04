@@ -174,7 +174,9 @@ router.get(
     (SELECT count(*)::int FROM qms_epoch_validation_requirements r WHERE r.package_id=p.id) requirement_count,
     (SELECT count(*)::int FROM qms_epoch_validation_executions e WHERE e.package_id=p.id) execution_count,
     (SELECT count(*)::int FROM qms_epoch_validation_defects d WHERE d.package_id=p.id AND d.status NOT IN ('CLOSED','CANCELLED')) open_defect_count
-    FROM qms_epoch_validation_packages p ORDER BY p.created_at DESC`)
+    FROM qms_epoch_validation_packages p
+    WHERE p.status<>'VOID_DUPLICATE'
+    ORDER BY p.created_at DESC`)
     );
   }
 );
@@ -789,7 +791,7 @@ async function detail(packageId: string) {
       [packageId]
     ),
     query(
-      `SELECT r.*,e.name employee_name,e.department,e.position
+      `SELECT r.*,e.name employee_name,e.department,e.job_title AS position
        FROM qms_epoch_validation_responsibilities r
        JOIN employees e ON e.id=r.employee_id
        WHERE r.package_id=$1 AND r.active=true

@@ -182,7 +182,7 @@ describe('Design Project manufacturing-configuration Phase 1', () => {
     expect(migration).not.toMatch(
       /\b(DROP TABLE|DROP COLUMN|TRUNCATE|DELETE FROM)\b/i
     );
-    expect(migration.match(/CREATE TABLE IF NOT EXISTS/g)?.length).toBe(8);
+    expect(migration.match(/CREATE TABLE IF NOT EXISTS/g)?.length).toBe(9);
     expect(migration).not.toMatch(/INSERT INTO (?!perm_capabilities)/i);
     expect(migration).toContain('ON CONFLICT (key) DO NOTHING');
   });

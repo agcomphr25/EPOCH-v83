@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { apiRequest } from '@/lib/queryClient';
+import { EpochValidationWizard } from '@/components/qms/EpochValidationWizard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -69,6 +70,7 @@ type Package = {
   environment_separation_confirmed?: boolean;
   planned_start_date: string;
   planned_completion_date: string;
+  reason_for_validation: string;
   locked_at?: string;
   requirement_count?: number;
   execution_count?: number;
@@ -82,6 +84,8 @@ const requestJson = <T,>(
 type Detail = {
   package: Package;
   intendedUse: any[];
+  intendedUseFunctions: any[];
+  responsibilities: any[];
   requirements: any[];
   risks: any[];
   plans: any[];
@@ -367,6 +371,17 @@ export default function EpochSoftwareValidationPage() {
     if (d.periodicReviews.length) complete++;
     return complete * 10;
   }, [detail.data]);
+
+  if (selected && detail.data) {
+    return (
+      <EpochValidationWizard
+        key={`${detail.data.package.id}-${detail.data.package.row_version}`}
+        detail={detail.data}
+        employees={employees.data || []}
+        onBack={() => setSelected(undefined)}
+      />
+    );
+  }
 
   if (selected && detail.data) {
     const d = detail.data,

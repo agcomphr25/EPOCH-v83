@@ -313,6 +313,7 @@ export const safeMigrationFiles = [
   '0247_retire_duplicate_traveler_roc2600719.sql',
   '0248_design_project_manufacturing_configuration.sql',
   '0249_prior_month_payment_entry_grace.sql',
+  '0250_epoch_validation_wizard_phase1.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -376,6 +377,7 @@ export const criticalMigrationFiles = new Set([
   '0241_rom_builder_approval_authority.sql',
   '0242_epoch_validation_create_idempotency.sql',
   '0245_controlled_document_legacy_reconciliation.sql',
+  '0250_epoch_validation_wizard_phase1.sql',
 ]);
 
 export async function runSafeBootMigrations() {

@@ -2,15 +2,14 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../../db';
 import { accountingPeriods } from '../../schema';
 import { isAccountingAdminUser } from '../middleware/requireAccountingAdmin';
+import { accountingPeriodFromDate, evaluatePriorMonthPaymentGrace } from './accountingDatePolicy';
 
-export type PostingMode = 'STANDARD' | 'HISTORICAL_MIGRATION' | 'ADJUSTMENT' | 'REVERSAL';
+export { evaluatePriorMonthPaymentGrace } from './accountingDatePolicy';
+
+export type PostingMode = 'STANDARD' | 'HISTORICAL_MIGRATION' | 'PRIOR_MONTH_GRACE' | 'ADJUSTMENT' | 'REVERSAL';
 
 export function periodFromDate(value: Date | string): { year: number; month: number; date: Date } {
-  const date = value instanceof Date ? value : new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error(`Invalid accounting date: ${String(value)}`);
-  }
-  return { year: date.getFullYear(), month: date.getMonth() + 1, date };
+  return accountingPeriodFromDate(value);
 }
 
 export async function getOrCreateAccountingPeriod(value: Date | string) {
@@ -56,7 +55,20 @@ export async function assertPostingAllowedForPeriod({
     throw err;
   }
 
-  if (status === 'SOFT_CLOSED' || status === 'MIGRATION' || postingMode === 'HISTORICAL_MIGRATION') {
+  const grace = evaluatePriorMonthPaymentGrace({
+    effectiveDate,
+    graceBusinessDays: Number(period.paymentEntryGraceBusinessDays ?? 3),
+  });
+  if (postingMode === 'PRIOR_MONTH_GRACE' && !grace.eligible) {
+    const err: any = new Error('The controlled prior-month payment entry grace window has expired.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (
+    (status === 'SOFT_CLOSED' || status === 'MIGRATION' || postingMode === 'HISTORICAL_MIGRATION') &&
+    postingMode !== 'PRIOR_MONTH_GRACE'
+  ) {
     const ok = await isAccountingAdminUser(user);
     if (!ok) {
       const err: any = new Error(

@@ -8,7 +8,7 @@ import {
   journalLines,
   payments,
 } from '../../schema';
-import { assertPostingAllowedForPeriod } from './accountingPeriodService';
+import { assertPostingAllowedForPeriod, evaluatePriorMonthPaymentGrace, getOrCreateAccountingPeriod } from './accountingPeriodService';
 
 type DbExecutor = typeof db | any;
 
@@ -103,10 +103,21 @@ export async function createOrUpdateP1PaymentJournalEntry(
   }
 
   const effectiveDate = effectivePaymentDate(payment);
+  const period = await getOrCreateAccountingPeriod(effectiveDate);
+  const evaluatedGrace = evaluatePriorMonthPaymentGrace({
+    effectiveDate,
+    graceBusinessDays: Number(period.paymentEntryGraceBusinessDays ?? 3),
+  });
+  const controlledPeriod = ['MIGRATION', 'SOFT_CLOSED'].includes(String(period.status).toUpperCase());
+  const grace = { ...evaluatedGrace, eligible: evaluatedGrace.eligible && controlledPeriod };
+  if (grace.eligible && (!String(payment.referenceNumber || '').trim() || !String(payment.lateEntryReason || '').trim())) {
+    throw new Error('Prior-month grace posting requires both a payment reference and a late-entry explanation.');
+  }
+  const postingMode = grace.eligible ? 'PRIOR_MONTH_GRACE' : 'STANDARD';
   await assertPostingAllowedForPeriod({
     effectiveDate,
     user,
-    postingMode: 'STANDARD',
+    postingMode,
   });
 
   const amount = Math.round(Number(payment.paymentAmount) * 100) / 100;
@@ -154,6 +165,9 @@ export async function createOrUpdateP1PaymentJournalEntry(
       orderSource: order?.orderSource ?? null,
       customerPO: order?.customerPO ?? null,
       batchId: payment.batchId ?? null,
+      paymentReferenceNumber: payment.referenceNumber ?? null,
+      lateEntryReason: payment.lateEntryReason ?? null,
+      priorMonthGrace: grace,
       feesDeferredUntilSettlement: true,
     } as Record<string, unknown>,
   };
@@ -168,7 +182,7 @@ export async function createOrUpdateP1PaymentJournalEntry(
     sourceSystem: 'EPOCH',
     sourceDocumentType: 'P1_PAYMENT',
     sourceDocumentNumber: String(payment.id),
-    postingMode: 'STANDARD',
+    postingMode,
     postedAt: new Date(),
     postedBy: user?.username || null,
     createdBy: user?.username || null,

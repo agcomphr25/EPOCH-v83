@@ -552,6 +552,8 @@ export const payments = pgTable('payments', {
   paymentType: text('payment_type').notNull(), // credit_card, agr, check, cash, ach, wire
   paymentAmount: real('payment_amount').notNull(),
   paymentDate: timestamp('payment_date').notNull(),
+  referenceNumber: text('reference_number'),
+  lateEntryReason: text('late_entry_reason'),
   notes: text('notes'), // Optional notes for the payment
   processingFee: real('processing_fee'), // Optional wire/bank processing fee (nullable)
   batchId: integer('batch_id').references(() => bulkPaymentBatches.id),
@@ -2823,6 +2825,8 @@ export const insertPaymentSchema = createInsertSchema(payments)
         'Payment amount must be a valid number'
       ),
     paymentDate: z.coerce.date(),
+    referenceNumber: z.string().trim().max(200).optional().nullable(),
+    lateEntryReason: z.string().trim().max(1000).optional().nullable(),
     notes: z.string().optional().nullable(),
   });
 
@@ -20319,6 +20323,7 @@ export const accountingPeriods = pgTable(
     periodYear: integer('period_year').notNull(),
     periodMonth: integer('period_month').notNull(),
     status: text('status').notNull().default('MIGRATION'), // OPEN | MIGRATION | SOFT_CLOSED | HARD_CLOSED | FINAL_LOCKED
+    paymentEntryGraceBusinessDays: integer('payment_entry_grace_business_days').notNull().default(3),
     hardLockEnforcedAt: timestamp('hard_lock_enforced_at'),
     closedBy: text('closed_by'),
     closedAt: timestamp('closed_at'),

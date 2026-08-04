@@ -368,16 +368,20 @@ describe.sequential(
       const inventory = await discoverInventory();
       expect(inventory.included).toEqual(expect.arrayContaining(roots));
       expect(inventory.included.length).toBeGreaterThan(25);
-    console.log(`legacy_table_inventory_included_count=${inventory.included.length}`);
-    for (const table of inventory.included) {
-      console.log(`legacy_table_inventory_included=${table}`);
-    }
-    console.log(`legacy_table_inventory_excluded_count=${inventory.excluded.length}`);
-    for (const item of inventory.excluded) {
       console.log(
-        `legacy_table_inventory_excluded=${item.table} reason=${item.reason}`
+        `legacy_table_inventory_included_count=${inventory.included.length}`
       );
-    }
+      for (const table of inventory.included) {
+        console.log(`legacy_table_inventory_included=${table}`);
+      }
+      console.log(
+        `legacy_table_inventory_excluded_count=${inventory.excluded.length}`
+      );
+      for (const item of inventory.excluded) {
+        console.log(
+          `legacy_table_inventory_excluded=${item.table} reason=${item.reason}`
+        );
+      }
       console.log(
         `legacy_fixture_inventory=${JSON.stringify(stages.map(([name, workflowVersion, stage]) => ({ name, workflowVersion, stage })))}`
       );

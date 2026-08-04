@@ -7,7 +7,7 @@ export const requiredControlledDocumentMigration =
 export const requiredControlledDocumentReconciliationMigration =
   '0245_controlled_document_legacy_reconciliation.sql';
 export const requiredControlledDocumentReconciliationCorrectiveMigration =
-  '0251_controlled_document_reconciliation_certification_controls.sql';
+  '0253_controlled_document_reconciliation_certification_controls.sql';
 export const requiredControlledDocumentTables = [
   'controlled_documents',
   'document_version_history',

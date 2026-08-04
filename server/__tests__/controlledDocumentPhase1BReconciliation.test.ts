@@ -173,7 +173,7 @@ describe('Master Document Register Phase 1B reconciliation', () => {
     const sql = fs.readFileSync(
       path.join(
         root,
-        'migrations/0251_controlled_document_reconciliation_certification_controls.sql'
+        'migrations/0253_controlled_document_reconciliation_certification_controls.sql'
       ),
       'utf8'
     );
@@ -200,7 +200,7 @@ describe('Master Document Register Phase 1B reconciliation', () => {
     ).toHaveLength(2);
     expect(
       source.match(
-        /0251_controlled_document_reconciliation_certification_controls\.sql/g
+        /0253_controlled_document_reconciliation_certification_controls\.sql/g
       )
     ).toHaveLength(2);
   });

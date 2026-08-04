@@ -43,6 +43,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/hooks/use-toast';
 
 type Package = {
@@ -73,6 +74,11 @@ type Package = {
   execution_count?: number;
   open_defect_count?: number;
 };
+
+const requestJson = <T,>(
+  url: string,
+  options?: Parameters<typeof apiRequest>[1]
+) => apiRequest(url, options) as Promise<T>;
 type Detail = {
   package: Package;
   intendedUse: any[];
@@ -151,53 +157,94 @@ export default function EpochSoftwareValidationPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [auditor, setAuditor] = useState(false);
   const [activeSection, setActiveSection] = useState('01');
+  const [createRecovery, setCreateRecovery] = useState<Package>();
   const createSubmission = useRef<string | null>(null);
   const qc = useQueryClient(),
     { toast } = useToast();
   const list = useQuery<Package[]>({
     queryKey: ['/api/qms/epoch-software-validation'],
-    queryFn: async () =>
-      (await apiRequest('/api/qms/epoch-software-validation')).json(),
+    queryFn: () => requestJson<Package[]>('/api/qms/epoch-software-validation'),
   });
   const detail = useQuery<Detail>({
     queryKey: ['/api/qms/epoch-software-validation', selected],
     enabled: Boolean(selected),
-    queryFn: async () =>
-      (
-        await apiRequest(`/api/qms/epoch-software-validation/${selected}`)
-      ).json(),
+    queryFn: () =>
+      requestJson<Detail>(`/api/qms/epoch-software-validation/${selected}`),
   });
   const employees = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
-    queryFn: async () => (await apiRequest('/api/employees')).json(),
+    queryFn: () => requestJson<Employee[]>('/api/employees'),
   });
   const assessments = useQuery<Assessment[]>({
     queryKey: ['/api/qms/as9100-audit-readiness'],
-    queryFn: async () =>
-      (await apiRequest('/api/qms/as9100-audit-readiness')).json(),
+    queryFn: () => requestJson<Assessment[]>('/api/qms/as9100-audit-readiness'),
   });
+  const refreshCreatedPackage = async (created: Package) => {
+    try {
+      await qc.invalidateQueries(
+        { queryKey: ['/api/qms/epoch-software-validation'] },
+        { throwOnError: true }
+      );
+      setSelected(created.id);
+      setCreateRecovery(undefined);
+      createSubmission.current = null;
+      toast({
+        title: 'Package list refreshed',
+        description: `${created.package_number} is open.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Package list refresh failed',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Refresh the package list before trying again.',
+        variant: 'destructive',
+      });
+    }
+  };
   const create = useMutation({
     retry: false,
     mutationFn: async (input: {
       body: Record<string, string>;
       idempotencyKey: string;
     }) => {
-      return (
-        await apiRequest('/api/qms/epoch-software-validation', {
-          method: 'POST',
-          body: input.body,
-          headers: { 'Idempotency-Key': input.idempotencyKey },
-        })
-      ).json();
-    },
-    onSuccess: (p: Package) => {
-      qc.invalidateQueries({
-        queryKey: ['/api/qms/epoch-software-validation'],
+      return requestJson<Package>('/api/qms/epoch-software-validation', {
+        method: 'POST',
+        body: input.body,
+        headers: { 'Idempotency-Key': input.idempotencyKey },
       });
-      createSubmission.current = null;
+    },
+    onSuccess: async (p: Package) => {
       setCreateOpen(false);
       setSelected(p.id);
-      toast({ title: `${p.package_number} created` });
+      toast({
+        title: 'Controlled draft created successfully.',
+        description: p.package_number,
+      });
+      try {
+        await qc.invalidateQueries(
+          { queryKey: ['/api/qms/epoch-software-validation'] },
+          { throwOnError: true }
+        );
+        createSubmission.current = null;
+      } catch {
+        setCreateRecovery(p);
+        toast({
+          title: 'Draft created; refresh needed',
+          description:
+            'The draft was created, but EPOCH could not refresh the screen. Refresh the package list before trying again.',
+          variant: 'destructive',
+          action: (
+            <ToastAction
+              altText="Refresh package list"
+              onClick={() => void refreshCreatedPackage(p)}
+            >
+              Refresh package list
+            </ToastAction>
+          ),
+        });
+      }
     },
     onError: (e: Error) => {
       createSubmission.current = null;
@@ -242,8 +289,9 @@ export default function EpochSoftwareValidationPage() {
           return value && value !== 'NONE' ? Number(value) : null;
         };
       const assessment = f.get('auditReadinessAssessmentId');
-      return (
-        await apiRequest(`/api/qms/epoch-software-validation/${selected}`, {
+      return requestJson<Package>(
+        `/api/qms/epoch-software-validation/${selected}`,
+        {
           method: 'PATCH',
           body: {
             rowVersion: detail.data!.package.row_version,
@@ -264,8 +312,8 @@ export default function EpochSoftwareValidationPage() {
                 : String(assessment),
             notes: f.get('notes') || null,
           },
-        })
-      ).json();
+        }
+      );
     },
     onSuccess: () => {
       refresh();
@@ -281,12 +329,10 @@ export default function EpochSoftwareValidationPage() {
   });
   const confirm = useMutation({
     mutationFn: async (kind: 'deployment-date' | 'environment-separation') =>
-      (
-        await apiRequest(
-          `/api/qms/epoch-software-validation/${selected}/confirm-${kind}`,
-          { method: 'POST', body: {} }
-        )
-      ).json(),
+      requestJson<Package>(
+        `/api/qms/epoch-software-validation/${selected}/confirm-${kind}`,
+        { method: 'POST', body: {} }
+      ),
     onSuccess: () => {
       refresh();
       toast({ title: 'Authenticated confirmation recorded' });
@@ -675,7 +721,7 @@ export default function EpochSoftwareValidationPage() {
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={Boolean(createRecovery)}>
               <Plus className="mr-2 h-4 w-4" />
               New validation package
             </Button>
@@ -791,6 +837,27 @@ export default function EpochSoftwareValidationPage() {
           </DialogContent>
         </Dialog>
       </div>
+      {createRecovery && (
+        <Card className="border-amber-300">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+            <div>
+              <p className="font-medium">
+                {createRecovery.package_number} was created.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Refresh the package list before creating another package.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void refreshCreatedPackage(createRecovery)}
+            >
+              Refresh package list
+            </Button>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardContent className="pt-6 text-sm text-muted-foreground">
           This workflow does not assert that AS9100 requires a commercial ERP or

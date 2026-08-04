@@ -44,4 +44,39 @@ describe('EPOCH software validation create submission', () => {
     expect(compact).toContain('if(!body[field]?.trim())deletebody[field]');
     expect(compact).toContain('create.mutate({body,idempotencyKey,})');
   });
+
+  it('uses the parsed API helper result exactly once', () => {
+    expect(compact).toContain(
+      "returnrequestJson<Package>('/api/qms/epoch-software-validation',{"
+    );
+    expect(source).not.toContain('.json()');
+  });
+
+  it('treats a successful create as successful and opens the package', () => {
+    expect(source).toContain('Controlled draft created successfully.');
+    expect(compact).toContain('setCreateOpen(false)');
+    expect(compact).toContain('setSelected(p.id)');
+    expect(compact).toContain(
+      "qc.invalidateQueries({queryKey:['/api/qms/epoch-software-validation']},{throwOnError:true})"
+    );
+  });
+
+  it('reserves the idempotency guard and offers refresh after uncertain UI recovery', () => {
+    expect(source).toContain(
+      'The draft was created, but EPOCH could not refresh the screen. Refresh the package list before trying again.'
+    );
+    expect(source).toContain('Refresh package list');
+    expect(compact).toContain('setCreateRecovery(p)');
+    expect(compact).toContain('disabled={Boolean(createRecovery)}');
+    expect(compact).not.toContain(
+      'catch{createSubmission.current=null;setCreateRecovery(p)'
+    );
+  });
+
+  it('only reports create failure from the request error path', () => {
+    expect(source).toContain("title: 'Package was not created'");
+    expect(compact).toContain(
+      'onError:(e:Error)=>{createSubmission.current=null;'
+    );
+  });
 });

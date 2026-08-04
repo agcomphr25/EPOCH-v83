@@ -23,6 +23,7 @@ const baseline = (overrides: Record<string, unknown> = {}) => ({
   revisionVersion: '1.1',
   revisionLifecycleStatus: 'APPROVED',
   revisionChecksum: null,
+  revisionChecksumStatus: 'PENDING_BACKFILL',
   fileReference: '/objects/legacy.pdf',
   fileReferenceType: 'OBJECT_STORAGE',
   fileAccessibility: 'ACCESSIBLE' as const,
@@ -31,8 +32,9 @@ const baseline = (overrides: Record<string, unknown> = {}) => ({
   approvalDate: '2020-01-01T00:00:00.000Z',
   effectiveDate: '2020-02-01',
   duplicateNumber: false,
-  crossDocumentPointer: false,
+  pointerProblems: [],
   contradictoryLifecycle: false,
+  requiresCurrentApprovalWorkflow: false,
   ...overrides,
 });
 
@@ -65,7 +67,14 @@ describe('Master Document Register Phase 1B reconciliation', () => {
     [{ revisionVersion: null }, 'REVISION_RECONCILIATION_REQUIRED'],
     [{ approvalIdentity: null }, 'APPROVAL_EVIDENCE_REQUIRED'],
     [{ approvalDate: null }, 'APPROVAL_EVIDENCE_REQUIRED'],
-    [{ crossDocumentPointer: true }, 'REVISION_RECONCILIATION_REQUIRED'],
+    [
+      {
+        pointerProblems: [
+          'current_released_revision_id identifies another document',
+        ],
+      },
+      'REVISION_RECONCILIATION_REQUIRED',
+    ],
     [
       { contradictoryLifecycle: true, lifecycleStatus: 'RELEASED' },
       'LEGACY_APPROVED_VERIFICATION_REQUIRED',
@@ -85,6 +94,53 @@ describe('Master Document Register Phase 1B reconciliation', () => {
     expect(checksumAuthoritativeBytes(Buffer.from('authoritative bytes'))).toBe(
       'db59b381b1ddf5b3b11fba4d422a93a033823fa7a371be038d665d5eafcdfd7b'
     );
+  });
+
+  it('requires exact checksum equality and VERIFIED status for RELEASED_VERIFIED', () => {
+    const released = baseline({
+      lifecycleStatus: 'RELEASED',
+      currentReleasedRevisionId: baseline().revisionId,
+      revisionLifecycleStatus: 'RELEASED',
+      revisionChecksum: 'abc123',
+      revisionChecksumStatus: 'VERIFIED',
+    });
+    expect(assessLegacyControlledDocument(released).classification).toBe(
+      'RELEASED_VERIFIED'
+    );
+    expect(
+      assessLegacyControlledDocument({
+        ...released,
+        observedChecksum: 'different',
+      }).classification
+    ).toBe('FILE_RECONCILIATION_REQUIRED');
+    expect(
+      assessLegacyControlledDocument({
+        ...released,
+        revisionChecksumStatus: 'PENDING_BACKFILL',
+      }).classification
+    ).not.toBe('RELEASED_VERIFIED');
+  });
+
+  it('never makes confirmed uploaded bytes automatically releasable', () => {
+    const result = assessLegacyControlledDocument(
+      baseline({ requiresCurrentApprovalWorkflow: true })
+    );
+    expect(result.automatic).toBe(false);
+    expect(result.blockers).toContain(
+      'Confirmed uploaded bytes must enter the current checksum-bound approval workflow'
+    );
+  });
+
+  it.each([
+    'current_revision_id',
+    'working_draft_revision_id',
+    'current_released_revision_id',
+  ])('blocks an invalid %s pointer', (pointer) => {
+    const result = assessLegacyControlledDocument(
+      baseline({ pointerProblems: [`${pointer} identifies another document`] })
+    );
+    expect(result.automatic).toBe(false);
+    expect(result.blockers).toContain(`${pointer} identifies another document`);
   });
 
   it('creates stable preview identities and changes them when evidence changes', () => {
@@ -113,6 +169,27 @@ describe('Master Document Register Phase 1B reconciliation', () => {
     );
   });
 
+  it('keeps the corrective migration additive and preserves 0245', () => {
+    const sql = fs.readFileSync(
+      path.join(
+        root,
+        'migrations/0249_controlled_document_reconciliation_certification_controls.sql'
+      ),
+      'utf8'
+    );
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS');
+    expect(sql).not.toMatch(/\b(DROP TABLE|DROP COLUMN|DELETE FROM)\b/i);
+    expect(
+      fs.existsSync(
+        path.join(
+          root,
+          'migrations/0245_controlled_document_legacy_reconciliation.sql'
+        )
+      )
+    ).toBe(true);
+  });
+
   it('registers the additive migration in both safe and critical boot lists', () => {
     const source = fs.readFileSync(
       path.join(root, 'server/scripts/migrations/runSafeBootMigrations.ts'),
@@ -121,6 +198,35 @@ describe('Master Document Register Phase 1B reconciliation', () => {
     expect(
       source.match(/0245_controlled_document_legacy_reconciliation\.sql/g)
     ).toHaveLength(2);
+    expect(
+      source.match(
+        /0249_controlled_document_reconciliation_certification_controls\.sql/g
+      )
+    ).toHaveLength(2);
+  });
+
+  it('gates every operation server-side before route handling', () => {
+    const route = fs.readFileSync(
+      path.join(root, 'server/src/routes/controlledDocumentReconciliation.ts'),
+      'utf8'
+    );
+    expect(route).toContain(
+      'router.use(requireAuth, requireControlledDocumentReconciliationEnabled)'
+    );
+    expect(
+      route.indexOf(
+        'router.use(requireAuth, requireControlledDocumentReconciliationEnabled)'
+      )
+    ).toBeLessThan(route.indexOf("'/inventory'"));
+    const ui = fs.readFileSync(
+      path.join(
+        root,
+        'client/src/components/ControlledDocumentReconciliationWorkspace.tsx'
+      ),
+      'utf8'
+    );
+    expect(ui).toContain('Unavailable pending certification');
+    expect(ui).toContain("availability !== 'enabled'");
   });
 
   it('requires separate view, preview, execute, and resolve permissions', () => {
@@ -145,7 +251,37 @@ describe('Master Document Register Phase 1B reconciliation', () => {
     );
     expect(route).toContain("await client.query('BEGIN')");
     expect(route).toContain('RECONCILIATION_PREVIEW_STALE');
-    expect(route).toContain('idempotency_key=$1');
+    expect(route).toContain('pg_advisory_xact_lock');
+    expect(route.indexOf('pg_advisory_xact_lock')).toBeLessThan(
+      route.indexOf('idempotency_key=$1')
+    );
+    expect(route).toContain('inventory(client)');
+    expect(route).toContain('before_snapshot,after_snapshot');
     expect(route).toContain("await client.query('ROLLBACK')");
+  });
+
+  it('keeps evidence append-only and current workflow revisions unreleased', () => {
+    const route = fs.readFileSync(
+      path.join(root, 'server/src/routes/controlledDocumentReconciliation.ts'),
+      'utf8'
+    );
+    expect(route).toContain('/:id/evidence/:evidenceId/confirm');
+    expect(route).toContain('createControlledRevision');
+    expect(route).toContain('released: false');
+    expect(route).not.toMatch(
+      /UPDATE controlled_document_reconciliation_evidence/i
+    );
+  });
+
+  it('reports operational references without rewriting them', () => {
+    const source = fs.readFileSync(
+      path.join(
+        root,
+        'server/src/services/controlledDocumentOperationalReferenceReport.ts'
+      ),
+      'utf8'
+    );
+    expect(source).toContain('REPORT_ONLY_NO_REWRITE');
+    expect(source).not.toMatch(/\b(UPDATE|DELETE|INSERT)\b/i);
   });
 });

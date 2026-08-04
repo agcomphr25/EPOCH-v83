@@ -1,20 +1,11 @@
 import { createHash } from 'crypto';
-import fs from 'fs/promises';
-import path from 'path';
 
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
-import { desc } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { db, pool } from '../../db';
+import { pool } from '../../db';
 import { requirePermission } from '../../middleware/requirePermission';
-import {
-  controlledDocumentNumberRegistry,
-  controlledDocumentRevisionApprovals,
-  controlledDocuments,
-  documentVersionHistory,
-} from '../../schema';
 import {
   getFileStorageProvider,
   getFileStorageProviderForObjectPath,
@@ -26,6 +17,13 @@ import {
   hashReconciliationPreview,
   type LegacyReconciliationAssessment,
 } from '../services/controlledDocumentReconciliationService';
+import { readContainedReconciliationFile } from '../services/controlledDocumentReconciliationFileResolver';
+import {
+  getControlledDocumentReconciliationAvailability,
+  requireControlledDocumentReconciliationEnabled,
+} from '../services/controlledDocumentReconciliationGate';
+import { createControlledRevision } from '../services/controlledDocumentLifecycleService';
+import { reportParentOnlyOperationalReferences } from '../services/controlledDocumentOperationalReferenceReport';
 
 const router = Router();
 const upload = multer({
@@ -64,55 +62,82 @@ const referenceType = (value: string | null) =>
           : 'LEGACY_LOCAL_PATH';
 const readBytes = async (value: string) => {
   if (value.startsWith('/objects/') || value.startsWith('/supabase-objects/'))
-    return getFileStorageProviderForObjectPath(value).downloadBuffer(value);
-  const normalized = value.replace(/\\/g, '/').replace(/^\//, '');
-  const allowed =
-    normalized.startsWith('uploads/media-library/') ||
-    normalized.startsWith('assets/documents/');
-  if (!allowed) throw new Error('Unsupported or mutable file reference');
-  return fs.readFile(
-    path.resolve(
-      process.cwd(),
-      normalized.startsWith('assets/') ? `server/src/${normalized}` : normalized
-    )
-  );
+    return {
+      bytes:
+        await getFileStorageProviderForObjectPath(value).downloadBuffer(value),
+      identity: { kind: 'OBJECT_STORAGE' },
+    };
+  return readContainedReconciliationFile(value);
 };
 
-async function inventory(): Promise<LegacyReconciliationAssessment[]> {
-  const [documents, revisions, approvals, registry] = await Promise.all([
-    db
-      .select()
-      .from(controlledDocuments)
-      .orderBy(desc(controlledDocuments.createdAt)),
-    db.select().from(documentVersionHistory),
-    db.select().from(controlledDocumentRevisionApprovals),
-    db.select().from(controlledDocumentNumberRegistry),
+type Queryable = {
+  query(sql: string, values?: unknown[]): Promise<{ rows: any[] }>;
+};
+async function inventory(
+  client: Queryable = pool
+): Promise<LegacyReconciliationAssessment[]> {
+  const [
+    documentsResult,
+    revisionsResult,
+    approvalsResult,
+    registryResult,
+    evidenceResult,
+  ] = await Promise.all([
+    client.query('SELECT * FROM controlled_documents ORDER BY created_at DESC'),
+    client.query('SELECT * FROM document_version_history'),
+    client.query('SELECT * FROM controlled_document_revision_approvals'),
+    client.query('SELECT * FROM controlled_document_number_registry'),
+    client.query(`SELECT id,controlled_document_id,revision_id,evidence_type,evidence_payload,immutable_file_path,immutable_file_checksum,
+      immutable_file_media_type,immutable_file_size,confirmed_at,confirmed_by_user_id,created_at
+      FROM controlled_document_reconciliation_evidence ORDER BY created_at`),
   ]);
+  const documents = documentsResult.rows;
+  const revisions = revisionsResult.rows;
+  const approvals = approvalsResult.rows;
+  const registry = registryResult.rows;
+  const evidence = evidenceResult.rows;
   const counts = new Map<string, number>();
   const byDocument = new Map<string, typeof revisions>();
   const byId = new Map(revisions.map((r) => [r.id, r]));
   for (const d of documents) {
-    const n = d.documentNumber.trim().toUpperCase();
+    const n = d.document_number.trim().toUpperCase();
     counts.set(n, (counts.get(n) || 0) + 1);
   }
   for (const r of revisions) {
-    const rows = byDocument.get(r.documentId) || [];
+    const rows = byDocument.get(r.document_id) || [];
     rows.push(r);
-    byDocument.set(r.documentId, rows);
+    byDocument.set(r.document_id, rows);
   }
   return Promise.all(
     documents.map(async (d) => {
       const rows = byDocument.get(d.id) || [];
-      const pointed = d.currentReleasedRevisionId
-        ? byId.get(d.currentReleasedRevisionId)
+      const pointed = d.current_released_revision_id
+        ? byId.get(d.current_released_revision_id)
         : null;
       const revision =
-        pointed?.documentId === d.id
+        pointed?.document_id === d.id
           ? pointed
           : rows.length === 1
             ? rows[0]
             : null;
-      const fileReference = revision?.filePath || d.filePath || null;
+      const confirmedEvidence = evidence.filter(
+        (item) =>
+          item.controlled_document_id === d.id &&
+          item.confirmed_at &&
+          item.confirmed_by_user_id &&
+          (!item.revision_id || item.revision_id === revision?.id)
+      );
+      const confirmedFile = [...confirmedEvidence]
+        .reverse()
+        .find((item) => item.evidence_type === 'AUTHORITATIVE_HISTORICAL_FILE');
+      const confirmedApproval = [...confirmedEvidence]
+        .reverse()
+        .find((item) => item.evidence_type === 'LEGACY_APPROVAL_EVIDENCE');
+      const fileReference =
+        confirmedFile?.immutable_file_path ||
+        revision?.file_path ||
+        d.file_path ||
+        null;
       let accessibility:
         'ACCESSIBLE' | 'INACCESSIBLE' | 'EXTERNAL_MUTABLE' | 'MISSING' =
         fileReference ? 'INACCESSIBLE' : 'MISSING';
@@ -122,60 +147,112 @@ async function inventory(): Promise<LegacyReconciliationAssessment[]> {
       else if (fileReference)
         try {
           observedChecksum = checksumAuthoritativeBytes(
-            await readBytes(fileReference)
+            (await readBytes(fileReference)).bytes
           );
           accessibility = 'ACCESSIBLE';
         } catch {
           accessibility = 'INACCESSIBLE';
         }
-      const approval = approvals.find((a) => a.revisionId === revision?.id);
-      const normalized = d.documentNumber.trim().toUpperCase();
-      return assessLegacyControlledDocument({
+      const approval = approvals.find((a) => a.revision_id === revision?.id);
+      const normalized = d.document_number.trim().toUpperCase();
+      const pointerProblems: string[] = [];
+      for (const [column, value] of [
+        ['current_revision_id', d.current_revision_id],
+        ['working_draft_revision_id', d.working_draft_revision_id],
+        ['current_released_revision_id', d.current_released_revision_id],
+      ] as const) {
+        if (!value) continue;
+        const target = byId.get(value);
+        if (!target)
+          pointerProblems.push(`${column} identifies a missing revision`);
+        else if (target.document_id !== d.id)
+          pointerProblems.push(`${column} identifies another document`);
+      }
+      if (
+        d.current_revision_id &&
+        d.working_draft_revision_id &&
+        d.current_revision_id !== d.working_draft_revision_id
+      )
+        pointerProblems.push(
+          'Current and working revision pointers are contradictory'
+        );
+      const acceptedEvidence = confirmedEvidence.map((item) => ({
+        id: item.id,
+        type: item.evidence_type,
+        revisionId: item.revision_id,
+        confirmedAt: item.confirmed_at,
+      }));
+      const assessment = assessLegacyControlledDocument({
         documentId: d.id,
-        documentNumber: d.documentNumber,
-        title: d.documentName,
+        documentNumber: d.document_number,
+        title: d.document_name,
         legacyStatus: d.status,
-        lifecycleStatus: d.lifecycleStatus,
-        currentVersion: d.currentVersion,
-        currentReleasedRevisionId: d.currentReleasedRevisionId,
+        lifecycleStatus: d.lifecycle_status,
+        currentVersion: d.current_version,
+        currentReleasedRevisionId: d.current_released_revision_id,
         revisionId: revision?.id || null,
         revisionCount: rows.length,
-        revisionVersion: revision?.versionNumber || null,
+        revisionVersion: revision?.version_number || null,
         revisionLifecycleStatus:
-          revision?.lifecycleStatus || revision?.status || null,
-        revisionChecksum: revision?.fileChecksum || null,
+          revision?.lifecycle_status || revision?.status || null,
+        revisionChecksum: revision?.file_checksum || null,
+        revisionChecksumStatus: revision?.checksum_status || null,
         fileReference,
         fileReferenceType: referenceType(fileReference),
         fileAccessibility: accessibility,
         observedChecksum,
         approvalIdentity:
-          revision?.approvedBy || approval?.actorUsernameSnapshot || null,
-        approvalDate:
-          revision?.approvedAt?.toISOString() ||
-          approval?.createdAt?.toISOString() ||
+          revision?.approved_by ||
+          approval?.actor_username_snapshot ||
+          confirmedApproval?.evidence_payload?.approvalIdentity ||
           null,
-        effectiveDate: revision?.effectiveDate || d.effectiveDate || null,
+        approvalDate:
+          revision?.approved_at ||
+          approval?.created_at ||
+          confirmedApproval?.evidence_payload?.approvalDate ||
+          null,
+        effectiveDate:
+          revision?.effective_date ||
+          d.effective_date ||
+          confirmedApproval?.evidence_payload?.effectiveDate ||
+          null,
         duplicateNumber:
           (counts.get(normalized) || 0) > 1 ||
           registry.some(
             (r) =>
-              r.normalizedNumber === normalized &&
-              r.controlledDocumentId !== d.id
+              r.normalized_number === normalized &&
+              r.controlled_document_id !== d.id
           ),
-        crossDocumentPointer: Boolean(
-          d.currentReleasedRevisionId && pointed?.documentId !== d.id
-        ),
+        pointerProblems,
         contradictoryLifecycle:
-          d.lifecycleStatus === 'RELEASED' &&
+          d.lifecycle_status === 'RELEASED' &&
           !['approved', 'active'].includes(d.status.toLowerCase()),
+        requiresCurrentApprovalWorkflow: Boolean(confirmedFile),
       });
+      return {
+        ...assessment,
+        fileReference: null,
+        acceptedEvidence,
+      } as LegacyReconciliationAssessment;
     })
   );
 }
 
 router.get(
-  '/inventory',
+  '/status',
   requireAuth,
+  requirePermission('documents.reconciliation_view'),
+  async (_req, res) => {
+    const availability =
+      await getControlledDocumentReconciliationAvailability();
+    res.status(availability.enabled ? 200 : 503).json(availability);
+  }
+);
+
+router.use(requireAuth, requireControlledDocumentReconciliationEnabled);
+
+router.get(
+  '/inventory',
   requirePermission('documents.reconciliation_view'),
   async (_req, res) => {
     const assessments = await inventory();
@@ -190,9 +267,19 @@ router.get(
     });
   }
 );
+router.get(
+  '/operational-references',
+  requirePermission('documents.reconciliation_view'),
+  async (_req, res) => {
+    res.json({
+      readOnly: true,
+      rewrittenRecords: 0,
+      references: await reportParentOnlyOperationalReferences(pool),
+    });
+  }
+);
 router.post(
   '/preview',
-  requireAuth,
   requirePermission('documents.reconciliation_preview'),
   async (req, res) => {
     const ids = z.array(z.string().uuid()).min(1).parse(req.body?.documentIds);
@@ -233,7 +320,6 @@ router.post(
 );
 router.post(
   '/execute',
-  requireAuth,
   requirePermission('documents.reconciliation_execute'),
   async (req, res) => {
     const input = z
@@ -262,7 +348,36 @@ router.post(
         throw Object.assign(new Error('Preview is stale'), {
           code: 'RECONCILIATION_PREVIEW_STALE',
         });
-      const current = (await inventory()).filter((r) =>
+      const lockedIds = [...new Set(input.selectedDocumentIds)].sort();
+      for (const documentId of lockedIds) {
+        await client.query(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+          [documentId]
+        );
+      }
+      const lockedDocuments = await client.query(
+        `SELECT id,current_revision_id,working_draft_revision_id,current_released_revision_id
+         FROM controlled_documents WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE`,
+        [lockedIds]
+      );
+      if (lockedDocuments.rows.length !== lockedIds.length)
+        throw Object.assign(new Error('Document selection changed'), {
+          code: 'RECONCILIATION_SOURCE_CHANGED',
+        });
+      const revisionIds = lockedDocuments.rows.flatMap((row) =>
+        [
+          row.current_revision_id,
+          row.working_draft_revision_id,
+          row.current_released_revision_id,
+        ].filter(Boolean)
+      );
+      if (revisionIds.length)
+        await client.query(
+          'SELECT id FROM document_version_history WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE',
+          [revisionIds]
+        );
+
+      const current = (await inventory(client)).filter((r) =>
         input.selectedDocumentIds.includes(r.documentId)
       );
       const expected = (
@@ -293,17 +408,32 @@ router.post(
         }
         const original = (
           await client.query(
-            'SELECT d.*,r.document_id AS revision_document_id,r.file_checksum AS revision_file_checksum FROM controlled_documents d JOIN document_version_history r ON r.id=$2 WHERE d.id=$1 FOR UPDATE OF d,r',
-            [row.documentId, row.revisionId]
+            `SELECT row_to_json(d) AS parent, row_to_json(r) AS revision,
+              (SELECT coalesce(jsonb_agg(row_to_json(a) ORDER BY a.created_at), '[]'::jsonb)
+                 FROM controlled_document_revision_approvals a WHERE a.revision_id=r.id) AS approvals,
+              (SELECT row_to_json(n) FROM controlled_document_number_registry n
+                 WHERE n.controlled_document_id=d.id LIMIT 1) AS number_registry,
+              $3::text AS observed_checksum, $4::jsonb AS classification
+             FROM controlled_documents d JOIN document_version_history r ON r.id=$2
+             WHERE d.id=$1`,
+            [
+              row.documentId,
+              row.revisionId,
+              row.observedChecksum,
+              JSON.stringify({
+                classification: row.classification,
+                blockers: row.blockers,
+              }),
+            ]
           )
         ).rows[0];
-        if (!original || original.revision_document_id !== row.documentId)
+        if (!original || original.revision.document_id !== row.documentId)
           throw Object.assign(new Error('Revision ownership changed'), {
             code: 'RECONCILIATION_SOURCE_CHANGED',
           });
         if (
-          original.revision_file_checksum &&
-          original.revision_file_checksum !== row.observedChecksum
+          original.revision.file_checksum &&
+          original.revision.file_checksum !== row.observedChecksum
         )
           throw Object.assign(new Error('Checksum mismatch'), {
             code: 'CHECKSUM_MISMATCH',
@@ -316,8 +446,19 @@ router.post(
           "UPDATE controlled_documents SET current_released_revision_id=$1,lifecycle_status='RELEASED',updated_at=now() WHERE id=$2",
           [row.revisionId, row.documentId]
         );
+        const after = (
+          await client.query(
+            `SELECT row_to_json(d) AS parent, row_to_json(r) AS revision,
+              (SELECT coalesce(jsonb_agg(row_to_json(a) ORDER BY a.created_at), '[]'::jsonb)
+                 FROM controlled_document_revision_approvals a WHERE a.revision_id=r.id) AS approvals,
+              (SELECT row_to_json(n) FROM controlled_document_number_registry n
+                 WHERE n.controlled_document_id=d.id LIMIT 1) AS number_registry
+             FROM controlled_documents d JOIN document_version_history r ON r.id=$2 WHERE d.id=$1`,
+            [row.documentId, row.revisionId]
+          )
+        ).rows[0];
         await client.query(
-          "INSERT INTO controlled_document_reconciliation_events(preview_id,controlled_document_id,revision_id,idempotency_key,event_type,provenance,policy_version,original_snapshot,proposed_changes,completed_changes,actor_user_id,actor_snapshot,reason,checksum,file_identity) VALUES($1,$2,$3,$4,'AUTOMATIC_BACKFILL','LEGACY_MIGRATION_VERIFIED',$5,$6::jsonb,$7::jsonb,$7::jsonb,$8,$9::jsonb,$10,$11,$12)",
+          "INSERT INTO controlled_document_reconciliation_events(preview_id,controlled_document_id,revision_id,idempotency_key,event_type,provenance,policy_version,original_snapshot,proposed_changes,completed_changes,before_snapshot,after_snapshot,actor_user_id,actor_snapshot,reason,checksum,file_identity) VALUES($1,$2,$3,$4,'AUTOMATIC_BACKFILL','LEGACY_MIGRATION_VERIFIED',$5,$6::jsonb,$7::jsonb,$8::jsonb,$6::jsonb,$8::jsonb,$9,$10::jsonb,$11,$12,$13)",
           [
             input.previewId,
             row.documentId,
@@ -326,11 +467,12 @@ router.post(
             CONTROLLED_DOCUMENT_RECONCILIATION_POLICY_VERSION,
             JSON.stringify(original),
             JSON.stringify(row.proposedChanges),
+            JSON.stringify(after),
             a.id,
             JSON.stringify(a),
             input.reason,
             row.observedChecksum,
-            row.fileReference,
+            JSON.stringify({ referenceType: row.fileReferenceType }),
           ]
         );
         completed.push({ documentId: row.documentId, replayed: false });
@@ -350,7 +492,6 @@ router.post(
 );
 router.post(
   '/:id/evidence',
-  requireAuth,
   requirePermission('documents.reconciliation_resolve'),
   async (req, res) => {
     const input = z
@@ -393,7 +534,6 @@ router.post(
 );
 router.post(
   '/:id/authoritative-file',
-  requireAuth,
   requirePermission('documents.reconciliation_resolve'),
   upload.single('file'),
   async (req, res) => {
@@ -421,7 +561,7 @@ router.post(
       entityId: req.params.id,
     });
     const result = await pool.query(
-      "INSERT INTO controlled_document_reconciliation_evidence(controlled_document_id,revision_id,evidence_type,evidence_payload,immutable_file_path,immutable_file_checksum,actor_user_id,actor_snapshot,reason) VALUES($1,$2,'AUTHORITATIVE_HISTORICAL_FILE',$3::jsonb,$4,$5,$6,$7::jsonb,$8) RETURNING id",
+      "INSERT INTO controlled_document_reconciliation_evidence(controlled_document_id,revision_id,evidence_type,evidence_payload,immutable_file_path,immutable_file_checksum,immutable_file_media_type,immutable_file_size,immutable_file_provenance,actor_user_id,actor_snapshot,reason) VALUES($1,$2,'AUTHORITATIVE_HISTORICAL_FILE',$3::jsonb,$4,$5,$6,$7,$8::jsonb,$9,$10::jsonb,$11) RETURNING id",
       [
         req.params.id,
         revisionId,
@@ -431,6 +571,14 @@ router.post(
         }),
         stored,
         checksum,
+        req.file.mimetype,
+        req.file.size,
+        JSON.stringify({
+          storage: 'CONTROLLED_OBJECT_STORAGE',
+          immutable: true,
+          uploadedAt: new Date().toISOString(),
+          originalReferencePreserved: true,
+        }),
         a.id,
         JSON.stringify(a),
         reason,
@@ -439,8 +587,152 @@ router.post(
     res.status(201).json({
       id: result.rows[0].id,
       checksum,
-      immutablePath: stored,
+      mediaType: req.file.mimetype,
+      size: req.file.size,
       revisionUnchanged: true,
+      releaseStatus: 'NOT_RELEASED',
+    });
+  }
+);
+
+router.post(
+  '/:id/evidence/:evidenceId/confirm',
+  requirePermission('documents.reconciliation_resolve'),
+  async (req, res) => {
+    const input = z
+      .object({ reason: z.string().trim().min(10) })
+      .parse(req.body);
+    const source = (
+      await pool.query(
+        `SELECT * FROM controlled_document_reconciliation_evidence
+       WHERE id=$1 AND controlled_document_id=$2`,
+        [req.params.evidenceId, req.params.id]
+      )
+    ).rows[0];
+    if (!source)
+      return res
+        .status(404)
+        .json({ error: 'RECONCILIATION_EVIDENCE_NOT_FOUND' });
+    const requirements: Record<string, string[]> = {
+      AUTHORITATIVE_HISTORICAL_FILE: [
+        'immutable_file_path',
+        'immutable_file_checksum',
+        'immutable_file_media_type',
+        'immutable_file_size',
+      ],
+      LEGACY_APPROVAL_EVIDENCE: [],
+      EFFECTIVE_STATUS_CONFIRMATION: [],
+      REFERENCE_ONLY: [],
+      OBSOLETE: [],
+      VOID: [],
+    };
+    if (!requirements[source.evidence_type])
+      return res
+        .status(422)
+        .json({ error: 'RECONCILIATION_EVIDENCE_TYPE_NOT_CONFIRMABLE' });
+    const missing = requirements[source.evidence_type].filter(
+      (field) => !source[field]
+    );
+    if (source.evidence_type === 'LEGACY_APPROVAL_EVIDENCE') {
+      for (const field of ['approvalIdentity', 'approvalDate', 'effectiveDate'])
+        if (!source.evidence_payload?.[field])
+          missing.push(`evidence.${field}`);
+    }
+    if (
+      source.evidence_type === 'EFFECTIVE_STATUS_CONFIRMATION' &&
+      !source.evidence_payload?.effectiveStatus
+    )
+      missing.push('evidence.effectiveStatus');
+    if (missing.length)
+      return res
+        .status(422)
+        .json({ error: 'RECONCILIATION_EVIDENCE_INCOMPLETE', missing });
+    const a = actor(req);
+    const confirmed = await pool.query(
+      `INSERT INTO controlled_document_reconciliation_evidence(
+        controlled_document_id,revision_id,evidence_type,evidence_payload,immutable_file_path,
+        immutable_file_checksum,immutable_file_media_type,immutable_file_size,immutable_file_provenance,
+        actor_user_id,actor_snapshot,reason,confirmed_at,confirmed_by_user_id,confirmation_reason)
+       VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9::jsonb,$10,$11::jsonb,$12,now(),$10,$12) RETURNING id`,
+      [
+        source.controlled_document_id,
+        source.revision_id,
+        source.evidence_type,
+        JSON.stringify({
+          ...source.evidence_payload,
+          sourceEvidenceId: source.id,
+        }),
+        source.immutable_file_path,
+        source.immutable_file_checksum,
+        source.immutable_file_media_type,
+        source.immutable_file_size,
+        JSON.stringify(source.immutable_file_provenance || {}),
+        a.id,
+        JSON.stringify(a),
+        input.reason,
+      ]
+    );
+    res.status(201).json({
+      id: confirmed.rows[0].id,
+      appendOnly: true,
+      electronicApproval: false,
+      released: false,
+    });
+  }
+);
+
+router.post(
+  '/:id/send-through-current-approval-workflow',
+  requirePermission('documents.reconciliation_resolve'),
+  async (req, res) => {
+    const input = z
+      .object({
+        evidenceId: z.string().uuid(),
+        revisionValue: z.string().trim().min(1),
+        reason: z.string().trim().min(10),
+      })
+      .parse(req.body);
+    const evidence = (
+      await pool.query(
+        `SELECT * FROM controlled_document_reconciliation_evidence
+       WHERE id=$1 AND controlled_document_id=$2 AND evidence_type='AUTHORITATIVE_HISTORICAL_FILE'
+         AND confirmed_at IS NOT NULL AND confirmed_by_user_id IS NOT NULL`,
+        [input.evidenceId, req.params.id]
+      )
+    ).rows[0];
+    if (!evidence)
+      return res
+        .status(422)
+        .json({ error: 'CONFIRMED_AUTHORITATIVE_FILE_REQUIRED' });
+    const bytes = await getFileStorageProviderForObjectPath(
+      evidence.immutable_file_path
+    ).downloadBuffer(evidence.immutable_file_path);
+    const observed = checksumAuthoritativeBytes(bytes);
+    if (observed !== evidence.immutable_file_checksum)
+      return res.status(409).json({
+        error: 'CHECKSUM_MISMATCH',
+        message:
+          'Confirmed authoritative file checksum no longer matches stored bytes.',
+      });
+    const result = await createControlledRevision({
+      documentId: req.params.id,
+      revisionValue: input.revisionValue,
+      reason: input.reason,
+      file: {
+        path: evidence.immutable_file_path,
+        name: `legacy-authoritative-${input.evidenceId}`,
+        mediaType: evidence.immutable_file_media_type,
+        size: Number(evidence.immutable_file_size),
+        buffer: bytes,
+      },
+      actor: actor(req),
+      request: { ipAddress: req.ip, userAgent: req.get('user-agent') },
+    });
+    res.status(201).json({
+      revisionId: result.revision.id,
+      lifecycleStatus: result.revision.lifecycleStatus,
+      released: false,
+      currentApprovalWorkflowRequired: true,
     });
   }
 );

@@ -12574,6 +12574,8 @@ export const controlledDocumentReconciliationEvents = pgTable(
     originalSnapshot: jsonb('original_snapshot').notNull(),
     proposedChanges: jsonb('proposed_changes').notNull(),
     completedChanges: jsonb('completed_changes').notNull(),
+    beforeSnapshot: jsonb('before_snapshot'),
+    afterSnapshot: jsonb('after_snapshot'),
     actorUserId: integer('actor_user_id')
       .references(() => users.id, { onDelete: 'restrict' })
       .notNull(),
@@ -12602,6 +12604,15 @@ export const controlledDocumentReconciliationEvidence = pgTable(
     evidencePayload: jsonb('evidence_payload').notNull(),
     immutableFilePath: text('immutable_file_path'),
     immutableFileChecksum: text('immutable_file_checksum'),
+    immutableFileMediaType: text('immutable_file_media_type'),
+    immutableFileSize: integer('immutable_file_size'),
+    immutableFileProvenance: jsonb('immutable_file_provenance'),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    confirmedByUserId: integer('confirmed_by_user_id').references(
+      () => users.id,
+      { onDelete: 'restrict' }
+    ),
+    confirmationReason: text('confirmation_reason'),
     actorUserId: integer('actor_user_id')
       .references(() => users.id, { onDelete: 'restrict' })
       .notNull(),

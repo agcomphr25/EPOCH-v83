@@ -17405,7 +17405,12 @@ export const specSheetRevisionApprovals = pgTable(
     decidedAt: timestamp('decided_at', { withTimezone: true })
       .notNull()
       .default(sql`now()`),
-  }
+  },
+  (table) => ({
+    revisionRoleUnique: uniqueIndex(
+      'spec_sheet_revision_approvals_role_unique'
+    ).on(table.specSheetRevisionId, table.approvalRole),
+  })
 );
 
 export const specSheetTransitionAudit = pgTable('spec_sheet_transition_audit', {
@@ -23252,9 +23257,9 @@ export const engineeringReleaseBaselineItems = pgTable(
       .notNull(),
     applicabilityDecision: text('applicability_decision'),
     omissionJustification: text('omission_justification'),
-    ecrId: uuid('ecr_id').references(() => engineeringChangeRequests.id, {
-      onDelete: 'restrict',
-    }),
+    // engineering_change_requests is migration-managed and has no Drizzle
+    // table declaration; the SQL migration owns this RESTRICT foreign key.
+    ecrId: uuid('ecr_id'),
     ecnId: uuid('ecn_id').references(() => engineeringChangeOrders.id, {
       onDelete: 'restrict',
     }),
@@ -26119,10 +26124,9 @@ export const designProjectPartRevisions = pgTable(
     effectivityStart: text('effectivity_start'),
     effectivityEnd: text('effectivity_end'),
     predecessorRevisionId: uuid('predecessor_revision_id'),
-    sourceEcrId: uuid('source_ecr_id').references(
-      () => engineeringChangeRequests.id,
-      { onDelete: 'restrict' }
-    ),
+    // engineering_change_requests is migration-managed and has no Drizzle
+    // table declaration; the SQL migration owns this RESTRICT foreign key.
+    sourceEcrId: uuid('source_ecr_id'),
     sourceEcnId: uuid('source_ecn_id').references(
       () => engineeringChangeOrders.id,
       { onDelete: 'restrict' }

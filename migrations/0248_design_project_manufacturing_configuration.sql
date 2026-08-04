@@ -1,6 +1,12 @@
 -- Phase 1: authoritative Design Project manufacturing-configuration foundation.
 -- Additive only: no legacy records are inferred, relinked, or modified.
 
+-- Repair the pre-existing Part Specification Sheet approval invariant when
+-- Drizzle created the table before migration 0233. The original migration's
+-- inline UNIQUE clause is otherwise skipped by CREATE TABLE IF NOT EXISTS.
+CREATE UNIQUE INDEX IF NOT EXISTS spec_sheet_revision_approvals_role_unique
+  ON spec_sheet_revision_approvals(spec_sheet_revision_id, approval_role);
+
 CREATE TABLE IF NOT EXISTS design_project_configuration_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   rd_project_id text NOT NULL REFERENCES rd_projects(id) ON DELETE RESTRICT,

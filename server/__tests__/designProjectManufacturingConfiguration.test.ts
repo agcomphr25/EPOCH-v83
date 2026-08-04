@@ -26,6 +26,13 @@ describe('Design Project manufacturing-configuration Phase 1', () => {
     expect(requiredDesignControlMigrations).toContain(migrationName);
   });
 
+  it('repairs the existing specification-sheet approval invariant idempotently', () => {
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS spec_sheet_revision_approvals_role_unique'
+    );
+    expect(schema).toContain("'spec_sheet_revision_approvals_role_unique'");
+  });
+
   it('models a multi-level tree with same-project and cycle guards', () => {
     expect(migration).toContain(
       'design_project_configuration_item_relationships'

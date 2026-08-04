@@ -5,7 +5,7 @@ Phase 1B reconciliation remains unavailable by default. Do not grant reconciliat
 ## Forward recovery
 
 1. Apply the already-merged `0245_controlled_document_legacy_reconciliation.sql`.
-2. Apply additive `0253_controlled_document_reconciliation_certification_controls.sql`.
+2. Apply additive `0254_controlled_document_reconciliation_certification_controls.sql`.
 3. Verify every required table, column, index, and append-only trigger with the schema-readiness check.
 4. Run path-security, authorization, stale-preview, idempotency, transaction, and live PostgreSQL route-level locking and concurrency certification tests.
 5. Obtain explicit Quality and production-change authorization before granting capabilities or enabling the exact `true` flag.
@@ -13,4 +13,4 @@ Phase 1B reconciliation remains unavailable by default. Do not grant reconciliat
 
 ## Compensating rollback
 
-Do not reverse migration `0245`, delete evidence, or remove historical fields. To contain Phase 1B, unset the feature flag (or set any value other than exact lowercase `true`) and revoke reconciliation capabilities. Applying `0253_controlled_document_reconciliation_certification_controls.sql` alone does not activate reconciliation; its additive columns and index remain inert while the feature is disabled. Production activation requires separate explicit authorization and successful live PostgreSQL route-level locking and concurrency certification. Correct forward with a later additive migration. Never drop append-only evidence or rewrite controlled-document, traveler, work-order, production, routing, project, or form history.
+Do not reverse migration `0245`, delete evidence, or remove historical fields. To contain Phase 1B, unset the feature flag (or set any value other than exact lowercase `true`) and revoke reconciliation capabilities. Applying `0254_controlled_document_reconciliation_certification_controls.sql` alone does not activate reconciliation; its additive columns and index remain inert while the feature is disabled. Production activation requires separate explicit authorization and successful live PostgreSQL route-level locking and concurrency certification. Correct forward with a later additive migration. Never drop append-only evidence or rewrite controlled-document, traveler, work-order, production, routing, project, or form history.

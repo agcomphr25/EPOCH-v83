@@ -113,7 +113,7 @@ describe('controlled document schema readiness', () => {
       '0245_controlled_document_legacy_reconciliation.sql'
     );
     expect(requiredControlledDocumentReconciliationCorrectiveMigration).toBe(
-      '0253_controlled_document_reconciliation_certification_controls.sql'
+      '0254_controlled_document_reconciliation_certification_controls.sql'
     );
     const query = vi
       .fn()

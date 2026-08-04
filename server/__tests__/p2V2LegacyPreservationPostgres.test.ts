@@ -33,6 +33,7 @@ const actor = {
 
 const roots = [
   'projects',
+  'p2_customers',
   'project_steps',
   'p2_purchase_orders',
   'p2_purchase_order_items',
@@ -112,13 +113,9 @@ async function discoverInventory() {
   while (changed) {
     changed = false;
     for (const edge of edges.rows) {
-      if (included.has(edge.source) || included.has(edge.target)) {
+      if (included.has(edge.target)) {
         if (!included.has(edge.source)) {
           included.add(edge.source);
-          changed = true;
-        }
-        if (!included.has(edge.target)) {
-          included.add(edge.target);
           changed = true;
         }
       }
@@ -130,7 +127,7 @@ async function discoverInventory() {
     .map((table) => ({
       table,
       reason:
-        'No foreign-key path to a project, step, PO, WAD, traveler, closing, or workflow root',
+        'No downstream foreign-key path referencing a project, step, PO, WAD, traveler, closing, workflow, or explicit evidence root',
     }));
   return {
     included: [...included].sort(),

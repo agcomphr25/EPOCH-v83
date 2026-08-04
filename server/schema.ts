@@ -27884,3 +27884,75 @@ export const operatorAuthSessions = pgTable(
 export type OperatorAuthSession = typeof operatorAuthSessions.$inferSelect;
 export type InsertOperatorAuthSession =
   typeof operatorAuthSessions.$inferInsert;
+
+// Guided EPOCH Software Validation Phase 1 child records. Existing validation
+// package and intended-use tables remain managed by their established raw-SQL
+// service; these additive tables provide structured wizard data and acceptance.
+export const qmsEpochValidationIntendedUseFunctions = pgTable(
+  'qms_epoch_validation_intended_use_functions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    packageId: uuid('package_id').notNull(),
+    intendedUseRevisionId: uuid('intended_use_revision_id').notNull(),
+    functionKey: text('function_key').notNull(),
+    usageStatus: text('usage_status').notNull(),
+    useDescription: text('use_description'),
+    failureEffect: text('failure_effect'),
+    criticalToQms: boolean('critical_to_qms').notNull().default(false),
+    notUsedExplanation: text('not_used_explanation'),
+    createdByUserId: integer('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    packageIdx: index('qms_esv_intended_function_package_idx').on(
+      table.packageId,
+      table.intendedUseRevisionId
+    ),
+    revisionFunctionUnique: uniqueIndex(
+      'qms_esv_intended_function_revision_unique'
+    ).on(table.intendedUseRevisionId, table.functionKey),
+  })
+);
+
+export const qmsEpochValidationResponsibilities = pgTable(
+  'qms_epoch_validation_responsibilities',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    packageId: uuid('package_id').notNull(),
+    responsibilityRole: text('responsibility_role').notNull(),
+    employeeId: integer('employee_id')
+      .notNull()
+      .references(() => employees.id, { onDelete: 'restrict' }),
+    assignmentStatus: text('assignment_status')
+      .notNull()
+      .default('AWAITING_ACCEPTANCE'),
+    assignedByUserId: integer('assigned_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    assignedByDisplayName: text('assigned_by_display_name').notNull(),
+    assignedAt: timestamp('assigned_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    acceptedByUserId: integer('accepted_by_user_id').references(
+      () => users.id,
+      {
+        onDelete: 'restrict',
+      }
+    ),
+    acceptedByDisplayName: text('accepted_by_display_name'),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    supersededAt: timestamp('superseded_at', { withTimezone: true }),
+    active: boolean('active').notNull().default(true),
+  },
+  (table) => ({
+    packageIdx: index('qms_esv_responsibility_package_idx').on(
+      table.packageId,
+      table.active,
+      table.responsibilityRole
+    ),
+  })
+);

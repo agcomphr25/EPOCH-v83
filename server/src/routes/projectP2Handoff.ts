@@ -20,6 +20,17 @@ type AuthenticatedProjectActor = {
   role: string;
 };
 
+function projectId(req: Request) {
+  const id = (req.params as Record<string, string | undefined>).id;
+  if (!id)
+    throw new ProjectP2HandoffError(
+      'PROJECT_ID_REQUIRED',
+      'A project identifier is required.',
+      400
+    );
+  return id;
+}
+
 function actor(req: Request) {
   const user = req.user as AuthenticatedProjectActor | undefined;
   if (!user?.id || !user.username || !user.role)
@@ -72,7 +83,7 @@ function fail(res: Response, error: unknown) {
 }
 router.get('/', async (req, res) => {
   try {
-    res.json(await getP2ExecutionReadModel(String(req.params.id)));
+    res.json(await getP2ExecutionReadModel(projectId(req)));
   } catch (error) {
     fail(res, error);
   }
@@ -86,7 +97,7 @@ router.post('/approve', async (req, res) => {
       req,
       'projects.production_release.approve'
     );
-    res.json(await approveProductionRelease(String(req.params.id), value));
+    res.json(await approveProductionRelease(projectId(req), value));
   } catch (error) {
     fail(res, error);
   }
@@ -102,7 +113,7 @@ router.post('/release', async (req, res) => {
       .parse(req.body);
     res.json(
       await releaseToP2ControlCenter(
-        String(req.params.id),
+        projectId(req),
         body,
         await authorizedActor(req)
       )

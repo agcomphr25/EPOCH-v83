@@ -42,9 +42,9 @@ SELECT
   'admin',
   NOW(),
   'system',
-  'migration 0243',
+  'migration 0246',
   'migration',
-  'migrations/0243_restore_open_paint_orders_after_0167_collateral.sql',
+  'migrations/0246_restore_open_paint_orders_after_0167_collateral.sql',
   'RESTORE_OPEN_PAINT_AFTER_0167_COLLATERAL',
   'Restored the open Paint transition after duplicate-ID collateral caused migration 0167 to reset the queue field.',
   'FINALIZED',
@@ -59,7 +59,7 @@ SELECT
     )
   ),
   jsonb_build_object(
-    'migration', '0243_restore_open_paint_orders_after_0167_collateral',
+    'migration', '0246_restore_open_paint_orders_after_0167_collateral',
     'cause', '0238_non_unique_id_collateral_then_0167_replay'
   )
 FROM tmp_restore_open_paint_orders repair;

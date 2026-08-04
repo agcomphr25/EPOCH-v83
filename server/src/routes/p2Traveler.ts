@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { db } from '../../db';
+import { db, pgPool } from '../../db';
 import { 
   p2SerializedItems, 
   p2SerializedItemEvents, 
@@ -1033,48 +1033,71 @@ async function ensureTravelerForSerializedItem(params: {
   actor: string;
 }) {
   const { serializedItem, routing, inventoryIdentity, actor } = params;
-  const workOrder = await findProductionWorkOrderForSerializedItem({
-    serializedItem,
-    routing,
-    inventoryIdentity,
-  });
-  const existingTraveler = await findTravelerForSerializedItemIdentity({
-    serializedItem,
-    routing,
-    inventoryIdentity,
-    workOrder,
-  });
+  const lockClient = await pgPool.connect();
+  const lockNamespace = 'p2-traveler-generation';
+  const lockIdentity = serializedItem.id;
 
-  if (existingTraveler) {
-    const repaired = await ensureExistingTravelerHasRoutingDetails({
-      traveler: existingTraveler,
+  try {
+    // Serialize the complete find-or-create sequence across users, requests,
+    // and application instances. Without this lock, simultaneous scans can
+    // both observe "no traveler" and each create a traveler for one unit.
+    await lockClient.query(
+      'SELECT pg_advisory_lock(hashtext($1), hashtext($2))',
+      [lockNamespace, lockIdentity],
+    );
+
+    const workOrder = await findProductionWorkOrderForSerializedItem({
+      serializedItem,
       routing,
+      inventoryIdentity,
+    });
+    const existingTraveler = await findTravelerForSerializedItemIdentity({
+      serializedItem,
+      routing,
+      inventoryIdentity,
+      workOrder,
+    });
+
+    if (existingTraveler) {
+      const repaired = await ensureExistingTravelerHasRoutingDetails({
+        traveler: existingTraveler,
+        routing,
+        actor,
+      });
+      let traveler = existingTraveler;
+      if (workOrder && existingTraveler.productionWorkOrderId !== workOrder.id) {
+        traveler = await storage.linkTravelerToProductionWorkOrder(existingTraveler.id, workOrder.id);
+      }
+      return { traveler, created: false, repaired, linkedWorkOrderId: workOrder?.id ?? null };
+    }
+
+    let traveler = await storage.generateTravelerFromRouting(routing.id, {
+      serialNumber: serializedItem.serialNumber,
+      lotNumber: serializedItem.poNumber || undefined,
+      createdBy: actor,
+    });
+
+    await storage.updateTraveler(traveler.id, { status: 'IN_PROGRESS' });
+    await alignNewTravelerToSerializedItemStage({
+      travelerId: traveler.id,
+      serializedItem,
       actor,
     });
-    let traveler = existingTraveler;
-    if (workOrder && existingTraveler.productionWorkOrderId !== workOrder.id) {
-      traveler = await storage.linkTravelerToProductionWorkOrder(existingTraveler.id, workOrder.id);
+    if (workOrder) {
+      traveler = await storage.linkTravelerToProductionWorkOrder(traveler.id, workOrder.id);
     }
-    return { traveler, created: false, repaired, linkedWorkOrderId: workOrder?.id ?? null };
+
+    return { traveler, created: true, repaired: true, linkedWorkOrderId: workOrder?.id ?? null };
+  } finally {
+    try {
+      await lockClient.query(
+        'SELECT pg_advisory_unlock(hashtext($1), hashtext($2))',
+        [lockNamespace, lockIdentity],
+      );
+    } finally {
+      lockClient.release();
+    }
   }
-
-  let traveler = await storage.generateTravelerFromRouting(routing.id, {
-    serialNumber: serializedItem.serialNumber,
-    lotNumber: serializedItem.poNumber || undefined,
-    createdBy: actor,
-  });
-
-  await storage.updateTraveler(traveler.id, { status: 'IN_PROGRESS' });
-  await alignNewTravelerToSerializedItemStage({
-    travelerId: traveler.id,
-    serializedItem,
-    actor,
-  });
-  if (workOrder) {
-    traveler = await storage.linkTravelerToProductionWorkOrder(traveler.id, workOrder.id);
-  }
-
-  return { traveler, created: true, repaired: true, linkedWorkOrderId: workOrder?.id ?? null };
 }
 
 async function alignNewTravelerToSerializedItemStage(params: {

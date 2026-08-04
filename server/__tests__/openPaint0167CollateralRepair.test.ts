@@ -18,7 +18,7 @@ describe('open Paint orders after migration 0167 collateral', () => {
 
   it('repairs only the four audited orders with open Paint transitions', () => {
     const sql = fs.readFileSync(
-      path.join(root, 'migrations/0243_restore_open_paint_orders_after_0167_collateral.sql'),
+      path.join(root, 'migrations/0246_restore_open_paint_orders_after_0167_collateral.sql'),
       'utf8',
     );
 

@@ -13,6 +13,20 @@ CREATE TABLE IF NOT EXISTS design_project_configuration_workspaces (
 CREATE INDEX IF NOT EXISTS design_project_configuration_workspaces_status_idx
   ON design_project_configuration_workspaces(configuration_status);
 
+-- 0248 originally declared these only inside CREATE TABLE IF NOT EXISTS.
+-- Repair schema-push-first databases where the tables already existed and the
+-- table-level declarations were therefore skipped.
+CREATE UNIQUE INDEX IF NOT EXISTS design_project_configuration_items_project_number_unique
+  ON design_project_configuration_items(rd_project_id, configuration_item_number);
+
+CREATE UNIQUE INDEX IF NOT EXISTS design_project_configuration_relationship_unique
+  ON design_project_configuration_item_relationships(
+    parent_configuration_item_id,
+    child_configuration_item_id,
+    effectivity_start,
+    effectivity_end
+  );
+
 ALTER TABLE design_project_document_applicability
   ADD COLUMN IF NOT EXISTS approval_status text NOT NULL DEFAULT 'NOT_REQUIRED';
 

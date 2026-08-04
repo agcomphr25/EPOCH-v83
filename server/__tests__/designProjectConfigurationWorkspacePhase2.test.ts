@@ -87,6 +87,15 @@ describe('Design Project configuration workspace Phase 2', () => {
     );
   });
 
+  it('repairs uniqueness after schema-push-first boot', () => {
+    expect(migrationSource).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS design_project_configuration_items_project_number_unique'
+    );
+    expect(migrationSource).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS design_project_configuration_relationship_unique'
+    );
+  });
+
   it('requires the Engineering or Quality approval capability', () => {
     expect(routeSource).toContain(
       "requirePermission('design.configuration.applicability.approve')"

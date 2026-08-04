@@ -60,9 +60,12 @@ function readMigrations() {
 }
 
 function captureNames(pattern: RegExp) {
-  return readMigrations().flatMap(({ file, content }) => (
-    Array.from(content.matchAll(pattern)).map((match) => ({ file, name: match[1] }))
-  ));
+  return readMigrations().flatMap(({ file, content }) =>
+    Array.from(content.matchAll(pattern)).map((match) => ({
+      file,
+      name: match[1],
+    }))
+  );
 }
 
 describe('Design Control schema hardening', () => {
@@ -78,7 +81,11 @@ describe('Design Control schema hardening', () => {
   });
 
   it('covers every required Design Control and Engineering Package table in migrations', () => {
-    const tables = new Set(captureNames(/CREATE TABLE IF NOT EXISTS\s+([a-z_]+)/gi).map((entry) => entry.name));
+    const tables = new Set(
+      captureNames(/CREATE TABLE IF NOT EXISTS\s+([a-z_]+)/gi).map(
+        (entry) => entry.name
+      )
+    );
 
     for (const table of requiredDesignControlTables) {
       expect(tables.has(table)).toBe(true);
@@ -94,7 +101,9 @@ describe('Design Control schema hardening', () => {
         acc[entry.name] = (acc[entry.name] ?? 0) + 1;
         return acc;
       }, {});
-      expect(Object.entries(counts).filter(([, count]) => count > 1)).toEqual([]);
+      expect(Object.entries(counts).filter(([, count]) => count > 1)).toEqual(
+        []
+      );
     }
   });
 
@@ -113,7 +122,9 @@ describe('Design Control schema hardening', () => {
   it('returns a structured readiness payload when schema is missing', async () => {
     const client = {
       execute: async () => {
-        const error = new Error('relation "design_control_records" does not exist') as Error & { code: string };
+        const error = new Error(
+          'relation "design_control_records" does not exist'
+        ) as Error & { code: string };
         error.code = '42P01';
         throw error;
       },
@@ -125,7 +136,7 @@ describe('Design Control schema hardening', () => {
     });
 
     const payload = designControlSchemaNotReadyPayload(
-      new DesignControlSchemaNotReadyError(['design_control_records']),
+      new DesignControlSchemaNotReadyError(['design_control_records'])
     );
 
     expect(payload).toEqual({
@@ -155,7 +166,8 @@ describe('Design Control schema hardening', () => {
             { column_name: 'record_version' },
           ];
         }
-        if (callNumber === requiredDesignControlTables.length + 2) return [{ present: 1 }];
+        if (callNumber === requiredDesignControlTables.length + 2)
+          return [{ present: 1 }];
         if (callNumber === requiredDesignControlTables.length + 3) {
           return [
             { conname: 'design_control_records_authority_status_check' },
@@ -174,7 +186,10 @@ describe('Design Control schema hardening', () => {
         }
         if (callNumber === requiredDesignControlTables.length + 5) {
           return [
-            { object_name: 'design_control_step_content_versions_step_version_unique' },
+            {
+              object_name:
+                'design_control_step_content_versions_step_version_unique',
+            },
             { object_name: 'design_control_step_approvals_valid_slot_unique' },
             { object_name: 'prevent_design_control_step_version_delete' },
             { object_name: 'prevent_design_control_step_approval_delete' },
@@ -184,7 +199,9 @@ describe('Design Control schema hardening', () => {
       },
     };
 
-    await expect(assertDesignControlSchemaReady(client)).resolves.toBeUndefined();
+    await expect(
+      assertDesignControlSchemaReady(client)
+    ).resolves.toBeUndefined();
     expect(calls).toHaveLength(requiredDesignControlTables.length + 5);
   });
 
@@ -193,7 +210,7 @@ describe('Design Control schema hardening', () => {
     delete process.env.FORCE_DATABASE_URL;
 
     await expect(runSafeBootMigrations()).rejects.toThrow(
-      'Missing required database environment variable: FORCE_DATABASE_URL or DATABASE_URL',
+      'Missing required database environment variable: FORCE_DATABASE_URL or DATABASE_URL'
     );
   });
 });

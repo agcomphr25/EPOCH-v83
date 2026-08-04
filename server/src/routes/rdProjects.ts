@@ -85,7 +85,16 @@ const createItemPayloadSchema = itemPayloadSchema.extend({
 });
 
 function rowsOf<T>(result: unknown): T[] {
-  return (((result as any)?.rows ?? result) || []) as T[];
+  if (Array.isArray(result)) return result as T[];
+  if (
+    result &&
+    typeof result === 'object' &&
+    'rows' in result &&
+    Array.isArray(result.rows)
+  ) {
+    return result.rows as T[];
+  }
+  return [];
 }
 
 function errorCode(error: unknown) {
@@ -143,8 +152,20 @@ const localReconciliationSchema = rdProjectPayloadSchema.extend({
   localStorageKey: z.string().trim().min(1),
 });
 
+type AuthenticatedUser = {
+  id?: number | null;
+  username?: string | null;
+  email?: string | null;
+  displayName?: string | null;
+  role?: string | null;
+};
+
+function authenticatedUser(req: Request): AuthenticatedUser | undefined {
+  return (req as Request & { user?: AuthenticatedUser }).user;
+}
+
 function actorSnapshot(req: Request) {
-  const user = (req as any).user;
+  const user = authenticatedUser(req);
   return {
     id: typeof user?.id === 'number' ? user.id : null,
     username: user?.username ?? user?.email ?? user?.displayName ?? 'unknown',
@@ -153,7 +174,7 @@ function actorSnapshot(req: Request) {
 }
 
 async function userSnapshot(req: Request) {
-  const user = (req as any).user;
+  const user = authenticatedUser(req);
   if (!user) return { userId: null, displayName: 'unknown' };
   if (!user.id) {
     return {
@@ -304,8 +325,8 @@ router.post(
         });
       }
       res.status(result.status === 'created' ? 201 : 200).json(result);
-    } catch (error: any) {
-      if (error?.code === '23505') {
+    } catch (error: unknown) {
+      if (errorCode(error) === '23505') {
         const resolution = await resolveDesignControlAuthority(
           req.params.projectId
         );
@@ -387,8 +408,7 @@ router.post(
       ORDER BY updated_at DESC
       LIMIT 10
     `);
-      const duplicateRows =
-        (possibleDuplicates as any)?.rows ?? possibleDuplicates;
+      const duplicateRows = rowsOf<Record<string, unknown>>(possibleDuplicates);
       if (Array.isArray(duplicateRows) && duplicateRows.length > 0) {
         return res.status(409).json({
           outcome: 'possible_duplicate',

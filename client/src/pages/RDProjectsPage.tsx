@@ -200,8 +200,18 @@ interface EngineeringReleasePreview {
   finalDesignReviewStatus: string;
   engineeringChangeStatus: string;
   manufacturingEvidenceStatus: string;
-  requiredApprovals: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
-  completedApprovals: Array<{ role: string; approved: boolean; approvedBy?: string | null; approvedAt?: string | null }>;
+  requiredApprovals: Array<{
+    role: string;
+    approved: boolean;
+    approvedBy?: string | null;
+    approvedAt?: string | null;
+  }>;
+  completedApprovals: Array<{
+    role: string;
+    approved: boolean;
+    approvedBy?: string | null;
+    approvedAt?: string | null;
+  }>;
   missingEvidence: string[];
   baselineItems: Array<{
     baselineCategory: string;
@@ -670,8 +680,11 @@ function getPartsForProject(
 ) {
   if (!project) return [];
   const attachedRecords = getDraftRecordsForProject(project, records);
-  const lines = attachedRecords.flatMap((draft) =>
-    (draft.partsRequestLines?.length ? draft.partsRequestLines : draft.lines) ?? []
+  const lines = attachedRecords.flatMap(
+    (draft) =>
+      (draft.partsRequestLines?.length
+        ? draft.partsRequestLines
+        : draft.lines) ?? []
   );
 
   if (lines.length === 0)
@@ -695,7 +708,10 @@ function getPartsForProject(
   });
 }
 
-function getBomRecordsForProject(project: RDProject | null, records: DraftBomRecord[]) {
+function getBomRecordsForProject(
+  project: RDProject | null,
+  records: DraftBomRecord[]
+) {
   if (!project) return [];
   return getDraftRecordsForProject(project, records).flatMap((draft) => {
     const savedBoms = draft.savedDraftBoms ?? [];
@@ -710,7 +726,10 @@ function getBomRecordsForProject(project: RDProject | null, records: DraftBomRec
   });
 }
 
-function getLaborLinesForProject(project: RDProject | null, records: DraftBomRecord[]) {
+function getLaborLinesForProject(
+  project: RDProject | null,
+  records: DraftBomRecord[]
+) {
   if (!project) return [];
   return getDraftRecordsForProject(project, records).flatMap((draft) =>
     (draft.laborEstimateLines ?? []).map((line) => ({
@@ -721,7 +740,9 @@ function getLaborLinesForProject(project: RDProject | null, records: DraftBomRec
 }
 
 function laborLineHours(line: DraftLaborEstimateLine) {
-  return asNumber(line.hoursPerPart) * Math.max(1, asNumber(line.quantityPerPo));
+  return (
+    asNumber(line.hoursPerPart) * Math.max(1, asNumber(line.quantityPerPo))
+  );
 }
 
 function laborLineTotal(line: DraftLaborEstimateLine) {
@@ -887,13 +908,22 @@ export default function RDProjectsPage() {
   const [localProjects, setLocalProjects] = useState<RDProject[]>(() =>
     readJsonStorage(R_AND_D_PROJECT_STORAGE_KEY, [])
   );
-  const [isCreatingDesignControlRecord, setIsCreatingDesignControlRecord] = useState(false);
+  const [isCreatingDesignControlRecord, setIsCreatingDesignControlRecord] =
+    useState(false);
   const [isReleaseDialogOpen, setIsReleaseDialogOpen] = useState(false);
-  const [isSubmittingEngineeringRelease, setIsSubmittingEngineeringRelease] = useState(false);
-  const [isGeneratingEngineeringPackage, setIsGeneratingEngineeringPackage] = useState(false);
-  const [engineeringReleaseError, setEngineeringReleaseError] = useState<string | null>(null);
-  const [engineeringPackageError, setEngineeringPackageError] = useState<string | null>(null);
-  const [localImportState, setLocalImportState] = useState<Record<string, string>>({});
+  const [isSubmittingEngineeringRelease, setIsSubmittingEngineeringRelease] =
+    useState(false);
+  const [isGeneratingEngineeringPackage, setIsGeneratingEngineeringPackage] =
+    useState(false);
+  const [engineeringReleaseError, setEngineeringReleaseError] = useState<
+    string | null
+  >(null);
+  const [engineeringPackageError, setEngineeringPackageError] = useState<
+    string | null
+  >(null);
+  const [localImportState, setLocalImportState] = useState<
+    Record<string, string>
+  >({});
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('projectId')
   );
@@ -907,7 +937,9 @@ export default function RDProjectsPage() {
     'draft-tabs': 'outputs',
   };
   const initialProjectTab =
-    rdTabAliases[new URLSearchParams(window.location.search).get('tab') ?? 'overview'] ??
+    rdTabAliases[
+      new URLSearchParams(window.location.search).get('tab') ?? 'overview'
+    ] ??
     new URLSearchParams(window.location.search).get('tab') ??
     'overview';
   const [activeProjectTab, setActiveProjectTab] = useState(initialProjectTab);
@@ -915,7 +947,9 @@ export default function RDProjectsPage() {
   const projects = sharedProjects;
   const localOnlyProjects = useMemo(() => {
     const serverIds = new Set(sharedProjects.map((project) => project.id));
-    return localProjects.filter((project) => project.id && !serverIds.has(project.id));
+    return localProjects.filter(
+      (project) => project.id && !serverIds.has(project.id)
+    );
   }, [localProjects, sharedProjects]);
   const draftRecords = useMemo(
     () => mergeDraftRecords(localDraftRecords, sharedDraftRecords),
@@ -977,11 +1011,24 @@ export default function RDProjectsPage() {
     enabled: Boolean(selectedProject?.id),
     retry: false,
     queryFn: async () => {
-      if (!selectedProject?.id) return { state: 'NOT_INITIALIZED', authoritativeRecord: null, records: [] };
-      const response = await fetch(`/api/rd-projects/${encodeURIComponent(selectedProject.id)}/design-control`, {
-        credentials: 'include',
-      });
-      if (!response.ok) return { state: 'NOT_INITIALIZED', authoritativeRecord: null, records: [] };
+      if (!selectedProject?.id)
+        return {
+          state: 'NOT_INITIALIZED',
+          authoritativeRecord: null,
+          records: [],
+        };
+      const response = await fetch(
+        `/api/rd-projects/${encodeURIComponent(selectedProject.id)}/design-control`,
+        {
+          credentials: 'include',
+        }
+      );
+      if (!response.ok)
+        return {
+          state: 'NOT_INITIALIZED',
+          authoritativeRecord: null,
+          records: [],
+        };
       const payload = await response.json();
       return {
         state: payload.state,
@@ -990,38 +1037,55 @@ export default function RDProjectsPage() {
       };
     },
   });
-  const selectedDesignControlRecords = selectedDesignControlPayload?.records ?? [];
-  const activeDesignControlRecord = selectedDesignControlPayload?.authoritativeRecord ?? null;
+  const selectedDesignControlRecords =
+    selectedDesignControlPayload?.records ?? [];
+  const activeDesignControlRecord =
+    selectedDesignControlPayload?.authoritativeRecord ?? null;
   const {
     data: engineeringReleasePayload,
     isLoading: isLoadingEngineeringReleasePreview,
   } = useQuery<{ preview: EngineeringReleasePreview } | null>({
-    queryKey: ['/api/qms/design-control', activeDesignControlRecord?.id, 'engineering-release-preview'],
+    queryKey: [
+      '/api/qms/design-control',
+      activeDesignControlRecord?.id,
+      'engineering-release-preview',
+    ],
     enabled: Boolean(activeDesignControlRecord?.id),
     retry: false,
     queryFn: async () => {
       if (!activeDesignControlRecord?.id) return null;
-      const response = await fetch(`/api/qms/design-control/${activeDesignControlRecord.id}/engineering-release-preview`, {
-        credentials: 'include',
-      });
+      const response = await fetch(
+        `/api/qms/design-control/${activeDesignControlRecord.id}/engineering-release-preview`,
+        {
+          credentials: 'include',
+        }
+      );
       if (!response.ok) return null;
       return response.json();
     },
   });
   const engineeringReleasePreview = engineeringReleasePayload?.preview ?? null;
-  const releasedEngineeringReleaseId = engineeringReleasePreview?.existingRelease?.id ?? null;
+  const releasedEngineeringReleaseId =
+    engineeringReleasePreview?.existingRelease?.id ?? null;
   const {
     data: engineeringPackagePayload,
     isLoading: isLoadingEngineeringPackagePreview,
   } = useQuery<{ preview: EngineeringPackagePreview } | null>({
-    queryKey: ['/api/engineering-releases', releasedEngineeringReleaseId, 'package-preview'],
+    queryKey: [
+      '/api/engineering-releases',
+      releasedEngineeringReleaseId,
+      'package-preview',
+    ],
     enabled: Boolean(releasedEngineeringReleaseId),
     retry: false,
     queryFn: async () => {
       if (!releasedEngineeringReleaseId) return null;
-      const response = await fetch(`/api/engineering-releases/${releasedEngineeringReleaseId}/package-preview`, {
-        credentials: 'include',
-      });
+      const response = await fetch(
+        `/api/engineering-releases/${releasedEngineeringReleaseId}/package-preview`,
+        {
+          credentials: 'include',
+        }
+      );
       if (!response.ok) return null;
       return response.json();
     },
@@ -1124,24 +1188,33 @@ export default function RDProjectsPage() {
       existingDraft?.projectType !== 'R_AND_D' ||
       existingDraft?.projectId !== project.id
     ) {
-      setLocalDraftRecords((current) => mergeDraftRecords(current, [linkedDraft]));
+      setLocalDraftRecords((current) =>
+        mergeDraftRecords(current, [linkedDraft])
+      );
       queryClient.setQueryData<DraftBomRecord[]>(
         ['/api/draft-bom-drafts'],
         (current = []) => mergeDraftRecords(current, [linkedDraft])
       );
       saveSharedDraftRecord(linkedDraft)
         .then(() => {
-          queryClient.invalidateQueries({ queryKey: ['/api/draft-bom-drafts'] });
+          queryClient.invalidateQueries({
+            queryKey: ['/api/draft-bom-drafts'],
+          });
         })
         .catch((error) => {
-          console.error('Failed to attach Draft Builder handoff to R&D project:', error);
+          console.error(
+            'Failed to attach Draft Builder handoff to R&D project:',
+            error
+          );
         });
     }
 
     if (project.deletedDraftTabIds?.includes(draftId)) {
       persistProject({
         ...project,
-        deletedDraftTabIds: project.deletedDraftTabIds.filter((id) => id !== draftId),
+        deletedDraftTabIds: project.deletedDraftTabIds.filter(
+          (id) => id !== draftId
+        ),
       });
     }
   }, [draftRecords, location, projects, queryClient]);
@@ -1274,13 +1347,17 @@ export default function RDProjectsPage() {
   const openProjectFolder = (projectId: string, tab = activeProjectTab) => {
     setSelectedProjectId(projectId);
     setActiveProjectTab(tab);
-    setLocation(`/design/rd-projects?projectId=${encodeURIComponent(projectId)}&tab=${encodeURIComponent(tab)}`);
+    setLocation(
+      `/design/rd-projects?projectId=${encodeURIComponent(projectId)}&tab=${encodeURIComponent(tab)}`
+    );
   };
 
   const changeProjectTab = (tab: string) => {
     setActiveProjectTab(tab);
     if (selectedProject?.id) {
-      setLocation(`/design/rd-projects?projectId=${encodeURIComponent(selectedProject.id)}&tab=${encodeURIComponent(tab)}`);
+      setLocation(
+        `/design/rd-projects?projectId=${encodeURIComponent(selectedProject.id)}&tab=${encodeURIComponent(tab)}`
+      );
     }
   };
 
@@ -1297,14 +1374,17 @@ export default function RDProjectsPage() {
     if (!selectedProject) return;
     setIsCreatingDesignControlRecord(true);
     try {
-      const response = await fetch(`/api/rd-projects/${encodeURIComponent(selectedProject.id)}/design-control/initialize`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: `${selectedProject.projectName} Design Control`,
-        }),
-      });
+      const response = await fetch(
+        `/api/rd-projects/${encodeURIComponent(selectedProject.id)}/design-control/initialize`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `${selectedProject.projectName} Design Control`,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error('Failed to create design control record');
@@ -1316,10 +1396,19 @@ export default function RDProjectsPage() {
           queryKey: ['/api/rd-projects', selectedProject.id, 'design-control'],
         }),
         queryClient.invalidateQueries({
-          queryKey: ['/api/qms/design-control', 'rd-project', selectedProject.id],
+          queryKey: [
+            '/api/qms/design-control',
+            'rd-project',
+            selectedProject.id,
+          ],
         }),
       ]);
-      setLocation(designControlUrl(selectedProject, payload.resolution?.authoritativeRecord?.id));
+      setLocation(
+        designControlUrl(
+          selectedProject,
+          payload.resolution?.authoritativeRecord?.id
+        )
+      );
     } catch (error) {
       console.error('Failed to create R&D design control record:', error);
     } finally {
@@ -1328,8 +1417,16 @@ export default function RDProjectsPage() {
   };
 
   const importLocalProject = async (project: RDProject) => {
-    if (!window.confirm(`Import the browser-local project "${project.projectName}" to the shared server project list? Existing server projects will not be overwritten.`)) return;
-    setLocalImportState((current) => ({ ...current, [project.id]: 'importing' }));
+    if (
+      !window.confirm(
+        `Import the browser-local project "${project.projectName}" to the shared server project list? Existing server projects will not be overwritten.`
+      )
+    )
+      return;
+    setLocalImportState((current) => ({
+      ...current,
+      [project.id]: 'importing',
+    }));
     try {
       const response = await fetch('/api/rd-projects/reconcile-local', {
         method: 'POST',
@@ -1343,13 +1440,22 @@ export default function RDProjectsPage() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setLocalImportState((current) => ({ ...current, [project.id]: payload.outcome ?? 'failed' }));
+        setLocalImportState((current) => ({
+          ...current,
+          [project.id]: payload.outcome ?? 'failed',
+        }));
         return;
       }
-      setLocalImportState((current) => ({ ...current, [project.id]: 'imported' }));
+      setLocalImportState((current) => ({
+        ...current,
+        [project.id]: 'imported',
+      }));
       await queryClient.invalidateQueries({ queryKey: ['/api/rd-projects'] });
     } catch {
-      setLocalImportState((current) => ({ ...current, [project.id]: 'failed' }));
+      setLocalImportState((current) => ({
+        ...current,
+        [project.id]: 'failed',
+      }));
     }
   };
 
@@ -1358,26 +1464,45 @@ export default function RDProjectsPage() {
     setIsSubmittingEngineeringRelease(true);
     setEngineeringReleaseError(null);
     try {
-      const response = await fetch(`/api/qms/design-control/${activeDesignControlRecord.id}/engineering-release`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          effectiveDate: engineeringReleasePreview?.effectiveDate,
-        }),
-      });
+      const response = await fetch(
+        `/api/qms/design-control/${activeDesignControlRecord.id}/engineering-release`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            effectiveDate: engineeringReleasePreview?.effectiveDate,
+          }),
+        }
+      );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload.message || 'Engineering Release Gate is not ready.');
+        throw new Error(
+          payload.message || 'Engineering Release Gate is not ready.'
+        );
       }
       setIsReleaseDialogOpen(false);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['/api/qms/design-control', 'rd-project', selectedProject?.id] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/qms/design-control', activeDesignControlRecord.id, 'engineering-release-preview'] }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            '/api/qms/design-control',
+            'rd-project',
+            selectedProject?.id,
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            '/api/qms/design-control',
+            activeDesignControlRecord.id,
+            'engineering-release-preview',
+          ],
+        }),
         queryClient.invalidateQueries({ queryKey: ['/api/rd-projects'] }),
       ]);
     } catch (error: any) {
-      setEngineeringReleaseError(error.message || 'Failed to release engineering baseline.');
+      setEngineeringReleaseError(
+        error.message || 'Failed to release engineering baseline.'
+      );
     } finally {
       setIsSubmittingEngineeringRelease(false);
     }
@@ -1388,21 +1513,34 @@ export default function RDProjectsPage() {
     setIsGeneratingEngineeringPackage(true);
     setEngineeringPackageError(null);
     try {
-      const response = await fetch(`/api/engineering-releases/${releasedEngineeringReleaseId}/generate-package`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await fetch(
+        `/api/engineering-releases/${releasedEngineeringReleaseId}/generate-package`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const missingItems = Array.isArray(payload.missingItems) ? ` ${payload.missingItems.join('; ')}` : '';
-        throw new Error(`${payload.message || 'Engineering Package is not ready.'}${missingItems}`);
+        const missingItems = Array.isArray(payload.missingItems)
+          ? ` ${payload.missingItems.join('; ')}`
+          : '';
+        throw new Error(
+          `${payload.message || 'Engineering Package is not ready.'}${missingItems}`
+        );
       }
       await queryClient.invalidateQueries({
-        queryKey: ['/api/engineering-releases', releasedEngineeringReleaseId, 'package-preview'],
+        queryKey: [
+          '/api/engineering-releases',
+          releasedEngineeringReleaseId,
+          'package-preview',
+        ],
       });
     } catch (error: any) {
-      setEngineeringPackageError(error.message || 'Failed to generate Engineering Package.');
+      setEngineeringPackageError(
+        error.message || 'Failed to generate Engineering Package.'
+      );
     } finally {
       setIsGeneratingEngineeringPackage(false);
     }
@@ -1438,31 +1576,48 @@ export default function RDProjectsPage() {
                 Browser-local project data needs review
               </CardTitle>
               <CardDescription className="text-amber-800">
-                These legacy records remain in this browser but are not shared server projects. They are excluded from normal project selection until reviewed and imported.
+                These legacy records remain in this browser but are not shared
+                server projects. They are excluded from normal project selection
+                until reviewed and imported.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {localOnlyProjects.map((project) => (
-                <div key={project.id} className="flex flex-col gap-3 rounded-md border border-amber-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div
+                  key={project.id}
+                  className="flex flex-col gap-3 rounded-md border border-amber-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
                   <div>
                     <p className="font-medium">{project.projectName}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Owner: {project.owner || 'Unassigned'} · Status: {project.status} · Draft tabs: {project.draftTabIds.length}
+                      Owner: {project.owner || 'Unassigned'} · Status:{' '}
+                      {project.status} · Draft tabs:{' '}
+                      {project.draftTabIds.length}
                     </p>
                     {project.description && (
-                      <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{project.description}</p>
+                      <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                        {project.description}
+                      </p>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Local ID {project.id} · {localImportState[project.id] ?? 'local only'}
+                      Local ID {project.id} ·{' '}
+                      {localImportState[project.id] ?? 'local only'}
                     </p>
                   </div>
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={localImportState[project.id] === 'importing' || localImportState[project.id] === 'imported'}
+                    disabled={
+                      localImportState[project.id] === 'importing' ||
+                      localImportState[project.id] === 'imported'
+                    }
                     onClick={() => importLocalProject(project)}
                   >
-                    {localImportState[project.id] === 'importing' ? 'Checking…' : localImportState[project.id] === 'imported' ? 'Imported' : 'Review and import'}
+                    {localImportState[project.id] === 'importing'
+                      ? 'Checking…'
+                      : localImportState[project.id] === 'imported'
+                        ? 'Imported'
+                        : 'Review and import'}
                   </Button>
                 </div>
               ))}
@@ -1661,14 +1816,22 @@ export default function RDProjectsPage() {
                   )}
                 </CardHeader>
                 <CardContent>
-                  <Tabs value={activeProjectTab} onValueChange={changeProjectTab} className="space-y-4">
+                  <Tabs
+                    value={activeProjectTab}
+                    onValueChange={changeProjectTab}
+                    className="space-y-4"
+                  >
                     <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-13">
                       <TabsTrigger value="overview">Overview</TabsTrigger>
-                      <TabsTrigger value="requirements">Requirements</TabsTrigger>
+                      <TabsTrigger value="requirements">
+                        Requirements
+                      </TabsTrigger>
                       <TabsTrigger value="risks">Risks</TabsTrigger>
                       <TabsTrigger value="outputs">Design Outputs</TabsTrigger>
                       <TabsTrigger value="prototype">Prototype</TabsTrigger>
-                      <TabsTrigger value="verification">Verification</TabsTrigger>
+                      <TabsTrigger value="verification">
+                        Verification
+                      </TabsTrigger>
                       <TabsTrigger value="validation">Validation</TabsTrigger>
                       <TabsTrigger value="reviews">Design Reviews</TabsTrigger>
                       <TabsTrigger value="changes">Changes</TabsTrigger>
@@ -1804,11 +1967,18 @@ export default function RDProjectsPage() {
                     <TabsContent value="requirements" className="space-y-4">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base">Requirements</CardTitle>
-                          <CardDescription>Customer, regulatory, performance, material, inspection, and test requirements owned by this R&amp;D project.</CardDescription>
+                          <CardTitle className="text-base">
+                            Requirements
+                          </CardTitle>
+                          <CardDescription>
+                            Customer, regulatory, performance, material,
+                            inspection, and test requirements owned by this
+                            R&amp;D project.
+                          </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-muted-foreground">
-                          Design Control evaluates completeness; the R&amp;D project owns the requirement set.
+                          Design Control evaluates completeness; the R&amp;D
+                          project owns the requirement set.
                         </CardContent>
                       </Card>
                     </TabsContent>
@@ -1817,10 +1987,14 @@ export default function RDProjectsPage() {
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-base">Risks</CardTitle>
-                          <CardDescription>Design risk assessment and mitigation closure for the selected R&amp;D project.</CardDescription>
+                          <CardDescription>
+                            Design risk assessment and mitigation closure for
+                            the selected R&amp;D project.
+                          </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-muted-foreground">
-                          Open high risks block Engineering Release until dispositioned.
+                          Open high risks block Engineering Release until
+                          dispositioned.
                         </CardContent>
                       </Card>
                     </TabsContent>
@@ -1828,21 +2002,38 @@ export default function RDProjectsPage() {
                     <TabsContent value="outputs" className="space-y-4">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base">Design Outputs</CardTitle>
-                          <CardDescription>Draft Builder tabs, BOM records, CAD/drawing references, and output package evidence.</CardDescription>
+                          <CardTitle className="text-base">
+                            Design Outputs
+                          </CardTitle>
+                          <CardDescription>
+                            Draft Builder tabs, BOM records, CAD/drawing
+                            references, and output package evidence.
+                          </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-3 md:grid-cols-3">
                           <div className="rounded-md border bg-white p-3">
-                            <p className="text-xs text-muted-foreground">Linked draft tabs</p>
-                            <p className="text-lg font-semibold">{selectedDraftTabs.length}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Linked draft tabs
+                            </p>
+                            <p className="text-lg font-semibold">
+                              {selectedDraftTabs.length}
+                            </p>
                           </div>
                           <div className="rounded-md border bg-white p-3">
-                            <p className="text-xs text-muted-foreground">BOM records</p>
-                            <p className="text-lg font-semibold">{selectedBomRecords.length}</p>
+                            <p className="text-xs text-muted-foreground">
+                              BOM records
+                            </p>
+                            <p className="text-lg font-semibold">
+                              {selectedBomRecords.length}
+                            </p>
                           </div>
                           <div className="rounded-md border bg-white p-3">
-                            <p className="text-xs text-muted-foreground">Parts</p>
-                            <p className="text-lg font-semibold">{selectedParts.length}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Parts
+                            </p>
+                            <p className="text-lg font-semibold">
+                              {selectedParts.length}
+                            </p>
                           </div>
                         </CardContent>
                       </Card>
@@ -1852,10 +2043,14 @@ export default function RDProjectsPage() {
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-base">Prototype</CardTitle>
-                          <CardDescription>Prototype build identity, build notes, lots, deviations, and evidence attachments.</CardDescription>
+                          <CardDescription>
+                            Prototype build identity, build notes, lots,
+                            deviations, and evidence attachments.
+                          </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-muted-foreground">
-                          The Engineering Release preview pulls the prototype identifier from the linked Design Control workflow.
+                          The Engineering Release preview pulls the prototype
+                          identifier from the linked Design Control workflow.
                         </CardContent>
                       </Card>
                     </TabsContent>
@@ -1863,11 +2058,16 @@ export default function RDProjectsPage() {
                     <TabsContent value="verification" className="space-y-4">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base">Verification</CardTitle>
-                          <CardDescription>Evidence that design outputs meet design inputs.</CardDescription>
+                          <CardTitle className="text-base">
+                            Verification
+                          </CardTitle>
+                          <CardDescription>
+                            Evidence that design outputs meet design inputs.
+                          </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-muted-foreground">
-                          Verification must be complete before Engineering Release.
+                          Verification must be complete before Engineering
+                          Release.
                         </CardContent>
                       </Card>
                     </TabsContent>
@@ -1875,11 +2075,17 @@ export default function RDProjectsPage() {
                     <TabsContent value="validation" className="space-y-4">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base">Validation</CardTitle>
-                          <CardDescription>Evidence that the product meets intended use and customer mission.</CardDescription>
+                          <CardTitle className="text-base">
+                            Validation
+                          </CardTitle>
+                          <CardDescription>
+                            Evidence that the product meets intended use and
+                            customer mission.
+                          </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-muted-foreground">
-                          Validation must be complete before Engineering Release.
+                          Validation must be complete before Engineering
+                          Release.
                         </CardContent>
                       </Card>
                     </TabsContent>
@@ -1887,8 +2093,13 @@ export default function RDProjectsPage() {
                     <TabsContent value="reviews" className="space-y-4">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base">Design Reviews</CardTitle>
-                          <CardDescription>Concept, requirements, and final design review status.</CardDescription>
+                          <CardTitle className="text-base">
+                            Design Reviews
+                          </CardTitle>
+                          <CardDescription>
+                            Concept, requirements, and final design review
+                            status.
+                          </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-muted-foreground">
                           Approved final design review is required for release.
@@ -1899,11 +2110,17 @@ export default function RDProjectsPage() {
                     <TabsContent value="changes" className="space-y-4">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base">Engineering Changes</CardTitle>
-                          <CardDescription>Open changes and future revision work for this design.</CardDescription>
+                          <CardTitle className="text-base">
+                            Engineering Changes
+                          </CardTitle>
+                          <CardDescription>
+                            Open changes and future revision work for this
+                            design.
+                          </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-muted-foreground">
-                          Changes to released design data require Engineering Change and do not alter the locked baseline.
+                          Changes to released design data require Engineering
+                          Change and do not alter the locked baseline.
                         </CardContent>
                       </Card>
                     </TabsContent>
@@ -1911,11 +2128,17 @@ export default function RDProjectsPage() {
                     <TabsContent value="dhf" className="space-y-4">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-base">Design History File</CardTitle>
-                          <CardDescription>Release-ready design evidence retained by R&amp;D project and Design Control record.</CardDescription>
+                          <CardTitle className="text-base">
+                            Design History File
+                          </CardTitle>
+                          <CardDescription>
+                            Release-ready design evidence retained by R&amp;D
+                            project and Design Control record.
+                          </CardDescription>
                         </CardHeader>
                         <CardContent className="text-sm text-muted-foreground">
-                          Engineering Release freezes a reproducible baseline snapshot for the DHF.
+                          Engineering Release freezes a reproducible baseline
+                          snapshot for the DHF.
                         </CardContent>
                       </Card>
                     </TabsContent>
@@ -1979,35 +2202,52 @@ export default function RDProjectsPage() {
                       {selectedBomRecords.length === 0 ? (
                         <Card>
                           <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                            Push a Draft Builder BOM wizard tab or attach a draft with saved BOMs to populate this folder tab.
+                            Push a Draft Builder BOM wizard tab or attach a
+                            draft with saved BOMs to populate this folder tab.
                           </CardContent>
                         </Card>
                       ) : (
                         <div className="grid gap-3 md:grid-cols-2">
-                          {selectedBomRecords.map((bom: DraftPartBom & { sourceDraftName?: string }) => {
-                            const rootPart = bom.parts?.[0] ?? bom.rootPart;
-                            const components = rootPart?.bomItems ?? bom.rootPart?.bomItems ?? [];
-                            return (
-                              <Card key={bom.id}>
-                                <CardHeader>
-                                  <CardTitle className="flex items-center gap-2 text-base">
-                                    <Boxes className="h-4 w-4 text-cyan-700" />
-                                    {bom.name}
-                                  </CardTitle>
-                                  <CardDescription>
-                                    {bom.sourceDraftName || 'Draft Builder'} {bom.revision ? `- ${bom.revision}` : ''}
-                                  </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3 text-sm">
-                                  <div className="rounded-md border bg-white p-3">
-                                    <p className="font-mono text-xs text-muted-foreground">{rootPart?.partNumber || 'No root part'}</p>
-                                    <p className="font-medium">{rootPart?.description || 'No description'}</p>
-                                  </div>
-                                  <Badge variant="outline">{components.length} component{components.length === 1 ? '' : 's'}</Badge>
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
+                          {selectedBomRecords.map(
+                            (
+                              bom: DraftPartBom & { sourceDraftName?: string }
+                            ) => {
+                              const rootPart = bom.parts?.[0] ?? bom.rootPart;
+                              const components =
+                                rootPart?.bomItems ??
+                                bom.rootPart?.bomItems ??
+                                [];
+                              return (
+                                <Card key={bom.id}>
+                                  <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                      <Boxes className="h-4 w-4 text-cyan-700" />
+                                      {bom.name}
+                                    </CardTitle>
+                                    <CardDescription>
+                                      {bom.sourceDraftName || 'Draft Builder'}{' '}
+                                      {bom.revision ? `- ${bom.revision}` : ''}
+                                    </CardDescription>
+                                  </CardHeader>
+                                  <CardContent className="space-y-3 text-sm">
+                                    <div className="rounded-md border bg-white p-3">
+                                      <p className="font-mono text-xs text-muted-foreground">
+                                        {rootPart?.partNumber || 'No root part'}
+                                      </p>
+                                      <p className="font-medium">
+                                        {rootPart?.description ||
+                                          'No description'}
+                                      </p>
+                                    </div>
+                                    <Badge variant="outline">
+                                      {components.length} component
+                                      {components.length === 1 ? '' : 's'}
+                                    </Badge>
+                                  </CardContent>
+                                </Card>
+                              );
+                            }
+                          )}
                         </div>
                       )}
                     </TabsContent>
@@ -2070,46 +2310,101 @@ export default function RDProjectsPage() {
                     <TabsContent value="labor" className="space-y-4">
                       <div className="grid gap-3 md:grid-cols-3">
                         <div className="rounded-md border bg-white p-3">
-                          <p className="text-xs text-muted-foreground">Estimate Lines</p>
-                          <p className="text-lg font-semibold">{selectedLaborLines.length}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Estimate Lines
+                          </p>
+                          <p className="text-lg font-semibold">
+                            {selectedLaborLines.length}
+                          </p>
                         </div>
                         <div className="rounded-md border bg-white p-3">
-                          <p className="text-xs text-muted-foreground">Estimated Hours</p>
-                          <p className="text-lg font-semibold">{selectedLaborHours.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Estimated Hours
+                          </p>
+                          <p className="text-lg font-semibold">
+                            {selectedLaborHours.toLocaleString(undefined, {
+                              maximumFractionDigits: 2,
+                            })}
+                          </p>
                         </div>
                         <div className="rounded-md border bg-white p-3">
-                          <p className="text-xs text-muted-foreground">Estimated Labor</p>
-                          <p className="text-lg font-semibold">{selectedLaborTotal.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Estimated Labor
+                          </p>
+                          <p className="text-lg font-semibold">
+                            {selectedLaborTotal.toLocaleString(undefined, {
+                              style: 'currency',
+                              currency: 'USD',
+                            })}
+                          </p>
                         </div>
                       </div>
                       {selectedLaborLines.length === 0 ? (
                         <Card>
                           <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                            Push a Draft Direct Labor Estimate from Draft Builder to populate this folder tab.
+                            Push a Draft Direct Labor Estimate from Draft
+                            Builder to populate this folder tab.
                           </CardContent>
                         </Card>
                       ) : (
                         <div className="space-y-2">
-                          {selectedLaborLines.map((line: DraftLaborEstimateLine & { sourceDraftName?: string }) => (
-                            <div key={line.id ?? `${line.employeeRole}-${line.sourceDraftName}`} className="grid gap-3 rounded-md border bg-white p-3 md:grid-cols-5">
-                              <div className="md:col-span-2">
-                                <p className="font-medium">{line.employeeRole || 'Unassigned role'}</p>
-                                <p className="text-xs text-muted-foreground">{line.sourceDraftName || 'Draft Builder'}</p>
+                          {selectedLaborLines.map(
+                            (
+                              line: DraftLaborEstimateLine & {
+                                sourceDraftName?: string;
+                              }
+                            ) => (
+                              <div
+                                key={
+                                  line.id ??
+                                  `${line.employeeRole}-${line.sourceDraftName}`
+                                }
+                                className="grid gap-3 rounded-md border bg-white p-3 md:grid-cols-5"
+                              >
+                                <div className="md:col-span-2">
+                                  <p className="font-medium">
+                                    {line.employeeRole || 'Unassigned role'}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {line.sourceDraftName || 'Draft Builder'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Hours / Part
+                                  </p>
+                                  <p className="font-medium">
+                                    {asNumber(line.hoursPerPart).toLocaleString(
+                                      undefined,
+                                      { maximumFractionDigits: 2 }
+                                    )}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Qty / PO
+                                  </p>
+                                  <p className="font-medium">
+                                    {Math.max(
+                                      1,
+                                      asNumber(line.quantityPerPo)
+                                    ).toLocaleString()}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Ext Labor
+                                  </p>
+                                  <p className="font-medium">
+                                    {laborLineTotal(line).toLocaleString(
+                                      undefined,
+                                      { style: 'currency', currency: 'USD' }
+                                    )}
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Hours / Part</p>
-                                <p className="font-medium">{asNumber(line.hoursPerPart).toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Qty / PO</p>
-                                <p className="font-medium">{Math.max(1, asNumber(line.quantityPerPo)).toLocaleString()}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Ext Labor</p>
-                                <p className="font-medium">{laborLineTotal(line).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</p>
-                              </div>
-                            </div>
-                          ))}
+                            )
+                          )}
                         </div>
                       )}
                     </TabsContent>
@@ -2123,25 +2418,37 @@ export default function RDProjectsPage() {
                               Design Control
                             </CardTitle>
                             <CardDescription>
-                              Design-control records linked to this R&amp;D project only.
+                              Design-control records linked to this R&amp;D
+                              project only.
                             </CardDescription>
                           </div>
                           <Button
                             className="gap-2 self-start"
                             onClick={createDesignControlRecordForProject}
-                            disabled={isCreatingDesignControlRecord || selectedDesignControlRecords.length > 0}
+                            disabled={
+                              isCreatingDesignControlRecord ||
+                              selectedDesignControlRecords.length > 0
+                            }
                           >
                             <Plus className="h-4 w-4" />
-                            {isCreatingDesignControlRecord ? 'Creating...' : 'Create Design Control'}
+                            {isCreatingDesignControlRecord
+                              ? 'Creating...'
+                              : 'Create Design Control'}
                           </Button>
                         </CardHeader>
                         <CardContent className="space-y-3">
                           <div className="rounded-md border bg-white px-3 py-2 text-sm text-muted-foreground">
-                            When this design is released, its R&amp;D data can become the source package for a manufactured inventory item. That released item can later be selected from P2 when a PO is received.
+                            When this design is released, its R&amp;D data can
+                            become the source package for a manufactured
+                            inventory item. That released item can later be
+                            selected from P2 when a PO is received.
                           </div>
-                          {selectedDesignControlPayload?.state === 'RECONCILIATION_REQUIRED' && (
+                          {selectedDesignControlPayload?.state ===
+                            'RECONCILIATION_REQUIRED' && (
                             <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-                              Multiple historical Design Control records require an administrator to designate authority. No record was selected automatically.
+                              Multiple historical Design Control records require
+                              an administrator to designate authority. No record
+                              was selected automatically.
                             </div>
                           )}
                           {isLoadingDesignControlRecords ? (
@@ -2150,7 +2457,8 @@ export default function RDProjectsPage() {
                             </div>
                           ) : selectedDesignControlRecords.length === 0 ? (
                             <div className="flex flex-col items-start gap-3 rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
-                              No design-control record is linked to this R&amp;D project yet.
+                              No design-control record is linked to this R&amp;D
+                              project yet.
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -2165,18 +2473,22 @@ export default function RDProjectsPage() {
                           ) : (
                             <div className="grid gap-3 md:grid-cols-2">
                               {selectedDesignControlRecords.map((record) => (
-                                <div key={record.id} className="rounded-md border bg-white px-3 py-3">
+                                <div
+                                  key={record.id}
+                                  className="rounded-md border bg-white px-3 py-3"
+                                >
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                       <p className="truncate text-sm font-medium text-slate-950">
                                         {record.title}
                                       </p>
                                       <p className="mt-1 text-xs text-muted-foreground">
-                                        {record.authorityStatus === 'authoritative'
+                                        {record.authorityStatus ===
+                                        'authoritative'
                                           ? 'Authoritative Design Control'
                                           : record.releasedAt
-                                          ? 'Released design control'
-                                          : `Status: ${record.status} · Authority: ${record.authorityStatus ?? 'legacy'}`}
+                                            ? 'Released design control'
+                                            : `Status: ${record.status} · Authority: ${record.authorityStatus ?? 'legacy'}`}
                                       </p>
                                     </div>
                                     <Badge variant="outline">
@@ -2188,7 +2500,14 @@ export default function RDProjectsPage() {
                                       variant="outline"
                                       size="sm"
                                       className="gap-2"
-                                      onClick={() => setLocation(designControlUrl(selectedProject, record.id))}
+                                      onClick={() =>
+                                        setLocation(
+                                          designControlUrl(
+                                            selectedProject,
+                                            record.id
+                                          )
+                                        )
+                                      }
                                     >
                                       <ExternalLink className="h-4 w-4" />
                                       Open
@@ -2202,7 +2521,10 @@ export default function RDProjectsPage() {
                       </Card>
                     </TabsContent>
 
-                    <TabsContent value="engineering-release" className="space-y-4">
+                    <TabsContent
+                      value="engineering-release"
+                      className="space-y-4"
+                    >
                       {activeDesignControlRecord && (
                         <DesignControlWorkspace
                           projectId={selectedProject.id}
@@ -2219,12 +2541,19 @@ export default function RDProjectsPage() {
                               Engineering Release Gate
                             </CardTitle>
                             <CardDescription>
-                              Freeze the approved R&amp;D design baseline before manufactured inventory item creation.
+                              Freeze the approved R&amp;D design baseline before
+                              manufactured inventory item creation.
                             </CardDescription>
                           </div>
                           <Button
                             className="gap-2 self-start"
-                            disabled={!engineeringReleasePreview?.ready || isSubmittingEngineeringRelease || Boolean(engineeringReleasePreview?.existingRelease)}
+                            disabled={
+                              !engineeringReleasePreview?.ready ||
+                              isSubmittingEngineeringRelease ||
+                              Boolean(
+                                engineeringReleasePreview?.existingRelease
+                              )
+                            }
                             onClick={() => setIsReleaseDialogOpen(true)}
                           >
                             <PackageCheck className="h-4 w-4" />
@@ -2234,7 +2563,8 @@ export default function RDProjectsPage() {
                         <CardContent className="space-y-4">
                           {!activeDesignControlRecord ? (
                             <div className="flex flex-col items-start gap-3 rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
-                              Create a linked Design Control record before releasing an engineering baseline.
+                              Create a linked Design Control record before
+                              releasing an engineering baseline.
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -2254,76 +2584,163 @@ export default function RDProjectsPage() {
                             <>
                               <div className="grid gap-3 md:grid-cols-4">
                                 <div className="rounded-md border bg-white p-3">
-                                  <p className="text-xs text-muted-foreground">Release readiness</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Release readiness
+                                  </p>
                                   <Badge
                                     variant="outline"
-                                    className={engineeringReleasePreview.ready ? 'mt-2 border-emerald-300 bg-emerald-50 text-emerald-700' : 'mt-2 border-amber-300 bg-amber-50 text-amber-800'}
+                                    className={
+                                      engineeringReleasePreview.ready
+                                        ? 'mt-2 border-emerald-300 bg-emerald-50 text-emerald-700'
+                                        : 'mt-2 border-amber-300 bg-amber-50 text-amber-800'
+                                    }
                                   >
-                                    {engineeringReleasePreview.ready ? 'Ready' : 'Blocked'}
+                                    {engineeringReleasePreview.ready
+                                      ? 'Ready'
+                                      : 'Blocked'}
                                   </Badge>
                                 </div>
                                 <div className="rounded-md border bg-white p-3">
-                                  <p className="text-xs text-muted-foreground">Release number</p>
-                                  <p className="mt-1 text-lg font-semibold">{engineeringReleasePreview.proposedReleaseNumber}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Release number
+                                  </p>
+                                  <p className="mt-1 text-lg font-semibold">
+                                    {
+                                      engineeringReleasePreview.proposedReleaseNumber
+                                    }
+                                  </p>
                                 </div>
                                 <div className="rounded-md border bg-white p-3">
-                                  <p className="text-xs text-muted-foreground">Release revision</p>
-                                  <p className="mt-1 text-lg font-semibold">{engineeringReleasePreview.proposedReleaseRevision}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Release revision
+                                  </p>
+                                  <p className="mt-1 text-lg font-semibold">
+                                    {
+                                      engineeringReleasePreview.proposedReleaseRevision
+                                    }
+                                  </p>
                                 </div>
                                 <div className="rounded-md border bg-white p-3">
-                                  <p className="text-xs text-muted-foreground">Effective date</p>
-                                  <p className="mt-1 text-lg font-semibold">{engineeringReleasePreview.effectiveDate}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Effective date
+                                  </p>
+                                  <p className="mt-1 text-lg font-semibold">
+                                    {engineeringReleasePreview.effectiveDate}
+                                  </p>
                                 </div>
                                 <div className="rounded-md border bg-white p-3">
-                                  <p className="text-xs text-muted-foreground">Manufacturing evidence</p>
-                                  <p className="mt-1 text-lg font-semibold">{engineeringReleasePreview.manufacturingEvidenceStatus}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Manufacturing evidence
+                                  </p>
+                                  <p className="mt-1 text-lg font-semibold">
+                                    {
+                                      engineeringReleasePreview.manufacturingEvidenceStatus
+                                    }
+                                  </p>
                                 </div>
                               </div>
 
                               {engineeringReleasePreview.existingRelease && (
                                 <div className="space-y-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
                                   <div>
-                                    <div className="text-base font-semibold">Engineering Release</div>
+                                    <div className="text-base font-semibold">
+                                      Engineering Release
+                                    </div>
                                     <div className="text-emerald-800">
-                                      Released by {engineeringReleasePreview.existingRelease.releasedBy || 'system'} on {engineeringReleasePreview.existingRelease.releasedAt || 'recorded release date'}
+                                      Released by{' '}
+                                      {engineeringReleasePreview.existingRelease
+                                        .releasedBy || 'system'}{' '}
+                                      on{' '}
+                                      {engineeringReleasePreview.existingRelease
+                                        .releasedAt || 'recorded release date'}
                                     </div>
                                   </div>
                                   <div className="grid gap-3 md:grid-cols-3">
                                     <div className="rounded-md border border-emerald-200 bg-white p-3">
-                                      <p className="text-xs text-muted-foreground">Status</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Status
+                                      </p>
                                       <p className="font-semibold">Released</p>
                                     </div>
                                     <div className="rounded-md border border-emerald-200 bg-white p-3">
-                                      <p className="text-xs text-muted-foreground">Release Number</p>
-                                      <p className="font-semibold">{engineeringReleasePreview.existingRelease.releaseNumber}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Release Number
+                                      </p>
+                                      <p className="font-semibold">
+                                        {
+                                          engineeringReleasePreview
+                                            .existingRelease.releaseNumber
+                                        }
+                                      </p>
                                     </div>
                                     <div className="rounded-md border border-emerald-200 bg-white p-3">
-                                      <p className="text-xs text-muted-foreground">Revision</p>
-                                      <p className="font-semibold">{engineeringReleasePreview.existingRelease.releaseRevision}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Revision
+                                      </p>
+                                      <p className="font-semibold">
+                                        {
+                                          engineeringReleasePreview
+                                            .existingRelease.releaseRevision
+                                        }
+                                      </p>
                                     </div>
                                     <div className="rounded-md border border-emerald-200 bg-white p-3">
-                                      <p className="text-xs text-muted-foreground">Baseline</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Baseline
+                                      </p>
                                       <p className="font-semibold">Locked</p>
                                     </div>
                                     <div className="rounded-md border border-emerald-200 bg-white p-3">
-                                      <p className="text-xs text-muted-foreground">Manufactured Item</p>
-                                      <p className="font-semibold">Pending creation</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Manufactured Item
+                                      </p>
+                                      <p className="font-semibold">
+                                        Pending creation
+                                      </p>
                                     </div>
                                     <div className="rounded-md border border-emerald-200 bg-white p-3">
-                                      <p className="text-xs text-muted-foreground">Manufacturing</p>
-                                      <p className="font-semibold">Baseline ready</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Manufacturing
+                                      </p>
+                                      <p className="font-semibold">
+                                        Baseline ready
+                                      </p>
                                     </div>
                                   </div>
                                   <div className="flex flex-wrap gap-2">
-                                    <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-700">Available after item creation for Quote</Badge>
-                                    <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-700">Available after item creation for Future PO</Badge>
-                                    <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-700">Ready for Manufacturing setup</Badge>
+                                    <Badge
+                                      variant="outline"
+                                      className="border-emerald-300 bg-white text-emerald-700"
+                                    >
+                                      Available after item creation for Quote
+                                    </Badge>
+                                    <Badge
+                                      variant="outline"
+                                      className="border-emerald-300 bg-white text-emerald-700"
+                                    >
+                                      Available after item creation for Future
+                                      PO
+                                    </Badge>
+                                    <Badge
+                                      variant="outline"
+                                      className="border-emerald-300 bg-white text-emerald-700"
+                                    >
+                                      Ready for Manufacturing setup
+                                    </Badge>
                                   </div>
-                                  <Button variant="outline" size="sm" className="gap-2" disabled>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2"
+                                    disabled
+                                  >
                                     <ExternalLink className="h-4 w-4" />
                                     Open Inventory Item
                                   </Button>
-                                  <div className="font-medium">Next action: Create Manufactured Inventory Item</div>
+                                  <div className="font-medium">
+                                    Next action: Create Manufactured Inventory
+                                    Item
+                                  </div>
                                 </div>
                               )}
 
@@ -2343,20 +2760,28 @@ export default function RDProjectsPage() {
                                         Engineering Package
                                       </CardTitle>
                                       <CardDescription>
-                                        Locked Technical Data Package used as the engineering source for future manufactured inventory items.
+                                        Locked Technical Data Package used as
+                                        the engineering source for future
+                                        manufactured inventory items.
                                       </CardDescription>
                                     </div>
                                     <Button
                                       className="gap-2 self-start"
                                       disabled={
                                         !engineeringPackagePreview?.ready ||
-                                        Boolean(engineeringPackagePreview?.existingPackage) ||
+                                        Boolean(
+                                          engineeringPackagePreview?.existingPackage
+                                        ) ||
                                         isGeneratingEngineeringPackage
                                       }
-                                      onClick={generateEngineeringPackageForRelease}
+                                      onClick={
+                                        generateEngineeringPackageForRelease
+                                      }
                                     >
                                       <ShieldCheck className="h-4 w-4" />
-                                      {isGeneratingEngineeringPackage ? 'Generating...' : 'Generate Package'}
+                                      {isGeneratingEngineeringPackage
+                                        ? 'Generating...'
+                                        : 'Generate Package'}
                                     </Button>
                                   </CardHeader>
                                   <CardContent className="space-y-4">
@@ -2368,26 +2793,58 @@ export default function RDProjectsPage() {
                                       <>
                                         <div className="grid gap-3 md:grid-cols-4">
                                           <div className="rounded-md border bg-white p-3">
-                                            <p className="text-xs text-muted-foreground">Status</p>
+                                            <p className="text-xs text-muted-foreground">
+                                              Status
+                                            </p>
                                             <p className="mt-1 font-semibold">
-                                              {engineeringPackagePreview.existingPackage?.packageStatus ?? engineeringPackagePreview.packageCompleteness.status}
+                                              {engineeringPackagePreview
+                                                .existingPackage
+                                                ?.packageStatus ??
+                                                engineeringPackagePreview
+                                                  .packageCompleteness.status}
                                             </p>
                                           </div>
                                           <div className="rounded-md border bg-white p-3">
-                                            <p className="text-xs text-muted-foreground">Revision</p>
+                                            <p className="text-xs text-muted-foreground">
+                                              Revision
+                                            </p>
                                             <p className="mt-1 font-semibold">
-                                              {engineeringPackagePreview.existingPackage?.packageRevision ?? engineeringReleasePreview.existingRelease.releaseRevision}
+                                              {engineeringPackagePreview
+                                                .existingPackage
+                                                ?.packageRevision ??
+                                                engineeringReleasePreview
+                                                  .existingRelease
+                                                  .releaseRevision}
                                             </p>
                                           </div>
                                           <div className="rounded-md border bg-white p-3">
-                                            <p className="text-xs text-muted-foreground">Contents</p>
+                                            <p className="text-xs text-muted-foreground">
+                                              Contents
+                                            </p>
                                             <p className="mt-1 font-semibold">
-                                              {engineeringPackagePreview.packageCompleteness.presentRequiredCount}/{engineeringPackagePreview.packageCompleteness.requiredCount} required
+                                              {
+                                                engineeringPackagePreview
+                                                  .packageCompleteness
+                                                  .presentRequiredCount
+                                              }
+                                              /
+                                              {
+                                                engineeringPackagePreview
+                                                  .packageCompleteness
+                                                  .requiredCount
+                                              }{' '}
+                                              required
                                             </p>
                                           </div>
                                           <div className="rounded-md border bg-white p-3">
-                                            <p className="text-xs text-muted-foreground">BOM revision</p>
-                                            <p className="mt-1 font-semibold">{engineeringPackagePreview.bomSummary.revision || 'Not captured'}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                              BOM revision
+                                            </p>
+                                            <p className="mt-1 font-semibold">
+                                              {engineeringPackagePreview
+                                                .bomSummary.revision ||
+                                                'Not captured'}
+                                            </p>
                                           </div>
                                         </div>
 
@@ -2395,26 +2852,61 @@ export default function RDProjectsPage() {
                                           <div className="space-y-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
                                             <div className="grid gap-3 md:grid-cols-4">
                                               <div className="rounded-md border border-emerald-200 bg-white p-3">
-                                                <p className="text-xs text-muted-foreground">Package Number</p>
-                                                <p className="font-semibold">{engineeringPackagePreview.existingPackage.packageNumber}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  Package Number
+                                                </p>
+                                                <p className="font-semibold">
+                                                  {
+                                                    engineeringPackagePreview
+                                                      .existingPackage
+                                                      .packageNumber
+                                                  }
+                                                </p>
                                               </div>
                                               <div className="rounded-md border border-emerald-200 bg-white p-3">
-                                                <p className="text-xs text-muted-foreground">Revision</p>
-                                                <p className="font-semibold">{engineeringPackagePreview.existingPackage.packageRevision}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  Revision
+                                                </p>
+                                                <p className="font-semibold">
+                                                  {
+                                                    engineeringPackagePreview
+                                                      .existingPackage
+                                                      .packageRevision
+                                                  }
+                                                </p>
                                               </div>
                                               <div className="rounded-md border border-emerald-200 bg-white p-3">
-                                                <p className="text-xs text-muted-foreground">Created By</p>
-                                                <p className="font-semibold">{engineeringPackagePreview.existingPackage.lockedBy || 'system'}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  Created By
+                                                </p>
+                                                <p className="font-semibold">
+                                                  {engineeringPackagePreview
+                                                    .existingPackage.lockedBy ||
+                                                    'system'}
+                                                </p>
                                               </div>
                                               <div className="rounded-md border border-emerald-200 bg-white p-3">
-                                                <p className="text-xs text-muted-foreground">Package Status</p>
-                                                <p className="font-semibold">Locked</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  Package Status
+                                                </p>
+                                                <p className="font-semibold">
+                                                  Locked
+                                                </p>
                                               </div>
                                             </div>
                                             <div className="text-emerald-800">
-                                              Created {engineeringPackagePreview.existingPackage.lockedAt || 'at recorded package time'}.
+                                              Created{' '}
+                                              {engineeringPackagePreview
+                                                .existingPackage.lockedAt ||
+                                                'at recorded package time'}
+                                              .
                                             </div>
-                                            <Button variant="outline" size="sm" className="gap-2" disabled>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="gap-2"
+                                              disabled
+                                            >
                                               <ExternalLink className="h-4 w-4" />
                                               Open Package
                                             </Button>
@@ -2427,11 +2919,24 @@ export default function RDProjectsPage() {
                                           </div>
                                         )}
 
-                                        {(engineeringPackagePreview.missingEngineeringDocuments.length > 0 || engineeringPackagePreview.missingControlledRecords.length > 0) && (
+                                        {(engineeringPackagePreview
+                                          .missingEngineeringDocuments.length >
+                                          0 ||
+                                          engineeringPackagePreview
+                                            .missingControlledRecords.length >
+                                            0) && (
                                           <div className="space-y-2">
-                                            <div className="text-sm font-medium">Missing Items</div>
-                                            {[...engineeringPackagePreview.missingEngineeringDocuments, ...engineeringPackagePreview.missingControlledRecords].map((item) => (
-                                              <div key={item} className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-sm">
+                                            <div className="text-sm font-medium">
+                                              Missing Items
+                                            </div>
+                                            {[
+                                              ...engineeringPackagePreview.missingEngineeringDocuments,
+                                              ...engineeringPackagePreview.missingControlledRecords,
+                                            ].map((item) => (
+                                              <div
+                                                key={item}
+                                                className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-sm"
+                                              >
                                                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                                                 <span>{item}</span>
                                               </div>
@@ -2440,29 +2945,46 @@ export default function RDProjectsPage() {
                                         )}
 
                                         <div className="grid gap-2 md:grid-cols-2">
-                                          {engineeringPackagePreview.contents.slice(0, 12).map((item) => (
-                                            <div key={item.category} className="rounded-md border bg-white px-3 py-2 text-sm">
-                                              <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                  <div className="font-medium">{item.label}</div>
-                                                  <div className="text-xs text-muted-foreground">
-                                                    {item.sourceRevision ? `Revision ${item.sourceRevision}` : item.sourceRecordId || 'Reference pending'}
+                                          {engineeringPackagePreview.contents
+                                            .slice(0, 12)
+                                            .map((item) => (
+                                              <div
+                                                key={item.category}
+                                                className="rounded-md border bg-white px-3 py-2 text-sm"
+                                              >
+                                                <div className="flex items-start justify-between gap-3">
+                                                  <div>
+                                                    <div className="font-medium">
+                                                      {item.label}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                      {item.sourceRevision
+                                                        ? `Revision ${item.sourceRevision}`
+                                                        : item.sourceRecordId ||
+                                                          'Reference pending'}
+                                                    </div>
                                                   </div>
+                                                  <Badge
+                                                    variant="outline"
+                                                    className={
+                                                      item.present
+                                                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                                        : 'border-amber-300 bg-amber-50 text-amber-800'
+                                                    }
+                                                  >
+                                                    {item.present
+                                                      ? 'Referenced'
+                                                      : 'Missing'}
+                                                  </Badge>
                                                 </div>
-                                                <Badge
-                                                  variant="outline"
-                                                  className={item.present ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-amber-300 bg-amber-50 text-amber-800'}
-                                                >
-                                                  {item.present ? 'Referenced' : 'Missing'}
-                                                </Badge>
                                               </div>
-                                            </div>
-                                          ))}
+                                            ))}
                                         </div>
                                       </>
                                     ) : (
                                       <div className="rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
-                                        Engineering Package preview is unavailable for this release.
+                                        Engineering Package preview is
+                                        unavailable for this release.
                                       </div>
                                     )}
                                   </CardContent>
@@ -2475,18 +2997,29 @@ export default function RDProjectsPage() {
                                 </div>
                               )}
 
-                              {engineeringReleasePreview.missingEvidence.length > 0 && (
+                              {engineeringReleasePreview.missingEvidence
+                                .length > 0 && (
                                 <div className="space-y-2">
-                                  <div className="text-sm font-medium">Blocked items</div>
-                                  {engineeringReleasePreview.missingEvidence.slice(0, 12).map((item) => (
-                                    <div key={item} className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-sm">
-                                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                                      <span>{item}</span>
-                                    </div>
-                                  ))}
-                                  {engineeringReleasePreview.missingEvidence.length > 12 && (
+                                  <div className="text-sm font-medium">
+                                    Blocked items
+                                  </div>
+                                  {engineeringReleasePreview.missingEvidence
+                                    .slice(0, 12)
+                                    .map((item) => (
+                                      <div
+                                        key={item}
+                                        className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-sm"
+                                      >
+                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                        <span>{item}</span>
+                                      </div>
+                                    ))}
+                                  {engineeringReleasePreview.missingEvidence
+                                    .length > 12 && (
                                     <p className="text-sm text-muted-foreground">
-                                      {engineeringReleasePreview.missingEvidence.length - 12} additional item(s) remain.
+                                      {engineeringReleasePreview.missingEvidence
+                                        .length - 12}{' '}
+                                      additional item(s) remain.
                                     </p>
                                   )}
                                 </div>
@@ -2495,92 +3028,170 @@ export default function RDProjectsPage() {
                               <div className="grid gap-4 lg:grid-cols-2">
                                 <Card>
                                   <CardHeader>
-                                    <CardTitle className="text-base">Baseline Preview</CardTitle>
+                                    <CardTitle className="text-base">
+                                      Baseline Preview
+                                    </CardTitle>
                                     <CardDescription>
-                                      Immutable snapshots that will be locked by Engineering Release.
+                                      Immutable snapshots that will be locked by
+                                      Engineering Release.
                                     </CardDescription>
                                   </CardHeader>
                                   <CardContent className="space-y-2">
-                                    {engineeringReleasePreview.baselineItems.slice(0, 10).map((item) => (
-                                      <div key={`${item.baselineCategory}-${item.sourceRecordId ?? item.sourceModule}`} className="rounded-md border bg-white px-3 py-2 text-sm">
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div>
-                                            <div className="font-medium">{item.baselineCategory}</div>
-                                            <div className="text-xs text-muted-foreground">{item.sourceModule || 'Source module pending'}</div>
+                                    {engineeringReleasePreview.baselineItems
+                                      .slice(0, 10)
+                                      .map((item) => (
+                                        <div
+                                          key={`${item.baselineCategory}-${item.sourceRecordId ?? item.sourceModule}`}
+                                          className="rounded-md border bg-white px-3 py-2 text-sm"
+                                        >
+                                          <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                              <div className="font-medium">
+                                                {item.baselineCategory}
+                                              </div>
+                                              <div className="text-xs text-muted-foreground">
+                                                {item.sourceModule ||
+                                                  'Source module pending'}
+                                              </div>
+                                            </div>
+                                            <Badge variant="outline">
+                                              {item.sourceStatus || 'snapshot'}
+                                            </Badge>
                                           </div>
-                                          <Badge variant="outline">{item.sourceStatus || 'snapshot'}</Badge>
+                                          {(item.sourceRevision ||
+                                            item.sourceRecordId) && (
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                              {item.sourceRevision
+                                                ? `Revision ${item.sourceRevision}`
+                                                : 'No revision'}
+                                              {item.sourceRecordId
+                                                ? ` · ${item.sourceRecordId}`
+                                                : ''}
+                                            </p>
+                                          )}
                                         </div>
-                                        {(item.sourceRevision || item.sourceRecordId) && (
-                                          <p className="mt-1 text-xs text-muted-foreground">
-                                            {item.sourceRevision ? `Revision ${item.sourceRevision}` : 'No revision'}{item.sourceRecordId ? ` · ${item.sourceRecordId}` : ''}
-                                          </p>
-                                        )}
-                                      </div>
-                                    ))}
+                                      ))}
                                   </CardContent>
                                 </Card>
 
                                 <Card>
                                   <CardHeader>
-                                    <CardTitle className="text-base">Approval Status</CardTitle>
+                                    <CardTitle className="text-base">
+                                      Approval Status
+                                    </CardTitle>
                                     <CardDescription>
-                                      Required approvals for Engineering Release.
+                                      Required approvals for Engineering
+                                      Release.
                                     </CardDescription>
                                   </CardHeader>
                                   <CardContent className="space-y-2">
-                                    {engineeringReleasePreview.requiredApprovals.map((approval) => (
-                                      <div key={approval.role} className="flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm">
-                                        <span>{approval.role}</span>
-                                        <Badge
-                                          variant="outline"
-                                          className={approval.approved ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-amber-300 bg-amber-50 text-amber-800'}
+                                    {engineeringReleasePreview.requiredApprovals.map(
+                                      (approval) => (
+                                        <div
+                                          key={approval.role}
+                                          className="flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm"
                                         >
-                                          {approval.approved ? 'Approved' : 'Missing'}
-                                        </Badge>
-                                      </div>
-                                    ))}
+                                          <span>{approval.role}</span>
+                                          <Badge
+                                            variant="outline"
+                                            className={
+                                              approval.approved
+                                                ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                                : 'border-amber-300 bg-amber-50 text-amber-800'
+                                            }
+                                          >
+                                            {approval.approved
+                                              ? 'Approved'
+                                              : 'Missing'}
+                                          </Badge>
+                                        </div>
+                                      )
+                                    )}
                                     <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                                      Verification: {engineeringReleasePreview.verificationStatus} · Validation: {engineeringReleasePreview.validationStatus} · Review: {engineeringReleasePreview.finalDesignReviewStatus} · Changes: {engineeringReleasePreview.engineeringChangeStatus}
+                                      Verification:{' '}
+                                      {
+                                        engineeringReleasePreview.verificationStatus
+                                      }{' '}
+                                      · Validation:{' '}
+                                      {
+                                        engineeringReleasePreview.validationStatus
+                                      }{' '}
+                                      · Review:{' '}
+                                      {
+                                        engineeringReleasePreview.finalDesignReviewStatus
+                                      }{' '}
+                                      · Changes:{' '}
+                                      {
+                                        engineeringReleasePreview.engineeringChangeStatus
+                                      }
                                     </div>
                                   </CardContent>
                                 </Card>
                               </div>
 
-                              {engineeringReleasePreview.releaseHistory.length > 0 && (
+                              {engineeringReleasePreview.releaseHistory.length >
+                                0 && (
                                 <Card>
                                   <CardHeader>
-                                    <CardTitle className="text-base">Release History</CardTitle>
-                                    <CardDescription>Engineering releases previously created for this R&amp;D design.</CardDescription>
+                                    <CardTitle className="text-base">
+                                      Release History
+                                    </CardTitle>
+                                    <CardDescription>
+                                      Engineering releases previously created
+                                      for this R&amp;D design.
+                                    </CardDescription>
                                   </CardHeader>
                                   <CardContent className="space-y-2">
-                                    {engineeringReleasePreview.releaseHistory.map((release) => (
-                                      <div key={release.id} className="flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm">
-                                        <div>
-                                          <div className="font-medium">{release.releaseNumber}</div>
-                                          <div className="text-xs text-muted-foreground">Revision {release.releaseRevision} · {release.releasedAt || 'released'}</div>
+                                    {engineeringReleasePreview.releaseHistory.map(
+                                      (release) => (
+                                        <div
+                                          key={release.id}
+                                          className="flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm"
+                                        >
+                                          <div>
+                                            <div className="font-medium">
+                                              {release.releaseNumber}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                              Revision {release.releaseRevision}{' '}
+                                              ·{' '}
+                                              {release.releasedAt || 'released'}
+                                            </div>
+                                          </div>
+                                          <Badge variant="outline">
+                                            {release.releaseStatus}
+                                          </Badge>
                                         </div>
-                                        <Badge variant="outline">{release.releaseStatus}</Badge>
-                                      </div>
-                                    ))}
+                                      )
+                                    )}
                                   </CardContent>
                                 </Card>
                               )}
 
-                              {engineeringReleasePreview.changedSinceReleaseWarnings.length > 0 && (
+                              {engineeringReleasePreview
+                                .changedSinceReleaseWarnings.length > 0 && (
                                 <div className="space-y-2">
-                                  <div className="text-sm font-medium">Changed since release</div>
-                                  {engineeringReleasePreview.changedSinceReleaseWarnings.map((warning) => (
-                                    <div key={warning} className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                                      <span>{warning}</span>
-                                    </div>
-                                  ))}
+                                  <div className="text-sm font-medium">
+                                    Changed since release
+                                  </div>
+                                  {engineeringReleasePreview.changedSinceReleaseWarnings.map(
+                                    (warning) => (
+                                      <div
+                                        key={warning}
+                                        className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                                      >
+                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                        <span>{warning}</span>
+                                      </div>
+                                    )
+                                  )}
                                 </div>
                               )}
                             </>
                           ) : (
                             <div className="rounded-md border bg-white px-3 py-4 text-sm text-muted-foreground">
-                              Engineering release preview is unavailable for this design control record.
+                              Engineering release preview is unavailable for
+                              this design control record.
                             </div>
                           )}
                         </CardContent>
@@ -2590,7 +3201,10 @@ export default function RDProjectsPage() {
                       <DesignProjectConfigurationWorkspace
                         projectId={selectedProject.id}
                         projectName={selectedProject.projectName}
-                        designControlReadiness={selectedDesignControlPayload?.state ?? 'NOT_INITIALIZED'}
+                        designControlReadiness={
+                          selectedDesignControlPayload?.state ??
+                          'NOT_INITIALIZED'
+                        }
                       />
                     </TabsContent>
                   </Tabs>
@@ -2600,7 +3214,10 @@ export default function RDProjectsPage() {
           </div>
         )}
 
-        <Dialog open={isReleaseDialogOpen} onOpenChange={setIsReleaseDialogOpen}>
+        <Dialog
+          open={isReleaseDialogOpen}
+          onOpenChange={setIsReleaseDialogOpen}
+        >
           <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden flex flex-col">
             <DialogHeader className="flex-shrink-0">
               <DialogTitle>Release Engineering Baseline</DialogTitle>
@@ -2608,41 +3225,73 @@ export default function RDProjectsPage() {
             {engineeringReleasePreview && selectedProject && (
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-2 pr-2 text-sm">
                 <div className="rounded-md border bg-white p-3">
-                  <div className="font-medium">{selectedProject.projectName}</div>
-                  <div className="text-muted-foreground">{engineeringReleasePreview.productName}</div>
+                  <div className="font-medium">
+                    {selectedProject.projectName}
+                  </div>
+                  <div className="text-muted-foreground">
+                    {engineeringReleasePreview.productName}
+                  </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-md border bg-white p-3">
-                    <p className="text-xs text-muted-foreground">Release number</p>
-                    <p className="font-medium">{engineeringReleasePreview.proposedReleaseNumber}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Release number
+                    </p>
+                    <p className="font-medium">
+                      {engineeringReleasePreview.proposedReleaseNumber}
+                    </p>
                   </div>
                   <div className="rounded-md border bg-white p-3">
-                    <p className="text-xs text-muted-foreground">Release revision</p>
-                    <p className="font-medium">{engineeringReleasePreview.proposedReleaseRevision}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Release revision
+                    </p>
+                    <p className="font-medium">
+                      {engineeringReleasePreview.proposedReleaseRevision}
+                    </p>
                   </div>
                   <div className="rounded-md border bg-white p-3">
-                    <p className="text-xs text-muted-foreground">Effective date</p>
-                    <p className="font-medium">{engineeringReleasePreview.effectiveDate}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Effective date
+                    </p>
+                    <p className="font-medium">
+                      {engineeringReleasePreview.effectiveDate}
+                    </p>
                   </div>
                   <div className="rounded-md border bg-white p-3">
-                    <p className="text-xs text-muted-foreground">BOM revision</p>
-                    <p className="font-medium">{engineeringReleasePreview.bomRevision || 'Not captured'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      BOM revision
+                    </p>
+                    <p className="font-medium">
+                      {engineeringReleasePreview.bomRevision || 'Not captured'}
+                    </p>
                   </div>
                   <div className="rounded-md border bg-white p-3">
-                    <p className="text-xs text-muted-foreground">CAD revision</p>
-                    <p className="font-medium">{engineeringReleasePreview.cadRevision || 'Not captured'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      CAD revision
+                    </p>
+                    <p className="font-medium">
+                      {engineeringReleasePreview.cadRevision || 'Not captured'}
+                    </p>
                   </div>
                   <div className="rounded-md border bg-white p-3">
                     <p className="text-xs text-muted-foreground">Prototype</p>
-                    <p className="font-medium">{engineeringReleasePreview.prototypeIdentifier || 'Not captured'}</p>
+                    <p className="font-medium">
+                      {engineeringReleasePreview.prototypeIdentifier ||
+                        'Not captured'}
+                    </p>
                   </div>
                   <div className="rounded-md border bg-white p-3">
                     <p className="text-xs text-muted-foreground">V&amp;V</p>
-                    <p className="font-medium">{engineeringReleasePreview.verificationStatus} / {engineeringReleasePreview.validationStatus}</p>
+                    <p className="font-medium">
+                      {engineeringReleasePreview.verificationStatus} /{' '}
+                      {engineeringReleasePreview.validationStatus}
+                    </p>
                   </div>
                 </div>
                 <div className="rounded-md border bg-white p-3">
-                  <p className="text-xs text-muted-foreground">Drawing revisions</p>
+                  <p className="text-xs text-muted-foreground">
+                    Drawing revisions
+                  </p>
                   <p className="font-medium">
                     {engineeringReleasePreview.drawingRevisions.length > 0
                       ? engineeringReleasePreview.drawingRevisions.join(', ')
@@ -2652,26 +3301,37 @@ export default function RDProjectsPage() {
                 <div className="rounded-md border bg-white p-3">
                   <p className="text-xs text-muted-foreground">Approvers</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {engineeringReleasePreview.requiredApprovals.map((approval) => (
-                      <Badge key={approval.role} variant="outline">
-                        {approval.role}: {approval.approved ? 'Approved' : 'Missing'}
-                      </Badge>
-                    ))}
+                    {engineeringReleasePreview.requiredApprovals.map(
+                      (approval) => (
+                        <Badge key={approval.role} variant="outline">
+                          {approval.role}:{' '}
+                          {approval.approved ? 'Approved' : 'Missing'}
+                        </Badge>
+                      )
+                    )}
                   </div>
                 </div>
               </div>
             )}
             <DialogFooter className="flex-shrink-0">
-              <Button variant="outline" onClick={() => setIsReleaseDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsReleaseDialogOpen(false)}
+              >
                 Cancel
               </Button>
               <Button
                 className="gap-2"
                 onClick={submitEngineeringReleaseForProject}
-                disabled={isSubmittingEngineeringRelease || !engineeringReleasePreview?.ready}
+                disabled={
+                  isSubmittingEngineeringRelease ||
+                  !engineeringReleasePreview?.ready
+                }
               >
                 <PackageCheck className="h-4 w-4" />
-                {isSubmittingEngineeringRelease ? 'Releasing...' : 'Release Engineering Baseline'}
+                {isSubmittingEngineeringRelease
+                  ? 'Releasing...'
+                  : 'Release Engineering Baseline'}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -131,10 +131,12 @@ describe('Phase 3 activation isolation', () => {
   const projectsRoute = read('server/src/routes/projects.ts');
   const quotesRoute = read('server/src/routes/quotes.ts');
 
-  it('keeps initialization internal and rejects legacy-effective projects', () => {
+  it('allows initialization only from transactional creation paths and rejects legacy-effective projects', () => {
     expect(service).toContain("version !== 'p2_v2'");
-    expect(projectsRoute).not.toContain('initializeV2Workflow');
-    expect(quotesRoute).not.toContain('initializeV2Workflow');
+    expect(projectsRoute).toContain('initializeV2Workflow(');
+    expect(quotesRoute).toContain('initializeV2Workflow(');
+    expect(projectsRoute).not.toMatch(/router\.post\([^)]*initialize/i);
+    expect(quotesRoute).not.toMatch(/router\.post\([^)]*initialize/i);
   });
 
   it('does not write project_steps or project workflow progress fields', () => {

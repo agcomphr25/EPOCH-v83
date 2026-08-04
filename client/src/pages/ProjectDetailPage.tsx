@@ -557,7 +557,7 @@ export default function ProjectDetailPage() {
   });
   const effectiveWorkflowVersion = project?.effectiveWorkflowVersion;
   const isP2V2Workflow = effectiveWorkflowVersion === 'p2_v2';
-  const isLegacyWorkflow = !effectiveWorkflowVersion || effectiveWorkflowVersion === 'legacy_v1';
+  const isLegacyWorkflow = effectiveWorkflowVersion === 'legacy_v1';
   const hasUnknownWorkflowVersion = Boolean(project && !isP2V2Workflow && !isLegacyWorkflow);
 
   const { data: employees = [] } = useQuery<Employee[]>({

@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   getWorkflowVersionForNewProject,
@@ -47,16 +47,16 @@ describe('project workflow version resolution', () => {
     });
   });
 
-  it.each([undefined, 'false', 'invalid', 'true'])(
-    'keeps new creation fail-closed for flag %s',
+  it.each([undefined, 'false', 'invalid', 'TRUE', ' true', 'true '])(
+    'keeps new creation on legacy_v1 unless the flag is exactly true: %s',
     (flag) => {
-      const warning = vi
-        .spyOn(console, 'warn')
-        .mockImplementation(() => undefined);
       expect(getWorkflowVersionForNewProject(flag)).toBe('legacy_v1');
-      warning.mockRestore();
     }
   );
+
+  it('selects p2_v2 for new projects only when the flag is exactly true', () => {
+    expect(getWorkflowVersionForNewProject('true')).toBe('p2_v2');
+  });
 });
 
 describe('Phase 1 additive migration and repair guards', () => {
@@ -92,11 +92,10 @@ describe('legacy creation and response compatibility guards', () => {
     ['manual', projectsRoute],
     ['accepted quote', quotesRoute],
   ])(
-    '%s creation explicitly stores the fail-closed workflow version',
+    '%s creation explicitly stores the prospective workflow selection',
     (_name, source) => {
-      expect(source).toContain(
-        'workflowVersion: getWorkflowVersionForNewProject()'
-      );
+      expect(source).toContain('const workflowVersion = getWorkflowVersionForNewProject()');
+      expect(source).toContain('workflowVersion,');
     }
   );
 
@@ -111,10 +110,19 @@ describe('legacy creation and response compatibility guards', () => {
 
   it('preserves the two existing initial-status expressions', () => {
     expect(projectsRoute).toContain('status: stepType.initialStatus');
-    expect(projectsRoute).toContain(
-      "isQuoteStep && quoteId ? { linkedQuoteId: quoteId, status: 'completed'"
+    expect(projectsRoute).toMatch(
+      /isQuoteStep\s*&&\s*quoteId\s*\?\s*\{[\s\S]{0,120}linkedQuoteId:\s*quoteId,[\s\S]{0,80}status:\s*'completed'/
     );
     expect(quotesRoute).toContain('status: stepDef.initialStatus');
+  });
+
+  it.each([
+    ['manual', projectsRoute],
+    ['accepted quote', quotesRoute],
+  ])('%s creation initializes V2 inside the project transaction', (_name, source) => {
+    expect(source).toContain('initializeV2Workflow(');
+    expect(source).toContain(', tx);');
+    expect(source).toContain("workflowVersion === 'legacy_v1' ? PROJECT_STEP_TYPES : []");
   });
 
   it('adds version serialization without replacing existing project response fields', () => {

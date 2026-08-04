@@ -23,6 +23,7 @@ on:
       - 'server/src/routes/workOrders.ts'
       - 'server/storage.ts'
       - 'server/__tests__/p2V2PostgresCertification.test.ts'
+      - 'server/__tests__/p2V2LegacyPreservationPostgres.test.ts'
       - 'server/__tests__/p2V2PilotPostgresCertification.test.ts'
       - 'server/__tests__/projectWorkflowVersion.test.ts'
       - 'server/__tests__/projectWorkflowRegistry.test.ts'
@@ -267,6 +268,13 @@ jobs:
           npx vitest run
           --config vitest.config.server.ts
           server/__tests__/p2V2PostgresCertification.test.ts
+          --reporter=verbose
+
+      - name: Run exhaustive legacy preservation PostgreSQL certification
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/p2V2LegacyPreservationPostgres.test.ts
           --reporter=verbose
 
       - name: Run controlled pilot PostgreSQL certification

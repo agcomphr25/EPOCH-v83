@@ -2332,20 +2332,30 @@ router.post('/', async (req, res) => {
       ...(customerNameSnapshot ? { customerNameSnapshot } : {}),
     };
 
-    const project = workflowVersion === 'p2_v2'
-      ? await db.transaction(async (tx) => {
-          const [created] = await tx.insert(projects).values(projectData).returning();
-          await initializeV2Workflow(created.id, {
-            id: req.user?.id,
-            username: req.user?.username,
-            displayName: req.user?.username,
-            role: req.user?.role,
-          }, tx);
-          return created;
-        })
-      : await storage.createProject(projectData);
+    const project =
+      workflowVersion === 'p2_v2'
+        ? await db.transaction(async (tx) => {
+            const [created] = await tx
+              .insert(projects)
+              .values(projectData)
+              .returning();
+            await initializeV2Workflow(
+              created.id,
+              {
+                id: req.user?.id,
+                username: req.user?.username,
+                displayName: req.user?.username,
+                role: req.user?.role,
+              },
+              tx
+            );
+            return created;
+          })
+        : await storage.createProject(projectData);
 
-    for (const stepType of workflowVersion === 'legacy_v1' ? PROJECT_STEP_TYPES : []) {
+    for (const stepType of workflowVersion === 'legacy_v1'
+      ? PROJECT_STEP_TYPES
+      : []) {
       const isQuoteStep = stepType.type === 'quote';
       await storage.createProjectStep({
         projectId: project.id,

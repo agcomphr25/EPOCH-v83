@@ -38,7 +38,7 @@ describe('prospective P2 V2 definition v3', () => {
   });
 
   it('adds evidence prospectively without rewriting workflow instances', () => {
-    const migration = read('migrations/0253_p2_v2_definition_v3_handoff.sql');
+    const migration = read('migrations/0254_p2_v2_definition_v3_handoff.sql');
     expect(migration).toContain(
       'CREATE TABLE IF NOT EXISTS project_p2_control_center_releases'
     );

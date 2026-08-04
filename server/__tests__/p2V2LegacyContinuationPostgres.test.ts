@@ -112,7 +112,7 @@ async function seedFixture(
   await client.query(
     `INSERT INTO purchase_review_checklists
        (customer_id,form_data,created_by,status,created_at,updated_at)
-     VALUES ('LEGACY-CERT-CUSTOMER',jsonb_build_object('marker',$1),
+     VALUES ('LEGACY-CERT-CUSTOMER',jsonb_build_object('marker',$1::text),
              'legacy-certifier','DRAFT','2026-02-01T00:00:00Z',
              '2026-02-01T00:00:00Z')`,
     [marker]
@@ -122,7 +122,7 @@ async function seedFixture(
        (work_order_number,project_id,part_number,quantity,status,wad_status,
         wizard_data,created_at,updated_at)
      VALUES ($1,$2,'LEGACY-PART',1,'DRAFT','DRAFT',
-             jsonb_build_object('marker',$1,'revision',1),
+             jsonb_build_object('marker',$1::text,'revision',1),
              '2026-02-01T00:00:00Z','2026-02-01T00:00:00Z')`,
     [`${marker}-WAD`, projectId]
   );
@@ -168,7 +168,7 @@ async function seedFixture(
         customer_id,customer_name,sequence_number,status,metadata,created_at,updated_at)
      VALUES ($1,$2,$3,$4,$5,'LEGACY-PART',$1,'LEGACY-CERT-CUSTOMER',
              'Legacy Certification Customer',1,'ACTIVE',
-             jsonb_build_object('marker',$1),'2026-02-01T00:00:00Z',
+             jsonb_build_object('marker',$1::text),'2026-02-01T00:00:00Z',
              '2026-02-01T00:00:00Z') RETURNING id`,
     [
       `${marker}-SERIAL`,
@@ -192,7 +192,7 @@ async function seedFixture(
         total_weight_lbs,shipped_at,ship_from_snapshot,ship_to_snapshot,documents,
         created_by,created_at,updated_at)
      VALUES ($1,$2,'Ground',$3,1,1,'2026-02-01T00:00:00Z',
-             jsonb_build_object('marker',$1),jsonb_build_object('marker',$1),
+             jsonb_build_object('marker',$1::text),jsonb_build_object('marker',$1::text),
              '[]','legacy-certifier','2026-02-01T00:00:00Z',
              '2026-02-01T00:00:00Z')`,
     [`${marker}-SHIPMENT`, `${marker}-PO`, `${marker}-TRACKING-PENDING`]
@@ -259,7 +259,7 @@ const actions: ActionCase[] = [
     execute: async (client, { projectId, marker }) => {
       await client.query(
         `UPDATE production_work_orders
-            SET wizard_data=jsonb_build_object('marker',$2,'revision',2),
+            SET wizard_data=jsonb_build_object('marker',$2::text,'revision',2),
                 updated_at='2026-02-02T00:00:00Z'
           WHERE project_id=$1`,
         [projectId, `${marker}-WAD`]

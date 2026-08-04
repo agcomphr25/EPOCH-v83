@@ -12605,7 +12605,7 @@ export const controlledDocumentReconciliationEvidence = pgTable(
     immutableFilePath: text('immutable_file_path'),
     immutableFileChecksum: text('immutable_file_checksum'),
     immutableFileMediaType: text('immutable_file_media_type'),
-    immutableFileSize: integer('immutable_file_size'),
+    immutableFileSize: bigint('immutable_file_size', { mode: 'number' }),
     immutableFileProvenance: jsonb('immutable_file_provenance'),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
     confirmedByUserId: integer('confirmed_by_user_id').references(

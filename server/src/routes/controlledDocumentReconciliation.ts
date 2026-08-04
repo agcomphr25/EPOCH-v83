@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
@@ -24,6 +24,7 @@ import {
 } from '../services/controlledDocumentReconciliationGate';
 import { createControlledRevision } from '../services/controlledDocumentLifecycleService';
 import { reportParentOnlyOperationalReferences } from '../services/controlledDocumentOperationalReferenceReport';
+import { buildReconciliationSnapshot } from '../services/controlledDocumentReconciliationProvenance';
 
 const router = Router();
 const upload = multer({
@@ -181,6 +182,7 @@ async function inventory(
         type: item.evidence_type,
         revisionId: item.revision_id,
         confirmedAt: item.confirmed_at,
+        confirmedByUserId: item.confirmed_by_user_id,
       }));
       const assessment = assessLegacyControlledDocument({
         documentId: d.id,
@@ -348,7 +350,7 @@ router.post(
         throw Object.assign(new Error('Preview is stale'), {
           code: 'RECONCILIATION_PREVIEW_STALE',
         });
-      const lockedIds = [...new Set(input.selectedDocumentIds)].sort();
+      const lockedIds = Array.from(new Set(input.selectedDocumentIds)).sort();
       for (const documentId of lockedIds) {
         await client.query(
           'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
@@ -364,18 +366,23 @@ router.post(
         throw Object.assign(new Error('Document selection changed'), {
           code: 'RECONCILIATION_SOURCE_CHANGED',
         });
-      const revisionIds = lockedDocuments.rows.flatMap((row) =>
-        [
-          row.current_revision_id,
-          row.working_draft_revision_id,
-          row.current_released_revision_id,
-        ].filter(Boolean)
+      await client.query(
+        `SELECT id FROM document_version_history
+         WHERE document_id = ANY($1::uuid[]) ORDER BY document_id,id FOR UPDATE`,
+        [lockedIds]
       );
-      if (revisionIds.length)
-        await client.query(
-          'SELECT id FROM document_version_history WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE',
-          [revisionIds]
-        );
+      await client.query(
+        `SELECT id FROM controlled_document_reconciliation_evidence
+         WHERE controlled_document_id = ANY($1::uuid[])
+         ORDER BY controlled_document_id,id FOR UPDATE`,
+        [lockedIds]
+      );
+      await client.query(
+        `SELECT id FROM controlled_document_number_registry
+         WHERE controlled_document_id = ANY($1::uuid[])
+         ORDER BY controlled_document_id,id FOR UPDATE`,
+        [lockedIds]
+      );
 
       const current = (await inventory(client)).filter((r) =>
         input.selectedDocumentIds.includes(r.documentId)
@@ -395,49 +402,82 @@ router.post(
       const a = actor(req);
       for (const row of current) {
         const key = `${CONTROLLED_DOCUMENT_RECONCILIATION_POLICY_VERSION}:${row.documentId}:${row.revisionId}:${row.observedChecksum}`;
-        if (
-          (
-            await client.query(
-              'SELECT id FROM controlled_document_reconciliation_events WHERE idempotency_key=$1',
-              [key]
-            )
-          ).rows.length
-        ) {
-          completed.push({ documentId: row.documentId, replayed: true });
-          continue;
-        }
-        const original = (
+        const existing = (
           await client.query(
-            `SELECT row_to_json(d) AS parent, row_to_json(r) AS revision,
-              (SELECT coalesce(jsonb_agg(row_to_json(a) ORDER BY a.created_at), '[]'::jsonb)
-                 FROM controlled_document_revision_approvals a WHERE a.revision_id=r.id) AS approvals,
-              (SELECT row_to_json(n) FROM controlled_document_number_registry n
-                 WHERE n.controlled_document_id=d.id LIMIT 1) AS number_registry,
-              $3::text AS observed_checksum, $4::jsonb AS classification
-             FROM controlled_documents d JOIN document_version_history r ON r.id=$2
-             WHERE d.id=$1`,
-            [
-              row.documentId,
-              row.revisionId,
-              row.observedChecksum,
-              JSON.stringify({
-                classification: row.classification,
-                blockers: row.blockers,
-              }),
-            ]
+            `SELECT id,controlled_document_id,revision_id,policy_version,checksum,proposed_changes
+             FROM controlled_document_reconciliation_events WHERE idempotency_key=$1`,
+            [key]
           )
         ).rows[0];
-        if (!original || original.revision.document_id !== row.documentId)
+        const matchesRequest = (event: Record<string, any>) =>
+          event.controlled_document_id === row.documentId &&
+          event.revision_id === row.revisionId &&
+          event.policy_version ===
+            CONTROLLED_DOCUMENT_RECONCILIATION_POLICY_VERSION &&
+          event.checksum === row.observedChecksum &&
+          hashReconciliationPreview(event.proposed_changes) ===
+            hashReconciliationPreview(row.proposedChanges);
+        if (existing) {
+          if (!matchesRequest(existing))
+            throw Object.assign(new Error('Idempotency key content changed'), {
+              code: 'RECONCILIATION_IDEMPOTENCY_KEY_REUSE',
+            });
+          completed.push({
+            documentId: row.documentId,
+            eventId: existing.id,
+            replayed: true,
+          });
+          continue;
+        }
+        const documentBefore = (
+          await client.query('SELECT * FROM controlled_documents WHERE id=$1', [
+            row.documentId,
+          ])
+        ).rows[0];
+        const revisionBefore = (
+          await client.query(
+            'SELECT * FROM document_version_history WHERE id=$1 AND document_id=$2',
+            [row.revisionId, row.documentId]
+          )
+        ).rows[0];
+        const approvals = (
+          await client.query(
+            'SELECT * FROM controlled_document_revision_approvals WHERE revision_id=$1 ORDER BY created_at,id',
+            [row.revisionId]
+          )
+        ).rows;
+        const numberRegistry =
+          (
+            await client.query(
+              'SELECT * FROM controlled_document_number_registry WHERE controlled_document_id=$1 ORDER BY id LIMIT 1',
+              [row.documentId]
+            )
+          ).rows[0] || null;
+        if (!documentBefore || !revisionBefore)
           throw Object.assign(new Error('Revision ownership changed'), {
             code: 'RECONCILIATION_SOURCE_CHANGED',
           });
         if (
-          original.revision.file_checksum &&
-          original.revision.file_checksum !== row.observedChecksum
+          revisionBefore.file_checksum &&
+          revisionBefore.file_checksum !== row.observedChecksum
         )
           throw Object.assign(new Error('Checksum mismatch'), {
             code: 'CHECKSUM_MISMATCH',
           });
+        const eventId = randomUUID();
+        const beforeSnapshot = buildReconciliationSnapshot({
+          phase: 'BEFORE',
+          document: documentBefore,
+          revision: revisionBefore,
+          approvals,
+          numberRegistry,
+          assessment: row,
+          acceptedEvidence: row.acceptedEvidence || [],
+          policyVersion: CONTROLLED_DOCUMENT_RECONCILIATION_POLICY_VERSION,
+          provenance: 'LEGACY_MIGRATION_VERIFIED',
+          eventId,
+          actionResult: 'PENDING',
+        });
         await client.query(
           "UPDATE document_version_history SET file_checksum=$1,checksum_status='VERIFIED',lifecycle_status='RELEASED' WHERE id=$2 AND document_id=$3",
           [row.observedChecksum, row.revisionId, row.documentId]
@@ -446,36 +486,80 @@ router.post(
           "UPDATE controlled_documents SET current_released_revision_id=$1,lifecycle_status='RELEASED',updated_at=now() WHERE id=$2",
           [row.revisionId, row.documentId]
         );
-        const after = (
+        const documentAfter = (
+          await client.query('SELECT * FROM controlled_documents WHERE id=$1', [
+            row.documentId,
+          ])
+        ).rows[0];
+        const revisionAfter = (
           await client.query(
-            `SELECT row_to_json(d) AS parent, row_to_json(r) AS revision,
-              (SELECT coalesce(jsonb_agg(row_to_json(a) ORDER BY a.created_at), '[]'::jsonb)
-                 FROM controlled_document_revision_approvals a WHERE a.revision_id=r.id) AS approvals,
-              (SELECT row_to_json(n) FROM controlled_document_number_registry n
-                 WHERE n.controlled_document_id=d.id LIMIT 1) AS number_registry
-             FROM controlled_documents d JOIN document_version_history r ON r.id=$2 WHERE d.id=$1`,
-            [row.documentId, row.revisionId]
+            'SELECT * FROM document_version_history WHERE id=$1 AND document_id=$2',
+            [row.revisionId, row.documentId]
           )
         ).rows[0];
-        await client.query(
-          "INSERT INTO controlled_document_reconciliation_events(preview_id,controlled_document_id,revision_id,idempotency_key,event_type,provenance,policy_version,original_snapshot,proposed_changes,completed_changes,before_snapshot,after_snapshot,actor_user_id,actor_snapshot,reason,checksum,file_identity) VALUES($1,$2,$3,$4,'AUTOMATIC_BACKFILL','LEGACY_MIGRATION_VERIFIED',$5,$6::jsonb,$7::jsonb,$8::jsonb,$6::jsonb,$8::jsonb,$9,$10::jsonb,$11,$12,$13)",
+        const afterAssessment = (await inventory(client)).find(
+          (candidate) => candidate.documentId === row.documentId
+        );
+        if (!afterAssessment)
+          throw Object.assign(new Error('Post-change assessment unavailable'), {
+            code: 'RECONCILIATION_SOURCE_CHANGED',
+          });
+        const afterSnapshot = buildReconciliationSnapshot({
+          phase: 'AFTER',
+          document: documentAfter,
+          revision: revisionAfter,
+          approvals,
+          numberRegistry,
+          assessment: afterAssessment,
+          acceptedEvidence: afterAssessment.acceptedEvidence || [],
+          policyVersion: CONTROLLED_DOCUMENT_RECONCILIATION_POLICY_VERSION,
+          provenance: 'LEGACY_MIGRATION_VERIFIED',
+          eventId,
+          actionResult: 'APPLIED',
+        });
+        const inserted = await client.query(
+          "INSERT INTO controlled_document_reconciliation_events(id,preview_id,controlled_document_id,revision_id,idempotency_key,event_type,provenance,policy_version,original_snapshot,proposed_changes,completed_changes,before_snapshot,after_snapshot,actor_user_id,actor_snapshot,reason,checksum,file_identity) VALUES($1,$2,$3,$4,$5,'AUTOMATIC_BACKFILL','LEGACY_MIGRATION_VERIFIED',$6,$7::jsonb,$8::jsonb,$9::jsonb,$7::jsonb,$9::jsonb,$10,$11::jsonb,$12,$13,$14) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id",
           [
+            eventId,
             input.previewId,
             row.documentId,
             row.revisionId,
             key,
             CONTROLLED_DOCUMENT_RECONCILIATION_POLICY_VERSION,
-            JSON.stringify(original),
+            JSON.stringify(beforeSnapshot),
             JSON.stringify(row.proposedChanges),
-            JSON.stringify(after),
+            JSON.stringify(afterSnapshot),
             a.id,
             JSON.stringify(a),
             input.reason,
             row.observedChecksum,
-            JSON.stringify({ referenceType: row.fileReferenceType }),
+            JSON.stringify(beforeSnapshot.fileIdentity),
           ]
         );
-        completed.push({ documentId: row.documentId, replayed: false });
+        if (!inserted.rows[0]) {
+          const winner = (
+            await client.query(
+              `SELECT id,controlled_document_id,revision_id,policy_version,checksum,proposed_changes
+               FROM controlled_document_reconciliation_events WHERE idempotency_key=$1`,
+              [key]
+            )
+          ).rows[0];
+          if (!winner || !matchesRequest(winner))
+            throw Object.assign(new Error('Idempotency key content changed'), {
+              code: 'RECONCILIATION_IDEMPOTENCY_KEY_REUSE',
+            });
+          completed.push({
+            documentId: row.documentId,
+            eventId: winner.id,
+            replayed: true,
+          });
+        } else {
+          completed.push({
+            documentId: row.documentId,
+            eventId: inserted.rows[0].id,
+            replayed: false,
+          });
+        }
       }
       await client.query('COMMIT');
       res.json({ completed, provenance: 'LEGACY_MIGRATION_VERIFIED' });

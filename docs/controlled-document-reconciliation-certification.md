@@ -5,7 +5,7 @@ Phase 1B reconciliation remains unavailable by default. Do not grant reconciliat
 ## Forward recovery
 
 1. Apply the already-merged `0245_controlled_document_legacy_reconciliation.sql`.
-2. Apply additive `0249_controlled_document_reconciliation_certification_controls.sql`.
+2. Apply additive `0251_controlled_document_reconciliation_certification_controls.sql`.
 3. Verify every required table, column, index, and append-only trigger with the schema-readiness check.
 4. Run path-security, authorization, stale-preview, idempotency, transaction, and disposable PostgreSQL concurrency tests.
 5. Obtain explicit Quality and production-change authorization before granting capabilities or enabling the exact `true` flag.

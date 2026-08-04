@@ -173,7 +173,7 @@ describe('Master Document Register Phase 1B reconciliation', () => {
     const sql = fs.readFileSync(
       path.join(
         root,
-        'migrations/0249_controlled_document_reconciliation_certification_controls.sql'
+        'migrations/0251_controlled_document_reconciliation_certification_controls.sql'
       ),
       'utf8'
     );
@@ -200,7 +200,7 @@ describe('Master Document Register Phase 1B reconciliation', () => {
     ).toHaveLength(2);
     expect(
       source.match(
-        /0249_controlled_document_reconciliation_certification_controls\.sql/g
+        /0251_controlled_document_reconciliation_certification_controls\.sql/g
       )
     ).toHaveLength(2);
   });
@@ -256,8 +256,55 @@ describe('Master Document Register Phase 1B reconciliation', () => {
       route.indexOf('idempotency_key=$1')
     );
     expect(route).toContain('inventory(client)');
+    expect(route).toContain(
+      'WHERE document_id = ANY($1::uuid[]) ORDER BY document_id,id FOR UPDATE'
+    );
+    expect(route).toContain('controlled_document_reconciliation_evidence');
+    expect(route).toContain('ORDER BY controlled_document_id,id FOR UPDATE');
+    expect(route).toContain(
+      'ON CONFLICT (idempotency_key) DO NOTHING RETURNING id'
+    );
+    expect(route).toContain('RECONCILIATION_IDEMPOTENCY_KEY_REUSE');
+    expect(route).toContain('buildReconciliationSnapshot');
+    expect(route).not.toContain('row_to_json');
     expect(route).toContain('before_snapshot,after_snapshot');
     expect(route).toContain("await client.query('ROLLBACK')");
+    const documentLock = route.indexOf(
+      'FROM controlled_documents WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE'
+    );
+    const revisionLock = route.indexOf(
+      'WHERE document_id = ANY($1::uuid[]) ORDER BY document_id,id FOR UPDATE'
+    );
+    const evidenceLock = route.indexOf(
+      'WHERE controlled_document_id = ANY($1::uuid[])\n         ORDER BY controlled_document_id,id FOR UPDATE'
+    );
+    const finalAssessment = route.indexOf(
+      'const current = (await inventory(client))'
+    );
+    expect(documentLock).toBeGreaterThan(-1);
+    expect(documentLock).toBeLessThan(revisionLock);
+    expect(revisionLock).toBeLessThan(evidenceLock);
+    expect(evidenceLock).toBeLessThan(finalAssessment);
+  });
+
+  it('uses target-compatible collection conversions in changed execution code', () => {
+    const route = fs.readFileSync(
+      path.join(root, 'server/src/routes/controlledDocumentReconciliation.ts'),
+      'utf8'
+    );
+    expect(route).toContain('Array.from(new Set(input.selectedDocumentIds))');
+    expect(route).not.toMatch(/\[\.\.\.new (Set|Map)/);
+  });
+
+  it('keeps raw file paths out of snapshots and API responses', () => {
+    const route = fs.readFileSync(
+      path.join(root, 'server/src/routes/controlledDocumentReconciliation.ts'),
+      'utf8'
+    );
+    expect(route).not.toContain('row_to_json');
+    expect(route).toContain('buildReconciliationSnapshot');
+    expect(route).toContain('fileReference: null');
+    expect(route).not.toContain('immutablePath: stored');
   });
 
   it('keeps evidence append-only and current workflow revisions unreleased', () => {

@@ -11,6 +11,10 @@ import {
   requireControlledDocumentReconciliationEnabled,
 } from '../src/services/controlledDocumentReconciliationGate';
 import { resolveContainedReconciliationFile } from '../src/services/controlledDocumentReconciliationFileResolver';
+import {
+  buildReconciliationSnapshot,
+  containsUnsafeReconciliationPath,
+} from '../src/services/controlledDocumentReconciliationProvenance';
 
 const temporary: string[] = [];
 afterEach(async () =>
@@ -128,5 +132,81 @@ describe('Phase 1B certification containment', () => {
     ).rejects.toMatchObject({
       code: 'RECONCILIATION_FILE_REFERENCE_REJECTED',
     });
+  });
+
+  it('builds complete snapshots without retaining unrestricted paths or signed URLs', () => {
+    const assessment: any = {
+      documentId: 'document',
+      revisionId: 'revision',
+      fileReferenceType: 'LEGACY_LOCAL_PATH',
+      fileAccessibility: 'ACCESSIBLE',
+      observedChecksum: 'observed',
+      classification: 'RELEASED_VERIFIED',
+      blockers: [],
+      proposedChanges: { release: true },
+    };
+    const snapshot = buildReconciliationSnapshot({
+      phase: 'BEFORE',
+      policyVersion: 'policy',
+      provenance: 'LEGACY_MIGRATION_VERIFIED',
+      eventId: 'event',
+      actionResult: 'PENDING',
+      assessment,
+      document: {
+        id: 'document',
+        document_number: ' QMS-1 ',
+        document_type: 'SOP',
+        department: 'Quality',
+        lifecycle_status: 'DRAFT',
+        status: 'approved',
+        current_version: '1.0',
+        file_path: 'C:\\Users\\secret\\source.pdf?token=credential',
+      },
+      revision: {
+        id: 'revision',
+        document_id: 'document',
+        version_number: '1.0',
+        revision_sequence: 1,
+        lifecycle_status: 'APPROVED',
+        status: 'approved',
+        file_path: 'C:\\Users\\secret\\source.pdf?token=credential',
+        file_checksum: 'stored',
+        checksum_status: 'VERIFIED',
+        media_type: 'application/pdf',
+        file_size: 10,
+      },
+      approvals: [
+        { id: 'approval', revision_id: 'revision', decision: 'APPROVED' },
+      ],
+      numberRegistry: {
+        id: 'registry',
+        normalized_number: 'QMS-1',
+        display_number: 'QMS-1',
+        status: 'ACTIVE',
+      },
+      acceptedEvidence: [
+        {
+          id: 'evidence',
+          type: 'LEGACY_APPROVAL_EVIDENCE',
+          confirmedAt: '2020-01-01',
+        },
+      ],
+    });
+    expect(snapshot).toMatchObject({
+      decisionSource: 'DETERMINISTIC_LEGACY_RECONCILIATION',
+      document: { id: 'document', normalizedNumber: 'QMS-1' },
+      revision: {
+        id: 'revision',
+        storedChecksum: 'stored',
+        observedChecksum: 'observed',
+      },
+      classification: 'RELEASED_VERIFIED',
+      blockers: [],
+      eventIdentity: 'event',
+    });
+    expect(snapshot.fileIdentity.basename).toBe('source.pdf');
+    expect(containsUnsafeReconciliationPath(snapshot)).toBe(false);
+    expect(JSON.stringify(snapshot)).not.toContain('credential');
+    expect(JSON.stringify(snapshot)).not.toContain('C:\\\\Users');
   });
 });

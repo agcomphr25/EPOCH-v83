@@ -317,7 +317,7 @@ export const safeMigrationFiles = [
   '0251_design_project_configuration_workspace.sql',
   '0252_potential_order_duplicate_reviews.sql',
   '0253_void_duplicate_epoch_validation_packages.sql',
-  '0249_controlled_document_reconciliation_certification_controls.sql',
+  '0251_controlled_document_reconciliation_certification_controls.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -374,7 +374,7 @@ export const criticalMigrationFiles = new Set([
   '0251_design_project_configuration_workspace.sql',
   '0252_potential_order_duplicate_reviews.sql',
   '0253_void_duplicate_epoch_validation_packages.sql',
-  '0249_controlled_document_reconciliation_certification_controls.sql',
+  '0251_controlled_document_reconciliation_certification_controls.sql',
   '0231_p1_po_item_quantity_adjustments.sql',
   '0232_p2_v2_controlled_pilot_readiness.sql',
   '0233a_spec_sheets_base_table.sql',
@@ -440,9 +440,8 @@ export async function runSafeBootMigrations() {
   if (process.env.SAFE_BOOT_MIGRATIONS_ONLY === 'true') return;
 
   try {
-    const { logCriticalSchemaHealth } = await import(
-      '../../utils/schemaHealth'
-    );
+    const { logCriticalSchemaHealth } =
+      await import('../../utils/schemaHealth');
     await logCriticalSchemaHealth();
   } catch (caughtSchemaHealthErr: unknown) {
     const schemaHealthErr = caughtSchemaHealthErr as MigrationError;
@@ -453,9 +452,8 @@ export async function runSafeBootMigrations() {
   }
 
   try {
-    const { migrateVendorDocumentUrls } = await import(
-      '../../src/routes/vendors'
-    );
+    const { migrateVendorDocumentUrls } =
+      await import('../../src/routes/vendors');
     await migrateVendorDocumentUrls();
   } catch (caughtVendorMigrErr: unknown) {
     const vendorMigrErr = caughtVendorMigrErr as MigrationError;

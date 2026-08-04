@@ -47,6 +47,13 @@ export type LegacyReconciliationAssessment = LegacyReconciliationFacts & {
   blockers: string[];
   proposedChanges: Record<string, unknown>;
   automatic: boolean;
+  acceptedEvidence?: Array<{
+    id: string;
+    type: string;
+    revisionId: string | null;
+    confirmedAt: string;
+    confirmedByUserId: number;
+  }>;
 };
 
 const upper = (value: unknown) =>

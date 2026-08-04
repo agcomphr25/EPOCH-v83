@@ -13,18 +13,26 @@ import {
 } from '../services/projectP2HandoffService';
 
 const router = Router({ mergeParams: true });
+
+type AuthenticatedProjectActor = {
+  id: number;
+  username: string;
+  role: string;
+};
+
 function actor(req: Request) {
-  if (!req.user?.id || !req.user.username || !req.user.role)
+  const user = req.user as AuthenticatedProjectActor | undefined;
+  if (!user?.id || !user.username || !user.role)
     throw new ProjectP2HandoffError(
       'AUTHENTICATION_REQUIRED',
       'Authentication is required.',
       401
     );
   return {
-    userId: req.user.id,
-    username: req.user.username,
-    displayName: req.user.username,
-    role: req.user.role,
+    userId: user.id,
+    username: user.username,
+    displayName: user.username,
+    role: user.role,
   };
 }
 async function authorizedActor(

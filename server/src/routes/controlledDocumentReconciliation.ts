@@ -409,7 +409,7 @@ router.post(
             [key]
           )
         ).rows[0];
-        const matchesRequest = (event: Record<string, any>) =>
+        const matchesRequest = (event: Record<string, unknown>) =>
           event.controlled_document_id === row.documentId &&
           event.revision_id === row.revisionId &&
           event.policy_version ===
@@ -563,11 +563,12 @@ router.post(
       }
       await client.query('COMMIT');
       res.json({ completed, provenance: 'LEGACY_MIGRATION_VERIFIED' });
-    } catch (error: any) {
+    } catch (caughtError: unknown) {
       await client.query('ROLLBACK');
+      const error = caughtError as { code?: string; message?: string };
       res.status(409).json({
         error: error.code || 'RECONCILIATION_FAILED',
-        message: error.message,
+        message: error.message || 'Reconciliation failed.',
       });
     } finally {
       client.release();

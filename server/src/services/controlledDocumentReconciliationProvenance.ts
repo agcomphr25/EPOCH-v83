@@ -18,6 +18,8 @@ export type SafeReconciliationFileIdentity = {
   mutable: boolean;
 };
 
+type SnapshotRow = Record<string, string | number | null | undefined>;
+
 export function buildSafeReconciliationFileIdentity(input: {
   reference: string | null;
   referenceType: string;
@@ -51,12 +53,12 @@ export function buildSafeReconciliationFileIdentity(input: {
 
 export function buildReconciliationSnapshot(input: {
   phase: 'BEFORE' | 'AFTER';
-  document: Record<string, any>;
-  revision: Record<string, any>;
-  approvals: Array<Record<string, any>>;
-  numberRegistry: Record<string, any> | null;
+  document: SnapshotRow;
+  revision: SnapshotRow;
+  approvals: SnapshotRow[];
+  numberRegistry: SnapshotRow | null;
   assessment: LegacyReconciliationAssessment;
-  acceptedEvidence: Array<Record<string, any>>;
+  acceptedEvidence: SnapshotRow[];
   policyVersion: string;
   provenance: string;
   eventId: string | null;

@@ -2,7 +2,7 @@ type Queryable = {
   query(
     sql: string,
     values?: unknown[]
-  ): Promise<{ rows: Array<Record<string, any>> }>;
+  ): Promise<{ rows: Array<Record<string, unknown>> }>;
 };
 
 export type OperationalReferenceCoverage = {

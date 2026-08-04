@@ -11,6 +11,21 @@ import {
   requiredControlledDocumentTables,
 } from '../src/services/controlledDocumentSchemaReadiness';
 
+type CatalogFact = {
+  object_kind: string;
+  object_name: string;
+  parent_name?: string;
+  definition?: string;
+  data_type?: string;
+  enabled?: string;
+};
+type BaseSchemaClient = Parameters<
+  typeof assertControlledDocumentSchemaReady
+>[0];
+type ReconciliationSchemaClient = Parameters<
+  typeof assertControlledDocumentReconciliationSchemaReady
+>[0];
+
 const completeReconciliationFacts = () => {
   const manifest = controlledDocumentReconciliationSchemaManifest;
   return [
@@ -63,7 +78,7 @@ describe('controlled document schema readiness', () => {
     await expect(
       assertControlledDocumentSchemaReady({
         execute: async () => [{ object_name: 'controlled_documents' }],
-      } as any)
+      } as unknown as BaseSchemaClient)
     ).rejects.toMatchObject({
       code: 'CONTROLLED_DOCUMENT_SCHEMA_NOT_READY',
       missingObjects: expect.arrayContaining([
@@ -89,7 +104,7 @@ describe('controlled document schema readiness', () => {
     await expect(
       assertControlledDocumentSchemaReady({
         execute: async () => objects.map((object_name) => ({ object_name })),
-      } as any)
+      } as unknown as BaseSchemaClient)
     ).resolves.toBeUndefined();
   });
 
@@ -105,10 +120,14 @@ describe('controlled document schema readiness', () => {
       .mockResolvedValueOnce({ rows: completeReconciliationFacts() })
       .mockResolvedValueOnce({ rows: [] });
     await expect(
-      assertControlledDocumentReconciliationSchemaReady({ query } as any)
+      assertControlledDocumentReconciliationSchemaReady({
+        query,
+      } as unknown as ReconciliationSchemaClient)
     ).resolves.toBeUndefined();
     await expect(
-      assertControlledDocumentReconciliationSchemaReady({ query } as any)
+      assertControlledDocumentReconciliationSchemaReady({
+        query,
+      } as unknown as ReconciliationSchemaClient)
     ).rejects.toMatchObject({
       code: 'CONTROLLED_DOCUMENT_SCHEMA_NOT_READY',
       missingObjects: expect.arrayContaining([
@@ -120,7 +139,7 @@ describe('controlled document schema readiness', () => {
   it.each([
     [
       'missing table',
-      (rows: any[]) =>
+      (rows: CatalogFact[]) =>
         rows.filter(
           (row) =>
             row.object_name !== 'controlled_document_reconciliation_events'
@@ -128,7 +147,7 @@ describe('controlled document schema readiness', () => {
     ],
     [
       'missing column',
-      (rows: any[]) =>
+      (rows: CatalogFact[]) =>
         rows.filter(
           (row) =>
             row.object_name !==
@@ -137,7 +156,7 @@ describe('controlled document schema readiness', () => {
     ],
     [
       'invalid column type',
-      (rows: any[]) =>
+      (rows: CatalogFact[]) =>
         rows.map((row) =>
           row.object_name ===
           'controlled_document_reconciliation_evidence.immutable_file_size'
@@ -147,7 +166,7 @@ describe('controlled document schema readiness', () => {
     ],
     [
       'missing foreign key',
-      (rows: any[]) =>
+      (rows: CatalogFact[]) =>
         rows.filter(
           (row) =>
             !(
@@ -159,7 +178,7 @@ describe('controlled document schema readiness', () => {
     ],
     [
       'invalid unique constraint',
-      (rows: any[]) =>
+      (rows: CatalogFact[]) =>
         rows.map((row) =>
           row.object_kind === 'constraint' &&
           String(row.definition).includes('(idempotency_key)')
@@ -169,7 +188,7 @@ describe('controlled document schema readiness', () => {
     ],
     [
       'missing trigger',
-      (rows: any[]) =>
+      (rows: CatalogFact[]) =>
         rows.filter(
           (row) =>
             row.object_name !==
@@ -178,7 +197,7 @@ describe('controlled document schema readiness', () => {
     ],
     [
       'disabled trigger',
-      (rows: any[]) =>
+      (rows: CatalogFact[]) =>
         rows.map((row) =>
           row.object_name ===
           'controlled_document_reconciliation_events_append_only'
@@ -188,7 +207,7 @@ describe('controlled document schema readiness', () => {
     ],
     [
       'wrong trigger event',
-      (rows: any[]) =>
+      (rows: CatalogFact[]) =>
         rows.map((row) =>
           row.object_name ===
           'controlled_document_reconciliation_events_append_only'
@@ -204,7 +223,7 @@ describe('controlled document schema readiness', () => {
     ],
     [
       'trigger attached to wrong table',
-      (rows: any[]) =>
+      (rows: CatalogFact[]) =>
         rows.map((row) =>
           row.object_name ===
           'controlled_document_reconciliation_events_append_only'
@@ -217,7 +236,7 @@ describe('controlled document schema readiness', () => {
     ],
     [
       'wrong trigger function',
-      (rows: any[]) =>
+      (rows: CatalogFact[]) =>
         rows.map((row) =>
           row.object_name ===
           'controlled_document_reconciliation_events_append_only'
@@ -235,7 +254,7 @@ describe('controlled document schema readiness', () => {
     await expect(
       assertControlledDocumentReconciliationSchemaReady({
         query: async () => ({ rows: mutate(completeReconciliationFacts()) }),
-      } as any)
+      } as unknown as ReconciliationSchemaClient)
     ).rejects.toMatchObject({ code: 'CONTROLLED_DOCUMENT_SCHEMA_NOT_READY' });
   });
 
@@ -243,7 +262,7 @@ describe('controlled document schema readiness', () => {
     await expect(
       assertControlledDocumentReconciliationSchemaReady({
         query: async () => ({ rows: completeReconciliationFacts() }),
-      } as any)
+      } as unknown as ReconciliationSchemaClient)
     ).resolves.toBeUndefined();
   });
 });

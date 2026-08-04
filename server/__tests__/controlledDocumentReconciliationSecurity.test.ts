@@ -15,6 +15,7 @@ import {
   buildReconciliationSnapshot,
   containsUnsafeReconciliationPath,
 } from '../src/services/controlledDocumentReconciliationProvenance';
+import type { LegacyReconciliationAssessment } from '../src/services/controlledDocumentReconciliationService';
 
 const temporary: string[] = [];
 afterEach(async () =>
@@ -47,8 +48,12 @@ describe('Phase 1B certification containment', () => {
     const json = vi.fn();
     const next = vi.fn();
     await requireControlledDocumentReconciliationEnabled(
-      {} as any,
-      { status, json } as any,
+      {} as unknown as Parameters<
+        typeof requireControlledDocumentReconciliationEnabled
+      >[0],
+      { status, json } as unknown as Parameters<
+        typeof requireControlledDocumentReconciliationEnabled
+      >[1],
       next
     );
     expect(status).toHaveBeenCalledWith(503);
@@ -135,7 +140,7 @@ describe('Phase 1B certification containment', () => {
   });
 
   it('builds complete snapshots without retaining unrestricted paths or signed URLs', () => {
-    const assessment: any = {
+    const assessment = {
       documentId: 'document',
       revisionId: 'revision',
       fileReferenceType: 'LEGACY_LOCAL_PATH',
@@ -144,7 +149,7 @@ describe('Phase 1B certification containment', () => {
       classification: 'RELEASED_VERIFIED',
       blockers: [],
       proposedChanges: { release: true },
-    };
+    } as LegacyReconciliationAssessment;
     const snapshot = buildReconciliationSnapshot({
       phase: 'BEFORE',
       policyVersion: 'policy',

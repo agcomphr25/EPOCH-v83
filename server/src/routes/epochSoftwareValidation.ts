@@ -18,6 +18,10 @@ import {
   type ReadinessCounts,
   type ValidationStatus,
 } from '../services/epochSoftwareValidation';
+import {
+  responsibilityDecisionIdentityError,
+  responsibilityDecisionSchema,
+} from '../services/epochValidationResponsibilityDecision';
 
 const router = Router();
 router.use(authenticateToken);
@@ -1160,54 +1164,125 @@ router.put(
   }
 );
 
-router.post(
-  '/:id/responsibilities/:assignmentId/accept',
-  requirePermission('EPOCH_VALIDATION_EDIT'),
-  async (req, res) => {
-    const p = await editable(req, res);
-    if (!p) return;
-    const assignmentId = uuid.parse(req.params.assignmentId),
-      a = actor(req),
-      employeeId = Number((req.user as any)?.employeeId || 0);
-    if (!employeeId)
-      return res.status(403).json({ error: 'EMPLOYEE_IDENTITY_REQUIRED' });
-    const accepted = await tx(async (q) => {
-      const assignment = (
+async function decideResponsibility(
+  req: Request,
+  res: any,
+  forcedDecision?: 'ACCEPTED'
+) {
+  const p = await editable(req, res);
+  if (!p) return;
+  const assignmentId = uuid.parse(req.params.assignmentId);
+  const body = responsibilityDecisionSchema.parse(
+    forcedDecision ? { decision: forcedDecision } : req.body
+  );
+  const a = actor(req);
+  const result = await tx(async (q) => {
+    const packageRow = (
+      await q(
+        `SELECT * FROM qms_epoch_validation_packages
+         WHERE id=$1 FOR SHARE`,
+        [p.id]
+      )
+    )[0];
+    if (!packageRow || isLocked(packageRow))
+      return { packageLocked: true as const };
+    const identity = (
+      await q(
+        `SELECT u.id AS user_id,u.employee_id,e.is_active AS employee_active
+           FROM users u JOIN employees e ON e.id=u.employee_id
+           WHERE u.id=$1 AND u.is_active=true FOR SHARE OF u,e`,
+        [a.id]
+      )
+    )[0];
+    if (!identity) return { identityError: 'EMPLOYEE_IDENTITY_REQUIRED' };
+    const activeUserCount = Number(
+      (
         await q(
-          `SELECT * FROM qms_epoch_validation_responsibilities
-           WHERE id=$1 AND package_id=$2 AND active=true FOR UPDATE`,
-          [assignmentId, p.id]
+          `SELECT count(*)::int AS count FROM users
+             WHERE employee_id=$1 AND is_active=true`,
+          [identity.employee_id]
         )
-      )[0];
-      if (!assignment) return { missing: true as const };
-      if (Number(assignment.employee_id) !== employeeId)
-        return { forbidden: true as const };
-      if (assignment.assignment_status === 'ACCEPTED')
-        return { assignment, replay: true as const };
-      const updated = (
-        await q(
-          `UPDATE qms_epoch_validation_responsibilities SET
-           assignment_status='ACCEPTED',accepted_by_user_id=$1,accepted_by_display_name=$2,accepted_at=now()
-           WHERE id=$3 RETURNING *`,
-          [a.id, a.name, assignment.id]
-        )
-      )[0];
-      await logEvent(
-        req,
-        p,
-        'RESPONSIBILITY',
-        'RESPONSIBILITY_ACCEPTED',
-        { entityId: updated.id, previous: assignment, next: updated },
-        q
-      );
-      return { assignment: updated };
+      )[0].count
+    );
+    const assignment = (
+      await q(
+        `SELECT r.*,e.is_active AS employee_active
+           FROM qms_epoch_validation_responsibilities r
+           JOIN employees e ON e.id=r.employee_id
+           WHERE r.id=$1 AND r.package_id=$2 AND r.active=true FOR UPDATE OF r,e`,
+        [assignmentId, p.id]
+      )
+    )[0];
+    if (!assignment) return { missing: true as const };
+    const identityError = responsibilityDecisionIdentityError({
+      authenticatedUserId: a.id,
+      authenticatedEmployeeId: Number(identity.employee_id),
+      employeeActive:
+        Boolean(identity.employee_active) &&
+        Boolean(assignment.employee_active),
+      activeUserCount,
+      assignedEmployeeId: Number(assignment.employee_id),
     });
-    if ('missing' in accepted)
-      return res.status(404).json({ error: 'RESPONSIBILITY_NOT_FOUND' });
-    if ('forbidden' in accepted)
-      return res.status(403).json({ error: 'ASSIGNEE_ACCEPTANCE_REQUIRED' });
-    res.json(accepted.assignment);
-  }
+    if (identityError) return { identityError };
+    if (assignment.assignment_status === body.decision)
+      return { assignment, replay: true as const };
+    if (assignment.assignment_status !== 'AWAITING_ACCEPTANCE')
+      return { conflict: true as const };
+    const updated = (
+      await q(
+        `UPDATE qms_epoch_validation_responsibilities SET
+           assignment_status=$1,
+           accepted_by_user_id=CASE WHEN $1='ACCEPTED' THEN $2 ELSE NULL END,
+           accepted_by_display_name=CASE WHEN $1='ACCEPTED' THEN $3 ELSE NULL END,
+           accepted_at=CASE WHEN $1='ACCEPTED' THEN now() ELSE NULL END
+           WHERE id=$4 RETURNING *,clock_timestamp() AS decided_at`,
+        [body.decision, a.id, a.name, assignment.id]
+      )
+    )[0];
+    await logEvent(
+      req,
+      packageRow,
+      'RESPONSIBILITY',
+      body.decision === 'ACCEPTED'
+        ? 'RESPONSIBILITY_ACCEPTED'
+        : 'RESPONSIBILITY_DECLINED',
+      {
+        entityId: updated.id,
+        previous: assignment,
+        next: {
+          assignmentId: updated.id,
+          assignedEmployeeId: Number(updated.employee_id),
+          authenticatedUserId: a.id,
+          authenticatedEmployeeId: Number(identity.employee_id),
+          decision: body.decision,
+          decidedAt: updated.decided_at,
+          packageRevision: packageRow.revision,
+          productionVersion: packageRow.production_version,
+        },
+        reason: body.reason,
+      },
+      q
+    );
+    return { assignment: updated };
+  });
+  if ('missing' in result)
+    return res.status(404).json({ error: 'RESPONSIBILITY_NOT_FOUND' });
+  if ('packageLocked' in result)
+    return res.status(409).json({ error: 'VALIDATION_PACKAGE_LOCKED' });
+  if ('identityError' in result)
+    return res.status(403).json({ error: result.identityError });
+  if ('conflict' in result)
+    return res
+      .status(409)
+      .json({ error: 'RESPONSIBILITY_DECISION_ALREADY_RECORDED' });
+  res.json(result.assignment);
+}
+
+router.post('/:id/responsibilities/:assignmentId/decision', (req, res) =>
+  decideResponsibility(req, res)
+);
+router.post('/:id/responsibilities/:assignmentId/accept', (req, res) =>
+  decideResponsibility(req, res, 'ACCEPTED')
 );
 
 const intendedUseSchema = z.object({

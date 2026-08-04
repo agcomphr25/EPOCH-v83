@@ -52,6 +52,7 @@ import { storage } from '../../storage';
 import { createQuoteSnapshot } from '../services/quoteContractService';
 import { getWorkflowVersionForNewProject } from '../services/projectWorkflowVersionService';
 import { getInitializableProjectWorkflowSteps } from '../services/projectWorkflowRegistry';
+import { initializeV2Workflow } from '../services/projectWorkflowInstanceService';
 
 const PROJECT_STEP_TYPES = getInitializableProjectWorkflowSteps('legacy_v1');
 
@@ -695,6 +696,7 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
 
         // 4. Auto-create the project (using tx)
         const projectName = `${lockedQuote.customerName} — ${lockedQuote.quoteNumber}`;
+        const workflowVersion = getWorkflowVersionForNewProject();
         const [project] = await tx
           .insert(projects)
           .values({
@@ -703,7 +705,7 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
             customerId: lockedQuote.customerId,
             description: lockedQuote.description ?? null,
             status: 'active',
-            workflowVersion: getWorkflowVersionForNewProject(),
+            workflowVersion,
             // Carry the bridge FK from the quote so the project retains a resolvable
             // integer FK to the master customers table even though customerId is text.
             customersIntegerId: lockedQuote.customersIntegerId ?? null,
@@ -712,8 +714,17 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
         const projectId = project.id;
         console.log(`[Quote→Project] Auto-created project ${project.projectCode} from accepted quote ${quote.quoteNumber}`);
 
-        // 5. Create all standard P2 workflow steps (using tx)
-        for (const stepDef of PROJECT_STEP_TYPES) {
+        if (workflowVersion === 'p2_v2') {
+          await initializeV2Workflow(projectId, {
+            id: req.user?.id,
+            username: req.user?.username,
+            displayName: req.user?.username,
+            role: req.user?.role,
+          }, tx);
+        }
+
+        // 5. Create legacy steps only for an explicitly legacy project.
+        for (const stepDef of workflowVersion === 'legacy_v1' ? PROJECT_STEP_TYPES : []) {
           await tx.insert(projectSteps).values({
             projectId,
             stepType: stepDef.type,

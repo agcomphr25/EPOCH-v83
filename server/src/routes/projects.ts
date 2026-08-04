@@ -9,7 +9,7 @@ import multer from 'multer';
 
 import { storage } from '../../storage';
 import { db, pool } from '../../db';
-import { insertInventoryItemSchema } from '../../schema';
+import { insertInventoryItemSchema, projects } from '../../schema';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import {
   validateProjectClosing,
@@ -39,6 +39,7 @@ import {
 import {
   getActiveWorkflowInstanceForProject,
   getWorkflowReadModel,
+  initializeV2Workflow,
 } from '../services/projectWorkflowInstanceService';
 import {
   buildP2V2WorkflowResponse,
@@ -2322,17 +2323,29 @@ router.post('/', async (req, res) => {
       validatedData.customerId
     );
 
+    const workflowVersion = getWorkflowVersionForNewProject();
     const projectData = {
       ...projectFields,
       projectCode: nextCode,
-      workflowVersion: getWorkflowVersionForNewProject(),
+      workflowVersion,
       customersIntegerId,
       ...(customerNameSnapshot ? { customerNameSnapshot } : {}),
     };
 
-    const project = await storage.createProject(projectData);
+    const project = workflowVersion === 'p2_v2'
+      ? await db.transaction(async (tx) => {
+          const [created] = await tx.insert(projects).values(projectData).returning();
+          await initializeV2Workflow(created.id, {
+            id: req.user?.id,
+            username: req.user?.username,
+            displayName: req.user?.username,
+            role: req.user?.role,
+          }, tx);
+          return created;
+        })
+      : await storage.createProject(projectData);
 
-    for (const stepType of PROJECT_STEP_TYPES) {
+    for (const stepType of workflowVersion === 'legacy_v1' ? PROJECT_STEP_TYPES : []) {
       const isQuoteStep = stepType.type === 'quote';
       await storage.createProjectStep({
         projectId: project.id,

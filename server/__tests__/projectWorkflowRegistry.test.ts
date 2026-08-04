@@ -52,12 +52,12 @@ describe('project workflow registry', () => {
     expect(isLegacyProjectWorkflow('legacy_v1')).toBe(true);
   });
 
-  it('defines p2_v2 as ten inactive customer-PO workflow stages with no database steps', () => {
+  it('defines p2_v2 as ten initializable customer-PO workflow stages with no legacy database steps', () => {
     const definition = getProjectWorkflowDefinition('p2_v2');
     expect(definition).toMatchObject({
       version: 'p2_v2',
-      active: false,
-      initializable: false,
+      active: true,
+      initializable: true,
     });
     expect(definition.steps).toEqual([]);
     expect(
@@ -84,9 +84,7 @@ describe('project workflow registry', () => {
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
     ]);
     expect(isLegacyProjectWorkflow('p2_v2')).toBe(false);
-    expect(() => getInitializableProjectWorkflowSteps('p2_v2')).toThrow(
-      'p2_v2 workflow initialization is not available'
-    );
+    expect(getInitializableProjectWorkflowSteps('p2_v2')).toEqual([]);
   });
 
   it('retains the definition-version-1 snapshot without converting existing instances', () => {
@@ -217,7 +215,7 @@ describe('Phase 2 isolation guards', () => {
   const schema = read('server/schema.ts');
   const migrations = read('migrations/0199_project_workflow_version.sql');
 
-  it('derives both creation paths from legacy_v1 without activating p2_v2', () => {
+  it('keeps legacy step creation isolated from p2_v2 stage initialization', () => {
     expect(projectsRoute).toContain(
       "getInitializableProjectWorkflowSteps('legacy_v1')"
     );

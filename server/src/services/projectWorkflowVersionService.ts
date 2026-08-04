@@ -44,16 +44,8 @@ export function serializeProjectWorkflowVersion<
   };
 }
 
-// Phase 1 is deliberately fail-closed until the p2_v2 initializer exists.
 export function getWorkflowVersionForNewProject(
   flagValue = process.env.P2_V2_WORKFLOW_CREATION_ENABLED
 ): ProjectWorkflowVersion {
-  const requested =
-    typeof flagValue === 'string' && flagValue.trim().toLowerCase() === 'true';
-  if (requested) {
-    console.warn(
-      '[Projects] P2_V2_WORKFLOW_CREATION_ENABLED requested, but p2_v2 initialization is unavailable; creating legacy_v1'
-    );
-  }
-  return 'legacy_v1';
+  return flagValue === 'true' ? 'p2_v2' : 'legacy_v1';
 }

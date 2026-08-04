@@ -284,8 +284,8 @@ export function getP2V2StagesForDefinitionVersion(
   );
 }
 
-// Internal-only snapshot source for Phase 3. This does not make p2_v2 active
-// or available to normal project creation.
+// Immutable snapshot source used when a newly-created p2_v2 project is
+// initialized in the same transaction as the project row.
 export function getInternalP2V2InitializationStages(): readonly ProjectWorkflowStageDefinition[] {
   return getProjectWorkflowDefinition('p2_v2').stages;
 }
@@ -304,8 +304,8 @@ const DEFINITIONS: Readonly<
   p2_v2: Object.freeze({
     version: 'p2_v2',
     label: 'P2 Project Workflow V2',
-    active: false,
-    initializable: false,
+    active: true,
+    initializable: true,
     steps: Object.freeze([]),
     stages: P2_V2_STAGES,
   }),
@@ -369,9 +369,9 @@ export function validateProjectWorkflowDefinition(
       throw new ProjectWorkflowDefinitionValidationError(
         'p2_v2 must have exactly ten metadata stages'
       );
-    if (definition.initializable || definition.steps.length > 0)
+    if (!definition.active || !definition.initializable || definition.steps.length > 0)
       throw new ProjectWorkflowDefinitionValidationError(
-        'p2_v2 must remain inactive and non-initializable'
+        'p2_v2 must be active and initializable only through stage instances'
       );
   }
 }

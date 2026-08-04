@@ -110,6 +110,7 @@ import gmailRoutes from './gmail';
 import followupOrdersRoutes from './followupOrders';
 import cuttingTableRoutes from './cuttingTable';
 import controlledDocumentsRoutes from './controlledDocuments';
+import controlledDocumentReconciliationRoutes from './controlledDocumentReconciliation';
 import designControlFormTemplatesRoutes from './designControlFormTemplates';
 import projectFormsRoutes, {
   designControlProjectFormsRouter,
@@ -1390,6 +1391,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Controlled Documents (Master Document Register) routes
   app.use('/api/controlled-documents', controlledDocumentsRoutes);
+  app.use('/api/controlled-document-reconciliation', controlledDocumentReconciliationRoutes);
   app.use('/api/design-control-form-templates', designControlFormTemplatesRoutes);
   app.use('/api/design-control', designControlProjectFormsRouter);
   app.use('/api/project-forms', projectFormsRoutes);

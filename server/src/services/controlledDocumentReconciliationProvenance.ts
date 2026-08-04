@@ -19,6 +19,8 @@ export type SafeReconciliationFileIdentity = {
 };
 
 type SnapshotRow = Record<string, string | number | null | undefined>;
+const nullableString = (value: SnapshotRow[string]) =>
+  value == null ? null : String(value);
 
 export function buildSafeReconciliationFileIdentity(input: {
   reference: string | null;
@@ -66,10 +68,10 @@ export function buildReconciliationSnapshot(input: {
 }) {
   const { document: d, revision: r, assessment: a } = input;
   const fileIdentity = buildSafeReconciliationFileIdentity({
-    reference: r.file_path || d.file_path || null,
+    reference: nullableString(r.file_path || d.file_path),
     referenceType: a.fileReferenceType,
-    checksum: r.file_checksum || null,
-    mediaType: r.media_type || null,
+    checksum: nullableString(r.file_checksum),
+    mediaType: nullableString(r.media_type),
     fileSize: r.file_size == null ? null : Number(r.file_size),
     accessibility: a.fileAccessibility,
   });

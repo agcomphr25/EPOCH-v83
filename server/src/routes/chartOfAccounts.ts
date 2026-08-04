@@ -51,6 +51,7 @@ const periodPatchSchema = z.object({
   status: z.enum(['OPEN', 'MIGRATION', 'SOFT_CLOSED', 'HARD_CLOSED', 'FINAL_LOCKED']),
   notes: z.string().nullable().optional(),
   reason: z.string().trim().min(1),
+  paymentEntryGraceBusinessDays: z.number().int().min(0).max(10).optional(),
 });
 
 function extractOrderNumber(memo: string | null): string | null {
@@ -361,6 +362,7 @@ router.patch('/periods/:year/:month', requireAccountingAdmin, h(async (req, res)
     periodMonth: month,
     status: parsed.data.status,
     notes: parsed.data.notes ?? null,
+    paymentEntryGraceBusinessDays: parsed.data.paymentEntryGraceBusinessDays ?? existing?.paymentEntryGraceBusinessDays ?? 3,
     closedBy: ['SOFT_CLOSED', 'HARD_CLOSED', 'FINAL_LOCKED'].includes(parsed.data.status) ? currentActor.username : null,
     closedAt: ['SOFT_CLOSED', 'HARD_CLOSED', 'FINAL_LOCKED'].includes(parsed.data.status) ? new Date() : null,
     reopenedBy: parsed.data.status === 'OPEN' && existing && existing.status !== 'OPEN' ? currentActor.username : null,
@@ -386,6 +388,7 @@ router.patch('/periods/:year/:month', requireAccountingAdmin, h(async (req, res)
     fieldsChanged: {
       status: { before: existing?.status ?? null, after: updated.status },
       notes: { before: existing?.notes ?? null, after: updated.notes },
+      paymentEntryGraceBusinessDays: { before: existing?.paymentEntryGraceBusinessDays ?? null, after: updated.paymentEntryGraceBusinessDays },
     },
     ipAddress: req.ip ?? null,
     userAgent: req.headers['user-agent'] ?? null,

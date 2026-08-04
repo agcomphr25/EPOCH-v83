@@ -35,7 +35,7 @@ import {
   createOrUpdateP1PaymentJournalEntry,
   reverseP1PaymentJournalEntry,
 } from '../services/p1PaymentPostingService';
-import { getOrCreateAccountingPeriod } from '../services/accountingPeriodService';
+import { evaluatePriorMonthPaymentGrace, getOrCreateAccountingPeriod } from '../services/accountingPeriodService';
 import { isAccountingAdminUser } from '../middleware/requireAccountingAdmin';
 import {
   normalizeNotificationMethods,
@@ -100,18 +100,40 @@ function shouldResetFulfilledToReadyForShipping(
   );
 }
 
-async function requiresP1PaymentAccountingApproval(paymentDate: Date, user: any): Promise<{ required: boolean; period: any }> {
+async function requiresP1PaymentAccountingApproval(paymentDate: Date, user: any): Promise<{ required: boolean; period: any; grace: ReturnType<typeof evaluatePriorMonthPaymentGrace> }> {
   const period = await getOrCreateAccountingPeriod(paymentDate);
   const status = String(period.status).toUpperCase();
+  const evaluatedGrace = evaluatePriorMonthPaymentGrace({
+    effectiveDate: paymentDate,
+    graceBusinessDays: Number(period.paymentEntryGraceBusinessDays ?? 3),
+  });
+  const grace = {
+    ...evaluatedGrace,
+    eligible: evaluatedGrace.eligible && (status === 'SOFT_CLOSED' || status === 'MIGRATION'),
+  };
   if (status === 'FINAL_LOCKED' || status === 'HARD_CLOSED') {
     const err: any = new Error(`Accounting period ${period.periodYear}-${String(period.periodMonth).padStart(2, '0')} is ${status}.`);
     err.statusCode = 423;
     throw err;
   }
   if (status === 'SOFT_CLOSED' || status === 'MIGRATION') {
-    return { required: !(await isAccountingAdminUser(user)), period };
+    return { required: !grace.eligible && !(await isAccountingAdminUser(user)), period, grace };
   }
-  return { required: false, period };
+  return { required: false, period, grace };
+}
+
+function assertDocumentedPriorMonthGrace(paymentData: any, grace: ReturnType<typeof evaluatePriorMonthPaymentGrace>) {
+  if (!grace.eligible) return;
+  if (!String(paymentData.referenceNumber || '').trim()) {
+    const err: any = new Error('A bank, deposit, check, or processor reference is required for prior-month grace entries.');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!String(paymentData.lateEntryReason || '').trim()) {
+    const err: any = new Error('A late-entry explanation is required for prior-month grace entries.');
+    err.statusCode = 400;
+    throw err;
+  }
 }
 
 async function deleteDraftP1PaymentJournalEntry(tx: any, paymentId: number) {
@@ -2310,6 +2332,7 @@ router.post('/:orderId/payments', requirePermission('finance.manage_payments'), 
     console.log('Validated payment data:', paymentData);
 
     const approval = await requiresP1PaymentAccountingApproval(paymentData.paymentDate, (req as any).user);
+    assertDocumentedPriorMonthGrace(paymentData, approval.grace);
     const newPayment = await db.transaction(async (tx) => {
       const [payment] = await tx
         .insert(payments)
@@ -2339,6 +2362,7 @@ router.post('/:orderId/payments', requirePermission('finance.manage_payments'), 
             month: approval.period.periodMonth,
             status: approval.period.status,
           },
+          priorMonthGrace: approval.grace,
         },
       });
     } catch (auditError) {
@@ -2377,6 +2401,7 @@ router.put('/payments/:paymentId', requirePermission('finance.manage_payments'),
 
     const paymentData = insertPaymentSchema.parse(req.body);
     const approval = await requiresP1PaymentAccountingApproval(paymentData.paymentDate, (req as any).user);
+    assertDocumentedPriorMonthGrace(paymentData, approval.grace);
     const updatedPayment = await db.transaction(async (tx) => {
       const [payment] = await tx
         .update(payments)
@@ -2408,6 +2433,7 @@ router.put('/payments/:paymentId', requirePermission('finance.manage_payments'),
           month: approval.period.periodMonth,
           status: approval.period.status,
         },
+        priorMonthGrace: approval.grace,
       },
     });
 
@@ -2654,11 +2680,14 @@ router.post('/bulk-payment', requirePermission('finance.manage_payments'), async
           orderId,
           paymentType,
           paymentAmount: parseFloat(paymentAmount),
-          paymentDate: new Date(paymentDate),
+          paymentDate: new Date(`${String(paymentDate).slice(0, 10)}T12:00:00`),
           notes: item.notes || null,
+          referenceNumber: item.referenceNumber || null,
+          lateEntryReason: item.lateEntryReason || null,
         });
 
         const approval = await requiresP1PaymentAccountingApproval(paymentData.paymentDate, (req as any).user);
+        assertDocumentedPriorMonthGrace(paymentData, approval.grace);
         const newPayment = await db.transaction(async (tx) => {
           const [payment] = await tx
             .insert(payments)

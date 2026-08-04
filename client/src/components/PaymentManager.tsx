@@ -32,6 +32,8 @@ export interface Payment {
   paymentAmount: number;
   paymentDate: string;
   notes?: string;
+  referenceNumber?: string | null;
+  lateEntryReason?: string | null;
   processingFee?: number | null;
   status?: string;
   reversalOfPaymentId?: number | null;
@@ -73,6 +75,8 @@ export default function PaymentManager({
     new Date().toISOString().split('T')[0]
   );
   const [notes, setNotes] = useState('');
+  const [referenceNumber, setReferenceNumber] = useState('');
+  const [lateEntryReason, setLateEntryReason] = useState('');
   const [processingFee, setProcessingFee] = useState(0);
 
   useEffect(() => {
@@ -223,6 +227,8 @@ export default function PaymentManager({
     setPaymentAmount('');
     setPaymentDate(new Date().toISOString().split('T')[0]);
     setNotes('');
+    setReferenceNumber('');
+    setLateEntryReason('');
     setProcessingFee(0);
     setEditingPayment(null);
   };
@@ -242,6 +248,8 @@ export default function PaymentManager({
     setPaymentAmount(payment.paymentAmount.toString());
     setPaymentDate(payment.paymentDate.split('T')[0]);
     setNotes(payment.notes || '');
+    setReferenceNumber(payment.referenceNumber || '');
+    setLateEntryReason(payment.lateEntryReason || '');
     setProcessingFee(payment.processingFee || 0);
     setShowPaymentModal(true);
   };
@@ -311,11 +319,14 @@ export default function PaymentManager({
       return;
     }
 
+    const selectedDate = new Date(`${paymentDate}T12:00:00`);
     const paymentData = {
       paymentType,
       paymentAmount: parseFloat(paymentAmount),
-      paymentDate: new Date(paymentDate),
+      paymentDate: selectedDate,
       notes: notes.trim() || null,
+      referenceNumber: referenceNumber.trim() || null,
+      lateEntryReason: lateEntryReason.trim() || null,
       processingFee: paymentType === 'wire' ? (processingFee || null) : null,
     };
 
@@ -590,6 +601,28 @@ export default function PaymentManager({
 
               {/* Notes */}
               <div className="space-y-2">
+                <Label htmlFor="payment-reference">Payment / Deposit Reference</Label>
+                <Input
+                  id="payment-reference"
+                  placeholder="Bank trace, deposit, check, or processor reference"
+                  value={referenceNumber}
+                  onChange={(e) => setReferenceNumber(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="late-entry-reason">Prior-Month Entry Explanation</Label>
+                <Textarea
+                  id="late-entry-reason"
+                  placeholder="Example: Received July 31; entered during August month-end grace window."
+                  value={lateEntryReason}
+                  onChange={(e) => setLateEntryReason(e.target.value)}
+                  rows={2}
+                />
+                <p className="text-xs text-muted-foreground">Required when using the controlled prior-month grace window.</p>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
                 <Label htmlFor="notes">Notes (Optional)</Label>
                 <Textarea
                   id="notes"
@@ -774,6 +807,27 @@ export default function PaymentManager({
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="payment-reference-standalone">Payment / Deposit Reference</Label>
+                <Input
+                  id="payment-reference-standalone"
+                  placeholder="Bank trace, deposit, check, or processor reference"
+                  value={referenceNumber}
+                  onChange={(e) => setReferenceNumber(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="late-entry-reason-standalone">Prior-Month Entry Explanation</Label>
+                <Textarea
+                  id="late-entry-reason-standalone"
+                  placeholder="Example: Received July 31; entered during August month-end grace window."
+                  value={lateEntryReason}
+                  onChange={(e) => setLateEntryReason(e.target.value)}
+                  rows={2}
+                />
+                <p className="text-xs text-muted-foreground">Required when using the controlled prior-month grace window.</p>
               </div>
 
               {/* Notes */}

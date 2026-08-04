@@ -761,6 +761,8 @@ async function detail(packageId: string) {
   if (!p) return null;
   const [
     intendedUse,
+    intendedUseFunctions,
+    responsibilities,
     requirements,
     risks,
     plans,
@@ -773,6 +775,21 @@ async function detail(packageId: string) {
   ] = await Promise.all([
     query(
       'SELECT * FROM qms_epoch_validation_intended_use_revisions WHERE package_id=$1 ORDER BY revision DESC',
+      [packageId]
+    ),
+    query(
+      `SELECT f.* FROM qms_epoch_validation_intended_use_functions f
+       JOIN qms_epoch_validation_intended_use_revisions u ON u.id=f.intended_use_revision_id
+       WHERE f.package_id=$1 AND u.approval_status<>'SUPERSEDED'
+       ORDER BY f.function_key`,
+      [packageId]
+    ),
+    query(
+      `SELECT r.*,e.name employee_name,e.department,e.position
+       FROM qms_epoch_validation_responsibilities r
+       JOIN employees e ON e.id=r.employee_id
+       WHERE r.package_id=$1 AND r.active=true
+       ORDER BY r.responsibility_role,e.name`,
       [packageId]
     ),
     query(
@@ -818,6 +835,8 @@ async function detail(packageId: string) {
   return {
     package: p,
     intendedUse,
+    intendedUseFunctions,
+    responsibilities,
     requirements,
     risks,
     plans,
@@ -924,6 +943,273 @@ router.post(
   }
 );
 
+const wizardSetupSchema = z.object({
+  rowVersion: z.number().int().positive(),
+  title: z.string().min(3).max(240),
+  reasonForValidation: z.string().min(3).max(10000),
+  validationType: z.enum([
+    'INITIAL_INTENDED_USE',
+    'MAJOR_RELEASE',
+    'CRITICAL_CHANGE',
+    'DATABASE_MIGRATION',
+    'SECURITY_ACCESS_CONTROL',
+    'BACKUP_RECOVERY',
+    'PERIODIC_REVIEW',
+    'PRE_AUDIT_REVALIDATION',
+    'CORRECTIVE_REVALIDATION',
+  ]),
+  plannedStartDate: z.string().date(),
+  plannedCompletionDate: z.string().date(),
+  commitOrReleaseIdentifier: z.string().max(240).nullable().optional(),
+  productionDeploymentDate: z.string().date().nullable().optional(),
+  validationEnvironment: z.string().min(1),
+  productionEnvironmentReference: z.string().min(1),
+  environmentDifferences: z.string().max(10000).nullable().optional(),
+});
+
+router.patch(
+  '/:id/wizard/setup',
+  requirePermission('EPOCH_VALIDATION_EDIT'),
+  async (req, res) => {
+    const p = await editable(req, res);
+    if (!p) return;
+    const v = wizardSetupSchema.parse(req.body),
+      a = actor(req),
+      technicalChanged =
+        v.commitOrReleaseIdentifier !== p.commit_or_release_identifier ||
+        v.productionDeploymentDate !== p.production_deployment_date ||
+        v.environmentDifferences !== p.environment_differences;
+    const updated = (
+      await query(
+        `UPDATE qms_epoch_validation_packages SET
+         title=$1,reason_for_validation=$2,validation_type=$3,
+         planned_start_date=$4::date,planned_completion_date=$5::date,
+         commit_or_release_identifier=$6,production_deployment_date=$7::date,
+         validation_environment=$8,production_environment_reference=$9,environment_differences=$10,
+         deployment_date_confirmed=CASE WHEN $11 THEN false ELSE deployment_date_confirmed END,
+         deployment_date_confirmed_by_user_id=CASE WHEN $11 THEN NULL ELSE deployment_date_confirmed_by_user_id END,
+         deployment_date_confirmed_by_display_name=CASE WHEN $11 THEN NULL ELSE deployment_date_confirmed_by_display_name END,
+         deployment_date_confirmed_at=CASE WHEN $11 THEN NULL ELSE deployment_date_confirmed_at END,
+         environment_separation_confirmed=CASE WHEN $11 THEN false ELSE environment_separation_confirmed END,
+         environment_separation_confirmed_by_user_id=CASE WHEN $11 THEN NULL ELSE environment_separation_confirmed_by_user_id END,
+         environment_separation_confirmed_by_display_name=CASE WHEN $11 THEN NULL ELSE environment_separation_confirmed_by_display_name END,
+         environment_separation_confirmed_at=CASE WHEN $11 THEN NULL ELSE environment_separation_confirmed_at END,
+         row_version=row_version+1,revision=revision+1,
+         updated_by_user_id=$12,updated_by_display_name=$13,updated_at=now()
+         WHERE id=$14 AND row_version=$15 RETURNING *`,
+        [
+          v.title,
+          v.reasonForValidation,
+          v.validationType,
+          v.plannedStartDate,
+          v.plannedCompletionDate,
+          v.commitOrReleaseIdentifier ?? null,
+          v.productionDeploymentDate ?? null,
+          v.validationEnvironment,
+          v.productionEnvironmentReference,
+          v.environmentDifferences ?? null,
+          technicalChanged,
+          a.id,
+          a.name,
+          p.id,
+          v.rowVersion,
+        ]
+      )
+    )[0];
+    if (!updated) return res.status(409).json({ error: 'STALE_RECORD' });
+    await invalidateApprovals(p.id, 'Wizard setup changed');
+    await logEvent(req, updated, 'PACKAGE', 'WIZARD_SETUP_SAVED', {
+      previous: p,
+      next: updated,
+    });
+    res.json({ package: updated, readiness: await packageReadiness(updated) });
+  }
+);
+
+const responsibilityRole = z.enum([
+  'SOFTWARE_OWNER',
+  'QUALITY_REVIEWER',
+  'VALIDATION_COORDINATOR',
+  'ADDITIONAL_TESTER',
+  'FINAL_APPROVING_AUTHORITY',
+]);
+const responsibilitySchema = z.object({
+  rowVersion: z.number().int().positive(),
+  assignments: z.array(
+    z.object({
+      role: responsibilityRole,
+      employeeId: z.number().int().positive(),
+    })
+  ),
+});
+
+router.put(
+  '/:id/responsibilities',
+  requirePermission('EPOCH_VALIDATION_EDIT'),
+  async (req, res) => {
+    const p = await editable(req, res);
+    if (!p) return;
+    const body = responsibilitySchema.parse(req.body),
+      a = actor(req);
+    const singularRoles = [
+      'SOFTWARE_OWNER',
+      'QUALITY_REVIEWER',
+      'VALIDATION_COORDINATOR',
+      'FINAL_APPROVING_AUTHORITY',
+    ] as const;
+    for (const role of singularRoles) {
+      if (body.assignments.filter((item) => item.role === role).length > 1)
+        return res.status(400).json({
+          error: 'RESPONSIBILITY_ROLE_MUST_BE_SINGULAR',
+          role,
+        });
+    }
+    const uniqueAssignments = new Set(
+      body.assignments.map((item) => `${item.role}:${item.employeeId}`)
+    );
+    if (uniqueAssignments.size !== body.assignments.length)
+      return res
+        .status(400)
+        .json({ error: 'DUPLICATE_RESPONSIBILITY_ASSIGNMENT' });
+    const employeeIds = Array.from(
+      new Set(body.assignments.map((x) => x.employeeId))
+    );
+    if (employeeIds.length) {
+      const active = await query(
+        `SELECT id FROM employees WHERE id=ANY($1::int[]) AND is_active=true`,
+        [employeeIds]
+      );
+      if (active.length !== employeeIds.length)
+        return res.status(409).json({ error: 'INACTIVE_EMPLOYEE_ASSIGNMENT' });
+    }
+    const updated = await tx(async (q) => {
+      const locked = (
+        await q(
+          `SELECT * FROM qms_epoch_validation_packages WHERE id=$1 AND row_version=$2 FOR UPDATE`,
+          [p.id, body.rowVersion]
+        )
+      )[0];
+      if (!locked) return null;
+      const previous = await q(
+        `SELECT * FROM qms_epoch_validation_responsibilities WHERE package_id=$1 AND active=true`,
+        [p.id]
+      );
+      const desiredKeys = new Set(
+        body.assignments.map((item) => `${item.role}:${item.employeeId}`)
+      );
+      const previousKeys = new Set(
+        previous.map(
+          (item) => `${item.responsibility_role}:${item.employee_id}`
+        )
+      );
+      const removedIds = previous
+        .filter(
+          (item) =>
+            !desiredKeys.has(`${item.responsibility_role}:${item.employee_id}`)
+        )
+        .map((item) => item.id);
+      if (removedIds.length)
+        await q(
+          `UPDATE qms_epoch_validation_responsibilities
+           SET active=false,assignment_status='SUPERSEDED',superseded_at=now()
+           WHERE package_id=$1 AND id=ANY($2::uuid[]) AND active=true`,
+          [p.id, removedIds]
+        );
+      for (const assignment of body.assignments) {
+        if (previousKeys.has(`${assignment.role}:${assignment.employeeId}`))
+          continue;
+        await q(
+          `INSERT INTO qms_epoch_validation_responsibilities
+          (package_id,responsibility_role,employee_id,assigned_by_user_id,assigned_by_display_name)
+          VALUES($1,$2,$3,$4,$5)`,
+          [p.id, assignment.role, assignment.employeeId, a.id, a.name]
+        );
+      }
+      const assigned = (role: string) =>
+        body.assignments.find((item) => item.role === role)?.employeeId || null;
+      const packageRow = (
+        await q(
+          `UPDATE qms_epoch_validation_packages SET
+           software_owner_employee_id=$1,quality_owner_employee_id=$2,validation_lead_employee_id=$3,
+           row_version=row_version+1,revision=revision+1,
+           updated_by_user_id=$4,updated_by_display_name=$5,updated_at=now()
+           WHERE id=$6 RETURNING *`,
+          [
+            assigned('SOFTWARE_OWNER'),
+            assigned('QUALITY_REVIEWER'),
+            assigned('VALIDATION_COORDINATOR'),
+            a.id,
+            a.name,
+            p.id,
+          ]
+        )
+      )[0];
+      await invalidateApprovals(p.id, 'Validation responsibilities changed', q);
+      await logEvent(
+        req,
+        packageRow,
+        'RESPONSIBILITY',
+        'RESPONSIBILITIES_ASSIGNED',
+        { previous, next: body.assignments },
+        q
+      );
+      return packageRow;
+    });
+    if (!updated) return res.status(409).json({ error: 'STALE_RECORD' });
+    res.json(await detail(updated.id));
+  }
+);
+
+router.post(
+  '/:id/responsibilities/:assignmentId/accept',
+  requirePermission('EPOCH_VALIDATION_EDIT'),
+  async (req, res) => {
+    const p = await editable(req, res);
+    if (!p) return;
+    const assignmentId = uuid.parse(req.params.assignmentId),
+      a = actor(req),
+      employeeId = Number((req.user as any)?.employeeId || 0);
+    if (!employeeId)
+      return res.status(403).json({ error: 'EMPLOYEE_IDENTITY_REQUIRED' });
+    const accepted = await tx(async (q) => {
+      const assignment = (
+        await q(
+          `SELECT * FROM qms_epoch_validation_responsibilities
+           WHERE id=$1 AND package_id=$2 AND active=true FOR UPDATE`,
+          [assignmentId, p.id]
+        )
+      )[0];
+      if (!assignment) return { missing: true as const };
+      if (Number(assignment.employee_id) !== employeeId)
+        return { forbidden: true as const };
+      if (assignment.assignment_status === 'ACCEPTED')
+        return { assignment, replay: true as const };
+      const updated = (
+        await q(
+          `UPDATE qms_epoch_validation_responsibilities SET
+           assignment_status='ACCEPTED',accepted_by_user_id=$1,accepted_by_display_name=$2,accepted_at=now()
+           WHERE id=$3 RETURNING *`,
+          [a.id, a.name, assignment.id]
+        )
+      )[0];
+      await logEvent(
+        req,
+        p,
+        'RESPONSIBILITY',
+        'RESPONSIBILITY_ACCEPTED',
+        { entityId: updated.id, previous: assignment, next: updated },
+        q
+      );
+      return { assignment: updated };
+    });
+    if ('missing' in accepted)
+      return res.status(404).json({ error: 'RESPONSIBILITY_NOT_FOUND' });
+    if ('forbidden' in accepted)
+      return res.status(403).json({ error: 'ASSIGNEE_ACCEPTANCE_REQUIRED' });
+    res.json(accepted.assignment);
+  }
+);
+
 const intendedUseSchema = z.object({
   systemName: z.string().min(1),
   epochVersion: z.string().min(1),
@@ -944,6 +1230,38 @@ const intendedUseSchema = z.object({
   excludedFunctionality: z.string().optional(),
   dataRetentionResponsibilities: z.string().min(1),
   backupResponsibilities: z.string().min(1),
+  functions: z
+    .array(
+      z
+        .object({
+          functionKey: z.string().min(1).max(120),
+          usageStatus: z.enum(['USED_FOR_QMS', 'NOT_USED_FOR_QMS']),
+          useDescription: z.string().max(5000).optional(),
+          failureEffect: z.string().max(5000).optional(),
+          criticalToQms: z.boolean().default(false),
+          notUsedExplanation: z.string().max(5000).optional(),
+        })
+        .superRefine((value, ctx) => {
+          if (
+            value.usageStatus === 'USED_FOR_QMS' &&
+            (!value.useDescription?.trim() || !value.failureEffect?.trim())
+          )
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message:
+                'Selected functions require a use description and failure effect.',
+            });
+          if (
+            value.usageStatus === 'NOT_USED_FOR_QMS' &&
+            !value.notUsedExplanation?.trim()
+          )
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'Not-used functions require an explanation.',
+            });
+        })
+    )
+    .default([]),
 });
 router.post(
   '/:id/intended-use',
@@ -1005,6 +1323,25 @@ router.post(
           ]
         )
       )[0];
+      for (const selectedFunction of v.functions) {
+        await q(
+          `INSERT INTO qms_epoch_validation_intended_use_functions
+          (package_id,intended_use_revision_id,function_key,usage_status,use_description,failure_effect,
+           critical_to_qms,not_used_explanation,created_by_user_id)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [
+            p.id,
+            x.id,
+            selectedFunction.functionKey,
+            selectedFunction.usageStatus,
+            selectedFunction.useDescription?.trim() || null,
+            selectedFunction.failureEffect?.trim() || null,
+            selectedFunction.criticalToQms,
+            selectedFunction.notUsedExplanation?.trim() || null,
+            a.id,
+          ]
+        );
+      }
       await invalidateApprovals(p.id, 'Intended Use revised', q);
       await logEvent(
         req,

@@ -283,9 +283,24 @@ BEGIN
   END IF;
   RETURN OLD;
 END $$;
-DROP TRIGGER IF EXISTS routing_operation_work_instruction_revisions_guard ON routing_operation_work_instruction_revisions;
-CREATE TRIGGER routing_operation_work_instruction_revisions_guard BEFORE UPDATE OR DELETE ON routing_operation_work_instruction_revisions
-FOR EACH ROW EXECUTE FUNCTION protect_released_routing_work_instruction_link();
+-- Guard: routing_operation_work_instruction_revisions may not yet exist on
+-- production databases where the table was not yet created via migration.
+-- The function is always created above; the trigger is deferred to when the
+-- table is present so the migration never crashes on a missing relation.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name   = 'routing_operation_work_instruction_revisions'
+  ) THEN
+    DROP TRIGGER IF EXISTS routing_operation_work_instruction_revisions_guard
+      ON routing_operation_work_instruction_revisions;
+    CREATE TRIGGER routing_operation_work_instruction_revisions_guard
+      BEFORE UPDATE OR DELETE ON routing_operation_work_instruction_revisions
+      FOR EACH ROW EXECUTE FUNCTION protect_released_routing_work_instruction_link();
+  END IF;
+END $$;
 
 INSERT INTO perm_capabilities (key, description, category) VALUES
   ('design.configuration.view', 'View Design Project configurations', 'design'),

@@ -65,7 +65,7 @@ describe('project workflow registry', () => {
     ).toEqual([
       { type: 'rfq_risk_assessment', label: 'RFQ Review' },
       { type: 'estimate_quote', label: 'Estimate & Quote' },
-      { type: 'contract_review', label: 'Contract Review' },
+      { type: 'contract_review', label: 'Purchase/Contract Review' },
       {
         type: 'technical_configuration_review',
         label: 'Technical & Configuration Review',
@@ -73,12 +73,9 @@ describe('project workflow registry', () => {
       { type: 'production_planning', label: 'Production Planning' },
       { type: 'wad_authorization', label: 'WAD Authorization' },
       { type: 'preproduction_release', label: 'Preproduction Readiness' },
-      { type: 'production_quality', label: 'Production' },
-      {
-        type: 'final_release_shipping',
-        label: 'Quality & Product Release',
-      },
-      { type: 'project_closing', label: 'Shipping & Project Closing' },
+      { type: 'p2_release', label: 'Approve and Release to P2' },
+      { type: 'p2_execution', label: 'P2 Execution' },
+      { type: 'project_closing', label: 'Project Closing' },
     ]);
     expect(definition.stages.map((stage) => stage.order)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
@@ -87,7 +84,7 @@ describe('project workflow registry', () => {
     expect(getInitializableProjectWorkflowSteps('p2_v2')).toEqual([]);
   });
 
-  it('retains the definition-version-1 snapshot without converting existing instances', () => {
+  it('retains definition-version-1 and version-2 snapshots without converting existing instances', () => {
     expect(
       getP2V2StagesForDefinitionVersion(1).map(({ type, label }) => ({
         type,
@@ -102,6 +99,20 @@ describe('project workflow registry', () => {
         (stage) => stage.type === 'technical_configuration_review'
       )
     ).toBe(false);
+    expect(
+      getP2V2StagesForDefinitionVersion(2).map((stage) => stage.label)
+    ).toEqual([
+      'RFQ Review',
+      'Estimate & Quote',
+      'Contract Review',
+      'Technical & Configuration Review',
+      'Production Planning',
+      'WAD Authorization',
+      'Preproduction Readiness',
+      'Production',
+      'Quality & Product Release',
+      'Shipping & Project Closing',
+    ]);
     expect(() => getP2V2StagesForDefinitionVersion(999)).toThrow(
       'Unknown p2_v2 definition version 999'
     );

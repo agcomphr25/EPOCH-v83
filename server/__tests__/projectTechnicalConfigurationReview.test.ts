@@ -125,7 +125,9 @@ describe('Phase 8B technical and configuration review boundaries', () => {
 
   it('fails closed outside definition-version 2 and keeps build-to-print independent of Design Projects', () => {
     expect(service).toContain("workflowVersion !== 'p2_v2'");
-    expect(service).toContain('Number(instances[0].definition_version) !== 2');
+    expect(service).toContain(
+      '[2, 3].includes(Number(instances[0].definition_version))'
+    );
     expect(service).not.toContain('CUSTOMER_BUILD_TO_PRINT');
     expect(service).not.toContain('Design Project');
     expect(service).not.toContain('createDesign');

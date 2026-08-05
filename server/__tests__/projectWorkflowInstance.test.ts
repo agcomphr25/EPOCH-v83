@@ -72,8 +72,8 @@ describe('p2_v2 workflow instance snapshots and integrity', () => {
       'production_planning',
       'wad_authorization',
       'preproduction_release',
-      'production_quality',
-      'final_release_shipping',
+      'p2_release',
+      'p2_execution',
       'project_closing',
     ]);
     expect(stages.every((stage) => stage.label && stage.description)).toBe(
@@ -91,6 +91,22 @@ describe('p2_v2 workflow instance snapshots and integrity', () => {
       validateWorkflowInstanceIntegrity(
         { ...instance, definition_version: 1 },
         legacySnapshot.map((stage) => ({
+          project_id: instance.project_id,
+          step_type: stage.type,
+          step_order: stage.order,
+          label_snapshot: stage.label,
+          description_snapshot: stage.description,
+        }))
+      )
+    ).toEqual([]);
+  });
+
+  it('continues to validate stored definition-version-2 snapshots unchanged', () => {
+    const snapshot = getP2V2StagesForDefinitionVersion(2);
+    expect(
+      validateWorkflowInstanceIntegrity(
+        { ...instance, definition_version: 2 },
+        snapshot.map((stage) => ({
           project_id: instance.project_id,
           step_type: stage.type,
           step_order: stage.order,

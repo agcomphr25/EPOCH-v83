@@ -121,10 +121,10 @@ async function context(
         : 'An active V2 workflow instance is required.',
       409
     );
-  if (Number(instances[0].definition_version) !== 2)
+  if (![2, 3].includes(Number(instances[0].definition_version)))
     throw new ProjectPreproductionError(
       'PREPRODUCTION_DEFINITION_REQUIRED',
-      'Preproduction Readiness is available only to p2_v2 definition version 2.',
+      'Preproduction Readiness requires a compatible p2_v2 definition.',
       409
     );
   const steps = resultRows(

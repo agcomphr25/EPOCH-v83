@@ -202,7 +202,7 @@ const P2_V2_DEFINITION_V1_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
   },
 ]);
 
-const P2_V2_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
+const P2_V2_DEFINITION_V2_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
   {
     type: 'rfq_risk_assessment',
     order: 1,
@@ -272,13 +272,86 @@ const P2_V2_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
   },
 ]);
 
-export const P2_V2_DEFINITION_VERSION = 2;
+const P2_V2_DEFINITION_V3_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
+  {
+    type: 'rfq_risk_assessment',
+    order: 1,
+    label: 'RFQ Review',
+    description:
+      'Confirm customer inquiry scope, requirements, and risk evidence.',
+  },
+  {
+    type: 'estimate_quote',
+    order: 2,
+    label: 'Estimate & Quote',
+    description: 'Confirm the approved estimate and released commercial offer.',
+  },
+  {
+    type: 'contract_review',
+    order: 3,
+    label: 'Purchase/Contract Review',
+    description:
+      'Confirm the received customer PO against the accepted quote and contractual requirements.',
+  },
+  {
+    type: 'technical_configuration_review',
+    order: 4,
+    label: 'Technical & Configuration Review',
+    description:
+      'Confirm the released technical and configuration baseline required to manufacture and inspect the customer order.',
+  },
+  {
+    type: 'production_planning',
+    order: 5,
+    label: 'Production Planning',
+    description:
+      'Establish the controlled BOM, routing, material, quality, and execution plan.',
+  },
+  {
+    type: 'wad_authorization',
+    order: 6,
+    label: 'WAD Authorization',
+    description: 'Authorize work through current controlled WAD evidence.',
+  },
+  {
+    type: 'preproduction_release',
+    order: 7,
+    label: 'Preproduction Readiness',
+    description:
+      'Confirm materials, tooling, documents, approvals, and readiness before release.',
+  },
+  {
+    type: 'p2_release',
+    order: 8,
+    label: 'Approve and Release to P2',
+    description:
+      'Approve the production-release evidence, then separately release the order to the P2 Control Center.',
+  },
+  {
+    type: 'p2_execution',
+    order: 9,
+    label: 'P2 Execution',
+    description:
+      'Read-only summary of authoritative scheduling, production, quality, certification, packing, and shipping records in the P2 Control Center.',
+  },
+  {
+    type: 'project_closing',
+    order: 10,
+    label: 'Project Closing',
+    description:
+      'Complete the controlled closing review after P2 execution requirements are satisfied.',
+  },
+]);
+
+export const P2_V2_DEFINITION_VERSION = 3;
 
 export function getP2V2StagesForDefinitionVersion(
   definitionVersion: number
 ): readonly ProjectWorkflowStageDefinition[] {
   if (definitionVersion === 1) return P2_V2_DEFINITION_V1_STAGES;
-  if (definitionVersion === P2_V2_DEFINITION_VERSION) return P2_V2_STAGES;
+  if (definitionVersion === 2) return P2_V2_DEFINITION_V2_STAGES;
+  if (definitionVersion === P2_V2_DEFINITION_VERSION)
+    return P2_V2_DEFINITION_V3_STAGES;
   throw new ProjectWorkflowDefinitionValidationError(
     `Unknown p2_v2 definition version ${definitionVersion}`
   );
@@ -307,7 +380,7 @@ const DEFINITIONS: Readonly<
     active: true,
     initializable: true,
     steps: Object.freeze([]),
-    stages: P2_V2_STAGES,
+    stages: P2_V2_DEFINITION_V3_STAGES,
   }),
 });
 
@@ -369,7 +442,11 @@ export function validateProjectWorkflowDefinition(
       throw new ProjectWorkflowDefinitionValidationError(
         'p2_v2 must have exactly ten metadata stages'
       );
-    if (!definition.active || !definition.initializable || definition.steps.length > 0)
+    if (
+      !definition.active ||
+      !definition.initializable ||
+      definition.steps.length > 0
+    )
       throw new ProjectWorkflowDefinitionValidationError(
         'p2_v2 must be active and initializable only through stage instances'
       );

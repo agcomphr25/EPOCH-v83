@@ -74,7 +74,7 @@ jobs:
       - name: Check out exact main baseline for TypeScript comparison
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          ref: ${{ github.event.pull_request.base.sha || 'main' }}
           path: phase10a-main-baseline
 
       - name: Isolate the TypeScript baseline checkout
@@ -147,7 +147,7 @@ jobs:
       - name: Run focused Phase 9-10A ESLint certification
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || 'origin/main' }}
         run: |
           node scripts/validate-phase10a-static-manifest.js
           mapfile -t manifest_files < <(
@@ -196,7 +196,7 @@ jobs:
       - name: Run focused Phase 9-10A formatting certification
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || 'origin/main' }}
         run: |
           node scripts/validate-phase10a-static-manifest.js
           mapfile -t files < <(
@@ -338,6 +338,7 @@ jobs:
           server/__tests__/projectProductionPlanning.test.ts
           server/__tests__/projectWadAuthorization.test.ts
           server/__tests__/projectPreproductionReadiness.test.ts
+          server/__tests__/projectP2Handoff.test.ts
           server/__tests__/projectProductionExecution.test.ts
           server/__tests__/projectQualityRelease.test.ts
           server/__tests__/projectShippingCloseout.test.ts

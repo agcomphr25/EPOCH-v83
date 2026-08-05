@@ -68,10 +68,11 @@ import {
   saveShippingReview,
   submitCloseoutReview,
 } from '../src/services/projectShippingCloseoutService';
-import {
-  getP2V2StagesForDefinitionVersion,
-  P2_V2_DEFINITION_VERSION,
-} from '../src/services/projectWorkflowRegistry';
+import { getP2V2StagesForDefinitionVersion } from '../src/services/projectWorkflowRegistry';
+
+// This established lifecycle suite certifies immutable definition v2. The
+// prospective definition-v3 handoff has a separate PostgreSQL suite.
+const CERTIFIED_COMPATIBILITY_DEFINITION_VERSION = 2;
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL is required');
@@ -248,12 +249,12 @@ async function createFixture(
       `INSERT INTO project_workflow_instances
          (project_id,workflow_version,definition_version,status)
        VALUES ($1,'p2_v2',$2,'ACTIVE') RETURNING id`,
-      [projectId, P2_V2_DEFINITION_VERSION]
+      [projectId, CERTIFIED_COMPATIBILITY_DEFINITION_VERSION]
     );
     const workflowId = workflow.rows[0].id;
     const steps: Record<string, string> = {};
     for (const stage of getP2V2StagesForDefinitionVersion(
-      P2_V2_DEFINITION_VERSION
+      CERTIFIED_COMPATIBILITY_DEFINITION_VERSION
     )) {
       const step = await client.query<{ id: string }>(
         `INSERT INTO project_workflow_step_instances

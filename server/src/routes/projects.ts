@@ -51,6 +51,7 @@ import projectWadAuthorizationRoutes from './projectWadAuthorization';
 import projectCommercialReviewRoutes from './projectCommercialReviews';
 import projectTechnicalConfigurationReviewRoutes from './projectTechnicalConfigurationReview';
 import projectPreproductionReadinessRoutes from './projectPreproductionReadiness';
+import projectP2HandoffRoutes from './projectP2Handoff';
 import projectProductionExecutionRoutes from './projectProductionExecution';
 import projectQualityReleaseRoutes from './projectQualityRelease';
 import projectShippingCloseoutRoutes from './projectShippingCloseout';
@@ -1933,6 +1934,7 @@ router.use(
   '/:id/workflow-v2/preproduction-readiness',
   projectPreproductionReadinessRoutes
 );
+router.use('/:id/workflow-v2/p2-handoff', projectP2HandoffRoutes);
 router.use('/:id/workflow-v2/production', projectProductionExecutionRoutes);
 router.use('/:id/workflow-v2/quality-release', projectQualityReleaseRoutes);
 router.use('/:id/workflow-v2/shipping-closeout', projectShippingCloseoutRoutes);

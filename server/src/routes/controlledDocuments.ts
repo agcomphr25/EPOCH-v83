@@ -18,6 +18,8 @@ import { PDFDocument, PDFFont, StandardFonts, rgb } from 'pdf-lib';
 import { getFileStorageProvider, getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 import {
   ControlledDocumentError,
+  approveAndReleaseControlledRevision,
+  rejectRegisteredControlledRevision,
   attachExternalApprovalEvidence,
   createControlledDocument,
   createControlledRevision,
@@ -27,9 +29,12 @@ import {
   transitionControlledRevision,
   updateDraftMetadata,
   verifyControlledRevisionFile,
+  checksumFile,
 } from '../services/controlledDocumentLifecycleService';
+import { isControlledDocumentPhase2Enabled } from '../services/controlledDocumentPhase2Gate';
 import {
   assertControlledDocumentSchemaReady,
+  assertControlledDocumentPhase2SchemaReady,
   ControlledDocumentSchemaNotReadyError,
 } from '../services/controlledDocumentSchemaReadiness';
 
@@ -112,6 +117,12 @@ const requireAuth = async (req: Request, res: Response, next: any) => {
   (req as any).user = user;
   next();
 };
+
+/* eslint-disable prettier/prettier */
+router.get('/phase2/availability', requireAuth, (_req: Request, res: Response) => {
+  res.json({ enabled: isControlledDocumentPhase2Enabled(), workflow: 'REGISTER_APPROVE_RELEASE' });
+});
+/* eslint-enable prettier/prettier */
 
 // Authorization middleware - check for admin/owner role
 const requireAdminOrOwner = async (req: Request, res: Response, next: any) => {
@@ -975,12 +986,53 @@ const lifecycleHandler = (
   }
 };
 
-router.post('/:id/submit', requireAuth, requirePermission('documents.submit'), lifecycleHandler('submit'));
-router.post('/:id/decision', requireAuth, requirePermission('documents.approve'), lifecycleHandler('approve'));
-router.post('/:id/release', requireAuth, requirePermission('documents.release'), lifecycleHandler('release'));
+/* eslint-disable prettier/prettier */
+const requireLegacyLifecycle = (_req: Request, res: Response, next: NextFunction) => {
+  if (!isControlledDocumentPhase2Enabled()) return next();
+  return res.status(409).json({ error: 'PHASE2_OBSOLETE_ACTION', message: 'Registered revisions are approved and released atomically; Submit and Release are not routine Phase 2 actions.' });
+};
+router.post('/:id/submit', requireAuth, requirePermission('documents.submit'), requireLegacyLifecycle, lifecycleHandler('submit'));
+router.post('/:id/decision', requireAuth, requirePermission('documents.approve'), requireLegacyLifecycle, lifecycleHandler('approve'));
+router.post('/:id/release', requireAuth, requirePermission('documents.release'), requireLegacyLifecycle, lifecycleHandler('release'));
 router.post('/:id/supersede', requireAuth, requirePermission('documents.supersede'), lifecycleHandler('supersede'));
 router.post('/:id/obsolete', requireAuth, requirePermission('documents.obsolete'), lifecycleHandler('obsolete'));
 router.post('/:id/void', requireAuth, requirePermission('documents.void'), lifecycleHandler('void'));
+
+router.post('/:id/approve-and-release', requireAuth, requirePermission('documents.approve'), requireStepUp(), async (req: Request, res: Response) => {
+  try {
+    if (!isControlledDocumentPhase2Enabled()) return res.status(404).json({ error: 'PHASE2_DISABLED', message: 'Atomic approval and release is disabled.' });
+    await assertControlledDocumentPhase2SchemaReady();
+    const state = await getControlledDocumentState(req.params.id);
+    const revisionId = String(req.body?.revisionId || '');
+    const revision = state.revisions.find((candidate) => candidate.id === revisionId);
+    if (!revision || revision.documentId !== state.document.id) throw new ControlledDocumentError(409, 'CROSS_DOCUMENT_REVISION', 'Revision does not belong to this controlled document');
+    if (!revision.filePath || getExternalRedirectUrl(revision.filePath)) throw new ControlledDocumentError(422, 'IMMUTABLE_REVISION_FILE_REQUIRED', 'Approval requires an immutable EPOCH-managed file');
+    const bytes = await readControlledDocumentBytes(revision.filePath);
+    const result = await approveAndReleaseControlledRevision({
+      documentId: state.document.id, revisionId, filePath: revision.filePath, observedChecksum: checksumFile(bytes),
+      idempotencyKey: String(req.headers['idempotency-key'] || ''), reason: String(req.body?.reason || req.body?.comment || ''),
+      effectiveDate: typeof req.body?.effectiveDate === 'string' ? req.body.effectiveDate : null,
+      actor: lifecycleActor(req), request: requestEvidence(req),
+    });
+    res.json(result);
+  } catch (error) {
+    sendLifecycleError(res, error, 'Failed to approve and release controlled revision');
+  }
+});
+
+router.post('/:id/reject', requireAuth, requirePermission('documents.approve'), requireStepUp(), async (req: Request, res: Response) => {
+  try {
+    if (!isControlledDocumentPhase2Enabled()) return res.status(404).json({ error: 'PHASE2_DISABLED' });
+    await assertControlledDocumentPhase2SchemaReady();
+    const result = await rejectRegisteredControlledRevision({ documentId: req.params.id,
+      revisionId: String(req.body?.revisionId || ''), reason: String(req.body?.reason || req.body?.comment || ''),
+      actor: lifecycleActor(req), request: requestEvidence(req) });
+    res.json(result);
+  } catch (error) {
+    sendLifecycleError(res, error, 'Failed to reject registered controlled revision');
+  }
+});
+/* eslint-enable prettier/prettier */
 
 router.post('/:id/revisions/:revisionId/external-approval-evidence', requireAuth, requirePermission('documents.approve'), async (req: Request, res: Response) => {
   try {

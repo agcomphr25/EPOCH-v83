@@ -3,6 +3,7 @@ import { and, asc, desc, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../db';
 import {
+  controlledDocumentApprovalReleaseEvents,
   controlledDocumentNumberRegistry,
   controlledDocumentRevisionApprovals,
   controlledDocuments,
@@ -14,7 +15,7 @@ import { getUserPermissions } from './permissionService';
 
 type Client = typeof db;
 export type DocumentLifecycle =
-  | 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'RELEASED'
+  | 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'RELEASED'
   | 'SUPERSEDED' | 'OBSOLETE' | 'VOID';
 export type ControlledDocumentActor = { id: number; username: string; role: string };
 export type RequestEvidence = { ipAddress?: string | null; userAgent?: string | null };
@@ -94,6 +95,10 @@ const audit = async (
 async function loadDocument(documentId: string, client: Client, lock = false) {
   if (lock) {
     await client.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`controlled-document:${documentId}`}))`);
+    /* eslint-disable prettier/prettier */
+    await client.execute(sql`SELECT id FROM controlled_documents WHERE id = ${documentId}::uuid FOR UPDATE`);
+    await client.execute(sql`SELECT id FROM document_version_history WHERE document_id = ${documentId}::uuid ORDER BY revision_sequence FOR UPDATE`);
+    /* eslint-enable prettier/prettier */
   }
   const [document] = await client.select().from(controlledDocuments)
     .where(eq(controlledDocuments.id, documentId)).limit(1);
@@ -498,6 +503,110 @@ export async function createControlledRevision(input: {
     return { document, revision };
   });
 }
+
+/* eslint-disable prettier/prettier */
+export async function approveAndReleaseControlledRevision(input: {
+  documentId: string; revisionId: string; filePath: string; observedChecksum: string;
+  idempotencyKey: string; reason: string; effectiveDate?: string | null;
+  actor: ControlledDocumentActor; request?: RequestEvidence;
+}, client: Client = db) {
+  const reason = input.reason.trim();
+  if (!reason) throw new ControlledDocumentError(400, 'TRANSITION_REASON_REQUIRED', 'Approval reason or comment is required');
+  if (!input.idempotencyKey.trim()) throw new ControlledDocumentError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'An Idempotency-Key is required');
+  if (!/^[0-9a-f]{64}$/.test(input.observedChecksum)) throw new ControlledDocumentError(422, 'CHECKSUM_INVALID', 'Exact SHA-256 checksum is required');
+  return client.transaction(async (tx) => {
+    const context = await loadDocument(input.documentId, tx as unknown as Client, true);
+    const evidence = await actorEvidence(input.actor);
+    if (!evidence.capabilities.includes('documents.approve')) throw new ControlledDocumentError(403, 'APPROVAL_PERMISSION_REQUIRED', 'documents.approve authority is required');
+    const revision = context.revisions.find((row) => row.id === input.revisionId);
+    if (!revision || revision.documentId !== context.document.id) throw new ControlledDocumentError(409, 'CROSS_DOCUMENT_REVISION', 'Revision does not belong to this controlled document');
+    const [replay] = await tx.select().from(controlledDocumentApprovalReleaseEvents)
+      .where(eq(controlledDocumentApprovalReleaseEvents.idempotencyKey, input.idempotencyKey.trim())).limit(1);
+    if (replay) {
+      if (replay.controlledDocumentId !== context.document.id || replay.revisionId !== revision.id || replay.fileChecksum !== input.observedChecksum) {
+        throw new ControlledDocumentError(409, 'IDEMPOTENCY_KEY_CONFLICT', 'Idempotency-Key was used for different approval evidence');
+      }
+      return getControlledDocumentState(input.documentId, tx as unknown as Client);
+    }
+    if (context.document.currentRevisionId !== revision.id || context.document.workingDraftRevisionId !== revision.id) throw new ControlledDocumentError(409, 'STALE_REVISION', 'Approval must target the exact current registered revision');
+    if (revision.lifecycleStatus !== 'DRAFT') throw new ControlledDocumentError(409, 'ILLEGAL_LIFECYCLE_TRANSITION', `Cannot approve a ${revision.lifecycleStatus} revision`);
+    if (!revision.filePath || revision.filePath !== input.filePath || revision.fileChecksum !== input.observedChecksum || revision.checksumStatus !== 'VERIFIED') throw new ControlledDocumentError(422, 'EXACT_VERIFIED_BYTES_REQUIRED', 'The locked revision path and verified checksum must match the exact authoritative bytes');
+    if (revision.createdBy.trim().toLowerCase() === input.actor.username.trim().toLowerCase()) throw new ControlledDocumentError(403, 'SELF_APPROVAL_PROHIBITED', 'The revision author cannot approve and release the same revision');
+    const pointerRevision = context.document.currentReleasedRevisionId ? context.revisions.find((row) => row.id === context.document.currentReleasedRevisionId) : null;
+    if (context.document.currentReleasedRevisionId && !pointerRevision) throw new ControlledDocumentError(409, 'INVALID_RELEASED_REVISION_POINTER', 'Existing released revision pointer is invalid');
+    if (pointerRevision && pointerRevision.lifecycleStatus !== 'RELEASED') throw new ControlledDocumentError(409, 'CONFLICTING_RELEASED_REVISION', 'Existing released pointer does not identify a released revision');
+    const conflictingReleased = context.revisions.find((row) => row.lifecycleStatus === 'RELEASED' && row.id !== pointerRevision?.id);
+    if (conflictingReleased) throw new ControlledDocumentError(409, 'CONFLICTING_RELEASED_REVISION', 'Multiple released revisions conflict with the authoritative pointer');
+    const now = new Date();
+    const effectiveDate = input.effectiveDate ?? now.toISOString().slice(0, 10);
+    const [approval] = await tx.insert(controlledDocumentRevisionApprovals).values({
+      controlledDocumentId: context.document.id, revisionId: revision.id, fileChecksum: revision.fileChecksum,
+      documentNumberSnapshot: context.document.documentNumber, revisionSnapshot: revision.versionNumber,
+      decision: 'APPROVED', signatureMeaning: 'I approve and release this exact immutable controlled document revision and checksum.',
+      decisionComment: reason, actorUserId: input.actor.id, actorUsernameSnapshot: input.actor.username,
+      actorRoleSnapshot: input.actor.role, actorCapabilitiesSnapshot: evidence.capabilities,
+      approvalStatus: 'VALID', metadata: { provenance: 'AUTHENTICATED_ATOMIC_APPROVAL_RELEASE' },
+    }).returning();
+    if (pointerRevision && pointerRevision.id !== revision.id) await tx.update(documentVersionHistory).set({
+      lifecycleStatus: 'SUPERSEDED', status: 'superseded', supersededByRevisionId: revision.id,
+      supersededAt: now, supersededByUserId: input.actor.id,
+    }).where(and(eq(documentVersionHistory.id, pointerRevision.id), eq(documentVersionHistory.documentId, context.document.id)));
+    await tx.update(documentVersionHistory).set({
+      lifecycleStatus: 'RELEASED', status: 'released', approvedAt: now, approvedBy: input.actor.username,
+      approvedByUserId: input.actor.id, approvedBySnapshot: evidence.snapshot, reviewedAt: now,
+      reviewedByUserId: input.actor.id, reviewedBySnapshot: evidence.snapshot, releasedAt: now,
+      releasedByUserId: input.actor.id, releasedBySnapshot: evidence.snapshot, effectiveDate,
+    }).where(and(eq(documentVersionHistory.id, revision.id), eq(documentVersionHistory.documentId, context.document.id)));
+    const [document] = await tx.update(controlledDocuments).set({
+      lifecycleStatus: 'RELEASED', status: 'released', lifecycleReason: reason,
+      currentReleasedRevisionId: revision.id, workingDraftRevisionId: null, currentVersion: revision.versionNumber,
+      filePath: revision.filePath, effectiveDate, updatedAt: now,
+    }).where(eq(controlledDocuments.id, context.document.id)).returning();
+    await tx.insert(controlledDocumentApprovalReleaseEvents).values({
+      controlledDocumentId: document.id, revisionId: revision.id, approvalId: approval.id,
+      idempotencyKey: input.idempotencyKey.trim(), fileChecksum: revision.fileChecksum,
+      documentNumberSnapshot: document.documentNumber, revisionSnapshot: revision.versionNumber,
+      actorUserId: input.actor.id, actorSnapshot: evidence.snapshot, authoritySnapshot: evidence.capabilities,
+      reason, beforeLifecycle: 'DRAFT', afterLifecycle: 'RELEASED', effectiveDate,
+    });
+    await audit('CONTROLLED_DOCUMENT_APPROVED_AND_RELEASED', document, revision, input.actor, evidence.capabilities,
+      reason, 'DRAFT', 'RELEASED', input.request ?? {}, tx as unknown as Client,
+      { approvalId: approval.id, idempotencyKey: input.idempotencyKey.trim(), effectiveDate });
+    return getControlledDocumentState(input.documentId, tx as unknown as Client);
+  });
+}
+
+export async function rejectRegisteredControlledRevision(input: {
+  documentId: string; revisionId: string; reason: string; actor: ControlledDocumentActor; request?: RequestEvidence;
+}, client: Client = db) {
+  const reason = input.reason.trim();
+  if (!reason) throw new ControlledDocumentError(400, 'TRANSITION_REASON_REQUIRED', 'Rejection reason is required');
+  return client.transaction(async (tx) => {
+    const context = await loadDocument(input.documentId, tx as unknown as Client, true);
+    const evidence = await actorEvidence(input.actor);
+    if (!evidence.capabilities.includes('documents.approve')) throw new ControlledDocumentError(403, 'APPROVAL_PERMISSION_REQUIRED', 'documents.approve authority is required');
+    const revision = context.revisions.find((row) => row.id === input.revisionId);
+    if (!revision || revision.documentId !== context.document.id) throw new ControlledDocumentError(409, 'CROSS_DOCUMENT_REVISION', 'Revision does not belong to this controlled document');
+    if (context.document.currentRevisionId !== revision.id || context.document.workingDraftRevisionId !== revision.id || revision.lifecycleStatus !== 'DRAFT') throw new ControlledDocumentError(409, 'STALE_REVISION', 'Rejection must target the exact current registered revision');
+    await tx.insert(controlledDocumentRevisionApprovals).values({
+      controlledDocumentId: context.document.id, revisionId: revision.id,
+      fileChecksum: revision.fileChecksum || 'UNVERIFIED', documentNumberSnapshot: context.document.documentNumber,
+      revisionSnapshot: revision.versionNumber, decision: 'REJECTED',
+      signatureMeaning: 'I rejected this exact registered controlled document revision.', decisionComment: reason,
+      actorUserId: input.actor.id, actorUsernameSnapshot: input.actor.username, actorRoleSnapshot: input.actor.role,
+      actorCapabilitiesSnapshot: evidence.capabilities, approvalStatus: 'VALID',
+      metadata: { provenance: 'AUTHENTICATED_PHASE2_REJECTION' },
+    });
+    await tx.update(documentVersionHistory).set({ lifecycleStatus: 'REJECTED', status: 'rejected', reviewedAt: new Date(), reviewedByUserId: input.actor.id, reviewedBySnapshot: evidence.snapshot })
+      .where(and(eq(documentVersionHistory.id, revision.id), eq(documentVersionHistory.documentId, context.document.id)));
+    const [document] = await tx.update(controlledDocuments).set({ lifecycleStatus: 'REJECTED', status: 'rejected', lifecycleReason: reason, updatedAt: new Date() })
+      .where(eq(controlledDocuments.id, context.document.id)).returning();
+    await audit('CONTROLLED_DOCUMENT_REJECTED', document, revision, input.actor, evidence.capabilities, reason,
+      'DRAFT', 'REJECTED', input.request ?? {}, tx as unknown as Client);
+    return getControlledDocumentState(input.documentId, tx as unknown as Client);
+  });
+}
+/* eslint-enable prettier/prettier */
 
 const transitions: Record<string, DocumentLifecycle[]> = {
   submit: ['DRAFT'],

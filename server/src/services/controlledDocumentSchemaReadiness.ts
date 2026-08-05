@@ -8,6 +8,8 @@ export const requiredControlledDocumentReconciliationMigration =
   '0245_controlled_document_legacy_reconciliation.sql';
 export const requiredControlledDocumentReconciliationCorrectiveMigration =
   '0254_controlled_document_reconciliation_certification_controls.sql';
+export const requiredControlledDocumentPhase2Migration =
+  '0256_controlled_document_atomic_approval_release.sql';
 export const requiredControlledDocumentTables = [
   'controlled_documents',
   'document_version_history',
@@ -69,6 +71,17 @@ export async function assertControlledDocumentSchemaReady(
   const missing = required.filter((object) => !present.has(object));
   if (missing.length) throw new ControlledDocumentSchemaNotReadyError(missing);
 }
+
+/* eslint-disable prettier/prettier, @typescript-eslint/no-explicit-any */
+export async function assertControlledDocumentPhase2SchemaReady(client: Pick<typeof db, 'execute'> = db) {
+  await assertControlledDocumentSchemaReady(client);
+  const result = await client.execute(sql`SELECT to_regclass('public.controlled_document_approval_release_events')::text AS object_name`);
+  const rows = (((result as any)?.rows ?? result) || []) as Array<{ object_name?: string | null }>;
+  if (rows[0]?.object_name !== 'controlled_document_approval_release_events') {
+    throw new ControlledDocumentSchemaNotReadyError(['controlled_document_approval_release_events']);
+  }
+}
+/* eslint-enable prettier/prettier, @typescript-eslint/no-explicit-any */
 
 const reconciliationTables = [
   'controlled_document_reconciliation_previews',

@@ -239,6 +239,10 @@ export default function MasterDocumentRegister() {
   const { data: session } = useQuery<{ username: string; role: string }>({
     queryKey: ['/api/auth/session'],
   });
+  /* eslint-disable prettier/prettier */
+  const { data: phase2Availability } = useQuery<{ enabled: boolean }>({ queryKey: ['/api/controlled-documents/phase2/availability'] });
+  const phase2Enabled = phase2Availability?.enabled === true;
+  /* eslint-enable prettier/prettier */
 
   const { data: versionHistory = [], isLoading: isHistoryLoading } = useQuery<DocumentVersionHistory[]>({
     queryKey: ['/api/controlled-documents', selectedDocument?.id, 'versions'],
@@ -400,7 +404,13 @@ export default function MasterDocumentRegister() {
       );
     }
 
-    switch ((doc as any).lifecycleStatus || doc.status?.toUpperCase()) {
+    /* eslint-disable prettier/prettier */
+    const lifecycle = doc.lifecycleStatus || doc.status?.toUpperCase();
+    if (phase2Enabled && lifecycle === 'DRAFT') return <Badge variant="outline" className="border-blue-500 text-blue-700">Registered — awaiting approval</Badge>;
+    if (phase2Enabled && lifecycle === 'REJECTED') return <Badge variant="destructive">Rejected — correction required</Badge>;
+    if (phase2Enabled && ['IN_REVIEW', 'APPROVED'].includes(lifecycle)) return <Badge variant="outline">Historical/legacy — retained</Badge>;
+    /* eslint-enable prettier/prettier */
+    switch (lifecycle) {
       case 'RELEASED':
         return <Badge className="bg-emerald-700">Released</Badge>;
       case 'SUPERSEDED':
@@ -741,15 +751,18 @@ export default function MasterDocumentRegister() {
   };
 
   // Approve document mutation
+  /* eslint-disable prettier/prettier */
   const approveDocumentMutation = useMutation({
     mutationFn: async ({ id, effectiveDate }: { id: string; effectiveDate: string }) => {
-      return await apiRequest(`/api/controlled-documents/${id}/decision`, {
+      return await apiRequest(`/api/controlled-documents/${id}/${phase2Enabled ? 'approve-and-release' : 'decision'}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(phase2Enabled ? { 'Idempotency-Key': crypto.randomUUID() } : {}) },
         body: JSON.stringify({
           revisionId: (selectedDocument as any)?.currentRevisionId,
           decision: 'APPROVED',
           comment: `Approved with effective date ${effectiveDate}`,
+          reason: `Approved and released with effective date ${effectiveDate}`,
+          effectiveDate,
         }),
       });
     },
@@ -759,7 +772,7 @@ export default function MasterDocumentRegister() {
       setSelectedDocument(null);
       toast({
         title: 'Success',
-        description: 'Document approved successfully',
+        description: phase2Enabled ? 'Document approved and released successfully' : 'Document approved successfully',
       });
     },
     onError: (error: any) => {
@@ -770,6 +783,7 @@ export default function MasterDocumentRegister() {
       });
     },
   });
+  /* eslint-enable prettier/prettier */
 
   const handleApproveDocument = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -782,8 +796,9 @@ export default function MasterDocumentRegister() {
     approveDocumentMutation.mutate({ id: selectedDocument.id, effectiveDate });
   };
 
+  /* eslint-disable prettier/prettier */
   const lifecycleMutation = useMutation({
-    mutationFn: async ({ doc, action }: { doc: ControlledDocument; action: 'submit' | 'release' | 'obsolete' | 'void' }) => {
+    mutationFn: async ({ doc, action }: { doc: ControlledDocument; action: 'submit' | 'release' | 'reject' | 'obsolete' | 'void' }) => {
       const reason = window.prompt(`Reason for ${action}`);
       if (!reason?.trim()) throw new Error('A transition reason is required');
       return apiRequest(`/api/controlled-documents/${doc.id}/${action}`, {
@@ -801,6 +816,7 @@ export default function MasterDocumentRegister() {
       variant: 'destructive',
     }),
   });
+  /* eslint-enable prettier/prettier */
 
   // CSV Import mutation
   const importCsvMutation = useMutation({
@@ -1259,12 +1275,13 @@ export default function MasterDocumentRegister() {
                                 Create Revision
                               </Button>
                             )}
-                            {!isDesignControlTemplate(doc) && can('documents.submit') && (doc as any).lifecycleStatus === 'DRAFT' && (
+                            {/* eslint-disable prettier/prettier */}
+                            {!phase2Enabled && !isDesignControlTemplate(doc) && can('documents.submit') && doc.lifecycleStatus === 'DRAFT' && (
                               <Button size="sm" variant="outline" onClick={() => lifecycleMutation.mutate({ doc, action: 'submit' })}>
                                 Submit
                               </Button>
                             )}
-                            {!isDesignControlTemplate(doc) && canApprove && (doc as any).lifecycleStatus === 'IN_REVIEW' && (
+                            {!isDesignControlTemplate(doc) && canApprove && ((phase2Enabled && doc.lifecycleStatus === 'DRAFT') || (!phase2Enabled && doc.lifecycleStatus === 'IN_REVIEW')) && (
                               <Button
                                 size="sm"
                                 variant="default"
@@ -1277,9 +1294,13 @@ export default function MasterDocumentRegister() {
                                 Approve
                               </Button>
                             )}
-                            {!isDesignControlTemplate(doc) && can('documents.release') && (doc as any).lifecycleStatus === 'APPROVED' && (
+                            {phase2Enabled && !isDesignControlTemplate(doc) && canApprove && doc.lifecycleStatus === 'DRAFT' && (
+                              <Button size="sm" variant="outline" onClick={() => lifecycleMutation.mutate({ doc, action: 'reject' })}>Reject</Button>
+                            )}
+                            {!phase2Enabled && !isDesignControlTemplate(doc) && can('documents.release') && doc.lifecycleStatus === 'APPROVED' && (
                               <Button size="sm" onClick={() => lifecycleMutation.mutate({ doc, action: 'release' })}>Release</Button>
                             )}
+                            {/* eslint-enable prettier/prettier */}
                             {!isDesignControlTemplate(doc) && can('documents.obsolete') && ((doc as any).lifecycleStatus === 'RELEASED' || (doc as any).lifecycleStatus === 'SUPERSEDED') && (
                               <Button size="sm" variant="destructive" onClick={() => lifecycleMutation.mutate({ doc, action: 'obsolete' })}>Obsolete</Button>
                             )}
@@ -1743,7 +1764,8 @@ export default function MasterDocumentRegister() {
           <DialogHeader>
             <DialogTitle>Approve Controlled Document</DialogTitle>
             <DialogDescription>
-              Record an authenticated approval for the exact current revision and checksum. Release is a separate action.
+              {/* eslint-disable-next-line prettier/prettier */}
+              {phase2Enabled ? 'Approve and automatically release the exact immutable current revision in one transaction.' : 'Record an authenticated approval for the exact current revision and checksum. Release is a separate action.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1781,7 +1803,8 @@ export default function MasterDocumentRegister() {
                   data-testid="input-effective-date"
                 />
                 <p className="text-xs text-gray-500">
-                  This date is included in the approval comment only. The release action controls the effective revision.
+                  {/* eslint-disable-next-line prettier/prettier */}
+                  {phase2Enabled ? 'This becomes the effective date of the exact released revision.' : 'This date is included in the approval comment only. The release action controls the effective revision.'}
                 </p>
               </div>
 
@@ -1803,7 +1826,8 @@ export default function MasterDocumentRegister() {
                   className="bg-green-600 hover:bg-green-700"
                   data-testid="button-submit-approve"
                 >
-                  {approveDocumentMutation.isPending ? 'Approving...' : 'Approve Document'}
+                  {/* eslint-disable-next-line prettier/prettier */}
+                  {approveDocumentMutation.isPending ? 'Approving...' : (phase2Enabled ? 'Approve and Release' : 'Approve Document')}
                 </Button>
               </DialogFooter>
             </form>

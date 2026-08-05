@@ -11,7 +11,14 @@ BEGIN
   FROM qms_epoch_validation_packages
   WHERE package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014';
 
-  IF target_count <> 13 THEN
+  -- If 0 packages are found this database never had the duplicates (dev, test,
+  -- baseline replay) or they were already disposed of in a prior run.  Return
+  -- immediately so the subsequent ESV-2026-0001 guard and the UPDATE / INSERT
+  -- below become natural no-ops rather than crashing the server.
+  IF target_count = 0 THEN
+    RAISE NOTICE '0253 no-op: packages ESV-2026-0002..ESV-2026-0014 not present on this database instance';
+    RETURN;
+  ELSIF target_count <> 13 THEN
     RAISE EXCEPTION
       '0253 expected exactly 13 duplicate packages ESV-2026-0002 through ESV-2026-0014; found %',
       target_count;

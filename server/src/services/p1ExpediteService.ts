@@ -20,6 +20,7 @@ export interface ExpeditePreviewRow {
   eligible: boolean;
   alreadyAtShippingQc: boolean;
   blockers: string[];
+  allOrderId?: string | null;
 }
 
 function normalizeIds(ids: unknown): string[] {
@@ -31,7 +32,8 @@ async function loadPreview(ids: string[], query = pgPool.query.bind(pgPool)): Pr
   if (!ids.length) return [];
   const result = await query(
     `SELECT requested.requested_id,
-            ao.order_id, ao.fb_order_number, ao.current_department, ao.status,
+            po.order_id, ao.order_id AS all_order_id, ao.fb_order_number,
+            ao.current_department AS all_order_department, ao.status,
             ao.scrap_date, ao.shipped_date,
             po.id AS production_order_id, po.customer_name,
             po.current_department AS production_department,
@@ -44,24 +46,23 @@ async function loadPreview(ids: string[], query = pgPool.query.bind(pgPool)): Pr
             ) AS has_open_ncr
        FROM unnest($1::text[]) WITH ORDINALITY requested(requested_id, ordinal)
        LEFT JOIN LATERAL (
-         SELECT * FROM all_orders candidate
+         SELECT * FROM production_orders candidate
           WHERE UPPER(candidate.order_id) = requested.requested_id
+          ORDER BY candidate.id DESC LIMIT 1
+       ) po ON true
+       LEFT JOIN LATERAL (
+         SELECT * FROM all_orders candidate
+          WHERE candidate.order_id = po.order_id
              OR UPPER(COALESCE(candidate.fb_order_number, '')) = requested.requested_id
           ORDER BY candidate.id DESC LIMIT 1
        ) ao ON true
-       LEFT JOIN LATERAL (
-         SELECT * FROM production_orders candidate
-          WHERE candidate.order_id = ao.order_id
-          ORDER BY candidate.id DESC LIMIT 1
-       ) po ON true
       ORDER BY requested.ordinal`,
     [ids]
   );
 
   return result.rows.map((row: any) => {
     const blockers: string[] = [];
-    if (!row.order_id) blockers.push('Order not found');
-    if (row.order_id && !row.production_order_id) blockers.push('Production order not found');
+    if (!row.production_order_id) blockers.push('P1 production order not found');
     if (row.customer_name && !String(row.customer_name).toLowerCase().includes('pure precision')) {
       blockers.push(`Customer is ${row.customer_name}, not Pure Precision`);
     }
@@ -72,17 +73,19 @@ async function loadPreview(ids: string[], query = pgPool.query.bind(pgPool)): Pr
       blockers.push('Order is already shipped or fulfilled');
     }
     if (row.has_open_ncr) blockers.push('Order has an open nonconformance record');
-    const alreadyAtShippingQc = row.current_department === TARGET_DEPARTMENT && row.production_department === TARGET_DEPARTMENT;
+    const alreadyAtShippingQc = row.production_department === TARGET_DEPARTMENT
+      && (!row.all_order_id || row.all_order_department === TARGET_DEPARTMENT);
     return {
       requestedId: row.requested_id,
       orderId: row.order_id ?? null,
       fbOrderNumber: row.fb_order_number ?? null,
       customerName: row.customer_name ?? null,
-      currentDepartment: row.current_department ?? null,
+      currentDepartment: row.production_department ?? null,
       productionDepartment: row.production_department ?? null,
       eligible: blockers.length === 0,
       alreadyAtShippingQc,
       blockers,
+      allOrderId: row.all_order_id ?? null,
     };
   });
 }
@@ -109,15 +112,13 @@ export async function executePurePrecisionExpedite(input: {
   try {
     await client.query('BEGIN');
     await client.query(
-      `SELECT id FROM all_orders
-        WHERE UPPER(order_id) = ANY($1::text[]) OR UPPER(COALESCE(fb_order_number, '')) = ANY($1::text[])
-        FOR UPDATE`, [ids]
+      `SELECT id FROM production_orders WHERE UPPER(order_id) = ANY($1::text[]) FOR UPDATE`, [ids]
     );
     await client.query(
-      `SELECT id FROM production_orders WHERE order_id IN (
-         SELECT order_id FROM all_orders
-          WHERE UPPER(order_id) = ANY($1::text[]) OR UPPER(COALESCE(fb_order_number, '')) = ANY($1::text[])
-       ) FOR UPDATE`, [ids]
+      `SELECT id FROM all_orders
+        WHERE order_id IN (SELECT order_id FROM production_orders WHERE UPPER(order_id) = ANY($1::text[]))
+           OR UPPER(COALESCE(fb_order_number, '')) = ANY($1::text[])
+        FOR UPDATE`, [ids]
     );
     const preview = await loadPreview(ids, client.query.bind(client));
     const blocked = preview.filter(row => !row.eligible);
@@ -141,12 +142,14 @@ export async function executePurePrecisionExpedite(input: {
         from: row.currentDepartment,
       });
 
-      await client.query(
-        `UPDATE all_orders SET current_department = $1,
-            department_history = COALESCE(department_history, '[]'::jsonb) || $2::jsonb,
-            updated_at = NOW() WHERE order_id = $3`,
-        [TARGET_DEPARTMENT, JSON.stringify([JSON.parse(historyEntry)]), row.orderId]
-      );
+      if (row.allOrderId) {
+        await client.query(
+          `UPDATE all_orders SET current_department = $1,
+              department_history = COALESCE(department_history, '[]'::jsonb) || $2::jsonb,
+              updated_at = NOW() WHERE order_id = $3`,
+          [TARGET_DEPARTMENT, JSON.stringify([JSON.parse(historyEntry)]), row.allOrderId]
+        );
+      }
       await client.query(
         `UPDATE production_orders SET current_department = $1, production_status = 'IN_PROGRESS',
             department_history = COALESCE(department_history, '[]'::jsonb) || $2::jsonb,

@@ -127,6 +127,26 @@ describe('Phase 4 controlled Design Control form templates', () => {
     ).toHaveLength(2);
   });
 
+  it('uses distinct stable PostgreSQL identifiers for the revision history constraints', () => {
+    const schema = read('server/schema.ts');
+    const legacyGeneratedNames = [
+      'design_control_form_template_revisions_document_version_history_id_unique',
+      'design_control_form_template_revisions_document_version_history_id_document_version_history_id_fk',
+    ];
+    const stableNames = [
+      'design_control_form_template_re_document_version_history_id_key',
+      'design_control_form_template_r_document_version_history_id_fkey',
+    ];
+    const postgresIdentifier = (name: string) => name.slice(0, 63);
+
+    expect(legacyGeneratedNames.map(postgresIdentifier)[0]).toBe(
+      legacyGeneratedNames.map(postgresIdentifier)[1]
+    );
+    expect(new Set(stableNames.map(postgresIdentifier)).size).toBe(2);
+    expect(stableNames.every((name) => name.length <= 63)).toBe(true);
+    for (const name of stableNames) expect(schema).toContain(name);
+  });
+
   it('reports partial deployment as structured schema readiness failure', async () => {
     const client = {
       execute: async () => [{ object_name: 'design_control_form_templates' }],

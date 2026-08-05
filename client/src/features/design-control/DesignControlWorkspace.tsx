@@ -9,6 +9,8 @@ import {
   LockKeyhole,
 } from 'lucide-react';
 
+import { DesignControlStepEditor } from './DesignControlStepEditor';
+
 import { ControlledCopyPanel } from '@/components/design-control/ControlledCopyPanel';
 import { DesignHistoryFilePanel } from '@/components/design-control/DesignHistoryFilePanel';
 import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
@@ -39,6 +41,7 @@ type LiveRow = {
 
 type StepRow = LiveRow & {
   stepKey: string;
+  checklist?: Record<string, unknown>;
   approvedAt?: string | null;
   updatedAt?: string | null;
   contentVersion?: number;
@@ -217,6 +220,9 @@ export function DesignControlWorkspace({
   const completed = detail.steps.filter((step) =>
     ['approved', 'complete', 'completed'].includes(step.status || '')
   ).length;
+  const selectedIndex = DESIGN_CONTROL_WORKFLOW.findIndex(
+    (step) => step.key === selectedDefinition.key
+  );
 
   return (
     <section className="space-y-4" aria-label="Design Control workspace">
@@ -343,22 +349,21 @@ export function DesignControlWorkspace({
                   </p>
                 </div>
               </div>
-              <div>
-                <h3 className="font-semibold">Required information</h3>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                  {selectedDefinition.fields.map((field) => (
-                    <li key={field.key}>{field.label}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <h3 className="font-semibold">Next action</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Review required fields, checklist evidence, and approval slots
-                  in the controlled step editor. Recorded fields support the
-                  process; they do not by themselves guarantee compliance.
-                </p>
-              </div>
+              <DesignControlStepEditor
+                definition={selectedDefinition}
+                hasNext={selectedIndex < DESIGN_CONTROL_WORKFLOW.length - 1}
+                hasPrevious={selectedIndex > 0}
+                onChanged={() => detailQuery.refetch()}
+                onNext={() =>
+                  setActiveStep(DESIGN_CONTROL_WORKFLOW[selectedIndex + 1].key)
+                }
+                onPrevious={() =>
+                  setActiveStep(DESIGN_CONTROL_WORKFLOW[selectedIndex - 1].key)
+                }
+                readOnly={readOnly}
+                recordId={recordId}
+                step={selectedStep}
+              />
               <ProjectFormInstancesPanel
                 recordId={recordId}
                 oversightMode={readOnly}

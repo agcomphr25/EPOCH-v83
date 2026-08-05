@@ -104,7 +104,7 @@ describe('QMS design control release gate validation', () => {
       'Step 12 Engineering Release Gate source incomplete: released CAD: source module is not configured for this R&D project',
     );
     expect(readiness.missingItems).toContain(
-      'Step 12 Engineering Release Gate approval missing: engineering release approval',
+      'Step 12 Engineering Release Gate approval missing: engineering_release_approval',
     );
   });
 
@@ -135,7 +135,7 @@ describe('QMS design control release gate validation', () => {
     expect(result.status).toBe('needs_approval');
     expect(result.missing.fields).toContain('Requirement ID');
     expect(result.missing.checklist).toContain('Customer requirements captured');
-    expect(result.missing.approvals).toContain('Requirements owner approval');
+    expect(result.missing.approvals).toContain('requirements_owner_approval');
   });
 
   it('treats an invalid stepKey as rejected by the canonical step registry', () => {
@@ -146,7 +146,7 @@ describe('QMS design control release gate validation', () => {
     const step12 = persistedStep('12', {
       approvals: {
         ...completePayloadForStep(stepByKey('12')).approvals,
-        'quality release approval': false,
+        quality_release_approval: false,
       },
     });
 
@@ -157,7 +157,7 @@ describe('QMS design control release gate validation', () => {
 
     expect(readiness.ready).toBe(false);
     expect(readiness.missingItems).toContain(
-      'Step 12 Engineering Release Gate approval missing: quality release approval',
+      'Step 12 Engineering Release Gate approval missing: quality_release_approval',
     );
   });
 

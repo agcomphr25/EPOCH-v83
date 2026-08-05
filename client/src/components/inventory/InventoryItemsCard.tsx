@@ -2145,6 +2145,35 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     return manufacturedItems.filter((item) => !item.manufacturedCategory && !item.isPacket);
   }, [manufacturedItems]);
 
+  const filterSearchResults = React.useCallback(
+    (sourceItems: InventoryItem[]) => sourceItems.filter((item) =>
+      inventoryItemMatchesSearch(item, deferredSearchTerm) &&
+      inventoryItemMatchesUtilizedFilter(item, utilizedFilter)
+    ),
+    [deferredSearchTerm, utilizedFilter]
+  );
+
+  const purchasedSearchResults = React.useMemo(
+    () => filterSearchResults(purchasedItems),
+    [filterSearchResults, purchasedItems]
+  );
+  const manufacturedSearchResults = React.useMemo(
+    () => filterSearchResults(manufacturedItems),
+    [filterSearchResults, manufacturedItems]
+  );
+  const hasGlobalSearch = deferredSearchTerm.trim().length > 0;
+
+  React.useEffect(() => {
+    if (!hasGlobalSearch) return;
+    if (activeTab === 'purchased' && purchasedSearchResults.length === 0 && manufacturedSearchResults.length > 0) {
+      setActiveTab('manufactured');
+      setSelectedItems(new Set());
+    } else if (activeTab === 'manufactured' && manufacturedSearchResults.length === 0 && purchasedSearchResults.length > 0) {
+      setActiveTab('purchased');
+      setSelectedItems(new Set());
+    }
+  }, [activeTab, hasGlobalSearch, manufacturedSearchResults.length, purchasedSearchResults.length]);
+
   // Sort handler function
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -3196,11 +3225,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         <TabsList className="mb-4">
           <TabsTrigger value="purchased" className="flex items-center gap-2" data-testid="tab-purchased">
             Purchased
-            <Badge variant="secondary" className="ml-1">{purchasedItems.length}</Badge>
+            <Badge variant="secondary" className="ml-1">{hasGlobalSearch ? purchasedSearchResults.length : purchasedItems.length}</Badge>
           </TabsTrigger>
           <TabsTrigger value="manufactured" className="flex items-center gap-2" data-testid="tab-manufactured">
             Manufactured
-            <Badge variant="secondary" className="ml-1">{manufacturedItems.length}</Badge>
+            <Badge variant="secondary" className="ml-1">{hasGlobalSearch ? manufacturedSearchResults.length : manufacturedItems.length}</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -3209,7 +3238,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         <div className="flex gap-4">
           <div className="relative flex-1 max-w-md">
             <Input
-              placeholder="Search by AG Part #, SKU, Name, Notes..."
+              placeholder="Search Purchased + Manufactured by AG Part #, SKU, Name, Notes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -3248,6 +3277,18 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             </Select>
           </div>
         </div>
+
+        {hasGlobalSearch && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="text-global-search-scope">
+            <span>Searching both categories:</span>
+            <Button type="button" variant={activeTab === 'purchased' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setActiveTab('purchased')}>
+              Purchased ({purchasedSearchResults.length})
+            </Button>
+            <Button type="button" variant={activeTab === 'manufactured' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setActiveTab('manufactured')}>
+              Manufactured ({manufacturedSearchResults.length})
+            </Button>
+          </div>
+        )}
 
         {!isLoading && (
           <div
@@ -3711,7 +3752,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             <div className="flex gap-4">
               <div className="relative flex-1 max-w-md">
                 <Input
-                  placeholder="Search by AG Part #, SKU, Name, Notes..."
+                  placeholder="Search Purchased + Manufactured by AG Part #, SKU, Name, Notes..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -3748,6 +3789,17 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 </Select>
               </div>
             </div>
+            {hasGlobalSearch && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="text-global-search-scope-manufactured">
+                <span>Searching both categories:</span>
+                <Button type="button" variant={activeTab === 'purchased' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setActiveTab('purchased')}>
+                  Purchased ({purchasedSearchResults.length})
+                </Button>
+                <Button type="button" variant={activeTab === 'manufactured' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setActiveTab('manufactured')}>
+                  Manufactured ({manufacturedSearchResults.length})
+                </Button>
+              </div>
+            )}
           </div>
 
           {isLoading ? (

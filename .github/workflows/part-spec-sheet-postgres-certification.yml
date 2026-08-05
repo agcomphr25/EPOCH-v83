@@ -105,6 +105,14 @@ jobs:
             sed '/^\\\(un\)\?restrict /d' > /tmp/part-spec-schema-second.sql
           diff --unified /tmp/part-spec-schema-first.sql /tmp/part-spec-schema-second.sql
 
+      - name: Certify migration 0253 state-aware duplicate cleanup
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          --no-file-parallelism
+          server/__tests__/epochSoftwareValidationDuplicateCleanupPostgres.test.ts
+          --reporter=verbose
+
       - name: Run isolated PostgreSQL 16.4 certification
         run: >-
           npx vitest run

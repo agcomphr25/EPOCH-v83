@@ -39,6 +39,12 @@ interface ExpediteRow {
   blockers: string[];
 }
 
+interface ExpediteUndoPreview {
+  batch: null | { correlationId: string; completedAt: string; originalReason: string };
+  rows: Array<{ orderId: string; previousDepartment: string | null; currentDepartment: string | null; eligible: boolean; blockers: string[] }>;
+  canUndo: boolean;
+}
+
 const PURE_PRECISION_IDS = Array.from({ length: 16 }, (_, index) => `FB${250 + index}`);
 
 const TIER_BADGE: Record<Tier, JSX.Element> = {
@@ -86,6 +92,8 @@ export default function OrderOverridePage() {
   const [expediteOrderIds, setExpediteOrderIds] = useState(PURE_PRECISION_IDS.join('\n'));
   const [expediteReason, setExpediteReason] = useState('Temporary abbreviated Pure Precision stock process');
   const [expeditePreview, setExpeditePreview] = useState<ExpediteRow[] | null>(null);
+  const [undoPreview, setUndoPreview] = useState<ExpediteUndoPreview | null>(null);
+  const [undoReason, setUndoReason] = useState('Wrong P1 PO batch selected; restoring each order to its audited prior department');
   const parsedExpediteIds = useMemo(() => [...new Set(expediteOrderIds.split(/[\s,]+/).map(value => value.trim().toUpperCase()).filter(Boolean))], [expediteOrderIds]);
 
   const { data: currentUser } = useQuery<any>({ queryKey: ['currentUser'], staleTime: 60_000 });
@@ -162,6 +170,25 @@ export default function OrderOverridePage() {
     onSuccess: (data: any) => {
       toast({ title: 'Fast track complete', description: `${data.changed.length} orders moved to Shipping QC. Batch ${data.correlationId}` });
       previewExpedite.mutate();
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+    },
+    onError: (err: any) => toast({ title: 'Nothing was changed', description: err.message, variant: 'destructive' }),
+  });
+
+  const previewUndo = useMutation({
+    mutationFn: () => apiRequest('/api/admin/p1-expedite/undo-preview'),
+    onSuccess: (data: ExpediteUndoPreview) => setUndoPreview(data),
+    onError: (err: any) => toast({ title: 'Undo preview failed', description: err.message, variant: 'destructive' }),
+  });
+
+  const executeUndo = useMutation({
+    mutationFn: () => apiRequest('/api/admin/p1-expedite/undo', {
+      method: 'POST', body: JSON.stringify({ reason: undoReason }),
+    }),
+    onSuccess: (data: any) => {
+      toast({ title: 'Fast track reversed', description: `${data.restored.length} orders restored to their prior departments.` });
+      setUndoPreview(null);
+      setExpeditePreview(null);
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     },
     onError: (err: any) => toast({ title: 'Nothing was changed', description: err.message, variant: 'destructive' }),
@@ -484,6 +511,43 @@ export default function OrderOverridePage() {
           {expeditePreview?.some(row => !row.eligible) && (
             <p className="text-xs text-amber-700 flex gap-1"><AlertTriangle className="w-3.5 h-3.5" /> The batch is locked until every validation issue is resolved; no partial updates are allowed.</p>
           )}
+          <div className="border-t pt-4 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold">Undo Latest Fast-Track Batch</h3>
+              <p className="text-xs text-muted-foreground">Restores every order to the department recorded immediately before its fast-track move. The rollback is all-or-nothing and fully audited.</p>
+            </div>
+            <Textarea value={undoReason} onChange={event => setUndoReason(event.target.value)} aria-label="Rollback audit reason" />
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => previewUndo.mutate()} disabled={previewUndo.isPending}>
+                {previewUndo.isPending ? 'Checking…' : 'Preview Latest Batch Undo'}
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={!undoPreview?.canUndo || undoReason.trim().length < 10 || executeUndo.isPending}
+                onClick={() => {
+                  if (window.confirm(`Restore all ${undoPreview?.rows.length ?? 0} orders to their prior departments? This rollback will be audited.`)) executeUndo.mutate();
+                }}
+              >
+                {executeUndo.isPending ? 'Restoring…' : 'Undo Latest Fast-Track Batch'}
+              </Button>
+            </div>
+            {undoPreview && (
+              <div className="border rounded-md overflow-hidden">
+                <div className="px-3 py-2 bg-muted text-xs">
+                  {undoPreview.batch ? <>Batch <span className="font-mono">{undoPreview.batch.correlationId}</span> · {new Date(undoPreview.batch.completedAt).toLocaleString()}</> : 'No unreversed fast-track batch found.'}
+                </div>
+                <div className="divide-y max-h-72 overflow-y-auto">
+                  {undoPreview.rows.map(row => (
+                    <div key={row.orderId} className="grid grid-cols-[100px_1fr_2fr] gap-3 px-3 py-2 text-xs">
+                      <span className="font-mono font-semibold">{row.orderId}</span>
+                      <span>Shipping QC → {row.previousDepartment ?? 'Unknown'}</span>
+                      {row.eligible ? <span className="text-green-700">Ready to restore</span> : <span className="text-red-600">{row.blockers.join('; ')}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

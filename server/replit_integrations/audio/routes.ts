@@ -1,6 +1,18 @@
 import type { Express, Request, Response } from "express";
 import { chatStorage } from "../chat/storage";
-import { openai, speechToText, voiceChatWithTextModel, convertWebmToWav } from "./client";
+import {
+  AUDIO_INTEGRATION_UNAVAILABLE,
+  AudioIntegrationUnavailableError,
+  getOpenAIClient,
+  speechToText,
+  voiceChatWithTextModel,
+} from "./client";
+
+function unavailableAudioResponse(res: Response, error: unknown): boolean {
+  if (!(error instanceof AudioIntegrationUnavailableError)) return false;
+  res.status(503).json({ error: AUDIO_INTEGRATION_UNAVAILABLE });
+  return true;
+}
 
 // Note: Set express.json({ limit: "50mb" }) for audio payloads.
 // Note: Use convertWebmToWav() to convert browser WebM to WAV before API calls.
@@ -90,7 +102,7 @@ export function registerAudioRoutes(app: Express): void {
       res.write(`data: ${JSON.stringify({ type: "user_transcript", data: userTranscript })}\n\n`);
 
       // 5. Stream audio response from gpt-audio-mini
-      const stream = await openai.chat.completions.create({
+      const stream = await getOpenAIClient().chat.completions.create({
         model: "gpt-audio-mini",
         modalities: ["text", "audio"],
         audio: { voice, format: "pcm16" },
@@ -120,6 +132,7 @@ export function registerAudioRoutes(app: Express): void {
       res.write(`data: ${JSON.stringify({ type: "done", transcript: assistantTranscript })}\n\n`);
       res.end();
     } catch (error) {
+      if (!res.headersSent && unavailableAudioResponse(res, error)) return;
       console.error("Error processing voice message:", error);
       if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ type: "error", error: "Failed to process voice message" })}\n\n`);
@@ -180,6 +193,7 @@ export function registerAudioRoutes(app: Express): void {
       await chatStorage.createMessage(conversationId, "assistant", assistantTranscript);
       res.end();
     } catch (error) {
+      if (!res.headersSent && unavailableAudioResponse(res, error)) return;
       console.error("Error in voice stream:", error);
       if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ type: "error", error: "Voice stream failed" })}\n\n`);

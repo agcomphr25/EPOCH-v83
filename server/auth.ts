@@ -11,7 +11,14 @@ const SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME = 15 * 60 * 1000; // 15 minutes
 const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
-const SESSION_IDLE_TIMEOUT = parseInt(process.env.SESSION_IDLE_TIMEOUT_MINUTES ?? '30', 10) * 60 * 1000;
+const configuredIdleTimeoutMinutes = parseInt(
+  process.env.SESSION_IDLE_TIMEOUT_MINUTES ?? '30',
+  10,
+);
+const SESSION_IDLE_TIMEOUT_MINUTES =
+  Number.isFinite(configuredIdleTimeoutMinutes) && configuredIdleTimeoutMinutes > 0
+    ? configuredIdleTimeoutMinutes
+    : 30;
 
 function buildDeviceFingerprint(ipAddress: string | null, userAgent: string | null): string {
   return createHash('sha256').update(`${ipAddress ?? 'unknown'}|${userAgent ?? 'unknown'}`).digest('hex');
@@ -142,13 +149,19 @@ export class AuthService {
     sessionToken: string
   ): Promise<SessionData | null> {
     const [session] = await db
-      .select()
+      .select({
+        id: userSessions.id,
+        sessionToken: userSessions.sessionToken,
+        userId: userSessions.userId,
+        expiresAt: userSessions.expiresAt,
+        idleExpired: sql<boolean>`COALESCE(${userSessions.lastActivityAt}, ${userSessions.createdAt}, NOW()) < NOW() - (${SESSION_IDLE_TIMEOUT_MINUTES} * INTERVAL '1 minute')`,
+      })
       .from(userSessions)
       .where(
         and(
           eq(userSessions.sessionToken, sessionToken),
           eq(userSessions.isActive, true),
-          gt(userSessions.expiresAt, new Date())
+          sql`${userSessions.expiresAt} > NOW()`
         )
       );
 
@@ -156,8 +169,7 @@ export class AuthService {
       return null;
     }
 
-    const lastActivityAt = session.lastActivityAt ?? session.createdAt ?? new Date();
-    if (Date.now() - new Date(lastActivityAt).getTime() > SESSION_IDLE_TIMEOUT) {
+    if (session.idleExpired) {
       await db
         .update(userSessions)
         .set({ isActive: false })
@@ -192,8 +204,8 @@ export class AuthService {
     return {
       userId: session.userId,
       sessionToken: session.sessionToken,
-      userType: session.userType,
-      employeeId: session.employeeId,
+      userType: (session as any).userType,
+      employeeId: (session as any).employeeId,
       expiresAt: newExpiresAt,
     };
   }

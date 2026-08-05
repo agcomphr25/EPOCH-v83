@@ -108,7 +108,7 @@ import InstallPWAButton from './InstallPWAButton';
 import OfflineIndicator from './OfflineIndicator';
 import GlobalSearch from './GlobalSearch';
 import ExecutiveRundownDropdown from './ExecutiveRundownDropdown';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES, isAdminUser, getRequiredCapability } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
@@ -125,6 +125,7 @@ import {
 
 export default function Navigation() {
   const [location, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [searchOpen, setSearchOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -135,15 +136,6 @@ export default function Navigation() {
     return () => clearInterval(timer);
   }, []);
 
-  // Check if we're in deployment environment to show logout button
-  const isDeploymentEnvironment = () => {
-    const hostname = window.location.hostname;
-    const isLocalhost =
-      hostname.includes('localhost') || hostname.includes('127.0.0.1');
-    const isReplitEditor = hostname.includes('replit.dev');
-    return !isLocalhost && !isReplitEditor;
-  };
-
   // Fetch current user data
   const { data: currentUser, refetch: refetchUser } = useQuery({
     queryKey: ['currentUser'],
@@ -151,24 +143,6 @@ export default function Navigation() {
       const token =
         localStorage.getItem('sessionToken') ||
         localStorage.getItem('jwtToken');
-
-      if (!isDeploymentEnvironment()) {
-        const storedUsername = localStorage.getItem('dev_username');
-        if (storedUsername) {
-          return { username: storedUsername };
-        }
-        try {
-          const response = await fetch('/api/auth/session', {
-            credentials: 'include',
-          });
-          if (response.ok) {
-            return await response.json();
-          }
-        } catch (error) {
-          // Fall through to default
-        }
-        return { username: 'admin', role: 'ADMIN' };
-      }
 
       try {
         const response = await fetch('/api/auth/session', {
@@ -250,6 +224,9 @@ export default function Navigation() {
       localStorage.removeItem('sessionToken');
       localStorage.removeItem('jwtToken');
       localStorage.removeItem('dev_username');
+      localStorage.removeItem('dev_user_role');
+      queryClient.removeQueries({ queryKey: ['currentUser'] });
+      queryClient.removeQueries({ queryKey: ['/api/permissions/me'] });
 
       // Redirect to login page
       setLocation('/login');

@@ -2,10 +2,28 @@ import OpenAI, { toFile } from "openai";
 import { Buffer } from "node:buffer";
 import { spawn } from "child_process";
 
-export const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+export const AUDIO_INTEGRATION_UNAVAILABLE = "AUDIO_INTEGRATION_UNAVAILABLE";
+
+export class AudioIntegrationUnavailableError extends Error {
+  readonly code = AUDIO_INTEGRATION_UNAVAILABLE;
+  readonly statusCode = 503;
+
+  constructor() {
+    super("Audio integration is unavailable");
+    this.name = "AudioIntegrationUnavailableError";
+  }
+}
+
+let openAIClient: OpenAI | undefined;
+
+/** Lazily construct the optional audio client only when an audio operation runs. */
+export function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY?.trim();
+  const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL?.trim();
+  if (!apiKey || !baseURL) throw new AudioIntegrationUnavailableError();
+  openAIClient ??= new OpenAI({ apiKey, baseURL });
+  return openAIClient;
+}
 
 /**
  * Convert WebM audio buffer to WAV format using ffmpeg.
@@ -64,7 +82,7 @@ export async function voiceChat(
   outputFormat: "wav" | "mp3" = "mp3"
 ): Promise<{ transcript: string; audioResponse: Buffer }> {
   const audioBase64 = audioBuffer.toString("base64");
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAIClient().chat.completions.create({
     model: "gpt-audio-mini",
     modalities: ["text", "audio"],
     audio: { voice, format: outputFormat },
@@ -100,7 +118,7 @@ export async function voiceChatStream(
   inputFormat: "wav" | "mp3" = "wav"
 ): Promise<AsyncIterable<{ type: "transcript" | "audio"; data: string }>> {
   const audioBase64 = audioBuffer.toString("base64");
-  const stream = await openai.chat.completions.create({
+  const stream = await getOpenAIClient().chat.completions.create({
     model: "gpt-audio-mini",
     modalities: ["text", "audio"],
     audio: { voice, format: "pcm16" },
@@ -136,7 +154,7 @@ export async function textToSpeech(
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
   format: "wav" | "mp3" | "flac" | "opus" | "pcm16" = "wav"
 ): Promise<Buffer> {
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAIClient().chat.completions.create({
     model: "gpt-audio-mini",
     modalities: ["text", "audio"],
     audio: { voice, format },
@@ -158,7 +176,7 @@ export async function textToSpeechStream(
   text: string,
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy"
 ): Promise<AsyncIterable<string>> {
-  const stream = await openai.chat.completions.create({
+  const stream = await getOpenAIClient().chat.completions.create({
     model: "gpt-audio-mini",
     modalities: ["text", "audio"],
     audio: { voice, format: "pcm16" },
@@ -189,7 +207,7 @@ export async function speechToText(
   format: "wav" | "mp3" | "webm" = "wav"
 ): Promise<string> {
   const file = await toFile(audioBuffer, `audio.${format}`);
-  const response = await openai.audio.transcriptions.create({
+  const response = await getOpenAIClient().audio.transcriptions.create({
     file,
     model: "gpt-4o-mini-transcribe",
   });
@@ -205,7 +223,7 @@ export async function speechToTextStream(
   format: "wav" | "mp3" | "webm" = "wav"
 ): Promise<AsyncIterable<string>> {
   const file = await toFile(audioBuffer, `audio.${format}`);
-  const stream = await openai.audio.transcriptions.create({
+  const stream = await getOpenAIClient().audio.transcriptions.create({
     file,
     model: "gpt-4o-mini-transcribe",
     stream: true,
@@ -340,7 +358,7 @@ export async function* voiceChatWithTextModel(
   ];
 
   // 3. Stream text from LLM
-  const textStream = await openai.chat.completions.create({
+  const textStream = await getOpenAIClient().chat.completions.create({
     model: textModel,
     messages,
     stream: true,

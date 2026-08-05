@@ -28,6 +28,20 @@ const requiredPhase2Paths = [
   'migrations/0251_design_project_configuration_workspace.sql',
 ];
 
+const requiredMigration0253Paths = [
+  'migrations/0253_void_duplicate_epoch_validation_packages.sql',
+  'server/__tests__/epochSoftwareValidationDuplicateCleanupArchitecture.test.ts',
+  'server/__tests__/epochSoftwareValidationDuplicateCleanupPostgres.test.ts',
+];
+
+const requiredP2CertificationPaths = [
+  'server/__tests__/p2V2PostgresCertification.test.ts',
+  'server/__tests__/p2V2LegacyPreservationPostgres.test.ts',
+  'server/__tests__/p2V2LegacyContinuationPostgres.test.ts',
+  'server/__tests__/legacySnapshotDiff.test.ts',
+  'server/__tests__/p2V2PilotPostgresCertification.test.ts',
+];
+
 test('pull requests use only their changed-file scope', () => {
   assert.deepEqual(
     resolveCertificationPaths({
@@ -64,6 +78,28 @@ test('the dispatch manifest includes every required Phase 2 artifact', () => {
     )
   );
   for (const file of requiredPhase2Paths)
+    assert.ok(manifest.includes(file), file);
+});
+
+test('the dispatch manifest includes migration 0253 and its certification tests', () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(
+      '.github/p2-v2-workflow-dispatch-certification-manifest.json',
+      'utf8'
+    )
+  );
+  for (const file of requiredMigration0253Paths)
+    assert.ok(manifest.includes(file), file);
+});
+
+test('the dispatch manifest includes the P2 PostgreSQL and legacy gates', () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(
+      '.github/p2-v2-workflow-dispatch-certification-manifest.json',
+      'utf8'
+    )
+  );
+  for (const file of requiredP2CertificationPaths)
     assert.ok(manifest.includes(file), file);
 });
 

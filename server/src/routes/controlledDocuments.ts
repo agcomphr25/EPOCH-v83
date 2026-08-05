@@ -53,6 +53,10 @@ const requestEvidence = (req: Request) => ({
   userAgent: req.headers['user-agent'] ?? null,
 });
 
+const sessionToken = (req: Request) => String(
+  req.cookies?.sessionToken || req.headers.authorization?.replace(/^Bearer\s+/i, '') || ''
+);
+
 const sendLifecycleError = (res: Response, error: unknown, fallback: string) => {
   if (error instanceof ControlledDocumentError) {
     res.status(error.statusCode).json({ error: error.code, message: error.message, ...error.details });
@@ -1013,6 +1017,7 @@ router.post('/:id/approve-and-release', requireAuth, requirePermission('document
       idempotencyKey: String(req.headers['idempotency-key'] || ''), reason: String(req.body?.reason || req.body?.comment || ''),
       effectiveDate: typeof req.body?.effectiveDate === 'string' ? req.body.effectiveDate : null,
       actor: lifecycleActor(req), request: requestEvidence(req),
+      sessionToken: sessionToken(req), readAuthoritativeBytes: readControlledDocumentBytes,
     });
     res.json(result);
   } catch (error) {
@@ -1026,7 +1031,8 @@ router.post('/:id/reject', requireAuth, requirePermission('documents.approve'), 
     await assertControlledDocumentPhase2SchemaReady();
     const result = await rejectRegisteredControlledRevision({ documentId: req.params.id,
       revisionId: String(req.body?.revisionId || ''), reason: String(req.body?.reason || req.body?.comment || ''),
-      actor: lifecycleActor(req), request: requestEvidence(req) });
+      actor: lifecycleActor(req), request: requestEvidence(req), sessionToken: sessionToken(req),
+      readAuthoritativeBytes: readControlledDocumentBytes });
     res.json(result);
   } catch (error) {
     sendLifecycleError(res, error, 'Failed to reject registered controlled revision');
@@ -1159,7 +1165,7 @@ router.put('/:id', requireDocumentEditor, requirePermission('documents.edit_draf
 });
 
 // Approve document — requires documents.approve capability
-router.post('/:id/approve', requireAuth, requirePermission('documents.approve'), async (req: Request, res: Response) => {
+router.post('/:id/approve', requireAuth, requirePermission('documents.approve'), requireLegacyLifecycle, requireStepUp(), async (req: Request, res: Response) => {
   try {
     const preflight = await getControlledDocumentState(req.params.id);
     const requestedRevisionId = typeof req.body?.revisionId === 'string' ? req.body.revisionId : null;
@@ -1230,11 +1236,8 @@ router.get('/:id/view', requireAuth, requirePermission('documents.view'), contro
     }
 
     const state = await getControlledDocumentState(doc.id);
-    const revision = doc.currentReleasedRevisionId
-      ? await getReleasedRevisionForControlledUse(req, doc, state.revisions)
-      : state.currentRevision;
-    const authoritativeFilePath = revision?.filePath
-      || (!doc.currentReleasedRevisionId ? doc.filePath : null);
+    const revision = await getReleasedRevisionForControlledUse(req, doc, state.revisions);
+    const authoritativeFilePath = revision.filePath;
 
     if (!authoritativeFilePath) {
       return res.status(422).json({ error: 'FILE_REFERENCE_MISSING', message: 'No file reference is attached to this document' });
@@ -1331,11 +1334,8 @@ router.get('/:id/download', requireAuth, requirePermission('documents.view'), co
     }
 
     const state = await getControlledDocumentState(doc.id);
-    const revision = doc.currentReleasedRevisionId
-      ? await getReleasedRevisionForControlledUse(req, doc, state.revisions)
-      : state.currentRevision;
-    const authoritativeFilePath = revision?.filePath
-      || (!doc.currentReleasedRevisionId ? doc.filePath : null);
+    const revision = await getReleasedRevisionForControlledUse(req, doc, state.revisions);
+    const authoritativeFilePath = revision.filePath;
 
     if (!authoritativeFilePath) {
       return res.status(422).json({ error: 'FILE_REFERENCE_MISSING', message: 'No file reference is attached to this document' });

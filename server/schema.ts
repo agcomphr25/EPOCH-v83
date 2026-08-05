@@ -12512,7 +12512,8 @@ export const controlledDocumentRevisionApprovals = pgTable(
     revisionId: uuid('revision_id')
       .references(() => documentVersionHistory.id, { onDelete: 'restrict' })
       .notNull(),
-    fileChecksum: text('file_checksum').notNull(),
+    fileChecksum: text('file_checksum'),
+    checksumVerificationStatus: text('checksum_verification_status'),
     documentNumberSnapshot: text('document_number_snapshot').notNull(),
     revisionSnapshot: text('revision_snapshot').notNull(),
     decision: text('decision').notNull(),
@@ -12539,6 +12540,7 @@ export const controlledDocumentApprovalReleaseEvents = pgTable('controlled_docum
   revisionId: uuid('revision_id').references(() => documentVersionHistory.id, { onDelete: 'restrict' }).notNull(),
   approvalId: uuid('approval_id').references(() => controlledDocumentRevisionApprovals.id, { onDelete: 'restrict' }).notNull(),
   idempotencyKey: text('idempotency_key').notNull().unique(),
+  requestIdentityHash: text('request_identity_hash').notNull(),
   fileChecksum: text('file_checksum').notNull(),
   documentNumberSnapshot: text('document_number_snapshot').notNull(),
   revisionSnapshot: text('revision_snapshot').notNull(),

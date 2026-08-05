@@ -33,6 +33,7 @@ describe('controlled document Phase 2 activation containment', () => {
     expect(isControlledDocumentPhase2Enabled(undefined)).toBe(false);
     expect(isControlledDocumentPhase2Enabled('TRUE')).toBe(false);
     expect(isControlledDocumentPhase2Enabled('true')).toBe(true);
+    expect(routes).not.toContain('CONTROLLED_DOCUMENT_PHASE2_ENABLED');
     expect(migration).not.toContain(
       'CONTROLLED_DOCUMENT_PHASE2_APPROVE_RELEASE_ENABLED'
     );
@@ -82,7 +83,7 @@ describe('atomic approve-and-release contract', () => {
     expect(migration).toContain('BEFORE UPDATE OR DELETE');
     expect(service).toContain('rejectRegisteredControlledRevision');
     expect(service).toContain("lifecycleStatus: 'REJECTED'");
-    expect(routes).toContain("router.post('/:id/reject'");
+    expect(routes).toMatch(/router\.post\(\s*'\/:id\/reject'/);
   });
 
   it('uses database-backed idempotency and cross-document fail-closed checks', () => {
@@ -100,6 +101,9 @@ describe('atomic approve-and-release contract', () => {
     expect(routes).toContain('assertControlledDocumentPhase2SchemaReady()');
     expect(routes).toContain("'IMMUTABLE_REVISION_FILE_REQUIRED'");
     expect(routes).toContain('getExternalRedirectUrl(revision.filePath)');
+    expect(routes).toMatch(
+      /router\.post\('\/:id\/approve',[\s\S]{0,250}requireLegacyLifecycle[\s\S]{0,120}requireStepUp\(\)/
+    );
   });
 });
 

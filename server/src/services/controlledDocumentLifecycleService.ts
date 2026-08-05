@@ -11,6 +11,8 @@ import {
 } from '../../schema';
 import { resolveUserSnapshot } from '../../utils/userSnapshot';
 import { recordAuditEvent, type AuditPayloadValue } from './auditLedgerService';
+import { isControlledDocumentPhase2Enabled } from './controlledDocumentPhase2Gate';
+import { assertControlledDocumentPhase2SchemaReady } from './controlledDocumentSchemaReadiness';
 import { getUserPermissions } from './permissionService';
 
 type Client = typeof db;
@@ -36,6 +38,46 @@ export const normalizeDocumentNumber = (value: unknown) =>
 
 export const checksumFile = (buffer: Buffer) =>
   crypto.createHash('sha256').update(buffer).digest('hex');
+
+const resultRows = <T>(result: unknown) =>
+  ((((result as { rows?: T[] })?.rows ?? result) || []) as T[]);
+
+async function revalidatePhase2Actor(client: Client, actor: ControlledDocumentActor, sessionToken: string) {
+  const authentication = await client.execute(sql`
+    SELECT u.id, u.username, u.role
+    FROM user_sessions session
+    JOIN users u ON u.id = session.user_id
+    WHERE session.session_token = ${sessionToken}
+      AND session.is_active = true AND session.expires_at > NOW()
+      AND session.last_credential_verified_at >= NOW() - INTERVAL '30 minutes'
+      AND u.id = ${actor.id} AND lower(u.username) = lower(${actor.username})
+      AND u.is_active = true
+    FOR SHARE OF session, u
+  `);
+  if (resultRows(authentication).length !== 1) {
+    throw new ControlledDocumentError(401, 'STEP_UP_REQUIRED', 'Current authenticated step-up evidence is required');
+  }
+  const permission = await client.execute(sql`
+    SELECT EXISTS (
+      SELECT 1 FROM users u
+      JOIN perm_roles role ON role.name = u.role
+      JOIN perm_role_capabilities role_capability ON role_capability.role_id = role.id
+      JOIN perm_capabilities capability ON capability.id = role_capability.capability_id
+      WHERE u.id = ${actor.id} AND capability.key = 'documents.approve'
+      UNION ALL
+      SELECT 1 FROM perm_user_overrides override
+      JOIN perm_capabilities capability ON capability.id = override.capability_id
+      WHERE override.user_id = ${actor.id} AND capability.key = 'documents.approve' AND override.effect = 'allow'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM perm_user_overrides override
+      JOIN perm_capabilities capability ON capability.id = override.capability_id
+      WHERE override.user_id = ${actor.id} AND capability.key = 'documents.approve' AND override.effect = 'deny'
+    ) AS allowed
+  `);
+  if (!resultRows<{ allowed: boolean }>(permission)[0]?.allowed) {
+    throw new ControlledDocumentError(403, 'APPROVAL_PERMISSION_REQUIRED', 'documents.approve authority is required');
+  }
+}
 
 const actorEvidence = async (actor: ControlledDocumentActor) => {
   if (!Number.isInteger(actor.id) || actor.id <= 0) {
@@ -508,29 +550,54 @@ export async function createControlledRevision(input: {
 export async function approveAndReleaseControlledRevision(input: {
   documentId: string; revisionId: string; filePath: string; observedChecksum: string;
   idempotencyKey: string; reason: string; effectiveDate?: string | null;
-  actor: ControlledDocumentActor; request?: RequestEvidence;
+  actor: ControlledDocumentActor; request?: RequestEvidence; sessionToken: string;
+  readAuthoritativeBytes: (filePath: string) => Promise<Buffer>;
 }, client: Client = db) {
   const reason = input.reason.trim();
+  const idempotencyKey = input.idempotencyKey.trim();
   if (!reason) throw new ControlledDocumentError(400, 'TRANSITION_REASON_REQUIRED', 'Approval reason or comment is required');
-  if (!input.idempotencyKey.trim()) throw new ControlledDocumentError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'An Idempotency-Key is required');
+  if (!idempotencyKey) throw new ControlledDocumentError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'An Idempotency-Key is required');
   if (!/^[0-9a-f]{64}$/.test(input.observedChecksum)) throw new ControlledDocumentError(422, 'CHECKSUM_INVALID', 'Exact SHA-256 checksum is required');
+  const requestIdentityHash = checksumFile(Buffer.from(JSON.stringify({
+    action: 'APPROVE_AND_RELEASE', documentId: input.documentId, revisionId: input.revisionId,
+    fileChecksum: input.observedChecksum, reason, effectiveDate: input.effectiveDate ?? null,
+    actorId: input.actor.id, actorUsername: input.actor.username.toLowerCase(),
+  })));
   return client.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`controlled-document-idempotency:${idempotencyKey}`}, 0))`);
+    if (!isControlledDocumentPhase2Enabled()) throw new ControlledDocumentError(404, 'PHASE2_DISABLED', 'Atomic approval and release is disabled');
+    await assertControlledDocumentPhase2SchemaReady(tx as unknown as Client);
     const context = await loadDocument(input.documentId, tx as unknown as Client, true);
+    await tx.execute(sql`SELECT id FROM controlled_document_revision_approvals WHERE controlled_document_id = ${input.documentId}::uuid ORDER BY id FOR UPDATE`);
+    await tx.execute(sql`SELECT id FROM controlled_document_approval_release_events WHERE idempotency_key = ${idempotencyKey} OR controlled_document_id = ${input.documentId}::uuid ORDER BY id FOR UPDATE`);
+    await tx.execute(sql`SELECT id FROM controlled_document_number_registry WHERE controlled_document_id = ${input.documentId}::uuid OR normalized_number = ${normalizeDocumentNumber(context.document.documentNumber)} ORDER BY id FOR UPDATE`);
+    await revalidatePhase2Actor(tx as unknown as Client, input.actor, input.sessionToken);
     const evidence = await actorEvidence(input.actor);
     if (!evidence.capabilities.includes('documents.approve')) throw new ControlledDocumentError(403, 'APPROVAL_PERMISSION_REQUIRED', 'documents.approve authority is required');
     const revision = context.revisions.find((row) => row.id === input.revisionId);
     if (!revision || revision.documentId !== context.document.id) throw new ControlledDocumentError(409, 'CROSS_DOCUMENT_REVISION', 'Revision does not belong to this controlled document');
     const [replay] = await tx.select().from(controlledDocumentApprovalReleaseEvents)
-      .where(eq(controlledDocumentApprovalReleaseEvents.idempotencyKey, input.idempotencyKey.trim())).limit(1);
+      .where(eq(controlledDocumentApprovalReleaseEvents.idempotencyKey, idempotencyKey)).limit(1);
     if (replay) {
-      if (replay.controlledDocumentId !== context.document.id || replay.revisionId !== revision.id || replay.fileChecksum !== input.observedChecksum) {
+      if (replay.requestIdentityHash !== requestIdentityHash) {
         throw new ControlledDocumentError(409, 'IDEMPOTENCY_KEY_CONFLICT', 'Idempotency-Key was used for different approval evidence');
       }
       return getControlledDocumentState(input.documentId, tx as unknown as Client);
     }
+    const [numberReservation] = await tx.select().from(controlledDocumentNumberRegistry)
+      .where(eq(controlledDocumentNumberRegistry.normalizedNumber, normalizeDocumentNumber(context.document.documentNumber))).limit(1);
+    if (!numberReservation || numberReservation.controlledDocumentId !== context.document.id ||
+        numberReservation.status === 'NUMBER_RECONCILIATION_REQUIRED' ||
+        (Array.isArray(numberReservation.conflictDocumentIds) && numberReservation.conflictDocumentIds.length > 0)) {
+      throw new ControlledDocumentError(409, 'DOCUMENT_NUMBER_CONFLICT', 'The locked document-number registration is missing or contradictory');
+    }
     if (context.document.currentRevisionId !== revision.id || context.document.workingDraftRevisionId !== revision.id) throw new ControlledDocumentError(409, 'STALE_REVISION', 'Approval must target the exact current registered revision');
     if (revision.lifecycleStatus !== 'DRAFT') throw new ControlledDocumentError(409, 'ILLEGAL_LIFECYCLE_TRANSITION', `Cannot approve a ${revision.lifecycleStatus} revision`);
     if (!revision.filePath || revision.filePath !== input.filePath || revision.fileChecksum !== input.observedChecksum || revision.checksumStatus !== 'VERIFIED') throw new ControlledDocumentError(422, 'EXACT_VERIFIED_BYTES_REQUIRED', 'The locked revision path and verified checksum must match the exact authoritative bytes');
+    const lockedChecksum = checksumFile(await input.readAuthoritativeBytes(revision.filePath));
+    if (lockedChecksum !== revision.fileChecksum || lockedChecksum !== input.observedChecksum) {
+      throw new ControlledDocumentError(409, 'AUTHORITATIVE_FILE_CHANGED', 'The authoritative file changed after preflight; approval was not recorded');
+    }
     if (revision.createdBy.trim().toLowerCase() === input.actor.username.trim().toLowerCase()) throw new ControlledDocumentError(403, 'SELF_APPROVAL_PROHIBITED', 'The revision author cannot approve and release the same revision');
     const pointerRevision = context.document.currentReleasedRevisionId ? context.revisions.find((row) => row.id === context.document.currentReleasedRevisionId) : null;
     if (context.document.currentReleasedRevisionId && !pointerRevision) throw new ControlledDocumentError(409, 'INVALID_RELEASED_REVISION_POINTER', 'Existing released revision pointer is invalid');
@@ -564,38 +631,61 @@ export async function approveAndReleaseControlledRevision(input: {
     }).where(eq(controlledDocuments.id, context.document.id)).returning();
     await tx.insert(controlledDocumentApprovalReleaseEvents).values({
       controlledDocumentId: document.id, revisionId: revision.id, approvalId: approval.id,
-      idempotencyKey: input.idempotencyKey.trim(), fileChecksum: revision.fileChecksum,
+      idempotencyKey, requestIdentityHash, fileChecksum: revision.fileChecksum,
       documentNumberSnapshot: document.documentNumber, revisionSnapshot: revision.versionNumber,
       actorUserId: input.actor.id, actorSnapshot: evidence.snapshot, authoritySnapshot: evidence.capabilities,
       reason, beforeLifecycle: 'DRAFT', afterLifecycle: 'RELEASED', effectiveDate,
     });
     await audit('CONTROLLED_DOCUMENT_APPROVED_AND_RELEASED', document, revision, input.actor, evidence.capabilities,
       reason, 'DRAFT', 'RELEASED', input.request ?? {}, tx as unknown as Client,
-      { approvalId: approval.id, idempotencyKey: input.idempotencyKey.trim(), effectiveDate });
+      { approvalId: approval.id, idempotencyKey, effectiveDate });
     return getControlledDocumentState(input.documentId, tx as unknown as Client);
   });
 }
 
 export async function rejectRegisteredControlledRevision(input: {
-  documentId: string; revisionId: string; reason: string; actor: ControlledDocumentActor; request?: RequestEvidence;
+  documentId: string; revisionId: string; reason: string; actor: ControlledDocumentActor;
+  request?: RequestEvidence; sessionToken: string;
+  readAuthoritativeBytes: (filePath: string) => Promise<Buffer>;
 }, client: Client = db) {
   const reason = input.reason.trim();
   if (!reason) throw new ControlledDocumentError(400, 'TRANSITION_REASON_REQUIRED', 'Rejection reason is required');
   return client.transaction(async (tx) => {
+    if (!isControlledDocumentPhase2Enabled()) throw new ControlledDocumentError(404, 'PHASE2_DISABLED', 'Phase 2 rejection is disabled');
+    await assertControlledDocumentPhase2SchemaReady(tx as unknown as Client);
     const context = await loadDocument(input.documentId, tx as unknown as Client, true);
+    await revalidatePhase2Actor(tx as unknown as Client, input.actor, input.sessionToken);
     const evidence = await actorEvidence(input.actor);
     if (!evidence.capabilities.includes('documents.approve')) throw new ControlledDocumentError(403, 'APPROVAL_PERMISSION_REQUIRED', 'documents.approve authority is required');
     const revision = context.revisions.find((row) => row.id === input.revisionId);
     if (!revision || revision.documentId !== context.document.id) throw new ControlledDocumentError(409, 'CROSS_DOCUMENT_REVISION', 'Revision does not belong to this controlled document');
     if (context.document.currentRevisionId !== revision.id || context.document.workingDraftRevisionId !== revision.id || revision.lifecycleStatus !== 'DRAFT') throw new ControlledDocumentError(409, 'STALE_REVISION', 'Rejection must target the exact current registered revision');
+    let rejectionChecksum: string | null = null;
+    let checksumVerificationStatus = 'UNAVAILABLE';
+    let checksumUnavailableReason = 'No verified authoritative checksum was available at rejection.';
+    if (revision.filePath && revision.fileChecksum && revision.checksumStatus === 'VERIFIED') {
+      try {
+        const observedChecksum = checksumFile(await input.readAuthoritativeBytes(revision.filePath));
+        if (observedChecksum === revision.fileChecksum) {
+          rejectionChecksum = observedChecksum;
+          checksumVerificationStatus = 'VERIFIED';
+          checksumUnavailableReason = '';
+        } else {
+          checksumVerificationStatus = 'MISMATCH';
+          checksumUnavailableReason = 'Authoritative bytes did not match the stored verified checksum at rejection.';
+        }
+      } catch {
+        checksumUnavailableReason = 'Authoritative bytes were unavailable at rejection.';
+      }
+    }
     await tx.insert(controlledDocumentRevisionApprovals).values({
       controlledDocumentId: context.document.id, revisionId: revision.id,
-      fileChecksum: revision.fileChecksum || 'UNVERIFIED', documentNumberSnapshot: context.document.documentNumber,
+      fileChecksum: rejectionChecksum, checksumVerificationStatus, documentNumberSnapshot: context.document.documentNumber,
       revisionSnapshot: revision.versionNumber, decision: 'REJECTED',
       signatureMeaning: 'I rejected this exact registered controlled document revision.', decisionComment: reason,
       actorUserId: input.actor.id, actorUsernameSnapshot: input.actor.username, actorRoleSnapshot: input.actor.role,
       actorCapabilitiesSnapshot: evidence.capabilities, approvalStatus: 'VALID',
-      metadata: { provenance: 'AUTHENTICATED_PHASE2_REJECTION' },
+      metadata: { provenance: 'AUTHENTICATED_PHASE2_REJECTION', checksumUnavailableReason: checksumUnavailableReason || null },
     });
     await tx.update(documentVersionHistory).set({ lifecycleStatus: 'REJECTED', status: 'rejected', reviewedAt: new Date(), reviewedByUserId: input.actor.id, reviewedBySnapshot: evidence.snapshot })
       .where(and(eq(documentVersionHistory.id, revision.id), eq(documentVersionHistory.documentId, context.document.id)));

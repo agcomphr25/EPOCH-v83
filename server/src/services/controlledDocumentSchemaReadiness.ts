@@ -72,8 +72,10 @@ export async function assertControlledDocumentSchemaReady(
   if (missing.length) throw new ControlledDocumentSchemaNotReadyError(missing);
 }
 
-/* eslint-disable prettier/prettier, @typescript-eslint/no-explicit-any */
-export async function assertControlledDocumentPhase2SchemaReady(client: Pick<typeof db, 'execute'> = db) {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export async function assertControlledDocumentPhase2SchemaReady(
+  client: Pick<typeof db, 'execute'> = db
+) {
   await assertControlledDocumentSchemaReady(client);
   const result = await client.execute(sql`
     WITH expected_columns(name, data_type, nullable, default_fragment) AS (
@@ -137,11 +139,13 @@ export async function assertControlledDocumentPhase2SchemaReady(client: Pick<typ
         AND table_name = 'controlled_document_revision_approvals' AND column_name = 'checksum_verification_status'
         AND data_type = 'text' AND is_nullable = 'YES')
   `);
-  const rows = (((result as any)?.rows ?? result) || []) as Array<{ issue?: string }>;
-  const issues = rows.flatMap((row) => row.issue ? [row.issue] : []);
+  const rows = (((result as any)?.rows ?? result) || []) as Array<{
+    issue?: string;
+  }>;
+  const issues = rows.flatMap((row) => (row.issue ? [row.issue] : []));
   if (issues.length) throw new ControlledDocumentSchemaNotReadyError(issues);
 }
-/* eslint-enable prettier/prettier, @typescript-eslint/no-explicit-any */
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const reconciliationTables = [
   'controlled_document_reconciliation_previews',

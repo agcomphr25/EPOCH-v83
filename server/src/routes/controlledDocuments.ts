@@ -979,9 +979,11 @@ router.get(
           const fileReferenceType = getControlledFileReferenceType(
             authoritativeReference
           );
+          /* eslint-disable prettier/prettier -- Linux CI and Windows disagree on this union layout. */
           let fileAccessibility:
             'ACCESSIBLE' | 'INACCESSIBLE' | 'EXTERNAL_MUTABLE' | 'MISSING' =
             'MISSING';
+          /* eslint-enable prettier/prettier */
           if (fileReferenceType === 'EXTERNAL_MUTABLE_URL') {
             fileAccessibility = 'EXTERNAL_MUTABLE';
           } else if (authoritativeReference) {

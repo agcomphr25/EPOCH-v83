@@ -431,8 +431,10 @@ export default function MasterDocumentRegister() {
   });
 
   const getStatusBadge = (doc: ControlledDocument) => {
+    /* eslint-disable prettier/prettier -- Linux CI and Windows disagree on this union layout. */
     const compatibilityStatus = (doc as any).compatibilityStatus as
       string | undefined;
+    /* eslint-enable prettier/prettier */
     if (compatibilityStatus === 'Released and Verified') {
       return <Badge className="bg-emerald-700">Released and Verified</Badge>;
     }

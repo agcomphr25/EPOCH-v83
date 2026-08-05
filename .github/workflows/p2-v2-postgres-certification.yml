@@ -269,7 +269,7 @@ jobs:
           server/__tests__/epochSoftwareValidationDuplicateCleanupPostgres.test.ts
           --reporter=verbose
 
-      - name: Run EPOCH software validation regressions
+      - name: Run EPOCH validation server regressions
         run: >-
           npx vitest run
           --config vitest.config.server.ts
@@ -280,6 +280,7 @@ jobs:
           server/__tests__/epochSoftwareValidationReadinessArchitecture.test.ts
           server/__tests__/epochSoftwareValidationRules.test.ts
           server/__tests__/epochSoftwareValidationWizardPhase1Architecture.test.ts
+          server/__tests__/epochValidationResponsibilityDecision.test.ts
           --reporter=verbose
 
       - name: Run isolated PostgreSQL certification
@@ -358,19 +359,6 @@ jobs:
           client/src/__tests__/P2V2ShippingProjectCloseout.component.test.tsx
           client/src/__tests__/P2V2PilotControlCenter.component.test.tsx
           client/src/__tests__/DesignProjectConfigurationWorkspace.component.test.tsx
-          --reporter=verbose
-
-      - name: Run EPOCH validation server regressions
-        run: >-
-          npx vitest run
-          --config vitest.config.server.ts
-          server/__tests__/epochSoftwareValidationArchitecture.test.ts
-          server/__tests__/epochSoftwareValidationDuplicateCleanupArchitecture.test.ts
-          server/__tests__/epochSoftwareValidationIdempotencyArchitecture.test.ts
-          server/__tests__/epochSoftwareValidationReadinessArchitecture.test.ts
-          server/__tests__/epochSoftwareValidationRules.test.ts
-          server/__tests__/epochSoftwareValidationWizardPhase1Architecture.test.ts
-          server/__tests__/epochValidationResponsibilityDecision.test.ts
           --reporter=verbose
 
       - name: Run EPOCH validation component regressions

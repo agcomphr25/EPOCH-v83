@@ -16,8 +16,10 @@ import { recordAuditEvent } from '../services/auditLedgerService';
 import { resolveItemDisplayName } from '../utils/resolveItemDisplayName';
 import {
   executePurePrecisionExpedite,
+  previewSelectedPurePrecisionExpediteUndo,
   previewPurePrecisionExpedite,
   PURE_PRECISION_EXPEDITE_IDS,
+  undoSelectedPurePrecisionExpedite,
 } from '../services/p1ExpediteService';
 
 const router = Router();
@@ -2270,6 +2272,32 @@ router.post('/p1-expedite/execute', authenticateToken, async (req: Request, res:
   try {
     res.json(await executePurePrecisionExpedite({
       ids: req.body?.ids ?? PURE_PRECISION_EXPEDITE_IDS,
+      reason: String(req.body?.reason ?? ''),
+      actor: { id: typeof user.id === 'number' ? user.id : null, username: user.username, role: user.role },
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? null,
+    }));
+  } catch (error: any) {
+    res.status(error.statusCode ?? 400).json({ error: error.message, preview: error.preview });
+  }
+});
+
+router.post('/p1-expedite/undo-preview', authenticateToken, async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if (!user || user.username !== OVERRIDE_ONLY_USER) return res.status(403).json({ error: 'Access restricted to glennj' });
+  try {
+    res.json(await previewSelectedPurePrecisionExpediteUndo(req.body?.ids));
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/p1-expedite/undo', authenticateToken, async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if (!user || user.username !== OVERRIDE_ONLY_USER) return res.status(403).json({ error: 'Access restricted to glennj' });
+  try {
+    res.json(await undoSelectedPurePrecisionExpedite({
+      ids: req.body?.ids,
       reason: String(req.body?.reason ?? ''),
       actor: { id: typeof user.id === 'number' ? user.id : null, username: user.username, role: user.role },
       ip: req.ip,

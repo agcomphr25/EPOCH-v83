@@ -261,6 +261,27 @@ jobs:
             sed '/^\\\(un\)\?restrict /d' > /tmp/schema-second.sql
           diff --unified /tmp/schema-first.sql /tmp/schema-second.sql
 
+      - name: Certify migration 0253 state-aware duplicate cleanup
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          --no-file-parallelism
+          server/__tests__/epochSoftwareValidationDuplicateCleanupPostgres.test.ts
+          --reporter=verbose
+
+      - name: Run EPOCH software validation regressions
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          --no-file-parallelism
+          server/__tests__/epochSoftwareValidationArchitecture.test.ts
+          server/__tests__/epochSoftwareValidationDuplicateCleanupArchitecture.test.ts
+          server/__tests__/epochSoftwareValidationIdempotencyArchitecture.test.ts
+          server/__tests__/epochSoftwareValidationReadinessArchitecture.test.ts
+          server/__tests__/epochSoftwareValidationRules.test.ts
+          server/__tests__/epochSoftwareValidationWizardPhase1Architecture.test.ts
+          --reporter=verbose
+
       - name: Run isolated PostgreSQL certification
         env:
           P2_V2_PRODUCTION_LAUNCH_ENABLED: 'true'
@@ -453,6 +474,14 @@ jobs:
           console.log('safe_boot_replay=passed');
           console.log('schema_idempotency=passed');
           NODE
+
+      - name: Certify migration 0253 state-aware duplicate cleanup
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          --no-file-parallelism
+          server/__tests__/epochSoftwareValidationDuplicateCleanupPostgres.test.ts
+          --reporter=verbose
 
       - name: Run existing Phase 10A PostgreSQL lifecycle
         env:

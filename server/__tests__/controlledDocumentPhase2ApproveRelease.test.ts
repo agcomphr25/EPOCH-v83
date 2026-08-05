@@ -102,7 +102,7 @@ describe('atomic approve-and-release contract', () => {
     expect(routes).toContain("'IMMUTABLE_REVISION_FILE_REQUIRED'");
     expect(routes).toContain('getExternalRedirectUrl(revision.filePath)');
     expect(routes).toMatch(
-      /router\.post\('\/:id\/approve',[\s\S]{0,250}requireLegacyLifecycle[\s\S]{0,120}requireStepUp\(\)/
+      /router\.post\(\s*'\/:id\/approve',[\s\S]{0,400}requireLegacyLifecycle[\s\S]{0,200}requireStepUp\(\)/
     );
   });
 });

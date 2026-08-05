@@ -10,7 +10,7 @@ const lifecycleService = read(
   'server/src/services/controlledDocumentLifecycleService.ts'
 );
 const releasedHandler = route.slice(
-  route.indexOf("router.get('/:id/view'"),
+  route.indexOf("'/:id/view'"),
   route.indexOf('// Delete document')
 );
 
@@ -40,8 +40,8 @@ describe('Master Document Register released-revision access', () => {
       'revision.effectiveDate || revision.releasedAt || revision.createdAt'
     );
     expect(route).toContain('revision.lifecycleStatus || revision.status');
-    expect(releasedHandler).toContain(
-      'addControlledDocumentFooter(buffer, doc, revision)'
+    expect(releasedHandler).toMatch(
+      /addControlledDocumentFooter\(\s*buffer,\s*doc,\s*revision\s*\)/
     );
   });
 
@@ -66,7 +66,7 @@ describe('Master Document Register released-revision access', () => {
   it('centralizes restricted, explicit-grant, and admin-only enforcement', () => {
     expect(
       route.match(
-        /requirePermission\('documents\.view'\), controlledDocumentAccessPolicy/g
+        /requirePermission\('documents\.view'\),\s*controlledDocumentAccessPolicy/g
       )
     ).toHaveLength(3);
     expect(route).toContain("accessRule === 'explicit_grant'");

@@ -45,7 +45,10 @@ import {
   Printer,
   RefreshCw,
 } from 'lucide-react';
-import type { ControlledDocument, DocumentVersionHistory } from '@shared/schema';
+import type {
+  ControlledDocument,
+  DocumentVersionHistory,
+} from '@shared/schema';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -110,7 +113,8 @@ const DEPARTMENT_CODE_PREFIXES: Record<string, string> = {
   Purchasing: 'PO',
 };
 
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const codePrefixForDepartment = (department: string) => {
   const mapped = DEPARTMENT_CODE_PREFIXES[department];
@@ -125,7 +129,8 @@ const codePrefixForDepartment = (department: string) => {
 };
 
 const codeTokenForDocumentType = (documentType: string) =>
-  DOCUMENT_TYPE_OPTIONS.find((option) => option.value === documentType)?.codeToken || documentType;
+  DOCUMENT_TYPE_OPTIONS.find((option) => option.value === documentType)
+    ?.codeToken || documentType;
 
 const generateDocumentNumber = (
   documents: ControlledDocument[],
@@ -190,8 +195,18 @@ type DesignControlTemplateView = {
 };
 
 type DesignControlTemplateReconciliationView = {
-  conflicts: Array<{ id: string; templateKey: string; conflictType: string; details: Record<string, unknown> }>;
-  legacyTemplates: Array<{ id: string; templateName: string; templateType: string; reason: string }>;
+  conflicts: Array<{
+    id: string;
+    templateKey: string;
+    conflictType: string;
+    details: Record<string, unknown>;
+  }>;
+  legacyTemplates: Array<{
+    id: string;
+    templateName: string;
+    templateType: string;
+    reason: string;
+  }>;
 };
 
 export default function MasterDocumentRegister() {
@@ -207,7 +222,8 @@ export default function MasterDocumentRegister() {
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [selectedDocument, setSelectedDocument] = useState<ControlledDocument | null>(null);
+  const [selectedDocument, setSelectedDocument] =
+    useState<ControlledDocument | null>(null);
   const [createNewVersion, setCreateNewVersion] = useState(false);
   const [newDocumentDepartment, setNewDocumentDepartment] = useState('');
   const [newDocumentType, setNewDocumentType] = useState('');
@@ -220,7 +236,9 @@ export default function MasterDocumentRegister() {
   const [stepUpError, setStepUpError] = useState<string | null>(null);
   const [isStepUpOpen, setIsStepUpOpen] = useState(false);
   const [isStepUpSubmitting, setIsStepUpSubmitting] = useState(false);
-  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
+  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(
+    null
+  );
   const { toast } = useToast();
 
   // Fetch controlled documents
@@ -228,29 +246,38 @@ export default function MasterDocumentRegister() {
     queryKey: ['/api/controlled-documents'],
   });
 
-  const { data: designControlTemplates = [], isLoading: areDesignTemplatesLoading } = useQuery<DesignControlTemplateView[]>({
+  const {
+    data: designControlTemplates = [],
+    isLoading: areDesignTemplatesLoading,
+  } = useQuery<DesignControlTemplateView[]>({
     queryKey: ['/api/design-control-form-templates'],
   });
-  const { data: designTemplateReconciliation } = useQuery<DesignControlTemplateReconciliationView>({
-    queryKey: ['/api/design-control-form-templates/reconciliation'],
-  });
+  const { data: designTemplateReconciliation } =
+    useQuery<DesignControlTemplateReconciliationView>({
+      queryKey: ['/api/design-control-form-templates/reconciliation'],
+    });
 
   // Fetch current user session for role-based access
   const { data: session } = useQuery<{ username: string; role: string }>({
     queryKey: ['/api/auth/session'],
   });
-  /* eslint-disable prettier/prettier */
-  const { data: phase2Availability } = useQuery<{ enabled: boolean }>({ queryKey: ['/api/controlled-documents/phase2/availability'] });
+  const { data: phase2Availability } = useQuery<{ enabled: boolean }>({
+    queryKey: ['/api/controlled-documents/phase2/availability'],
+  });
   const phase2Enabled = phase2Availability?.enabled === true;
-  /* eslint-enable prettier/prettier */
 
-  const { data: versionHistory = [], isLoading: isHistoryLoading } = useQuery<DocumentVersionHistory[]>({
+  const { data: versionHistory = [], isLoading: isHistoryLoading } = useQuery<
+    DocumentVersionHistory[]
+  >({
     queryKey: ['/api/controlled-documents', selectedDocument?.id, 'versions'],
     enabled: isHistoryDialogOpen && Boolean(selectedDocument?.id),
     queryFn: async () => {
-      const response = await fetch(`/api/controlled-documents/${selectedDocument?.id}/versions`, {
-        credentials: 'include',
-      });
+      const response = await fetch(
+        `/api/controlled-documents/${selectedDocument?.id}/versions`,
+        {
+          credentials: 'include',
+        }
+      );
       if (!response.ok) throw new Error('Failed to fetch version history');
       return response.json();
     },
@@ -267,49 +294,63 @@ export default function MasterDocumentRegister() {
       body?: Record<string, unknown>;
       method?: 'POST';
     }) => {
-      const response = await fetch(`/api/design-control-form-templates${input.path}`, {
-        method: input.method ?? 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input.body ?? {}),
-      });
+      const response = await fetch(
+        `/api/design-control-form-templates${input.path}`,
+        {
+          method: input.method ?? 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input.body ?? {}),
+        }
+      );
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.message || payload.error || 'Template operation failed');
+      if (!response.ok)
+        throw new Error(
+          payload.message || payload.error || 'Template operation failed'
+        );
       return payload;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/design-control-form-templates'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/design-control-form-templates/reconciliation'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/design-control-form-templates'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/design-control-form-templates/reconciliation'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/controlled-documents'],
+      });
       toast({ title: 'Design Control template updated' });
     },
-    onError: (error: Error) => toast({
-      title: 'Design Control template action failed',
-      description: error.message,
-      variant: 'destructive',
-    }),
+    onError: (error: Error) =>
+      toast({
+        title: 'Design Control template action failed',
+        description: error.message,
+        variant: 'destructive',
+      }),
   });
 
   const runDesignTemplateAction = (
     template: DesignControlTemplateView,
     revision: DesignControlTemplateRevisionView,
-    action: 'submit' | 'decision' | 'release' | 'obsolete',
+    action: 'submit' | 'decision' | 'release' | 'obsolete'
   ) => {
     const reason = window.prompt(`Reason for ${action}:`);
     if (!reason?.trim()) return;
     designTemplateMutation.mutate({
       path: `/${template.templateKey}/revisions/${revision.id}/${action}`,
-      body: action === 'decision' ? { reason, decision: 'APPROVED' } : { reason },
+      body:
+        action === 'decision' ? { reason, decision: 'APPROVED' } : { reason },
     });
   };
 
   const createDesignTemplateRevision = (
     template: DesignControlTemplateView,
-    revision: DesignControlTemplateRevisionView,
+    revision: DesignControlTemplateRevisionView
   ) => {
     const documentRevision = window.prompt(
       'New controlled document revision:',
-      nextRevisionVersion(revision.documentRevisionSnapshot),
+      nextRevisionVersion(revision.documentRevisionSnapshot)
     );
     if (!documentRevision?.trim()) return;
     const reason = window.prompt('Material-change reason:');
@@ -326,14 +367,27 @@ export default function MasterDocumentRegister() {
   };
 
   // Get unique departments and types for filters
-  const departments = ['all', ...Array.from(new Set(documents.map((d) => d.department)))];
-  const documentTypes = ['all', ...Array.from(new Set(documents.map((d) => d.documentType)))];
+  const departments = [
+    'all',
+    ...Array.from(new Set(documents.map((d) => d.department))),
+  ];
+  const documentTypes = [
+    'all',
+    ...Array.from(new Set(documents.map((d) => d.documentType))),
+  ];
   const createDepartmentOptions = useMemo(
-    () => Array.from(new Set([...DOCUMENT_DEPARTMENT_OPTIONS, ...documents.map((d) => d.department).filter(Boolean)])),
+    () =>
+      Array.from(
+        new Set([
+          ...DOCUMENT_DEPARTMENT_OPTIONS,
+          ...documents.map((d) => d.department).filter(Boolean),
+        ])
+      ),
     [documents]
   );
   const generatedDocumentNumber = useMemo(
-    () => generateDocumentNumber(documents, newDocumentDepartment, newDocumentType),
+    () =>
+      generateDocumentNumber(documents, newDocumentDepartment, newDocumentType),
     [documents, newDocumentDepartment, newDocumentType]
   );
 
@@ -348,7 +402,9 @@ export default function MasterDocumentRegister() {
     if (!doc.expirationDate || doc.status !== 'approved') return false;
     const today = new Date();
     const expDate = new Date(doc.expirationDate);
-    const daysUntilExpiration = Math.floor((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const daysUntilExpiration = Math.floor(
+      (expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    );
     return daysUntilExpiration > 0 && daysUntilExpiration <= 30;
   };
 
@@ -358,32 +414,44 @@ export default function MasterDocumentRegister() {
       searchQuery === '' ||
       doc.documentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.documentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      (doc.description &&
+        doc.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesDepartment = departmentFilter === 'all' || doc.department === departmentFilter;
+    const matchesDepartment =
+      departmentFilter === 'all' || doc.department === departmentFilter;
     const matchesType = typeFilter === 'all' || doc.documentType === typeFilter;
     const matchesStatus =
       statusFilter === 'all' ||
       (statusFilter === 'expired'
         ? isExpired(doc)
-        : ((doc as any).lifecycleStatus || doc.status).toLowerCase() === statusFilter.toLowerCase());
+        : ((doc as any).lifecycleStatus || doc.status).toLowerCase() ===
+          statusFilter.toLowerCase());
 
     return matchesSearch && matchesDepartment && matchesType && matchesStatus;
   });
 
   const getStatusBadge = (doc: ControlledDocument) => {
-    const compatibilityStatus = (doc as any).compatibilityStatus as string | undefined;
+    const compatibilityStatus = (doc as any).compatibilityStatus as
+      string | undefined;
     if (compatibilityStatus === 'Released and Verified') {
       return <Badge className="bg-emerald-700">Released and Verified</Badge>;
     }
     if (compatibilityStatus === 'Legacy Approved — Verification Required') {
-      return <Badge variant="outline" className="border-amber-500 text-amber-700">Legacy Approved — Verification Required</Badge>;
+      return (
+        <Badge variant="outline" className="border-amber-500 text-amber-700">
+          Legacy Approved — Verification Required
+        </Badge>
+      );
     }
     if (compatibilityStatus === 'File Reconciliation Required') {
       return <Badge variant="destructive">File Reconciliation Required</Badge>;
     }
     if (compatibilityStatus === 'Awaiting Approval') {
-      return <Badge variant="outline" className="border-blue-500 text-blue-700">Awaiting Approval</Badge>;
+      return (
+        <Badge variant="outline" className="border-blue-500 text-blue-700">
+          Awaiting Approval
+        </Badge>
+      );
     }
 
     if (isExpired(doc)) {
@@ -397,19 +465,29 @@ export default function MasterDocumentRegister() {
 
     if (isExpiringSoon(doc)) {
       return (
-        <Badge variant="outline" className="flex items-center gap-1 border-yellow-500 text-yellow-700">
+        <Badge
+          variant="outline"
+          className="flex items-center gap-1 border-yellow-500 text-yellow-700"
+        >
           <Clock className="h-3 w-3" />
           Expiring Soon
         </Badge>
       );
     }
 
-    /* eslint-disable prettier/prettier */
     const lifecycle = doc.lifecycleStatus || doc.status?.toUpperCase();
-    if (phase2Enabled && lifecycle === 'DRAFT') return <Badge variant="outline" className="border-blue-500 text-blue-700">Registered — awaiting approval</Badge>;
-    if (phase2Enabled && lifecycle === 'REJECTED') return <Badge variant="destructive">Rejected — correction required</Badge>;
-    if (phase2Enabled && ['IN_REVIEW', 'APPROVED'].includes(lifecycle)) return <Badge variant="outline">Historical/legacy — retained</Badge>;
-    /* eslint-enable prettier/prettier */
+    if (phase2Enabled && lifecycle === 'DRAFT')
+      return (
+        <Badge variant="outline" className="border-blue-500 text-blue-700">
+          Registered — awaiting approval
+        </Badge>
+      );
+    if (phase2Enabled && lifecycle === 'REJECTED')
+      return (
+        <Badge variant="destructive">Rejected — correction required</Badge>
+      );
+    if (phase2Enabled && ['IN_REVIEW', 'APPROVED'].includes(lifecycle))
+      return <Badge variant="outline">Historical/legacy — retained</Badge>;
     switch (lifecycle) {
       case 'RELEASED':
         return <Badge className="bg-emerald-700">Released</Badge>;
@@ -420,19 +498,29 @@ export default function MasterDocumentRegister() {
       case 'VOID':
         return <Badge variant="secondary">Void</Badge>;
       case 'IN_REVIEW':
-        return <Badge variant="outline" className="border-blue-500 text-blue-700">In Review</Badge>;
+        return (
+          <Badge variant="outline" className="border-blue-500 text-blue-700">
+            In Review
+          </Badge>
+        );
       case 'APPROVED':
       case 'approved':
       case 'approved':
         return (
-          <Badge variant="default" className="flex items-center gap-1 bg-green-600">
+          <Badge
+            variant="default"
+            className="flex items-center gap-1 bg-green-600"
+          >
             <CheckCircle className="h-3 w-3" />
             Approved
           </Badge>
         );
       case 'pending':
         return (
-          <Badge variant="outline" className="flex items-center gap-1 border-blue-500 text-blue-700">
+          <Badge
+            variant="outline"
+            className="flex items-center gap-1 border-blue-500 text-blue-700"
+          >
             <Clock className="h-3 w-3" />
             Pending
           </Badge>
@@ -458,7 +546,9 @@ export default function MasterDocumentRegister() {
   const formatVersionDisplay = (doc: ControlledDocument) => {
     const versionDate = (doc as any).versionDate;
     if (!versionDate) return `Version ${doc.currentVersion}`;
-    const date = String(versionDate).includes('T') ? new Date(versionDate) : new Date(`${versionDate}T00:00:00`);
+    const date = String(versionDate).includes('T')
+      ? new Date(versionDate)
+      : new Date(`${versionDate}T00:00:00`);
     if (Number.isNaN(date.getTime())) return `Version ${doc.currentVersion}`;
     return `Version ${doc.currentVersion} ${date.toLocaleDateString('en-US', {
       month: '2-digit',
@@ -481,19 +571,29 @@ export default function MasterDocumentRegister() {
   };
 
   const getAuthHeaders = (): Record<string, string> => {
-    const storedToken = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+    const storedToken =
+      localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
     return storedToken ? { Authorization: `Bearer ${storedToken}` } : {};
   };
 
-  const getFilenameFromDisposition = (disposition: string | null, fallback: string) => {
+  const getFilenameFromDisposition = (
+    disposition: string | null,
+    fallback: string
+  ) => {
     if (!disposition) return fallback;
     const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-    if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/"/g, ''));
+    if (utf8Match?.[1])
+      return decodeURIComponent(utf8Match[1].replace(/"/g, ''));
     const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
     return filenameMatch?.[1] || fallback;
   };
 
-  const openDocumentBlob = (blob: Blob, filename: string, mode: 'view' | 'download', targetWindow?: Window | null) => {
+  const openDocumentBlob = (
+    blob: Blob,
+    filename: string,
+    mode: 'view' | 'download',
+    targetWindow?: Window | null
+  ) => {
     const blobUrl = URL.createObjectURL(blob);
     if (mode === 'view') {
       if (targetWindow) {
@@ -518,17 +618,19 @@ export default function MasterDocumentRegister() {
     doc: ControlledDocument,
     mode: 'view' | 'download',
     targetWindowOverride?: Window | null,
-    apiPathOverride?: string,
+    apiPathOverride?: string
   ) => {
-    const path = apiPathOverride || `/api/controlled-documents/${doc.id}/${mode}`;
+    const path =
+      apiPathOverride || `/api/controlled-documents/${doc.id}/${mode}`;
     const targetWindow =
-      targetWindowOverride ?? (mode === 'view'
-        ? window.open('', '_blank')
-        : null);
+      targetWindowOverride ??
+      (mode === 'view' ? window.open('', '_blank') : null);
 
     if (targetWindow) {
       targetWindow.opener = null;
-      targetWindow.document.write('<p style="font-family: sans-serif; padding: 1rem;">Loading document...</p>');
+      targetWindow.document.write(
+        '<p style="font-family: sans-serif; padding: 1rem;">Loading document...</p>'
+      );
     }
 
     try {
@@ -555,7 +657,9 @@ export default function MasterDocumentRegister() {
         }
 
         targetWindow?.close();
-        throw new Error(errorData?.message || errorData?.error || `Failed to ${mode} document`);
+        throw new Error(
+          errorData?.message || errorData?.error || `Failed to ${mode} document`
+        );
       }
 
       const blob = await response.blob();
@@ -583,8 +687,17 @@ export default function MasterDocumentRegister() {
         headers: getAuthHeaders(),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.message || payload.error || 'Failed to generate legacy audit report');
-      const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+      if (!response.ok)
+        throw new Error(
+          payload.message ||
+            payload.error ||
+            'Failed to generate legacy audit report'
+        );
+      const blobUrl = URL.createObjectURL(
+        new Blob([JSON.stringify(payload, null, 2)], {
+          type: 'application/json',
+        })
+      );
       const link = document.createElement('a');
       link.href = blobUrl;
       link.download = `controlled-document-legacy-audit-${new Date().toISOString().slice(0, 10)}.json`;
@@ -593,11 +706,17 @@ export default function MasterDocumentRegister() {
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
     } catch (error: any) {
-      toast({ title: 'Unable to generate audit report', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Unable to generate audit report',
+        description: error.message,
+        variant: 'destructive',
+      });
     }
   };
 
-  const handleStepUpSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleStepUpSubmit = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
     event.preventDefault();
     if (!pendingDocumentAccess) return;
     if (!stepUpPassword.trim()) {
@@ -614,7 +733,9 @@ export default function MasterDocumentRegister() {
           : null;
       if (targetWindow) {
         targetWindow.opener = null;
-        targetWindow.document.write('<p style="font-family: sans-serif; padding: 1rem;">Verifying credentials...</p>');
+        targetWindow.document.write(
+          '<p style="font-family: sans-serif; padding: 1rem;">Verifying credentials...</p>'
+        );
       }
 
       const response = await fetch('/api/auth/step-up', {
@@ -642,7 +763,12 @@ export default function MasterDocumentRegister() {
       setIsStepUpOpen(false);
       setPendingDocumentAccess(null);
       setStepUpPassword('');
-      await openDocumentFile(access.doc, access.mode, targetWindow, access.apiPath);
+      await openDocumentFile(
+        access.doc,
+        access.mode,
+        targetWindow,
+        access.apiPath
+      );
     } catch (error: any) {
       setStepUpError(error.message || 'Credential verification failed');
     } finally {
@@ -659,7 +785,9 @@ export default function MasterDocumentRegister() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/controlled-documents'],
+      });
       setIsCreateDialogOpen(false);
       setSelectedFile(null);
       setNewDocumentDepartment('');
@@ -692,14 +820,27 @@ export default function MasterDocumentRegister() {
 
   // Update document mutation
   const updateDocumentMutation = useMutation({
-    mutationFn: async ({ id, formData, revise }: { id: string; formData: FormData; revise: boolean }) => {
-      return await apiRequest(`/api/controlled-documents/${id}${revise ? '/revise' : ''}`, {
-        method: revise ? 'POST' : 'PUT',
-        body: formData,
-      });
+    mutationFn: async ({
+      id,
+      formData,
+      revise,
+    }: {
+      id: string;
+      formData: FormData;
+      revise: boolean;
+    }) => {
+      return await apiRequest(
+        `/api/controlled-documents/${id}${revise ? '/revise' : ''}`,
+        {
+          method: revise ? 'POST' : 'PUT',
+          body: formData,
+        }
+      );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/controlled-documents'],
+      });
       setIsEditDialogOpen(false);
       setSelectedDocument(null);
       setSelectedFile(null);
@@ -736,10 +877,19 @@ export default function MasterDocumentRegister() {
     const formData = new FormData(formElement);
 
     if (createNewVersion) {
-      formData.append('revisionValue', nextRevisionVersion(selectedDocument.currentVersion));
-      formData.append('reason', String(formData.get('changeDescription') || ''));
+      formData.append(
+        'revisionValue',
+        nextRevisionVersion(selectedDocument.currentVersion)
+      );
+      formData.append(
+        'reason',
+        String(formData.get('changeDescription') || '')
+      );
       if ((selectedDocument as any).currentRevisionId) {
-        formData.append('currentRevisionId', (selectedDocument as any).currentRevisionId);
+        formData.append(
+          'currentRevisionId',
+          (selectedDocument as any).currentRevisionId
+        );
       }
     }
 
@@ -747,32 +897,53 @@ export default function MasterDocumentRegister() {
       formData.append('file', selectedFile);
     }
 
-    updateDocumentMutation.mutate({ id: selectedDocument.id, formData, revise: createNewVersion });
+    updateDocumentMutation.mutate({
+      id: selectedDocument.id,
+      formData,
+      revise: createNewVersion,
+    });
   };
 
   // Approve document mutation
-  /* eslint-disable prettier/prettier */
   const approveDocumentMutation = useMutation({
-    mutationFn: async ({ id, effectiveDate }: { id: string; effectiveDate: string }) => {
-      return await apiRequest(`/api/controlled-documents/${id}/${phase2Enabled ? 'approve-and-release' : 'decision'}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(phase2Enabled ? { 'Idempotency-Key': crypto.randomUUID() } : {}) },
-        body: JSON.stringify({
-          revisionId: (selectedDocument as any)?.currentRevisionId,
-          decision: 'APPROVED',
-          comment: `Approved with effective date ${effectiveDate}`,
-          reason: `Approved and released with effective date ${effectiveDate}`,
-          effectiveDate,
-        }),
-      });
+    mutationFn: async ({
+      id,
+      effectiveDate,
+    }: {
+      id: string;
+      effectiveDate: string;
+    }) => {
+      return await apiRequest(
+        `/api/controlled-documents/${id}/${phase2Enabled ? 'approve-and-release' : 'decision'}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(phase2Enabled
+              ? { 'Idempotency-Key': crypto.randomUUID() }
+              : {}),
+          },
+          body: JSON.stringify({
+            revisionId: (selectedDocument as any)?.currentRevisionId,
+            decision: 'APPROVED',
+            comment: `Approved with effective date ${effectiveDate}`,
+            reason: `Approved and released with effective date ${effectiveDate}`,
+            effectiveDate,
+          }),
+        }
+      );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/controlled-documents'],
+      });
       setIsApproveDialogOpen(false);
       setSelectedDocument(null);
       toast({
         title: 'Success',
-        description: phase2Enabled ? 'Document approved and released successfully' : 'Document approved successfully',
+        description: phase2Enabled
+          ? 'Document approved and released successfully'
+          : 'Document approved successfully',
       });
     },
     onError: (error: any) => {
@@ -783,7 +954,6 @@ export default function MasterDocumentRegister() {
       });
     },
   });
-  /* eslint-enable prettier/prettier */
 
   const handleApproveDocument = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -796,9 +966,14 @@ export default function MasterDocumentRegister() {
     approveDocumentMutation.mutate({ id: selectedDocument.id, effectiveDate });
   };
 
-  /* eslint-disable prettier/prettier */
   const lifecycleMutation = useMutation({
-    mutationFn: async ({ doc, action }: { doc: ControlledDocument; action: 'submit' | 'release' | 'reject' | 'obsolete' | 'void' }) => {
+    mutationFn: async ({
+      doc,
+      action,
+    }: {
+      doc: ControlledDocument;
+      action: 'submit' | 'release' | 'reject' | 'obsolete' | 'void';
+    }) => {
       const reason = window.prompt(`Reason for ${action}`);
       if (!reason?.trim()) throw new Error('A transition reason is required');
       return apiRequest(`/api/controlled-documents/${doc.id}/${action}`, {
@@ -809,14 +984,17 @@ export default function MasterDocumentRegister() {
         },
       });
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] }),
-    onError: (error: any) => toast({
-      title: 'Document lifecycle action failed',
-      description: error.message,
-      variant: 'destructive',
-    }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: ['/api/controlled-documents'],
+      }),
+    onError: (error: any) =>
+      toast({
+        title: 'Document lifecycle action failed',
+        description: error.message,
+        variant: 'destructive',
+      }),
   });
-  /* eslint-enable prettier/prettier */
 
   // CSV Import mutation
   const importCsvMutation = useMutation({
@@ -830,7 +1008,9 @@ export default function MasterDocumentRegister() {
       });
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/controlled-documents'],
+      });
       setIsImportDialogOpen(false);
       setCsvFile(null);
       const results = data.results;
@@ -902,27 +1082,27 @@ export default function MasterDocumentRegister() {
               <ControlledDocumentReconciliationWorkspace />
               {canCreateEdit && (
                 <>
-                <Button
-                  variant="outline"
-                  className="flex items-center gap-2"
-                  data-testid="button-import-csv"
-                  onClick={() => setIsImportDialogOpen(true)}
-                >
-                  <Upload className="h-4 w-4" />
-                  Import CSV
-                </Button>
-                <Button
-                  className="flex items-center gap-2"
-                  data-testid="button-create-document"
-                  onClick={() => {
-                    setNewDocumentDepartment('');
-                    setNewDocumentType('');
-                    setIsCreateDialogOpen(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4" />
-                  New Document
-                </Button>
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    data-testid="button-import-csv"
+                    onClick={() => setIsImportDialogOpen(true)}
+                  >
+                    <Upload className="h-4 w-4" />
+                    Import CSV
+                  </Button>
+                  <Button
+                    className="flex items-center gap-2"
+                    data-testid="button-create-document"
+                    onClick={() => {
+                      setNewDocumentDepartment('');
+                      setNewDocumentType('');
+                      setIsCreateDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    New Document
+                  </Button>
                 </>
               )}
             </div>
@@ -952,7 +1132,10 @@ export default function MasterDocumentRegister() {
               </div>
 
               {/* Department Filter */}
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <Select
+                value={departmentFilter}
+                onValueChange={setDepartmentFilter}
+              >
                 <SelectTrigger data-testid="select-department-filter">
                   <SelectValue placeholder="All Departments" />
                 </SelectTrigger>
@@ -1003,10 +1186,13 @@ export default function MasterDocumentRegister() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
-              <CardTitle className="text-lg">Design Control Form Templates</CardTitle>
+              <CardTitle className="text-lg">
+                Design Control Form Templates
+              </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Exact template-definition revisions linked to independently controlled MDR documents.
-                Project form entry begins in Phase 5 and is not available here.
+                Exact template-definition revisions linked to independently
+                controlled MDR documents. Project form entry begins in Phase 5
+                and is not available here.
               </p>
             </div>
             {can('documents.template.create') && (
@@ -1021,21 +1207,32 @@ export default function MasterDocumentRegister() {
             )}
           </CardHeader>
           <CardContent>
-            {Boolean(designTemplateReconciliation?.conflicts.length || designTemplateReconciliation?.legacyTemplates.length) && (
+            {Boolean(
+              designTemplateReconciliation?.conflicts.length ||
+              designTemplateReconciliation?.legacyTemplates.length
+            ) && (
               <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                <div className="font-medium">Template reconciliation required</div>
+                <div className="font-medium">
+                  Template reconciliation required
+                </div>
                 <div>
-                  {designTemplateReconciliation?.conflicts.length ?? 0} canonical mapping conflict(s) and{' '}
-                  {designTemplateReconciliation?.legacyTemplates.length ?? 0} legacy configurable template(s) were left intact.
-                  No record was automatically overwritten or relinked.
+                  {designTemplateReconciliation?.conflicts.length ?? 0}{' '}
+                  canonical mapping conflict(s) and{' '}
+                  {designTemplateReconciliation?.legacyTemplates.length ?? 0}{' '}
+                  legacy configurable template(s) were left intact. No record
+                  was automatically overwritten or relinked.
                 </div>
               </div>
             )}
             {areDesignTemplatesLoading ? (
-              <div className="py-6 text-center text-muted-foreground">Loading Design Control templates…</div>
+              <div className="py-6 text-center text-muted-foreground">
+                Loading Design Control templates…
+              </div>
             ) : designControlTemplates.length === 0 ? (
               <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-                No canonical Design Control templates are registered. An authorized document controller can run the idempotent seed operation.
+                No canonical Design Control templates are registered. An
+                authorized document controller can run the idempotent seed
+                operation.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -1052,65 +1249,188 @@ export default function MasterDocumentRegister() {
                   </TableHeader>
                   <TableBody>
                     {designControlTemplates.map((template) => {
-                      const revision = template.revisions[template.revisions.length - 1];
+                      const revision =
+                        template.revisions[template.revisions.length - 1];
                       const mapping = template.workflowStepKey
                         ? `Design Control step ${template.workflowStepKey}`
                         : template.changeRecordType;
                       return (
                         <TableRow key={template.id}>
                           <TableCell>
-                            <div className="font-medium">{template.document?.documentName ?? template.templateKey}</div>
-                            <div className="font-mono text-xs text-muted-foreground">{template.templateKey}</div>
-                            <Badge variant="outline" className="mt-1">{mapping}</Badge>
+                            <div className="font-medium">
+                              {template.document?.documentName ??
+                                template.templateKey}
+                            </div>
+                            <div className="font-mono text-xs text-muted-foreground">
+                              {template.templateKey}
+                            </div>
+                            <Badge variant="outline" className="mt-1">
+                              {mapping}
+                            </Badge>
                           </TableCell>
                           <TableCell>
-                            <div className="font-medium">{template.document?.documentNumber ?? 'Missing mapping'}</div>
-                            <div className="text-xs text-muted-foreground">{template.document?.id}</div>
+                            <div className="font-medium">
+                              {template.document?.documentNumber ??
+                                'Missing mapping'}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {template.document?.id}
+                            </div>
                             {template.reconciliationStatus !== 'READY' && (
-                              <Badge variant="destructive">Reconciliation required</Badge>
+                              <Badge variant="destructive">
+                                Reconciliation required
+                              </Badge>
                             )}
                           </TableCell>
                           <TableCell>
                             {revision ? (
                               <>
-                                <div>Document revision {revision.documentRevisionSnapshot}</div>
-                                <div className="font-mono text-xs text-muted-foreground">{revision.id}</div>
+                                <div>
+                                  Document revision{' '}
+                                  {revision.documentRevisionSnapshot}
+                                </div>
+                                <div className="font-mono text-xs text-muted-foreground">
+                                  {revision.id}
+                                </div>
                               </>
-                            ) : <Badge variant="destructive">Missing revision mapping</Badge>}
+                            ) : (
+                              <Badge variant="destructive">
+                                Missing revision mapping
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="text-xs">
-                            <div className="font-mono">Definition: {revision?.definitionChecksum.slice(0, 12) ?? '—'}…</div>
-                            <div className="font-mono">Blank PDF: {revision?.blankPdfChecksum?.slice(0, 12) ?? 'not retained'}{revision?.blankPdfChecksum ? '…' : ''}</div>
+                            <div className="font-mono">
+                              Definition:{' '}
+                              {revision?.definitionChecksum.slice(0, 12) ?? '—'}
+                              …
+                            </div>
+                            <div className="font-mono">
+                              Blank PDF:{' '}
+                              {revision?.blankPdfChecksum?.slice(0, 12) ??
+                                'not retained'}
+                              {revision?.blankPdfChecksum ? '…' : ''}
+                            </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={revision?.lifecycleStatus === 'RELEASED' ? 'default' : 'outline'}>
+                            <Badge
+                              variant={
+                                revision?.lifecycleStatus === 'RELEASED'
+                                  ? 'default'
+                                  : 'outline'
+                              }
+                            >
                               {revision?.lifecycleStatus ?? 'UNMAPPED'}
                             </Badge>
                           </TableCell>
                           <TableCell>
                             {revision && (
                               <div className="flex flex-wrap gap-2">
-                                <Button size="sm" variant="outline" onClick={() => window.open(`/api/design-control-form-templates/${template.templateKey}/revisions/${revision.id}/preview`, '_blank')}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    window.open(
+                                      `/api/design-control-form-templates/${template.templateKey}/revisions/${revision.id}/preview`,
+                                      '_blank'
+                                    )
+                                  }
+                                >
                                   <Eye className="h-4 w-4 mr-1" /> Preview
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => window.open(`/api/design-control-form-templates/${template.templateKey}/revisions/${revision.id}/download`, '_blank')}>
-                                  <Printer className="h-4 w-4 mr-1" /> Download / Print
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    window.open(
+                                      `/api/design-control-form-templates/${template.templateKey}/revisions/${revision.id}/download`,
+                                      '_blank'
+                                    )
+                                  }
+                                >
+                                  <Printer className="h-4 w-4 mr-1" /> Download
+                                  / Print
                                 </Button>
-                                {can('documents.template.revise') && !['OBSOLETE'].includes(revision.lifecycleStatus) && (
-                                  <Button size="sm" variant="outline" onClick={() => createDesignTemplateRevision(template, revision)}>Create Revision</Button>
-                                )}
-                                {can('documents.submit') && revision.lifecycleStatus === 'DRAFT' && (
-                                  <Button size="sm" onClick={() => runDesignTemplateAction(template, revision, 'submit')}>Submit</Button>
-                                )}
-                                {can('documents.template.release') && revision.lifecycleStatus === 'IN_REVIEW' && (
-                                  <Button size="sm" onClick={() => runDesignTemplateAction(template, revision, 'decision')}>Approve</Button>
-                                )}
-                                {can('documents.template.release') && revision.lifecycleStatus === 'APPROVED' && (
-                                  <Button size="sm" onClick={() => runDesignTemplateAction(template, revision, 'release')}>Release</Button>
-                                )}
-                                {can('documents.template.obsolete') && ['RELEASED', 'SUPERSEDED'].includes(revision.lifecycleStatus) && (
-                                  <Button size="sm" variant="destructive" onClick={() => runDesignTemplateAction(template, revision, 'obsolete')}>Obsolete</Button>
-                                )}
+                                {can('documents.template.revise') &&
+                                  !['OBSOLETE'].includes(
+                                    revision.lifecycleStatus
+                                  ) && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        createDesignTemplateRevision(
+                                          template,
+                                          revision
+                                        )
+                                      }
+                                    >
+                                      Create Revision
+                                    </Button>
+                                  )}
+                                {can('documents.submit') &&
+                                  revision.lifecycleStatus === 'DRAFT' && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() =>
+                                        runDesignTemplateAction(
+                                          template,
+                                          revision,
+                                          'submit'
+                                        )
+                                      }
+                                    >
+                                      Submit
+                                    </Button>
+                                  )}
+                                {can('documents.template.release') &&
+                                  revision.lifecycleStatus === 'IN_REVIEW' && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() =>
+                                        runDesignTemplateAction(
+                                          template,
+                                          revision,
+                                          'decision'
+                                        )
+                                      }
+                                    >
+                                      Approve
+                                    </Button>
+                                  )}
+                                {can('documents.template.release') &&
+                                  revision.lifecycleStatus === 'APPROVED' && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() =>
+                                        runDesignTemplateAction(
+                                          template,
+                                          revision,
+                                          'release'
+                                        )
+                                      }
+                                    >
+                                      Release
+                                    </Button>
+                                  )}
+                                {can('documents.template.obsolete') &&
+                                  ['RELEASED', 'SUPERSEDED'].includes(
+                                    revision.lifecycleStatus
+                                  ) && (
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={() =>
+                                        runDesignTemplateAction(
+                                          template,
+                                          revision,
+                                          'obsolete'
+                                        )
+                                      }
+                                    >
+                                      Obsolete
+                                    </Button>
+                                  )}
                               </div>
                             )}
                           </TableCell>
@@ -1133,7 +1453,9 @@ export default function MasterDocumentRegister() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-center py-8 text-gray-500">Loading documents...</div>
+              <div className="text-center py-8 text-gray-500">
+                Loading documents...
+              </div>
             ) : filteredDocuments.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 No documents found matching your criteria
@@ -1162,10 +1484,14 @@ export default function MasterDocumentRegister() {
                         className={isExpired(doc) ? 'bg-red-50' : ''}
                         data-testid={`row-document-${doc.id}`}
                       >
-                        <TableCell className="font-medium">{doc.documentNumber}</TableCell>
+                        <TableCell className="font-medium">
+                          {doc.documentNumber}
+                        </TableCell>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{doc.documentName}</div>
+                            <div className="font-medium">
+                              {doc.documentName}
+                            </div>
                             {doc.description && (
                               <div className="text-xs text-gray-500 truncate max-w-xs">
                                 {doc.description}
@@ -1175,19 +1501,38 @@ export default function MasterDocumentRegister() {
                         </TableCell>
                         <TableCell>{doc.documentType}</TableCell>
                         <TableCell>{doc.department}</TableCell>
-                        <TableCell className="font-mono text-sm">{formatVersionDisplay(doc)}</TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {formatVersionDisplay(doc)}
+                        </TableCell>
                         <TableCell className="text-xs">
-                          <div>Released: {(doc as any).currentReleasedRevisionId ? doc.currentVersion : 'None'}</div>
-                          <div>Working draft: {(doc as any).workingDraftRevisionId ? doc.currentVersion : 'None'}</div>
-                          {(doc as any).numberControlStatus === 'NUMBER_RECONCILIATION_REQUIRED' && (
-                            <Badge variant="destructive" className="mt-1">Number conflict</Badge>
+                          <div>
+                            Released:{' '}
+                            {(doc as any).currentReleasedRevisionId
+                              ? doc.currentVersion
+                              : 'None'}
+                          </div>
+                          <div>
+                            Working draft:{' '}
+                            {(doc as any).workingDraftRevisionId
+                              ? doc.currentVersion
+                              : 'None'}
+                          </div>
+                          {(doc as any).numberControlStatus ===
+                            'NUMBER_RECONCILIATION_REQUIRED' && (
+                            <Badge variant="destructive" className="mt-1">
+                              Number conflict
+                            </Badge>
                           )}
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(doc)}
                           {(doc as any).lifecycleStatus &&
-                            String((doc as any).lifecycleStatus).toLowerCase() !== doc.status?.toLowerCase() && (
-                              <div className="mt-1 text-xs text-muted-foreground">Legacy: {doc.status}</div>
+                            String(
+                              (doc as any).lifecycleStatus
+                            ).toLowerCase() !== doc.status?.toLowerCase() && (
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                Legacy: {doc.status}
+                              </div>
                             )}
                         </TableCell>
                         <TableCell>{formatDate(doc.effectiveDate)}</TableCell>
@@ -1205,7 +1550,9 @@ export default function MasterDocumentRegister() {
                           <div className="flex items-center gap-2">
                             {doc.filePath && (
                               <>
-                                <span className="text-xs text-muted-foreground">{getFileTypeLabel(doc.filePath)}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {getFileTypeLabel(doc.filePath)}
+                                </span>
                                 {isPdfDocument(doc) && (
                                   <Badge
                                     variant="outline"
@@ -1214,16 +1561,23 @@ export default function MasterDocumentRegister() {
                                     className="h-8 cursor-pointer gap-1 border-blue-300 px-2 text-blue-700 hover:bg-blue-50"
                                     title="View PDF"
                                     data-testid={`badge-view-pdf-${doc.id}`}
-                                    onClick={() => openDocumentFile(doc, 'view')}
+                                    onClick={() =>
+                                      openDocumentFile(doc, 'view')
+                                    }
                                     onKeyDown={(event) => {
-                                      if (event.key === 'Enter' || event.key === ' ') {
+                                      if (
+                                        event.key === 'Enter' ||
+                                        event.key === ' '
+                                      ) {
                                         event.preventDefault();
                                         openDocumentFile(doc, 'view');
                                       }
                                     }}
                                   >
                                     <Eye className="h-3.5 w-3.5" />
-                                    {openingDocumentId === doc.id ? 'Opening' : 'View'}
+                                    {openingDocumentId === doc.id
+                                      ? 'Opening'
+                                      : 'View'}
                                   </Badge>
                                 )}
                                 <Button
@@ -1232,7 +1586,9 @@ export default function MasterDocumentRegister() {
                                   className="h-8 w-8 p-0"
                                   title="Download Original"
                                   disabled={openingDocumentId === doc.id}
-                                  onClick={() => openDocumentFile(doc, 'download')}
+                                  onClick={() =>
+                                    openDocumentFile(doc, 'download')
+                                  }
                                   data-testid={`button-download-${doc.id}`}
                                 >
                                   <Download className="h-4 w-4" />
@@ -1249,64 +1605,142 @@ export default function MasterDocumentRegister() {
                             >
                               <History className="h-4 w-4" />
                             </Button>
-                            {!isDesignControlTemplate(doc) && can('documents.edit_draft') && (doc as any).lifecycleStatus === 'DRAFT' && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0"
-                                title="Edit"
-                                onClick={() => openEditDialog(doc)}
-                                data-testid={`button-edit-${doc.id}`}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {!isDesignControlTemplate(doc) && can('documents.revise') && !['OBSOLETE', 'VOID'].includes((doc as any).lifecycleStatus) && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedDocument(doc);
-                                  setCreateNewVersion(true);
-                                  setSelectedFile(null);
-                                  setIsEditDialogOpen(true);
-                                }}
-                              >
-                                Create Revision
-                              </Button>
-                            )}
-                            {/* eslint-disable prettier/prettier */}
-                            {!phase2Enabled && !isDesignControlTemplate(doc) && can('documents.submit') && doc.lifecycleStatus === 'DRAFT' && (
-                              <Button size="sm" variant="outline" onClick={() => lifecycleMutation.mutate({ doc, action: 'submit' })}>
-                                Submit
-                              </Button>
-                            )}
-                            {!isDesignControlTemplate(doc) && canApprove && ((phase2Enabled && doc.lifecycleStatus === 'DRAFT') || (!phase2Enabled && doc.lifecycleStatus === 'IN_REVIEW')) && (
-                              <Button
-                                size="sm"
-                                variant="default"
-                                className="bg-green-600 hover:bg-green-700"
-                                title="Approve"
-                                onClick={() => openApproveDialog(doc)}
-                                data-testid={`button-approve-${doc.id}`}
-                              >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                Approve
-                              </Button>
-                            )}
-                            {phase2Enabled && !isDesignControlTemplate(doc) && canApprove && doc.lifecycleStatus === 'DRAFT' && (
-                              <Button size="sm" variant="outline" onClick={() => lifecycleMutation.mutate({ doc, action: 'reject' })}>Reject</Button>
-                            )}
-                            {!phase2Enabled && !isDesignControlTemplate(doc) && can('documents.release') && doc.lifecycleStatus === 'APPROVED' && (
-                              <Button size="sm" onClick={() => lifecycleMutation.mutate({ doc, action: 'release' })}>Release</Button>
-                            )}
-                            {/* eslint-enable prettier/prettier */}
-                            {!isDesignControlTemplate(doc) && can('documents.obsolete') && ((doc as any).lifecycleStatus === 'RELEASED' || (doc as any).lifecycleStatus === 'SUPERSEDED') && (
-                              <Button size="sm" variant="destructive" onClick={() => lifecycleMutation.mutate({ doc, action: 'obsolete' })}>Obsolete</Button>
-                            )}
-                            {!isDesignControlTemplate(doc) && can('documents.void') && ['DRAFT', 'IN_REVIEW'].includes((doc as any).lifecycleStatus) && (
-                              <Button size="sm" variant="ghost" onClick={() => lifecycleMutation.mutate({ doc, action: 'void' })}>Void</Button>
-                            )}
+                            {!isDesignControlTemplate(doc) &&
+                              can('documents.edit_draft') &&
+                              (doc as any).lifecycleStatus === 'DRAFT' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0"
+                                  title="Edit"
+                                  onClick={() => openEditDialog(doc)}
+                                  data-testid={`button-edit-${doc.id}`}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              )}
+                            {!isDesignControlTemplate(doc) &&
+                              can('documents.revise') &&
+                              !['OBSOLETE', 'VOID'].includes(
+                                (doc as any).lifecycleStatus
+                              ) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedDocument(doc);
+                                    setCreateNewVersion(true);
+                                    setSelectedFile(null);
+                                    setIsEditDialogOpen(true);
+                                  }}
+                                >
+                                  Create Revision
+                                </Button>
+                              )}
+                            {!phase2Enabled &&
+                              !isDesignControlTemplate(doc) &&
+                              can('documents.submit') &&
+                              doc.lifecycleStatus === 'DRAFT' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    lifecycleMutation.mutate({
+                                      doc,
+                                      action: 'submit',
+                                    })
+                                  }
+                                >
+                                  Submit
+                                </Button>
+                              )}
+                            {!isDesignControlTemplate(doc) &&
+                              canApprove &&
+                              ((phase2Enabled &&
+                                doc.lifecycleStatus === 'DRAFT') ||
+                                (!phase2Enabled &&
+                                  doc.lifecycleStatus === 'IN_REVIEW')) && (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="bg-green-600 hover:bg-green-700"
+                                  title="Approve"
+                                  onClick={() => openApproveDialog(doc)}
+                                  data-testid={`button-approve-${doc.id}`}
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Approve
+                                </Button>
+                              )}
+                            {phase2Enabled &&
+                              !isDesignControlTemplate(doc) &&
+                              canApprove &&
+                              doc.lifecycleStatus === 'DRAFT' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    lifecycleMutation.mutate({
+                                      doc,
+                                      action: 'reject',
+                                    })
+                                  }
+                                >
+                                  Reject
+                                </Button>
+                              )}
+                            {!phase2Enabled &&
+                              !isDesignControlTemplate(doc) &&
+                              can('documents.release') &&
+                              doc.lifecycleStatus === 'APPROVED' && (
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    lifecycleMutation.mutate({
+                                      doc,
+                                      action: 'release',
+                                    })
+                                  }
+                                >
+                                  Release
+                                </Button>
+                              )}
+                            {!isDesignControlTemplate(doc) &&
+                              can('documents.obsolete') &&
+                              ((doc as any).lifecycleStatus === 'RELEASED' ||
+                                (doc as any).lifecycleStatus ===
+                                  'SUPERSEDED') && (
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() =>
+                                    lifecycleMutation.mutate({
+                                      doc,
+                                      action: 'obsolete',
+                                    })
+                                  }
+                                >
+                                  Obsolete
+                                </Button>
+                              )}
+                            {!isDesignControlTemplate(doc) &&
+                              can('documents.void') &&
+                              ['DRAFT', 'IN_REVIEW'].includes(
+                                (doc as any).lifecycleStatus
+                              ) && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    lifecycleMutation.mutate({
+                                      doc,
+                                      action: 'void',
+                                    })
+                                  }
+                                >
+                                  Void
+                                </Button>
+                              )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1360,7 +1794,12 @@ export default function MasterDocumentRegister() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="documentType">Document Type *</Label>
-                <Select name="documentType" value={newDocumentType} onValueChange={setNewDocumentType} required>
+                <Select
+                  name="documentType"
+                  value={newDocumentType}
+                  onValueChange={setNewDocumentType}
+                  required
+                >
                   <SelectTrigger data-testid="select-document-type">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -1376,7 +1815,12 @@ export default function MasterDocumentRegister() {
 
               <div className="space-y-2">
                 <Label htmlFor="department">Department *</Label>
-                <Select name="department" value={newDocumentDepartment} onValueChange={setNewDocumentDepartment} required>
+                <Select
+                  name="department"
+                  value={newDocumentDepartment}
+                  onValueChange={setNewDocumentDepartment}
+                  required
+                >
                   <SelectTrigger data-testid="select-department">
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
@@ -1511,7 +1955,9 @@ export default function MasterDocumentRegister() {
                 disabled={createDocumentMutation.isPending}
                 data-testid="button-submit-create"
               >
-                {createDocumentMutation.isPending ? 'Creating...' : 'Create Document'}
+                {createDocumentMutation.isPending
+                  ? 'Creating...'
+                  : 'Create Document'}
               </Button>
             </DialogFooter>
           </form>
@@ -1543,27 +1989,35 @@ export default function MasterDocumentRegister() {
                 <CardContent className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium">Current Version: {selectedDocument.currentVersion}</p>
+                      <p className="text-sm font-medium">
+                        Current Version: {selectedDocument.currentVersion}
+                      </p>
                       <p className="text-xs text-gray-600">
                         {createNewVersion
                           ? `Next revision: ${nextRevisionVersion(selectedDocument.currentVersion)}`
                           : 'Updating current version'}
                       </p>
                     </div>
-                    <Badge variant="outline">{createNewVersion ? 'Create Revision' : 'Metadata Only'}</Badge>
+                    <Badge variant="outline">
+                      {createNewVersion ? 'Create Revision' : 'Metadata Only'}
+                    </Badge>
                   </div>
 
                   {createNewVersion && (
                     <div className="space-y-3 border-t pt-3">
                       <div className="rounded-md border border-blue-200 bg-white p-3">
-                        <div className="text-xs font-medium uppercase text-gray-500">Next Version</div>
+                        <div className="text-xs font-medium uppercase text-gray-500">
+                          Next Version
+                        </div>
                         <div className="font-mono text-lg">
                           {nextRevisionVersion(selectedDocument.currentVersion)}
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="changeDescription">Change Description *</Label>
+                        <Label htmlFor="changeDescription">
+                          Change Description *
+                        </Label>
                         <Textarea
                           id="changeDescription"
                           name="changeDescription"
@@ -1607,7 +2061,11 @@ export default function MasterDocumentRegister() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-documentType">Document Type *</Label>
-                  <Select name="documentType" defaultValue={selectedDocument.documentType} required>
+                  <Select
+                    name="documentType"
+                    defaultValue={selectedDocument.documentType}
+                    required
+                  >
                     <SelectTrigger data-testid="select-edit-document-type">
                       <SelectValue />
                     </SelectTrigger>
@@ -1623,7 +2081,11 @@ export default function MasterDocumentRegister() {
 
                 <div className="space-y-2">
                   <Label htmlFor="edit-department">Department *</Label>
-                  <Select name="department" defaultValue={selectedDocument.department} required>
+                  <Select
+                    name="department"
+                    defaultValue={selectedDocument.department}
+                    required
+                  >
                     <SelectTrigger data-testid="select-edit-department">
                       <SelectValue />
                     </SelectTrigger>
@@ -1666,7 +2128,9 @@ export default function MasterDocumentRegister() {
                     id="edit-originationDate"
                     name="originationDate"
                     type="date"
-                    defaultValue={(selectedDocument as any).originationDate || ''}
+                    defaultValue={
+                      (selectedDocument as any).originationDate || ''
+                    }
                     data-testid="input-edit-origination-date"
                   />
                 </div>
@@ -1689,7 +2153,9 @@ export default function MasterDocumentRegister() {
                   <Input
                     id="edit-retentionLength"
                     name="retentionLength"
-                    defaultValue={selectedDocument.retentionLength || '10 years'}
+                    defaultValue={
+                      selectedDocument.retentionLength || '10 years'
+                    }
                     data-testid="input-edit-retention-length"
                   />
                 </div>
@@ -1705,31 +2171,33 @@ export default function MasterDocumentRegister() {
                 </div>
               </div>
 
-              {createNewVersion && <div className="space-y-2">
-                <Label htmlFor="edit-file">
-                  New revision file *
-                </Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="edit-file"
-                    type="file"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx"
-                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                    data-testid="input-edit-file-upload"
-                  />
-                  {selectedFile && (
-                    <div className="text-sm text-green-600 flex items-center gap-1">
-                      <Upload className="h-4 w-4" />
-                      {selectedFile.name}
-                    </div>
+              {createNewVersion && (
+                <div className="space-y-2">
+                  <Label htmlFor="edit-file">New revision file *</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="edit-file"
+                      type="file"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx"
+                      onChange={(e) =>
+                        setSelectedFile(e.target.files?.[0] || null)
+                      }
+                      data-testid="input-edit-file-upload"
+                    />
+                    {selectedFile && (
+                      <div className="text-sm text-green-600 flex items-center gap-1">
+                        <Upload className="h-4 w-4" />
+                        {selectedFile.name}
+                      </div>
+                    )}
+                  </div>
+                  {selectedDocument.filePath && (
+                    <p className="text-xs text-gray-500">
+                      Current file: {selectedDocument.filePath.split('/').pop()}
+                    </p>
                   )}
                 </div>
-                {selectedDocument.filePath && (
-                  <p className="text-xs text-gray-500">
-                    Current file: {selectedDocument.filePath.split('/').pop()}
-                  </p>
-                )}
-              </div>}
+              )}
 
               <DialogFooter>
                 <Button
@@ -1750,7 +2218,9 @@ export default function MasterDocumentRegister() {
                   disabled={updateDocumentMutation.isPending}
                   data-testid="button-submit-edit"
                 >
-                  {updateDocumentMutation.isPending ? 'Saving...' : 'Save Changes'}
+                  {updateDocumentMutation.isPending
+                    ? 'Saving...'
+                    : 'Save Changes'}
                 </Button>
               </DialogFooter>
             </form>
@@ -1764,8 +2234,9 @@ export default function MasterDocumentRegister() {
           <DialogHeader>
             <DialogTitle>Approve Controlled Document</DialogTitle>
             <DialogDescription>
-              {/* eslint-disable-next-line prettier/prettier */}
-              {phase2Enabled ? 'Approve and automatically release the exact immutable current revision in one transaction.' : 'Record an authenticated approval for the exact current revision and checksum. Release is a separate action.'}
+              {phase2Enabled
+                ? 'Approve and automatically release the exact immutable current revision in one transaction.'
+                : 'Record an authenticated approval for the exact current revision and checksum. Release is a separate action.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1774,7 +2245,9 @@ export default function MasterDocumentRegister() {
               {/* Document Summary */}
               <Card className="bg-green-50 border-green-200">
                 <CardHeader className="py-3">
-                  <CardTitle className="text-sm font-medium">Document Summary</CardTitle>
+                  <CardTitle className="text-sm font-medium">
+                    Document Summary
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="grid grid-cols-2 gap-2 text-sm">
@@ -1783,7 +2256,9 @@ export default function MasterDocumentRegister() {
                     <div className="font-medium">Document Name:</div>
                     <div>{selectedDocument.documentName}</div>
                     <div className="font-medium">Version:</div>
-                    <div className="font-mono">{selectedDocument.currentVersion}</div>
+                    <div className="font-mono">
+                      {selectedDocument.currentVersion}
+                    </div>
                     <div className="font-medium">Type:</div>
                     <div>{selectedDocument.documentType}</div>
                     <div className="font-medium">Department:</div>
@@ -1803,8 +2278,9 @@ export default function MasterDocumentRegister() {
                   data-testid="input-effective-date"
                 />
                 <p className="text-xs text-gray-500">
-                  {/* eslint-disable-next-line prettier/prettier */}
-                  {phase2Enabled ? 'This becomes the effective date of the exact released revision.' : 'This date is included in the approval comment only. The release action controls the effective revision.'}
+                  {phase2Enabled
+                    ? 'This becomes the effective date of the exact released revision.'
+                    : 'This date is included in the approval comment only. The release action controls the effective revision.'}
                 </p>
               </div>
 
@@ -1826,8 +2302,11 @@ export default function MasterDocumentRegister() {
                   className="bg-green-600 hover:bg-green-700"
                   data-testid="button-submit-approve"
                 >
-                  {/* eslint-disable-next-line prettier/prettier */}
-                  {approveDocumentMutation.isPending ? 'Approving...' : (phase2Enabled ? 'Approve and Release' : 'Approve Document')}
+                  {approveDocumentMutation.isPending
+                    ? 'Approving...'
+                    : phase2Enabled
+                      ? 'Approve and Release'
+                      : 'Approve Document'}
                 </Button>
               </DialogFooter>
             </form>
@@ -1848,9 +2327,13 @@ export default function MasterDocumentRegister() {
           </DialogHeader>
 
           {isHistoryLoading ? (
-            <div className="py-8 text-center text-sm text-gray-500">Loading version history...</div>
+            <div className="py-8 text-center text-sm text-gray-500">
+              Loading version history...
+            </div>
           ) : versionHistory.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-500">No revision history has been recorded.</div>
+            <div className="py-8 text-center text-sm text-gray-500">
+              No revision history has been recorded.
+            </div>
           ) : (
             <div className="max-h-[60vh] overflow-y-auto">
               <Table>
@@ -1868,31 +2351,41 @@ export default function MasterDocumentRegister() {
                 <TableBody>
                   {versionHistory.map((version) => (
                     <TableRow key={version.id}>
-                      <TableCell className="font-mono">{version.versionNumber}</TableCell>
+                      <TableCell className="font-mono">
+                        {version.versionNumber}
+                      </TableCell>
                       <TableCell className="max-w-sm whitespace-pre-wrap text-sm">
                         {version.changeDescription || 'No change note recorded'}
                       </TableCell>
-                      <TableCell>{(version as any).lifecycleStatus || version.status}</TableCell>
+                      <TableCell>
+                        {(version as any).lifecycleStatus || version.status}
+                      </TableCell>
                       <TableCell className="font-mono text-xs">
                         {(version as any).fileChecksum
                           ? String((version as any).fileChecksum).slice(0, 12)
                           : (version as any).checksumStatus || 'Legacy unknown'}
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{formatDate(version.createdAt as any)}</div>
-                        <div className="text-xs text-gray-500">{version.createdBy}</div>
+                        <div className="text-sm">
+                          {formatDate(version.createdAt as any)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {version.createdBy}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {(version as any).filePath && selectedDocument && (
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => openDocumentFile(
-                              selectedDocument,
-                              'download',
-                              null,
-                              `/api/controlled-documents/${selectedDocument.id}/revisions/${version.id}/download`,
-                            )}
+                            onClick={() =>
+                              openDocumentFile(
+                                selectedDocument,
+                                'download',
+                                null,
+                                `/api/controlled-documents/${selectedDocument.id}/revisions/${version.id}/download`
+                              )
+                            }
                           >
                             Download Exact Revision
                           </Button>
@@ -1901,11 +2394,17 @@ export default function MasterDocumentRegister() {
                       <TableCell>
                         {version.approvedAt ? (
                           <>
-                            <div className="text-sm">{formatDate(version.approvedAt as any)}</div>
-                            <div className="text-xs text-gray-500">{version.approvedBy}</div>
+                            <div className="text-sm">
+                              {formatDate(version.approvedAt as any)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {version.approvedBy}
+                            </div>
                           </>
                         ) : (
-                          <span className="text-sm text-gray-500">Not approved</span>
+                          <span className="text-sm text-gray-500">
+                            Not approved
+                          </span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -1918,28 +2417,36 @@ export default function MasterDocumentRegister() {
       </Dialog>
 
       {/* Credential Verification Dialog */}
-      <Dialog open={isStepUpOpen} onOpenChange={(open) => {
-        setIsStepUpOpen(open);
-        if (!open) {
-          setPendingDocumentAccess(null);
-          setStepUpPassword('');
-          setStepUpError(null);
-        }
-      }}>
+      <Dialog
+        open={isStepUpOpen}
+        onOpenChange={(open) => {
+          setIsStepUpOpen(open);
+          if (!open) {
+            setPendingDocumentAccess(null);
+            setStepUpPassword('');
+            setStepUpError(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Verify Credentials</DialogTitle>
             <DialogDescription>
-              Controlled document access requires recent credential verification.
+              Controlled document access requires recent credential
+              verification.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleStepUpSubmit} className="space-y-4">
             {pendingDocumentAccess && (
               <div className="rounded-md border bg-gray-50 p-3 text-sm">
-                <div className="font-medium">{pendingDocumentAccess.doc.documentName}</div>
+                <div className="font-medium">
+                  {pendingDocumentAccess.doc.documentName}
+                </div>
                 <div className="text-xs text-gray-500">
-                  {pendingDocumentAccess.mode === 'view' ? 'View PDF' : 'Download file'}
+                  {pendingDocumentAccess.mode === 'view'
+                    ? 'View PDF'
+                    : 'Download file'}
                 </div>
               </div>
             )}
@@ -1957,7 +2464,10 @@ export default function MasterDocumentRegister() {
                 data-testid="input-step-up-password"
               />
               {stepUpError && (
-                <p className="text-sm text-red-600" data-testid="text-step-up-error">
+                <p
+                  className="text-sm text-red-600"
+                  data-testid="text-step-up-error"
+                >
                   {stepUpError}
                 </p>
               )}
@@ -2007,14 +2517,18 @@ export default function MasterDocumentRegister() {
                 required
               />
               <p className="text-xs text-gray-500">
-                CSV should have columns: TITLE, CODE, Department, Version, Date, Record Retention Length, Summary of Changes.
-                Include Document Link, File URL, URL, Link, or File Path to attach document links.
+                CSV should have columns: TITLE, CODE, Department, Version, Date,
+                Record Retention Length, Summary of Changes. Include Document
+                Link, File URL, URL, Link, or File Path to attach document
+                links.
               </p>
             </div>
 
             <Card className="bg-blue-50 border-blue-200">
               <CardHeader className="py-3">
-                <CardTitle className="text-sm font-medium">Import Behavior</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Import Behavior
+                </CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-gray-700 space-y-1">
                 <p>• Documents with matching CODE will be updated</p>

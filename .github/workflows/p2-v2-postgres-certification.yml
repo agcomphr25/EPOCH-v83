@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/p2-v2-postgres-certification.yml'
       - '.github/p2-v2-phase10a-static-manifest.json'
+      - '.github/p2-v2-workflow-dispatch-certification-manifest.json'
       - 'migrations/**'
       - 'server/schema.ts'
       - 'server/scripts/migrations/runSafeBootMigrations.ts'
@@ -32,6 +33,8 @@ on:
       - 'server/__tests__/projectClosingGate.test.ts'
       - 'client/src/__tests__/P2V2*.component.test.tsx'
       - 'scripts/validate-phase10a-static-manifest.js'
+      - 'scripts/resolve-p2-v2-certification-scope.mjs'
+      - 'scripts/resolve-p2-v2-certification-scope.test.mjs'
       - 'package.json'
       - 'package-lock.json'
 
@@ -87,6 +90,9 @@ jobs:
 
       - name: Install committed dependencies
         run: npm ci --ignore-scripts
+
+      - name: Validate certification scope selection
+        run: node --test scripts/resolve-p2-v2-certification-scope.test.mjs
 
       - name: Run bounded full TypeScript certification
         shell: bash
@@ -148,14 +154,15 @@ jobs:
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           node scripts/validate-phase10a-static-manifest.js
           mapfile -t manifest_files < <(
             node -e 'for (const file of require("./.github/p2-v2-phase10a-static-manifest.json")) console.log(file)'
           )
           mapfile -t corrective_files < <(
-            git diff --name-only "$BASE_SHA"...HEAD |
-              grep -E '\.(js|jsx|ts|tsx)$' || true
+            node scripts/resolve-p2-v2-certification-scope.mjs \
+              --event "$EVENT_NAME" --base "$BASE_SHA" --kind eslint
           )
           mapfile -t files < <(
             printf '%s\n' "${manifest_files[@]}" "${corrective_files[@]}" | sort -u
@@ -197,6 +204,7 @@ jobs:
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           node scripts/validate-phase10a-static-manifest.js
           mapfile -t files < <(
@@ -204,13 +212,9 @@ jobs:
           )
           npx prettier --check "${files[@]}"
           mapfile -t corrective_files < <(
-            git diff --name-only "$BASE_SHA"...HEAD |
-              grep -E '\.(js|jsx|ts|tsx|json|css|md|ya?ml)$' || true
+            node scripts/resolve-p2-v2-certification-scope.mjs \
+              --event "$EVENT_NAME" --base "$BASE_SHA" --kind prettier
           )
-          if [ "${#corrective_files[@]}" -eq 0 ]; then
-            echo "No Prettier-supported corrective files found."
-            exit 1
-          fi
           for file in "${corrective_files[@]}"; do
             if npx prettier --check "$file" >/dev/null 2>&1; then
               continue

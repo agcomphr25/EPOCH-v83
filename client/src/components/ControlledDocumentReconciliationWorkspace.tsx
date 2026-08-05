@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,14 @@ type Assessment = {
   automatic: boolean;
   blockers: string[];
   proposedChanges: Record<string, unknown>;
+  revisionChecksum: string | null;
+  revisionChecksumStatus: string | null;
+  observedChecksum: string | null;
+  acceptedEvidence?: Array<{
+    id: string;
+    type: string;
+    confirmedAt: string;
+  }>;
 };
 type Preview = {
   previewId: string;
@@ -61,7 +69,35 @@ export function ControlledDocumentReconciliationWorkspace() {
   const [evidenceType, setEvidenceType] = useState('LEGACY_APPROVAL_EVIDENCE');
   const [evidence, setEvidence] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [availability, setAvailability] = useState<
+    'checking' | 'enabled' | 'disabled'
+  >('checking');
+  useEffect(() => {
+    if (!can('documents.reconciliation_view')) return;
+    fetch('/api/controlled-document-reconciliation/status', {
+      credentials: 'include',
+    })
+      .then(async (response) => ({
+        response,
+        body: await response.json().catch(() => ({})),
+      }))
+      .then(({ response, body }) =>
+        setAvailability(
+          response.ok && body.enabled === true ? 'enabled' : 'disabled'
+        )
+      )
+      .catch(() => setAvailability('disabled'));
+  }, [can]);
   if (!can('documents.reconciliation_view')) return null;
+  if (availability !== 'enabled') {
+    return (
+      <Button variant="outline" disabled>
+        {availability === 'checking'
+          ? 'Checking reconciliation availability…'
+          : 'Quality Reconciliation — Unavailable pending certification'}
+      </Button>
+    );
+  }
   const request = async (path: string, init?: Parameters<typeof fetch>[1]) => {
     const response = await fetch(
       `/api/controlled-document-reconciliation/${path}`,
@@ -204,6 +240,7 @@ export function ControlledDocumentReconciliationWorkspace() {
                 <TableHead>Select</TableHead>
                 <TableHead>Document</TableHead>
                 <TableHead>Classification</TableHead>
+                <TableHead>Checksum evidence</TableHead>
                 <TableHead>Blockers or additions</TableHead>
               </TableRow>
             </TableHeader>
@@ -230,6 +267,19 @@ export function ControlledDocumentReconciliationWorkspace() {
                   </TableCell>
                   <TableCell>
                     <Badge>{row.classification}</Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <div>Stored: {row.revisionChecksum || 'none'}</div>
+                    <div>Observed: {row.observedChecksum || 'unavailable'}</div>
+                    <div>Status: {row.revisionChecksumStatus || 'unknown'}</div>
+                    {!!row.acceptedEvidence?.length && (
+                      <div>
+                        Accepted evidence:{' '}
+                        {row.acceptedEvidence
+                          .map((item) => item.type)
+                          .join(', ')}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs">
                     {row.automatic ? (

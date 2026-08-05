@@ -82,6 +82,12 @@ describe('ProjectsPage — Create Project dialog', () => {
     vi.clearAllMocks();
   });
 
+  it('defaults the project status filter to Active', () => {
+    renderPage();
+
+    expect(screen.getByTestId('select-status-filter')).toHaveTextContent('Active');
+  });
+
   it('opens the Create New Project dialog when "New Project" is clicked', async () => {
     const user = userEvent.setup();
     renderPage();

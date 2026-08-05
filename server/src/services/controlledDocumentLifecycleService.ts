@@ -63,7 +63,7 @@ async function revalidatePhase2Actor(
   sessionToken: string
 ) {
   const authentication = await client.execute(sql`
-    SELECT u.id, u.username, u.role
+    SELECT u.id, u.username, u.role, u.employee_id AS "employeeId"
     FROM user_sessions session
     JOIN users u ON u.id = session.user_id
     WHERE session.session_token = ${sessionToken}
@@ -73,7 +73,10 @@ async function revalidatePhase2Actor(
       AND u.is_active = true
     FOR SHARE OF session, u
   `);
-  if (resultRows(authentication).length !== 1) {
+  const [authenticatedActor] = resultRows<{ employeeId: number | null }>(
+    authentication
+  );
+  if (!authenticatedActor) {
     throw new ControlledDocumentError(
       401,
       'STEP_UP_REQUIRED',
@@ -104,6 +107,7 @@ async function revalidatePhase2Actor(
       'documents.approve authority is required'
     );
   }
+  return authenticatedActor;
 }
 
 const actorEvidence = async (actor: ControlledDocumentActor) => {
@@ -145,7 +149,8 @@ const audit = async (
   after: DocumentLifecycle | null,
   request: RequestEvidence,
   client: Client,
-  extra: Record<string, AuditPayloadValue> = {}
+  extra: Record<string, AuditPayloadValue> = {},
+  auditActorId?: number | null
 ) =>
   recordAuditEvent(
     {
@@ -153,7 +158,10 @@ const audit = async (
       subjectType: 'controlled_document',
       subjectId: document.id,
       sourceService: 'controlledDocumentLifecycle.service',
-      actor,
+      actor: {
+        ...actor,
+        id: auditActorId === undefined ? actor.id : auditActorId,
+      },
       reason,
       ipAddress: request.ipAddress,
       userAgent: request.userAgent,
@@ -902,7 +910,7 @@ export async function approveAndReleaseControlledRevision(
     await tx.execute(
       sql`SELECT id FROM controlled_document_number_registry WHERE controlled_document_id = ${input.documentId}::uuid OR normalized_number = ${normalizeDocumentNumber(context.document.documentNumber)} ORDER BY id FOR UPDATE`
     );
-    await revalidatePhase2Actor(
+    const authenticatedActor = await revalidatePhase2Actor(
       tx as unknown as Client,
       input.actor,
       input.sessionToken
@@ -1148,7 +1156,8 @@ export async function approveAndReleaseControlledRevision(
       'RELEASED',
       input.request ?? {},
       tx as unknown as Client,
-      { approvalId: approval.id, idempotencyKey, effectiveDate }
+      { approvalId: approval.id, idempotencyKey, effectiveDate },
+      authenticatedActor.employeeId
     );
     return getControlledDocumentState(
       input.documentId,
@@ -1189,7 +1198,7 @@ export async function rejectRegisteredControlledRevision(
       tx as unknown as Client,
       true
     );
-    await revalidatePhase2Actor(
+    const authenticatedActor = await revalidatePhase2Actor(
       tx as unknown as Client,
       input.actor,
       input.sessionToken
@@ -1303,7 +1312,9 @@ export async function rejectRegisteredControlledRevision(
       'DRAFT',
       'REJECTED',
       input.request ?? {},
-      tx as unknown as Client
+      tx as unknown as Client,
+      {},
+      authenticatedActor.employeeId
     );
     return getControlledDocumentState(
       input.documentId,

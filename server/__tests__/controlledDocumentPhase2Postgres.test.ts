@@ -22,6 +22,7 @@ const role = `MDR_PHASE2_CERT_${randomUUID()}`;
 const approverUsername = `mdr-approver-${randomUUID()}`;
 const sessionToken = `mdr-session-${randomUUID()}`;
 let approverId = 0;
+let approverEmployeeId = 0;
 
 type Fixture = {
   documentId: string;
@@ -90,6 +91,12 @@ function approve(
 
 beforeAll(async () => {
   process.env.CONTROLLED_DOCUMENT_PHASE2_APPROVE_RELEASE_ENABLED = 'true';
+  const employee = await pgPool.query(
+    `INSERT INTO employees (name, user_role)
+     VALUES ($1, 'EMPLOYEE') RETURNING id`,
+    [`Phase 2 approver ${approverUsername}`]
+  );
+  approverEmployeeId = employee.rows[0].id;
   const capability = await pgPool.query(
     `INSERT INTO perm_capabilities (key, description, category)
      VALUES ('documents.approve', 'Approve controlled documents', 'documents')
@@ -106,8 +113,9 @@ beforeAll(async () => {
     [roleRow.rows[0].id, capability.rows[0].id]
   );
   const user = await pgPool.query(
-    `INSERT INTO users (username, password_hash, role) VALUES ($1, 'not-a-login-secret', $2) RETURNING id`,
-    [approverUsername, role]
+    `INSERT INTO users (username, password_hash, role, employee_id)
+     VALUES ($1, 'not-a-login-secret', $2, $3) RETURNING id`,
+    [approverUsername, role, employee.rows[0].id]
   );
   approverId = user.rows[0].id;
   await pgPool.query(
@@ -152,11 +160,18 @@ describe('controlled-document Phase 2 PostgreSQL 16.4 certification', () => {
     expect(result.document.currentReleasedRevisionId).toBe(fixture.revisionId);
     const evidence = await pgPool.query(
       `SELECT count(*)::int AS approvals,
-              (SELECT count(*)::int FROM controlled_document_approval_release_events WHERE revision_id = $1) AS events
+              (SELECT count(*)::int FROM controlled_document_approval_release_events WHERE revision_id = $1) AS events,
+              (SELECT actor_id FROM audit_events
+               WHERE subject_type = 'controlled_document' AND subject_id = $2
+               ORDER BY id DESC LIMIT 1) AS audit_actor_id
        FROM controlled_document_revision_approvals WHERE revision_id = $1`,
-      [fixture.revisionId]
+      [fixture.revisionId, fixture.documentId]
     );
-    expect(evidence.rows[0]).toMatchObject({ approvals: 1, events: 1 });
+    expect(evidence.rows[0]).toMatchObject({
+      approvals: 1,
+      events: 1,
+      audit_actor_id: approverEmployeeId,
+    });
   });
 
   it('replays an identical committed request without a second mutation', async () => {

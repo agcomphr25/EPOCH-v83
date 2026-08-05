@@ -368,7 +368,9 @@ describe('migration 0253 PostgreSQL state classification', () => {
     await client.query(
       "UPDATE qms_epoch_validation_packages SET status='APPROVED_FOR_INTENDED_USE' WHERE package_number='ESV-2026-0007'"
     );
-    await expectMigrationFailure(/lifecycle is mixed or unsafe/);
+    await expectMigrationFailure(
+      /state AMBIGUOUS_STOP: target lifecycle is unsafe/
+    );
     expect(
       (await targetState()).rows.filter(
         (row) => row.status === 'VOID_DUPLICATE'

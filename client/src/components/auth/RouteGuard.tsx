@@ -40,14 +40,6 @@ const PUBLIC_ROUTE_PREFIXES = [
   '/kiosk', // Time-clock kiosk — PIN-based auth, no EPOCH login required
 ];
 
-function isDeploymentEnvironment(): boolean {
-  const hostname = window.location.hostname;
-  const isLocalhost =
-    hostname.includes('localhost') || hostname.includes('127.0.0.1');
-  const isReplitEditor = hostname.includes('replit.dev');
-  return !isLocalhost && !isReplitEditor;
-}
-
 function normalizeRoute(path: string): string {
   return path.split('?')[0].split('#')[0];
 }
@@ -120,34 +112,6 @@ export default function RouteGuard({ children }: RouteGuardProps) {
       const token =
         localStorage.getItem('sessionToken') ||
         localStorage.getItem('jwtToken');
-
-      if (!isDeploymentEnvironment()) {
-        const storedUsername = localStorage.getItem('dev_username');
-        if (storedUsername) {
-          return { 
-            id: 0, 
-            username: storedUsername, 
-            role: 'ADMIN',
-            employeeId: null 
-          };
-        }
-        try {
-          const response = await fetch('/api/auth/session', {
-            credentials: 'include',
-          });
-          if (response.ok) {
-            return await response.json();
-          }
-        } catch (error) {
-          // Fall through to anonymous default
-        }
-        return { 
-          id: 0, 
-          username: 'admin', 
-          role: 'ADMIN',
-          employeeId: null 
-        };
-      }
 
       try {
         const response = await fetch('/api/auth/session', {

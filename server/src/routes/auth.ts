@@ -114,15 +114,21 @@ async function logSessionAuditEvent(
   ipAddress?: string,
   userAgent?: string
 ): Promise<void> {
+  const actorEmployeeRows = await pool.query<{ employee_id: number | null }>(
+    'SELECT employee_id FROM users WHERE id = $1',
+    [userId],
+  );
+  const actorEmployeeId = actorEmployeeRows[0]?.employee_id ?? null;
+
   await recordAuditEvent({
     eventType: action,
     subjectType: 'user_session',
     subjectId: sessionId,
     sourceService: 'auth.route',
-    actor: { id: userId, username, role },
+    actor: { id: actorEmployeeId, username, role },
     ipAddress: ipAddress ?? null,
     userAgent: userAgent ?? null,
-    payload: meta as any,
+    payload: { userId, ...meta } as any,
     meta: meta as any,
     entityType: 'user_session',
     entityId: sessionId,

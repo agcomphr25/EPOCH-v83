@@ -1,6 +1,8 @@
 export { registerAudioRoutes } from "./routes";
 export {
-  openai,
+  AUDIO_INTEGRATION_UNAVAILABLE,
+  AudioIntegrationUnavailableError,
+  getOpenAIClient,
   textToSpeech,
   textToSpeechStream,
   speechToText,

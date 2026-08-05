@@ -99,13 +99,13 @@ export default function LoginPage() {
           localStorage.setItem('sessionToken', data.sessionToken);
         }
         
-        localStorage.setItem('dev_username', username.toLowerCase());
-
         toast({
           title: 'Success',
           description: 'Login successful!',
         });
         
+        queryClient.removeQueries({ queryKey: ['currentUser'] });
+        queryClient.removeQueries({ queryKey: ['/api/permissions/me'] });
         queryClient.setQueryData(['currentUser'], data.user);
 
         const dashboardRoute = getDashboardRoute(username);
@@ -184,15 +184,13 @@ export default function LoginPage() {
 
       const sessionData = await sessionResponse.json();
 
-      if (sessionData.username) {
-        localStorage.setItem('dev_username', sessionData.username.toLowerCase());
-      }
-
       toast({
         title: 'Welcome!',
         description: `Logged in as ${data.employee?.name || badgeCode}`,
       });
       
+      queryClient.removeQueries({ queryKey: ['currentUser'] });
+      queryClient.removeQueries({ queryKey: ['/api/permissions/me'] });
       queryClient.setQueryData(['currentUser'], sessionData);
 
       const redirectUrl = data.redirectUrl || getDashboardRoute(sessionData.username);

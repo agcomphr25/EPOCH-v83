@@ -396,6 +396,7 @@ app.use((req, res, next) => {
 // because no port is bound yet.  By listening first, health checks pass
 // immediately while route registration finishes in the background.
 const port = parseInt(process.env.PORT || '5000', 10);
+const host = process.env.HOST || '0.0.0.0';
 const earlyServer = createServer(app);
 
 // Register production SPA static serving before API route registration.
@@ -405,10 +406,10 @@ if (app.get('env') !== 'development') {
   serveStatic(app);
 }
 
-earlyServer.listen({ port, host: '0.0.0.0' }, () => {
+earlyServer.listen({ port, host }, () => {
   console.log(`Server started successfully`);
   console.log(`- Port: ${port}`);
-  console.log(`- Host: 0.0.0.0`);
+  console.log(`- Host: ${host}`);
   console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
   log(`serving on port ${port}`);
 });

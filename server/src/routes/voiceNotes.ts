@@ -11,7 +11,13 @@ import {
   stockModels,
 } from '../../schema';
 import { eq, desc, and, like, sql, isNotNull, count } from 'drizzle-orm';
-import { convertWebmToWav, speechToText, textToSpeech } from '../../replit_integrations/audio/client';
+import {
+  AUDIO_INTEGRATION_UNAVAILABLE,
+  AudioIntegrationUnavailableError,
+  convertWebmToWav,
+  speechToText,
+  textToSpeech,
+} from '../../replit_integrations/audio/client';
 
 const router = Router();
 
@@ -574,6 +580,9 @@ router.post('/assistant-capture', checkVoiceNoteAccess, async (req: Request, res
       audioFormat,
     });
   } catch (error) {
+    if (error instanceof AudioIntegrationUnavailableError) {
+      return res.status(503).json({ error: AUDIO_INTEGRATION_UNAVAILABLE });
+    }
     console.error('Error creating assistant voice capture:', error);
     res.status(500).json({ error: 'Failed to process assistant voice capture' });
   }

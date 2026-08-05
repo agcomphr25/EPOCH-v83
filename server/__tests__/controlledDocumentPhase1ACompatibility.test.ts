@@ -31,7 +31,7 @@ describe('Master Document Register Phase 1A compatibility', () => {
   it('uses one access-policy evaluator for View, Download, and Exact Revision', () => {
     expect(
       route.match(
-        /requirePermission\('documents\.view'\),\s*controlledDocumentAccessPolicy/g
+        /controlledDocumentViewPermission,\s*controlledDocumentAccessPolicy/g
       )
     ).toHaveLength(3);
     expect(route).toContain('hasControlledDocumentGrant');

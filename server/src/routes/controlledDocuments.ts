@@ -244,7 +244,11 @@ const readControlledDocumentBytes = async (filePath: string) => {
     );
   }
   try {
-    return await fs.readFile(resolvedPath);
+    const containedPath = await assertContainedControlledDocumentPath(
+      filePath,
+      resolvedPath
+    );
+    return await fs.readFile(containedPath);
   } catch (error: any) {
     if (error?.code === 'ENOENT') {
       throw new ControlledDocumentError(
@@ -581,6 +585,61 @@ const resolveControlledDocumentFile = (filePath: string | null | undefined) => {
   return null;
 };
 
+const pathIdentity = (value: string) =>
+  process.platform === 'win32'
+    ? path.resolve(value).toLowerCase()
+    : path.resolve(value);
+
+const assertContainedControlledDocumentPath = async (
+  fileReference: string,
+  resolvedPath: string
+) => {
+  const canonicalPath = await fs.realpath(resolvedPath);
+  if (pathIdentity(canonicalPath) !== pathIdentity(resolvedPath)) {
+    throw new ControlledDocumentError(
+      422,
+      'FILE_NOT_ACCESSIBLE',
+      'Symbolic-link file references are not permitted for controlled documents'
+    );
+  }
+
+  const normalizedReference = fileReference.replace(/\\/g, '/');
+  let allowedRoot: string | null = null;
+  if (
+    normalizedReference.startsWith('/api/media/file/') ||
+    normalizedReference.replace(/^\//, '').startsWith('uploads/media-library/')
+  ) {
+    allowedRoot = path.resolve(process.cwd(), 'uploads', 'media-library');
+  } else if (
+    normalizedReference.replace(/^\//, '').startsWith('assets/documents/') ||
+    /^[^/]+\.[a-z0-9]{2,5}$/i.test(normalizedReference)
+  ) {
+    allowedRoot = path.resolve(process.cwd(), 'server/src/assets/documents');
+  }
+
+  if (allowedRoot) {
+    const canonicalRoot = await fs.realpath(allowedRoot);
+    const relative = path.relative(canonicalRoot, canonicalPath);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new ControlledDocumentError(
+        422,
+        'FILE_NOT_ACCESSIBLE',
+        'The file reference escapes its controlled storage root'
+      );
+    }
+    return canonicalPath;
+  }
+
+  if (!isAllowedImportedAbsolutePath(canonicalPath)) {
+    throw new ControlledDocumentError(
+      422,
+      'FILE_NOT_ACCESSIBLE',
+      'The imported file reference is outside approved controlled storage'
+    );
+  }
+  return canonicalPath;
+};
+
 const getControlledFileReferenceType = (
   filePath: string | null | undefined
 ) => {
@@ -685,6 +744,37 @@ const controlledDocumentAccessPolicy = async (
       res,
       error,
       'Failed to evaluate controlled document access policy'
+    );
+  }
+};
+
+const controlledDocumentViewPermission = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const actor = lifecycleActor(req);
+  try {
+    const privileged = actor.role === 'ADMIN' || actor.role === 'OWNER';
+    const { permissionSet } = await getUserPermissions(actor.id, actor.role);
+    if (!privileged && !permissionSet.has('documents.view')) {
+      await writeAccessLog({
+        documentId: req.params.id,
+        userId: actor.username,
+        action: 'denied',
+        ipAddress: requestEvidence(req).ipAddress ?? 'unknown',
+      });
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'documents.view authority is required',
+      });
+    }
+    return next();
+  } catch (error) {
+    sendLifecycleError(
+      res,
+      error,
+      'Failed to evaluate controlled document view permission'
     );
   }
 };
@@ -1248,7 +1338,7 @@ router.get(
 router.get(
   '/:id/revisions/:revisionId/download',
   requireAuth,
-  requirePermission('documents.view'),
+  controlledDocumentViewPermission,
   controlledDocumentAccessPolicy,
   async (req: Request, res: Response) => {
     try {
@@ -1803,7 +1893,7 @@ router.post(
 router.get(
   '/:id/view',
   requireAuth,
-  requirePermission('documents.view'),
+  controlledDocumentViewPermission,
   controlledDocumentAccessPolicy,
   async (req: Request, res: Response) => {
     const actor = (req as any).user as {
@@ -1922,17 +2012,6 @@ router.get(
         });
       }
 
-      // Check if file exists
-      try {
-        await fs.access(filePath);
-      } catch {
-        return res.status(404).json({
-          error: 'FILE_NOT_ACCESSIBLE',
-          message:
-            'The referenced file is not accessible from this EPOCH server',
-        });
-      }
-
       if (path.extname(filePath).toLowerCase() !== '.pdf') {
         return res.status(415).json({
           error: 'UNSUPPORTED_PREVIEW_TYPE',
@@ -1940,7 +2019,7 @@ router.get(
         });
       }
 
-      const buffer = await fs.readFile(filePath);
+      const buffer = await readControlledDocumentBytes(authoritativeFilePath);
       if (revision)
         await verifyStoredRevision(
           doc.id,
@@ -1976,7 +2055,7 @@ router.get(
 router.get(
   '/:id/download',
   requireAuth,
-  requirePermission('documents.view'),
+  controlledDocumentViewPermission,
   controlledDocumentAccessPolicy,
   async (req: Request, res: Response) => {
     const actor = (req as any).user as {
@@ -2095,19 +2174,8 @@ router.get(
         });
       }
 
-      // Check if file exists
-      try {
-        await fs.access(filePath);
-      } catch {
-        return res.status(404).json({
-          error: 'FILE_NOT_ACCESSIBLE',
-          message:
-            'The referenced file is not accessible from this EPOCH server',
-        });
-      }
-
       if (path.extname(filePath).toLowerCase() === '.pdf') {
-        const buffer = await fs.readFile(filePath);
+        const buffer = await readControlledDocumentBytes(authoritativeFilePath);
         if (revision)
           await verifyStoredRevision(
             doc.id,
@@ -2131,7 +2199,7 @@ router.get(
       }
 
       // Send file with appropriate content type
-      const buffer = await fs.readFile(filePath);
+      const buffer = await readControlledDocumentBytes(authoritativeFilePath);
       if (revision)
         await verifyStoredRevision(
           doc.id,

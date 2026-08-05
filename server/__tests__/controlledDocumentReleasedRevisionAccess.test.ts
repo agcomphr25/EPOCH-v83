@@ -66,7 +66,7 @@ describe('Master Document Register released-revision access', () => {
   it('centralizes restricted, explicit-grant, and admin-only enforcement', () => {
     expect(
       route.match(
-        /requirePermission\('documents\.view'\),\s*controlledDocumentAccessPolicy/g
+        /controlledDocumentViewPermission,\s*controlledDocumentAccessPolicy/g
       )
     ).toHaveLength(3);
     expect(route).toContain("accessRule === 'explicit_grant'");

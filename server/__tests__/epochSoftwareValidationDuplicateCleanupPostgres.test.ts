@@ -376,7 +376,7 @@ describe('migration 0253 PostgreSQL state classification', () => {
     ).toHaveLength(0);
   });
 
-  it('fails closed on mixed pre-cleanup and completed states', async () => {
+  it('completes a mixed exact set and writes events only for remaining drafts', async () => {
     await seedExactDraftSet();
     await client.query(`
       UPDATE qms_epoch_validation_packages
@@ -385,8 +385,48 @@ describe('migration 0253 PostgreSQL state classification', () => {
           updated_by_display_name = 'migration 0253 (user-authorized duplicate cleanup)'
       WHERE package_number = 'ESV-2026-0002'
     `);
+    await client.query(`
+      INSERT INTO qms_epoch_validation_events (
+        package_id, entity_type, action, actor_user_id, actor_display_name,
+        actor_role, previous_value, new_value, reason, package_revision
+      ) VALUES (
+        'ESV-2026-0002', 'PACKAGE', 'PACKAGE_VOIDED_DUPLICATE', 101,
+        'migration 0253 (user-authorized duplicate cleanup)',
+        'SYSTEM_MAINTENANCE', '"DRAFT"', '"VOID_DUPLICATE"',
+        'authorized cleanup', 2
+      )
+    `);
+    const existing = (
+      await client.query(
+        "SELECT updated_at FROM qms_epoch_validation_packages WHERE package_number='ESV-2026-0002'"
+      )
+    ).rows[0];
+    await runMigration();
+    expect(
+      (await targetState()).rows.every((row) => row.status === 'VOID_DUPLICATE')
+    ).toBe(true);
+    expect(
+      (
+        await client.query(
+          "SELECT count(*)::int count FROM qms_epoch_validation_events WHERE action='PACKAGE_VOIDED_DUPLICATE'"
+        )
+      ).rows[0].count
+    ).toBe(13);
+    expect(
+      (
+        await client.query(
+          "SELECT updated_at FROM qms_epoch_validation_packages WHERE package_number='ESV-2026-0002'"
+        )
+      ).rows[0]
+    ).toEqual(existing);
+  });
+
+  it('fails closed when all targets exist without retained 0001', async () => {
+    for (const packageNumber of targetNumbers) {
+      await insertPackage(packageNumber);
+    }
     const before = (await targetState()).rows;
-    await expectMigrationFailure(/lifecycle is mixed or unsafe/);
+    await expectMigrationFailure(/retained authoritative package.*missing/);
     expect((await targetState()).rows).toEqual(before);
   });
 
@@ -436,6 +476,24 @@ describe('migration 0253 PostgreSQL state classification', () => {
       ).rows[0].count
     ).toBe(0);
   });
+
+  it.each(childTables)(
+    'fails closed and rolls back authored content in %s',
+    async (table) => {
+      await seedExactDraftSet();
+      await client.query(
+        `INSERT INTO ${table}(package_id, evidence) VALUES ($1, 'authored')`,
+        ['ESV-2026-0002']
+      );
+      const before = (await targetState()).rows;
+      await expectMigrationFailure(/authored validation or lifecycle records/);
+      expect((await targetState()).rows).toEqual(before);
+      expect(
+        (await client.query(`SELECT count(*)::int count FROM ${table}`)).rows[0]
+          .count
+      ).toBe(1);
+    }
+  );
 
   it('rejects contradictory completed audit evidence without mutation', async () => {
     await seedExactDraftSet();

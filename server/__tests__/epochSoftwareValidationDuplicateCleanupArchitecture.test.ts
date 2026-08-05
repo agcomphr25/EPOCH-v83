@@ -15,6 +15,10 @@ const safeBoot = fs.readFileSync(
   path.join(root, 'server/scripts/migrations/runSafeBootMigrations.ts'),
   'utf8'
 );
+const certification = fs.readFileSync(
+  path.join(root, '.github/workflows/p2-v2-postgres-certification.yml'),
+  'utf8'
+);
 
 describe('EPOCH validation duplicate cleanup', () => {
   it('preserves 0001 and classifies empty, complete, safe, and ambiguous states', () => {
@@ -40,6 +44,7 @@ describe('EPOCH validation duplicate cleanup', () => {
     expect(migration).toContain('NOTHING_TO_DO');
     expect(migration).toContain('ALREADY_COMPLETED');
     expect(migration).toContain('EXACT_SAFE_CLEANUP');
+    expect(migration).toContain('MIXED_RECOVERY');
     expect(migration).toContain('AMBIGUOUS_STOP');
     expect(migration).toContain('authored_count <> 0');
     expect(migration).not.toMatch(/DELETE\s+FROM/i);
@@ -62,9 +67,7 @@ describe('EPOCH validation duplicate cleanup', () => {
     expect(migration).toContain('matching_authority_count <> 1');
     expect(migration).toContain('revision <> 1');
     expect(migration).toContain('row_version <> 1');
-    expect(migration).toContain(
-      'completed_event_count <> cardinality(target_numbers)'
-    );
+    expect(migration).toContain('completed_event_count <> void_count');
     expect(migration).toContain("actor_role = 'SYSTEM_MAINTENANCE'");
     expect(migration).toContain("updated_by_display_name <> 'migration 0253");
     expect(migration).toContain('SELECT count(*)');
@@ -75,5 +78,17 @@ describe('EPOCH validation duplicate cleanup', () => {
       safeBoot.match(/0253_void_duplicate_epoch_validation_packages\.sql/g)
         ?.length
     ).toBe(2);
+  });
+
+  it('keeps the migration matrix and validation regressions in certification', () => {
+    expect(certification).toContain(
+      'epochSoftwareValidationDuplicateCleanupPostgres.test.ts'
+    );
+    expect(certification).toContain(
+      'epochSoftwareValidationIdempotencyArchitecture.test.ts'
+    );
+    expect(certification).toContain(
+      'epochSoftwareValidationCreate.component.test.tsx'
+    );
   });
 });

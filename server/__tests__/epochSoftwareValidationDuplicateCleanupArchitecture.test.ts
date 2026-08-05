@@ -18,14 +18,25 @@ const safeBoot = fs.readFileSync(
 
 describe('EPOCH validation duplicate cleanup', () => {
   it('preserves 0001 and classifies empty, complete, safe, and ambiguous states', () => {
+    const expectedTargets = Array.from(
+      { length: 13 },
+      (_, index) => `'ESV-2026-${String(index + 2).padStart(4, '0')}'`
+    );
+    const targetArray = migration.match(
+      /target_numbers\s+constant\s+text\[\]\s*:=\s*ARRAY\[([\s\S]*?)\];/
+    );
+
     expect(migration).toContain("package_number = 'ESV-2026-0001'");
-    expect(migration).toContain(
-      "'ESV-2026-0002', 'ESV-2026-0003', 'ESV-2026-0004'"
+    expect(targetArray).not.toBeNull();
+    expect(targetArray?.[1].match(/'ESV-2026-\d{4}'/g)).toEqual(
+      expectedTargets
     );
     expect(migration).not.toContain('package_number BETWEEN');
     expect(migration).toContain('package_number = ANY(target_numbers)');
     expect(migration).toContain('candidate_count = 0');
-    expect(migration).toContain('candidate_count <> 13');
+    expect(migration).toMatch(
+      /candidate_count\s*<>\s*cardinality\s*\(\s*target_numbers\s*\)/
+    );
     expect(migration).toContain('NOTHING_TO_DO');
     expect(migration).toContain('ALREADY_COMPLETED');
     expect(migration).toContain('EXACT_SAFE_CLEANUP');

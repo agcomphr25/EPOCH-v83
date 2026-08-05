@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 
 export const CONTROLLED_DOCUMENT_RECONCILIATION_POLICY_VERSION =
-  'MDR_PHASE_1B_V1';
+  'MDR_PHASE_1B_CORRECTIVE_V2';
 
 export type ReconciliationClassification =
   | 'RELEASED_VERIFIED'
@@ -27,6 +27,7 @@ export type LegacyReconciliationFacts = {
   revisionVersion: string | null;
   revisionLifecycleStatus: string | null;
   revisionChecksum: string | null;
+  revisionChecksumStatus: string | null;
   fileReference: string | null;
   fileReferenceType: string;
   fileAccessibility:
@@ -36,8 +37,9 @@ export type LegacyReconciliationFacts = {
   approvalDate: string | null;
   effectiveDate: string | null;
   duplicateNumber: boolean;
-  crossDocumentPointer: boolean;
+  pointerProblems: string[];
   contradictoryLifecycle: boolean;
+  requiresCurrentApprovalWorkflow: boolean;
 };
 
 export type LegacyReconciliationAssessment = LegacyReconciliationFacts & {
@@ -45,6 +47,13 @@ export type LegacyReconciliationAssessment = LegacyReconciliationFacts & {
   blockers: string[];
   proposedChanges: Record<string, unknown>;
   automatic: boolean;
+  acceptedEvidence?: Array<{
+    id: string;
+    type: string;
+    revisionId: string | null;
+    confirmedAt: string;
+    confirmedByUserId: number;
+  }>;
 };
 
 const upper = (value: unknown) =>
@@ -67,7 +76,10 @@ export function assessLegacyControlledDocument(
     facts.currentReleasedRevisionId === facts.revisionId &&
     upper(facts.revisionLifecycleStatus) === 'RELEASED' &&
     Boolean(facts.revisionChecksum) &&
-    facts.fileAccessibility === 'ACCESSIBLE';
+    facts.revisionChecksum === facts.observedChecksum &&
+    upper(facts.revisionChecksumStatus) === 'VERIFIED' &&
+    facts.fileAccessibility === 'ACCESSIBLE' &&
+    facts.pointerProblems.length === 0;
 
   let classification: ReconciliationClassification;
   if (alreadyVerified) {
@@ -78,15 +90,26 @@ export function assessLegacyControlledDocument(
       'Historical obsolete or void disposition requires Quality confirmation'
     );
   } else if (
-    facts.crossDocumentPointer ||
+    facts.pointerProblems.length > 0 ||
     facts.revisionCount !== 1 ||
     !facts.revisionId
   ) {
     classification = 'REVISION_RECONCILIATION_REQUIRED';
-    if (facts.crossDocumentPointer)
-      blockers.push('A revision pointer identifies another document');
+    blockers.push(...facts.pointerProblems);
     if (facts.revisionCount !== 1)
       blockers.push('Exactly one matching historical revision is required');
+  } else if (
+    facts.revisionChecksum &&
+    facts.observedChecksum &&
+    facts.revisionChecksum !== facts.observedChecksum
+  ) {
+    classification = 'FILE_RECONCILIATION_REQUIRED';
+    blockers.push('Stored checksum does not match exact authoritative bytes');
+  } else if (facts.requiresCurrentApprovalWorkflow) {
+    classification = 'LEGACY_APPROVED_VERIFICATION_REQUIRED';
+    blockers.push(
+      'Confirmed uploaded bytes must enter the current checksum-bound approval workflow'
+    );
   } else if (facts.duplicateNumber) {
     classification = 'NUMBER_RECONCILIATION_REQUIRED';
     blockers.push('The normalized document number is not unique');

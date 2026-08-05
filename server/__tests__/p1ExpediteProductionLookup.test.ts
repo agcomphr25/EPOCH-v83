@@ -16,4 +16,13 @@ describe('P1 expedite helper lookup authority', () => {
     expect(source).toContain('if (row.allOrderId)');
     expect(source).not.toContain("if (row.order_id && !row.production_order_id)");
   });
+
+  it('supports an audited all-or-nothing reversal of the latest batch', () => {
+    expect(source).toContain("event_type = 'P1_EXPEDITED_TO_SHIPPING_QC'");
+    expect(source).toContain("'P1_EXPEDITE_BATCH_REVERSED'");
+    expect(source).toContain("metadata->>'originalCorrelationId'");
+    expect(source).toContain('has_later_activity');
+    expect(source).toContain("new Error('No orders were changed because the batch is no longer safe to undo')");
+    expect(source).toContain("await client.query('ROLLBACK')");
+  });
 });

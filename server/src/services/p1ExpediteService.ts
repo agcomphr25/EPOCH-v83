@@ -204,3 +204,188 @@ export async function executePurePrecisionExpedite(input: {
     client.release();
   }
 }
+
+export interface ExpediteUndoRow {
+  orderId: string;
+  previousDepartment: string | null;
+  currentDepartment: string | null;
+  eligible: boolean;
+  blockers: string[];
+  allOrderId: string | null;
+  expeditedAt: string;
+}
+
+async function loadLatestUndoPreview(query = pgPool.query.bind(pgPool)) {
+  const batchResult = await query(
+    `SELECT correlation_id, MIN(occurred_at) AS started_at, MAX(occurred_at) AS completed_at,
+            MAX(reason_text) AS reason_text
+       FROM order_activity_events original
+      WHERE event_type = 'P1_EXPEDITED_TO_SHIPPING_QC'
+        AND correlation_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM order_activity_events reversal
+           WHERE reversal.event_type = 'P1_EXPEDITE_BATCH_REVERSED'
+             AND reversal.metadata->>'originalCorrelationId' = original.correlation_id
+        )
+      GROUP BY correlation_id
+      ORDER BY MAX(occurred_at) DESC
+      LIMIT 1`
+  );
+  const batch = batchResult.rows[0];
+  if (!batch) return { batch: null, rows: [] as ExpediteUndoRow[], canUndo: false };
+
+  const result = await query(
+    `SELECT event.order_id, event.occurred_at,
+            COALESCE(event.before_snapshot->>'productionDepartment', event.department_from) AS previous_department,
+            po.current_department, po.production_status, po.is_fulfilled, po.shipped_at,
+            ao.order_id AS all_order_id,
+            EXISTS (
+              SELECT 1 FROM order_activity_events later
+               WHERE later.order_id = event.order_id
+                 AND later.occurred_at > event.occurred_at
+                 AND later.id <> event.id
+            ) AS has_later_activity
+       FROM order_activity_events event
+       LEFT JOIN production_orders po ON po.id = (
+         SELECT id FROM production_orders candidate WHERE candidate.order_id = event.order_id ORDER BY id DESC LIMIT 1
+       )
+       LEFT JOIN all_orders ao ON ao.id = (
+         SELECT id FROM all_orders candidate
+          WHERE candidate.order_id = event.order_id OR candidate.fb_order_number = event.order_id
+          ORDER BY id DESC LIMIT 1
+       )
+      WHERE event.event_type = 'P1_EXPEDITED_TO_SHIPPING_QC'
+        AND event.correlation_id = $1
+      ORDER BY event.occurred_at, event.order_id`,
+    [batch.correlation_id]
+  );
+
+  const rows: ExpediteUndoRow[] = result.rows.map((row: any) => {
+    const blockers: string[] = [];
+    if (!row.previous_department) blockers.push('Original department is missing from the audit event');
+    if (!row.current_department) blockers.push('Production order not found');
+    if (row.current_department && row.current_department !== TARGET_DEPARTMENT) blockers.push(`Order is now in ${row.current_department}`);
+    if (row.is_fulfilled || row.shipped_at || String(row.production_status || '').toUpperCase() === 'SHIPPED') blockers.push('Order has been shipped or fulfilled');
+    if (row.has_later_activity) blockers.push('Order has activity after the fast-track move');
+    return {
+      orderId: row.order_id,
+      previousDepartment: row.previous_department ?? null,
+      currentDepartment: row.current_department ?? null,
+      eligible: blockers.length === 0,
+      blockers,
+      allOrderId: row.all_order_id ?? null,
+      expeditedAt: new Date(row.occurred_at).toISOString(),
+    };
+  });
+  return {
+    batch: {
+      correlationId: batch.correlation_id,
+      startedAt: new Date(batch.started_at).toISOString(),
+      completedAt: new Date(batch.completed_at).toISOString(),
+      originalReason: batch.reason_text,
+    },
+    rows,
+    canUndo: rows.length > 0 && rows.every(row => row.eligible),
+  };
+}
+
+export async function previewLatestPurePrecisionExpediteUndo() {
+  return loadLatestUndoPreview();
+}
+
+export async function undoLatestPurePrecisionExpedite(input: {
+  reason: string;
+  actor: Actor;
+  ip?: string | null;
+  userAgent?: string | null;
+}) {
+  const reason = input.reason.trim();
+  if (reason.length < 10) throw new Error('A rollback reason of at least 10 characters is required');
+  const client = await pgPool.connect();
+  try {
+    await client.query('BEGIN');
+    const preview = await loadLatestUndoPreview(client.query.bind(client));
+    if (!preview.batch) throw new Error('No unreversed fast-track batch was found');
+    await client.query(`SELECT id FROM production_orders WHERE order_id = ANY($1::text[]) FOR UPDATE`, [preview.rows.map(row => row.orderId)]);
+    await client.query(`SELECT id FROM all_orders WHERE order_id = ANY($1::text[]) OR fb_order_number = ANY($1::text[]) FOR UPDATE`, [preview.rows.map(row => row.orderId)]);
+    const lockedPreview = await loadLatestUndoPreview(client.query.bind(client));
+    if (!lockedPreview.batch || lockedPreview.batch.correlationId !== preview.batch.correlationId || !lockedPreview.canUndo) {
+      const error: any = new Error('No orders were changed because the batch is no longer safe to undo');
+      error.statusCode = 409;
+      error.preview = lockedPreview;
+      throw error;
+    }
+
+    const reversalCorrelationId = `pure-precision-expedite-undo:${randomUUID()}`;
+    for (const row of lockedPreview.rows) {
+      const previousDepartment = row.previousDepartment!;
+      const historyEntry = [{
+        department: previousDepartment,
+        enteredAt: new Date().toISOString(),
+        expeditedRollback: true,
+        reason,
+        actor: input.actor.username,
+        correlationId: reversalCorrelationId,
+        originalCorrelationId: lockedPreview.batch.correlationId,
+        from: TARGET_DEPARTMENT,
+      }];
+      const restoredStatus = previousDepartment === 'P1 Production Queue' ? 'PENDING' : 'IN_PROGRESS';
+      await client.query(
+        `UPDATE production_orders SET current_department = $1, production_status = $2,
+            department_history = COALESCE(department_history, '[]'::jsonb) || $3::jsonb,
+            updated_at = NOW() WHERE order_id = $4`,
+        [previousDepartment, restoredStatus, JSON.stringify(historyEntry), row.orderId]
+      );
+      if (row.allOrderId) {
+        await client.query(
+          `UPDATE all_orders SET current_department = $1,
+              department_history = COALESCE(department_history, '[]'::jsonb) || $2::jsonb,
+              updated_at = NOW() WHERE order_id = $3`,
+          [previousDepartment, JSON.stringify(historyEntry), row.allOrderId]
+        );
+      }
+      await client.query(
+        `UPDATE order_department_transitions SET exited_at = NOW(),
+            duration_minutes = GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - entered_at)) / 60)::int),
+            exit_reason = 'expedite_reversed', metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb
+          WHERE entity_type = 'p1_order' AND entity_id = $2 AND department = $3 AND exited_at IS NULL`,
+        [JSON.stringify({ reason, correlationId: reversalCorrelationId, originalCorrelationId: lockedPreview.batch.correlationId }), row.orderId, TARGET_DEPARTMENT]
+      );
+      await client.query(
+        `INSERT INTO order_department_transitions (entity_type, entity_id, department, entered_at, metadata)
+         VALUES ('p1_order', $1, $2, NOW(), $3::jsonb)`,
+        [row.orderId, previousDepartment, JSON.stringify({ expediteReversed: true, reason, correlationId: reversalCorrelationId, originalCorrelationId: lockedPreview.batch.correlationId })]
+      );
+      await client.query(
+        `INSERT INTO order_activity_events
+          (order_id, event_type, event_category, actor_id, actor_type, actor_display_name, source,
+           source_route, correlation_id, reason_code, reason_text, before_snapshot, after_snapshot,
+           field_diff, department_from, department_to, metadata)
+         VALUES ($1, 'P1_EXPEDITE_BATCH_REVERSED', 'production', $2, 'user', $3, 'admin',
+                 '/api/admin/p1-expedite/undo', $4, 'WRONG_BATCH_SELECTED', $5, $6::jsonb, $7::jsonb,
+                 $8::jsonb, $9, $10, $11::jsonb)`,
+        [row.orderId, input.actor.id ?? null, input.actor.username, reversalCorrelationId, reason,
+         JSON.stringify({ currentDepartment: TARGET_DEPARTMENT }), JSON.stringify({ currentDepartment: previousDepartment }),
+         JSON.stringify({ currentDepartment: { before: TARGET_DEPARTMENT, after: previousDepartment } }),
+         TARGET_DEPARTMENT, previousDepartment,
+         JSON.stringify({ originalCorrelationId: lockedPreview.batch.correlationId, originalExpeditedAt: row.expeditedAt })]
+      );
+      await client.query(
+        `INSERT INTO admin_audit_log
+          (order_id, field_name, field_label, old_value, new_value, changed_by, user_role,
+           change_type, reason, ip_address, user_agent, timestamp)
+         VALUES ($1, 'current_department', 'Undo Pure Precision Fast Track', $2, $3, $4, $5,
+                 'P1_EXPEDITE_UNDO', $6, $7, $8, NOW())`,
+        [row.orderId, JSON.stringify(TARGET_DEPARTMENT), JSON.stringify(previousDepartment), input.actor.username,
+         input.actor.role ?? 'ADMIN', reason, input.ip ?? null, input.userAgent ?? null]
+      );
+    }
+    await client.query('COMMIT');
+    return { success: true, correlationId: reversalCorrelationId, originalCorrelationId: lockedPreview.batch.correlationId, restored: lockedPreview.rows.map(row => ({ orderId: row.orderId, department: row.previousDepartment })) };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}

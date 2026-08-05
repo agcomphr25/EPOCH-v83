@@ -7,6 +7,8 @@
 --   ALREADY_COMPLETED - all targets are already void with audit evidence.
 --   EXACT_SAFE_CLEANUP- all thirteen untouched drafts match the sole retained
 --                       authoritative package and contain no authored content.
+--   MIXED_RECOVERY    - exact evidence-backed voids are preserved while the
+--                       remaining untouched drafts are dispositioned.
 --   AMBIGUOUS_STOP    - every other state fails before mutation.
 --
 -- The anonymous block is one transaction. The advisory lock serializes this
@@ -61,50 +63,9 @@ BEGIN
       candidate_count;
   END IF;
 
-  IF void_count = 13 THEN
-    SELECT count(*) INTO completed_event_count
-    FROM qms_epoch_validation_packages p
-    WHERE p.package_number = ANY(target_numbers)
-      AND EXISTS (
-        SELECT 1
-        FROM qms_epoch_validation_events e
-        WHERE e.package_id = p.id
-          AND e.action = 'PACKAGE_VOIDED_DUPLICATE'
-          AND e.actor_display_name = 'migration 0253 (user-authorized duplicate cleanup)'
-          AND e.actor_role = 'SYSTEM_MAINTENANCE'
-      );
-
-    IF completed_event_count <> cardinality(target_numbers) OR EXISTS (
-      SELECT 1
-      FROM qms_epoch_validation_packages p
-      WHERE p.package_number = ANY(target_numbers)
-        AND (
-          p.locked_at IS NULL
-          OR p.updated_by_display_name <> 'migration 0253 (user-authorized duplicate cleanup)'
-          OR p.revision < 2
-          OR p.row_version < 2
-          OR 1 <> (
-            SELECT count(*)
-            FROM qms_epoch_validation_events e
-            WHERE e.package_id = p.id
-              AND e.action = 'PACKAGE_VOIDED_DUPLICATE'
-              AND e.actor_display_name = 'migration 0253 (user-authorized duplicate cleanup)'
-              AND e.actor_role = 'SYSTEM_MAINTENANCE'
-          )
-        )
-    ) THEN
-      RAISE EXCEPTION
-        '0253 state AMBIGUOUS_STOP: all targets are VOID_DUPLICATE but only % retain exact duplicate-void migration evidence',
-        completed_event_count;
-    END IF;
-
-    RAISE NOTICE '0253 state ALREADY_COMPLETED: all duplicate dispositions and audit evidence already exist';
-    RETURN;
-  END IF;
-
-  IF draft_count <> 13 OR void_count <> 0 THEN
+  IF draft_count + void_count <> cardinality(target_numbers) THEN
     RAISE EXCEPTION
-      '0253 state AMBIGUOUS_STOP: target lifecycle is mixed or unsafe (DRAFT %, VOID_DUPLICATE %, total %)',
+      '0253 state AMBIGUOUS_STOP: target lifecycle is unsafe (DRAFT %, VOID_DUPLICATE %, total %)',
       draft_count,
       void_count,
       candidate_count;
@@ -120,10 +81,64 @@ BEGIN
       '0253 state AMBIGUOUS_STOP: retained authoritative package ESV-2026-0001 is missing or void';
   END IF;
 
+  SELECT count(*) INTO completed_event_count
+  FROM qms_epoch_validation_packages p
+  WHERE p.package_number = ANY(target_numbers)
+    AND p.status = 'VOID_DUPLICATE'
+    AND EXISTS (
+      SELECT 1
+      FROM qms_epoch_validation_events e
+      WHERE e.package_id = p.id
+        AND e.action = 'PACKAGE_VOIDED_DUPLICATE'
+        AND e.actor_display_name = 'migration 0253 (user-authorized duplicate cleanup)'
+        AND e.actor_role = 'SYSTEM_MAINTENANCE'
+    );
+
+  IF completed_event_count <> void_count OR EXISTS (
+    SELECT 1
+    FROM qms_epoch_validation_packages p
+    WHERE p.package_number = ANY(target_numbers)
+      AND (
+        (p.status = 'VOID_DUPLICATE' AND (
+          p.locked_at IS NULL
+          OR p.updated_by_display_name <> 'migration 0253 (user-authorized duplicate cleanup)'
+          OR p.revision < 2
+          OR p.row_version < 2
+          OR 1 <> (
+            SELECT count(*)
+            FROM qms_epoch_validation_events e
+            WHERE e.package_id = p.id
+              AND e.action = 'PACKAGE_VOIDED_DUPLICATE'
+              AND e.actor_display_name = 'migration 0253 (user-authorized duplicate cleanup)'
+              AND e.actor_role = 'SYSTEM_MAINTENANCE'
+          )
+        ))
+        OR (p.status = 'DRAFT' AND EXISTS (
+          SELECT 1
+          FROM qms_epoch_validation_events e
+          WHERE e.package_id = p.id
+            AND e.action = 'PACKAGE_VOIDED_DUPLICATE'
+            AND e.actor_display_name = 'migration 0253 (user-authorized duplicate cleanup)'
+            AND e.actor_role = 'SYSTEM_MAINTENANCE'
+        ))
+      )
+  ) THEN
+    RAISE EXCEPTION
+      '0253 state AMBIGUOUS_STOP: % void targets exist but only % retain exact duplicate-void migration evidence',
+      void_count,
+      completed_event_count;
+  END IF;
+
+  IF void_count = cardinality(target_numbers) THEN
+    RAISE NOTICE '0253 state ALREADY_COMPLETED: all duplicate dispositions and audit evidence already exist';
+    RETURN;
+  END IF;
+
   IF EXISTS (
     SELECT 1
     FROM qms_epoch_validation_packages p
     WHERE p.package_number = ANY(target_numbers)
+      AND p.status = 'DRAFT'
       AND (
         p.revision <> 1
         OR p.row_version <> 1
@@ -257,7 +272,7 @@ BEGIN
     UNION ALL SELECT count(*) FROM qms_epoch_validation_approvals r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
     UNION ALL SELECT count(*) FROM qms_epoch_validation_snapshots r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
     UNION ALL SELECT count(*) FROM qms_epoch_validation_periodic_reviews r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_events e JOIN qms_epoch_validation_packages p ON p.id = e.package_id WHERE p.package_number = ANY(target_numbers) AND e.action <> 'PACKAGE_CREATED'
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_events e JOIN qms_epoch_validation_packages p ON p.id = e.package_id WHERE p.package_number = ANY(target_numbers) AND e.action <> 'PACKAGE_CREATED' AND NOT (e.action = 'PACKAGE_VOIDED_DUPLICATE' AND e.actor_display_name = 'migration 0253 (user-authorized duplicate cleanup)' AND e.actor_role = 'SYSTEM_MAINTENANCE')
   ) authored;
 
   IF authored_count <> 0 THEN
@@ -298,12 +313,15 @@ BEGIN
   )
   SELECT count(*) INTO changed_count FROM inserted_events;
 
-  IF changed_count <> 13 THEN
+  IF changed_count <> draft_count THEN
     RAISE EXCEPTION
-      '0253 state AMBIGUOUS_STOP: transactional cleanup changed % packages instead of 13',
-      changed_count;
+      '0253 state AMBIGUOUS_STOP: transactional cleanup changed % packages instead of %',
+      changed_count,
+      draft_count;
   END IF;
 
-  RAISE NOTICE '0253 state EXACT_SAFE_CLEANUP: voided 13 empty duplicates and appended 13 audit events';
+  RAISE NOTICE '0253 state MIXED_RECOVERY: preserved % completed dispositions and voided % remaining empty duplicates',
+    void_count,
+    changed_count;
 END
 $migration$;

@@ -170,6 +170,19 @@ async function runMigration() {
   await client.query(migration);
 }
 
+async function expectMigrationFailure(message: RegExp) {
+  await client.query('SAVEPOINT migration_attempt');
+  let caught: unknown;
+  try {
+    await runMigration();
+  } catch (error) {
+    caught = error;
+  }
+  await client.query('ROLLBACK TO SAVEPOINT migration_attempt');
+  expect(caught).toBeInstanceOf(Error);
+  expect((caught as Error).message).toMatch(message);
+}
+
 async function targetState() {
   return client.query(
     `SELECT package_number, status, revision, row_version
@@ -293,14 +306,14 @@ describe('migration 0253 PostgreSQL state classification', () => {
   it('fails closed on an unexpected partial target set before mutation', async () => {
     await insertPackage('ESV-2026-0001');
     await insertPackage('ESV-2026-0002');
-    await expect(runMigration()).rejects.toThrow(/AMBIGUOUS_STOP.*found 1/);
+    await expectMigrationFailure(/AMBIGUOUS_STOP.*found 1/);
     expect((await targetState()).rows[0].status).toBe('DRAFT');
   });
 
   it('fails closed when multiple authoritative payload matches exist', async () => {
     await seedExactDraftSet();
     await insertPackage('ESV-2026-0000');
-    await expect(runMigration()).rejects.toThrow(
+    await expectMigrationFailure(
       /expected exactly one authoritative payload match.*found 2/
     );
     expect(
@@ -313,9 +326,7 @@ describe('migration 0253 PostgreSQL state classification', () => {
     await client.query(
       "UPDATE qms_epoch_validation_packages SET status='APPROVED_FOR_INTENDED_USE' WHERE package_number='ESV-2026-0007'"
     );
-    await expect(runMigration()).rejects.toThrow(
-      /lifecycle is mixed or unsafe/
-    );
+    await expectMigrationFailure(/lifecycle is mixed or unsafe/);
     expect(
       (await targetState()).rows.filter(
         (row) => row.status === 'VOID_DUPLICATE'
@@ -328,7 +339,7 @@ describe('migration 0253 PostgreSQL state classification', () => {
     await client.query(
       "UPDATE qms_epoch_validation_packages SET row_version=2 WHERE package_number='ESV-2026-0008'"
     );
-    await expect(runMigration()).rejects.toThrow(/lifecycle or edit evidence/);
+    await expectMigrationFailure(/lifecycle or edit evidence/);
     expect(
       (await targetState()).rows.every((row) => row.status === 'DRAFT')
     ).toBe(true);
@@ -339,9 +350,7 @@ describe('migration 0253 PostgreSQL state classification', () => {
     await client.query(
       "UPDATE qms_epoch_validation_packages SET title='Different intended validation' WHERE package_number='ESV-2026-0009'"
     );
-    await expect(runMigration()).rejects.toThrow(
-      /payloads do not exactly match/
-    );
+    await expectMigrationFailure(/payloads do not exactly match/);
     expect(
       (await targetState()).rows.every((row) => row.status === 'DRAFT')
     ).toBe(true);
@@ -354,9 +363,7 @@ describe('migration 0253 PostgreSQL state classification', () => {
        VALUES ('ESV-2026-0010', 'approved evidence')`
     );
     const before = (await targetState()).rows;
-    await expect(runMigration()).rejects.toThrow(
-      /authored validation or lifecycle records/
-    );
+    await expectMigrationFailure(/authored validation or lifecycle records/);
     expect((await targetState()).rows).toEqual(before);
     expect(
       (

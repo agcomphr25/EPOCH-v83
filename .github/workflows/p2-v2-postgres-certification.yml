@@ -9,6 +9,29 @@ on:
       - '.github/p2-v2-workflow-dispatch-certification-manifest.json'
       - 'migrations/**'
       - 'server/schema.ts'
+      - 'server/src/routes/qmsDesignControl.ts'
+      - 'server/src/services/designControlApprovalService.ts'
+      - 'server/src/services/designControlAuthorityService.ts'
+      - 'server/src/services/designManufacturingEvidenceService.ts'
+      - 'server/src/services/designHistoryFileService.ts'
+      - 'server/src/services/engineeringReleaseService.ts'
+      - 'server/src/routes/engineeringChangeRequests.ts'
+      - 'server/src/routes/engineeringChangeNotices.ts'
+      - 'server/src/services/engineeringChangeRequestService.ts'
+      - 'server/src/services/engineeringChangeNoticeService.ts'
+      - 'client/src/features/design-control/**'
+      - 'client/src/components/design-control/**'
+      - 'client/src/pages/QMSDesignControlPage.tsx'
+      - 'shared/designControlWorkflow.ts'
+      - 'shared/designControlFormCatalog.ts'
+      - 'shared/designHistoryFileManifest.ts'
+      - 'server/__tests__/designControl*.test.ts'
+      - 'server/__tests__/designHistoryFiles.test.ts'
+      - 'server/__tests__/engineeringChange*.test.ts'
+      - 'server/__tests__/qmsDesignControlReleaseGate.test.ts'
+      - 'client/src/__tests__/designControl*.test.ts'
+      - 'client/src/__tests__/DesignProjectConfigurationWorkspace.component.test.tsx'
+      - 'docs/design-control/**'
       - 'server/scripts/migrations/runSafeBootMigrations.ts'
       - 'server/src/lib/featureFlags.ts'
       - 'server/src/services/projectPreproductionReadinessService.ts'
@@ -297,6 +320,37 @@ jobs:
           --no-file-parallelism
           server/__tests__/p2V2PostgresCertification.test.ts
           server/__tests__/designProjectConfigurationSecurityPostgres.test.ts
+          --reporter=verbose
+
+      - name: Run Design Control PostgreSQL and lifecycle certification
+        env:
+          DESIGN_CONTROL_CLEAN_SCHEMA_CERTIFICATION: isolated_test
+          DESIGN_PROJECT_CONFIGURATION_POSTGRES_CERTIFICATION: isolated_test
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          --no-file-parallelism
+          server/__tests__/designControlCleanSchemaPostgres.test.ts
+          server/__tests__/designProjectConfigurationSecurityPostgres.test.ts
+          server/__tests__/designControlAuthorityFoundation.test.ts
+          server/__tests__/designControlAuthenticatedApprovals.test.ts
+          server/__tests__/designControlFormTemplates.test.ts
+          server/__tests__/designControlProductionReadiness.test.ts
+          server/__tests__/designControlSchemaHardening.test.ts
+          server/__tests__/designControlWorkspacePhase11.test.ts
+          server/__tests__/designHistoryFiles.test.ts
+          server/__tests__/engineeringChangeRequests.test.ts
+          server/__tests__/engineeringChangeNotices.test.ts
+          server/__tests__/postReleaseEngineeringReleases.test.ts
+          server/__tests__/qmsDesignControlReleaseGate.test.ts
+          --reporter=verbose
+
+      - name: Run Design Control client regressions
+        run: >-
+          npx vitest run
+          --config vitest.config.client.ts
+          client/src/__tests__/designControlAuthority.client.test.ts
+          client/src/__tests__/DesignProjectConfigurationWorkspace.component.test.tsx
           --reporter=verbose
 
       - name: Run exhaustive legacy preservation PostgreSQL certification

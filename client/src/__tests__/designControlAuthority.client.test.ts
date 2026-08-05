@@ -76,6 +76,9 @@ describe('Design Control client authority foundation', () => {
     expect(editorSource).toContain("decide(slot, 'RETURNED_FOR_REVISION')");
     expect(editorSource).toContain("decide(slot, 'REJECTED')");
     expect(editorSource).toContain('Save the draft before submission.');
+    expect(editorSource).toContain('design-control-missing-summary');
+    expect(editorSource).toContain('Version and decision history');
+    expect(editorSource).toContain('contentVersionId:');
     expect(editorSource).toContain('Save controlled draft');
     expect(editorSource).toContain('Submit current version');
     expect(editorSource).toContain('Previous stage');
@@ -83,5 +86,6 @@ describe('Design Control client authority foundation', () => {
     expect(editorSource).toContain("can('design.control.edit')");
     expect(editorSource).toContain("can('design.control.submit')");
     expect(editorSource).toContain("can('design.control.approve')");
+    expect(workspaceSource).toContain('<DesignProjectConfigurationWorkspace');
   });
 });

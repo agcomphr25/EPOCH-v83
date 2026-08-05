@@ -134,6 +134,37 @@ export function missingDesignControlStepEvidence(
   };
 }
 
+export function assertExpectedDesignControlVersion(
+  expectedContentVersionId: string | null | undefined,
+  currentContentVersionId: string | null
+) {
+  if (
+    expectedContentVersionId !== undefined &&
+    expectedContentVersionId !== currentContentVersionId
+  ) {
+    throw new DesignControlApprovalError(
+      409,
+      'STALE_CONTENT_VERSION',
+      'The step content version changed before this action'
+    );
+  }
+}
+
+export function requireDesignControlDecisionComment(
+  decision: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_REVISION',
+  comment?: string
+) {
+  const normalized = comment?.trim() ?? '';
+  if (decision !== 'APPROVED' && !normalized) {
+    throw new DesignControlApprovalError(
+      422,
+      'DECISION_COMMENT_REQUIRED',
+      'A reason is required when rejecting or returning a Design Control step'
+    );
+  }
+  return normalized || undefined;
+}
+
 async function actorEvidence(actor: DesignControlApprovalActor) {
   if (!Number.isInteger(actor.id) || actor.id <= 0) {
     throw new DesignControlApprovalError(401, 'AUTHENTICATION_REQUIRED', 'Authenticated user identity is required');
@@ -299,6 +330,7 @@ export async function saveDesignControlStepDraft(input: {
   checklist?: unknown;
   attachments?: unknown;
   metadata?: unknown;
+  expectedContentVersionId?: string | null;
   changeReason: string;
   actor: DesignControlApprovalActor;
   requestMetadata?: DesignControlRequestMetadata;
@@ -307,6 +339,10 @@ export async function saveDesignControlStepDraft(input: {
   return client.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`);
     const context = await loadStepContext(input.recordId, input.stepKey, tx as Client);
+    assertExpectedDesignControlVersion(
+      input.expectedContentVersionId,
+      context.step.currentContentVersionId
+    );
     if (context.step.status === 'submitted_for_approval') {
       throw new DesignControlApprovalError(409, 'STEP_UNDER_REVIEW', 'Submitted content is read-only while under review');
     }
@@ -362,7 +398,7 @@ export async function saveDesignControlStepDraft(input: {
 export async function submitDesignControlStep(input: {
   recordId: string;
   stepKey: string;
-  expectedContentVersionId?: string;
+  expectedContentVersionId?: string | null;
   actor: DesignControlApprovalActor;
   requestMetadata?: DesignControlRequestMetadata;
 }, client: Client = db) {
@@ -373,6 +409,10 @@ export async function submitDesignControlStep(input: {
     if (context.step.status === 'submitted_for_approval') {
       return getDesignControlStepApprovalState(input.recordId, input.stepKey, tx as Client);
     }
+    assertExpectedDesignControlVersion(
+      input.expectedContentVersionId,
+      context.step.currentContentVersionId
+    );
     const content = materialStepContent(context.step);
     const version = await createContentVersion(
       context,
@@ -382,9 +422,6 @@ export async function submitDesignControlStep(input: {
       'Initial authenticated approval submission',
       tx as Client
     );
-    if (input.expectedContentVersionId && input.expectedContentVersionId !== version.id) {
-      throw new DesignControlApprovalError(409, 'STALE_CONTENT_VERSION', 'The step content version changed before submission');
-    }
     const missing = missingDesignControlStepEvidence(input.stepKey, content, {
       includeChecklist: input.stepKey !== '12',
     });
@@ -454,6 +491,10 @@ export async function decideDesignControlStepApproval(input: {
   actor: DesignControlApprovalActor;
   requestMetadata?: DesignControlRequestMetadata;
 }, client: Client = db) {
+  const decisionComment = requireDesignControlDecisionComment(
+    input.decision,
+    input.comment
+  );
   return client.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`);
     const context = await loadStepContext(input.recordId, input.stepKey, tx as Client);
@@ -525,7 +566,7 @@ export async function decideDesignControlStepApproval(input: {
         requiredRolesSnapshot: [...(slot.allowedRoles ?? [])],
         decision: input.decision,
         signatureMeaning: slot.signatureMeaning ?? 'Authenticated Design Control decision',
-        decisionComment: input.comment?.trim() || null,
+        decisionComment: decisionComment ?? null,
         actorUserId: input.actor.id,
         actorUsernameSnapshot: input.actor.username,
         actorDisplayNameSnapshot: actorInfo.snapshot.displayName,
@@ -580,7 +621,7 @@ export async function decideDesignControlStepApproval(input: {
           : input.decision === 'REJECTED'
             ? 'DESIGN_CONTROL_APPROVAL_REJECTED'
             : 'DESIGN_CONTROL_RETURNED_FOR_REVISION',
-      reason: input.comment?.trim() || input.decision,
+      reason: decisionComment || input.decision,
       fieldsChanged: {
         status: { before: context.step.status, after: nextStatus },
         approvalDecision: { before: null, after: input.decision },

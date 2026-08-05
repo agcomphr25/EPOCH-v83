@@ -643,6 +643,11 @@ router.patch('/:id/steps/:stepKey', authenticateToken, requirePermission('design
       checklist: req.body?.checklist,
       attachments: req.body?.attachments,
       metadata: req.body?.metadata,
+      expectedContentVersionId:
+        Object.prototype.hasOwnProperty.call(req.body ?? {}, 'contentVersionId') &&
+        (typeof req.body?.contentVersionId === 'string' || req.body?.contentVersionId === null)
+          ? req.body.contentVersionId
+          : undefined,
       changeReason: typeof req.body?.changeReason === 'string' && req.body.changeReason.trim()
         ? req.body.changeReason.trim()
         : 'Design Control step draft saved',
@@ -666,7 +671,7 @@ router.post(
         recordId: req.params.id,
         stepKey: req.params.stepKey,
         expectedContentVersionId:
-          typeof req.body?.contentVersionId === 'string'
+          typeof req.body?.contentVersionId === 'string' || req.body?.contentVersionId === null
             ? req.body.contentVersionId
             : undefined,
         actor: approvalActorFromRequest(req),

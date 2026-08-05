@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import { DesignControlStepEditor } from './DesignControlStepEditor';
+import { DesignProjectConfigurationWorkspace } from './DesignProjectConfigurationWorkspace';
 
 import { ControlledCopyPanel } from '@/components/design-control/ControlledCopyPanel';
 import { DesignHistoryFilePanel } from '@/components/design-control/DesignHistoryFilePanel';
@@ -41,6 +42,7 @@ type LiveRow = {
 
 type StepRow = LiveRow & {
   stepKey: string;
+  currentContentVersionId?: string | null;
   checklist?: Record<string, unknown>;
   approvedAt?: string | null;
   updatedAt?: string | null;
@@ -276,6 +278,7 @@ export function DesignControlWorkspace({
         <TabsList className="h-auto flex-wrap justify-start">
           <TabsTrigger value="lifecycle">12 steps</TabsTrigger>
           <TabsTrigger value="evidence">Evidence registers</TabsTrigger>
+          <TabsTrigger value="configuration">Configuration</TabsTrigger>
           <TabsTrigger value="changes">Engineering changes</TabsTrigger>
           <TabsTrigger value="documents">Forms &amp; copies</TabsTrigger>
           <TabsTrigger value="dhf">DHF &amp; package</TabsTrigger>
@@ -382,6 +385,14 @@ export function DesignControlWorkspace({
           <LiveRegister title="Verification" rows={detail.verification} />
           <LiveRegister title="Validation" rows={detail.validation} />
           <LiveRegister title="Design changes" rows={detail.changes} />
+        </TabsContent>
+
+        <TabsContent value="configuration">
+          <DesignProjectConfigurationWorkspace
+            designControlReadiness={detail.record.status}
+            projectId={projectId}
+            projectName={detail.record.title}
+          />
         </TabsContent>
 
         <TabsContent value="changes" className="space-y-4">

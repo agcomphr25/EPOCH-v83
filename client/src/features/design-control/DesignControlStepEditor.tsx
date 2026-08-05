@@ -13,6 +13,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 type StepRow = {
   stepKey: string;
   status?: string | null;
+  currentContentVersionId?: string | null;
   formData?: Record<string, unknown>;
   checklist?: Record<string, unknown>;
   attachments?: unknown[];
@@ -33,6 +34,25 @@ type ApprovalSlot = {
 
 type ApprovalState = {
   currentContentVersion?: { id: string; contentVersion: number } | null;
+  versions: Array<{
+    id: string;
+    contentVersion: number;
+    status: string;
+    contentChecksum: string;
+    changeReason: string;
+    createdAt?: string | null;
+    createdBySnapshot?: { displayName?: string; username?: string } | null;
+  }>;
+  approvals: Array<{
+    id: string;
+    approvalLabelSnapshot: string;
+    decision: string;
+    decisionComment?: string | null;
+    actorDisplayNameSnapshot?: string | null;
+    actorUsernameSnapshot?: string | null;
+    createdAt?: string | null;
+    status: string;
+  }>;
   approvalSlots: ApprovalSlot[];
 };
 
@@ -150,6 +170,7 @@ export function DesignControlStepEditor({
             formData,
             checklist,
             attachments: step?.attachments ?? [],
+            contentVersionId: step?.currentContentVersionId ?? null,
             changeReason:
               changeReason.trim() || 'Design Control step draft saved',
           }),
@@ -167,7 +188,7 @@ export function DesignControlStepEditor({
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contentVersionId: approvalQuery.data?.currentContentVersion?.id,
+            contentVersionId: step?.currentContentVersionId ?? null,
           }),
         }
       );
@@ -205,6 +226,13 @@ export function DesignControlStepEditor({
   const editable = !readOnly && can('design.control.edit') && !underReview;
   const canSubmit = !readOnly && can('design.control.submit') && !underReview;
   const canApprove = !readOnly && can('design.control.approve') && underReview;
+  const missingFields = definition.fields.filter(
+    (field) => !String(formData[field.key] ?? '').trim()
+  );
+  const missingChecklist = definition.checklist.filter(
+    (item) => checklist[item.key] !== true
+  );
+  const missingCount = missingFields.length + missingChecklist.length;
 
   return (
     <div className="space-y-5">
@@ -215,6 +243,30 @@ export function DesignControlStepEditor({
           creates an immutable, checksummed content version; later edits
           invalidate prior approvals.
         </p>
+        <div
+          className="rounded-md border p-3 text-sm"
+          aria-live="polite"
+          data-testid="design-control-missing-summary"
+        >
+          {missingCount === 0 ? (
+            <span>Required stage information is complete.</span>
+          ) : (
+            <>
+              <p className="font-medium">
+                {missingCount} required item{missingCount === 1 ? '' : 's'}{' '}
+                incomplete
+              </p>
+              <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                {missingFields.map((field) => (
+                  <li key={`field-${field.key}`}>{field.label}</li>
+                ))}
+                {missingChecklist.map((item) => (
+                  <li key={`checklist-${item.key}`}>{item.label}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           {definition.fields.map((field) => (
             <div className="space-y-1.5" key={field.key}>
@@ -350,7 +402,7 @@ export function DesignControlStepEditor({
                   {canApprove && slot.status !== 'APPROVED' && (
                     <>
                       <Button
-                        disabled={busy}
+                        disabled={busy || !decisionComment.trim()}
                         onClick={() => decide(slot, 'APPROVED')}
                         size="sm"
                         type="button"
@@ -358,7 +410,7 @@ export function DesignControlStepEditor({
                         Approve
                       </Button>
                       <Button
-                        disabled={busy}
+                        disabled={busy || !decisionComment.trim()}
                         onClick={() => decide(slot, 'RETURNED_FOR_REVISION')}
                         size="sm"
                         type="button"
@@ -383,6 +435,80 @@ export function DesignControlStepEditor({
           </div>
         </section>
       )}
+
+      <section className="space-y-3" aria-label="Stage activity history">
+        <div>
+          <h3 className="font-semibold">Version and decision history</h3>
+          <p className="text-sm text-muted-foreground">
+            Immutable content versions and attributable decisions retained by
+            the server for this stage.
+          </p>
+        </div>
+        {(approvalQuery.data?.versions ?? []).length === 0 ? (
+          <p className="rounded-md border p-3 text-sm text-muted-foreground">
+            No controlled version has been saved yet.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {[...(approvalQuery.data?.versions ?? [])]
+              .sort((left, right) => right.contentVersion - left.contentVersion)
+              .map((version) => (
+                <div className="rounded-md border p-3 text-sm" key={version.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">
+                      Version {version.contentVersion}
+                    </span>
+                    <Badge variant="outline">
+                      {version.status.toLowerCase().replaceAll('_', ' ')}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">
+                    {version.changeReason} ·{' '}
+                    {version.createdBySnapshot?.displayName ||
+                      version.createdBySnapshot?.username ||
+                      'Authenticated user'}
+                    {version.createdAt
+                      ? ` · ${new Date(version.createdAt).toLocaleString()}`
+                      : ''}
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-muted-foreground">
+                    Evidence hash {version.contentChecksum.slice(0, 12)}…
+                  </p>
+                </div>
+              ))}
+          </div>
+        )}
+        {(approvalQuery.data?.approvals ?? []).length > 0 && (
+          <div className="space-y-2">
+            {(approvalQuery.data?.approvals ?? []).map((approval) => (
+              <div className="rounded-md border p-3 text-sm" key={approval.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">
+                    {approval.approvalLabelSnapshot}
+                  </span>
+                  <Badge variant="outline">
+                    {approval.decision.toLowerCase().replaceAll('_', ' ')}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-muted-foreground">
+                  {approval.actorDisplayNameSnapshot ||
+                    approval.actorUsernameSnapshot ||
+                    'Authenticated user'}
+                  {approval.createdAt
+                    ? ` · ${new Date(approval.createdAt).toLocaleString()}`
+                    : ''}
+                  {approval.status !== 'VALID'
+                    ? ` · ${approval.status.toLowerCase()}`
+                    : ''}
+                </p>
+                {approval.decisionComment && (
+                  <p className="mt-1">{approval.decisionComment}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {error && (
         <p

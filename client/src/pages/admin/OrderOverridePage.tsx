@@ -176,14 +176,16 @@ export default function OrderOverridePage() {
   });
 
   const previewUndo = useMutation({
-    mutationFn: () => apiRequest('/api/admin/p1-expedite/undo-preview'),
+    mutationFn: () => apiRequest('/api/admin/p1-expedite/undo-preview', {
+      method: 'POST', body: JSON.stringify({ ids: parsedExpediteIds }),
+    }),
     onSuccess: (data: ExpediteUndoPreview) => setUndoPreview(data),
     onError: (err: any) => toast({ title: 'Undo preview failed', description: err.message, variant: 'destructive' }),
   });
 
   const executeUndo = useMutation({
     mutationFn: () => apiRequest('/api/admin/p1-expedite/undo', {
-      method: 'POST', body: JSON.stringify({ reason: undoReason }),
+      method: 'POST', body: JSON.stringify({ ids: parsedExpediteIds, reason: undoReason }),
     }),
     onSuccess: (data: any) => {
       toast({ title: 'Fast track reversed', description: `${data.restored.length} orders restored to their prior departments.` });
@@ -467,7 +469,7 @@ export default function OrderOverridePage() {
         <CardContent className="space-y-4">
           <div>
             <Label htmlFor="expedite-orders">Order IDs ({parsedExpediteIds.length})</Label>
-            <Textarea id="expedite-orders" value={expediteOrderIds} onChange={event => { setExpediteOrderIds(event.target.value); setExpeditePreview(null); }} className="mt-1 font-mono min-h-28" />
+            <Textarea id="expedite-orders" value={expediteOrderIds} onChange={event => { setExpediteOrderIds(event.target.value); setExpeditePreview(null); setUndoPreview(null); }} className="mt-1 font-mono min-h-28" />
             <p className="text-xs text-muted-foreground mt-1">One per line or comma-separated. This first batch is prefilled with FB250–FB265.</p>
           </div>
           <div>
@@ -513,13 +515,13 @@ export default function OrderOverridePage() {
           )}
           <div className="border-t pt-4 space-y-3">
             <div>
-              <h3 className="text-sm font-semibold">Undo Latest Fast-Track Batch</h3>
-              <p className="text-xs text-muted-foreground">Restores every order to the department recorded immediately before its fast-track move. The rollback is all-or-nothing and fully audited.</p>
+              <h3 className="text-sm font-semibold">Undo Selected Fast-Track Batch</h3>
+              <p className="text-xs text-muted-foreground">Uses the order IDs entered above to find their exact historical batch, then restores every order to its audited prior department. Other batches are untouched.</p>
             </div>
             <Textarea value={undoReason} onChange={event => setUndoReason(event.target.value)} aria-label="Rollback audit reason" />
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => previewUndo.mutate()} disabled={previewUndo.isPending}>
-                {previewUndo.isPending ? 'Checking…' : 'Preview Latest Batch Undo'}
+                {previewUndo.isPending ? 'Checking…' : 'Preview Selected Batch Undo'}
               </Button>
               <Button
                 variant="destructive"
@@ -528,7 +530,7 @@ export default function OrderOverridePage() {
                   if (window.confirm(`Restore all ${undoPreview?.rows.length ?? 0} orders to their prior departments? This rollback will be audited.`)) executeUndo.mutate();
                 }}
               >
-                {executeUndo.isPending ? 'Restoring…' : 'Undo Latest Fast-Track Batch'}
+                {executeUndo.isPending ? 'Restoring…' : 'Undo Selected Fast-Track Batch'}
               </Button>
             </div>
             {undoPreview && (

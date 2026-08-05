@@ -215,21 +215,33 @@ export interface ExpediteUndoRow {
   expeditedAt: string;
 }
 
-async function loadLatestUndoPreview(query = pgPool.query.bind(pgPool)) {
+async function loadSelectedUndoPreview(rawIds: unknown, query = pgPool.query.bind(pgPool)) {
+  const ids = normalizeIds(rawIds);
+  if (!ids.length) return { batch: null, rows: [] as ExpediteUndoRow[], canUndo: false };
   const batchResult = await query(
     `SELECT correlation_id, MIN(occurred_at) AS started_at, MAX(occurred_at) AS completed_at,
             MAX(reason_text) AS reason_text
        FROM order_activity_events original
       WHERE event_type = 'P1_EXPEDITED_TO_SHIPPING_QC'
         AND correlation_id IS NOT NULL
+        AND correlation_id IN (
+          SELECT matched.correlation_id
+            FROM order_activity_events matched
+           WHERE matched.event_type = 'P1_EXPEDITED_TO_SHIPPING_QC'
+             AND matched.order_id = ANY($1::text[])
+           GROUP BY matched.correlation_id
+          HAVING COUNT(DISTINCT matched.order_id) = cardinality($1::text[])
+        )
         AND NOT EXISTS (
           SELECT 1 FROM order_activity_events reversal
            WHERE reversal.event_type = 'P1_EXPEDITE_BATCH_REVERSED'
              AND reversal.metadata->>'originalCorrelationId' = original.correlation_id
         )
       GROUP BY correlation_id
+      HAVING COUNT(DISTINCT original.order_id) = cardinality($1::text[])
       ORDER BY MAX(occurred_at) DESC
-      LIMIT 1`
+      LIMIT 1`,
+    [ids]
   );
   const batch = batchResult.rows[0];
   if (!batch) return { batch: null, rows: [] as ExpediteUndoRow[], canUndo: false };
@@ -289,11 +301,12 @@ async function loadLatestUndoPreview(query = pgPool.query.bind(pgPool)) {
   };
 }
 
-export async function previewLatestPurePrecisionExpediteUndo() {
-  return loadLatestUndoPreview();
+export async function previewSelectedPurePrecisionExpediteUndo(rawIds: unknown) {
+  return loadSelectedUndoPreview(rawIds);
 }
 
-export async function undoLatestPurePrecisionExpedite(input: {
+export async function undoSelectedPurePrecisionExpedite(input: {
+  ids: unknown;
   reason: string;
   actor: Actor;
   ip?: string | null;
@@ -304,11 +317,11 @@ export async function undoLatestPurePrecisionExpedite(input: {
   const client = await pgPool.connect();
   try {
     await client.query('BEGIN');
-    const preview = await loadLatestUndoPreview(client.query.bind(client));
-    if (!preview.batch) throw new Error('No unreversed fast-track batch was found');
+    const preview = await loadSelectedUndoPreview(input.ids, client.query.bind(client));
+    if (!preview.batch) throw new Error('No unreversed fast-track batch exactly matches the selected order IDs');
     await client.query(`SELECT id FROM production_orders WHERE order_id = ANY($1::text[]) FOR UPDATE`, [preview.rows.map(row => row.orderId)]);
     await client.query(`SELECT id FROM all_orders WHERE order_id = ANY($1::text[]) OR fb_order_number = ANY($1::text[]) FOR UPDATE`, [preview.rows.map(row => row.orderId)]);
-    const lockedPreview = await loadLatestUndoPreview(client.query.bind(client));
+    const lockedPreview = await loadSelectedUndoPreview(input.ids, client.query.bind(client));
     if (!lockedPreview.batch || lockedPreview.batch.correlationId !== preview.batch.correlationId || !lockedPreview.canUndo) {
       const error: any = new Error('No orders were changed because the batch is no longer safe to undo');
       error.statusCode = 409;

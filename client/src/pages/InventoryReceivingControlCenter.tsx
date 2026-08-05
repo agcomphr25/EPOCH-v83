@@ -895,6 +895,9 @@ function CenterPanel({
   onReceiptUpdate: (r: Receipt) => void;
 }) {
   const [step, setStep] = useState(0);
+  const [reversalDialogOpen, setReversalDialogOpen] = useState(false);
+  const [reversalReason, setReversalReason] = useState('');
+  const [reversalPreview, setReversalPreview] = useState<{ canReverse: boolean; unitCount: number; totalQuantity: number; blockers: string[] } | null>(null);
   const queryClient = useQueryClient();
   const reopenActiveReceiptMutation = useMutation({
     mutationFn: async () => {
@@ -916,6 +919,40 @@ function CenterPanel({
       toast.success(`Reopened ${updated.receiptNumber} for adjustment`);
     },
     onError: (err: any) => toast.error(err?.message ?? 'Failed to reopen receipt'),
+  });
+  const loadReversalPreview = async () => {
+    if (!receipt) return;
+    try {
+      setReversalPreview(await apiRequest(`/api/receipts/${receipt.id}/reversal-preview`));
+      setReversalDialogOpen(true);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to check receipt reversal');
+    }
+  };
+  const reverseReceiptMutation = useMutation({
+    mutationFn: async () => {
+      if (!receipt) throw new Error('No receipt selected');
+      return apiRequest(`/api/receipts/${receipt.id}/reverse`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reversalReason }),
+      });
+    },
+    onSuccess: async (result: any) => {
+      const updated = await apiRequest(`/api/receipts/${receipt!.id}`);
+      onReceiptUpdate(updated);
+      setReversalDialogOpen(false);
+      setReversalReason('');
+      setReversalPreview(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/receipts'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/receipts', 'complete'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/receipts/pending-by-po'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] }),
+      ]);
+      toast.success(`Reversed ${result.reversedUnits} units (${result.reversedQuantity} total) without deleting traceability`);
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to reverse receipt'),
   });
 
   if (!receipt) {
@@ -946,6 +983,11 @@ function CenterPanel({
             <Badge variant={receipt.status === 'complete' ? 'default' : 'outline'} className="text-xs">
               {receipt.status === 'complete' ? 'Complete' : receipt.status === 'in_progress' ? 'In Progress' : receipt.status}
             </Badge>
+            {receipt.status !== 'cancelled' && (
+              <Button size="sm" variant="destructive" onClick={loadReversalPreview}>
+                <Trash2 className="w-3 h-3 mr-1" /> Reverse Receipt
+              </Button>
+            )}
           </div>
         </div>
         <StepIndicator currentStep={step} totalSteps={5} />
@@ -953,7 +995,15 @@ function CenterPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
-        {receipt.status === 'complete' ? (
+        {receipt.status === 'cancelled' ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="border border-red-200 rounded-lg p-4 max-w-md text-center space-y-2 bg-red-50 dark:bg-red-950/20">
+              <XCircle className="w-8 h-8 text-red-600 mx-auto" />
+              <div className="text-sm font-semibold">Receipt Cancelled / Reversed</div>
+              <div className="text-xs text-gray-500">The original receipt and unit records remain available in History for audit traceability.</div>
+            </div>
+          </div>
+        ) : receipt.status === 'complete' ? (
           <div className="h-full flex items-center justify-center">
             <div className="border rounded-lg p-4 max-w-md text-center space-y-3 bg-gray-50 dark:bg-gray-900">
               <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto" />
@@ -961,10 +1011,12 @@ function CenterPanel({
                 <div className="text-sm font-semibold">Receipt Complete</div>
                 <div className="text-xs text-gray-500 mt-1">Use the Docs tab to attach a CoC or other receiving record. Reopen only when receiving data itself needs correction.</div>
               </div>
-              <Button size="sm" onClick={() => reopenActiveReceiptMutation.mutate()} disabled={reopenActiveReceiptMutation.isPending}>
-                {reopenActiveReceiptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-                Reopen for Adjustment
-              </Button>
+              <div className="flex items-center justify-center gap-2">
+                <Button size="sm" onClick={() => reopenActiveReceiptMutation.mutate()} disabled={reopenActiveReceiptMutation.isPending}>
+                  {reopenActiveReceiptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                  Reopen for Adjustment
+                </Button>
+              </div>
             </div>
           </div>
         ) : step === 0 && (
@@ -1006,7 +1058,7 @@ function CenterPanel({
         )}
       </div>
 
-      {receipt.status !== 'complete' && (
+      {receipt.status !== 'complete' && receipt.status !== 'cancelled' && (
         <div className="p-3 border-t flex items-center justify-between bg-white dark:bg-gray-950">
           <Button variant="outline" size="sm" onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}>
             Back
@@ -1018,6 +1070,37 @@ function CenterPanel({
           )}
         </div>
       )}
+
+      <Dialog open={reversalDialogOpen} onOpenChange={setReversalDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Reverse receipt {receipt.receiptNumber}?</DialogTitle>
+            <DialogDescription>This creates offsetting inventory and ledger entries without deleting receipt or traceability records.</DialogDescription>
+          </DialogHeader>
+          {reversalPreview && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded border p-3 bg-gray-50 dark:bg-gray-900">{reversalPreview.unitCount} units · {reversalPreview.totalQuantity} total quantity</div>
+              {reversalPreview.blockers.length > 0 && (
+                <div className="rounded border border-red-300 bg-red-50 p-3 text-red-800">
+                  <div className="font-medium mb-1">Reversal is blocked:</div>
+                  <ul className="list-disc pl-5 space-y-1">{reversalPreview.blockers.map(blocker => <li key={blocker}>{blocker}</li>)}</ul>
+                </div>
+              )}
+              <div className="space-y-1">
+                <Label htmlFor="receipt-reversal-reason">Required audit reason</Label>
+                <Textarea id="receipt-reversal-reason" value={reversalReason} onChange={event => setReversalReason(event.target.value)} placeholder="Duplicate receipt created from price-only PO revision" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReversalDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" disabled={!reversalPreview?.canReverse || reversalReason.trim().length < 10 || reverseReceiptMutation.isPending} onClick={() => reverseReceiptMutation.mutate()}>
+              {reverseReceiptMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+              Reverse Receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

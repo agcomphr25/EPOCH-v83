@@ -49,6 +49,10 @@ const childTables = [
   'qms_epoch_validation_snapshots',
   'qms_epoch_validation_periodic_reviews',
 ] as const;
+const targetNumbers = Array.from(
+  { length: 13 },
+  (_, index) => `ESV-2026-${String(index + 2).padStart(4, '0')}`
+);
 
 async function createFixtureSchema() {
   await client.query(`
@@ -161,8 +165,8 @@ async function insertPackage(
 
 async function seedExactDraftSet() {
   await insertPackage('ESV-2026-0001');
-  for (let suffix = 2; suffix <= 14; suffix += 1) {
-    await insertPackage(`ESV-2026-${String(suffix).padStart(4, '0')}`);
+  for (const packageNumber of targetNumbers) {
+    await insertPackage(packageNumber);
   }
 }
 
@@ -185,10 +189,12 @@ async function expectMigrationFailure(message: RegExp) {
 
 async function targetState() {
   return client.query(
-    `SELECT package_number, status, revision, row_version
+    `SELECT package_number, status, revision, row_version, locked_at,
+            updated_at, updated_by_display_name
      FROM qms_epoch_validation_packages
-     WHERE package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-     ORDER BY package_number`
+     WHERE package_number = ANY($1::text[])
+     ORDER BY package_number`,
+    [targetNumbers]
   );
 }
 
@@ -229,11 +235,19 @@ describe('migration 0253 PostgreSQL state classification', () => {
 
   it('passes when unrelated packages exist but no historical candidates match', async () => {
     await insertPackage('ESV-2026-0999');
+    await insertPackage('ESV-2026-00020');
     await runMigration();
     expect(
       (
         await client.query(
           "SELECT status FROM qms_epoch_validation_packages WHERE package_number='ESV-2026-0999'"
+        )
+      ).rows[0].status
+    ).toBe('DRAFT');
+    expect(
+      (
+        await client.query(
+          "SELECT status FROM qms_epoch_validation_packages WHERE package_number='ESV-2026-00020'"
         )
       ).rows[0].status
     ).toBe('DRAFT');
@@ -272,6 +286,34 @@ describe('migration 0253 PostgreSQL state classification', () => {
         )
       ).rows[0].evidence
     ).toBe('authoritative evidence');
+  });
+
+  it('preserves append-only creation evidence while adding one cleanup event', async () => {
+    await seedExactDraftSet();
+    await client.query(
+      `
+      INSERT INTO qms_epoch_validation_events (
+        package_id, entity_type, action, actor_user_id, actor_display_name,
+        actor_role, package_revision
+      )
+      SELECT id, 'PACKAGE', 'PACKAGE_CREATED', 101, 'Original Creator',
+             'VALIDATION_AUTHOR', 1
+      FROM qms_epoch_validation_packages
+      WHERE package_number = ANY($1::text[])
+    `,
+      [targetNumbers]
+    );
+    await runMigration();
+    const eventCounts = await client.query(`
+      SELECT action, count(*)::int count
+      FROM qms_epoch_validation_events
+      GROUP BY action
+      ORDER BY action
+    `);
+    expect(eventCounts.rows).toEqual([
+      { action: 'PACKAGE_CREATED', count: 13 },
+      { action: 'PACKAGE_VOIDED_DUPLICATE', count: 13 },
+    ]);
   });
 
   it('is idempotent on second execution without duplicate audit evidence', async () => {
@@ -334,6 +376,20 @@ describe('migration 0253 PostgreSQL state classification', () => {
     ).toHaveLength(0);
   });
 
+  it('fails closed on mixed pre-cleanup and completed states', async () => {
+    await seedExactDraftSet();
+    await client.query(`
+      UPDATE qms_epoch_validation_packages
+      SET status = 'VOID_DUPLICATE', locked_at = now(), revision = 2,
+          row_version = 2,
+          updated_by_display_name = 'migration 0253 (user-authorized duplicate cleanup)'
+      WHERE package_number = 'ESV-2026-0002'
+    `);
+    const before = (await targetState()).rows;
+    await expectMigrationFailure(/lifecycle is mixed or unsafe/);
+    expect((await targetState()).rows).toEqual(before);
+  });
+
   it('fails closed when a draft has edit or lifecycle evidence', async () => {
     await seedExactDraftSet();
     await client.query(
@@ -376,6 +432,72 @@ describe('migration 0253 PostgreSQL state classification', () => {
       (
         await client.query(
           'SELECT count(*)::int count FROM qms_epoch_validation_events'
+        )
+      ).rows[0].count
+    ).toBe(0);
+  });
+
+  it('rejects contradictory completed audit evidence without mutation', async () => {
+    await seedExactDraftSet();
+    await runMigration();
+    await client.query(`
+      UPDATE qms_epoch_validation_events
+      SET actor_role = 'UNAUTHORIZED_ACTOR'
+      WHERE package_id = 'ESV-2026-0002'
+        AND action = 'PACKAGE_VOIDED_DUPLICATE'
+    `);
+    const before = (await targetState()).rows;
+    await expectMigrationFailure(/exact duplicate-void migration evidence/);
+    expect((await targetState()).rows).toEqual(before);
+    expect(
+      (
+        await client.query(
+          "SELECT count(*)::int count FROM qms_epoch_validation_events WHERE action='PACKAGE_VOIDED_DUPLICATE'"
+        )
+      ).rows[0].count
+    ).toBe(13);
+  });
+
+  it('serializes concurrent executions and writes one cleanup event per target', async () => {
+    await seedExactDraftSet();
+    await client.query('COMMIT');
+    const second = await pool.connect();
+    try {
+      await client.query(`SET search_path TO ${schema}, public`);
+      await second.query(`SET search_path TO ${schema}, public`);
+      await Promise.all([client.query(migration), second.query(migration)]);
+      expect(
+        (
+          await client.query(
+            "SELECT count(*)::int count FROM qms_epoch_validation_events WHERE action='PACKAGE_VOIDED_DUPLICATE'"
+          )
+        ).rows[0].count
+      ).toBe(13);
+    } finally {
+      second.release();
+      await client.query(`DROP SCHEMA ${schema} CASCADE`);
+      await client.query('BEGIN');
+    }
+  });
+
+  it('rolls back every package update when audit insertion faults', async () => {
+    await seedExactDraftSet();
+    await client.query(`
+      CREATE FUNCTION reject_cleanup_event() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'synthetic audit fault';
+      END $$;
+      CREATE TRIGGER reject_cleanup_event
+      BEFORE INSERT ON qms_epoch_validation_events
+      FOR EACH ROW EXECUTE FUNCTION reject_cleanup_event()
+    `);
+    const before = (await targetState()).rows;
+    await expectMigrationFailure(/synthetic audit fault/);
+    expect((await targetState()).rows).toEqual(before);
+    expect(
+      (
+        await client.query(
+          "SELECT count(*)::int count FROM qms_epoch_validation_events WHERE action='PACKAGE_VOIDED_DUPLICATE'"
         )
       ).rows[0].count
     ).toBe(0);

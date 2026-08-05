@@ -20,8 +20,10 @@ describe('EPOCH validation duplicate cleanup', () => {
   it('preserves 0001 and classifies empty, complete, safe, and ambiguous states', () => {
     expect(migration).toContain("package_number = 'ESV-2026-0001'");
     expect(migration).toContain(
-      "package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'"
+      "'ESV-2026-0002', 'ESV-2026-0003', 'ESV-2026-0004'"
     );
+    expect(migration).not.toContain('package_number BETWEEN');
+    expect(migration).toContain('package_number = ANY(target_numbers)');
     expect(migration).toContain('candidate_count = 0');
     expect(migration).toContain('candidate_count <> 13');
     expect(migration).toContain('NOTHING_TO_DO');
@@ -49,7 +51,12 @@ describe('EPOCH validation duplicate cleanup', () => {
     expect(migration).toContain('matching_authority_count <> 1');
     expect(migration).toContain('revision <> 1');
     expect(migration).toContain('row_version <> 1');
-    expect(migration).toContain('completed_event_count <> 13');
+    expect(migration).toContain(
+      'completed_event_count <> cardinality(target_numbers)'
+    );
+    expect(migration).toContain("actor_role = 'SYSTEM_MAINTENANCE'");
+    expect(migration).toContain("updated_by_display_name <> 'migration 0253");
+    expect(migration).toContain('SELECT count(*)');
   });
 
   it('registers migration 0253 in both safe and critical boot lists', () => {

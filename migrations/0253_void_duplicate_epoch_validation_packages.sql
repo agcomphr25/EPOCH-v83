@@ -15,8 +15,14 @@
 
 DO $migration$
 DECLARE
+  target_numbers constant text[] := ARRAY[
+    'ESV-2026-0002', 'ESV-2026-0003', 'ESV-2026-0004',
+    'ESV-2026-0005', 'ESV-2026-0006', 'ESV-2026-0007',
+    'ESV-2026-0008', 'ESV-2026-0009', 'ESV-2026-0010',
+    'ESV-2026-0011', 'ESV-2026-0012', 'ESV-2026-0013',
+    'ESV-2026-0014'
+  ];
   candidate_count integer;
-  missing_expected_count integer;
   draft_count integer;
   void_count integer;
   authored_count integer;
@@ -31,6 +37,8 @@ BEGIN
 
   PERFORM id
   FROM qms_epoch_validation_packages
+  WHERE package_number = 'ESV-2026-0001'
+     OR package_number = ANY(target_numbers)
   ORDER BY package_number
   FOR UPDATE;
 
@@ -40,48 +48,53 @@ BEGIN
     count(*) FILTER (WHERE status = 'VOID_DUPLICATE')
   INTO candidate_count, draft_count, void_count
   FROM qms_epoch_validation_packages
-  WHERE package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014';
+  WHERE package_number = ANY(target_numbers);
 
   IF candidate_count = 0 THEN
     RAISE NOTICE '0253 state NOTHING_TO_DO: no historical duplicate candidates found';
     RETURN;
   END IF;
 
-  IF candidate_count <> 13 THEN
+  IF candidate_count <> cardinality(target_numbers) THEN
     RAISE EXCEPTION
       '0253 state AMBIGUOUS_STOP: expected either zero or all 13 target packages ESV-2026-0002 through ESV-2026-0014; found %',
       candidate_count;
   END IF;
 
-  SELECT count(*) INTO missing_expected_count
-  FROM generate_series(2, 14) expected(suffix)
-  WHERE NOT EXISTS (
-    SELECT 1
-    FROM qms_epoch_validation_packages p
-    WHERE p.package_number =
-      'ESV-2026-' || lpad(expected.suffix::text, 4, '0')
-  );
-
-  IF missing_expected_count <> 0 THEN
-    RAISE EXCEPTION
-      '0253 state AMBIGUOUS_STOP: target range contains 13 rows but % exact expected package numbers are missing',
-      missing_expected_count;
-  END IF;
-
   IF void_count = 13 THEN
     SELECT count(*) INTO completed_event_count
     FROM qms_epoch_validation_packages p
-    WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
+    WHERE p.package_number = ANY(target_numbers)
       AND EXISTS (
         SELECT 1
         FROM qms_epoch_validation_events e
         WHERE e.package_id = p.id
           AND e.action = 'PACKAGE_VOIDED_DUPLICATE'
+          AND e.actor_display_name = 'migration 0253 (user-authorized duplicate cleanup)'
+          AND e.actor_role = 'SYSTEM_MAINTENANCE'
       );
 
-    IF completed_event_count <> 13 THEN
+    IF completed_event_count <> cardinality(target_numbers) OR EXISTS (
+      SELECT 1
+      FROM qms_epoch_validation_packages p
+      WHERE p.package_number = ANY(target_numbers)
+        AND (
+          p.locked_at IS NULL
+          OR p.updated_by_display_name <> 'migration 0253 (user-authorized duplicate cleanup)'
+          OR p.revision < 2
+          OR p.row_version < 2
+          OR 1 <> (
+            SELECT count(*)
+            FROM qms_epoch_validation_events e
+            WHERE e.package_id = p.id
+              AND e.action = 'PACKAGE_VOIDED_DUPLICATE'
+              AND e.actor_display_name = 'migration 0253 (user-authorized duplicate cleanup)'
+              AND e.actor_role = 'SYSTEM_MAINTENANCE'
+          )
+        )
+    ) THEN
       RAISE EXCEPTION
-        '0253 state AMBIGUOUS_STOP: all targets are VOID_DUPLICATE but only % retain duplicate-void audit evidence',
+        '0253 state AMBIGUOUS_STOP: all targets are VOID_DUPLICATE but only % retain exact duplicate-void migration evidence',
         completed_event_count;
     END IF;
 
@@ -110,7 +123,7 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM qms_epoch_validation_packages p
-    WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
+    WHERE p.package_number = ANY(target_numbers)
       AND (
         p.revision <> 1
         OR p.row_version <> 1
@@ -126,7 +139,7 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM qms_epoch_validation_packages p
-    WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
+    WHERE p.package_number = ANY(target_numbers)
       AND ROW(
         p.title,
         p.system_name,
@@ -177,7 +190,7 @@ BEGIN
 
   SELECT count(*) INTO matching_authority_count
   FROM qms_epoch_validation_packages p
-  WHERE NOT (p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014')
+  WHERE NOT (p.package_number = ANY(target_numbers))
     AND p.status <> 'VOID_DUPLICATE'
     AND ROW(
       p.title,
@@ -231,20 +244,20 @@ BEGIN
 
   SELECT sum(row_count) INTO authored_count
   FROM (
-    SELECT count(*) row_count FROM qms_epoch_validation_intended_use_revisions r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_intended_use_functions r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_responsibilities r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_requirements r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_risks r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_plans r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_protocols r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_executions r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_evidence r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_defects r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_approvals r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_snapshots r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_periodic_reviews r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
-    UNION ALL SELECT count(*) FROM qms_epoch_validation_events e JOIN qms_epoch_validation_packages p ON p.id = e.package_id WHERE p.package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014' AND e.action <> 'PACKAGE_CREATED'
+    SELECT count(*) row_count FROM qms_epoch_validation_intended_use_revisions r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_intended_use_functions r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_responsibilities r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_requirements r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_risks r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_plans r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_protocols r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_executions r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_evidence r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_defects r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_approvals r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_snapshots r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_periodic_reviews r JOIN qms_epoch_validation_packages p ON p.id = r.package_id WHERE p.package_number = ANY(target_numbers)
+    UNION ALL SELECT count(*) FROM qms_epoch_validation_events e JOIN qms_epoch_validation_packages p ON p.id = e.package_id WHERE p.package_number = ANY(target_numbers) AND e.action <> 'PACKAGE_CREATED'
   ) authored;
 
   IF authored_count <> 0 THEN
@@ -261,7 +274,7 @@ BEGIN
         revision = revision + 1,
         updated_at = now(),
         updated_by_display_name = 'migration 0253 (user-authorized duplicate cleanup)'
-    WHERE package_number BETWEEN 'ESV-2026-0002' AND 'ESV-2026-0014'
+    WHERE package_number = ANY(target_numbers)
       AND status = 'DRAFT'
     RETURNING *
   ), inserted_events AS (

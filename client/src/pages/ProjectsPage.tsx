@@ -116,7 +116,7 @@ export default function ProjectsPage() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [customerFilter, setCustomerFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('active_only');
+  const [statusFilter, setStatusFilter] = useState<string>('active');
   const [closingFilter, setClosingFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [generatingFeedbackFor, setGeneratingFeedbackFor] = useState<string | null>(null);

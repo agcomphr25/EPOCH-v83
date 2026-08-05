@@ -30,6 +30,7 @@ import {
   numeric,
   index,
   uniqueIndex,
+  foreignKey,
   serial,
   varchar,
   doublePrecision,
@@ -12659,9 +12660,10 @@ export const designControlFormTemplateRevisions = pgTable(
       .references(() => designControlFormTemplates.id, { onDelete: 'restrict' })
       .notNull(),
     documentVersionHistoryId: uuid('document_version_history_id')
-      .references(() => documentVersionHistory.id, { onDelete: 'restrict' })
       .notNull()
-      .unique(),
+      .unique(
+        'design_control_form_template_re_document_version_history_id_key'
+      ),
     templateRevisionSequence: integer('template_revision_sequence').notNull(),
     templateSchemaVersion: text('template_schema_version').notNull(),
     rendererVersion: text('renderer_version').notNull(),
@@ -12685,6 +12687,11 @@ export const designControlFormTemplateRevisions = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => ({
+    documentVersionHistoryFk: foreignKey({
+      name: 'design_control_form_template_r_document_version_history_id_fkey',
+      columns: [table.documentVersionHistoryId],
+      foreignColumns: [documentVersionHistory.id],
+    }).onDelete('restrict'),
     templateRevisionUnique: uniqueIndex(
       'design_control_form_template_revisions_sequence_unique'
     ).on(table.designControlFormTemplateId, table.templateRevisionSequence),

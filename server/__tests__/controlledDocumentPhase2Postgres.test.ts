@@ -190,12 +190,12 @@ async function mutationSnapshot(fixture: Fixture) {
        (SELECT count(*)::int FROM controlled_document_approval_release_events
         WHERE revision_id = $1) AS release_events,
        (SELECT count(*)::int FROM audit_events
-        WHERE subject_type = 'controlled_document' AND subject_id = $2) AS audits
+        WHERE subject_type = 'controlled_document' AND subject_id = $2::text) AS audits
      FROM controlled_documents document
      JOIN document_version_history revision ON revision.id = $1
      JOIN controlled_document_number_registry registry
        ON registry.controlled_document_id = document.id
-     WHERE document.id = $2`,
+     WHERE document.id = $2::uuid`,
     [fixture.revisionId, fixture.documentId]
   );
   return result.rows[0];
@@ -204,8 +204,14 @@ async function mutationSnapshot(fixture: Fixture) {
 async function restoreApprovalChecksumSchema() {
   await pgPool.query(
     `ALTER TABLE controlled_document_revision_approvals
-       ALTER COLUMN file_checksum DROP NOT NULL,
-       ADD COLUMN IF NOT EXISTS checksum_verification_status text,
+       ALTER COLUMN file_checksum DROP NOT NULL`
+  );
+  await pgPool.query(
+    `ALTER TABLE controlled_document_revision_approvals
+       ADD COLUMN IF NOT EXISTS checksum_verification_status text`
+  );
+  await pgPool.query(
+    `ALTER TABLE controlled_document_revision_approvals
        ALTER COLUMN checksum_verification_status DROP DEFAULT`
   );
   await pgPool.query(
@@ -468,7 +474,7 @@ describe('controlled-document Phase 2 PostgreSQL 16.4 certification', () => {
   it('fails readiness for a malformed checksum status default or constraint', async () => {
     await pgPool.query(
       `ALTER TABLE controlled_document_revision_approvals
-       DROP CONSTRAINT controlled_document_revision_approvals_checksum_status_check,
+       DROP CONSTRAINT IF EXISTS controlled_document_revision_approvals_checksum_status_check,
        ALTER COLUMN checksum_verification_status SET DEFAULT 'UNVERIFIED'`
     );
     await pgPool.query(

@@ -92,6 +92,14 @@ const sendLifecycleError = (
       .json({ error: error.code, message: error.message, ...error.details });
     return;
   }
+  if (error instanceof ControlledDocumentSchemaNotReadyError) {
+    res.status(503).json({
+      error: error.code,
+      message: error.message,
+      missingObjects: error.missingObjects,
+    });
+    return;
+  }
   console.error(fallback, error);
   res
     .status(500)
@@ -280,6 +288,25 @@ const verifyStoredRevision = async (
 type ControlledDocumentRecord = typeof controlledDocuments.$inferSelect;
 type ControlledRevisionRecord = typeof documentVersionHistory.$inferSelect;
 
+const recordControlledDocumentDenial = async (
+  req: Request,
+  documentId: string,
+  actor: { username: string },
+  ipAddress: string
+) => {
+  const requestState = req as Request & {
+    controlledDocumentDeniedAccessLogged?: boolean;
+  };
+  if (requestState.controlledDocumentDeniedAccessLogged) return;
+  await writeAccessLog({
+    documentId,
+    userId: actor.username,
+    action: 'denied',
+    ipAddress,
+  });
+  requestState.controlledDocumentDeniedAccessLogged = true;
+};
+
 const isPrivilegedDocumentActor = (actor: { role: string }) =>
   actor.role === 'ADMIN' || actor.role === 'OWNER';
 
@@ -369,12 +396,12 @@ const getReleasedRevisionForControlledUse = async (
 ) => {
   if (!document.currentReleasedRevisionId) {
     const actor = lifecycleActor(req);
-    await writeAccessLog({
-      documentId: document.id,
-      userId: actor.username,
-      action: 'denied',
-      ipAddress: requestEvidence(req).ipAddress ?? 'unknown',
-    });
+    await recordControlledDocumentDenial(
+      req,
+      document.id,
+      actor,
+      requestEvidence(req).ipAddress ?? 'unknown'
+    );
     throw new ControlledDocumentError(
       409,
       'NO_RELEASED_REVISION',
@@ -386,12 +413,12 @@ const getReleasedRevisionForControlledUse = async (
   );
   if (!revision || revision.documentId !== document.id) {
     const actor = lifecycleActor(req);
-    await writeAccessLog({
-      documentId: document.id,
-      userId: actor.username,
-      action: 'denied',
-      ipAddress: requestEvidence(req).ipAddress ?? 'unknown',
-    });
+    await recordControlledDocumentDenial(
+      req,
+      document.id,
+      actor,
+      requestEvidence(req).ipAddress ?? 'unknown'
+    );
     await recordAuditEvent({
       eventType: 'CONTROLLED_DOCUMENT_RELEASE_POINTER_INVALID',
       subjectType: 'controlled_document',
@@ -512,9 +539,28 @@ const getImportedFileReference = (filePath: string | null | undefined) => {
   return null;
 };
 
+const hasUnsafeControlledDocumentEncoding = (value: string) => {
+  let decoded = value;
+  for (let pass = 0; pass < 3; pass += 1) {
+    if (decoded.includes('\0')) return true;
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      return true;
+    }
+  }
+  if (decoded.includes('\0')) return true;
+  return decoded
+    .replace(/\\/g, '/')
+    .split('/')
+    .some((segment) => segment === '..');
+};
+
 const resolveControlledDocumentFile = (filePath: string | null | undefined) => {
   const trimmed = String(filePath || '').trim();
-  if (!trimmed) return null;
+  if (!trimmed || hasUnsafeControlledDocumentEncoding(trimmed)) return null;
 
   const centralMediaRoot = path.resolve(
     process.cwd(),
@@ -1930,13 +1976,7 @@ router.get(
             [doc.id, actor.username, actor.role]
           );
           if (grantCheck.rows.length === 0) {
-            // Write denied log entry — never silently discard
-            await writeAccessLog({
-              documentId: doc.id,
-              userId: actor.username,
-              action: 'denied',
-              ipAddress,
-            });
+            await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
             return res.status(403).json({
               error: 'Access denied: insufficient clearance for this document',
             });
@@ -1953,6 +1993,7 @@ router.get(
       const authoritativeFilePath = revision.filePath;
 
       if (!authoritativeFilePath) {
+        await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(422).json({
           error: 'FILE_REFERENCE_MISSING',
           message: 'No file reference is attached to this document',
@@ -1961,12 +2002,7 @@ router.get(
 
       const externalRedirectUrl = getExternalRedirectUrl(authoritativeFilePath);
       if (externalRedirectUrl) {
-        await writeAccessLog({
-          documentId: doc.id,
-          userId: actor.username,
-          action: 'denied',
-          ipAddress,
-        });
+        await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(422).json({
           error: 'EXTERNAL_REFERENCE_REQUIRES_RECONCILIATION',
           message:
@@ -2006,6 +2042,7 @@ router.get(
 
       const filePath = resolveControlledDocumentFile(authoritativeFilePath);
       if (!filePath) {
+        await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(422).json({
           error: 'FILE_NOT_ACCESSIBLE',
           message: 'The file reference is not supported by this EPOCH server',
@@ -2013,6 +2050,7 @@ router.get(
       }
 
       if (path.extname(filePath).toLowerCase() !== '.pdf') {
+        await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(415).json({
           error: 'UNSUPPORTED_PREVIEW_TYPE',
           message: 'This file type cannot be previewed; use Download Original',
@@ -2045,6 +2083,12 @@ router.get(
       );
       res.send(stampedPdf);
     } catch (error) {
+      await recordControlledDocumentDenial(
+        req,
+        req.params.id,
+        actor,
+        ipAddress
+      );
       sendLifecycleError(res, error, 'Failed to view document');
     }
   }
@@ -2092,13 +2136,7 @@ router.get(
             [doc.id, actor.username, actor.role]
           );
           if (grantCheck.rows.length === 0) {
-            // Write denied log entry - never silently discard
-            await writeAccessLog({
-              documentId: doc.id,
-              userId: actor.username,
-              action: 'denied',
-              ipAddress,
-            });
+            await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
             return res.status(403).json({
               error: 'Access denied: insufficient clearance for this document',
             });
@@ -2115,6 +2153,7 @@ router.get(
       const authoritativeFilePath = revision.filePath;
 
       if (!authoritativeFilePath) {
+        await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(422).json({
           error: 'FILE_REFERENCE_MISSING',
           message: 'No file reference is attached to this document',
@@ -2123,12 +2162,7 @@ router.get(
 
       const externalRedirectUrl = getExternalRedirectUrl(authoritativeFilePath);
       if (externalRedirectUrl) {
-        await writeAccessLog({
-          documentId: doc.id,
-          userId: actor.username,
-          action: 'denied',
-          ipAddress,
-        });
+        await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(422).json({
           error: 'EXTERNAL_REFERENCE_REQUIRES_RECONCILIATION',
           message:
@@ -2168,6 +2202,7 @@ router.get(
 
       const filePath = resolveControlledDocumentFile(authoritativeFilePath);
       if (!filePath) {
+        await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(422).json({
           error: 'FILE_NOT_ACCESSIBLE',
           message: 'The file reference is not supported by this EPOCH server',
@@ -2224,6 +2259,12 @@ router.get(
       );
       res.send(buffer);
     } catch (error) {
+      await recordControlledDocumentDenial(
+        req,
+        req.params.id,
+        actor,
+        ipAddress
+      );
       sendLifecycleError(res, error, 'Failed to download document');
     }
   }

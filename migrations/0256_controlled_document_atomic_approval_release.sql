@@ -102,4 +102,26 @@ ALTER TABLE controlled_document_revision_approvals
 ALTER TABLE controlled_document_revision_approvals
   ADD COLUMN IF NOT EXISTS checksum_verification_status text;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'controlled_document_revision_approvals'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%checksum_verification_status%'
+      AND pg_get_constraintdef(oid) ILIKE '%VERIFIED%'
+      AND pg_get_constraintdef(oid) ILIKE '%UNAVAILABLE%'
+      AND pg_get_constraintdef(oid) ILIKE '%MISMATCH%'
+  ) THEN
+    ALTER TABLE controlled_document_revision_approvals
+      ADD CONSTRAINT controlled_document_revision_approvals_checksum_status_check
+      CHECK (
+        checksum_verification_status IS NULL
+        OR checksum_verification_status IN ('VERIFIED', 'UNAVAILABLE', 'MISMATCH')
+      );
+  END IF;
+END;
+$$;
+
 COMMIT;

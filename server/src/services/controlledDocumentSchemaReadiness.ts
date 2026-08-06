@@ -137,7 +137,21 @@ export async function assertControlledDocumentPhase2SchemaReady(
     UNION ALL SELECT 'column:controlled_document_revision_approvals.checksum_verification_status'
       WHERE NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public'
         AND table_name = 'controlled_document_revision_approvals' AND column_name = 'checksum_verification_status'
-        AND data_type = 'text' AND is_nullable = 'YES')
+        AND data_type = 'text' AND is_nullable = 'YES' AND column_default IS NULL)
+    UNION ALL SELECT 'column:controlled_document_revision_approvals.file_checksum'
+      WHERE NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public'
+        AND table_name = 'controlled_document_revision_approvals' AND column_name = 'file_checksum'
+        AND data_type = 'text' AND is_nullable = 'YES' AND column_default IS NULL)
+    UNION ALL SELECT 'constraint:controlled_document_revision_approvals.checksum_verification_status'
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = to_regclass('public.controlled_document_revision_approvals')
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%checksum_verification_status%'
+          AND pg_get_constraintdef(oid) ILIKE '%VERIFIED%'
+          AND pg_get_constraintdef(oid) ILIKE '%UNAVAILABLE%'
+          AND pg_get_constraintdef(oid) ILIKE '%MISMATCH%'
+      )
   `);
   const rows = (((result as any)?.rows ?? result) || []) as Array<{
     issue?: string;

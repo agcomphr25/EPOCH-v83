@@ -551,17 +551,12 @@ export async function prepareReleasedBlankPdf(input: {
     generatedAt: context.revision.createdAt,
   });
   const checksum = sha256Buffer(pdf);
-  const path = await getFileStorageProvider().uploadBuffer({
-    buffer: pdf,
-    fileName: `${context.revision.documentNumberSnapshot}-${context.revision.documentRevisionSnapshot}-blank.pdf`,
-    contentType: 'application/pdf',
-    scope: 'design-control-form-templates',
-    entityId: context.revision.id,
-  });
+  const path = `database://design-control-form-templates/${context.revision.id}/blank.pdf`;
   const [updated] = await db
     .update(designControlFormTemplateRevisions)
     .set({
       blankPdfPath: path,
+      blankPdfBase64: pdf.toString('base64'),
       blankPdfChecksum: checksum,
       blankPdfSize: pdf.length,
       blankPdfGeneratedAt: new Date(),
@@ -699,9 +694,18 @@ export async function getBlankFormArtifact(
         'Released blank form artifact is missing'
       );
     }
-    const buffer = await getFileStorageProvider().downloadBuffer(
-      context.revision.blankPdfPath
-    );
+    const buffer = context.revision.blankPdfPath.startsWith('database://')
+      ? Buffer.from(context.revision.blankPdfBase64 ?? '', 'base64')
+      : await getFileStorageProvider().downloadBuffer(
+          context.revision.blankPdfPath
+        );
+    if (!buffer.length || buffer.length !== context.revision.blankPdfSize) {
+      throw new ControlledDocumentError(
+        409,
+        'RELEASED_ARTIFACT_SIZE_MISMATCH',
+        'Retained released blank form failed size verification'
+      );
+    }
     if (sha256Buffer(buffer) !== context.revision.blankPdfChecksum) {
       throw new ControlledDocumentError(
         409,

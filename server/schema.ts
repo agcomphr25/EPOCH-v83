@@ -12700,6 +12700,7 @@ export const designControlFormTemplateRevisions = pgTable(
       .notNull()
       .default('DRAFT'),
     blankPdfPath: text('blank_pdf_path'),
+    blankPdfBase64: text('blank_pdf_base64'),
     blankPdfChecksum: text('blank_pdf_checksum'),
     blankPdfSize: integer('blank_pdf_size'),
     blankPdfGeneratedAt: timestamp('blank_pdf_generated_at'),

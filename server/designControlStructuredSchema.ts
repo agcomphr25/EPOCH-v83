@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -44,6 +45,10 @@ export const designControlProjectAccessPolicies = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    statusCheck: check(
+      'dc_project_access_policy_status_ck',
+      sql`${table.status} IN ('ACTIVE', 'DISABLED')`
+    ),
     projectRecordUnique: uniqueIndex(
       'dc_project_access_policy_record_project_uq'
     ).on(table.rdProjectId, table.designControlRecordId),
@@ -105,6 +110,18 @@ export const designControlProjectAssignments = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    roleCheck: check(
+      'dc_project_assignment_role_ck',
+      sql`${table.projectRole} IN ('DESIGN_AUTHORITY','PROJECT_MANAGER','QUALITY','MANUFACTURING','REVIEWER','CONTRIBUTOR','AUDITOR')`
+    ),
+    statusCheck: check(
+      'dc_project_assignment_status_ck',
+      sql`${table.status} IN ('ACTIVE','REVOKED','EXPIRED')`
+    ),
+    revocationCheck: check(
+      'dc_project_assignment_revocation_ck',
+      sql`(${table.status} = 'ACTIVE' AND ${table.revokedAt} IS NULL) OR (${table.status} <> 'ACTIVE' AND ${table.revokedAt} IS NOT NULL)`
+    ),
     activeUserUnique: uniqueIndex('dc_project_assignment_active_user_uq')
       .on(table.rdProjectId, table.userId)
       .where(sql`${table.status} = 'ACTIVE'`),
@@ -147,7 +164,13 @@ export const designControlProjectAssignmentEvents = pgTable(
     occurredAt: timestamp('occurred_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
-  }
+  },
+  (table) => ({
+    eventTypeCheck: check(
+      'dc_project_assignment_event_type_ck',
+      sql`${table.eventType} IN ('ASSIGNED','ROLE_CHANGED','REVOKED','ADMIN_OVERRIDE')`
+    ),
+  })
 );
 
 export const designControlStructuredRecordVersions = pgTable(
@@ -195,6 +218,18 @@ export const designControlStructuredRecordVersions = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    recordTypeCheck: check(
+      'dc_structured_version_type_ck',
+      sql`${table.recordType} IN ('REQUIREMENT','RISK','REVIEW','VERIFICATION','VALIDATION')`
+    ),
+    lifecycleStatusCheck: check(
+      'dc_structured_version_status_ck',
+      sql`${table.lifecycleStatus} IN ('DRAFT','SUBMITTED','APPROVED','REJECTED','RETURNED','SUPERSEDED')`
+    ),
+    versionCheck: check(
+      'dc_structured_version_number_ck',
+      sql`${table.version} > 0`
+    ),
     recordVersionUnique: uniqueIndex('dc_structured_version_record_uq').on(
       table.recordType,
       table.structuredRecordId,
@@ -243,6 +278,14 @@ export const designControlStructuredRecordDecisions = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    decisionCheck: check(
+      'dc_structured_decision_value_ck',
+      sql`${table.decision} IN ('APPROVED','REJECTED','RETURNED')`
+    ),
+    reasonCheck: check(
+      'dc_structured_decision_reason_ck',
+      sql`${table.decision} = 'APPROVED' OR coalesce(length(btrim(${table.decisionComment})), 0) > 0`
+    ),
     actorDecisionUnique: uniqueIndex('dc_structured_decision_actor_uq').on(
       table.versionId,
       table.actorUserId,
@@ -287,6 +330,14 @@ export const designControlStructuredRecordLinks = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    sourceTypeCheck: check(
+      'dc_structured_link_source_type_ck',
+      sql`${table.sourceRecordType} IN ('REQUIREMENT','RISK','REVIEW','VERIFICATION','VALIDATION')`
+    ),
+    targetTypeCheck: check(
+      'dc_structured_link_target_type_ck',
+      sql`${table.targetRecordType} IN ('REQUIREMENT','RISK','REVIEW','REVIEW_ACTION','DESIGN_OUTPUT','CONFIGURATION_ITEM','PART_REVISION','VERIFICATION','VALIDATION','NCR','ECR','ECN','ENGINEERING_RELEASE')`
+    ),
     linkUnique: uniqueIndex('dc_structured_link_uq').on(
       table.sourceRecordType,
       table.sourceRecordId,
@@ -350,6 +401,10 @@ export const designControlReviewActions = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    statusCheck: check(
+      'dc_review_action_status_ck',
+      sql`${table.status} IN ('OPEN','IN_PROGRESS','CLOSED','EXCEPTED')`
+    ),
     actionNumberUnique: uniqueIndex('dc_review_action_number_uq').on(
       table.reviewRecordId,
       table.actionNumber
@@ -385,7 +440,13 @@ export const designControlTraceabilitySnapshots = pgTable(
     capturedAt: timestamp('captured_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
-  }
+  },
+  (table) => ({
+    statusCheck: check(
+      'dc_trace_snapshot_status_ck',
+      sql`${table.snapshotStatus} = 'LOCKED'`
+    ),
+  })
 );
 
 export const designControlFinalReviewExceptions = pgTable(
@@ -417,7 +478,13 @@ export const designControlFinalReviewExceptions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
-  }
+  },
+  (table) => ({
+    statusCheck: check(
+      'dc_final_review_exception_status_ck',
+      sql`${table.status} IN ('APPROVED','EXPIRED','REVOKED')`
+    ),
+  })
 );
 
 export const designControlFinalReviewSnapshots = pgTable(
@@ -458,6 +525,10 @@ export const designControlFinalReviewSnapshots = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    statusCheck: check(
+      'dc_final_review_snapshot_status_ck',
+      sql`${table.readinessStatus} = 'COMPLETE'`
+    ),
     reviewVersionUnique: uniqueIndex('dc_final_review_snapshot_review_uq').on(
       table.reviewVersionId
     ),

@@ -47,6 +47,7 @@ import { createInventoryEvent } from '../services/inventoryEventService';
 import { recordInventoryLedgerEntry } from '../services/inventoryTransactionLedgerService';
 import { ensureInventoryItemForReceipt } from '../services/ensureInventoryItemForReceipt';
 import { syncLinkedPartsRequestsReceivedForVendorPo } from '../services/partsRequestVendorPoSyncService';
+import { previewReceiptReversal, ReceiptReversalError, reverseReceipt } from '../services/receiptReversalService';
 
 const router = Router();
 
@@ -73,6 +74,7 @@ function uploadReceiptDocument(req: Request, res: Response, next: NextFunction) 
 // All authenticated employees (ADMIN, EMPLOYEE, OWNER) may perform receiving operations.
 // Applied to all mutating endpoints at the route level for defence-in-depth beyond global auth.
 const requireReceivingAccess = requireRole('ADMIN', 'EMPLOYEE', 'OWNER');
+const requireReceiptReversalAccess = requireRole('ADMIN', 'OWNER');
 
 const RECEIVING_MEDIA_FOLDER_NAME = 'Receiving';
 const RECEIVING_MEDIA_STORAGE_DIR = path.join('uploads', 'media-library', 'receiving');
@@ -836,6 +838,35 @@ router.get('/:id', requireReceivingAccess, async (req: Request, res: Response) =
   } catch (err: any) {
     console.error('GET /api/receipts/:id:', err);
     res.status(500).json({ error: 'Failed to fetch receipt' });
+  }
+});
+
+router.get('/:id/reversal-preview', requireReceiptReversalAccess, async (req: Request, res: Response) => {
+  try {
+    res.json(await previewReceiptReversal(parseInt(req.params.id, 10)));
+  } catch (err: any) {
+    const status = err instanceof ReceiptReversalError ? err.status : 500;
+    res.status(status).json({ error: err.message ?? 'Failed to preview receipt reversal', blockers: err.blockers ?? [] });
+  }
+});
+
+router.post('/:id/reverse', requireReceiptReversalAccess, async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    const result = await reverseReceipt(parseInt(req.params.id, 10), String(req.body?.reason ?? ''), {
+      userId: user?.id ?? null,
+      employeeId: user?.employeeId ?? null,
+      displayName: actorName(user),
+    });
+    if (result.vendorPoStatus && result.vendorPoStatus !== 'Fully Received') {
+      const [receipt] = await db.select({ vendorPoId: receipts.vendorPoId }).from(receipts).where(eq(receipts.id, parseInt(req.params.id, 10)));
+      if (receipt?.vendorPoId) await syncLinkedPartsRequestsReceivedForVendorPo(receipt.vendorPoId, actorName(user));
+    }
+    res.json(result);
+  } catch (err: any) {
+    console.error('POST /api/receipts/:id/reverse:', err);
+    const status = err instanceof ReceiptReversalError ? err.status : 500;
+    res.status(status).json({ error: err.message ?? 'Failed to reverse receipt', blockers: err.blockers ?? [] });
   }
 });
 

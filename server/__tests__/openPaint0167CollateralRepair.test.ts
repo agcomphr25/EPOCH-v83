@@ -1,19 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { safeMigrationFiles } from '../scripts/migrations/runSafeBootMigrations';
 
 const root = path.resolve(import.meta.dirname, '../..');
 
 describe('open Paint orders after migration 0167 collateral', () => {
-  it('guards 0167 from overwriting an open active-department transition', () => {
-    const sql = fs.readFileSync(
-      path.join(root, 'migrations/0167_repair_customer_signature_fulfilled_orders.sql'),
-      'utf8',
-    );
-
-    expect(sql).toContain("transition.exited_at IS NULL");
-    expect(sql).toContain("transition.entity_type = 'p1_order'");
-    expect(sql).toContain("transition.department NOT IN");
+  it('retires migration 0167 while retaining its corrective evidence', () => {
+    const retiredMigration = '0167_repair_customer_signature_fulfilled_orders.sql';
+    expect(fs.existsSync(path.join(root, 'migrations', retiredMigration))).toBe(false);
+    expect(safeMigrationFiles).not.toContain(retiredMigration);
   });
 
   it('repairs only the four audited orders with open Paint transitions', () => {

@@ -184,9 +184,6 @@ const MarketingCommunications = React.lazy(
 const EmailTemplateEditor = React.lazy(
   () => import('./pages/EmailTemplateEditor')
 );
-const SignOrderPageSettings = React.lazy(
-  () => import('./pages/SignOrderPageSettings')
-);
 const APJournalPage = React.lazy(() => import('./pages/APJournalPage'));
 const ARJournalPage = React.lazy(() => import('./pages/ARJournalPage'));
 const InvoicesPage = React.lazy(() => import('./pages/InvoicesPage'));
@@ -657,7 +654,6 @@ const MetalAccessoriesTracker = React.lazy(
 const DocumentIntelligence = React.lazy(
   () => import('./pages/DocumentIntelligence')
 );
-const SignOrderPage = React.lazy(() => import('./pages/SignOrderPage'));
 const FillAndSignPage = React.lazy(() => import('./pages/FillAndSignPage'));
 const QRCodeAdminPage = React.lazy(() => import('./pages/QRCodeAdminPage'));
 const QRErrorPage = React.lazy(() => import('./pages/QRErrorPage'));
@@ -890,7 +886,6 @@ function ConditionalNavigation() {
     location === '/staciw-dashboard' ||
     location === '/admin-dashboard-preview' ||
     location === '/login' ||
-    location.startsWith('/sign-order') || // Hide navigation on customer sign order page
     location.startsWith('/fill-and-sign') || // Hide navigation on customer fill-and-sign page
     location.startsWith('/tv-display') || // Hide navigation on TV display page
     location.startsWith('/tv-timer-board') || // Hide navigation on timer board page
@@ -1869,10 +1864,6 @@ function App() {
                           component={EmailTemplateEditor}
                         />
                         <Route
-                          path="/sign-order-page-settings"
-                          component={SignOrderPageSettings}
-                        />
-                        <Route
                           path="/enhanced-forms"
                           component={EnhancedFormsPage}
                         />
@@ -2503,13 +2494,6 @@ function App() {
                           path="/shipping/label/:orderId"
                           component={ShippingLabelPage}
                         />
-
-                        {/* Sign Order Routes - Public routes for customers */}
-                        <Route
-                          path="/sign-order/:token"
-                          component={SignOrderPage}
-                        />
-                        <Route path="/sign-order" component={SignOrderPage} />
 
                         <Route
                           path="/command-center"

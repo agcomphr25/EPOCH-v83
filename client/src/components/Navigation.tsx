@@ -880,12 +880,6 @@ export default function Navigation() {
       icon: FileText,
       description: 'Manage governed email templates',
     },
-    {
-      path: '/sign-order-page-settings',
-      label: 'Sign Order Page',
-      icon: FileText,
-      description: 'Customize sign order page content',
-    },
   ];
 
   const qcMaintenanceItems = [

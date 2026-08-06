@@ -107,7 +107,6 @@ import linkedOrdersRoutes from './linkedOrders';
 import googleOAuthRoutes from './googleOAuth';
 import microsoftAuthRoutes from './microsoftAuth';
 import gmailRoutes from './gmail';
-import followupOrdersRoutes from './followupOrders';
 import cuttingTableRoutes from './cuttingTable';
 import controlledDocumentsRoutes from './controlledDocuments';
 import controlledDocumentReconciliationRoutes from './controlledDocumentReconciliation';
@@ -243,7 +242,6 @@ import { widgetTypesRouter, dashboardsRouter } from './widgets';
 import unitsRouter from './units';
 import materialIntelligenceRoutes from './materialIntelligence';
 import emailTemplatesRoutes from './emailTemplates';
-import signOrderSettingsRoutes from './signOrderSettings';
 import arInvoicesRoutes from './arInvoices';
 import arPaymentsRoutes from './arPayments';
 import arPaymentAttachmentsRoutes from './arPaymentAttachments';
@@ -1449,7 +1447,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/email-templates', emailTemplatesRoutes);
 
   // Sign order page settings (GET is public, PUT requires auth)
-  app.use('/api/sign-order-settings', signOrderSettingsRoutes);
 
   // Marketing communications routes
   app.use('/api/marketing', marketingRoutes);
@@ -1568,7 +1565,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/linked-orders', linkedOrdersRoutes);
 
   // Follow-up orders routes
-  app.use('/api/followup-orders', followupOrdersRoutes);
 
   // Fillable PDF Templates routes
   app.use('/api/fillable-pdf-templates', fillablePdfTemplatesRoutes);

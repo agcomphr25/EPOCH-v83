@@ -1,24 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  criticalMigrationFiles,
-  safeMigrationFiles,
-} from '../scripts/migrations/runSafeBootMigrations';
+import { criticalMigrationFiles, safeMigrationFiles } from '../scripts/migrations/runSafeBootMigrations';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const repairMigration = '0257_restore_shipping_qc_after_0171_replay.sql';
 
 describe('Shipping QC migration 0171 replay repair', () => {
-  it('does not move Shipping QC orders back to P1 Production Queue', () => {
-    const sql = fs.readFileSync(
-      path.join(root, 'migrations/0171_all_orders_finalize_to_p1_queue.sql'),
-      'utf8',
-    );
-
-    expect(sql).not.toContain("current_department IN ('P1 Production Queue', 'Shipping QC')");
-    expect(sql).not.toMatch(/current_department\s*=\s*'Shipping QC'[\s\S]*current_department\s*=\s*'P1 Production Queue'/);
-    expect(sql).toContain("current_department = 'Awaiting Customer ' || 'Signature'");
+  it('retires the obsolete migration that moved Shipping QC orders backward', () => {
+    const retiredMigration = '0171_all_orders_finalize_to_p1_queue.sql';
+    expect(fs.existsSync(path.join(root, 'migrations', retiredMigration))).toBe(false);
+    expect(safeMigrationFiles).not.toContain(retiredMigration);
+    expect(criticalMigrationFiles.has(retiredMigration)).toBe(false);
   });
 
   it('restores only unambiguous open Shipping QC transitions and records evidence', () => {
@@ -39,8 +32,9 @@ describe('Shipping QC migration 0171 replay repair', () => {
     expect(sql).not.toMatch(/DELETE\s+FROM/i);
   });
 
-  it('runs the restoration as a critical safe-boot migration', () => {
-    expect(safeMigrationFiles).toContain(repairMigration);
-    expect(criticalMigrationFiles.has(repairMigration)).toBe(true);
+  it('preserves the repair SQL as evidence without replaying it at boot', () => {
+    expect(fs.existsSync(path.join(root, 'migrations', repairMigration))).toBe(true);
+    expect(safeMigrationFiles).not.toContain(repairMigration);
+    expect(criticalMigrationFiles.has(repairMigration)).toBe(false);
   });
 });

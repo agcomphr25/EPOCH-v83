@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -414,13 +414,25 @@ function DispositionDialog({
   );
 }
 
-function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
+function RmaRow({
+  rma,
+  onUpdated,
+  reveal,
+}: {
+  rma: Rma;
+  onUpdated: () => void;
+  reveal?: boolean;
+}) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [materials, setMaterials] = useState<TraceableMaterial[]>(
     rma.rma.traceableMaterials || []
   );
   const [newMaterial, setNewMaterial] = useState<TraceableMaterial>({ name: '', lot: '', qty: '' });
+
+  useEffect(() => {
+    if (reveal) setExpanded(true);
+  }, [reveal]);
 
   const { data: inventoryItems = [] } = useQuery<InventoryItemOption[]>({
     queryKey: ['/api/inventory/items/part-numbers'],
@@ -642,6 +654,8 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
 export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOIds?: number[] } = {}) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<ScrappedItem | null>(null);
+  const [activeTab, setActiveTab] = useState('items');
+  const [revealedRmaId, setRevealedRmaId] = useState<number | null>(null);
 
   const { data: openNcrItemsRaw = [], isLoading, isError, error, refetch: refetchItems } = useQuery<ScrappedItem[]>({
     queryKey: ['/api/p2/serialized-items/scrapped'],
@@ -722,7 +736,7 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
         />
       )}
 
-      <Tabs defaultValue="items" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="items" className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
@@ -810,6 +824,12 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
                       {filtered.map((item) => {
                         const hasDispo = !!item.disposition;
                         const isResolved = item.disposition?.resolved;
+                        const linkedRma = item.disposition?.dispositionType === 'Repair'
+                          ? rmas.find((entry) =>
+                              entry.rma.dispositionId === item.disposition?.id
+                              || entry.rma.serializedItemId === item.id
+                            )
+                          : undefined;
                         return (
                           <TableRow
                             key={item.id}
@@ -850,7 +870,7 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
                               {formatDateTime(item.scrapAt)}
                             </TableCell>
                             <TableCell>
-                              {!hasDispo && (
+                              {!hasDispo ? (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -863,7 +883,25 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
                                   <ClipboardList className="h-3 w-3 mr-1" />
                                   File Disposition
                                 </Button>
-                              )}
+                              ) : linkedRma && !isResolved ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRevealedRmaId(linkedRma.rma.id);
+                                    setActiveTab('rmas');
+                                  }}
+                                >
+                                  <Wrench className="h-3 w-3 mr-1" />
+                                  Manage RMA
+                                </Button>
+                              ) : item.disposition?.dispositionType === 'Repair' && !isResolved ? (
+                                <Badge variant="destructive" className="text-xs whitespace-nowrap">
+                                  RMA record unavailable
+                                </Badge>
+                              ) : null}
                             </TableCell>
                           </TableRow>
                         );
@@ -912,6 +950,7 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
                     <RmaRow
                       key={rma.rma.id}
                       rma={rma}
+                      reveal={revealedRmaId === rma.rma.id}
                       onUpdated={() => {
                         refetchItems();
                         refetchRmas();

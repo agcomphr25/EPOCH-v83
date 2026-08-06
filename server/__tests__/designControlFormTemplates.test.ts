@@ -98,6 +98,23 @@ describe('Phase 4 controlled Design Control form templates', () => {
     expect(pdf.getPageCount()).toBeGreaterThan(0);
   });
 
+  it('renders every canonical released blank PDF without external storage', async () => {
+    const rendered = await Promise.all(
+      DESIGN_CONTROL_FORM_CATALOG.map((definition) =>
+        renderDesignControlBlankPdf({
+          templateRevisionId: '11111111-1111-4111-8111-111111111111',
+          definition,
+          documentNumber: definition.documentNumber,
+          documentRevision: '1.0',
+          lifecycleStatus: 'RELEASED',
+          generatedAt: new Date('2026-08-06T00:00:00.000Z'),
+        })
+      )
+    );
+    expect(rendered).toHaveLength(14);
+    expect(rendered.every((pdf) => pdf.length > 0)).toBe(true);
+  });
+
   it('uses additive idempotent migration protections without auto release or destructive legacy rewrite', () => {
     const migration = read('migrations/0211_design_control_form_templates.sql');
     expect(migration).toContain(
@@ -125,6 +142,15 @@ describe('Phase 4 controlled Design Control form templates', () => {
     expect(
       runner.match(/0211_design_control_form_templates\.sql/g)
     ).toHaveLength(2);
+  });
+
+  it('retains generated blank artifacts in the database without rewriting legacy storage paths', () => {
+    const migration = read(
+      'migrations/0259_design_control_form_template_database_artifacts.sql'
+    );
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS blank_pdf_base64');
+    expect(migration).toContain('NEW.blank_pdf_base64 IS DISTINCT FROM OLD.blank_pdf_base64');
+    expect(migration).not.toMatch(/UPDATE\s+design_control_form_template_revisions/i);
   });
 
   it('uses distinct stable PostgreSQL identifiers for the revision history constraints', () => {
@@ -177,6 +203,8 @@ describe('Phase 4 controlled Design Control form templates', () => {
     expect(service).toContain('Only the active RELEASED template revision');
     expect(service).toContain('LEGACY_TEMPLATE_RECONCILIATION_REQUIRED');
     expect(service).toContain('RELEASED_ARTIFACT_CHECKSUM_MISMATCH');
+    expect(service).toContain("pdf.toString('base64')");
+    expect(service).toContain("startsWith('database://')");
   });
 
   it('enforces literal template capabilities and authenticated route actors', () => {

@@ -319,6 +319,7 @@ export const safeMigrationFiles = [
   '0253_void_duplicate_epoch_validation_packages.sql',
   '0254_controlled_document_reconciliation_certification_controls.sql',
   '0255_p2_v2_definition_v3_handoff.sql',
+  '0257_restore_shipping_qc_after_0171_replay.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -388,6 +389,7 @@ export const criticalMigrationFiles = new Set([
   '0245_controlled_document_legacy_reconciliation.sql',
   '0250_epoch_validation_wizard_phase1.sql',
   '0255_p2_v2_definition_v3_handoff.sql',
+  '0257_restore_shipping_qc_after_0171_replay.sql',
 ]);
 
 export async function runSafeBootMigrations() {

@@ -228,6 +228,17 @@ async function restoreApprovalChecksumSchema() {
   );
 }
 
+async function restoreRevisionLifecycleConstraint() {
+  await pgPool.query(
+    `ALTER TABLE document_version_history
+       DROP CONSTRAINT IF EXISTS document_version_history_lifecycle_check,
+       ADD CONSTRAINT document_version_history_lifecycle_check
+       CHECK (lifecycle_status IN (
+         'DRAFT','IN_REVIEW','APPROVED','REJECTED','RELEASED','SUPERSEDED','OBSOLETE','VOID'
+       ))`
+  );
+}
+
 async function expectNoPhase2Mutation(fixture: Fixture) {
   const state = await mutationSnapshot(fixture);
   expect(state).toMatchObject({
@@ -494,6 +505,27 @@ describe('controlled-document Phase 2 PostgreSQL 16.4 certification', () => {
       });
     } finally {
       await restoreApprovalChecksumSchema();
+    }
+  });
+
+  it('fails readiness when the revision lifecycle constraint cannot represent rejection', async () => {
+    await pgPool.query(
+      `ALTER TABLE document_version_history
+       DROP CONSTRAINT document_version_history_lifecycle_check,
+       ADD CONSTRAINT document_version_history_lifecycle_check
+       CHECK (lifecycle_status IN ('DRAFT','RELEASED'))`
+    );
+    try {
+      await expect(
+        assertControlledDocumentPhase2SchemaReady()
+      ).rejects.toMatchObject({
+        code: 'CONTROLLED_DOCUMENT_SCHEMA_NOT_READY',
+        missingObjects: expect.arrayContaining([
+          'constraint:document_version_history.lifecycle_status',
+        ]),
+      });
+    } finally {
+      await restoreRevisionLifecycleConstraint();
     }
   });
 

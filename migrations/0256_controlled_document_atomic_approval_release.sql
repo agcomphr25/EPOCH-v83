@@ -1,6 +1,24 @@
 -- Prospective Phase 2 evidence only. Applying migration 0256 does not activate Phase 2.
 BEGIN;
 
+-- Phase 2 records a rejected registered revision truthfully. Extend the
+-- prospective lifecycle vocabulary without rewriting any historical row.
+ALTER TABLE controlled_documents
+  DROP CONSTRAINT IF EXISTS controlled_documents_lifecycle_check;
+ALTER TABLE controlled_documents
+  ADD CONSTRAINT controlled_documents_lifecycle_check
+  CHECK (lifecycle_status IN (
+    'DRAFT','IN_REVIEW','APPROVED','REJECTED','RELEASED','SUPERSEDED','OBSOLETE','VOID'
+  ));
+
+ALTER TABLE document_version_history
+  DROP CONSTRAINT IF EXISTS document_version_history_lifecycle_check;
+ALTER TABLE document_version_history
+  ADD CONSTRAINT document_version_history_lifecycle_check
+  CHECK (lifecycle_status IN (
+    'DRAFT','IN_REVIEW','APPROVED','REJECTED','RELEASED','SUPERSEDED','OBSOLETE','VOID'
+  ));
+
 DO $$
 BEGIN
   IF to_regclass('public.controlled_document_approval_release_events') IS NOT NULL

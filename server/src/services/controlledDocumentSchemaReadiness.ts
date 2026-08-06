@@ -152,6 +152,36 @@ export async function assertControlledDocumentPhase2SchemaReady(
           AND pg_get_constraintdef(oid) ILIKE '%UNAVAILABLE%'
           AND pg_get_constraintdef(oid) ILIKE '%MISMATCH%'
       )
+    UNION ALL SELECT 'constraint:controlled_documents.lifecycle_status'
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = to_regclass('public.controlled_documents')
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%lifecycle_status%'
+          AND pg_get_constraintdef(oid) ILIKE '%DRAFT%'
+          AND pg_get_constraintdef(oid) ILIKE '%IN_REVIEW%'
+          AND pg_get_constraintdef(oid) ILIKE '%APPROVED%'
+          AND pg_get_constraintdef(oid) ILIKE '%REJECTED%'
+          AND pg_get_constraintdef(oid) ILIKE '%RELEASED%'
+          AND pg_get_constraintdef(oid) ILIKE '%SUPERSEDED%'
+          AND pg_get_constraintdef(oid) ILIKE '%OBSOLETE%'
+          AND pg_get_constraintdef(oid) ILIKE '%VOID%'
+      )
+    UNION ALL SELECT 'constraint:document_version_history.lifecycle_status'
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = to_regclass('public.document_version_history')
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%lifecycle_status%'
+          AND pg_get_constraintdef(oid) ILIKE '%DRAFT%'
+          AND pg_get_constraintdef(oid) ILIKE '%IN_REVIEW%'
+          AND pg_get_constraintdef(oid) ILIKE '%APPROVED%'
+          AND pg_get_constraintdef(oid) ILIKE '%REJECTED%'
+          AND pg_get_constraintdef(oid) ILIKE '%RELEASED%'
+          AND pg_get_constraintdef(oid) ILIKE '%SUPERSEDED%'
+          AND pg_get_constraintdef(oid) ILIKE '%OBSOLETE%'
+          AND pg_get_constraintdef(oid) ILIKE '%VOID%'
+      )
   `);
   const rows = (((result as any)?.rows ?? result) || []) as Array<{
     issue?: string;

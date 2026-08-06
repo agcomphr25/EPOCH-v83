@@ -208,7 +208,8 @@ describe('Design Control structured workspaces', () => {
   });
 
   it('renders usable inputs and both draft actions for every controlled step', async () => {
-    for (const [index, definition] of DESIGN_CONTROL_WORKFLOW.entries()) {
+    for (let index = 0; index < DESIGN_CONTROL_WORKFLOW.length; index += 1) {
+      const definition = DESIGN_CONTROL_WORKFLOW[index];
       const view = renderWithQuery(
         <DesignControlStepEditor
           definition={definition}

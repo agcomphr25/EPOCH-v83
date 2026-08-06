@@ -11,6 +11,7 @@ export interface P2SerializedUnitLedgerRow {
   status?: string | null;
   currentDepartment?: string | null;
   current_department?: string | null;
+  metadata?: unknown;
   finalizedAt?: string | Date | null;
   finalized_at?: string | Date | null;
 }

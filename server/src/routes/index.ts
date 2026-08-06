@@ -27,6 +27,7 @@ import {
 } from '../lib/p2ShipmentEvidence';
 import {
   countDistinctP2DemandUnits,
+  partitionP2PendingRmaReplacements,
   p2PendingUnitDeficit,
 } from '../lib/p2SchedulingReconciliation';
 import {
@@ -5115,11 +5116,18 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           orderedQuantity - completedCount
         );
 
-        let pendingItems = items.filter((s: any) => {
+        const allPendingItems = items.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
           const dept = String(s.currentDepartment || '').trim();
           return dept === '' || dept === 'Pending Layup';
         });
+        // RMA remakes are additive manufacturing demand, not additional PO
+        // quantity. Keep them outside the ordered-quantity capacity calculation
+        // so a replacement remains visible after its scrapped predecessor has
+        // already consumed the customer's original demand slot.
+        const pendingPartition = partitionP2PendingRmaReplacements(allPendingItems);
+        let pendingItems = pendingPartition.demandPending;
+        const pendingRmaReplacements = pendingPartition.rmaReplacements;
 
         const priorRevisionPoolKey = `${displayPoIdForPoId(Number(poItem.poId))}:${normalizeP2ControlPartKey(poItem.partNumber)}`;
         const priorRevisionPending = (
@@ -5150,7 +5158,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }
         }
 
-        const pendingToShow = pendingItems.slice(0, earlyStageCapacity);
+        const pendingToShow = [
+          ...pendingItems.slice(0, earlyStageCapacity),
+          ...pendingRmaReplacements,
+        ].sort(sortBySequence);
 
         for (const s of pendingToShow) {
           schedulingList.push({

@@ -8,6 +8,7 @@ import {
   countDistinctP2DemandUnits,
   countDistinctP2SerializedUnits,
   isHistoricalP2Unit,
+  partitionP2PendingRmaReplacements,
   p2PendingUnitDeficit,
 } from '../src/lib/p2SchedulingReconciliation';
 import {
@@ -81,6 +82,40 @@ describe('P2 shipment and scheduling reconciliation', () => {
     expect(p2PendingUnitDeficit(90, 81, 0)).toBe(9);
     expect(p2PendingUnitDeficit(90, 81, 9)).toBe(0);
     expect(p2PendingUnitDeficit(90, 81, 12)).toBe(0);
+  });
+
+  it('keeps an RMA remake visible outside the original PO demand capacity', () => {
+    const originalPending = { id: 'original', metadata: null };
+    const rmaReplacement = {
+      id: 'replacement',
+      metadata: {
+        isReplacement: true,
+        rmaRequired: true,
+        nonconformingRmaId: 55,
+      },
+    };
+
+    const partitioned = partitionP2PendingRmaReplacements([
+      originalPending,
+      rmaReplacement,
+    ]);
+
+    expect(partitioned.demandPending).toEqual([originalPending]);
+    expect(partitioned.rmaReplacements).toEqual([rmaReplacement]);
+    expect([
+      ...partitioned.demandPending.slice(0, 0),
+      ...partitioned.rmaReplacements,
+    ]).toEqual([rmaReplacement]);
+    expect(countDistinctP2DemandUnits([
+      { id: 'completed-original', serialNumber: 'ROC2600720', status: 'COMPLETED' },
+      {
+        id: 'replacement',
+        serialNumber: 'ROC2600721',
+        status: 'ACTIVE',
+        currentDepartment: 'Pending Layup',
+        metadata: rmaReplacement.metadata,
+      },
+    ], new Set())).toBe(1);
   });
 
   it('reports the distinct pending units that are actually exposed to Scheduling', () => {

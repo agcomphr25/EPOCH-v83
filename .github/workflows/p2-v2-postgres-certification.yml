@@ -44,9 +44,15 @@ on:
       - 'server/src/routes/projectShippingCloseout.ts'
       - 'server/src/routes/projects.ts'
       - 'server/src/routes/travelers.ts'
+      - 'server/src/routes/controlledDocuments.ts'
+      - 'server/src/services/controlledDocumentLifecycleService.ts'
+      - 'server/src/services/controlledDocumentPhase2Gate.ts'
+      - 'server/src/services/controlledDocumentSchemaReadiness.ts'
       - 'server/src/routes/workOrders.ts'
       - 'server/storage.ts'
       - 'server/__tests__/p2V2PostgresCertification.test.ts'
+      - 'server/__tests__/controlledDocumentPhase2ApproveRelease.test.ts'
+      - 'server/__tests__/controlledDocumentPhase2Postgres.test.ts'
       - 'server/__tests__/p2V2LegacyPreservationPostgres.test.ts'
       - 'server/__tests__/p2V2PilotPostgresCertification.test.ts'
       - 'server/__tests__/projectWorkflowVersion.test.ts'
@@ -294,6 +300,15 @@ jobs:
           --config vitest.config.server.ts
           --no-file-parallelism
           server/__tests__/epochSoftwareValidationDuplicateCleanupPostgres.test.ts
+          --reporter=verbose
+
+      - name: Certify controlled-document Phase 2 atomicity and concurrency
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          --no-file-parallelism
+          server/__tests__/controlledDocumentPhase2ApproveRelease.test.ts
+          server/__tests__/controlledDocumentPhase2Postgres.test.ts
           --reporter=verbose
 
       - name: Run EPOCH validation server regressions

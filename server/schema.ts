@@ -12512,7 +12512,8 @@ export const controlledDocumentRevisionApprovals = pgTable(
     revisionId: uuid('revision_id')
       .references(() => documentVersionHistory.id, { onDelete: 'restrict' })
       .notNull(),
-    fileChecksum: text('file_checksum').notNull(),
+    fileChecksum: text('file_checksum'),
+    checksumVerificationStatus: text('checksum_verification_status'),
     documentNumberSnapshot: text('document_number_snapshot').notNull(),
     revisionSnapshot: text('revision_snapshot').notNull(),
     decision: text('decision').notNull(),
@@ -12531,6 +12532,28 @@ export const controlledDocumentRevisionApprovals = pgTable(
     metadata: jsonb('metadata').notNull().default({}),
   }
 );
+
+/* eslint-disable prettier/prettier */
+export const controlledDocumentApprovalReleaseEvents = pgTable('controlled_document_approval_release_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  controlledDocumentId: uuid('controlled_document_id').references(() => controlledDocuments.id, { onDelete: 'restrict' }).notNull(),
+  revisionId: uuid('revision_id').references(() => documentVersionHistory.id, { onDelete: 'restrict' }).notNull(),
+  approvalId: uuid('approval_id').references(() => controlledDocumentRevisionApprovals.id, { onDelete: 'restrict' }).notNull(),
+  idempotencyKey: text('idempotency_key').notNull().unique(),
+  requestIdentityHash: text('request_identity_hash').notNull(),
+  fileChecksum: text('file_checksum').notNull(),
+  documentNumberSnapshot: text('document_number_snapshot').notNull(),
+  revisionSnapshot: text('revision_snapshot').notNull(),
+  actorUserId: integer('actor_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
+  actorSnapshot: jsonb('actor_snapshot').notNull(),
+  authoritySnapshot: jsonb('authority_snapshot').notNull(),
+  reason: text('reason').notNull(),
+  beforeLifecycle: text('before_lifecycle').notNull(),
+  afterLifecycle: text('after_lifecycle').notNull(),
+  effectiveDate: date('effective_date').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+/* eslint-enable prettier/prettier */
 
 export const controlledDocumentReconciliationPreviews = pgTable(
   'controlled_document_reconciliation_previews',

@@ -8,6 +8,8 @@ export const requiredControlledDocumentReconciliationMigration =
   '0245_controlled_document_legacy_reconciliation.sql';
 export const requiredControlledDocumentReconciliationCorrectiveMigration =
   '0254_controlled_document_reconciliation_certification_controls.sql';
+export const requiredControlledDocumentPhase2Migration =
+  '0256_controlled_document_atomic_approval_release.sql';
 export const requiredControlledDocumentTables = [
   'controlled_documents',
   'document_version_history',
@@ -69,6 +71,125 @@ export async function assertControlledDocumentSchemaReady(
   const missing = required.filter((object) => !present.has(object));
   if (missing.length) throw new ControlledDocumentSchemaNotReadyError(missing);
 }
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export async function assertControlledDocumentPhase2SchemaReady(
+  client: Pick<typeof db, 'execute'> = db
+) {
+  await assertControlledDocumentSchemaReady(client);
+  const result = await client.execute(sql`
+    WITH expected_columns(name, data_type, nullable, default_fragment) AS (
+      VALUES
+        ('id', 'uuid', 'NO', 'gen_random_uuid'), ('controlled_document_id', 'uuid', 'NO', NULL),
+        ('revision_id', 'uuid', 'NO', NULL), ('approval_id', 'uuid', 'NO', NULL),
+        ('idempotency_key', 'text', 'NO', NULL), ('request_identity_hash', 'text', 'NO', NULL),
+        ('file_checksum', 'text', 'NO', NULL), ('document_number_snapshot', 'text', 'NO', NULL),
+        ('revision_snapshot', 'text', 'NO', NULL), ('actor_user_id', 'integer', 'NO', NULL),
+        ('actor_snapshot', 'jsonb', 'NO', NULL), ('authority_snapshot', 'jsonb', 'NO', NULL),
+        ('reason', 'text', 'NO', NULL), ('before_lifecycle', 'text', 'NO', NULL),
+        ('after_lifecycle', 'text', 'NO', NULL), ('effective_date', 'date', 'NO', NULL),
+        ('created_at', 'timestamp with time zone', 'NO', 'now()')
+    ), column_issues AS (
+      SELECT 'column:' || expected.name AS issue FROM expected_columns expected
+      LEFT JOIN information_schema.columns actual ON actual.table_schema = 'public'
+        AND actual.table_name = 'controlled_document_approval_release_events' AND actual.column_name = expected.name
+      WHERE actual.column_name IS NULL OR actual.data_type <> expected.data_type OR actual.is_nullable <> expected.nullable
+        OR (expected.default_fragment IS NOT NULL AND COALESCE(actual.column_default, '') NOT ILIKE '%' || expected.default_fragment || '%')
+    ), required_constraints(name, kind, fragments) AS (
+      VALUES
+        ('events.primary_key', 'p', ARRAY['PRIMARY KEY (id)']),
+        ('events.idempotency_unique', 'u', ARRAY['UNIQUE (idempotency_key)']),
+        ('events.revision_unique', 'u', ARRAY['UNIQUE (revision_id)']),
+        ('events.document_fk', 'f', ARRAY['FOREIGN KEY (controlled_document_id)', 'REFERENCES controlled_documents(id)', 'ON DELETE RESTRICT']),
+        ('events.revision_fk', 'f', ARRAY['FOREIGN KEY (revision_id)', 'REFERENCES document_version_history(id)', 'ON DELETE RESTRICT']),
+        ('events.approval_fk', 'f', ARRAY['FOREIGN KEY (approval_id)', 'REFERENCES controlled_document_revision_approvals(id)', 'ON DELETE RESTRICT']),
+        ('events.actor_fk', 'f', ARRAY['FOREIGN KEY (actor_user_id)', 'REFERENCES users(id)', 'ON DELETE RESTRICT']),
+        ('events.checksum_check', 'c', ARRAY['file_checksum', '[0-9a-f]{64}']),
+        ('events.request_identity_check', 'c', ARRAY['request_identity_hash', '[0-9a-f]{64}']),
+        ('events.reason_check', 'c', ARRAY['btrim(reason)', '<>']),
+        ('events.lifecycle_check', 'c', ARRAY['after_lifecycle', 'RELEASED'])
+    ), constraint_defs AS (
+      SELECT contype, pg_get_constraintdef(oid) AS definition FROM pg_constraint
+      WHERE conrelid = to_regclass('public.controlled_document_approval_release_events')
+    ), constraint_issues AS (
+      SELECT 'constraint:' || required.name AS issue FROM required_constraints required
+      WHERE NOT EXISTS (SELECT 1 FROM constraint_defs actual WHERE actual.contype = required.kind::"char"
+        AND NOT EXISTS (SELECT 1 FROM unnest(required.fragments) fragment WHERE actual.definition NOT ILIKE '%' || fragment || '%'))
+    ), trigger_issue AS (
+      SELECT 'trigger:controlled_document_approval_release_events_append_only' AS issue WHERE NOT EXISTS (
+        SELECT 1 FROM pg_trigger trigger JOIN pg_proc function ON function.oid = trigger.tgfoid
+        WHERE trigger.tgrelid = to_regclass('public.controlled_document_approval_release_events')
+          AND trigger.tgname = 'controlled_document_approval_release_events_append_only'
+          AND NOT trigger.tgisinternal AND trigger.tgenabled = 'O' AND trigger.tgtype = 27
+          AND function.proname = 'reject_controlled_document_approval_release_event_mutation'
+          AND function.prosrc ILIKE '%RAISE EXCEPTION%')
+    ), index_issue AS (
+      SELECT 'index:controlled_document_approval_release_document_idx' AS issue WHERE NOT EXISTS (
+        SELECT 1 FROM pg_indexes WHERE schemaname = 'public'
+          AND tablename = 'controlled_document_approval_release_events'
+          AND indexname = 'controlled_document_approval_release_document_idx'
+          AND indexdef ILIKE '%(controlled_document_id, created_at)%')
+    )
+    SELECT issue FROM column_issues UNION ALL SELECT issue FROM constraint_issues
+    UNION ALL SELECT issue FROM trigger_issue UNION ALL SELECT issue FROM index_issue
+    UNION ALL SELECT 'table:controlled_document_approval_release_events'
+      WHERE to_regclass('public.controlled_document_approval_release_events') IS NULL
+    UNION ALL SELECT 'column:controlled_document_revision_approvals.checksum_verification_status'
+      WHERE NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public'
+        AND table_name = 'controlled_document_revision_approvals' AND column_name = 'checksum_verification_status'
+        AND data_type = 'text' AND is_nullable = 'YES' AND column_default IS NULL)
+    UNION ALL SELECT 'column:controlled_document_revision_approvals.file_checksum'
+      WHERE NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public'
+        AND table_name = 'controlled_document_revision_approvals' AND column_name = 'file_checksum'
+        AND data_type = 'text' AND is_nullable = 'YES' AND column_default IS NULL)
+    UNION ALL SELECT 'constraint:controlled_document_revision_approvals.checksum_verification_status'
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = to_regclass('public.controlled_document_revision_approvals')
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%checksum_verification_status%'
+          AND pg_get_constraintdef(oid) ILIKE '%VERIFIED%'
+          AND pg_get_constraintdef(oid) ILIKE '%UNAVAILABLE%'
+          AND pg_get_constraintdef(oid) ILIKE '%MISMATCH%'
+      )
+    UNION ALL SELECT 'constraint:controlled_documents.lifecycle_status'
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = to_regclass('public.controlled_documents')
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%lifecycle_status%'
+          AND pg_get_constraintdef(oid) ILIKE '%DRAFT%'
+          AND pg_get_constraintdef(oid) ILIKE '%IN_REVIEW%'
+          AND pg_get_constraintdef(oid) ILIKE '%APPROVED%'
+          AND pg_get_constraintdef(oid) ILIKE '%REJECTED%'
+          AND pg_get_constraintdef(oid) ILIKE '%RELEASED%'
+          AND pg_get_constraintdef(oid) ILIKE '%SUPERSEDED%'
+          AND pg_get_constraintdef(oid) ILIKE '%OBSOLETE%'
+          AND pg_get_constraintdef(oid) ILIKE '%VOID%'
+      )
+    UNION ALL SELECT 'constraint:document_version_history.lifecycle_status'
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = to_regclass('public.document_version_history')
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%lifecycle_status%'
+          AND pg_get_constraintdef(oid) ILIKE '%DRAFT%'
+          AND pg_get_constraintdef(oid) ILIKE '%IN_REVIEW%'
+          AND pg_get_constraintdef(oid) ILIKE '%APPROVED%'
+          AND pg_get_constraintdef(oid) ILIKE '%REJECTED%'
+          AND pg_get_constraintdef(oid) ILIKE '%RELEASED%'
+          AND pg_get_constraintdef(oid) ILIKE '%SUPERSEDED%'
+          AND pg_get_constraintdef(oid) ILIKE '%OBSOLETE%'
+          AND pg_get_constraintdef(oid) ILIKE '%VOID%'
+      )
+  `);
+  const rows = (((result as any)?.rows ?? result) || []) as Array<{
+    issue?: string;
+  }>;
+  const issues = rows.flatMap((row) => (row.issue ? [row.issue] : []));
+  if (issues.length) throw new ControlledDocumentSchemaNotReadyError(issues);
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const reconciliationTables = [
   'controlled_document_reconciliation_previews',

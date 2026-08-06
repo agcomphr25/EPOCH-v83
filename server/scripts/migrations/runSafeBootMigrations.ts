@@ -285,6 +285,7 @@ export const safeMigrationFiles = [
   '0252_potential_order_duplicate_reviews.sql',
   '0254_controlled_document_reconciliation_certification_controls.sql',
   '0255_p2_v2_definition_v3_handoff.sql',
+  '0256_controlled_document_atomic_approval_release.sql',
   '0258_design_control_structured_lifecycle.sql',
   'investigation_308_order_duplication.sql',
 ];
@@ -336,6 +337,7 @@ export const criticalMigrationFiles = new Set([
   '0251_design_project_configuration_workspace.sql',
   '0252_potential_order_duplicate_reviews.sql',
   '0254_controlled_document_reconciliation_certification_controls.sql',
+  '0256_controlled_document_atomic_approval_release.sql',
   '0231_p1_po_item_quantity_adjustments.sql',
   '0232_p2_v2_controlled_pilot_readiness.sql',
   '0233a_spec_sheets_base_table.sql',

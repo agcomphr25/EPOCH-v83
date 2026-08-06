@@ -10,11 +10,13 @@ import {
 } from 'lucide-react';
 
 import { DesignControlStepEditor } from './DesignControlStepEditor';
+import { EngineeringReleaseGatePanel } from './EngineeringReleaseGatePanel';
 import { DesignProjectConfigurationWorkspace } from './DesignProjectConfigurationWorkspace';
 import { FinalDesignReviewPanel } from './FinalDesignReviewPanel';
 import { ProjectTeamPanel } from './ProjectTeamPanel';
 import { StructuredRecordsWorkspace } from './StructuredRecordsWorkspace';
 import { TraceabilityMatrix } from './TraceabilityMatrix';
+import { STRUCTURED_RECORD_TYPE_BY_STEP } from './designControlFieldPresentation';
 
 import { ControlledCopyPanel } from '@/components/design-control/ControlledCopyPanel';
 import { DesignHistoryFilePanel } from '@/components/design-control/DesignHistoryFilePanel';
@@ -76,21 +78,38 @@ type Detail = {
 
 const lifecycleLabels = [
   'Project Intake',
-  'Planning',
-  'Inputs',
-  'Reviews and Risk',
-  'Outputs',
-  'Prototype',
+  'Design Planning',
+  'Design Inputs',
+  'Requirements Review',
+  'Design Risk',
+  'Concept / Preliminary Review',
+  'Design Outputs',
+  'Prototype / First Article',
   'Verification',
   'Validation',
-  'Final Review',
+  'Final Design Review',
   'Engineering Release',
-  'Post-release Change Control',
-  'DHF',
 ] as const;
 
 function displayStatus(value?: string | null) {
-  return (value || 'not started').replaceAll('_', ' ');
+  const normalized = (value || 'not_started').toLowerCase();
+  const labels: Record<string, string> = {
+    not_started: 'Not started',
+    draft: 'Draft',
+    needs_approval: 'Draft',
+    submitted: 'Submitted',
+    submitted_for_approval: 'Submitted',
+    approved: 'Approved',
+    returned: 'Returned',
+    returned_for_revision: 'Returned',
+    rejected: 'Rejected',
+  };
+  return (
+    labels[normalized] ??
+    normalized
+      .replaceAll('_', ' ')
+      .replace(/\b\w/g, (character) => character.toUpperCase())
+  );
 }
 
 function LiveRegister({ title, rows }: { title: string; rows: LiveRow[] }) {
@@ -229,6 +248,8 @@ export function DesignControlWorkspace({
   const selectedIndex = DESIGN_CONTROL_WORKFLOW.findIndex(
     (step) => step.key === selectedDefinition.key
   );
+  const structuredRecordType =
+    STRUCTURED_RECORD_TYPE_BY_STEP[selectedDefinition.key];
 
   return (
     <section className="space-y-4" aria-label="Design Control workspace">
@@ -374,9 +395,47 @@ export function DesignControlWorkspace({
                 recordId={recordId}
                 step={selectedStep}
               />
+              {structuredRecordType && (
+                <section
+                  className="space-y-3 border-t pt-5"
+                  aria-label={`${selectedDefinition.title} authoritative register`}
+                >
+                  <div>
+                    <h3 className="font-semibold">
+                      Authoritative structured records
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Add and revise individual records here. These normalized,
+                      versioned records remain the source for traceability and
+                      readiness; the stage summary does not replace them.
+                    </p>
+                  </div>
+                  <StructuredRecordsWorkspace
+                    key={`${selectedDefinition.key}-${structuredRecordType}`}
+                    allowedTypes={[structuredRecordType]}
+                    compact
+                    initialType={structuredRecordType}
+                    readOnly={readOnly}
+                    recordId={recordId}
+                  />
+                </section>
+              )}
+              {selectedDefinition.key === '11' && (
+                <FinalDesignReviewPanel
+                  readOnly={readOnly}
+                  recordId={recordId}
+                />
+              )}
+              {selectedDefinition.key === '12' && (
+                <EngineeringReleaseGatePanel
+                  readOnly={readOnly}
+                  recordId={recordId}
+                />
+              )}
               <ProjectFormInstancesPanel
                 recordId={recordId}
                 oversightMode={readOnly}
+                stepKey={selectedDefinition.key}
               />
             </CardContent>
           </Card>

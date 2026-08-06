@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
+import type { StructuredDesignControlRecordType } from './designControlFieldPresentation';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,18 +15,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
-type RecordType =
-  | 'REQUIREMENT'
-  | 'RISK'
-  | 'REVIEW'
-  | 'VERIFICATION'
-  | 'VALIDATION';
+type RecordType = StructuredDesignControlRecordType;
 type Field = {
   key: string;
   label: string;
   kind?: 'boolean' | 'list' | 'attendees';
   options?: string[];
   guidance: string;
+  required?: boolean;
 };
 type Definition = {
   type: RecordType;
@@ -74,6 +72,11 @@ const definitions: Definition[] = [
         guidance: 'State one clear, testable requirement.',
       },
       {
+        key: 'revision',
+        label: 'Requirement revision',
+        guidance: 'Identify the retained requirement revision.',
+      },
+      {
         key: 'acceptanceCriterion',
         label: 'Acceptance criterion',
         guidance: 'Define the objective pass condition.',
@@ -100,6 +103,12 @@ const definitions: Definition[] = [
         key: 'owner',
         label: 'Owner',
         guidance: 'Name the accountable project role or assigned user.',
+      },
+      {
+        key: 'recordStatus',
+        label: 'Requirement status',
+        options: ['DRAFT', 'ACTIVE', 'SUPERSEDED', 'CLOSED'],
+        guidance: 'Select the lifecycle status of this requirement.',
       },
       {
         key: 'clarification',
@@ -373,6 +382,14 @@ const definitions: Definition[] = [
         key: 'customerAcceptance',
         label: 'Customer acceptance evidence',
         guidance: 'Reference acceptance when required.',
+        required: false,
+      },
+      {
+        key: 'disposition',
+        label: 'Validation disposition',
+        options: ['ACCEPTED', 'CORRECTION_REQUIRED', 'REJECTED'],
+        guidance:
+          'Record the controlled disposition; approval remains a separate authenticated server decision.',
       },
     ],
   },
@@ -451,11 +468,20 @@ function fromEditorValue(field: Field, value: string) {
 export function StructuredRecordsWorkspace({
   recordId,
   readOnly,
+  initialType = 'REQUIREMENT',
+  allowedTypes,
+  compact = false,
 }: {
   recordId: string;
   readOnly: boolean;
+  initialType?: RecordType;
+  allowedTypes?: readonly RecordType[];
+  compact?: boolean;
 }) {
-  const [type, setType] = useState<RecordType>('REQUIREMENT');
+  const availableDefinitions = allowedTypes
+    ? definitions.filter((definition) => allowedTypes.includes(definition.type))
+    : definitions;
+  const [type, setType] = useState<RecordType>(initialType);
   const definition = definitions.find((item) => item.type === type)!;
   const query = useQuery<{ records: Row[] }>({
     queryKey: ['/api/qms/design-control', recordId, 'structured', type],
@@ -463,6 +489,10 @@ export function StructuredRecordsWorkspace({
       request(`/api/qms/design-control/${recordId}/structured/${type}`),
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  useEffect(() => {
+    setType(initialType);
+    setSelectedId(null);
+  }, [initialType]);
   const selected =
     query.data?.records.find((item) => item.id === selectedId) ?? null;
   const [values, setValues] = useState<Record<string, string>>({});
@@ -500,6 +530,7 @@ export function StructuredRecordsWorkspace({
   const missing = useMemo(
     () =>
       definition.fields.filter((field) => {
+        if (field.required === false) return false;
         if (
           [
             'clarification',
@@ -542,25 +573,29 @@ export function StructuredRecordsWorkspace({
 
   return (
     <div className="space-y-4">
+      {availableDefinitions.length > 1 && (
+        <div
+          className="flex flex-wrap gap-2"
+          aria-label="Structured Design Control registers"
+        >
+          {availableDefinitions.map((item) => (
+            <Button
+              key={item.type}
+              size="sm"
+              variant={type === item.type ? 'default' : 'outline'}
+              onClick={() => {
+                setType(item.type);
+                setSelectedId(null);
+              }}
+            >
+              {item.title}
+            </Button>
+          ))}
+        </div>
+      )}
       <div
-        className="flex flex-wrap gap-2"
-        aria-label="Structured Design Control registers"
+        className={`grid gap-4 ${compact ? 'xl:grid-cols-[18rem_1fr]' : 'lg:grid-cols-[20rem_1fr]'}`}
       >
-        {definitions.map((item) => (
-          <Button
-            key={item.type}
-            size="sm"
-            variant={type === item.type ? 'default' : 'outline'}
-            onClick={() => {
-              setType(item.type);
-              setSelectedId(null);
-            }}
-          >
-            {item.title}
-          </Button>
-        ))}
-      </div>
-      <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{definition.title}</CardTitle>
@@ -671,6 +706,13 @@ export function StructuredRecordsWorkspace({
                     />
                   ) : (
                     <Input
+                      type={
+                        field.key === 'dueDate' ||
+                        field.key === 'reviewDate' ||
+                        field.key === 'performedDate'
+                          ? 'date'
+                          : 'text'
+                      }
                       className="mt-1"
                       disabled={readOnly}
                       value={values[field.key] ?? ''}

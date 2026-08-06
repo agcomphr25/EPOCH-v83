@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DesignControlWorkflowStep } from '@shared/designControlWorkflow';
+
+import {
+  getDesignControlFieldPresentation,
+  nextActionForStep,
+} from './designControlFieldPresentation';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +22,18 @@ type StepRow = {
   formData?: Record<string, unknown>;
   checklist?: Record<string, unknown>;
   attachments?: unknown[];
+  updatedAt?: string | null;
+};
+
+type ProjectTeam = {
+  assignments: Array<{
+    userId: number;
+    username: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    projectRole: string;
+    status: string;
+  }>;
 };
 
 type ApprovalSlot = {
@@ -102,6 +119,9 @@ export function DesignControlStepEditor({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(
+    step?.updatedAt ?? null
+  );
   const approvalQueryKey = [
     '/api/qms/design-control',
     recordId,
@@ -118,7 +138,47 @@ export function DesignControlStepEditor({
     setMessage('');
     setError('');
     setDirty(false);
-  }, [definition.key, step?.formData, step?.checklist]);
+    setLastSavedAt(step?.updatedAt ?? null);
+  }, [definition.key, step?.formData, step?.checklist, step?.updatedAt]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [dirty]);
+
+  const teamQuery = useQuery<ProjectTeam>({
+    queryKey: ['/api/qms/design-control', recordId, 'project-team'],
+    queryFn: async () =>
+      responsePayload(
+        await fetch(`/api/qms/design-control/${recordId}/project-team`, {
+          credentials: 'include',
+        })
+      ),
+    retry: false,
+  });
+
+  const people = useMemo(
+    () =>
+      (teamQuery.data?.assignments ?? [])
+        .filter((assignment) => assignment.status === 'ACTIVE')
+        .map((assignment) => ({
+          value:
+            [assignment.firstName, assignment.lastName]
+              .filter(Boolean)
+              .join(' ') || assignment.username,
+          label: `${
+            [assignment.firstName, assignment.lastName]
+              .filter(Boolean)
+              .join(' ') || assignment.username
+          } (${assignment.projectRole.replaceAll('_', ' ')})`,
+        })),
+    [teamQuery.data?.assignments]
+  );
 
   const approvalQuery = useQuery<ApprovalState>({
     queryKey: approvalQueryKey,
@@ -147,19 +207,21 @@ export function DesignControlStepEditor({
       setMessage(success);
       setDirty(false);
       await refresh();
+      return true;
     } catch (actionError) {
       setError(
         actionError instanceof Error
           ? actionError.message
           : 'The controlled action failed.'
       );
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
-  const saveDraft = () =>
-    run(async () => {
+  const saveDraft = async (continueAfterSave = false) => {
+    const saved = await run(async () => {
       const response = await fetch(
         `/api/qms/design-control/${encodeURIComponent(recordId)}/steps/${encodeURIComponent(definition.key)}`,
         {
@@ -178,6 +240,9 @@ export function DesignControlStepEditor({
       );
       return responsePayload(response);
     }, 'Draft saved as a controlled content version.');
+    if (saved) setLastSavedAt(new Date().toISOString());
+    if (saved && continueAfterSave && hasNext) onNext();
+  };
 
   const submit = () =>
     run(async () => {
@@ -233,9 +298,41 @@ export function DesignControlStepEditor({
     (item) => checklist[item.key] !== true
   );
   const missingCount = missingFields.length + missingChecklist.length;
+  const confirmNavigation = (navigate: () => void) => {
+    if (
+      dirty &&
+      !window.confirm(
+        'You have unsaved changes. Leave this step without saving?'
+      )
+    )
+      return;
+    navigate();
+  };
 
   return (
     <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-md border p-3 text-sm">
+          <span className="text-xs text-muted-foreground">Draft state</span>
+          <p className="font-medium">
+            {dirty ? 'Unsaved changes' : 'Saved to the server'}
+          </p>
+        </div>
+        <div className="rounded-md border p-3 text-sm">
+          <span className="text-xs text-muted-foreground">Last saved</span>
+          <p className="font-medium">
+            {lastSavedAt
+              ? new Date(lastSavedAt).toLocaleString()
+              : 'No saved draft yet'}
+          </p>
+        </div>
+        <div className="rounded-md border p-3 text-sm">
+          <span className="text-xs text-muted-foreground">Next action</span>
+          <p className="font-medium">
+            {nextActionForStep(step?.status, missingCount)}
+          </p>
+        </div>
+      </div>
       <fieldset className="space-y-4" disabled={!editable || busy}>
         <legend className="font-semibold">Required information</legend>
         <p className="text-sm text-muted-foreground">
@@ -268,26 +365,122 @@ export function DesignControlStepEditor({
           )}
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          {definition.fields.map((field) => (
-            <div className="space-y-1.5" key={field.key}>
-              <Label htmlFor={`design-control-${definition.key}-${field.key}`}>
-                {field.label} <span aria-hidden="true">*</span>
-              </Label>
-              <Textarea
-                id={`design-control-${definition.key}-${field.key}`}
-                rows={3}
-                value={String(formData[field.key] ?? '')}
-                onChange={(event) => {
-                  setFormData((current) => ({
-                    ...current,
-                    [field.key]: event.target.value,
-                  }));
-                  setDirty(true);
-                }}
-              />
-            </div>
-          ))}
+          {definition.fields.map((field) => {
+            const presentation = getDesignControlFieldPresentation(
+              definition.key,
+              field
+            );
+            const fieldId = `design-control-${definition.key}-${field.key}`;
+            const value = String(formData[field.key] ?? '');
+            const missing = !value.trim();
+            const update = (nextValue: string) => {
+              setFormData((current) => ({
+                ...current,
+                [field.key]: nextValue,
+              }));
+              setDirty(true);
+            };
+            return (
+              <div
+                className={`space-y-1.5 ${
+                  presentation.kind === 'textarea' ? 'md:col-span-2' : ''
+                }`}
+                key={field.key}
+              >
+                <Label htmlFor={fieldId}>
+                  {field.label}{' '}
+                  <span className="text-destructive" aria-label="required">
+                    *
+                  </span>
+                </Label>
+                {presentation.kind === 'textarea' ? (
+                  <Textarea
+                    aria-describedby={`${fieldId}-help`}
+                    aria-invalid={missing}
+                    id={fieldId}
+                    placeholder={presentation.placeholder}
+                    rows={3}
+                    value={value}
+                    onChange={(event) => update(event.target.value)}
+                  />
+                ) : presentation.kind === 'select' ||
+                  presentation.kind === 'role' ? (
+                  <select
+                    aria-describedby={`${fieldId}-help`}
+                    aria-invalid={missing}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    id={fieldId}
+                    value={value}
+                    onChange={(event) => update(event.target.value)}
+                  >
+                    <option value="">Select…</option>
+                    {value && !(presentation.options ?? []).includes(value) && (
+                      <option value={value}>Existing value: {value}</option>
+                    )}
+                    {(presentation.options ?? []).map((option) => (
+                      <option key={option} value={option}>
+                        {option.replaceAll('_', ' ')}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <>
+                    <Input
+                      aria-describedby={`${fieldId}-help`}
+                      aria-invalid={missing}
+                      id={fieldId}
+                      list={
+                        presentation.kind === 'person'
+                          ? `${fieldId}-people`
+                          : undefined
+                      }
+                      placeholder={presentation.placeholder}
+                      type={
+                        presentation.kind === 'date' &&
+                        (!value || /^\d{4}-\d{2}-\d{2}$/.test(value))
+                          ? 'date'
+                          : 'text'
+                      }
+                      value={value}
+                      onChange={(event) => update(event.target.value)}
+                    />
+                    {presentation.kind === 'person' && people.length > 0 && (
+                      <datalist id={`${fieldId}-people`}>
+                        {people.map((person) => (
+                          <option key={person.label} value={person.value}>
+                            {person.label}
+                          </option>
+                        ))}
+                      </datalist>
+                    )}
+                  </>
+                )}
+                <p
+                  className={`text-xs ${
+                    missing ? 'text-destructive' : 'text-muted-foreground'
+                  }`}
+                  id={`${fieldId}-help`}
+                >
+                  {missing ? 'Required. ' : ''}
+                  {presentation.help}
+                </p>
+              </div>
+            );
+          })}
         </div>
+
+        {definition.examples && definition.examples.length > 0 && (
+          <details className="rounded-md border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">
+              Examples for this step
+            </summary>
+            <ul className="mt-2 list-disc pl-5 text-muted-foreground">
+              {definition.examples.map((example) => (
+                <li key={example}>{example}</li>
+              ))}
+            </ul>
+          </details>
+        )}
 
         {definition.checklist.length > 0 && (
           <div className="space-y-2">
@@ -330,9 +523,23 @@ export function DesignControlStepEditor({
 
       <div className="flex flex-wrap gap-2">
         {editable && (
-          <Button disabled={busy} onClick={saveDraft} type="button">
-            Save controlled draft
-          </Button>
+          <>
+            <Button
+              disabled={busy || !dirty}
+              onClick={() => saveDraft()}
+              type="button"
+            >
+              Save Draft
+            </Button>
+            <Button
+              disabled={busy || !dirty}
+              onClick={() => saveDraft(true)}
+              type="button"
+              variant="secondary"
+            >
+              Save and Continue
+            </Button>
+          </>
         )}
         {canSubmit && (
           <Button
@@ -527,7 +734,7 @@ export function DesignControlStepEditor({
       <div className="flex justify-between border-t pt-4">
         <Button
           disabled={!hasPrevious}
-          onClick={onPrevious}
+          onClick={() => confirmNavigation(onPrevious)}
           type="button"
           variant="outline"
         >
@@ -535,7 +742,7 @@ export function DesignControlStepEditor({
         </Button>
         <Button
           disabled={!hasNext}
-          onClick={onNext}
+          onClick={() => confirmNavigation(onNext)}
           type="button"
           variant="outline"
         >

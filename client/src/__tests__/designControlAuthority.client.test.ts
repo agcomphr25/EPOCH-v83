@@ -79,7 +79,12 @@ describe('Design Control client authority foundation', () => {
     expect(editorSource).toContain('design-control-missing-summary');
     expect(editorSource).toContain('Version and decision history');
     expect(editorSource).toContain('contentVersionId:');
-    expect(editorSource).toContain('Save controlled draft');
+    expect(editorSource).toContain('Save Draft');
+    expect(editorSource).toContain('Save and Continue');
+    expect(editorSource).toContain("window.addEventListener('beforeunload'");
+    expect(editorSource).toContain('You have unsaved changes');
+    expect(editorSource).toContain('Last saved');
+    expect(editorSource).toContain('Next action');
     expect(editorSource).toContain('Submit current version');
     expect(editorSource).toContain('Previous stage');
     expect(editorSource).toContain('Next stage');

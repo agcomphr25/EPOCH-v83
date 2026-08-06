@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS design_control_structured_record_decisions (
   decision_comment text,
   signed_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT dc_structured_decision_value_ck CHECK (decision IN ('APPROVED','REJECTED','RETURNED')),
-  CONSTRAINT dc_structured_decision_reason_ck CHECK (decision = 'APPROVED' OR length(btrim(coalesce(decision_comment, ''))) > 0),
+  CONSTRAINT dc_structured_decision_reason_ck CHECK (decision = 'APPROVED' OR coalesce(length(btrim(decision_comment)), 0) > 0),
   CONSTRAINT dc_structured_decision_actor_uq UNIQUE (version_id, actor_user_id, decision)
 );
 CREATE INDEX IF NOT EXISTS dc_structured_decision_project_idx

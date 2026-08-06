@@ -75,21 +75,9 @@ describe('Design Control clean-schema PostgreSQL constraints', () => {
   });
 
   afterAll(async () => {
-    await pool.query(
-      'DELETE FROM design_control_form_template_revisions WHERE id = $1',
-      [ids.revision]
-    );
-    await pool.query(
-      'DELETE FROM design_control_form_templates WHERE id = $1',
-      [ids.template]
-    );
-    await pool.query('DELETE FROM document_version_history WHERE id = $1', [
-      ids.history,
-    ]);
-    await pool.query('DELETE FROM controlled_documents WHERE id = $1', [
-      ids.document,
-    ]);
-    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    // Controlled-document and Design Control evidence is deliberately
+    // append-only. The isolated PostgreSQL service is destroyed with the CI
+    // job, so certification evidence is not hard-deleted during cleanup.
     await pool.end();
   });
 
@@ -151,7 +139,10 @@ describe('Design Control clean-schema PostgreSQL constraints', () => {
       pool.query('DELETE FROM document_version_history WHERE id = $1', [
         ids.history,
       ])
-    ).rejects.toMatchObject({ code: '23503' });
+    ).rejects.toMatchObject({
+      code: 'P0001',
+      message: expect.stringMatching(/cannot be hard-deleted/i),
+    });
   });
 
   it('rejects an invalid history reference and savepoint rollback preserves fixture evidence', async () => {

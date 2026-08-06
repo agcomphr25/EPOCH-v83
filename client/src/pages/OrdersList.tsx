@@ -2051,28 +2051,6 @@ export default function OrdersList() {
                                 <FileDown className={`mr-2 h-4 w-4 ${emailPdfCopyMutation.isPending ? 'animate-pulse' : ''}`} />
                                 {emailPdfCopyMutation.isPending ? 'Sending...' : 'Email PDF Copy'}
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={async () => {
-                                  try {
-                                    // First check if signed PDF is available
-                                    const response = await fetch(`/api/followup-orders/signature-info/${order.orderId}`);
-                                    const data = await response.json();
-                                    if (data.hasSignature && data.signedPdfAvailable) {
-                                      window.open(`/api/followup-orders/signed-pdf/${order.orderId}`, '_blank');
-                                    } else if (data.hasSignature) {
-                                      toast.error('Signed PDF file not found on server');
-                                    } else {
-                                      toast.error('Order has not been signed by customer yet');
-                                    }
-                                  } catch (error) {
-                                    toast.error('Failed to check signature status');
-                                  }
-                                }}
-                                data-testid={`button-view-signed-pdf-${order.orderId}`}
-                              >
-                                <FileText className="mr-2 h-4 w-4" />
-                                View Signed Confirmation
-                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                           

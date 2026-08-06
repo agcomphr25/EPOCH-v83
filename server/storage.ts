@@ -160,7 +160,6 @@ import {
   vendorPOItems,
   vendorPOSettings,
   companySettings,
-  signOrderPageSettings,
   optionalSettings,
   poOptionalSettings,
   vendorPoAttachments,
@@ -3080,10 +3079,6 @@ export interface IStorage {
   cancelLotReservation(id: number): Promise<MaterialLotReservation>;
   fulfillLotReservation(id: number): Promise<MaterialLotReservation>;
   getReservedQtyForLot(lotId: string): Promise<number>;
-
-  // Sign Order Page Settings
-  getSignOrderPageSettings(): Promise<any | undefined>;
-  updateSignOrderPageSettings(data: any): Promise<any>;
 
   // P2 Nonconforming Dispositions
   getP2NonconformingDispositionsByItem(serializedItemId: string): Promise<P2NonconformingDisposition[]>;
@@ -22822,21 +22817,6 @@ export class DatabaseStorage implements IStorage {
       `🎯 AUTO-ADDED TO P1 PRODUCTION QUEUE: Order ${orderData.orderId} with stock model "${orderData.modelId}"`
     );
 
-    // Check if this order needs a signature email (no stock model + no review)
-    if (hasNoStockModel && orderData.isCustomOrder === 'no') {
-      console.log(
-        `📧 Order ${orderData.orderId} has no stock model and no review needed - triggering signature email`
-      );
-      
-      // Trigger signature email in the background
-      this.sendSignatureEmailForOrder(finalizedOrder.orderId).catch((error) => {
-        console.error(
-          `❌ Failed to send signature email for order ${finalizedOrder.orderId}:`,
-          error
-        );
-      });
-    }
-
     return finalizedOrder;
   }
 
@@ -22997,120 +22977,7 @@ export class DatabaseStorage implements IStorage {
       );
     }
 
-    // Check if this order needs a signature email (no stock model + no review)
-    if (hasNoStockModel && draft.isCustomOrder === 'no') {
-      console.log(
-        `📧 Order ${orderId} has no stock model and no review needed - triggering signature email`
-      );
-      
-      // Trigger signature email in the background
-      this.sendSignatureEmailForOrder(finalizedOrder.orderId).catch((error) => {
-        console.error(
-          `❌ Failed to send signature email for order ${finalizedOrder.orderId}:`,
-          error
-        );
-      });
-    }
-
     return finalizedOrder;
-  }
-
-  // Helper method to send signature email for orders that need it
-  private async sendSignatureEmailForOrder(orderId: string): Promise<void> {
-    try {
-      console.log(`📧 Preparing to send signature email for order ${orderId}`);
-      
-      // Get order details
-      const order = await this.getOrderById(orderId);
-      if (!order) {
-        throw new Error(`Order ${orderId} not found`);
-      }
-
-      // Get customer details
-      const customer = await this.getCustomerById(order.customerId || '');
-      if (!customer || !customer.email) {
-        throw new Error(`Customer email not found for order ${orderId}`);
-      }
-
-      // Check if followup order already exists
-      const existing = await this.getFollowupOrderByOrderId(orderId);
-      if (existing) {
-        console.log(`📧 Followup order already exists for ${orderId}, skipping`);
-        return;
-      }
-
-      // Import required modules
-      const { nanoid } = await import('nanoid');
-      const { sendFollowupOrderEmail } = await import('./utils/followupOrderEmail');
-
-      // Generate unique signature token (kept server-side for security)
-      const signatureToken = nanoid(32);
-
-      // Generate signature link with EXPLICIT environment - no inference allowed
-      const { createSignatureLink, getCurrentEnvironment, generatePublicSignatureId } = await import('./utils/magicLink');
-      const environment = getCurrentEnvironment();
-      const publicSignatureId = generatePublicSignatureId();
-      const signatureLink = createSignatureLink(publicSignatureId, environment);
-
-      // Generate PDF via unified service with frozen snapshot
-      const pdfResult = await generateOrderPdf(orderId, PdfIntent.SIGNATURE_EMAIL);
-      const pdfPath = pdfResult.filePath!;
-      const orderSnapshot = pdfResult.snapshot;
-      
-      // SIGNATURE LINK CONTRACT: Create followup order record with immutable token, public ID, and frozen snapshot
-      const followupOrder = await this.createFollowupOrder({
-        orderId: order.orderId,
-        customerId: order.customerId || '',
-        customerEmail: customer.email,
-        signatureToken,
-        publicSignatureId, // NEW: Path-based URL identifier (no secrets in URL)
-        environment, // Store environment for cross-environment safety
-        pdfGenerated: true,
-        pdfPath,
-        orderSummary: { orderId: order.orderId } as any,
-        orderSnapshot, // INVARIANT: Frozen at creation, never updated on resend
-      });
-
-      // Send email
-      const emailResult = await sendFollowupOrderEmail(
-        {
-          orderId: order.orderId,
-          customerName: customer.name,
-          customerEmail: customer.email,
-          orderDate: new Date(order.orderDate).toLocaleDateString(),
-          dueDate: new Date(order.dueDate).toLocaleDateString(),
-          customerPO: order.customerPO,
-          modelId: order.modelId,
-          signatureLink,
-        },
-        pdfPath
-      );
-
-      // Update followup order with email status
-      if (emailResult.success) {
-        await db
-          .update(followupOrders)
-          .set({
-            emailSent: true,
-            emailSentAt: new Date(),
-          })
-          .where(eq(followupOrders.id, followupOrder.id));
-        
-        console.log(`✅ Signature email sent successfully for order ${orderId}`);
-      } else {
-        await db
-          .update(followupOrders)
-          .set({
-            emailError: emailResult.error,
-          })
-          .where(eq(followupOrders.id, followupOrder.id));
-        
-        console.error(`❌ Failed to send signature email for order ${orderId}: ${emailResult.error}`);
-      }
-    } catch (error) {
-      console.error(`❌ Error in sendSignatureEmailForOrder for ${orderId}:`, error);
-      throw error;
-    }
   }
 
   // Get finalized order by ID
@@ -26739,36 +26606,6 @@ export class DatabaseStorage implements IStorage {
     ).returning();
 
     return result.length;
-  }
-
-  async getSignOrderPageSettings(): Promise<any | undefined> {
-    const [settings] = await db
-      .select()
-      .from(signOrderPageSettings)
-      .limit(1);
-    return settings;
-  }
-
-  async updateSignOrderPageSettings(data: any): Promise<any> {
-    const [existingSettings] = await db
-      .select()
-      .from(signOrderPageSettings)
-      .limit(1);
-
-    if (existingSettings) {
-      const [updatedSettings] = await db
-        .update(signOrderPageSettings)
-        .set({ ...data, updatedAt: new Date() })
-        .where(eq(signOrderPageSettings.id, existingSettings.id))
-        .returning();
-      return updatedSettings;
-    } else {
-      const [newSettings] = await db
-        .insert(signOrderPageSettings)
-        .values(data)
-        .returning();
-      return newSettings;
-    }
   }
 
   // P2 Nonconforming Dispositions

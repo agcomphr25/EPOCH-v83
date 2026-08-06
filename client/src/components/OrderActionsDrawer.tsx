@@ -37,7 +37,6 @@ import {
   Zap,
   History,
   Clock,
-  FileCheck,
 } from 'lucide-react';
 import { useOrderActions } from '@/hooks/useOrderActions';
 import { duplicateOrder } from '@/lib/queryClient';
@@ -202,23 +201,6 @@ export function OrderActionsDrawer({
 
   const handleViewTimeline = () => {
     setLocation(`/order-timeline/p1_order/${orderId}`);
-    setOpen(false);
-  };
-
-  const handleViewSignedConfirmation = async () => {
-    try {
-      const response = await fetch(`/api/followup-orders/signature-info/${orderId}`);
-      const data = await response.json();
-      if (data.hasSignature && data.signedPdfAvailable) {
-        window.open(`/api/followup-orders/signed-pdf/${orderId}`, '_blank');
-      } else if (data.hasSignature) {
-        toast.error('Signed PDF file not found on server');
-      } else {
-        toast.error('Order has not been signed by customer yet');
-      }
-    } catch (error) {
-      toast.error('Failed to check signature status');
-    }
     setOpen(false);
   };
 
@@ -417,14 +399,6 @@ export function OrderActionsDrawer({
               >
                 <Clock className="h-4 w-4" />
                 View Timeline
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2"
-                onClick={handleViewSignedConfirmation}
-              >
-                <FileCheck className="h-4 w-4" />
-                View Signed Confirmation
               </Button>
             </div>
 

@@ -14,7 +14,7 @@ SET
 WHERE
   current_department = 'Awaiting Customer ' || 'Signature'
   OR (
-    current_department IN ('P1 Production Queue', 'Shipping QC')
+    current_department = 'P1 Production Queue'
     AND status IN ('PENDING_' || 'SIGNATURE', 'IN_PROGRESS')
   );
 

@@ -1,6 +1,6 @@
 # Design Control remaining-phases gap audit
 
-Audit baseline: `24b76a1837641bfe9eb3c6fca00d283e9fb7c5ba`
+Audit baseline: `57d3f1bf9e8b8810af20a417dd4c750b571baadb`
 
 PR: #1651
 

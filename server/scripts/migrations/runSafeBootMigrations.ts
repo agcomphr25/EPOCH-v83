@@ -288,7 +288,6 @@ export const safeMigrationFiles = [
   '0256_controlled_document_atomic_approval_release.sql',
   '0258_design_control_structured_lifecycle.sql',
   '0259_design_control_form_template_database_artifacts.sql',
-  'investigation_308_order_duplication.sql',
 ];
 
 export const criticalMigrationFiles = new Set([

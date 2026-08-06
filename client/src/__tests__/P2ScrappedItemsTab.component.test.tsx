@@ -67,8 +67,22 @@ describe('P2NonconformingTab', () => {
   });
 
   it('opens the linked RMA directly from an in-progress Repair row', async () => {
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: {
+          queryFn: async ({ queryKey }) => {
+            const url = Array.isArray(queryKey) ? queryKey.join('') : String(queryKey);
+            const res = await fetch(url, { credentials: 'include' });
+            if (!res.ok) throw new Error(`HTTP ${(res as any).status ?? 'error'}`);
+            return res.json();
+          },
+          retry: false,
+          gcTime: 0,
+        },
+      },
+    });
     render(
-      <QueryClientProvider client={new QueryClient()}>
+      <QueryClientProvider client={client}>
         <P2NonconformingTab />
       </QueryClientProvider>,
     );

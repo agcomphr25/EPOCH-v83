@@ -153,6 +153,7 @@ export class AuthService {
         id: userSessions.id,
         sessionToken: userSessions.sessionToken,
         userId: userSessions.userId,
+        username: userSessions.username,
         expiresAt: userSessions.expiresAt,
         idleExpired: sql<boolean>`COALESCE(${userSessions.lastActivityAt}, ${userSessions.createdAt}, NOW()) < NOW() - (${SESSION_IDLE_TIMEOUT_MINUTES} * INTERVAL '1 minute')`,
       })

@@ -155,6 +155,7 @@ export default function OEMShipmentsPage() {
   const [invoicePreviewRequest, setInvoicePreviewRequest] = useState<{
     shipmentId: string;
     poNumber: string;
+    invoiceDate?: string;
   } | null>(null);
   const [invoicePreviewOpen, setInvoicePreviewOpen] = useState(false);
   const limit = 20;
@@ -263,10 +264,10 @@ export default function OEMShipmentsPage() {
     );
 
   const createInvoiceMutation = useMutation({
-    mutationFn: async ({ shipmentId, poNumber }: { shipmentId: string; poNumber: string }) => {
+    mutationFn: async ({ shipmentId, poNumber, invoiceDate }: { shipmentId: string; poNumber: string; invoiceDate?: string }) => {
       return await apiRequest(`/api/po-orders/oem-shipments/${shipmentId}/invoices`, {
         method: 'POST',
-        body: { poNumber },
+        body: { poNumber, invoiceDate },
       });
     },
     onSuccess: (invoice: any) => {
@@ -311,7 +312,10 @@ export default function OEMShipmentsPage() {
         return;
       }
       setInvoicePreview(preview);
-      setInvoicePreviewRequest(variables);
+      setInvoicePreviewRequest({
+        ...variables,
+        invoiceDate: preview?.invoiceDate || new Date().toISOString().split('T')[0],
+      });
       setInvoicePreviewOpen(true);
     },
     onError: (error: any) => {
@@ -1731,6 +1735,21 @@ export default function OEMShipmentsPage() {
                 </div>
               </div>
 
+              <div className="max-w-xs space-y-2">
+                <Label htmlFor="p1-invoice-date">Invoice date *</Label>
+                <Input
+                  id="p1-invoice-date"
+                  type="date"
+                  required
+                  value={invoicePreviewRequest?.invoiceDate || invoicePreview.invoiceDate || ''}
+                  onChange={(event) => setInvoicePreviewRequest((current) => current ? {
+                    ...current,
+                    invoiceDate: event.target.value,
+                  } : current)}
+                />
+                <p className="text-xs text-muted-foreground">The Net 30 due date will be calculated from this date.</p>
+              </div>
+
               {invoicePreview.pricingMismatch && (
                 <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                   One or more lines are missing unit pricing. The invoice will be created for review.
@@ -1788,7 +1807,7 @@ export default function OEMShipmentsPage() {
                   createInvoiceMutation.mutate(invoicePreviewRequest);
                 }
               }}
-              disabled={!invoicePreviewRequest || createInvoiceMutation.isPending}
+              disabled={!invoicePreviewRequest?.invoiceDate || createInvoiceMutation.isPending}
             >
               {createInvoiceMutation.isPending ? (
                 <>

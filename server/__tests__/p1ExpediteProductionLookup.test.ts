@@ -17,6 +17,12 @@ describe('P1 expedite helper lookup authority', () => {
     expect(source).not.toContain("if (row.order_id && !row.production_order_id)");
   });
 
+  it('allows both approved fast-track customers', () => {
+    expect(source).toContain("['pure precision', 'wilson combat']");
+    expect(source).toContain('isExpediteCustomer(row.customer_name)');
+    expect(source).toContain('not Pure Precision or Wilson Combat');
+  });
+
   it('supports an audited all-or-nothing reversal of a selected batch', () => {
     expect(source).toContain("event_type = 'P1_EXPEDITED_TO_SHIPPING_QC'");
     expect(source).toContain("'P1_EXPEDITE_BATCH_REVERSED'");

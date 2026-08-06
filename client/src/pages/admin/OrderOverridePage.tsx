@@ -459,10 +459,10 @@ export default function OrderOverridePage() {
       <Card className="border-blue-200">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <FastForward className="w-4 h-4 text-blue-600" /> Pure Precision Fast Track
+            <FastForward className="w-4 h-4 text-blue-600" /> P1 Customer Fast Track
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Move FB250–FB265 directly to Shipping QC without completing or signing skipped department steps.
+            Move approved Pure Precision or Wilson Combat orders directly to Shipping QC without completing or signing skipped department steps.
             The normal P1 route is not changed.
           </p>
         </CardHeader>

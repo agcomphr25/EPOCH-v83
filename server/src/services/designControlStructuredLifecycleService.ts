@@ -66,6 +66,7 @@ const schemas = {
     source: requiredText,
     sourceReference: requiredText,
     requirementStatement: requiredText,
+    revision: optionalText,
     acceptanceCriterion: requiredText,
     verificationMethod: z.enum([
       'Inspection',
@@ -78,6 +79,9 @@ const schemas = {
     validationRequired: z.boolean(),
     criticality: z.enum(['NON_CRITICAL', 'CRITICAL', 'SAFETY_CRITICAL']),
     owner: requiredText,
+    recordStatus: z
+      .enum(['DRAFT', 'ACTIVE', 'SUPERSEDED', 'CLOSED'])
+      .optional(),
     clarification: optionalText,
     resolution: optionalText,
   }),
@@ -146,6 +150,9 @@ const schemas = {
     correctiveAction: optionalText,
     customerAcceptanceRequired: z.boolean(),
     customerAcceptance: optionalText,
+    disposition: z
+      .enum(['ACCEPTED', 'CORRECTION_REQUIRED', 'REJECTED'])
+      .optional(),
   }),
 } satisfies Record<StructuredRecordType, z.ZodType<Record<string, unknown>>>;
 

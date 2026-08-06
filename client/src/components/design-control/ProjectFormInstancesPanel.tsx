@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   FilePenLine,
@@ -7,12 +7,12 @@ import {
   Printer,
   RefreshCw,
 } from 'lucide-react';
-
 import type {
   DesignControlFormDefinition,
   DesignControlFormField,
 } from '@shared/designControlFormCatalog';
 import type { ProjectFormContent } from '@shared/projectFormValidation';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getDesignControlFieldPresentation } from '@/features/design-control/designControlFieldPresentation';
 
 type ProjectFormInstance = {
   id: string;
@@ -46,11 +47,13 @@ type ProjectFormInstance = {
   currentContentRevisionId: string | null;
   retainedPdfChecksum: string | null;
   draftContent: ProjectFormContent;
+  updatedAt?: string | null;
 };
 
 type Props = {
   recordId: string;
   oversightMode?: boolean;
+  stepKey?: string;
 };
 
 type TemplateReadiness = {
@@ -76,13 +79,34 @@ const fieldControl = (
   field: DesignControlFormField,
   value: unknown,
   onChange: (value: unknown) => void
-) =>
-  field.type === 'checkbox' || field.type === 'yes_no' ? (
+) => {
+  const presentation = getDesignControlFieldPresentation('', field);
+  const stringValue = String(value ?? '');
+  const selectOptions = field.options ?? presentation.options ?? [];
+  return field.type === 'checkbox' || field.type === 'yes_no' ? (
     <Checkbox
       checked={value === true}
       onCheckedChange={(checked) => onChange(checked === true)}
     />
-  ) : field.type === 'textarea' ? (
+  ) : field.options?.length ||
+    presentation.kind === 'select' ||
+    presentation.kind === 'role' ? (
+    <select
+      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+      value={stringValue}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      <option value="">Select…</option>
+      {stringValue && !selectOptions.includes(stringValue) && (
+        <option value={stringValue}>Existing value: {stringValue}</option>
+      )}
+      {selectOptions.map((option) => (
+        <option key={option} value={option}>
+          {option.replaceAll('_', ' ')}
+        </option>
+      ))}
+    </select>
+  ) : field.type === 'textarea' && presentation.kind === 'textarea' ? (
     <Textarea
       value={String(value ?? '')}
       onChange={(event) => onChange(event.target.value)}
@@ -90,20 +114,23 @@ const fieldControl = (
   ) : (
     <Input
       type={
-        field.type === 'date'
+        (field.type === 'date' || presentation.kind === 'date') &&
+        (!stringValue || /^\d{4}-\d{2}-\d{2}$/.test(stringValue))
           ? 'date'
           : field.type === 'number'
             ? 'number'
             : 'text'
       }
-      value={String(value ?? '')}
+      value={stringValue}
       onChange={(event) => onChange(event.target.value)}
     />
   );
+};
 
 export function ProjectFormInstancesPanel({
   recordId,
   oversightMode = false,
+  stepKey,
 }: Props) {
   const { can } = usePermissions();
   const [catalog, setCatalog] = useState<DesignControlFormDefinition[]>([]);
@@ -115,12 +142,26 @@ export function ProjectFormInstancesPanel({
   const [content, setContent] = useState<ProjectFormContent>(emptyContent);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [formDirty, setFormDirty] = useState(false);
   const paperInput = useRef<HTMLInputElement>(null);
   const [paperTarget, setPaperTarget] = useState<ProjectFormInstance | null>(
     null
   );
+  const evidenceInput = useRef<HTMLInputElement>(null);
+  const [evidenceTarget, setEvidenceTarget] =
+    useState<ProjectFormInstance | null>(null);
 
-  const load = async () => {
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!formDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [formDirty]);
+
+  const load = useCallback(async () => {
     const [catalogResponse, formsResponse, readinessResponse] =
       await Promise.all([
         fetch('/api/design-control-form-templates/catalog', {
@@ -148,11 +189,11 @@ export function ProjectFormInstancesPanel({
     setTemplateReadiness(
       new Map(readiness.steps.map((item) => [item.stepKey, item]))
     );
-  };
+  }, [recordId]);
 
   useEffect(() => {
     load().catch((error) => setMessage(error.message));
-  }, [recordId]);
+  }, [load]);
 
   const formsByStep = useMemo(
     () =>
@@ -165,10 +206,17 @@ export function ProjectFormInstancesPanel({
       ),
     [forms]
   );
+  const visibleCatalog = useMemo(
+    () =>
+      stepKey
+        ? catalog.filter((definition) => definition.workflowStepKey === stepKey)
+        : catalog,
+    [catalog, stepKey]
+  );
 
   const mutate = async (
     url: string,
-    options: RequestInit,
+    options: globalThis.RequestInit,
     successMessage: string
   ) => {
     setBusy(true);
@@ -189,8 +237,8 @@ export function ProjectFormInstancesPanel({
       setMessage(successMessage);
       await load();
       return payload;
-    } catch (error: any) {
-      setMessage(error.message);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Action failed');
       return null;
     } finally {
       setBusy(false);
@@ -210,6 +258,7 @@ export function ProjectFormInstancesPanel({
   const edit = (form: ProjectFormInstance) => {
     setEditing(form);
     setContent(form.draftContent ?? emptyContent());
+    setFormDirty(false);
   };
 
   const updateField = (
@@ -217,6 +266,7 @@ export function ProjectFormInstancesPanel({
     field: DesignControlFormField,
     value: unknown
   ) => {
+    setFormDirty(true);
     setContent((current) => ({
       ...current,
       sections: {
@@ -238,6 +288,7 @@ export function ProjectFormInstancesPanel({
     field: DesignControlFormField,
     value: unknown
   ) => {
+    setFormDirty(true);
     setContent((current) => {
       const rows = [...((current.repeatingRows ?? {})[sectionKey] ?? [])];
       rows[rowIndex] = { ...(rows[rowIndex] ?? {}), [field.key]: value };
@@ -264,7 +315,26 @@ export function ProjectFormInstancesPanel({
       },
       'Draft saved with audit evidence'
     );
-    if (result) setEditing(null);
+    if (result) {
+      setFormDirty(false);
+      setEditing(null);
+    }
+  };
+
+  const uploadEvidence = async (file: File) => {
+    if (!evidenceTarget) return;
+    const body = new FormData();
+    body.append('file', file);
+    body.append(
+      'indexingMetadata',
+      JSON.stringify({ workflowStepKey: evidenceTarget.stepKey })
+    );
+    const result = await mutate(
+      `/api/project-forms/${evidenceTarget.id}/attachments`,
+      { method: 'POST', body },
+      'Objective evidence attached to the controlled form'
+    );
+    if (result) setEvidenceTarget(null);
   };
 
   const uploadPaper = async (file: File) => {
@@ -294,7 +364,9 @@ export function ProjectFormInstancesPanel({
           <CardDescription>
             {oversightMode
               ? 'Oversight view of the shared Design Project form workflow.'
-              : 'Complete the 12 Design Control step forms electronically or retain an original paper scan.'}
+              : stepKey
+                ? `Complete the controlled form and attach objective evidence for step ${stepKey}.`
+                : 'Complete the 12 Design Control step forms electronically or retain an original paper scan.'}
           </CardDescription>
         </div>
         <Button
@@ -313,7 +385,7 @@ export function ProjectFormInstancesPanel({
             {message}
           </div>
         )}
-        {catalog.map((definition) => {
+        {visibleCatalog.map((definition) => {
           const form = formsByStep.get(definition.workflowStepKey ?? '');
           const readiness = templateReadiness.get(
             definition.workflowStepKey ?? ''
@@ -389,6 +461,23 @@ export function ProjectFormInstancesPanel({
                     >
                       <FilePenLine className="mr-1 h-4 w-4" />
                       Edit
+                    </Button>
+                  )}
+                {form &&
+                  ['DRAFT', 'IN_PROGRESS', 'RETURNED_FOR_REVISION'].includes(
+                    form.lifecycleStatus
+                  ) &&
+                  can('design.forms.edit') && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEvidenceTarget(form);
+                        evidenceInput.current?.click();
+                      }}
+                    >
+                      <FileUp className="mr-1 h-4 w-4" />
+                      Attach evidence
                     </Button>
                   )}
                 {form &&
@@ -579,11 +668,33 @@ export function ProjectFormInstancesPanel({
             event.target.value = '';
           }}
         />
+        <input
+          ref={evidenceInput}
+          type="file"
+          accept="application/pdf,image/png,image/jpeg,text/plain,.csv,.xlsx,.doc,.docx"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) uploadEvidence(file);
+            event.target.value = '';
+          }}
+        />
       </CardContent>
 
       <Dialog
         open={Boolean(editing)}
-        onOpenChange={(open) => !open && setEditing(null)}
+        onOpenChange={(open) => {
+          if (open) return;
+          if (
+            formDirty &&
+            !window.confirm(
+              'You have unsaved controlled-form changes. Close without saving?'
+            )
+          )
+            return;
+          setFormDirty(false);
+          setEditing(null);
+        }}
       >
         <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
@@ -632,6 +743,30 @@ export function ProjectFormInstancesPanel({
                                   )}
                                 </div>
                               ))}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setFormDirty(true);
+                                  setContent((current) => ({
+                                    ...current,
+                                    repeatingRows: {
+                                      ...(current.repeatingRows ?? {}),
+                                      [section.key]: (
+                                        (current.repeatingRows ?? {})[
+                                          section.key
+                                        ] ?? []
+                                      ).filter(
+                                        (_item, itemIndex) =>
+                                          itemIndex !== rowIndex
+                                      ),
+                                    },
+                                  }));
+                                }}
+                              >
+                                Remove row
+                              </Button>
                             </div>
                           )
                         )}
@@ -639,7 +774,8 @@ export function ProjectFormInstancesPanel({
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={() =>
+                          onClick={() => {
+                            setFormDirty(true);
                             setContent((current) => ({
                               ...current,
                               repeatingRows: {
@@ -651,8 +787,8 @@ export function ProjectFormInstancesPanel({
                                   {},
                                 ],
                               },
-                            }))
-                          }
+                            }));
+                          }}
                         >
                           Add row
                         </Button>
@@ -683,7 +819,20 @@ export function ProjectFormInstancesPanel({
                 ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (
+                  formDirty &&
+                  !window.confirm(
+                    'You have unsaved controlled-form changes. Close without saving?'
+                  )
+                )
+                  return;
+                setFormDirty(false);
+                setEditing(null);
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={saveDraft} disabled={busy}>

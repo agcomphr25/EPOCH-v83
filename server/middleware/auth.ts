@@ -62,6 +62,16 @@ export async function authenticateToken(
   next: NextFunction
 ) {
   try {
+    // Browser logins are stored in the Express session. In hosted development
+    // environments the separate sessionToken cookie may be unavailable (for
+    // example inside the Replit preview iframe), so honor the authenticated
+    // server-side session before falling back to token authentication.
+    const sessionUser = (req as any).session?.user;
+    if (sessionUser && sessionUser.username && sessionUser.isActive !== false) {
+      req.user = sessionUser;
+      return next();
+    }
+
     const authHeader = req.headers['authorization'];
     const bearerToken = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
     const cookieToken = req.cookies?.sessionToken;

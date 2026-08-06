@@ -7,6 +7,12 @@ export const PURE_PRECISION_EXPEDITE_IDS = Array.from(
 );
 
 const TARGET_DEPARTMENT = 'Shipping QC';
+const EXPEDITE_CUSTOMER_NAMES = ['pure precision', 'wilson combat'] as const;
+
+function isExpediteCustomer(customerName: unknown): boolean {
+  const normalized = String(customerName ?? '').trim().toLowerCase();
+  return EXPEDITE_CUSTOMER_NAMES.some(name => normalized.includes(name));
+}
 
 type Actor = { id?: number | null; username: string; role?: string | null };
 
@@ -63,8 +69,8 @@ async function loadPreview(ids: string[], query = pgPool.query.bind(pgPool)): Pr
   return result.rows.map((row: any) => {
     const blockers: string[] = [];
     if (!row.production_order_id) blockers.push('P1 production order not found');
-    if (row.customer_name && !String(row.customer_name).toLowerCase().includes('pure precision')) {
-      blockers.push(`Customer is ${row.customer_name}, not Pure Precision`);
+    if (row.customer_name && !isExpediteCustomer(row.customer_name)) {
+      blockers.push(`Customer is ${row.customer_name}, not Pure Precision or Wilson Combat`);
     }
     if (row.production_order_id && !row.customer_name) blockers.push('Customer could not be verified');
     if (row.scrap_date || String(row.status || '').toUpperCase().includes('SCRAP')) blockers.push('Order is scrapped');

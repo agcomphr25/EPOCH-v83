@@ -14,7 +14,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
 type RecordType =
-  'REQUIREMENT' | 'RISK' | 'REVIEW' | 'VERIFICATION' | 'VALIDATION';
+  | 'REQUIREMENT'
+  | 'RISK'
+  | 'REVIEW'
+  | 'VERIFICATION'
+  | 'VALIDATION';
 type Field = {
   key: string;
   label: string;

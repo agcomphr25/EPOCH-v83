@@ -84,7 +84,8 @@ export type EngineeringReleasePreview = {
     approvedAt?: string | null;
   }>;
   approvalProvenance?:
-    'AUTHENTICATED_VERSION_BOUND' | 'LEGACY_UNVERIFIED_APPROVAL_EVIDENCE';
+    | 'AUTHENTICATED_VERSION_BOUND'
+    | 'LEGACY_UNVERIFIED_APPROVAL_EVIDENCE';
   missingEvidence: string[];
   baselineItems: EngineeringBaselineItemPreview[];
   changedSinceReleaseWarnings: string[];
@@ -1102,8 +1103,9 @@ export async function submitEngineeringRelease(
         .where(eq(projects.id, context.record.projectId))
         .limit(1);
       if (linkedProject?.workflowVersion === 'p2_v2') {
-        const { synchronizeDesignStageStatus } =
-          await import('./projectDesignApplicabilityService');
+        const { synchronizeDesignStageStatus } = await import(
+          './projectDesignApplicabilityService'
+        );
         await synchronizeDesignStageStatus(context.record.projectId, tx);
       }
     }

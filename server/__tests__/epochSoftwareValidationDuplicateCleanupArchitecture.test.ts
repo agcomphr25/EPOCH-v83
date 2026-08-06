@@ -73,11 +73,10 @@ describe('EPOCH validation duplicate cleanup', () => {
     expect(migration).toContain('SELECT count(*)');
   });
 
-  it('registers migration 0253 in both safe and critical boot lists', () => {
-    expect(
-      safeBoot.match(/0253_void_duplicate_epoch_validation_packages\.sql/g)
-        ?.length
-    ).toBe(2);
+  it('keeps retired migration 0253 out of recurring safe boot', () => {
+    expect(safeBoot).not.toContain(
+      '0253_void_duplicate_epoch_validation_packages.sql'
+    );
   });
 
   it('keeps the migration matrix and validation regressions in certification', () => {

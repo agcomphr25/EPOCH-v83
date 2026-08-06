@@ -2199,6 +2199,7 @@ router.post(
       res.json({
         exists: false,
         invoiceNumber,
+        invoiceDate: toDateOnly(new Date()),
         poNumber,
         customerName:
           first.po_customer_name ||
@@ -2245,7 +2246,7 @@ router.post(
       }
 
       const { id } = req.params;
-      const { poNumber } = req.body || {};
+      const { poNumber, invoiceDate: requestedInvoiceDate } = req.body || {};
       const uuidRegex =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(id)) {
@@ -2253,6 +2254,14 @@ router.post(
       }
       if (!poNumber || typeof poNumber !== 'string') {
         return res.status(400).json({ error: 'poNumber is required' });
+      }
+      if (
+        requestedInvoiceDate != null &&
+        !/^\d{4}-\d{2}-\d{2}$/.test(String(requestedInvoiceDate))
+      ) {
+        return res.status(400).json({
+          error: 'invoiceDate must use YYYY-MM-DD format',
+        });
       }
 
       const draft = await buildP1PackingSlipInvoiceDraft(id, poNumber);
@@ -2280,9 +2289,12 @@ router.post(
         );
       }
 
-      const today = new Date();
-      const invoiceDate = toDateOnly(today);
-      const dueDate = toDateOnly(addDays(today, 30));
+      const invoiceDate = requestedInvoiceDate || toDateOnly(new Date());
+      const invoiceDateValue = new Date(`${invoiceDate}T12:00:00`);
+      if (Number.isNaN(invoiceDateValue.getTime())) {
+        return res.status(400).json({ error: 'invoiceDate is invalid' });
+      }
+      const dueDate = toDateOnly(addDays(invoiceDateValue, 30));
       const customerId = String(
         first.po_customer_id || first.shipment_customer_id || '0'
       );
@@ -3165,7 +3177,40 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       thirdPartyAccountNumber,
       thirdPartyPostalCode,
       thirdPartyCountryCode,
+      historicalShipment = false,
+      existingTrackingNumber,
+      actualShipDate,
+      auditReason,
     } = req.body;
+
+    if (historicalShipment) {
+      if (!isGlennAdmin(req.user)) {
+        return res.status(403).json({
+          _error: 'Only glennj/admin can record historical P1 shipments.',
+        });
+      }
+      if (!String(existingTrackingNumber || '').trim()) {
+        return res.status(400).json({
+          _error: 'Existing tracking number is required for a historical shipment.',
+        });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(actualShipDate || ''))) {
+        return res.status(400).json({
+          _error: 'Actual ship date is required in YYYY-MM-DD format.',
+        });
+      }
+      const requestedShipDate = new Date(`${actualShipDate}T12:00:00`);
+      if (Number.isNaN(requestedShipDate.getTime()) || requestedShipDate > new Date()) {
+        return res.status(400).json({
+          _error: 'Actual ship date must be valid and not in the future.',
+        });
+      }
+      if (String(auditReason || '').trim().length < 10) {
+        return res.status(400).json({
+          _error: 'An audit reason of at least 10 characters is required.',
+        });
+      }
+    }
 
     // Use weightLbs from frontend if provided, otherwise fall back to weightPerItemLbs
     const totalPackageWeight = weightLbs
@@ -3173,7 +3218,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       : weightPerItemLbs;
 
     // Validate billing third-party requirements
-    if (billingOption === 'third-party') {
+    if (!historicalShipment && billingOption === 'third-party') {
       if (
         !thirdPartyAccountNumber ||
         !thirdPartyPostalCode ||
@@ -3555,7 +3600,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     const referenceNumber = poNumbers.join(',').substring(0, 35);
     console.log(`📝 Reference number: ${referenceNumber}`);
 
-    // 7. GENERATE UPS SHIPPING LABEL
+    // 7. GENERATE UPS SHIPPING LABEL, unless this is an audited historical backfill
     let trackingNumber: string;
     let labelBase64: string;
 
@@ -3569,7 +3614,13 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       process.env.UPS_CLIENT_SECRET &&
       process.env.UPS_ACCOUNT_NUMBER;
 
-    if (!useRealUps || !hasUpsCredentials) {
+    if (historicalShipment) {
+      trackingNumber = String(existingTrackingNumber).trim();
+      labelBase64 = '';
+      console.log(
+        `Historical P1 shipment: reusing tracking ${trackingNumber}; UPS was not called`
+      );
+    } else if (!useRealUps || !hasUpsCredentials) {
       // Generate test tracking number when UPS is not configured
       const crypto = await import('crypto');
       trackingNumber = `TEST-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
@@ -3614,12 +3665,16 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     }
 
     // 8. PERSIST SHIPMENT TO DATABASE (skip when using test tracking numbers)
-    const shippedAt = new Date();
+    const shippedAt = historicalShipment
+      ? new Date(`${actualShipDate}T12:00:00`)
+      : new Date();
     const crypto = await import('crypto');
     const shipmentId = crypto.randomUUID();
 
     // Skip database persistence if using test mode (no real UPS)
-    const skipDbPersistence = !useRealUps || !hasUpsCredentials;
+    const skipDbPersistence = historicalShipment
+      ? false
+      : !useRealUps || !hasUpsCredentials;
 
     // Generate one packing slip per PO group (runs unconditionally, regardless of test mode)
     const poSlipMap = new Map<string, string | null>();
@@ -3679,7 +3734,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         const slipData: PackingSlipData = {
           packingSlipNumber: invoiceNumber,
           poNumber: groupPoNumber,
-          date: new Date().toLocaleDateString('en-US', {
+          date: shippedAt.toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
             year: 'numeric',
@@ -3729,9 +3784,9 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       try {
         // Map billingOption to billType enum
         const billType: 'SENDER' | 'RECEIVER' | 'THIRD_PARTY' =
-          billingOption === 'prepaid'
+          billingOption === 'sender' || billingOption === 'prepaid'
             ? 'SENDER'
-            : billingOption === 'collect'
+            : billingOption === 'receiver' || billingOption === 'collect'
               ? 'RECEIVER'
               : 'THIRD_PARTY';
 
@@ -3742,8 +3797,8 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           poNumbers: poNumbers.join(', '),
           shippedAt,
           carrier: 'UPS',
-          serviceLevel: serviceCode,
-          serviceCode: serviceCode,
+          serviceLevel: historicalShipment ? 'HISTORICAL' : serviceCode,
+          serviceCode: historicalShipment ? 'HISTORICAL' : serviceCode,
           billType,
           masterTrackingNumber: trackingNumber,
           packageCount: 1,
@@ -3788,7 +3843,16 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
                 }
               : null,
           ].filter(Boolean),
-          notificationMetadata: {},
+          notificationMetadata: historicalShipment
+            ? {
+                historicalShipment: true,
+                auditReason: String(auditReason).trim(),
+                recordedBy: req.user?.username || 'system',
+                recordedAt: new Date().toISOString(),
+                originalShipDate: actualShipDate,
+                upsLabelGenerated: false,
+              }
+            : {},
         };
 
         const shipmentItemsData = orderDetails.map((detail) => {
@@ -3830,6 +3894,34 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         });
 
         console.log(`✅ Shipment persisted to database: ${shipmentId}`);
+
+        if (historicalShipment) {
+          for (const item of shipmentItemsData) {
+            if (!item.orderId) continue;
+            await auditService.logEvent({
+              entityType: 'p1_order',
+              entityId: item.orderId,
+              action: 'HISTORICAL_SHIPMENT_RECORDED',
+              actor: {
+                id: req.user?.id,
+                username: req.user?.username,
+                role: req.user?.role,
+              },
+              reason: String(auditReason).trim(),
+              fieldsChanged: {
+                shipmentStatus: { before: 'Shipping', after: 'Shipped' },
+                trackingNumber: { before: null, after: trackingNumber },
+                shippedAt: { before: null, after: actualShipDate },
+              },
+              meta: {
+                shipmentRecordId: createdShipment.id,
+                poNumber: item.poNumber,
+                quantity: item.quantity,
+                upsLabelGenerated: false,
+              },
+            });
+          }
+        }
 
         try {
           await createOrUpdateP1ShipmentRevenueFromShipmentRecord(

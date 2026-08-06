@@ -159,6 +159,10 @@ type SerializedUnit = {
 
 export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: ShipmentDialogProps) {
   const [state, dispatch] = useReducer(shipmentReducer, initialState);
+  const [shipmentMode, setShipmentMode] = useState<'standard' | 'historical'>('standard');
+  const [existingTrackingNumber, setExistingTrackingNumber] = useState('');
+  const [actualShipDate, setActualShipDate] = useState('');
+  const [historicalReason, setHistoricalReason] = useState('');
   const [printPopup, setPrintPopup] = useState<{
     show: boolean;
     trackingNumber: string;
@@ -308,6 +312,10 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   useEffect(() => {
     if (!open) {
       dispatch({ type: 'RESET' });
+      setShipmentMode('standard');
+      setExistingTrackingNumber('');
+      setActualShipDate('');
+      setHistoricalReason('');
       setUnitsByPoItemId({});
       setServerMissing(null);
     }
@@ -323,8 +331,12 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   const showP2Step = hasP2Units && !loadingUnits;
   const minStep = showP2Step ? 0 : 1;
 
-  const userStepNumber = showP2Step ? state.currentStep + 1 : state.currentStep;
-  const userTotalSteps = showP2Step ? 4 : 3;
+  const userStepNumber = shipmentMode === 'historical'
+    ? showP2Step
+      ? state.currentStep === 3 ? 3 : state.currentStep + 1
+      : state.currentStep === 3 ? 2 : 1
+    : showP2Step ? state.currentStep + 1 : state.currentStep;
+  const userTotalSteps = shipmentMode === 'historical' ? (showP2Step ? 3 : 2) : (showP2Step ? 4 : 3);
 
   useEffect(() => {
     if (!loadingUnits && !hasP2Units && state.currentStep === 0) {
@@ -345,13 +357,20 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       if (selectedItems.length === 0) {
         errors.items = 'No items selected';
       }
-      if (!state.weightLbs || parseFloat(state.weightLbs) <= 0) {
+      if (shipmentMode === 'historical') {
+        if (!existingTrackingNumber.trim()) errors.existingTrackingNumber = 'Existing tracking number is required';
+        if (!actualShipDate) errors.actualShipDate = 'Actual ship date is required';
+        if (actualShipDate && actualShipDate > new Date().toISOString().split('T')[0]) {
+          errors.actualShipDate = 'Actual ship date cannot be in the future';
+        }
+        if (historicalReason.trim().length < 10) errors.historicalReason = 'Enter an audit reason of at least 10 characters';
+      } else if (!state.weightLbs || parseFloat(state.weightLbs) <= 0) {
         errors.weightLbs = 'Weight is required';
       }
-      if (!state.boxSize) {
+      if (shipmentMode === 'standard' && !state.boxSize) {
         errors.boxSize = 'Box size is required';
       }
-      if (state.boxSize === 'custom') {
+      if (shipmentMode === 'standard' && state.boxSize === 'custom') {
         if (!state.customLength || parseFloat(state.customLength) <= 0) {
           errors.customLength = 'Length is required';
         }
@@ -364,7 +383,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       }
     }
 
-    if (step === 2) {
+    if (step === 2 && shipmentMode === 'standard') {
       const result = serviceLevelSchema.safeParse({
         serviceCode: state.serviceCode,
         billingOption: state.billingOption,
@@ -386,13 +405,21 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
 
   const handleNext = () => {
     if (validateStep(state.currentStep)) {
-      dispatch({ type: 'NEXT_STEP' });
+      if (shipmentMode === 'historical' && state.currentStep === 1) {
+        dispatch({ type: 'SET_STEP', step: 3 });
+      } else {
+        dispatch({ type: 'NEXT_STEP' });
+      }
     }
   };
 
   const handleBack = () => {
     if (state.currentStep <= minStep) return;
-    dispatch({ type: 'PREV_STEP' });
+    if (shipmentMode === 'historical' && state.currentStep === 3) {
+      dispatch({ type: 'SET_STEP', step: 1 });
+    } else {
+      dispatch({ type: 'PREV_STEP' });
+    }
   };
 
   const handleSubmit = async () => {
@@ -411,6 +438,10 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       thirdPartyCountryCode: state.thirdPartyCountryCode || undefined,
       weightLbs: parseFloat(state.weightLbs) || 5,
       boxSize: state.boxSize || 'medium',
+      historicalShipment: shipmentMode === 'historical',
+      existingTrackingNumber: shipmentMode === 'historical' ? existingTrackingNumber.trim() : undefined,
+      actualShipDate: shipmentMode === 'historical' ? actualShipDate : undefined,
+      auditReason: shipmentMode === 'historical' ? historicalReason.trim() : undefined,
     };
 
     if (state.boxSize === 'custom') {
@@ -440,11 +471,58 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
     <Dialog open={open && !printPopup?.show} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Shipment</DialogTitle>
+          <DialogTitle>{shipmentMode === 'historical' ? 'Record Historical Shipment' : 'Create Shipment'}</DialogTitle>
           <DialogDescription>
             Step {userStepNumber} of {userTotalSteps}: {stepLabel(state.currentStep)}
           </DialogDescription>
         </DialogHeader>
+
+        {state.currentStep === 1 && (
+          <div className="rounded-lg border p-4 space-y-3">
+            <Label className="font-medium">Shipment type</Label>
+            <RadioGroup
+              value={shipmentMode}
+              onValueChange={(value) => {
+                setShipmentMode(value as 'standard' | 'historical');
+                dispatch({ type: 'SET_VALIDATION_ERRORS', errors: {} });
+              }}
+              className="grid grid-cols-1 md:grid-cols-2 gap-3"
+            >
+              <Label className="flex items-start gap-3 rounded border p-3 cursor-pointer">
+                <RadioGroupItem value="standard" />
+                <span><span className="block font-medium">Create UPS shipment</span><span className="block text-xs text-muted-foreground">Purchase a new label and record shipment.</span></span>
+              </Label>
+              <Label className="flex items-start gap-3 rounded border p-3 cursor-pointer">
+                <RadioGroupItem value="historical" />
+                <span><span className="block font-medium">Record existing shipment</span><span className="block text-xs text-muted-foreground">Reuse an existing label; UPS will not be called.</span></span>
+              </Label>
+            </RadioGroup>
+          </div>
+        )}
+
+        {state.currentStep === 1 && shipmentMode === 'historical' && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50/70 p-4 space-y-4">
+            <div className="flex gap-2 text-amber-900"><Shield className="w-5 h-5" /><span className="font-medium">Audited historical shipment</span></div>
+            <p className="text-sm text-amber-900">This records fulfillment using the existing label and will not contact UPS.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="existingTrackingNumber">Existing tracking number *</Label>
+                <Input id="existingTrackingNumber" value={existingTrackingNumber} onChange={(e) => setExistingTrackingNumber(e.target.value)} className={state.validationErrors.existingTrackingNumber ? 'border-destructive' : ''} />
+                {state.validationErrors.existingTrackingNumber && <p className="text-sm text-destructive">{state.validationErrors.existingTrackingNumber}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="actualShipDate">Actual ship date *</Label>
+                <Input id="actualShipDate" type="date" max={new Date().toISOString().split('T')[0]} value={actualShipDate} onChange={(e) => setActualShipDate(e.target.value)} className={state.validationErrors.actualShipDate ? 'border-destructive' : ''} />
+                {state.validationErrors.actualShipDate && <p className="text-sm text-destructive">{state.validationErrors.actualShipDate}</p>}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="historicalReason">Audit reason *</Label>
+              <Input id="historicalReason" value={historicalReason} onChange={(e) => setHistoricalReason(e.target.value)} placeholder="Previously shipped; recording fulfillment and invoicing now" className={state.validationErrors.historicalReason ? 'border-destructive' : ''} />
+              {state.validationErrors.historicalReason && <p className="text-sm text-destructive">{state.validationErrors.historicalReason}</p>}
+            </div>
+          </div>
+        )}
 
         {state.currentStep === 0 && (
           loadingUnits ? (
@@ -474,6 +552,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
             errors={state.validationErrors}
             state={state}
             dispatch={dispatch}
+            hidePackageDetails={shipmentMode === 'historical'}
           />
         )}
 
@@ -541,7 +620,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
                     Creating Shipment...
                   </>
                 ) : (
-                  'Create Shipment'
+                  shipmentMode === 'historical' ? 'Record Historical Shipment' : 'Create Shipment'
                 )}
               </Button>
             )}
@@ -877,12 +956,14 @@ function StepSelectionRecap({
   errors,
   state,
   dispatch,
+  hidePackageDetails,
 }: {
   itemsByCustomer: Record<string, Record<string, any[]>>;
   selectedItems: any[];
   errors: Record<string, string>;
   state: ShipmentDialogState;
   dispatch: React.Dispatch<ShipmentDialogAction>;
+  hidePackageDetails?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -916,7 +997,7 @@ function StepSelectionRecap({
         ))}
       </div>
 
-      <div className="border-t pt-4 space-y-4">
+      {!hidePackageDetails && <div className="border-t pt-4 space-y-4">
         <h4 className="font-semibold text-sm text-muted-foreground">Package Details</h4>
         
         <div className="grid grid-cols-2 gap-4">
@@ -1015,7 +1096,7 @@ function StepSelectionRecap({
             </div>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

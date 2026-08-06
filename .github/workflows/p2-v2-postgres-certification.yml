@@ -325,12 +325,14 @@ jobs:
       - name: Run Design Control PostgreSQL and lifecycle certification
         env:
           DESIGN_CONTROL_CLEAN_SCHEMA_CERTIFICATION: isolated_test
+          DESIGN_CONTROL_STRUCTURED_CERTIFICATION: isolated_test
           DESIGN_PROJECT_CONFIGURATION_POSTGRES_CERTIFICATION: isolated_test
         run: >-
           npx vitest run
           --config vitest.config.server.ts
           --no-file-parallelism
           server/__tests__/designControlCleanSchemaPostgres.test.ts
+          server/__tests__/designControlStructuredLifecyclePostgres.test.ts
           server/__tests__/designProjectConfigurationSecurityPostgres.test.ts
           server/__tests__/designControlAuthorityFoundation.test.ts
           server/__tests__/designControlAuthenticatedApprovals.test.ts
@@ -350,6 +352,7 @@ jobs:
           npx vitest run
           --config vitest.config.client.ts
           client/src/__tests__/designControlAuthority.client.test.ts
+          client/src/__tests__/designControlStructuredWorkspace.client.test.tsx
           client/src/__tests__/DesignProjectConfigurationWorkspace.component.test.tsx
           --reporter=verbose
 

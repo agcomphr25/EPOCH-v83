@@ -11,6 +11,10 @@ import {
 
 import { DesignControlStepEditor } from './DesignControlStepEditor';
 import { DesignProjectConfigurationWorkspace } from './DesignProjectConfigurationWorkspace';
+import { FinalDesignReviewPanel } from './FinalDesignReviewPanel';
+import { ProjectTeamPanel } from './ProjectTeamPanel';
+import { StructuredRecordsWorkspace } from './StructuredRecordsWorkspace';
+import { TraceabilityMatrix } from './TraceabilityMatrix';
 
 import { ControlledCopyPanel } from '@/components/design-control/ControlledCopyPanel';
 import { DesignHistoryFilePanel } from '@/components/design-control/DesignHistoryFilePanel';
@@ -278,6 +282,9 @@ export function DesignControlWorkspace({
         <TabsList className="h-auto flex-wrap justify-start">
           <TabsTrigger value="lifecycle">12 steps</TabsTrigger>
           <TabsTrigger value="evidence">Evidence registers</TabsTrigger>
+          <TabsTrigger value="traceability">Traceability</TabsTrigger>
+          <TabsTrigger value="final-review">Final review</TabsTrigger>
+          <TabsTrigger value="team">Project team</TabsTrigger>
           <TabsTrigger value="configuration">Configuration</TabsTrigger>
           <TabsTrigger value="changes">Engineering changes</TabsTrigger>
           <TabsTrigger value="documents">Forms &amp; copies</TabsTrigger>
@@ -375,16 +382,21 @@ export function DesignControlWorkspace({
           </Card>
         </TabsContent>
 
-        <TabsContent value="evidence" className="grid gap-4 md:grid-cols-2">
-          <LiveRegister
-            title="Requirements and traceability"
-            rows={detail.requirements}
-          />
-          <LiveRegister title="Design risks" rows={detail.risks} />
-          <LiveRegister title="Design reviews" rows={detail.reviews} />
-          <LiveRegister title="Verification" rows={detail.verification} />
-          <LiveRegister title="Validation" rows={detail.validation} />
+        <TabsContent value="evidence" className="space-y-4">
+          <StructuredRecordsWorkspace recordId={recordId} readOnly={readOnly} />
           <LiveRegister title="Design changes" rows={detail.changes} />
+        </TabsContent>
+
+        <TabsContent value="traceability">
+          <TraceabilityMatrix recordId={recordId} />
+        </TabsContent>
+
+        <TabsContent value="final-review">
+          <FinalDesignReviewPanel recordId={recordId} readOnly={readOnly} />
+        </TabsContent>
+
+        <TabsContent value="team">
+          <ProjectTeamPanel recordId={recordId} readOnly={readOnly} />
         </TabsContent>
 
         <TabsContent value="configuration">

@@ -285,6 +285,7 @@ export const safeMigrationFiles = [
   '0252_potential_order_duplicate_reviews.sql',
   '0254_controlled_document_reconciliation_certification_controls.sql',
   '0255_p2_v2_definition_v3_handoff.sql',
+  '0258_design_control_structured_lifecycle.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -347,6 +348,7 @@ export const criticalMigrationFiles = new Set([
   '0245_controlled_document_legacy_reconciliation.sql',
   '0250_epoch_validation_wizard_phase1.sql',
   '0255_p2_v2_definition_v3_handoff.sql',
+  '0258_design_control_structured_lifecycle.sql',
 ]);
 
 export async function runSafeBootMigrations() {

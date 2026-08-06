@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+
 import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../db';
@@ -74,11 +75,15 @@ export function canonicalizeDesignControlValue(value: unknown): unknown {
   return value === undefined ? null : value;
 }
 
-export function canonicalDesignControlContent(content: MaterialStepContent): string {
+export function canonicalDesignControlContent(
+  content: MaterialStepContent
+): string {
   return JSON.stringify(canonicalizeDesignControlValue(content));
 }
 
-export function checksumDesignControlContent(content: MaterialStepContent): string {
+export function checksumDesignControlContent(
+  content: MaterialStepContent
+): string {
   return crypto
     .createHash('sha256')
     .update(canonicalDesignControlContent(content))
@@ -117,19 +122,31 @@ export function missingDesignControlStepEvidence(
   content: MaterialStepContent,
   options: { includeChecklist?: boolean } = {}
 ) {
-  const definition = DESIGN_CONTROL_WORKFLOW.find((step) => step.key === stepKey);
+  const definition = DESIGN_CONTROL_WORKFLOW.find(
+    (step) => step.key === stepKey
+  );
   if (!definition) {
-    throw new DesignControlApprovalError(400, 'INVALID_STEP', `Unknown Design Control step ${stepKey}`);
+    throw new DesignControlApprovalError(
+      400,
+      'INVALID_STEP',
+      `Unknown Design Control step ${stepKey}`
+    );
   }
   const includeChecklist = options.includeChecklist ?? true;
   return {
     fields: definition.fields
-      .filter((item) => String(valueForWorkflowItem(content.formData, item) ?? '').trim().length === 0)
+      .filter(
+        (item) =>
+          String(valueForWorkflowItem(content.formData, item) ?? '').trim()
+            .length === 0
+      )
       .map((item) => item.label),
     checklist: includeChecklist
       ? definition.checklist
-        .filter((item) => valueForWorkflowItem(content.checklist, item) !== true)
-        .map((item) => item.label)
+          .filter(
+            (item) => valueForWorkflowItem(content.checklist, item) !== true
+          )
+          .map((item) => item.label)
       : [],
   };
 }
@@ -167,7 +184,11 @@ export function requireDesignControlDecisionComment(
 
 async function actorEvidence(actor: DesignControlApprovalActor) {
   if (!Number.isInteger(actor.id) || actor.id <= 0) {
-    throw new DesignControlApprovalError(401, 'AUTHENTICATION_REQUIRED', 'Authenticated user identity is required');
+    throw new DesignControlApprovalError(
+      401,
+      'AUTHENTICATION_REQUIRED',
+      'Authenticated user identity is required'
+    );
   }
   const snapshot = await resolveUserSnapshot(actor.id);
   const permissions = await getUserPermissions(actor.id, actor.role);
@@ -178,9 +199,10 @@ async function actorEvidence(actor: DesignControlApprovalActor) {
       displayName: snapshot.displayName,
       role: actor.role,
     },
-    capabilities: actor.role === 'ADMIN' || actor.role === 'OWNER'
-      ? permissions.permissions
-      : permissions.permissions,
+    capabilities:
+      actor.role === 'ADMIN' || actor.role === 'OWNER'
+        ? permissions.permissions
+        : permissions.permissions,
     permissionSet: permissions.permissionSet,
   };
 }
@@ -197,10 +219,22 @@ async function loadStepContext(
     .where(eq(designControlRecords.id, recordId))
     .limit(1);
   if (!record || !record.rdProjectId) {
-    throw new DesignControlApprovalError(404, 'DESIGN_CONTROL_NOT_FOUND', 'Design Control record not found');
+    throw new DesignControlApprovalError(
+      404,
+      'DESIGN_CONTROL_NOT_FOUND',
+      'Design Control record not found'
+    );
   }
-  const authority = await resolveDesignControlAuthority(record.rdProjectId, client);
-  if (enforceAuthority && (!authority || authority.state !== 'AUTHORITATIVE' || authority.authoritativeRecord?.id !== record.id)) {
+  const authority = await resolveDesignControlAuthority(
+    record.rdProjectId,
+    client
+  );
+  if (
+    enforceAuthority &&
+    (!authority ||
+      authority.state !== 'AUTHORITATIVE' ||
+      authority.authoritativeRecord?.id !== record.id)
+  ) {
     throw new DesignControlApprovalError(
       409,
       'DESIGN_CONTROL_NOT_AUTHORITATIVE',
@@ -211,14 +245,29 @@ async function loadStepContext(
   const [step] = await client
     .select()
     .from(designControlSteps)
-    .where(and(eq(designControlSteps.recordId, recordId), eq(designControlSteps.stepKey, stepKey)))
+    .where(
+      and(
+        eq(designControlSteps.recordId, recordId),
+        eq(designControlSteps.stepKey, stepKey)
+      )
+    )
     .limit(1);
   if (!step) {
-    throw new DesignControlApprovalError(404, 'DESIGN_CONTROL_STEP_NOT_FOUND', 'Design Control step not found');
+    throw new DesignControlApprovalError(
+      404,
+      'DESIGN_CONTROL_STEP_NOT_FOUND',
+      'Design Control step not found'
+    );
   }
-  const definition = DESIGN_CONTROL_WORKFLOW.find((candidate) => candidate.key === stepKey);
+  const definition = DESIGN_CONTROL_WORKFLOW.find(
+    (candidate) => candidate.key === stepKey
+  );
   if (!definition) {
-    throw new DesignControlApprovalError(400, 'INVALID_STEP', `Unknown Design Control step ${stepKey}`);
+    throw new DesignControlApprovalError(
+      400,
+      'INVALID_STEP',
+      `Unknown Design Control step ${stepKey}`
+    );
   }
   return { record, step, definition, authority };
 }
@@ -230,9 +279,14 @@ async function requireActorCapability(
   const evidence = await actorEvidence(actor);
   const bypass = actor.role === 'ADMIN' || actor.role === 'OWNER';
   if (!bypass && !evidence.permissionSet.has(requiredCapability)) {
-    throw new DesignControlApprovalError(403, 'FORBIDDEN', `Capability ${requiredCapability} is required`, {
-      requiredCapability,
-    });
+    throw new DesignControlApprovalError(
+      403,
+      'FORBIDDEN',
+      `Capability ${requiredCapability} is required`,
+      {
+        requiredCapability,
+      }
+    );
   }
   return evidence;
 }
@@ -249,15 +303,22 @@ async function createContentVersion(
   const checksum = checksumDesignControlContent(content);
   const [current] = context.step.currentContentVersionId
     ? await client
-      .select()
-      .from(designControlStepContentVersions)
-      .where(eq(designControlStepContentVersions.id, context.step.currentContentVersionId))
-      .limit(1)
+        .select()
+        .from(designControlStepContentVersions)
+        .where(
+          eq(
+            designControlStepContentVersions.id,
+            context.step.currentContentVersionId
+          )
+        )
+        .limit(1)
     : [];
 
   if (!force && current?.contentChecksum === checksum) return current;
 
-  const nextVersion = Math.max(context.step.contentVersion ?? 0, current?.contentVersion ?? 0) + 1;
+  const nextVersion =
+    Math.max(context.step.contentVersion ?? 0, current?.contentVersion ?? 0) +
+    1;
   const [created] = await client
     .insert(designControlStepContentVersions)
     .values({
@@ -272,7 +333,10 @@ async function createContentVersion(
       createdByUserId: actor.id,
       createdBySnapshot: actorSnapshot,
       changeReason,
-      metadata: { canonicalization: 'sorted-object-keys-v1', checksumAlgorithm: 'sha256' },
+      metadata: {
+        canonicalization: 'sorted-object-keys-v1',
+        checksumAlgorithm: 'sha256',
+      },
     })
     .returning();
 
@@ -291,10 +355,12 @@ async function createContentVersion(
         invalidationReason: changeReason,
         supersedingContentVersionId: created.id,
       })
-      .where(and(
-        eq(designControlStepApprovals.stepContentVersionId, current.id),
-        eq(designControlStepApprovals.status, 'VALID')
-      ));
+      .where(
+        and(
+          eq(designControlStepApprovals.stepContentVersionId, current.id),
+          eq(designControlStepApprovals.status, 'VALID')
+        )
+      );
   }
   return created;
 }
@@ -323,28 +389,44 @@ function auditBase(
   };
 }
 
-export async function saveDesignControlStepDraft(input: {
-  recordId: string;
-  stepKey: string;
-  formData?: unknown;
-  checklist?: unknown;
-  attachments?: unknown;
-  metadata?: unknown;
-  expectedContentVersionId?: string | null;
-  changeReason: string;
-  actor: DesignControlApprovalActor;
-  requestMetadata?: DesignControlRequestMetadata;
-}, client: Client = db) {
-  const actorInfo = await requireActorCapability(input.actor, 'design.control.edit');
+export async function saveDesignControlStepDraft(
+  input: {
+    recordId: string;
+    stepKey: string;
+    formData?: unknown;
+    checklist?: unknown;
+    attachments?: unknown;
+    metadata?: unknown;
+    expectedContentVersionId?: string | null;
+    changeReason: string;
+    actor: DesignControlApprovalActor;
+    requestMetadata?: DesignControlRequestMetadata;
+  },
+  client: Client = db
+) {
+  const actorInfo = await requireActorCapability(
+    input.actor,
+    'design.control.edit'
+  );
   return client.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`);
-    const context = await loadStepContext(input.recordId, input.stepKey, tx as Client);
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`
+    );
+    const context = await loadStepContext(
+      input.recordId,
+      input.stepKey,
+      tx as Client
+    );
     assertExpectedDesignControlVersion(
       input.expectedContentVersionId,
       context.step.currentContentVersionId
     );
     if (context.step.status === 'submitted_for_approval') {
-      throw new DesignControlApprovalError(409, 'STEP_UNDER_REVIEW', 'Submitted content is read-only while under review');
+      throw new DesignControlApprovalError(
+        409,
+        'STEP_UNDER_REVIEW',
+        'Submitted content is read-only while under review'
+      );
     }
     const content = materialStepContent(input);
     const beforeVersionId = context.step.currentContentVersionId;
@@ -369,45 +451,84 @@ export async function saveDesignControlStepDraft(input: {
         currentContentVersionId: version.id,
         contentVersion: version.contentVersion,
         submittedAt: materialChanged ? null : context.step.submittedAt,
-        submittedByUserId: materialChanged ? null : context.step.submittedByUserId,
-        submittedBySnapshot: materialChanged ? null : context.step.submittedBySnapshot,
+        submittedByUserId: materialChanged
+          ? null
+          : context.step.submittedByUserId,
+        submittedBySnapshot: materialChanged
+          ? null
+          : context.step.submittedBySnapshot,
         approvedAt: materialChanged ? null : context.step.approvedAt,
         updatedAt: new Date(),
       })
       .where(eq(designControlSteps.id, context.step.id))
       .returning();
 
-    await recordAuditEvent({
-      ...auditBase(context, input.actor, input.requestMetadata ?? {}, version),
-      eventType: materialChanged ? 'DESIGN_CONTROL_STEP_VERSION_CREATED' : 'DESIGN_CONTROL_STEP_DRAFT_SAVED',
-      reason: input.changeReason,
-      fieldsChanged: {
-        contentVersionId: { before: beforeVersionId, after: version.id },
-        status: { before: context.step.status, after: materialChanged ? 'draft' : context.step.status },
+    await recordAuditEvent(
+      {
+        ...auditBase(
+          context,
+          input.actor,
+          input.requestMetadata ?? {},
+          version
+        ),
+        eventType: materialChanged
+          ? 'DESIGN_CONTROL_STEP_VERSION_CREATED'
+          : 'DESIGN_CONTROL_STEP_DRAFT_SAVED',
+        reason: input.changeReason,
+        fieldsChanged: {
+          contentVersionId: { before: beforeVersionId, after: version.id },
+          status: {
+            before: context.step.status,
+            after: materialChanged ? 'draft' : context.step.status,
+          },
+        },
+        payload: {
+          ...auditBase(
+            context,
+            input.actor,
+            input.requestMetadata ?? {},
+            version
+          ).payload,
+          materialChanged,
+          priorApprovalsInvalidated:
+            materialChanged && Boolean(beforeVersionId),
+        },
       },
-      payload: {
-        ...auditBase(context, input.actor, input.requestMetadata ?? {}, version).payload,
-        materialChanged,
-        priorApprovalsInvalidated: materialChanged && Boolean(beforeVersionId),
-      },
-    }, tx);
+      tx
+    );
     return { step, version, materialChanged };
   });
 }
 
-export async function submitDesignControlStep(input: {
-  recordId: string;
-  stepKey: string;
-  expectedContentVersionId?: string | null;
-  actor: DesignControlApprovalActor;
-  requestMetadata?: DesignControlRequestMetadata;
-}, client: Client = db) {
-  const actorInfo = await requireActorCapability(input.actor, 'design.control.submit');
+export async function submitDesignControlStep(
+  input: {
+    recordId: string;
+    stepKey: string;
+    expectedContentVersionId?: string | null;
+    actor: DesignControlApprovalActor;
+    requestMetadata?: DesignControlRequestMetadata;
+  },
+  client: Client = db
+) {
+  const actorInfo = await requireActorCapability(
+    input.actor,
+    'design.control.submit'
+  );
   return client.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`);
-    const context = await loadStepContext(input.recordId, input.stepKey, tx as Client);
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`
+    );
+    const context = await loadStepContext(
+      input.recordId,
+      input.stepKey,
+      tx as Client
+    );
     if (context.step.status === 'submitted_for_approval') {
-      return getDesignControlStepApprovalState(input.recordId, input.stepKey, tx as Client);
+      return getDesignControlStepApprovalState(
+        input.recordId,
+        input.stepKey,
+        tx as Client
+      );
     }
     assertExpectedDesignControlVersion(
       input.expectedContentVersionId,
@@ -434,9 +555,14 @@ export async function submitDesignControlStep(input: {
       missingItems.push(...manufacturing.missingItems);
     }
     if (missingItems.length > 0) {
-      throw new DesignControlApprovalError(422, 'STEP_INCOMPLETE', 'Complete all required evidence before submission', {
-        missingItems,
-      });
+      throw new DesignControlApprovalError(
+        422,
+        'STEP_INCOMPLETE',
+        'Complete all required evidence before submission',
+        {
+          missingItems,
+        }
+      );
     }
     const now = new Date();
     await tx
@@ -463,59 +589,110 @@ export async function submitDesignControlStep(input: {
       })
       .where(eq(designControlSteps.id, context.step.id));
 
-    await recordAuditEvent({
-      ...auditBase(context, input.actor, input.requestMetadata ?? {}, version),
-      eventType: 'DESIGN_CONTROL_STEP_SUBMITTED',
-      reason: 'Submitted exact content version for authenticated approval',
-      fieldsChanged: {
-        status: { before: context.step.status, after: 'submitted_for_approval' },
-        contentVersionId: { before: context.step.currentContentVersionId, after: version.id },
+    await recordAuditEvent(
+      {
+        ...auditBase(
+          context,
+          input.actor,
+          input.requestMetadata ?? {},
+          version
+        ),
+        eventType: 'DESIGN_CONTROL_STEP_SUBMITTED',
+        reason: 'Submitted exact content version for authenticated approval',
+        fieldsChanged: {
+          status: {
+            before: context.step.status,
+            after: 'submitted_for_approval',
+          },
+          contentVersionId: {
+            before: context.step.currentContentVersionId,
+            after: version.id,
+          },
+        },
+        payload: {
+          ...auditBase(
+            context,
+            input.actor,
+            input.requestMetadata ?? {},
+            version
+          ).payload,
+          requestedApprovalKeys: context.definition.approvals.map(
+            (slot) => slot.key
+          ),
+          submitterCapabilities: actorInfo.capabilities,
+        },
       },
-      payload: {
-        ...auditBase(context, input.actor, input.requestMetadata ?? {}, version).payload,
-        requestedApprovalKeys: context.definition.approvals.map((slot) => slot.key),
-        submitterCapabilities: actorInfo.capabilities,
-      },
-    }, tx);
-    return getDesignControlStepApprovalState(input.recordId, input.stepKey, tx as Client);
+      tx
+    );
+    return getDesignControlStepApprovalState(
+      input.recordId,
+      input.stepKey,
+      tx as Client
+    );
   });
 }
 
-export async function decideDesignControlStepApproval(input: {
-  recordId: string;
-  stepKey: string;
-  contentVersionId: string;
-  approvalKey: string;
-  decision: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_REVISION';
-  comment?: string;
-  actor: DesignControlApprovalActor;
-  requestMetadata?: DesignControlRequestMetadata;
-}, client: Client = db) {
+export async function decideDesignControlStepApproval(
+  input: {
+    recordId: string;
+    stepKey: string;
+    contentVersionId: string;
+    approvalKey: string;
+    decision: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_REVISION';
+    comment?: string;
+    actor: DesignControlApprovalActor;
+    requestMetadata?: DesignControlRequestMetadata;
+  },
+  client: Client = db
+) {
   const decisionComment = requireDesignControlDecisionComment(
     input.decision,
     input.comment
   );
   return client.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`);
-    const context = await loadStepContext(input.recordId, input.stepKey, tx as Client);
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`
+    );
+    const context = await loadStepContext(
+      input.recordId,
+      input.stepKey,
+      tx as Client
+    );
     if (
       context.step.status !== 'submitted_for_approval' ||
       context.step.currentContentVersionId !== input.contentVersionId
     ) {
-      throw new DesignControlApprovalError(409, 'STALE_CONTENT_VERSION', 'Decision does not match the submitted content version');
+      throw new DesignControlApprovalError(
+        409,
+        'STALE_CONTENT_VERSION',
+        'Decision does not match the submitted content version'
+      );
     }
-    const slot = context.definition.approvals.find((candidate) => candidate.key === input.approvalKey);
+    const slot = context.definition.approvals.find(
+      (candidate) => candidate.key === input.approvalKey
+    );
     if (!slot?.requiredCapability) {
-      throw new DesignControlApprovalError(400, 'INVALID_APPROVAL_SLOT', 'Unknown approval slot');
+      throw new DesignControlApprovalError(
+        400,
+        'INVALID_APPROVAL_SLOT',
+        'Unknown approval slot'
+      );
     }
-    const actorInfo = await requireActorCapability(input.actor, slot.requiredCapability);
+    const actorInfo = await requireActorCapability(
+      input.actor,
+      slot.requiredCapability
+    );
     const normalizedRole = input.actor.role.toUpperCase();
     if (
       normalizedRole !== 'ADMIN' &&
       normalizedRole !== 'OWNER' &&
       !(slot.allowedRoles ?? []).includes(normalizedRole)
     ) {
-      throw new DesignControlApprovalError(403, 'APPROVAL_ROLE_MISMATCH', 'Actor role cannot satisfy this approval slot');
+      throw new DesignControlApprovalError(
+        403,
+        'APPROVAL_ROLE_MISMATCH',
+        'Actor role cannot satisfy this approval slot'
+      );
     }
     const [version] = await tx
       .select()
@@ -523,27 +700,45 @@ export async function decideDesignControlStepApproval(input: {
       .where(eq(designControlStepContentVersions.id, input.contentVersionId))
       .limit(1);
     if (!version || version.status !== 'SUBMITTED') {
-      throw new DesignControlApprovalError(409, 'STALE_CONTENT_VERSION', 'Submitted content version is no longer current');
+      throw new DesignControlApprovalError(
+        409,
+        'STALE_CONTENT_VERSION',
+        'Submitted content version is no longer current'
+      );
     }
-    if (slot.requiresIndependentReviewer && version.submittedByUserId === input.actor.id) {
-      throw new DesignControlApprovalError(409, 'INDEPENDENCE_REQUIRED', 'The submitter cannot satisfy this independent approval slot');
+    if (
+      slot.requiresIndependentReviewer &&
+      version.submittedByUserId === input.actor.id
+    ) {
+      throw new DesignControlApprovalError(
+        409,
+        'INDEPENDENCE_REQUIRED',
+        'The submitter cannot satisfy this independent approval slot'
+      );
     }
     if (slot.incompatibleRoleGroup) {
       const existing = await tx
         .select()
         .from(designControlStepApprovals)
-        .where(and(
-          eq(designControlStepApprovals.stepContentVersionId, version.id),
-          eq(designControlStepApprovals.actorUserId, input.actor.id),
-          eq(designControlStepApprovals.decision, 'APPROVED'),
-          eq(designControlStepApprovals.status, 'VALID')
-        ));
+        .where(
+          and(
+            eq(designControlStepApprovals.stepContentVersionId, version.id),
+            eq(designControlStepApprovals.actorUserId, input.actor.id),
+            eq(designControlStepApprovals.decision, 'APPROVED'),
+            eq(designControlStepApprovals.status, 'VALID')
+          )
+        );
       const incompatibleKeys = new Set(
         context.definition.approvals
-          .filter((candidate) => candidate.incompatibleRoleGroup === slot.incompatibleRoleGroup)
+          .filter(
+            (candidate) =>
+              candidate.incompatibleRoleGroup === slot.incompatibleRoleGroup
+          )
           .map((candidate) => candidate.key)
       );
-      if (existing.some((approval) => incompatibleKeys.has(approval.approvalKey))) {
+      if (
+        existing.some((approval) => incompatibleKeys.has(approval.approvalKey))
+      ) {
         throw new DesignControlApprovalError(
           409,
           'SEGREGATION_OF_DUTIES',
@@ -565,7 +760,8 @@ export async function decideDesignControlStepApproval(input: {
         requiredCapabilitySnapshot: slot.requiredCapability,
         requiredRolesSnapshot: [...(slot.allowedRoles ?? [])],
         decision: input.decision,
-        signatureMeaning: slot.signatureMeaning ?? 'Authenticated Design Control decision',
+        signatureMeaning:
+          slot.signatureMeaning ?? 'Authenticated Design Control decision',
         decisionComment: decisionComment ?? null,
         actorUserId: input.actor.id,
         actorUsernameSnapshot: input.actor.username,
@@ -580,17 +776,23 @@ export async function decideDesignControlStepApproval(input: {
     const approvals = await tx
       .select()
       .from(designControlStepApprovals)
-      .where(and(
-        eq(designControlStepApprovals.stepContentVersionId, version.id),
-        eq(designControlStepApprovals.status, 'VALID')
-      ))
+      .where(
+        and(
+          eq(designControlStepApprovals.stepContentVersionId, version.id),
+          eq(designControlStepApprovals.status, 'VALID')
+        )
+      )
       .orderBy(asc(designControlStepApprovals.createdAt));
     const approvedKeys = new Set(
-      approvals.filter((approval) => approval.decision === 'APPROVED').map((approval) => approval.approvalKey)
+      approvals
+        .filter((approval) => approval.decision === 'APPROVED')
+        .map((approval) => approval.approvalKey)
     );
     const fullyApproved =
       input.decision === 'APPROVED' &&
-      context.definition.approvals.every((required) => approvedKeys.has(required.key));
+      context.definition.approvals.every((required) =>
+        approvedKeys.has(required.key)
+      );
     const nextStatus = fullyApproved
       ? 'approved'
       : input.decision === 'REJECTED'
@@ -613,42 +815,71 @@ export async function decideDesignControlStepApproval(input: {
       })
       .where(eq(designControlSteps.id, context.step.id));
 
-    await recordAuditEvent({
-      ...auditBase(context, input.actor, input.requestMetadata ?? {}, version),
-      eventType:
-        input.decision === 'APPROVED'
-          ? 'DESIGN_CONTROL_APPROVAL_GRANTED'
-          : input.decision === 'REJECTED'
-            ? 'DESIGN_CONTROL_APPROVAL_REJECTED'
-            : 'DESIGN_CONTROL_RETURNED_FOR_REVISION',
-      reason: decisionComment || input.decision,
-      fieldsChanged: {
-        status: { before: context.step.status, after: nextStatus },
-        approvalDecision: { before: null, after: input.decision },
+    await recordAuditEvent(
+      {
+        ...auditBase(
+          context,
+          input.actor,
+          input.requestMetadata ?? {},
+          version
+        ),
+        eventType:
+          input.decision === 'APPROVED'
+            ? 'DESIGN_CONTROL_APPROVAL_GRANTED'
+            : input.decision === 'REJECTED'
+              ? 'DESIGN_CONTROL_APPROVAL_REJECTED'
+              : 'DESIGN_CONTROL_RETURNED_FOR_REVISION',
+        reason: decisionComment || input.decision,
+        fieldsChanged: {
+          status: { before: context.step.status, after: nextStatus },
+          approvalDecision: { before: null, after: input.decision },
+        },
+        payload: {
+          ...auditBase(
+            context,
+            input.actor,
+            input.requestMetadata ?? {},
+            version
+          ).payload,
+          approvalKey: slot.key,
+          actorRole: input.actor.role,
+          actorCapabilities: actorInfo.capabilities,
+          decisionId: decision.id,
+        },
       },
-      payload: {
-        ...auditBase(context, input.actor, input.requestMetadata ?? {}, version).payload,
-        approvalKey: slot.key,
-        actorRole: input.actor.role,
-        actorCapabilities: actorInfo.capabilities,
-        decisionId: decision.id,
-      },
-    }, tx);
-    return getDesignControlStepApprovalState(input.recordId, input.stepKey, tx as Client);
+      tx
+    );
+    return getDesignControlStepApprovalState(
+      input.recordId,
+      input.stepKey,
+      tx as Client
+    );
   });
 }
 
-export async function reopenDesignControlStep(input: {
-  recordId: string;
-  stepKey: string;
-  reason: string;
-  actor: DesignControlApprovalActor;
-  requestMetadata?: DesignControlRequestMetadata;
-}, client: Client = db) {
-  const actorInfo = await requireActorCapability(input.actor, 'design.control.edit');
+export async function reopenDesignControlStep(
+  input: {
+    recordId: string;
+    stepKey: string;
+    reason: string;
+    actor: DesignControlApprovalActor;
+    requestMetadata?: DesignControlRequestMetadata;
+  },
+  client: Client = db
+) {
+  const actorInfo = await requireActorCapability(
+    input.actor,
+    'design.control.edit'
+  );
   return client.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`);
-    const context = await loadStepContext(input.recordId, input.stepKey, tx as Client);
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`
+    );
+    const context = await loadStepContext(
+      input.recordId,
+      input.stepKey,
+      tx as Client
+    );
     const version = await createContentVersion(
       context,
       materialStepContent(context.step),
@@ -672,15 +903,26 @@ export async function reopenDesignControlStep(input: {
       })
       .where(eq(designControlSteps.id, context.step.id))
       .returning();
-    await recordAuditEvent({
-      ...auditBase(context, input.actor, input.requestMetadata ?? {}, version),
-      eventType: 'DESIGN_CONTROL_STEP_REOPENED',
-      reason: input.reason,
-      fieldsChanged: {
-        status: { before: context.step.status, after: 'draft' },
-        contentVersionId: { before: context.step.currentContentVersionId, after: version.id },
+    await recordAuditEvent(
+      {
+        ...auditBase(
+          context,
+          input.actor,
+          input.requestMetadata ?? {},
+          version
+        ),
+        eventType: 'DESIGN_CONTROL_STEP_REOPENED',
+        reason: input.reason,
+        fieldsChanged: {
+          status: { before: context.step.status, after: 'draft' },
+          contentVersionId: {
+            before: context.step.currentContentVersionId,
+            after: version.id,
+          },
+        },
       },
-    }, tx);
+      tx
+    );
     return { step, version };
   });
 }
@@ -694,7 +936,9 @@ export async function getDesignControlStepApprovalState(
   const versions = await client
     .select()
     .from(designControlStepContentVersions)
-    .where(eq(designControlStepContentVersions.designControlStepId, context.step.id))
+    .where(
+      eq(designControlStepContentVersions.designControlStepId, context.step.id)
+    )
     .orderBy(asc(designControlStepContentVersions.contentVersion));
   const approvals = await client
     .select()
@@ -714,7 +958,9 @@ export async function getDesignControlStepApprovalState(
   return {
     step: context.step,
     currentContentVersion:
-      versions.find((version) => version.id === context.step.currentContentVersionId) ?? null,
+      versions.find(
+        (version) => version.id === context.step.currentContentVersionId
+      ) ?? null,
     versions,
     approvals,
     approvalSlots: context.definition.approvals.map((slot) => ({
@@ -725,7 +971,10 @@ export async function getDesignControlStepApprovalState(
       signatureMeaning: slot.signatureMeaning,
       requiresIndependentReviewer: slot.requiresIndependentReviewer ?? false,
       status: approvedKeys.has(slot.key) ? 'APPROVED' : 'PENDING',
-      decision: currentApprovals.find((approval) => approval.approvalKey === slot.key) ?? null,
+      decision:
+        currentApprovals.find(
+          (approval) => approval.approvalKey === slot.key
+        ) ?? null,
     })),
     legacyEvidence: {
       provenance: 'LEGACY_UNVERIFIED_APPROVAL_EVIDENCE',
@@ -744,30 +993,44 @@ export async function getRecordAuthenticatedApprovalReadiness(
     .from(designControlRecords)
     .where(eq(designControlRecords.id, recordId))
     .limit(1);
-  if (!record) return { ready: false, missingItems: ['Design Control record not found'] };
+  if (!record)
+    return { ready: false, missingItems: ['Design Control record not found'] };
   const steps = await client
     .select()
     .from(designControlSteps)
     .where(eq(designControlSteps.recordId, recordId));
   const missingItems: string[] = [];
   for (const definition of DESIGN_CONTROL_WORKFLOW) {
-    const step = steps.find((candidate) => candidate.stepKey === definition.key);
+    const step = steps.find(
+      (candidate) => candidate.stepKey === definition.key
+    );
     if (!step || step.status !== 'approved' || !step.currentContentVersionId) {
-      missingItems.push(`Step ${definition.key} requires authenticated current-version approval`);
+      missingItems.push(
+        `Step ${definition.key} requires authenticated current-version approval`
+      );
       continue;
     }
     const approvals = await client
       .select()
       .from(designControlStepApprovals)
-      .where(and(
-        eq(designControlStepApprovals.stepContentVersionId, step.currentContentVersionId),
-        eq(designControlStepApprovals.status, 'VALID'),
-        eq(designControlStepApprovals.decision, 'APPROVED')
-      ));
-    const approvedKeys = new Set(approvals.map((approval) => approval.approvalKey));
+      .where(
+        and(
+          eq(
+            designControlStepApprovals.stepContentVersionId,
+            step.currentContentVersionId
+          ),
+          eq(designControlStepApprovals.status, 'VALID'),
+          eq(designControlStepApprovals.decision, 'APPROVED')
+        )
+      );
+    const approvedKeys = new Set(
+      approvals.map((approval) => approval.approvalKey)
+    );
     for (const slot of definition.approvals) {
       if (!approvedKeys.has(slot.key)) {
-        missingItems.push(`Step ${definition.key}: ${slot.label} requires authenticated approval`);
+        missingItems.push(
+          `Step ${definition.key}: ${slot.label} requires authenticated approval`
+        );
       }
     }
   }
@@ -781,10 +1044,15 @@ export async function getRecordAuthenticatedApprovalEvidence(
   return client
     .select()
     .from(designControlStepApprovals)
-    .where(and(
-      eq(designControlStepApprovals.designControlRecordId, recordId),
-      eq(designControlStepApprovals.status, 'VALID'),
-      eq(designControlStepApprovals.decision, 'APPROVED')
-    ))
-    .orderBy(asc(designControlStepApprovals.stepKey), asc(designControlStepApprovals.createdAt));
+    .where(
+      and(
+        eq(designControlStepApprovals.designControlRecordId, recordId),
+        eq(designControlStepApprovals.status, 'VALID'),
+        eq(designControlStepApprovals.decision, 'APPROVED')
+      )
+    )
+    .orderBy(
+      asc(designControlStepApprovals.stepKey),
+      asc(designControlStepApprovals.createdAt)
+    );
 }

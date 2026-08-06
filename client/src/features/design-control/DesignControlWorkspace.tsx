@@ -9,6 +9,13 @@ import {
   LockKeyhole,
 } from 'lucide-react';
 
+import { DesignControlStepEditor } from './DesignControlStepEditor';
+import { DesignProjectConfigurationWorkspace } from './DesignProjectConfigurationWorkspace';
+import { FinalDesignReviewPanel } from './FinalDesignReviewPanel';
+import { ProjectTeamPanel } from './ProjectTeamPanel';
+import { StructuredRecordsWorkspace } from './StructuredRecordsWorkspace';
+import { TraceabilityMatrix } from './TraceabilityMatrix';
+
 import { ControlledCopyPanel } from '@/components/design-control/ControlledCopyPanel';
 import { DesignHistoryFilePanel } from '@/components/design-control/DesignHistoryFilePanel';
 import { EngineeringChangeNoticeWorkspace } from '@/components/design-control/EngineeringChangeNoticeWorkspace';
@@ -39,6 +46,8 @@ type LiveRow = {
 
 type StepRow = LiveRow & {
   stepKey: string;
+  currentContentVersionId?: string | null;
+  checklist?: Record<string, unknown>;
   approvedAt?: string | null;
   updatedAt?: string | null;
   contentVersion?: number;
@@ -217,6 +226,9 @@ export function DesignControlWorkspace({
   const completed = detail.steps.filter((step) =>
     ['approved', 'complete', 'completed'].includes(step.status || '')
   ).length;
+  const selectedIndex = DESIGN_CONTROL_WORKFLOW.findIndex(
+    (step) => step.key === selectedDefinition.key
+  );
 
   return (
     <section className="space-y-4" aria-label="Design Control workspace">
@@ -270,6 +282,10 @@ export function DesignControlWorkspace({
         <TabsList className="h-auto flex-wrap justify-start">
           <TabsTrigger value="lifecycle">12 steps</TabsTrigger>
           <TabsTrigger value="evidence">Evidence registers</TabsTrigger>
+          <TabsTrigger value="traceability">Traceability</TabsTrigger>
+          <TabsTrigger value="final-review">Final review</TabsTrigger>
+          <TabsTrigger value="team">Project team</TabsTrigger>
+          <TabsTrigger value="configuration">Configuration</TabsTrigger>
           <TabsTrigger value="changes">Engineering changes</TabsTrigger>
           <TabsTrigger value="documents">Forms &amp; copies</TabsTrigger>
           <TabsTrigger value="dhf">DHF &amp; package</TabsTrigger>
@@ -343,22 +359,21 @@ export function DesignControlWorkspace({
                   </p>
                 </div>
               </div>
-              <div>
-                <h3 className="font-semibold">Required information</h3>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                  {selectedDefinition.fields.map((field) => (
-                    <li key={field.key}>{field.label}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <h3 className="font-semibold">Next action</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Review required fields, checklist evidence, and approval slots
-                  in the controlled step editor. Recorded fields support the
-                  process; they do not by themselves guarantee compliance.
-                </p>
-              </div>
+              <DesignControlStepEditor
+                definition={selectedDefinition}
+                hasNext={selectedIndex < DESIGN_CONTROL_WORKFLOW.length - 1}
+                hasPrevious={selectedIndex > 0}
+                onChanged={() => detailQuery.refetch()}
+                onNext={() =>
+                  setActiveStep(DESIGN_CONTROL_WORKFLOW[selectedIndex + 1].key)
+                }
+                onPrevious={() =>
+                  setActiveStep(DESIGN_CONTROL_WORKFLOW[selectedIndex - 1].key)
+                }
+                readOnly={readOnly}
+                recordId={recordId}
+                step={selectedStep}
+              />
               <ProjectFormInstancesPanel
                 recordId={recordId}
                 oversightMode={readOnly}
@@ -367,16 +382,29 @@ export function DesignControlWorkspace({
           </Card>
         </TabsContent>
 
-        <TabsContent value="evidence" className="grid gap-4 md:grid-cols-2">
-          <LiveRegister
-            title="Requirements and traceability"
-            rows={detail.requirements}
-          />
-          <LiveRegister title="Design risks" rows={detail.risks} />
-          <LiveRegister title="Design reviews" rows={detail.reviews} />
-          <LiveRegister title="Verification" rows={detail.verification} />
-          <LiveRegister title="Validation" rows={detail.validation} />
+        <TabsContent value="evidence" className="space-y-4">
+          <StructuredRecordsWorkspace recordId={recordId} readOnly={readOnly} />
           <LiveRegister title="Design changes" rows={detail.changes} />
+        </TabsContent>
+
+        <TabsContent value="traceability">
+          <TraceabilityMatrix recordId={recordId} />
+        </TabsContent>
+
+        <TabsContent value="final-review">
+          <FinalDesignReviewPanel recordId={recordId} readOnly={readOnly} />
+        </TabsContent>
+
+        <TabsContent value="team">
+          <ProjectTeamPanel recordId={recordId} readOnly={readOnly} />
+        </TabsContent>
+
+        <TabsContent value="configuration">
+          <DesignProjectConfigurationWorkspace
+            designControlReadiness={detail.record.status}
+            projectId={projectId}
+            projectName={detail.record.title}
+          />
         </TabsContent>
 
         <TabsContent value="changes" className="space-y-4">

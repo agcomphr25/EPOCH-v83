@@ -23233,6 +23233,7 @@ export const engineeringReleases = pgTable(
     designControlRecordId: uuid('design_control_record_id')
       .notNull()
       .references(() => designControlRecords.id, { onDelete: 'restrict' }),
+    finalReviewSnapshotId: uuid('final_review_snapshot_id'),
     releaseNumber: text('release_number').notNull(),
     releaseRevision: text('release_revision').notNull(),
     releaseSequence: integer('release_sequence'),

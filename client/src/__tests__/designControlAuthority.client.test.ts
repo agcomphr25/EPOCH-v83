@@ -24,7 +24,10 @@ describe('Design Control client authority foundation', () => {
     // QMSDesignControlPage now delegates rendering to DesignControlWorkspace,
     // which is where the shared workflow import lives.
     const workspaceSrc = readFileSync(
-      join(process.cwd(), 'client/src/features/design-control/DesignControlWorkspace.tsx'),
+      join(
+        process.cwd(),
+        'client/src/features/design-control/DesignControlWorkspace.tsx'
+      ),
       'utf8'
     );
     expect(workspaceSrc).toContain("from '@shared/designControlWorkflow'");
@@ -47,5 +50,42 @@ describe('Design Control client authority foundation', () => {
     expect(source).toContain('Browser-local project data needs review');
     expect(source).toContain('Review and import');
     expect(source).toContain('was selected automatically.');
+  });
+
+  it('provides controlled draft, submit, approval, and navigation actions for every stage', () => {
+    const editorSource = readFileSync(
+      join(
+        process.cwd(),
+        'client/src/features/design-control/DesignControlStepEditor.tsx'
+      ),
+      'utf8'
+    );
+    const workspaceSource = readFileSync(
+      join(
+        process.cwd(),
+        'client/src/features/design-control/DesignControlWorkspace.tsx'
+      ),
+      'utf8'
+    );
+
+    expect(workspaceSource).toContain('<DesignControlStepEditor');
+    expect(editorSource).toContain('definition.fields.map');
+    expect(editorSource).toContain('definition.checklist.map');
+    expect(editorSource).toContain('/submit`');
+    expect(editorSource).toContain('/decision`');
+    expect(editorSource).toContain("decide(slot, 'RETURNED_FOR_REVISION')");
+    expect(editorSource).toContain("decide(slot, 'REJECTED')");
+    expect(editorSource).toContain('Save the draft before submission.');
+    expect(editorSource).toContain('design-control-missing-summary');
+    expect(editorSource).toContain('Version and decision history');
+    expect(editorSource).toContain('contentVersionId:');
+    expect(editorSource).toContain('Save controlled draft');
+    expect(editorSource).toContain('Submit current version');
+    expect(editorSource).toContain('Previous stage');
+    expect(editorSource).toContain('Next stage');
+    expect(editorSource).toContain("can('design.control.edit')");
+    expect(editorSource).toContain("can('design.control.submit')");
+    expect(editorSource).toContain("can('design.control.approve')");
+    expect(workspaceSource).toContain('<DesignProjectConfigurationWorkspace');
   });
 });

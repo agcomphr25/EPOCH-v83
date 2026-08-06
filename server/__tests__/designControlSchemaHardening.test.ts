@@ -32,6 +32,7 @@ const migrationFiles = [
   'migrations/0208_design_control_authenticated_approvals.sql',
   'migrations/0248_design_project_manufacturing_configuration.sql',
   'migrations/0251_design_project_configuration_workspace.sql',
+  'migrations/0258_design_control_structured_lifecycle.sql',
 ];
 
 const originalDatabaseUrl = process.env.DATABASE_URL;
@@ -69,6 +70,42 @@ function captureNames(pattern: RegExp) {
 }
 
 describe('Design Control schema hardening', () => {
+  it('keeps schema-push safety checks aligned with migration 0258', () => {
+    const migration = readRepoFile(
+      'migrations/0258_design_control_structured_lifecycle.sql'
+    );
+    const drizzleSchema = readRepoFile(
+      'server/designControlStructuredSchema.ts'
+    );
+    for (const constraint of [
+      'dc_project_access_policy_status_ck',
+      'dc_project_assignment_role_ck',
+      'dc_project_assignment_status_ck',
+      'dc_project_assignment_revocation_ck',
+      'dc_project_assignment_event_type_ck',
+      'dc_structured_version_type_ck',
+      'dc_structured_version_status_ck',
+      'dc_structured_version_number_ck',
+      'dc_structured_decision_value_ck',
+      'dc_structured_decision_reason_ck',
+      'dc_structured_link_source_type_ck',
+      'dc_structured_link_target_type_ck',
+      'dc_review_action_status_ck',
+      'dc_trace_snapshot_status_ck',
+      'dc_final_review_exception_status_ck',
+      'dc_final_review_snapshot_status_ck',
+    ]) {
+      expect(migration).toContain(constraint);
+      expect(drizzleSchema).toContain(constraint);
+    }
+    expect(migration).toContain(
+      'coalesce(length(btrim(decision_comment)), 0) > 0'
+    );
+    expect(drizzleSchema).toContain(
+      'coalesce(length(btrim(${table.decisionComment})), 0) > 0'
+    );
+  });
+
   it('registers Design Control, Engineering Release, and Engineering Package migrations in order', () => {
     const expected = [...requiredDesignControlMigrations];
     const positions = expected.map((file) => safeMigrationFiles.indexOf(file));

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
@@ -20,14 +21,18 @@ describe('Phase 12 Design Control production-readiness hardening', () => {
 
   it('capability-gates every QMS Design Control read surface', () => {
     for (const route of [
-      "router.get('/', requireDesignControlView",
-      "router.get('/oversight/projects', requireDesignControlView",
-      "router.get('/:id', requireDesignControlView",
-      "router.get('/:id/manufacturing-evidence', requireDesignControlView",
-      "router.get('/:id/engineering-release-preview', requireDesignControlView",
-      "router.get('/:id/readiness', requireDesignControlView",
+      '/',
+      '/oversight/projects',
+      '/:id',
+      '/:id/manufacturing-evidence',
+      '/:id/engineering-release-preview',
+      '/:id/readiness',
     ]) {
-      expect(qmsRoute).toContain(route);
+      expect(qmsRoute).toMatch(
+        new RegExp(
+          `router\\.get\\(\\s*['"]${route.replaceAll('/', '\\/')}['"]\\s*,\\s*requireDesignControlView`
+        )
+      );
     }
   });
 

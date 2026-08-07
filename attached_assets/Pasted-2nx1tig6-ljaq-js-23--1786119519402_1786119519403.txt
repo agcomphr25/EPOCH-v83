@@ -1,0 +1,76 @@
+2nx1tig6_ljaq.js:23 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+   ///////////////////////////
+      /////////////////////
+      
+2nx1tig6_ljaq.js:23 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+2nx1tig6_ljaq.js:23 [LaunchDarkly] LaunchDarkly client initialized
+/t/ag-composites?supportform=true:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ Unrecognized feature: 'speaker-selection'.
+ Allow attribute will take precedence over 'allowfullscreen'.
+ Allow attribute will take precedence over 'allowpaymentrequest'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Ari8%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: Object
+injected.js:37 React hooks: Object
+injected.js:37 [EPOCH SYNC] Sync engine starting
+injected.js:37 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 120000ms, deployment: false)
+injected.js:37 Redirecting admin to /admin-dashboard
+621a4fe3-c14c-4765-a615-e43ef8556b5a-00-2t4h7l0ql61d9.worf.replit.dev/api/permissions/me:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+injected.js:37 [AUTH] Query returned 401 for /api/permissions/me
+(anonymous) @ injected.js:37
+injected.js:37 [AUTH] 401 on /api/permissions/me — checking session state
+(anonymous) @ injected.js:37
+621a4fe3-c14c-4765-a615-e43ef8556b5a-00-2t4h7l0ql61d9.worf.replit.dev/api/internal-messages/unread/count/2:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+621a4fe3-c14c-4765-a615-e43ef8556b5a-00-2t4h7l0ql61d9.worf.replit.dev/api/policies/outstanding:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+injected.js:37 [AUTH] Query returned 401 for /api/policies/outstanding
+(anonymous) @ injected.js:37
+injected.js:37 [AUTH] 401 on /api/policies/outstanding — checking session state
+(anonymous) @ injected.js:37
+injected.js:37 [AUTH] Session alive — retrying /api/permissions/me once after 401
+(anonymous) @ injected.js:37
+injected.js:37 [AUTH] Session alive — retrying /api/policies/outstanding once after 401
+(anonymous) @ injected.js:37
+621a4fe3-c14c-4765-a615-e43ef8556b5a-00-2t4h7l0ql61d9.worf.replit.dev/api/permissions/me:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+621a4fe3-c14c-4765-a615-e43ef8556b5a-00-2t4h7l0ql61d9.worf.replit.dev/api/policies/outstanding:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+injected.js:37 🌐 API Request to /api/admin/queue-integrity/status (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/parts-requests/owner-approvals (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/admin/queue-integrity/status: 200
+injected.js:37 ✅ API Response from /api/inventory/parts-requests/owner-approvals: 200
+injected.js:37 ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 200
+621a4fe3-c14c-4765-a615-e43ef8556b5a-00-2t4h7l0ql61d9.worf.replit.dev/api/internal-messages/unread/count/2:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+00e85907a602bbcfbe1054e15cbf9db47d74432fab9acd8dedec286c7ca9438b:1  Failed to load resource: the server responded with a status of 404 ()
+729fc662ad4cde063665e6cfc4443f7a68ff3fc58bdb835cb4157773f730a213:1  Failed to load resource: the server responded with a status of 404 ()
+7391980a62497e22001f1a007f4e3ab5a16025937eb7884107292d25e429f624:1  Failed to load resource: the server responded with a status of 404 ()

@@ -29,6 +29,7 @@ export type ControlledDocumentActor = {
   id: number;
   username: string;
   role: string;
+  auditActorId?: number | null;
 };
 export type RequestEvidence = {
   ipAddress?: string | null;
@@ -160,7 +161,12 @@ const audit = async (
       sourceService: 'controlledDocumentLifecycle.service',
       actor: {
         ...actor,
-        id: auditActorId === undefined ? actor.id : auditActorId,
+        id:
+          auditActorId === undefined
+            ? actor.auditActorId === undefined
+              ? actor.id
+              : actor.auditActorId
+            : auditActorId,
       },
       reason,
       ipAddress: request.ipAddress,

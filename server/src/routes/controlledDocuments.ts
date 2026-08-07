@@ -63,6 +63,10 @@ const lifecycleActor = (req: Request) => {
     id: Number(user.id),
     username: String(user.username),
     role: String(user.role),
+    auditActorId:
+      user.employeeId != null && Number.isInteger(Number(user.employeeId))
+        ? Number(user.employeeId)
+        : null,
   };
 };
 
@@ -142,7 +146,8 @@ async function getUserFromSession(req: Request): Promise<any | null> {
 
     // Get user data from database
     const dbUserResult = await pool.query(
-      `SELECT id, username, role FROM users WHERE username = $1 AND is_active = true`,
+      `SELECT id, username, role, employee_id AS "employeeId"
+       FROM users WHERE username = $1 AND is_active = true`,
       [session.username.toLowerCase()]
     );
 
@@ -346,12 +351,12 @@ const authorizeControlledDocumentAccess = async (
     (!grantRequired || (await hasControlledDocumentGrant(document.id, actor)));
 
   if (!allowed) {
-    await writeAccessLog({
-      documentId: document.id,
-      userId: actor.username,
-      action: 'denied',
-      ipAddress: requestEvidence(req).ipAddress ?? 'unknown',
-    });
+    await recordControlledDocumentDenial(
+      req,
+      document.id,
+      actor,
+      requestEvidence(req).ipAddress ?? 'unknown'
+    );
     throw new ControlledDocumentError(
       403,
       'CONTROLLED_DOCUMENT_ACCESS_DENIED',
@@ -995,6 +1000,18 @@ router.get(
       const releasedById = new Map(
         releasedRevisions.map((revision) => [revision.id, revision])
       );
+      const phase2ReleasedDocumentIds = new Set<string>();
+      if (isControlledDocumentPhase2Enabled() && docs.length > 0) {
+        const phase2ReleaseEvents = await pool.query(
+          `SELECT DISTINCT controlled_document_id::text AS document_id
+           FROM controlled_document_approval_release_events
+           WHERE controlled_document_id = ANY($1::uuid[])`,
+          [docs.map((doc) => doc.id)]
+        );
+        for (const row of phase2ReleaseEvents.rows) {
+          phase2ReleasedDocumentIds.add(String(row.document_id));
+        }
+      }
       res.json(
         docs.map((doc) => {
           const released = doc.currentReleasedRevisionId
@@ -1014,6 +1031,7 @@ router.get(
             ) || String(doc.lifecycleStatus || '').toUpperCase() === 'RELEASED';
           return {
             ...doc,
+            phase2ProspectiveRelease: phase2ReleasedDocumentIds.has(doc.id),
             compatibilityStatus: releasedVerified
               ? 'Released and Verified'
               : legacyApproved && doc.filePath
@@ -1387,44 +1405,49 @@ router.get(
   controlledDocumentViewPermission,
   controlledDocumentAccessPolicy,
   async (req: Request, res: Response) => {
+    const actor = lifecycleActor(req);
+    const ipAddress = requestEvidence(req).ipAddress ?? 'unknown';
+    let documentIdForAudit: string | null = null;
     try {
       const state = await getControlledDocumentState(req.params.id);
+      documentIdForAudit = state.document.id;
       const revision = state.revisions.find(
         (candidate) => candidate.id === req.params.revisionId
       );
-      if (!revision)
+      if (!revision) {
+        await recordControlledDocumentDenial(
+          req,
+          state.document.id,
+          actor,
+          ipAddress
+        );
         return res.status(404).json({
           error: 'REVISION_RECORD_MISSING',
           message:
             'The requested revision record does not exist for this document',
         });
-      if (!revision.filePath)
+      }
+      if (!revision.filePath) {
+        await recordControlledDocumentDenial(
+          req,
+          state.document.id,
+          actor,
+          ipAddress
+        );
         return res.status(422).json({
           error: 'FILE_REFERENCE_MISSING',
           message: 'This revision has no file reference',
         });
-      const actor = await authorizeControlledDocumentAccess(
-        req,
-        state.document
-      );
-      try {
-        await assertExactRevisionPermission(actor, revision);
-      } catch (error) {
-        await writeAccessLog({
-          documentId: state.document.id,
-          userId: actor.username,
-          action: 'denied',
-          ipAddress: requestEvidence(req).ipAddress ?? 'unknown',
-        });
-        throw error;
       }
+      await authorizeControlledDocumentAccess(req, state.document);
+      await assertExactRevisionPermission(actor, revision);
       if (getExternalRedirectUrl(revision.filePath)) {
-        await writeAccessLog({
-          documentId: state.document.id,
-          userId: actor.username,
-          action: 'denied',
-          ipAddress: requestEvidence(req).ipAddress ?? 'unknown',
-        });
+        await recordControlledDocumentDenial(
+          req,
+          state.document.id,
+          actor,
+          ipAddress
+        );
         return res.status(422).json({
           error: 'EXTERNAL_REFERENCE_REQUIRES_RECONCILIATION',
           message:
@@ -1443,7 +1466,7 @@ router.get(
         documentId: state.document.id,
         userId: actor.username,
         action: 'download',
-        ipAddress: requestEvidence(req).ipAddress ?? 'unknown',
+        ipAddress,
       });
       res.setHeader(
         'Content-Type',
@@ -1455,6 +1478,14 @@ router.get(
       );
       res.send(buffer);
     } catch (error) {
+      if (documentIdForAudit) {
+        await recordControlledDocumentDenial(
+          req,
+          documentIdForAudit,
+          actor,
+          ipAddress
+        );
+      }
       sendLifecycleError(
         res,
         error,

@@ -435,6 +435,21 @@ export default function MasterDocumentRegister() {
     const compatibilityStatus = (doc as any).compatibilityStatus as
       string | undefined;
     /* eslint-enable prettier/prettier */
+    if (
+      phase2Enabled &&
+      (
+        doc as ControlledDocument & {
+          phase2ProspectiveRelease?: boolean;
+        }
+      ).phase2ProspectiveRelease === true &&
+      doc.lifecycleStatus === 'RELEASED'
+    ) {
+      return (
+        <Badge className="bg-emerald-700">
+          Released — approved and available for use
+        </Badge>
+      );
+    }
     if (compatibilityStatus === 'Released and Verified') {
       return <Badge className="bg-emerald-700">Released and Verified</Badge>;
     }
@@ -796,7 +811,9 @@ export default function MasterDocumentRegister() {
       setNewDocumentType('');
       toast({
         title: 'Success',
-        description: 'Document created successfully',
+        description: phase2Enabled
+          ? 'Document registered and awaiting approval'
+          : 'Document created successfully',
       });
     },
     onError: (error: any) => {
@@ -1103,7 +1120,7 @@ export default function MasterDocumentRegister() {
                     }}
                   >
                     <Plus className="h-4 w-4" />
-                    New Document
+                    {phase2Enabled ? 'Register Document' : 'New Document'}
                   </Button>
                 </>
               )}
@@ -1666,12 +1683,18 @@ export default function MasterDocumentRegister() {
                                   size="sm"
                                   variant="default"
                                   className="bg-green-600 hover:bg-green-700"
-                                  title="Approve"
+                                  title={
+                                    phase2Enabled
+                                      ? 'Approve and Release'
+                                      : 'Approve'
+                                  }
                                   onClick={() => openApproveDialog(doc)}
                                   data-testid={`button-approve-${doc.id}`}
                                 >
                                   <CheckCircle className="h-4 w-4 mr-1" />
-                                  Approve
+                                  {phase2Enabled
+                                    ? 'Approve and Release'
+                                    : 'Approve'}
                                 </Button>
                               )}
                             {phase2Enabled &&
@@ -1759,9 +1782,15 @@ export default function MasterDocumentRegister() {
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create New Controlled Document</DialogTitle>
+            <DialogTitle>
+              {phase2Enabled
+                ? 'Register Controlled Document'
+                : 'Create New Controlled Document'}
+            </DialogTitle>
             <DialogDescription>
-              Upload a new controlled document for P1 or P2 operations
+              {phase2Enabled
+                ? 'Registration counts as submission and awaits independent approval.'
+                : 'Upload a new controlled document for P1 or P2 operations'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1958,8 +1987,12 @@ export default function MasterDocumentRegister() {
                 data-testid="button-submit-create"
               >
                 {createDocumentMutation.isPending
-                  ? 'Creating...'
-                  : 'Create Document'}
+                  ? phase2Enabled
+                    ? 'Registering...'
+                    : 'Creating...'
+                  : phase2Enabled
+                    ? 'Register Document'
+                    : 'Create Document'}
               </Button>
             </DialogFooter>
           </form>

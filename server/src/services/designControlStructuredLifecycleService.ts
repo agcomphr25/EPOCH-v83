@@ -103,15 +103,47 @@ const schemas = {
   }),
   REVIEW: z.object({
     reviewNumber: requiredText,
-    reviewType: z.enum(['PRELIMINARY', 'FINAL']),
+    reviewType: z.enum([
+      'PRELIMINARY',
+      'FINAL',
+      'General Design Review',
+      'PDR (Preliminary Design Review)',
+      'CDR (Critical Design Review)',
+      'Combined PDR/CDR (Combined Preliminary Design Review and Critical Design Review)',
+      'TRR (Test Readiness Review)',
+      'PRR (Production Readiness Review)',
+      'Final Design Review',
+      'Other controlled review type',
+    ]),
+    reviewPurpose: requiredText,
     reviewDate: requiredText,
     attendees: z
       .array(z.object({ name: requiredText, role: requiredText }))
       .min(1),
+    productDescription: requiredText,
     reviewedConfiguration: requiredText,
-    decision: z.enum(['PROCEED', 'PROCEED_WITH_CONDITIONS', 'HOLD']),
+    decision: z.enum([
+      'PROCEED',
+      'PROCEED_WITH_CONDITIONS',
+      'HOLD',
+      'APPROVED',
+      'APPROVED_WITH_ACTION_ITEMS',
+      'CONDITIONAL_APPROVAL',
+      'NOT_APPROVED',
+    ]),
     conditions: optionalText,
     minutesEvidence: requiredText,
+    requirementsAssessment: requiredText,
+    manufacturingAssessment: requiredText,
+    preliminaryAnalysis: requiredText,
+    risksAndOpenIssues: requiredText,
+    readinessCriteria: requiredText,
+    notApplicableJustification: optionalText,
+    controlledDocumentReference: requiredText,
+    sourceMappingStatus: z.enum([
+      'PENDING_AUTHORIZED_CONFIRMATION',
+      'CONFIRMED',
+    ]),
     requiredApprovals: z.array(requiredText).min(1),
   }),
   VERIFICATION: z.object({
@@ -691,6 +723,45 @@ export async function submitStructuredRecord(input: {
           ),
         }
       );
+    if (input.type === 'REVIEW') {
+      const review = parsed.data;
+      if (
+        [
+          'APPROVED_WITH_ACTION_ITEMS',
+          'CONDITIONAL_APPROVAL',
+          'NOT_APPROVED',
+          'PROCEED_WITH_CONDITIONS',
+          'HOLD',
+        ].includes(String(review.decision)) &&
+        !String(review.conditions ?? '').trim()
+      )
+        throw new DesignControlStructuredError(
+          422,
+          'REVIEW_DECISION_COMMENTS_REQUIRED',
+          'Comments or conditions are required for this Design Review decision'
+        );
+      const hasNotApplicable = [
+        review.requirementsAssessment,
+        review.manufacturingAssessment,
+        review.preliminaryAnalysis,
+        review.readinessCriteria,
+      ].some((value) => /(^|\W)N\/?A(\W|$)/i.test(String(value ?? '')));
+      if (
+        hasNotApplicable &&
+        !String(review.notApplicableJustification ?? '').trim()
+      )
+        throw new DesignControlStructuredError(
+          422,
+          'NOT_APPLICABLE_JUSTIFICATION_REQUIRED',
+          'N/A (Not Applicable) requires a reason'
+        );
+      if (review.sourceMappingStatus !== 'CONFIRMED')
+        throw new DesignControlStructuredError(
+          422,
+          'SOURCE_MAPPING_CONFIRMATION_REQUIRED',
+          'An authorized user must confirm source-document mappings before submission'
+        );
+    }
     if (
       input.type === 'VERIFICATION' &&
       current.contentSnapshot.passFail === 'FAIL' &&

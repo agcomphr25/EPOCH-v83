@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import type { StructuredDesignControlRecordType } from './designControlFieldPresentation';
+import { expandDesignControlTerm } from '@shared/designControlTerminology';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,17 @@ type Definition = {
   singular: string;
   fields: Field[];
 };
+
+const reviewTypes = [
+  'General Design Review',
+  expandDesignControlTerm('PDR'),
+  expandDesignControlTerm('CDR'),
+  'Combined PDR/CDR (Combined Preliminary Design Review and Critical Design Review)',
+  expandDesignControlTerm('TRR'),
+  expandDesignControlTerm('PRR'),
+  'Final Design Review',
+  'Other controlled review type',
+];
 
 const verificationMethods = [
   'Inspection',
@@ -200,8 +212,14 @@ const definitions: Definition[] = [
       {
         key: 'reviewType',
         label: 'Review type',
-        options: ['PRELIMINARY', 'FINAL'],
-        guidance: 'Select Preliminary or Final Design Review.',
+        options: reviewTypes,
+        guidance:
+          'Confirm the classification and purpose. EPOCH may recommend a type, but never assigns one silently.',
+      },
+      {
+        key: 'reviewPurpose',
+        label: 'Purpose and objectives',
+        guidance: 'Explain what the review team is deciding and why.',
       },
       { key: 'reviewDate', label: 'Review date', guidance: 'Use YYYY-MM-DD.' },
       {
@@ -211,15 +229,26 @@ const definitions: Definition[] = [
         guidance: 'One attendee per line as Name | Role.',
       },
       {
+        key: 'productDescription',
+        label: 'Design description',
+        guidance: 'Describe the product, system, and maturity being reviewed.',
+      },
+      {
         key: 'reviewedConfiguration',
-        label: 'Reviewed configuration / revision',
+        label: 'System configuration and revision reviewed',
         guidance: 'Identify the exact reviewed baseline.',
       },
       {
         key: 'decision',
-        label: 'Decision',
-        options: ['PROCEED', 'PROCEED_WITH_CONDITIONS', 'HOLD'],
-        guidance: 'Record the review disposition.',
+        label: 'Review decision',
+        options: [
+          'APPROVED',
+          'APPROVED_WITH_ACTION_ITEMS',
+          'CONDITIONAL_APPROVAL',
+          'NOT_APPROVED',
+        ],
+        guidance:
+          'This Design Review decision records design maturity only. It never releases manufacturing.',
       },
       {
         key: 'conditions',
@@ -228,8 +257,58 @@ const definitions: Definition[] = [
       },
       {
         key: 'minutesEvidence',
-        label: 'Minutes / evidence',
+        label: 'Review minutes and evidence',
         guidance: 'Reference retained minutes and objective evidence.',
+      },
+      {
+        key: 'requirementsAssessment',
+        label: 'Design requirements and performance assessment',
+        guidance:
+          'Link authoritative requirements and record Complete, Partial, Open, or N/A (Not Applicable).',
+      },
+      {
+        key: 'manufacturingAssessment',
+        label: 'Manufacturing-readiness assessment',
+        guidance:
+          'Assess tooling, first articles, instructions, inspection, materials, and processes without releasing them.',
+      },
+      {
+        key: 'preliminaryAnalysis',
+        label: 'Preliminary analysis and design outputs reviewed',
+        guidance:
+          'Identify controlled analyses, drawings, models, and calculations.',
+      },
+      {
+        key: 'risksAndOpenIssues',
+        label: 'Linked risks and open issues',
+        guidance:
+          'Link the authoritative Design Risk Register; do not copy risks here.',
+      },
+      {
+        key: 'readinessCriteria',
+        label: 'Readiness and exit criteria',
+        guidance:
+          'Record each criterion as Complete, Partial, Open, or N/A (Not Applicable).',
+      },
+      {
+        key: 'notApplicableJustification',
+        label: 'N/A (Not Applicable) justification',
+        guidance:
+          'Required whenever any assessment is marked N/A (Not Applicable).',
+        required: false,
+      },
+      {
+        key: 'controlledDocumentReference',
+        label: `${expandDesignControlTerm('MDR')} controlled document reference`,
+        guidance:
+          'Link the existing Design Review report and exact revision. Do not replace or overwrite the original.',
+      },
+      {
+        key: 'sourceMappingStatus',
+        label: 'Source-document mapping status',
+        options: ['PENDING_AUTHORIZED_CONFIRMATION', 'CONFIRMED'],
+        guidance:
+          'Mapped Word-form values remain non-authoritative until an authorized user confirms them.',
       },
       {
         key: 'requiredApprovals',
@@ -295,8 +374,7 @@ const definitions: Definition[] = [
       {
         key: 'exceptionDisposition',
         label: 'Exception / disposition',
-        guidance:
-          'Required for a failed result; reference action, risk, NCR, ECR, or ECN.',
+        guidance: `Required for a failed result; reference an action, risk, ${expandDesignControlTerm('NCR')}, ${expandDesignControlTerm('ECR')}, or ${expandDesignControlTerm('ECN')}.`,
       },
       {
         key: 'reviewer',
@@ -514,6 +592,15 @@ export function StructuredRecordsWorkspace({
     mandatory: true,
   });
 
+  const activeDraftReview =
+    type === 'REVIEW'
+      ? query.data?.records.find((row) =>
+          ['DRAFT', 'RETURNED', 'REJECTED'].includes(
+            row.currentVersion?.lifecycleStatus || ''
+          )
+        )
+      : undefined;
+
   useEffect(() => {
     const content = selected?.currentVersion?.contentSnapshot ?? {};
     setValues(
@@ -542,6 +629,13 @@ export function StructuredRecordsWorkspace({
             'correctiveAction',
             'customerAcceptance',
           ].includes(field.key)
+        )
+          return false;
+        if (
+          field.key === 'notApplicableJustification' &&
+          !Object.values(values).some((value) =>
+            /(^|\W)N\/?A(\W|$)/i.test(value)
+          )
         )
           return false;
         return (
@@ -591,6 +685,20 @@ export function StructuredRecordsWorkspace({
               {item.title}
             </Button>
           ))}
+        </div>
+      )}
+      {type === 'REVIEW' && activeDraftReview && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-500/40 bg-blue-50 p-4 text-sm">
+          <div>
+            <strong>Existing Design Review draft found.</strong> Continue the
+            same controlled record; no duplicate will be created.
+          </div>
+          <Button
+            onClick={() => setSelectedId(activeDraftReview.id)}
+            type="button"
+          >
+            Continue Design Review
+          </Button>
         </div>
       )}
       <div
@@ -734,6 +842,16 @@ export function StructuredRecordsWorkspace({
               <div className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm">
                 <strong>Before submission:</strong> complete{' '}
                 {missing.map((field) => field.label).join(', ')}.
+              </div>
+            )}
+            {type === 'REVIEW' && (
+              <div className="rounded-md border p-3 text-sm text-muted-foreground">
+                <strong className="text-foreground">Controlled handoff:</strong>{' '}
+                approval of this {expandDesignControlTerm('DR')} is
+                design-maturity evidence only. A separate item-level or
+                complete-product Engineering Release, with Engineering and
+                Quality approval, is always required before manufacturing
+                receives an approved baseline.
               </div>
             )}
             {!readOnly && (

@@ -40,7 +40,7 @@ import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import ShipmentSummaryModal from './ShipmentSummaryModal';
 import P2InvoicePreviewButton from './P2InvoicePreviewButton';
-import { isHistoricalP2InventoryUnit } from '@/lib/p2ShippingUnitStatus';
+import { isCompletedP2ShippingUnit, isHistoricalP2InventoryUnit } from '@/lib/p2ShippingUnitStatus';
 
 type SerializedUnit = {
   id: string;
@@ -310,7 +310,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
       if (unit.finalizedAt && unit.sku && unit.drawingName) {
         groups[key].finalizedCount++;
       }
-      if (unit.completedAt) {
+      if (isCompletedP2ShippingUnit(unit)) {
         groups[key].readyToShip++;
       } else {
         groups[key].inProduction++;
@@ -348,7 +348,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     const group = poGroups.find((g) => g.poNumber === expandedPO);
     if (!group) return;
     const unfinalized = group.units.filter(
-      (u) => u.completedAt && (!u.finalizedAt || !u.sku || !u.drawingName)
+      (u) => isCompletedP2ShippingUnit(u) && (!u.finalizedAt || !u.sku || !u.drawingName)
     );
     if (unfinalized.length === 0) return;
     const sample = unfinalized[0];
@@ -679,7 +679,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
       finalized += g.finalizedCount;
       readyToShip += g.readyToShip;
       needsFinalization += currentUnits.filter(
-        (u) => u.completedAt && (!u.finalizedAt || !u.sku || !u.drawingName)
+        (u) => isCompletedP2ShippingUnit(u) && (!u.finalizedAt || !u.sku || !u.drawingName)
       ).length;
     }
     return { totalUnits, finalized, readyToShip, needsFinalization, poCount: poGroups.length };
@@ -754,7 +754,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           {filteredGroups.map((group) => {
             const isExpanded = expandedPO === group.poNumber;
             const completedUnfinalized = group.units.filter(
-              (u) => u.completedAt && (!u.finalizedAt || !u.sku || !u.drawingName)
+              (u) => isCompletedP2ShippingUnit(u) && (!u.finalizedAt || !u.sku || !u.drawingName)
             );
             const finalizedUnits = group.units.filter(
               (u) => !!(u.finalizedAt && u.sku && u.drawingName)
@@ -945,9 +945,9 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                     {(() => {
                       const historicalInventoryUnits = group.units.filter(isHistoricalP2InventoryUnit);
                       const currentUnits = group.units.filter((u) => !isHistoricalP2InventoryUnit(u));
-                      const inProductionUnits = currentUnits.filter((u) => !u.completedAt);
+                      const inProductionUnits = currentUnits.filter((u) => !isCompletedP2ShippingUnit(u));
                       const needsFinalizationUnits = group.units.filter(
-                        (u) => !isHistoricalP2InventoryUnit(u) && u.completedAt && !(u.finalizedAt && u.sku && u.drawingName)
+                        (u) => !isHistoricalP2InventoryUnit(u) && isCompletedP2ShippingUnit(u) && !(u.finalizedAt && u.sku && u.drawingName)
                       );
 
                       // Build status sections — only render non-empty ones
@@ -961,7 +961,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                       const renderTableRows = (units: SerializedUnit[]) =>
                         units.map((unit) => {
                           const isFinalized = !!(unit.finalizedAt && unit.sku && unit.drawingName);
-                          const isCompleted = !!unit.completedAt;
+                          const isCompleted = isCompletedP2ShippingUnit(unit);
                           const isNeedingFinalization = isCompleted && !isFinalized;
                           const isSelectedForFinalize = finSelForPO.has(unit.id);
                           const isSelectedForShip = shipSelForPO.has(unit.id);

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DESIGN_CONTROL_WORKFLOW } from '@shared/designControlWorkflow';
+import {
+  DESIGN_CONTROL_PHASES,
+  designControlPhaseForStep,
+} from '@shared/designControlPhases';
 import { expandDesignControlTerm } from '@shared/designControlTerminology';
 import {
   AlertTriangle,
@@ -76,21 +80,6 @@ type Detail = {
   changes: LiveRow[];
   releaseGate?: { status?: string; blockers?: unknown[] } | null;
 };
-
-const lifecycleLabels = [
-  'Project Intake',
-  'Design Planning',
-  'Design Inputs',
-  'Requirements Review',
-  'Design Risk',
-  'Concept / Preliminary Review',
-  'Design Outputs',
-  'Prototype / First Article',
-  'Verification',
-  'Validation',
-  'Final Design Review',
-  'Engineering Release',
-] as const;
 
 function displayStatus(value?: string | null) {
   const normalized = (value || 'not_started').toLowerCase();
@@ -251,6 +240,31 @@ export function DesignControlWorkspace({
   );
   const structuredRecordType =
     STRUCTURED_RECORD_TYPE_BY_STEP[selectedDefinition.key];
+  const activePhase = designControlPhaseForStep(selectedDefinition.key)!;
+  const phaseStatus = (stepKeys: readonly string[]) => {
+    const statuses = stepKeys.map(
+      (key) => stepByKey.get(key)?.status?.toLowerCase() || 'not_started'
+    );
+    if (statuses.some((status) => ['rejected', 'blocked'].includes(status)))
+      return 'Blocked';
+    if (
+      statuses.some((status) =>
+        ['returned', 'returned_for_revision'].includes(status)
+      )
+    )
+      return 'Returned';
+    if (statuses.every((status) => ['approved', 'complete'].includes(status)))
+      return 'Approved';
+    if (
+      statuses.some((status) =>
+        ['submitted', 'submitted_for_approval'].includes(status)
+      )
+    )
+      return 'Ready for review';
+    if (statuses.every((status) => status === 'not_started'))
+      return 'Not started';
+    return 'In progress';
+  };
 
   return (
     <section className="space-y-4" aria-label="Design Control workspace">
@@ -272,6 +286,9 @@ export function DesignControlWorkspace({
                 Status: {displayStatus(detail.record.status)}
               </Badge>
               <Badge variant="outline">Progress: {completed}/12</Badge>
+              <Badge variant="outline">
+                Phase {activePhase.order}: {activePhase.title}
+              </Badge>
               {readOnly && (
                 <Badge variant="secondary">
                   <LockKeyhole className="mr-1 h-3 w-3" />
@@ -283,15 +300,31 @@ export function DesignControlWorkspace({
         </CardHeader>
         <CardContent>
           <ol
-            className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
-            aria-label="Design lifecycle"
+            className="grid gap-2 md:grid-cols-2 xl:grid-cols-3"
+            aria-label="Six Design Control phases"
           >
-            {lifecycleLabels.map((label, index) => (
-              <li className="rounded-md border p-2 text-xs" key={label}>
-                <span className="font-semibold">{index + 1}.</span> {label}
+            {DESIGN_CONTROL_PHASES.map((phase) => (
+              <li
+                className={`rounded-md border p-3 text-sm ${phase.key === activePhase.key ? 'border-primary bg-primary/5' : ''}`}
+                key={phase.key}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-semibold">
+                    {phase.order}. {phase.title}
+                  </span>
+                  <Badge variant="outline">{phaseStatus(phase.stepKeys)}</Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {phase.explanation}
+                </p>
               </li>
             ))}
           </ol>
+          <p className="mt-3 text-sm">
+            Six plain-language phases organize the work. All 12 controlled
+            lifecycle stages, approvals, versions, and audit events remain
+            intact underneath.
+          </p>
           <p className="mt-3 text-sm text-muted-foreground">
             Revision A establishes the initial baseline. Released designs use
             {expandDesignControlTerm('ECR')} approval and{' '}
@@ -303,7 +336,7 @@ export function DesignControlWorkspace({
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-auto flex-wrap justify-start">
-          <TabsTrigger value="lifecycle">12 steps</TabsTrigger>
+          <TabsTrigger value="lifecycle">Design phases</TabsTrigger>
           <TabsTrigger value="evidence">Evidence registers</TabsTrigger>
           <TabsTrigger value="traceability">Traceability</TabsTrigger>
           <TabsTrigger value="final-review">Final review</TabsTrigger>

@@ -41,12 +41,35 @@ const terminology = fs.readFileSync(
   path.join(root, 'shared/designControlTerminology.ts'),
   'utf8'
 );
+const phases = fs.readFileSync(
+  path.join(root, 'shared/designControlPhases.ts'),
+  'utf8'
+);
 
 describe('Phase 11 unified Design Control workspace', () => {
   it('uses the canonical twelve-step definition', () => {
     expect(workspace).toContain('import { DESIGN_CONTROL_WORKFLOW }');
     expect(workspace).toContain('Progress: {completed}/12');
     expect(workspace).not.toMatch(/const\s+workflowSteps\s*=/);
+  });
+
+  it('presents six plain-language phases while preserving all twelve stages', () => {
+    for (const title of [
+      'Define the Project',
+      'Requirements and Risks',
+      'Develop the Design',
+      'Build, Review, and Test',
+      'Final Design Approval',
+      'Release to Manufacturing',
+    ]) {
+      expect(phases).toContain(title);
+    }
+    for (let step = 1; step <= 12; step += 1) {
+      expect(phases).toContain(`'${step}'`);
+    }
+    expect(workspace).toContain('Six Design Control phases');
+    expect(workspace).toContain('All 12 controlled');
+    expect(workspace).toContain('Design phases');
   });
 
   it('is shared by R&D project mode and QMS oversight mode', () => {

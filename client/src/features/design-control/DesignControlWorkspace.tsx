@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DESIGN_CONTROL_WORKFLOW } from '@shared/designControlWorkflow';
+import { expandDesignControlTerm } from '@shared/designControlTerminology';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -293,8 +294,9 @@ export function DesignControlWorkspace({
           </ol>
           <p className="mt-3 text-sm text-muted-foreground">
             Revision A establishes the initial baseline. Released designs use
-            ECR approval and ECN implementation before a Revision B+ baseline is
-            released.
+            {expandDesignControlTerm('ECR')} approval and{' '}
+            {expandDesignControlTerm('ECN')} implementation before a Revision B+
+            baseline is released.
           </p>
         </CardContent>
       </Card>
@@ -309,7 +311,9 @@ export function DesignControlWorkspace({
           <TabsTrigger value="configuration">Configuration</TabsTrigger>
           <TabsTrigger value="changes">Engineering changes</TabsTrigger>
           <TabsTrigger value="documents">Forms &amp; copies</TabsTrigger>
-          <TabsTrigger value="dhf">DHF &amp; package</TabsTrigger>
+          <TabsTrigger value="dhf">
+            {expandDesignControlTerm('DHF')} &amp; package
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent
@@ -469,9 +473,11 @@ export function DesignControlWorkspace({
         <TabsContent value="changes" className="space-y-4">
           <Card>
             <CardContent className="pt-6 text-sm">
-              <strong>ECR</strong> asks whether a change should be made.{' '}
-              <strong>ECN</strong> controls implementation. Engineering Release
-              establishes the resulting controlled baseline.
+              <strong>{expandDesignControlTerm('ECR')}</strong> asks whether a
+              change should be made.{' '}
+              <strong>{expandDesignControlTerm('ECN')}</strong> controls
+              implementation. Engineering Release establishes the resulting
+              controlled baseline.
             </CardContent>
           </Card>
           <EngineeringChangeRequestRegister
@@ -512,7 +518,8 @@ export function DesignControlWorkspace({
           ) : (
             <div className="rounded-md border p-6 text-sm text-muted-foreground">
               <FileSearch className="mb-2 h-5 w-5" />A released Engineering
-              baseline is required before a DHF can be generated.
+              baseline is required before a {expandDesignControlTerm('DHF')} can
+              be generated.
             </div>
           )}
           {!releaseId && (

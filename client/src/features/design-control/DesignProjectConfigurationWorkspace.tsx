@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { expandDesignControlTerm } from '@shared/designControlTerminology';
 import {
   ChevronDown,
   ChevronRight,
@@ -129,8 +130,8 @@ const steps = [
   },
 ];
 const labels: Record<string, string> = {
-  DRAWING_CAD: 'Drawing / CAD',
-  BOM: 'BOM',
+  DRAWING_CAD: `Drawing / ${expandDesignControlTerm('CAD')}`,
+  BOM: expandDesignControlTerm('BOM'),
   ROUTING: 'Routing',
   TRAVELER: 'Traveler',
   WORK_INSTRUCTION: 'Work instructions',
@@ -841,7 +842,7 @@ export function DesignProjectConfigurationWorkspace({
                         />
                       </Label>
                       <Label>
-                        ECR ID
+                        {expandDesignControlTerm('ECR')} identifier
                         <Input
                           value={revisionForm.sourceEcrId}
                           onChange={(e) =>
@@ -853,7 +854,7 @@ export function DesignProjectConfigurationWorkspace({
                         />
                       </Label>
                       <Label>
-                        ECN ID
+                        {expandDesignControlTerm('ECN')} identifier
                         <Input
                           value={revisionForm.sourceEcnId}
                           onChange={(e) =>

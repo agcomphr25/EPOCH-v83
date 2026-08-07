@@ -30,6 +30,17 @@ const route = fs.readFileSync(
   path.join(root, 'server/src/routes/qmsDesignControl.ts'),
   'utf8'
 );
+const lifecycleService = fs.readFileSync(
+  path.join(
+    root,
+    'server/src/services/designControlStructuredLifecycleService.ts'
+  ),
+  'utf8'
+);
+const terminology = fs.readFileSync(
+  path.join(root, 'shared/designControlTerminology.ts'),
+  'utf8'
+);
 
 describe('Phase 11 unified Design Control workspace', () => {
   it('uses the canonical twelve-step definition', () => {
@@ -90,11 +101,43 @@ describe('Phase 11 unified Design Control workspace', () => {
   });
 
   it('explains ECR, ECN, and release distinctions', () => {
-    expect(workspace).toContain(
-      'ECR</strong> asks whether a change should be made'
-    );
-    expect(workspace).toContain('ECN</strong> controls implementation');
+    expect(workspace).toContain("expandDesignControlTerm('ECR')");
+    expect(workspace).toContain("expandDesignControlTerm('ECN')");
     expect(workspace).toMatch(/Engineering Release\s+establishes/);
+  });
+
+  it('continues an existing Design Review and explains controlled terminology', () => {
+    expect(structuredWorkspace).toContain('Continue Design Review');
+    expect(structuredWorkspace).toContain('no duplicate will be created');
+    expect(structuredWorkspace).toContain("expandDesignControlTerm('DR')");
+    for (const acronym of [
+      'SOW',
+      'PDR',
+      'CDR',
+      'TRR',
+      'PRR',
+      'BOM',
+      'CAD',
+      'ECR',
+      'ECN',
+      'DHF',
+      'UAS',
+      'FAI',
+      'WIP',
+      'QMS',
+      'MDR',
+      'P1',
+      'P2',
+      'AS9100',
+    ]) {
+      expect(terminology).toMatch(new RegExp(`\\b${acronym}:`));
+    }
+  });
+
+  it('enforces source confirmation, N/A reasons, and decision comments server-side', () => {
+    expect(lifecycleService).toContain('SOURCE_MAPPING_CONFIRMATION_REQUIRED');
+    expect(lifecycleService).toContain('NOT_APPLICABLE_JUSTIFICATION_REQUIRED');
+    expect(lifecycleService).toContain('REVIEW_DECISION_COMMENTS_REQUIRED');
   });
 
   it('distinguishes Revision A and Revision B+', () => {

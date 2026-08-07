@@ -97,6 +97,39 @@ describe('Design Control structured workspaces', () => {
           return new Response(JSON.stringify({ records: [] }), { status: 200 });
         if (url.endsWith('/structured/VALIDATION'))
           return new Response(JSON.stringify({ records: [] }), { status: 200 });
+        if (url.endsWith('/structured/REVIEW'))
+          return new Response(
+            JSON.stringify({
+              records: [
+                {
+                  id: 'privateer-review-1',
+                  title: 'Privateer Unmanned Aircraft System Design Review',
+                  status: 'draft',
+                  currentVersion: {
+                    id: 'privateer-review-version-1',
+                    version: 1,
+                    lifecycleStatus: 'DRAFT',
+                    contentSnapshot: {
+                      reviewNumber: '',
+                      reviewType: '',
+                      reviewPurpose:
+                        'Evaluate design maturity and readiness for tooling and first articles.',
+                      attendees: [
+                        {
+                          name: 'Synthetic Engineering Lead',
+                          role: 'Engineering Lead',
+                        },
+                      ],
+                      productDescription: 'Privateer Unmanned Aircraft System',
+                      sourceMappingStatus: 'PENDING_AUTHORIZED_CONFIRMATION',
+                    },
+                  },
+                  reviewActions: [],
+                },
+              ],
+            }),
+            { status: 200 }
+          );
         if (url.endsWith('/engineering-release-preview'))
           return new Response(
             JSON.stringify({
@@ -284,6 +317,61 @@ describe('Design Control structured workspaces', () => {
     expect(
       screen.queryByText('Design Inputs / Requirements')
     ).not.toBeInTheDocument();
+  });
+
+  it('continues the existing Privateer Design Review draft without creating a duplicate', async () => {
+    renderWithQuery(
+      <StructuredRecordsWorkspace
+        allowedTypes={['REVIEW']}
+        initialType="REVIEW"
+        readOnly={false}
+        recordId="record-1"
+      />
+    );
+
+    const continueButton = await screen.findByRole('button', {
+      name: 'Continue Design Review',
+    });
+    expect(
+      screen.getAllByText(/Privateer Unmanned Aircraft System/)
+    ).not.toHaveLength(0);
+    fireEvent.click(continueButton);
+    expect(
+      screen.getByDisplayValue(
+        'Evaluate design maturity and readiness for tooling and first articles.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText(/complete Review number/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Create draft' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/design-maturity evidence only/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/DR \(Design Review\)/i)).toBeInTheDocument();
+  });
+
+  it('requires a reason when a Design Review assessment uses N/A (Not Applicable)', async () => {
+    renderWithQuery(
+      <StructuredRecordsWorkspace
+        allowedTypes={['REVIEW']}
+        initialType="REVIEW"
+        readOnly={false}
+        recordId="record-1"
+      />
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Continue Design Review' })
+    );
+    fireEvent.change(
+      screen.getByLabelText('Manufacturing-readiness assessment', {
+        exact: false,
+      }),
+      { target: { value: 'N/A' } }
+    );
+    expect(
+      screen.getByText(/complete .*N\/A \(Not Applicable\) justification/i)
+    ).toBeInTheDocument();
   });
 
   it('shows server-calculated Engineering Release blockers and keeps release disabled', async () => {

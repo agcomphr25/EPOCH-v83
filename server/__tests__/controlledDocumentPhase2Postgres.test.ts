@@ -35,9 +35,14 @@ const viewerSessionToken = `mdr-viewer-session-${randomUUID()}`;
 const deniedRole = `MDR_DENIED_CERT_${randomUUID()}`;
 const deniedUsername = `mdr-denied-${randomUUID()}`;
 const deniedSessionToken = `mdr-denied-session-${randomUUID()}`;
+const creatorRole = `MDR_CREATOR_CERT_${randomUUID()}`;
+const creatorUsername = `mdr-creator-${randomUUID()}`;
+const creatorSessionToken = `mdr-creator-session-${randomUUID()}`;
 let approverId = 0;
 let approverEmployeeId = 0;
 let viewerId = 0;
+let creatorId = 0;
+let creatorEmployeeId = 0;
 let releasedPdfBytes = Buffer.alloc(0);
 let releasedPdfChecksum = '';
 const documentAssetRoot = path.resolve(
@@ -52,9 +57,9 @@ const outsidePdfPath = path.resolve(
   '..',
   `mdr-phase2-outside-${randomUUID()}.pdf`
 );
-const symlinkPdfName = `mdr-phase2-link-${randomUUID()}.pdf`;
-const symlinkPdfReference = `assets/documents/${symlinkPdfName}`;
-const symlinkPdfPath = path.join(documentAssetRoot, symlinkPdfName);
+const symlinkDirectoryName = `mdr-phase2-link-${randomUUID()}`;
+const symlinkDirectoryPath = path.join(documentAssetRoot, symlinkDirectoryName);
+const symlinkPdfReference = `assets/documents/${symlinkDirectoryName}/${path.basename(outsidePdfPath)}`;
 
 const accessApp = express();
 accessApp.use(express.json());
@@ -283,7 +288,11 @@ beforeAll(async () => {
   releasedPdfChecksum = checksumFile(releasedPdfBytes);
   await fs.writeFile(releasedPdfPath, releasedPdfBytes);
   await fs.writeFile(outsidePdfPath, releasedPdfBytes);
-  await fs.symlink(outsidePdfPath, symlinkPdfPath);
+  await fs.symlink(
+    path.dirname(outsidePdfPath),
+    symlinkDirectoryPath,
+    'junction'
+  );
   const employee = await pgPool.query(
     `INSERT INTO employees (name, user_role)
      VALUES ($1, 'EMPLOYEE') RETURNING id`,
@@ -337,6 +346,21 @@ beforeAll(async () => {
      VALUES ($1, 'Disposable denied viewer role')`,
     [deniedRole]
   );
+  const createCapability = await pgPool.query(
+    `INSERT INTO perm_capabilities (key, description, category)
+     VALUES ('documents.create', 'Register controlled documents', 'documents')
+     ON CONFLICT (key) DO UPDATE SET key = EXCLUDED.key RETURNING id`
+  );
+  const creatorRoleRow = await pgPool.query(
+    `INSERT INTO perm_roles (name, description)
+     VALUES ($1, 'Disposable document creator role') RETURNING id`,
+    [creatorRole]
+  );
+  await pgPool.query(
+    `INSERT INTO perm_role_capabilities (role_id, capability_id)
+     VALUES ($1, $2)`,
+    [creatorRoleRow.rows[0].id, createCapability.rows[0].id]
+  );
   const user = await pgPool.query(
     `INSERT INTO users (username, password_hash, role, employee_id)
      VALUES ($1, 'not-a-login-secret', $2, $3) RETURNING id`,
@@ -367,11 +391,24 @@ beforeAll(async () => {
      VALUES ($1, 'not-a-login-secret', $2) RETURNING id`,
     [deniedUsername, deniedRole]
   );
+  const creatorEmployee = await pgPool.query(
+    `INSERT INTO employees (name, user_role)
+     VALUES ($1, 'EMPLOYEE') RETURNING id`,
+    [`Phase 2 creator ${creatorUsername}`]
+  );
+  creatorEmployeeId = creatorEmployee.rows[0].id;
+  const creator = await pgPool.query(
+    `INSERT INTO users (username, password_hash, role, employee_id)
+     VALUES ($1, 'not-a-login-secret', $2, $3) RETURNING id`,
+    [creatorUsername, creatorRole, creatorEmployeeId]
+  );
+  creatorId = creator.rows[0].id;
   await pgPool.query(
     `INSERT INTO user_sessions
        (session_token, user_id, username, expires_at, is_active, last_credential_verified_at)
      VALUES ($1, $2, $3, NOW() + INTERVAL '1 hour', true, NOW()),
-            ($4, $5, $6, NOW() + INTERVAL '1 hour', true, NOW())`,
+            ($4, $5, $6, NOW() + INTERVAL '1 hour', true, NOW()),
+            ($7, $8, $9, NOW() + INTERVAL '1 hour', true, NOW())`,
     [
       viewerSessionToken,
       viewerId,
@@ -379,6 +416,9 @@ beforeAll(async () => {
       deniedSessionToken,
       denied.rows[0].id,
       deniedUsername,
+      creatorSessionToken,
+      creatorId,
+      creatorUsername,
     ]
   );
 });
@@ -388,12 +428,44 @@ afterAll(async () => {
   await Promise.allSettled([
     fs.unlink(releasedPdfPath),
     fs.unlink(outsidePdfPath),
-    fs.unlink(symlinkPdfPath),
+    fs.unlink(symlinkDirectoryPath),
   ]);
   await pgPool.end();
 });
 
 describe('controlled-document Phase 2 PostgreSQL 16.4 certification', () => {
+  it('registers through the authenticated route when user and employee IDs differ', async () => {
+    expect(creatorId).not.toBe(creatorEmployeeId);
+    const documentNumber = `MDR-REGISTER-${randomUUID()}`.toUpperCase();
+    const response = await request(accessApp)
+      .post('/api/controlled-documents')
+      .set('Authorization', `Bearer ${creatorSessionToken}`)
+      .field('documentNumber', documentNumber)
+      .field('documentName', 'Phase 2 authenticated registration')
+      .field('documentType', 'PROCEDURE')
+      .field('department', 'Quality')
+      .field('currentVersion', '1.0');
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      documentNumber,
+      lifecycleStatus: 'DRAFT',
+      status: 'draft',
+    });
+    const audit = await pgPool.query(
+      `SELECT actor_id, actor_name
+       FROM audit_events
+       WHERE subject_type = 'controlled_document'
+         AND subject_id = $1
+       ORDER BY id DESC LIMIT 1`,
+      [response.body.id]
+    );
+    expect(audit.rows[0]).toMatchObject({
+      actor_id: creatorEmployeeId,
+      actor_name: creatorUsername,
+    });
+  });
+
   it('certifies the complete Phase 2 schema contract and append-only trigger', async () => {
     await expect(
       assertControlledDocumentPhase2SchemaReady()
@@ -930,6 +1002,20 @@ describe('controlled-document Phase 2 PostgreSQL 16.4 certification', () => {
       )
       .set('Authorization', `Bearer ${viewerSessionToken}`);
     expect(guessed.status).toBe(404);
+
+    const denied = await pgPool.query<{ document_id: string; count: number }>(
+      `SELECT document_id, count(*)::int AS count
+       FROM object_access_log
+       WHERE user_id = $1 AND action = 'denied' AND document_id = ANY($2::uuid[])
+       GROUP BY document_id`,
+      [viewerUsername, [draft.documentId, other.documentId]]
+    );
+    expect(
+      Object.fromEntries(denied.rows.map((row) => [row.document_id, row.count]))
+    ).toEqual({
+      [draft.documentId]: 3,
+      [other.documentId]: 1,
+    });
   });
 
   it('supports authorized historical released bytes and audits authenticated path containment denials', async () => {

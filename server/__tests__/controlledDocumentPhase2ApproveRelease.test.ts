@@ -113,8 +113,14 @@ describe('truthful gated UI', () => {
     expect(client).toContain(
       "phase2Enabled ? 'approve-and-release' : 'decision'"
     );
+    expect(client).toContain(
+      "phase2Enabled ? 'Register Document' : 'New Document'"
+    );
+    expect(client).toContain('Registration counts as submission');
     expect(client).toContain('Registered — awaiting approval');
+    expect(client).toContain('Released — approved and available for use');
     expect(client).toContain('Rejected — correction required');
+    expect(client).toContain("? 'Approve and Release'");
     expect(client).toContain('Historical/legacy — retained');
   });
 });

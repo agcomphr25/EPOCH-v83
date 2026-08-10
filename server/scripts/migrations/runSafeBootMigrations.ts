@@ -288,6 +288,7 @@ export const safeMigrationFiles = [
   '0256_controlled_document_atomic_approval_release.sql',
   '0258_design_control_structured_lifecycle.sql',
   '0259_design_control_form_template_database_artifacts.sql',
+  '0260_controlled_document_source_recovery.sql',
 ];
 
 export const criticalMigrationFiles = new Set([
@@ -352,6 +353,7 @@ export const criticalMigrationFiles = new Set([
   '0255_p2_v2_definition_v3_handoff.sql',
   '0258_design_control_structured_lifecycle.sql',
   '0259_design_control_form_template_database_artifacts.sql',
+  '0260_controlled_document_source_recovery.sql',
 ]);
 
 export async function runSafeBootMigrations() {

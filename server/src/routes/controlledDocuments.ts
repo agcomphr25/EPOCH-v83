@@ -47,8 +47,10 @@ import {
   assertControlledDocumentPhase2SchemaReady,
   ControlledDocumentSchemaNotReadyError,
 } from '../services/controlledDocumentSchemaReadiness';
+import controlledDocumentRecoveryRoutes from './controlledDocumentRecovery';
 
 const router = Router();
+router.use('/recovery', controlledDocumentRecoveryRoutes);
 
 const lifecycleActor = (req: Request) => {
   const user = (req as any).user;
@@ -244,9 +246,17 @@ const readControlledDocumentBytes = async (filePath: string) => {
     filePath.startsWith('/objects/') ||
     filePath.startsWith('/supabase-objects/')
   ) {
-    return getFileStorageProviderForObjectPath(filePath).downloadBuffer(
-      filePath
-    );
+    try {
+      return await getFileStorageProviderForObjectPath(filePath).downloadBuffer(
+        filePath
+      );
+    } catch {
+      throw new ControlledDocumentError(
+        404,
+        'FILE_NOT_ACCESSIBLE',
+        'The released file is unavailable; Document Control has been notified.'
+      );
+    }
   }
   const resolvedPath = resolveControlledDocumentFile(filePath);
   if (!resolvedPath) {
@@ -263,11 +273,11 @@ const readControlledDocumentBytes = async (filePath: string) => {
     );
     return await fs.readFile(containedPath);
   } catch (error: any) {
-    if (error?.code === 'ENOENT') {
+    if (['ENOENT', 'ENOTDIR', 'EACCES'].includes(error?.code)) {
       throw new ControlledDocumentError(
         404,
         'FILE_NOT_ACCESSIBLE',
-        'The referenced file is not accessible from this EPOCH server'
+        'The released file is unavailable; Document Control has been notified.'
       );
     }
     throw error;
@@ -410,7 +420,11 @@ const getReleasedRevisionForControlledUse = async (
     throw new ControlledDocumentError(
       409,
       'NO_RELEASED_REVISION',
-      'This controlled document has not been released'
+      document.filePath &&
+      !document.filePath.startsWith('/objects/') &&
+      !document.filePath.startsWith('/supabase-objects/')
+        ? 'The historical file must be recovered before this document can be released.'
+        : 'This document is registered but has not been approved and released.'
     );
   }
   const revision = revisions.find(
@@ -446,6 +460,21 @@ const getReleasedRevisionForControlledUse = async (
     );
   }
   return revision;
+};
+
+const safeDownloadFilename = (
+  value: string | null | undefined,
+  fallback: string
+) => {
+  const normalized = path
+    .basename(String(value || fallback))
+    .replace(/[\r\n";\\/]/g, '_')
+    .replace(/[^a-zA-Z0-9._ -]/g, '_')
+    .trim();
+  return (normalized || fallback.replace(/[^a-zA-Z0-9._-]/g, '_')).slice(
+    0,
+    180
+  );
 };
 
 // Separate multer configuration for CSV imports
@@ -2027,7 +2056,8 @@ router.get(
         await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(422).json({
           error: 'FILE_REFERENCE_MISSING',
-          message: 'No file reference is attached to this document',
+          message:
+            'The released file is unavailable; Document Control has been notified.',
         });
       }
 
@@ -2045,6 +2075,14 @@ router.get(
         authoritativeFilePath.startsWith('/objects/') ||
         authoritativeFilePath.startsWith('/supabase-objects/')
       ) {
+        if (revision.mediaType !== 'application/pdf') {
+          await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
+          return res.status(415).json({
+            error: 'UNSUPPORTED_PREVIEW_TYPE',
+            message:
+              'This file type cannot be previewed; use Download Original.',
+          });
+        }
         const buffer = await readControlledDocumentBytes(authoritativeFilePath);
         if (revision)
           await verifyStoredRevision(
@@ -2066,7 +2104,7 @@ router.get(
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
           'Content-Disposition',
-          `inline; filename="${doc.documentNumber}.pdf"`
+          `inline; filename="${safeDownloadFilename(revision.fileName, `${doc.documentNumber}.pdf`)}"`
         );
         return res.send(stampedPdf);
       }
@@ -2076,7 +2114,8 @@ router.get(
         await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(422).json({
           error: 'FILE_NOT_ACCESSIBLE',
-          message: 'The file reference is not supported by this EPOCH server',
+          message:
+            'The released file is unavailable; Document Control has been notified.',
         });
       }
 
@@ -2110,7 +2149,7 @@ router.get(
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader(
         'Content-Disposition',
-        `inline; filename="${path.basename(filePath)}"`
+        `inline; filename="${safeDownloadFilename(revision?.fileName, path.basename(filePath))}"`
       );
       res.send(stampedPdf);
     } catch (error) {
@@ -2187,7 +2226,8 @@ router.get(
         await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(422).json({
           error: 'FILE_REFERENCE_MISSING',
-          message: 'No file reference is attached to this document',
+          message:
+            'The released file is unavailable; Document Control has been notified.',
         });
       }
 
@@ -2226,7 +2266,7 @@ router.get(
         );
         res.setHeader(
           'Content-Disposition',
-          `attachment; filename="${revision?.fileName || doc.documentNumber}"`
+          `attachment; filename="${safeDownloadFilename(revision?.fileName, doc.documentNumber)}"`
         );
         return res.send(buffer);
       }
@@ -2236,7 +2276,8 @@ router.get(
         await recordControlledDocumentDenial(req, doc.id, actor, ipAddress);
         return res.status(422).json({
           error: 'FILE_NOT_ACCESSIBLE',
-          message: 'The file reference is not supported by this EPOCH server',
+          message:
+            'The released file is unavailable; Document Control has been notified.',
         });
       }
 
@@ -2259,7 +2300,7 @@ router.get(
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
           'Content-Disposition',
-          `attachment; filename="${path.basename(filePath)}"`
+          `attachment; filename="${safeDownloadFilename(revision?.fileName, path.basename(filePath))}"`
         );
         return res.send(buffer);
       }
@@ -2286,7 +2327,7 @@ router.get(
       );
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="${revision?.fileName || path.basename(filePath)}"`
+        `attachment; filename="${safeDownloadFilename(revision?.fileName, path.basename(filePath))}"`
       );
       res.send(buffer);
     } catch (error) {

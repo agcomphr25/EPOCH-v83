@@ -12648,6 +12648,134 @@ export const controlledDocumentReconciliationEvidence = pgTable(
   }
 );
 
+export const controlledDocumentRecoveryPreviews = pgTable(
+  'controlled_document_recovery_previews',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    previewHash: text('preview_hash').notNull(),
+    policyVersion: text('policy_version').notNull(),
+    normalizedDocumentCode: text('normalized_document_code').notNull(),
+    controlledDocumentId: uuid('controlled_document_id')
+      .references(() => controlledDocuments.id, { onDelete: 'restrict' })
+      .notNull(),
+    revisionId: uuid('revision_id').references(
+      () => documentVersionHistory.id,
+      { onDelete: 'restrict' }
+    ),
+    sourceSnapshot: jsonb('source_snapshot').notNull(),
+    documentSnapshot: jsonb('document_snapshot').notNull(),
+    blockers: jsonb('blockers').notNull().default([]),
+    recommendedAction: text('recommended_action').notNull(),
+    actorUserId: integer('actor_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    actorSnapshot: jsonb('actor_snapshot').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  }
+);
+
+export const controlledDocumentRecoveryImports = pgTable(
+  'controlled_document_recovery_imports',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    previewId: uuid('preview_id')
+      .references(() => controlledDocumentRecoveryPreviews.id, {
+        onDelete: 'restrict',
+      })
+      .notNull(),
+    controlledDocumentId: uuid('controlled_document_id')
+      .references(() => controlledDocuments.id, { onDelete: 'restrict' })
+      .notNull(),
+    revisionId: uuid('revision_id').references(
+      () => documentVersionHistory.id,
+      { onDelete: 'restrict' }
+    ),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    requestIdentityHash: text('request_identity_hash').notNull(),
+    storageObjectPath: text('storage_object_path'),
+    storageProvider: text('storage_provider'),
+    originalFilename: text('original_filename').notNull(),
+    mediaType: text('media_type').notNull(),
+    fileSize: bigint('file_size', { mode: 'number' }).notNull(),
+    fileChecksum: text('file_checksum').notNull(),
+    expectedChecksum: text('expected_checksum'),
+    sourceType: text('source_type').notNull(),
+    sourceProvenance: jsonb('source_provenance').notNull().default({}),
+    status: text('status').notNull().default('RESERVED'),
+    failureCode: text('failure_code'),
+    actorUserId: integer('actor_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    actorSnapshot: jsonb('actor_snapshot').notNull(),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    stagedAt: timestamp('staged_at', { withTimezone: true }),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  }
+);
+
+export const controlledDocumentRecoveryEvents = pgTable(
+  'controlled_document_recovery_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    previewId: uuid('preview_id').references(
+      () => controlledDocumentRecoveryPreviews.id,
+      { onDelete: 'restrict' }
+    ),
+    importId: uuid('import_id').references(
+      () => controlledDocumentRecoveryImports.id,
+      { onDelete: 'restrict' }
+    ),
+    controlledDocumentId: uuid('controlled_document_id')
+      .references(() => controlledDocuments.id, { onDelete: 'restrict' })
+      .notNull(),
+    revisionId: uuid('revision_id').references(
+      () => documentVersionHistory.id,
+      { onDelete: 'restrict' }
+    ),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    eventType: text('event_type').notNull(),
+    policyVersion: text('policy_version').notNull(),
+    evidenceSnapshot: jsonb('evidence_snapshot').notNull(),
+    checksum: text('checksum'),
+    actorUserId: integer('actor_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    actorSnapshot: jsonb('actor_snapshot').notNull(),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  }
+);
+
+export const controlledDocumentRecoveryDispositions = pgTable(
+  'controlled_document_recovery_dispositions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    normalizedDocumentCode: text('normalized_document_code').notNull(),
+    authoritativeDocumentId: uuid('authoritative_document_id')
+      .references(() => controlledDocuments.id, { onDelete: 'restrict' })
+      .notNull(),
+    relatedDocumentIds: jsonb('related_document_ids').notNull(),
+    disposition: text('disposition').notNull(),
+    supportingEvidence: jsonb('supporting_evidence').notNull(),
+    actorUserId: integer('actor_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    actorSnapshot: jsonb('actor_snapshot').notNull(),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  }
+);
+
 export const designControlFormTemplates = pgTable(
   'design_control_form_templates',
   {

@@ -229,8 +229,7 @@ export function DesignControlWorkspace({
   }
 
   const detail = detailQuery.data;
-  const linkedProjectName =
-    detail.linkedProject?.projectName || 'R&D project';
+  const linkedProjectName = detail.linkedProject?.projectName || 'R&D project';
   const stepByKey = new Map(detail.steps.map((step) => [step.stepKey, step]));
   const selectedDefinition =
     DESIGN_CONTROL_WORKFLOW.find((step) => step.key === activeStep) ??

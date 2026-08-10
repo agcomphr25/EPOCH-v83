@@ -36,6 +36,16 @@ describe('Master Document Register lifecycle hardening', () => {
     );
   });
 
+  it('checks create readiness before upload and cleans up failed creates', () => {
+    const route = read('server/src/routes/controlledDocuments.ts');
+    const createRoute = route.slice(route.indexOf('// Create new document'));
+    expect(
+      createRoute.indexOf('assertControlledDocumentCreateSchemaReady()')
+    ).toBeLessThan(createRoute.indexOf('persistControlledDocumentUpload('));
+    expect(createRoute).toContain('CONTROLLED_DOCUMENT_STORAGE_UNAVAILABLE');
+    expect(createRoute).toContain('.deleteObject(uploadedFilePath)');
+  });
+
   it('provides exact-revision lifecycle routes without trusting body actor identity', () => {
     const route = read('server/src/routes/controlledDocuments.ts');
     for (const operation of [

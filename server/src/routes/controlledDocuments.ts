@@ -25,6 +25,7 @@ import { PDFDocument, PDFFont, StandardFonts, rgb } from 'pdf-lib';
 import {
   getFileStorageProvider,
   getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
 } from '../services/fileStorageProvider';
 import {
   ControlledDocumentError,
@@ -43,6 +44,7 @@ import {
 } from '../services/controlledDocumentLifecycleService';
 import { isControlledDocumentPhase2Enabled } from '../services/controlledDocumentPhase2Gate';
 import {
+  assertControlledDocumentCreateSchemaReady,
   assertControlledDocumentSchemaReady,
   assertControlledDocumentPhase2SchemaReady,
   ControlledDocumentSchemaNotReadyError,
@@ -1808,20 +1810,51 @@ router.post(
   requirePermission('documents.create'),
   upload.single('file'),
   async (req: Request, res: Response) => {
+    let uploadedFilePath: string | null = null;
     try {
-      const filePath = req.file
-        ? await persistControlledDocumentUpload(
+      const documentNumber = String(req.body.documentNumber || '').trim();
+      const documentName = String(req.body.documentName || '').trim();
+      const documentType = String(req.body.documentType || '').trim();
+      const department = String(req.body.department || '').trim();
+      if (!documentNumber) {
+        throw new ControlledDocumentError(
+          400,
+          'DOCUMENT_NUMBER_REQUIRED',
+          'Document number is required'
+        );
+      }
+      if (!documentName || !documentType || !department) {
+        throw new ControlledDocumentError(
+          400,
+          'DOCUMENT_METADATA_REQUIRED',
+          'Document name, type, and department are required'
+        );
+      }
+
+      await assertControlledDocumentCreateSchemaReady();
+      if (req.file) {
+        try {
+          uploadedFilePath = await persistControlledDocumentUpload(
             req.file,
-            req.body.documentNumber
-          )
-        : null;
+            documentNumber
+          );
+        } catch (storageError) {
+          const storage = getStorageErrorResponse(storageError);
+          throw new ControlledDocumentError(
+            storage.status,
+            'CONTROLLED_DOCUMENT_STORAGE_UNAVAILABLE',
+            storage.message,
+            { reason: storage.reason }
+          );
+        }
+      }
       const result = await createControlledDocument({
         document: {
-          documentNumber: req.body.documentNumber,
-          documentName: req.body.documentName,
+          documentNumber,
+          documentName,
           templateKey: req.body.templateKey || null,
-          documentType: req.body.documentType,
-          department: req.body.department,
+          documentType,
+          department,
           category: req.body.category || null,
           description: req.body.description || null,
           revisionValue: req.body.currentVersion || '1.0',
@@ -1838,9 +1871,9 @@ router.post(
             req.body.mfaRequired === 'true' || req.body.mfaRequired === true,
         },
         file:
-          req.file && filePath
+          req.file && uploadedFilePath
             ? {
-                path: filePath,
+                path: uploadedFilePath,
                 name: req.file.originalname,
                 mediaType: req.file.mimetype,
                 size: req.file.size,
@@ -1852,6 +1885,18 @@ router.post(
       });
       res.status(201).json(result.document);
     } catch (error: any) {
+      if (uploadedFilePath) {
+        try {
+          await getFileStorageProviderForObjectPath(
+            uploadedFilePath
+          ).deleteObject(uploadedFilePath);
+        } catch (cleanupError) {
+          console.error(
+            'Failed to clean up controlled document upload after create failure',
+            { uploadedFilePath, cleanupError }
+          );
+        }
+      }
       sendLifecycleError(res, error, 'Failed to create controlled document');
     }
   }

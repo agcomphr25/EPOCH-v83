@@ -822,6 +822,7 @@ router.get(
         validation,
         changes,
         releaseGate,
+        linkedProject,
       ] = await Promise.all([
         getSteps(record.id),
         db
@@ -852,6 +853,16 @@ router.get(
           .select()
           .from(designControlReleaseGate)
           .where(eq(designControlReleaseGate.recordId, record.id)),
+        record.projectId
+          ? db
+              .select({
+                id: rdProjects.id,
+                projectName: rdProjects.projectName,
+              })
+              .from(rdProjects)
+              .where(eq(rdProjects.id, record.projectId))
+              .limit(1)
+          : Promise.resolve([]),
       ]);
 
       res.json({
@@ -864,6 +875,7 @@ router.get(
         validation,
         changes,
         releaseGate: releaseGate[0] ?? null,
+        linkedProject: linkedProject[0] ?? null,
       });
     } catch (error) {
       console.error('[qms-design-control] Failed to load record', error);

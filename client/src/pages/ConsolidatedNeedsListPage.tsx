@@ -222,7 +222,8 @@ export default function ConsolidatedNeedsListPage() {
 
   // Get all vendors (API returns paginated result with data property)
   const { data: vendorsResponse } = useQuery<{ data: Vendor[]; total: number; page: number; pageSize: number }>({
-    queryKey: ['/api/vendors'],
+    queryKey: ['/api/vendors', 'consolidated-needs'],
+    queryFn: () => apiRequest('/api/vendors?pageSize=10000&approved=any&sort=name:asc'),
   });
   const vendors = vendorsResponse?.data ?? [];
 
@@ -948,19 +949,21 @@ export default function ConsolidatedNeedsListPage() {
 
     for (const request of activeRequests) {
       const vendor = getResolvedVendorForRequest(request);
+      const assignedVendorId = request.vendorId ?? request.inventoryItem?.vendorId ?? null;
       const vendorLabel = getRequestVendorLabel(request);
       const effectiveOrderMethod = resolveEffectiveOrderMethod(request, vendor);
 
-      if (vendor) {
+      if (vendor || assignedVendorId) {
         // Has a resolved vendor record — group under that vendor regardless of order method
-        const key = `vendor-${vendor.id}`;
+        const vendorId = vendor?.id ?? assignedVendorId!;
+        const key = `vendor-${vendorId}`;
         if (!groups[key]) {
           groups[key] = {
             key,
-            vendorId: vendor.id,
-            vendorName: vendor.name,
+            vendorId,
+            vendorName: vendor?.name || vendorLabel || `Vendor #${vendorId}`,
             orderMethod: effectiveOrderMethod,
-            websiteUrl: vendor.website || null,
+            websiteUrl: vendor?.website || null,
             requests: [],
             totalQuantity: 0,
             totalEstimatedCost: 0,

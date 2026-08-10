@@ -421,8 +421,8 @@ const getReleasedRevisionForControlledUse = async (
       409,
       'NO_RELEASED_REVISION',
       document.filePath &&
-        !document.filePath.startsWith('/objects/') &&
-        !document.filePath.startsWith('/supabase-objects/')
+      !document.filePath.startsWith('/objects/') &&
+      !document.filePath.startsWith('/supabase-objects/')
         ? 'The historical file must be recovered before this document can be released.'
         : 'This document is registered but has not been approved and released.'
     );

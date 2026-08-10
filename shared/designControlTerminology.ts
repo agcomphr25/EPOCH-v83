@@ -9,6 +9,7 @@ export const DESIGN_CONTROL_TERMINOLOGY = {
   ECR: 'Engineering Change Request',
   FAI: 'First Article Inspection',
   MDR: 'Master Document Register',
+  'N/A': 'Not Applicable',
   NCR: 'Nonconformance Report',
   P1: 'Production Line 1',
   P2: 'Production Line 2',

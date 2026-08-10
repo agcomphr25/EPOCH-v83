@@ -17,6 +17,7 @@ import type { InventoryItem, PartsRequest } from '@shared/schema';
 
 import { apiRequest } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
+import { filterPartsRequestInventoryItems } from '@/lib/partsRequestInventorySearch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -140,6 +141,8 @@ export default function PartsRequestsCard({ scope = 'mine' }: PartsRequestsCardP
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isPartSelectOpen, setIsPartSelectOpen] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState('');
+  const inventoryListRef = useRef<HTMLDivElement>(null);
   const [editingRequest, setEditingRequest] = useState<PartsRequest | null>(
     null
   );
@@ -224,6 +227,18 @@ export default function PartsRequestsCard({ scope = 'mine' }: PartsRequestsCardP
         ),
     [inventoryItems]
   );
+
+  const filteredInventoryItems = useMemo(
+    () => filterPartsRequestInventoryItems(activeInventoryItems, inventorySearch),
+    [activeInventoryItems, inventorySearch]
+  );
+
+  const handleInventorySearchChange = (value: string) => {
+    setInventorySearch(value);
+    requestAnimationFrame(() => {
+      if (inventoryListRef.current) inventoryListRef.current.scrollTop = 0;
+    });
+  };
 
   const selectedInventoryItem = useMemo(
     () =>
@@ -533,7 +548,13 @@ export default function PartsRequestsCard({ scope = 'mine' }: PartsRequestsCardP
       <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pr-1">
         <div className="min-w-0">
           <Label htmlFor="inventoryItem">Inventory Part *</Label>
-          <Popover open={isPartSelectOpen} onOpenChange={setIsPartSelectOpen}>
+          <Popover
+            open={isPartSelectOpen}
+            onOpenChange={(open) => {
+              setIsPartSelectOpen(open);
+              if (open) setInventorySearch('');
+            }}
+          >
             <PopoverTrigger asChild>
               <Button
                 id="inventoryItem"
@@ -563,12 +584,16 @@ export default function PartsRequestsCard({ scope = 'mine' }: PartsRequestsCardP
               className="w-[--radix-popover-trigger-width] max-w-[calc(100vw-3rem)] p-0"
               align="start"
             >
-              <Command>
-                <CommandInput placeholder="Type part number or name..." />
-                <CommandList>
+              <Command shouldFilter={false}>
+                <CommandInput
+                  placeholder="Type part number or name..."
+                  value={inventorySearch}
+                  onValueChange={handleInventorySearchChange}
+                />
+                <CommandList ref={inventoryListRef}>
                   <CommandEmpty>No inventory items found.</CommandEmpty>
                   <CommandGroup>
-                    {activeInventoryItems.map((item) => (
+                    {filteredInventoryItems.map((item) => (
                       <CommandItem
                         key={item.id}
                         value={`${item.agPartNumber} ${item.name}`}

@@ -8,12 +8,22 @@ async function recordReconciliationAuthorization(
   capabilityKey: string,
   decision: 'ALLOWED' | 'DENIED'
 ) {
-  if (!capabilityKey.startsWith('documents.reconciliation_')) return;
+  if (
+    !capabilityKey.startsWith('documents.reconciliation_') &&
+    !capabilityKey.startsWith('documents.recovery_')
+  )
+    return;
   const user = req.user as any;
+  const auditDomain = capabilityKey.startsWith('documents.recovery_')
+    ? 'RECOVERY'
+    : 'RECONCILIATION';
+  const subjectType = capabilityKey.startsWith('documents.recovery_')
+    ? 'controlled_document_recovery'
+    : 'controlled_document_reconciliation';
   try {
     await recordAuditEvent({
-      eventType: `CONTROLLED_DOCUMENT_RECONCILIATION_ACCESS_${decision}`,
-      subjectType: 'controlled_document_reconciliation',
+      eventType: `CONTROLLED_DOCUMENT_${auditDomain}_ACCESS_${decision}`,
+      subjectType,
       subjectId: capabilityKey,
       sourceService: 'requirePermission.middleware',
       actor: user

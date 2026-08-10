@@ -388,30 +388,35 @@ export async function assertControlledDocumentReconciliationSchemaReady(
   client: QueryClient
 ) {
   const result = await client.query(`
-    SELECT 'table' AS object_kind, table_name AS object_name, NULL::text AS definition,
-      NULL::text AS data_type, NULL::text AS enabled, table_name AS parent_name
+    SELECT 'table'::text AS object_kind, table_name::text AS object_name, NULL::text AS definition,
+      NULL::text AS data_type, NULL::text AS enabled, table_name::text AS parent_name
     FROM information_schema.tables
       WHERE table_schema='public' AND table_name LIKE 'controlled_document_reconciliation_%'
     UNION ALL
-    SELECT 'column', table_name || '.' || column_name, NULL, data_type, NULL, table_name
+    SELECT 'column'::text, (table_name || '.' || column_name)::text, NULL::text,
+      data_type::text, NULL::text, table_name::text
     FROM information_schema.columns
       WHERE table_schema='public' AND table_name LIKE 'controlled_document_reconciliation_%'
     UNION ALL
-    SELECT 'constraint', con.conname, pg_get_constraintdef(con.oid), NULL, NULL, rel.relname
+    SELECT 'constraint'::text, con.conname::text, pg_get_constraintdef(con.oid),
+      NULL::text, NULL::text, rel.relname::text
     FROM pg_constraint con JOIN pg_class rel ON rel.oid=con.conrelid
       JOIN pg_namespace ns ON ns.oid=rel.relnamespace
       WHERE ns.nspname='public' AND rel.relname LIKE 'controlled_document_reconciliation_%'
     UNION ALL
-    SELECT 'index', indexname, indexdef, NULL, NULL, tablename FROM pg_indexes WHERE schemaname='public'
+    SELECT 'index'::text, indexname::text, indexdef, NULL::text, NULL::text,
+      tablename::text FROM pg_indexes WHERE schemaname='public'
       AND tablename LIKE 'controlled_document_reconciliation_%'
     UNION ALL
-    SELECT 'trigger', trg.tgname, pg_get_triggerdef(trg.oid), NULL, trg.tgenabled::text, rel.relname
+    SELECT 'trigger'::text, trg.tgname::text, pg_get_triggerdef(trg.oid), NULL::text,
+      trg.tgenabled::text, rel.relname::text
       FROM pg_trigger trg JOIN pg_class rel ON rel.oid=trg.tgrelid
       JOIN pg_namespace ns ON ns.oid=rel.relnamespace
       WHERE ns.nspname='public' AND NOT trg.tgisinternal
         AND rel.relname LIKE 'controlled_document_reconciliation_%'
     UNION ALL
-    SELECT 'function', proc.proname, pg_get_functiondef(proc.oid), NULL, NULL, NULL
+    SELECT 'function'::text, proc.proname::text, pg_get_functiondef(proc.oid),
+      NULL::text, NULL::text, NULL::text
       FROM pg_proc proc JOIN pg_namespace ns ON ns.oid=proc.pronamespace
       WHERE ns.nspname='public' AND proc.proname='reject_controlled_document_reconciliation_history_mutation'
   `);

@@ -114,7 +114,8 @@ export function getDesignControlFieldPresentation(
   if (personPattern.test(label)) {
     return {
       kind: 'person',
-      help: 'Select an active Design Control project assignment when available, or enter the accountable person.',
+      help: 'Select the accountable person assigned to this Design Control project.',
+      placeholder: "Enter the accountable person's name",
     };
   }
   if (rolePattern.test(label)) {

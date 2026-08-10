@@ -403,6 +403,26 @@ export function DesignControlStepEditor({
                     value={value}
                     onChange={(event) => update(event.target.value)}
                   />
+                ) : presentation.kind === 'person' && people.length > 0 ? (
+                  <select
+                    aria-describedby={`${fieldId}-help`}
+                    aria-invalid={missing}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    id={fieldId}
+                    value={value}
+                    onChange={(event) => update(event.target.value)}
+                  >
+                    <option value="">Select a person...</option>
+                    {value &&
+                      !people.some((person) => person.value === value) && (
+                        <option value={value}>Existing person: {value}</option>
+                      )}
+                    {people.map((person) => (
+                      <option key={person.label} value={person.value}>
+                        {person.label}
+                      </option>
+                    ))}
+                  </select>
                 ) : presentation.kind === 'select' ||
                   presentation.kind === 'role' ? (
                   <select
@@ -429,11 +449,6 @@ export function DesignControlStepEditor({
                       aria-describedby={`${fieldId}-help`}
                       aria-invalid={missing}
                       id={fieldId}
-                      list={
-                        presentation.kind === 'person'
-                          ? `${fieldId}-people`
-                          : undefined
-                      }
                       placeholder={presentation.placeholder}
                       type={
                         presentation.kind === 'date' &&
@@ -444,15 +459,6 @@ export function DesignControlStepEditor({
                       value={value}
                       onChange={(event) => update(event.target.value)}
                     />
-                    {presentation.kind === 'person' && people.length > 0 && (
-                      <datalist id={`${fieldId}-people`}>
-                        {people.map((person) => (
-                          <option key={person.label} value={person.value}>
-                            {person.label}
-                          </option>
-                        ))}
-                      </datalist>
-                    )}
                   </>
                 )}
                 <p

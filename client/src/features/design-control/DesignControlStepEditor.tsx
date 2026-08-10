@@ -75,6 +75,7 @@ type ApprovalState = {
 
 type Props = {
   recordId: string;
+  projectId?: string;
   definition: DesignControlWorkflowStep;
   step?: StepRow;
   readOnly: boolean;
@@ -100,6 +101,7 @@ async function responsePayload(response: Response) {
 
 export function DesignControlStepEditor({
   recordId,
+  projectId,
   definition,
   step,
   readOnly,
@@ -119,6 +121,12 @@ export function DesignControlStepEditor({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [manualPersonFields, setManualPersonFields] = useState<Set<string>>(
+    new Set()
+  );
+  const [manualProjectFields, setManualProjectFields] = useState<Set<string>>(
+    new Set()
+  );
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(
     step?.updatedAt ?? null
   );
@@ -138,6 +146,8 @@ export function DesignControlStepEditor({
     setMessage('');
     setError('');
     setDirty(false);
+    setManualPersonFields(new Set());
+    setManualProjectFields(new Set());
     setLastSavedAt(step?.updatedAt ?? null);
   }, [definition.key, step?.formData, step?.checklist, step?.updatedAt]);
 
@@ -423,17 +433,116 @@ export function DesignControlStepEditor({
                       </option>
                     ))}
                   </select>
+                ) : presentation.kind === 'project' ? (
+                  <>
+                    <select
+                      aria-describedby={`${fieldId}-help`}
+                      aria-invalid={missing}
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                      id={fieldId}
+                      value={
+                        manualProjectFields.has(field.key)
+                          ? '__MANUAL__'
+                          : value
+                      }
+                      onChange={(event) => {
+                        if (event.target.value === '__MANUAL__') {
+                          setManualProjectFields((current) =>
+                            new Set(current).add(field.key)
+                          );
+                          update('');
+                          return;
+                        }
+                        setManualProjectFields((current) => {
+                          const next = new Set(current);
+                          next.delete(field.key);
+                          return next;
+                        });
+                        update(event.target.value);
+                      }}
+                    >
+                      <option value="">Select the controlled link…</option>
+                      {value && value !== projectId && (
+                        <option value={value}>Existing value: {value}</option>
+                      )}
+                      {projectId && (
+                        <option value={projectId}>Linked project: {projectId}</option>
+                      )}
+                      <option value="__MANUAL__">
+                        Enter another customer or order link…
+                      </option>
+                    </select>
+                    {manualProjectFields.has(field.key) && (
+                      <Input
+                        aria-label={`${field.label} manual entry`}
+                        placeholder="Enter the controlled customer or order reference"
+                        value={value}
+                        onChange={(event) => update(event.target.value)}
+                      />
+                    )}
+                  </>
+                ) : presentation.kind === 'person' ? (
+                  <>
+                    <select
+                      aria-describedby={`${fieldId}-help`}
+                      aria-invalid={missing}
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                      id={fieldId}
+                      value={
+                        manualPersonFields.has(field.key)
+                          ? '__MANUAL__'
+                          : value
+                      }
+                      onChange={(event) => {
+                        if (event.target.value === '__MANUAL__') {
+                          setManualPersonFields((current) =>
+                            new Set(current).add(field.key)
+                          );
+                          update('');
+                          return;
+                        }
+                        setManualPersonFields((current) => {
+                          const next = new Set(current);
+                          next.delete(field.key);
+                          return next;
+                        });
+                        update(event.target.value);
+                      }}
+                    >
+                      <option value="">
+                        Select an active project assignment…
+                      </option>
+                      {value &&
+                        !people.some((person) => person.value === value) && (
+                          <option value={value}>Existing value: {value}</option>
+                        )}
+                      {people.map((person) => (
+                        <option
+                          key={`${person.value}-${person.label}`}
+                          value={person.value}
+                        >
+                          {person.label}
+                        </option>
+                      ))}
+                      <option value="__MANUAL__">
+                        Enter another accountable person…
+                      </option>
+                    </select>
+                    {manualPersonFields.has(field.key) && (
+                      <Input
+                        aria-label={`${field.label} manual entry`}
+                        placeholder="Enter the accountable person's full name"
+                        value={value}
+                        onChange={(event) => update(event.target.value)}
+                      />
+                    )}
+                  </>
                 ) : (
                   <>
                     <Input
                       aria-describedby={`${fieldId}-help`}
                       aria-invalid={missing}
                       id={fieldId}
-                      list={
-                        presentation.kind === 'person'
-                          ? `${fieldId}-people`
-                          : undefined
-                      }
                       placeholder={presentation.placeholder}
                       type={
                         presentation.kind === 'date' &&
@@ -444,15 +553,6 @@ export function DesignControlStepEditor({
                       value={value}
                       onChange={(event) => update(event.target.value)}
                     />
-                    {presentation.kind === 'person' && people.length > 0 && (
-                      <datalist id={`${fieldId}-people`}>
-                        {people.map((person) => (
-                          <option key={person.label} value={person.value}>
-                            {person.label}
-                          </option>
-                        ))}
-                      </datalist>
-                    )}
                   </>
                 )}
                 <p

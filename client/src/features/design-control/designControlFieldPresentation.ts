@@ -5,6 +5,7 @@ export type DesignControlFieldKind =
   | 'textarea'
   | 'date'
   | 'select'
+  | 'project'
   | 'person'
   | 'role'
   | 'attachment';
@@ -90,6 +91,12 @@ export function getDesignControlFieldPresentation(
   item: DesignControlWorkflowItem
 ): DesignControlFieldPresentation {
   const label = item.label;
+  if (label === 'Project / customer / order link') {
+    return {
+      kind: 'project',
+      help: 'Use the linked Design Control project when applicable, or enter another controlled customer or order reference.',
+    };
+  }
   const options = optionSets[label];
   if (options) {
     return {

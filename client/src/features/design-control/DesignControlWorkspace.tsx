@@ -581,6 +581,7 @@ export function DesignControlWorkspace({
                 }
                 readOnly={readOnly}
                 recordId={recordId}
+                projectId={projectId}
                 step={selectedStep}
               />
               {structuredRecordType && (

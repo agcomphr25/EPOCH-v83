@@ -22,7 +22,7 @@ describe('unified Design Control step editor', () => {
       for (const field of step.fields) {
         const presentation = getDesignControlFieldPresentation(step.key, field);
         expect(presentation.kind).toMatch(
-          /^(text|textarea|date|select|person|role|attachment)$/
+          /^(text|textarea|date|select|project|person|role|attachment)$/
         );
         expect(presentation.help.trim()).not.toBe('');
       }
@@ -39,6 +39,9 @@ describe('unified Design Control step editor', () => {
     };
 
     expect(presentationFor('1', 'Design type').kind).toBe('select');
+    expect(presentationFor('1', 'Project / customer / order link').kind).toBe(
+      'project'
+    );
     expect(presentationFor('1', 'Target manufacturing date').kind).toBe('date');
     expect(presentationFor('1', 'Responsible engineer').kind).toBe('person');
     expect(presentationFor('2', 'Approval roles').kind).toBe('role');
@@ -85,6 +88,10 @@ describe('unified Design Control step editor', () => {
     expect(editor).toContain("window.addEventListener('beforeunload'");
     expect(editor).toContain('Save and Continue');
     expect(editor).toContain('payload.message || payload.error');
+    expect(editor).toContain('Select an active project assignment');
+    expect(editor).toContain('Enter another accountable person');
+    expect(editor).toContain('Enter another customer or order link');
+    expect(editor).not.toContain('<datalist');
     expect(forms).toContain("window.addEventListener('beforeunload'");
     expect(forms).toContain('/attachments`');
     expect(forms).toContain('Objective evidence attached');

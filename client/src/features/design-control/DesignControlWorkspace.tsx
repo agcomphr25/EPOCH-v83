@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import { DESIGN_CONTROL_WORKFLOW } from '@shared/designControlWorkflow';
 import {
   DESIGN_CONTROL_PHASES,
@@ -79,6 +80,7 @@ type Detail = {
   validation: LiveRow[];
   changes: LiveRow[];
   releaseGate?: { status?: string; blockers?: unknown[] } | null;
+  linkedProject?: { id: string; projectName: string } | null;
 };
 
 function displayStatus(value?: string | null) {
@@ -227,6 +229,8 @@ export function DesignControlWorkspace({
   }
 
   const detail = detailQuery.data;
+  const linkedProjectName =
+    detail.linkedProject?.projectName || 'R&D project';
   const stepByKey = new Map(detail.steps.map((step) => [step.stepKey, step]));
   const selectedDefinition =
     DESIGN_CONTROL_WORKFLOW.find((step) => step.key === activeStep) ??
@@ -308,6 +312,15 @@ export function DesignControlWorkspace({
                 Record {detail.record.recordNumber || detail.record.id} ·
                 generation {detail.record.recordVersion || 1}
               </CardDescription>
+              <p className="mt-1 text-sm">
+                R&amp;D project:{' '}
+                <Link
+                  href={`/design/rd-projects?projectId=${encodeURIComponent(projectId)}`}
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {linkedProjectName}
+                </Link>
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">

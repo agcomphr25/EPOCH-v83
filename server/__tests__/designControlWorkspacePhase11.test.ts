@@ -104,6 +104,14 @@ describe('Phase 11 unified Design Control workspace', () => {
     expect(route).not.toContain('p2Projects');
   });
 
+  it('labels the R&D project link with the authoritative project name', () => {
+    expect(route).toContain('linkedProject: linkedProject[0] ?? null');
+    expect(route).toContain('projectName: rdProjects.projectName');
+    expect(workspace).toContain('detail.linkedProject?.projectName');
+    expect(workspace).toContain('{linkedProjectName}');
+    expect(workspace).toContain('/design/rd-projects?projectId=');
+  });
+
   it('provides bounded server pagination and filtering', () => {
     expect(route).toMatch(/Math\.min\(\s*50/);
     expect(route).toContain('.limit(pageSize)');

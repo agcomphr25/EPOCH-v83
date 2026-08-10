@@ -130,19 +130,19 @@ export function LayupSchedulePreview({
   }, [scheduleBarcode, open]);
 
   const handlePrint = async () => {
-    // Ensure barcode is fully rendered before printing
-    if (!barcodeRef.current) {
-      console.warn('⚠️ Barcode not ready for printing');
-      alert('Please wait a moment for the barcode to load, then try again.');
-      return;
-    }
-
-    // Wait a bit to ensure SVG is fully rendered
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Convert SVG barcode to data URL
+    // Best-effort print preparation must not prevent a newly generated
+    // schedule from being committed. Capture any barcode failure now, then
+    // save before reporting the recoverable print problem.
     let barcodeDataURL = '';
+    let barcodeError: unknown = null;
     try {
+      if (!barcodeRef.current) {
+        throw new Error('Barcode not ready for printing');
+      }
+
+      // Wait a bit to ensure SVG is fully rendered
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       const svgElement = barcodeRef.current;
       
       // Check if the SVG has content
@@ -164,12 +164,8 @@ export function LayupSchedulePreview({
       console.log('📊 Barcode data URL length:', barcodeDataURL.length);
     } catch (error) {
       console.error('❌ Error converting barcode:', error);
-      alert('Error generating barcode for printing. Please try again.');
-      return;
+      barcodeError = error;
     }
-    
-    // Generate the HTML content
-    const printHTML = generatePrintHTML(barcodeDataURL);
 
     // Open the window during the user's click so popup blockers allow it. A
     // newly generated schedule must be committed before anything is printed;
@@ -194,6 +190,16 @@ export function LayupSchedulePreview({
       }
     }
 
+    if (barcodeError) {
+      printWindow?.close();
+      alert(
+        isHistoricalReprint
+          ? 'The barcode is not ready for printing. Please close and reopen the saved schedule, then try again.'
+          : 'Schedule saved, but the barcode was not ready to print. Reprint it from Schedule History.'
+      );
+      return;
+    }
+
     // Popup blocking must never prevent the approved schedule from being
     // persisted. The user can enable popups and reprint the saved schedule
     // from history without recreating or progressing the schedule again.
@@ -201,18 +207,23 @@ export function LayupSchedulePreview({
       alert('Schedule saved. Please allow popups, then reprint it from Schedule History.');
       return;
     }
-    
+
+    // Generate the HTML only after the schedule save has succeeded.
+    const printHTML = generatePrintHTML(barcodeDataURL);
+
     printWindow.document.open();
     printWindow.document.write(printHTML);
-    printWindow.document.close();
-    
-    // Wait for content to load, then print
+
+    // Register before closing the document. A fast popup can finish loading
+    // synchronously during close(), which previously lost the event and never
+    // opened the browser print dialog.
     printWindow.onload = () => {
       setTimeout(() => {
         printWindow.print();
         // Don't auto-close so user can save as PDF
       }, 250);
     };
+    printWindow.document.close();
   };
 
   const generatePrintHTML = (barcodeDataURL: string) => {

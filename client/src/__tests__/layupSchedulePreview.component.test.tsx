@@ -31,12 +31,22 @@ describe('LayupSchedulePreview printing', () => {
 
   it('saves a newly generated schedule before writing printable content', async () => {
     const writes: string[] = [];
+    let printWindow: {
+      document: {
+        write: ReturnType<typeof vi.fn>;
+        open: ReturnType<typeof vi.fn>;
+        close: ReturnType<typeof vi.fn>;
+      };
+      close: ReturnType<typeof vi.fn>;
+      print: ReturnType<typeof vi.fn>;
+      onload: null | (() => void);
+    };
     const printDocument = {
       write: vi.fn((value: string) => writes.push(value)),
       open: vi.fn(),
-      close: vi.fn(),
+      close: vi.fn(() => expect(printWindow.onload).toBeTypeOf('function')),
     };
-    const printWindow = {
+    printWindow = {
       document: printDocument,
       close: vi.fn(),
       print: vi.fn(),
@@ -112,6 +122,43 @@ describe('LayupSchedulePreview printing', () => {
     await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1));
     expect(alertSpy).toHaveBeenCalledWith(
       'Schedule saved. Please allow popups, then reprint it from Schedule History.'
+    );
+  });
+
+  it('still saves the schedule when barcode preparation fails', async () => {
+    const printWindow = {
+      document: { write: vi.fn(), open: vi.fn(), close: vi.fn() },
+      close: vi.fn(),
+      print: vi.fn(),
+      onload: null,
+    };
+    vi.spyOn(window, 'open').mockReturnValue(printWindow as unknown as Window);
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    const onApprove = vi.fn().mockResolvedValue({ entriesSaved: 1 });
+
+    render(
+      <LayupSchedulePreview
+        open
+        onClose={vi.fn()}
+        scheduledItems={scheduledItems}
+        overflowItems={[]}
+        weekStart="2026-07-20"
+        totalItems={1}
+        onApprove={onApprove}
+        isApproving={false}
+      />
+    );
+
+    await waitFor(() =>
+      expect(document.querySelector('svg rect')).not.toBeNull()
+    );
+    document.querySelector('svg')?.replaceChildren();
+    fireEvent.click(screen.getByTestId('button-print-schedule'));
+
+    await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1));
+    expect(printWindow.close).toHaveBeenCalledTimes(1);
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Schedule saved, but the barcode was not ready to print. Reprint it from Schedule History.'
     );
   });
 });

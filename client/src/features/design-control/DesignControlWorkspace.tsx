@@ -229,8 +229,7 @@ export function DesignControlWorkspace({
   }
 
   const detail = detailQuery.data;
-  const linkedProjectName =
-    detail.linkedProject?.projectName || 'R&D project';
+  const linkedProjectName = detail.linkedProject?.projectName || 'R&D project';
   const stepByKey = new Map(detail.steps.map((step) => [step.stepKey, step]));
   const selectedDefinition =
     DESIGN_CONTROL_WORKFLOW.find((step) => step.key === activeStep) ??
@@ -269,6 +268,11 @@ export function DesignControlWorkspace({
       return 'Not started';
     return 'In progress';
   };
+  const phaseEntryStep = (stepKeys: readonly string[]) =>
+    stepKeys.find((key) => {
+      const status = stepByKey.get(key)?.status?.toLowerCase();
+      return !['approved', 'complete', 'completed'].includes(status || '');
+    }) ?? stepKeys[stepKeys.length - 1];
   const firstIncompleteDefinition =
     DESIGN_CONTROL_WORKFLOW.find((definition) => {
       const status = stepByKey.get(definition.key)?.status?.toLowerCase();
@@ -405,7 +409,7 @@ export function DesignControlWorkspace({
                   className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => {
                     setActiveTab('lifecycle');
-                    setActiveStep(phase.stepKeys[0]);
+                    setActiveStep(phaseEntryStep(phase.stepKeys));
                   }}
                   type="button"
                 >
@@ -425,9 +429,8 @@ export function DesignControlWorkspace({
             ))}
           </ol>
           <p className="mt-3 text-sm">
-            Six plain-language phases organize the work. All 12 controlled
-            lifecycle stages, approvals, versions, and audit events remain
-            intact underneath.
+            Follow the six phases in order. Controlled approvals, versions, and
+            audit history are preserved automatically.
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
             Revision A establishes the initial baseline. Released designs use
@@ -455,9 +458,13 @@ export function DesignControlWorkspace({
 
         <TabsContent
           value="lifecycle"
-          className="grid gap-4 lg:grid-cols-[19rem_1fr]"
+          className="space-y-4"
         >
-          <nav className="space-y-2" aria-label="Design Control steps">
+          <nav
+            className="hidden"
+            aria-hidden="true"
+            aria-label="Controlled Design Control checkpoints"
+          >
             {DESIGN_CONTROL_WORKFLOW.map((definition) => {
               const step = stepByKey.get(definition.key);
               const selected = definition.key === activeStep;
@@ -489,9 +496,17 @@ export function DesignControlWorkspace({
           </nav>
           <Card>
             <CardHeader>
-              <CardTitle>
-                {selectedDefinition.order}. {selectedDefinition.title}
-              </CardTitle>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-primary">
+                    Phase {activePhase.order}: {activePhase.title}
+                  </p>
+                  <CardTitle>{selectedDefinition.title}</CardTitle>
+                </div>
+                <Badge variant="outline">
+                  Controlled checkpoint {selectedDefinition.order} of 12
+                </Badge>
+              </div>
               <CardDescription>{selectedDefinition.purpose}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

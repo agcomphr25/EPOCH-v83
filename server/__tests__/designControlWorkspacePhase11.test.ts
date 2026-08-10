@@ -68,11 +68,17 @@ describe('Phase 11 unified Design Control workspace', () => {
       expect(phases).toContain(`'${step}'`);
     }
     expect(workspace).toContain('Six Design Control phases');
-    expect(workspace).toContain('All 12 controlled');
+    expect(workspace).toContain('Controlled approvals, versions, and');
     expect(workspace).toContain('Design phases');
     expect(workspace).toContain('Next required action');
     expect(workspace).toContain('Continue Design');
-    expect(workspace).toContain('setActiveStep(phase.stepKeys[0])');
+    expect(workspace).toContain('setActiveStep(phaseEntryStep(phase.stepKeys))');
+    expect(workspace).toContain(
+      'Controlled checkpoint {selectedDefinition.order} of 12'
+    );
+    expect(workspace).toContain(
+      'aria-label="Controlled Design Control checkpoints"'
+    );
   });
 
   it('gives every phase the same guided, correctable layout', () => {

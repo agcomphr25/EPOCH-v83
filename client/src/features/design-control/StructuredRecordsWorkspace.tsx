@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { expandDesignControlTerm } from '@shared/designControlTerminology';
 
 import type { StructuredDesignControlRecordType } from './designControlFieldPresentation';
-import { expandDesignControlTerm } from '@shared/designControlTerminology';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -617,6 +617,13 @@ export function StructuredRecordsWorkspace({
   const missing = useMemo(
     () =>
       definition.fields.filter((field) => {
+        if (field.key === 'notApplicableJustification')
+          return (
+            Object.values(values).some((value) =>
+              /(^|\W)N\/?A(\W|$)/i.test(value)
+            ) &&
+            (values[field.key] === undefined || values[field.key].trim() === '')
+          );
         if (field.required === false) return false;
         if (
           [
@@ -629,13 +636,6 @@ export function StructuredRecordsWorkspace({
             'correctiveAction',
             'customerAcceptance',
           ].includes(field.key)
-        )
-          return false;
-        if (
-          field.key === 'notApplicableJustification' &&
-          !Object.values(values).some((value) =>
-            /(^|\W)N\/?A(\W|$)/i.test(value)
-          )
         )
           return false;
         return (

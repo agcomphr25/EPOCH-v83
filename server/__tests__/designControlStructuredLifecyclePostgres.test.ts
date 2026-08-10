@@ -751,14 +751,25 @@ describe('Design Control structured lifecycle PostgreSQL certification', () => {
       content: {
         reviewNumber: `FDR-${suffix}`,
         reviewType: 'FINAL',
+        reviewPurpose:
+          'Synthetic final readiness review for isolated certification only',
         reviewDate: '2026-08-05',
         attendees: [
           { name: 'Synthetic Design Authority', role: 'DESIGN_AUTHORITY' },
         ],
+        productDescription: 'Synthetic certification article',
         reviewedConfiguration: 'Synthetic Revision A',
         decision: 'PROCEED',
         conditions: '',
         minutesEvidence: 'SYN-FDR-MINUTES-1',
+        requirementsAssessment: 'Synthetic requirements assessment complete',
+        manufacturingAssessment:
+          'Synthetic manufacturing-readiness assessment complete',
+        preliminaryAnalysis: 'Synthetic analysis evidence reviewed',
+        risksAndOpenIssues: 'Synthetic risks and issues reviewed',
+        readinessCriteria: 'Synthetic readiness criteria satisfied',
+        controlledDocumentReference: 'SYN-MDR-FDR-001',
+        sourceMappingStatus: 'CONFIRMED',
         requiredApprovals: ['QUALITY'],
       },
     });

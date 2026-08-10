@@ -72,6 +72,85 @@ export async function assertControlledDocumentSchemaReady(
   if (missing.length) throw new ControlledDocumentSchemaNotReadyError(missing);
 }
 
+export const controlledDocumentCreateColumns: Record<string, string[]> = {
+  controlled_documents: [
+    'template_key',
+    'lifecycle_status',
+    'current_revision_id',
+    'working_draft_revision_id',
+    'number_control_status',
+    'classification',
+    'cui_category',
+    'itar_category',
+    'export_control_jurisdiction',
+    'customer_id',
+    'contract_artifact_type',
+    'access_rule',
+    'mfa_required',
+    'download_tracking_required',
+  ],
+  document_version_history: [
+    'revision_sequence',
+    'lifecycle_status',
+    'revision_reason',
+    'file_name',
+    'media_type',
+    'file_size',
+    'file_checksum',
+    'checksum_status',
+    'metadata',
+  ],
+  controlled_document_number_registry: [
+    'normalized_number',
+    'display_number',
+    'controlled_document_id',
+    'status',
+    'reserved_by_user_id',
+    'reserved_by_snapshot',
+  ],
+  audit_events: [
+    'subject_type',
+    'subject_id',
+    'payload_json',
+    'payload_hash',
+    'prev_hash',
+    'row_hash',
+    'occurred_at',
+    'recorded_at',
+    'source_service',
+    'sequence_number',
+  ],
+};
+
+/** Check every create-only dependency before accepting central-storage bytes. */
+export async function assertControlledDocumentCreateSchemaReady(
+  client: Pick<typeof db, 'execute'> = db
+) {
+  await assertControlledDocumentSchemaReady(client);
+  const result = await client.execute(sql`
+    SELECT table_name, column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name IN (
+        'controlled_documents', 'document_version_history',
+        'controlled_document_number_registry', 'audit_events'
+      )
+  `);
+  const rows = (((result as any)?.rows ?? result) || []) as Array<{
+    table_name?: string;
+    column_name?: string;
+  }>;
+  const present = new Set(
+    rows.map((row) => `${row.table_name}.${row.column_name}`)
+  );
+  const missing = Object.entries(controlledDocumentCreateColumns)
+    .flatMap(([tableName, columns]) =>
+      columns.map((columnName) => `${tableName}.${columnName}`)
+    )
+    .filter((objectName) => !present.has(objectName));
+  if (missing.length) throw new ControlledDocumentSchemaNotReadyError(missing);
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function assertControlledDocumentPhase2SchemaReady(
   client: Pick<typeof db, 'execute'> = db

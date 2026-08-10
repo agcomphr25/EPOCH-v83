@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../db', () => ({ db: {} }));
 
 import {
+  assertControlledDocumentCreateSchemaReady,
   assertControlledDocumentReconciliationSchemaReady,
   assertControlledDocumentSchemaReady,
+  controlledDocumentCreateColumns,
   controlledDocumentReconciliationSchemaManifest,
   requiredControlledDocumentReconciliationCorrectiveMigration,
   requiredControlledDocumentReconciliationMigration,
@@ -24,6 +26,9 @@ type BaseSchemaClient = Parameters<
 >[0];
 type ReconciliationSchemaClient = Parameters<
   typeof assertControlledDocumentReconciliationSchemaReady
+>[0];
+type CreateSchemaClient = Parameters<
+  typeof assertControlledDocumentCreateSchemaReady
 >[0];
 
 const completeReconciliationFacts = () => {
@@ -106,6 +111,49 @@ describe('controlled document schema readiness', () => {
         execute: async () => objects.map((object_name) => ({ object_name })),
       } as unknown as BaseSchemaClient)
     ).resolves.toBeUndefined();
+  });
+
+  it('checks create-only revision, registry, and audit dependencies', async () => {
+    const baseObjects = [
+      ...requiredControlledDocumentTables,
+      'controlled_documents.lifecycle_status',
+      'controlled_documents.current_revision_id',
+      'controlled_documents.current_released_revision_id',
+      'controlled_documents.working_draft_revision_id',
+      'controlled_documents.number_control_status',
+      'document_version_history.revision_sequence',
+      'document_version_history.lifecycle_status',
+      'document_version_history.file_checksum',
+      'document_version_history.checksum_status',
+    ];
+    const completeColumns = Object.entries(
+      controlledDocumentCreateColumns
+    ).flatMap(([table_name, columns]) =>
+      columns.map((column_name) => ({ table_name, column_name }))
+    );
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce(
+        baseObjects.map((object_name) => ({ object_name }))
+      )
+      .mockResolvedValueOnce(
+        completeColumns.filter(
+          (row) =>
+            !(
+              row.table_name === 'audit_events' &&
+              row.column_name === 'sequence_number'
+            )
+        )
+      );
+
+    await expect(
+      assertControlledDocumentCreateSchemaReady({
+        execute,
+      } as unknown as CreateSchemaClient)
+    ).rejects.toMatchObject({
+      code: 'CONTROLLED_DOCUMENT_SCHEMA_NOT_READY',
+      missingObjects: ['audit_events.sequence_number'],
+    });
   });
 
   it('requires the complete Phase 1B migration shape without permanent caching', async () => {

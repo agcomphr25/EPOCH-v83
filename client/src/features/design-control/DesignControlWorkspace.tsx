@@ -276,6 +276,10 @@ export function DesignControlWorkspace({
       ? 'Review Release Readiness'
       : 'Continue Design';
   const selectedFormData = selectedStep?.formData ?? {};
+  const selectedExample =
+    'examples' in selectedDefinition
+      ? selectedDefinition.examples?.[0]
+      : undefined;
   const missingFields = selectedDefinition.fields.filter((field) => {
     const value = selectedFormData[field.key];
     return value === undefined || value === null || value === '';
@@ -488,10 +492,10 @@ export function DesignControlWorkspace({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {selectedDefinition.purpose}
                 </p>
-                {selectedDefinition.examples?.[0] && (
+                {selectedExample && (
                   <p className="mt-2 text-sm">
                     <span className="font-medium">Example:</span>{' '}
-                    {selectedDefinition.examples[0]}
+                    {selectedExample}
                   </p>
                 )}
               </section>

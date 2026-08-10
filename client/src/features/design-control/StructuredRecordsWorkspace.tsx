@@ -295,7 +295,6 @@ const definitions: Definition[] = [
         label: 'N/A (Not Applicable) justification',
         guidance:
           'Required whenever any assessment is marked N/A (Not Applicable).',
-        required: false,
       },
       {
         key: 'controlledDocumentReference',

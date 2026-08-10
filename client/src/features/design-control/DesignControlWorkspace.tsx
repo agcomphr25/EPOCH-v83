@@ -265,6 +265,33 @@ export function DesignControlWorkspace({
       return 'Not started';
     return 'In progress';
   };
+  const firstIncompleteDefinition =
+    DESIGN_CONTROL_WORKFLOW.find((definition) => {
+      const status = stepByKey.get(definition.key)?.status?.toLowerCase();
+      return !['approved', 'complete', 'completed'].includes(status || '');
+    }) ?? DESIGN_CONTROL_WORKFLOW[DESIGN_CONTROL_WORKFLOW.length - 1];
+  const nextActionLabel = readOnly
+    ? 'View Current Design Phase'
+    : completed === DESIGN_CONTROL_WORKFLOW.length
+      ? 'Review Release Readiness'
+      : 'Continue Design';
+  const selectedFormData = selectedStep?.formData ?? {};
+  const missingFields = selectedDefinition.fields.filter((field) => {
+    const value = selectedFormData[field.key];
+    return value === undefined || value === null || value === '';
+  });
+  const openRiskCount = detail.risks.filter(
+    (risk) =>
+      !['approved', 'accepted', 'closed'].includes(
+        (risk.status || '').toLowerCase()
+      )
+  ).length;
+  const openActionCount = detail.reviews.reduce((total, review) => {
+    const actions = Array.isArray(review.metadata?.reviewActions)
+      ? review.metadata.reviewActions
+      : [];
+    return total + actions.length;
+  }, 0);
 
   return (
     <section className="space-y-4" aria-label="Design Control workspace">
@@ -298,7 +325,56 @@ export function DesignControlWorkspace({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            aria-label="Project guidance summary"
+          >
+            <div className="rounded-md border p-3">
+              <span className="text-xs text-muted-foreground">
+                Current phase
+              </span>
+              <p className="font-medium">{activePhase.title}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <span className="text-xs text-muted-foreground">
+                Overall progress
+              </span>
+              <p className="font-medium">
+                {Math.round((completed / DESIGN_CONTROL_WORKFLOW.length) * 100)}
+                % complete
+              </p>
+            </div>
+            <div className="rounded-md border p-3">
+              <span className="text-xs text-muted-foreground">Open risks</span>
+              <p className="font-medium">{openRiskCount}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <span className="text-xs text-muted-foreground">
+                Open review actions
+              </span>
+              <p className="font-medium">{openActionCount}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Next required action
+              </p>
+              <p className="font-semibold">{firstIncompleteDefinition.title}</p>
+              <p className="text-sm text-muted-foreground">
+                {firstIncompleteDefinition.purpose}
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                setActiveTab('lifecycle');
+                setActiveStep(firstIncompleteDefinition.key);
+              }}
+            >
+              {nextActionLabel}
+            </Button>
+          </div>
           <ol
             className="grid gap-2 md:grid-cols-2 xl:grid-cols-3"
             aria-label="Six Design Control phases"
@@ -308,15 +384,26 @@ export function DesignControlWorkspace({
                 className={`rounded-md border p-3 text-sm ${phase.key === activePhase.key ? 'border-primary bg-primary/5' : ''}`}
                 key={phase.key}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-semibold">
-                    {phase.order}. {phase.title}
+                <button
+                  className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => {
+                    setActiveTab('lifecycle');
+                    setActiveStep(phase.stepKeys[0]);
+                  }}
+                  type="button"
+                >
+                  <span className="flex items-start justify-between gap-2">
+                    <span className="font-semibold">
+                      {phase.order}. {phase.title}
+                    </span>
+                    <Badge variant="outline">
+                      {phaseStatus(phase.stepKeys)}
+                    </Badge>
                   </span>
-                  <Badge variant="outline">{phaseStatus(phase.stepKeys)}</Badge>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {phase.explanation}
-                </p>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {phase.explanation}
+                  </span>
+                </button>
               </li>
             ))}
           </ol>
@@ -391,6 +478,66 @@ export function DesignControlWorkspace({
               <CardDescription>{selectedDefinition.purpose}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <section
+                aria-labelledby="phase-guidance-heading"
+                className="rounded-md border bg-muted/20 p-4"
+              >
+                <h3 id="phase-guidance-heading" className="font-semibold">
+                  What you need to do
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {selectedDefinition.purpose}
+                </p>
+                {selectedDefinition.examples?.[0] && (
+                  <p className="mt-2 text-sm">
+                    <span className="font-medium">Example:</span>{' '}
+                    {selectedDefinition.examples[0]}
+                  </p>
+                )}
+              </section>
+              <section aria-labelledby="required-information-heading">
+                <h3 id="required-information-heading" className="font-semibold">
+                  Required information
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Complete the focused fields and linked authoritative records
+                  below. You can save an incomplete draft.
+                </p>
+              </section>
+              <section
+                aria-labelledby="missing-information-heading"
+                className="rounded-md border p-4"
+              >
+                <h3 id="missing-information-heading" className="font-semibold">
+                  What is missing
+                </h3>
+                {missingFields.length === 0 ? (
+                  <p className="mt-2 flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="h-4 w-4" /> No empty required
+                    fields were found in this draft.
+                  </p>
+                ) : (
+                  <ul className="mt-2 space-y-2 text-sm">
+                    {missingFields.slice(0, 6).map((field) => (
+                      <li key={field.key}>
+                        <button
+                          className="text-left text-primary underline-offset-4 hover:underline"
+                          onClick={() =>
+                            document
+                              .getElementById(
+                                `design-control-${selectedDefinition.key}-${field.key}`
+                              )
+                              ?.focus()
+                          }
+                          type="button"
+                        >
+                          Complete {field.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-md border p-3">
                   <span className="text-xs text-muted-foreground">Status</span>
@@ -474,6 +621,35 @@ export function DesignControlWorkspace({
                 oversightMode={readOnly}
                 stepKey={selectedDefinition.key}
               />
+              <section
+                aria-labelledby="review-approval-heading"
+                className="border-t pt-4"
+              >
+                <h3 id="review-approval-heading" className="font-semibold">
+                  Review and approval
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {selectedStep?.approvedAt
+                    ? 'Authenticated approval is recorded for this exact version.'
+                    : 'Review assignments, decisions, comments, and authenticated approval remain pending or are not yet required.'}
+                </p>
+              </section>
+              <section
+                aria-labelledby="history-heading"
+                className="border-t pt-4"
+              >
+                <h3 id="history-heading" className="font-semibold">
+                  History
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Generation {selectedStep?.contentVersion || 0}
+                  {selectedStep?.updatedAt
+                    ? ` · last changed ${new Date(selectedStep.updatedAt).toLocaleString()}`
+                    : ' · no saved revision yet'}
+                  . Previous versions and decisions remain in the controlled
+                  record.
+                </p>
+              </section>
             </CardContent>
           </Card>
         </TabsContent>

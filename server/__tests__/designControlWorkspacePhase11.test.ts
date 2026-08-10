@@ -70,6 +70,23 @@ describe('Phase 11 unified Design Control workspace', () => {
     expect(workspace).toContain('Six Design Control phases');
     expect(workspace).toContain('All 12 controlled');
     expect(workspace).toContain('Design phases');
+    expect(workspace).toContain('Next required action');
+    expect(workspace).toContain('Continue Design');
+    expect(workspace).toContain('setActiveStep(phase.stepKeys[0])');
+  });
+
+  it('gives every phase the same guided, correctable layout', () => {
+    for (const heading of [
+      'What you need to do',
+      'Required information',
+      'What is missing',
+      'Review and approval',
+      'History',
+    ]) {
+      expect(workspace).toContain(heading);
+    }
+    expect(workspace).toContain('.getElementById(');
+    expect(workspace).toContain('You can save an incomplete draft');
   });
 
   it('is shared by R&D project mode and QMS oversight mode', () => {
@@ -155,6 +172,7 @@ describe('Phase 11 unified Design Control workspace', () => {
     ]) {
       expect(terminology).toMatch(new RegExp(`\\b${acronym}:`));
     }
+    expect(terminology).toContain("'N/A': 'Not Applicable'");
   });
 
   it('enforces source confirmation, N/A reasons, and decision comments server-side', () => {

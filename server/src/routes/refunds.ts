@@ -6,6 +6,8 @@ import {
   customers,
   payments,
   creditCardTransactions,
+  creditMemos,
+  creditMemoApplications,
   internalMessages,
   messageRecipients,
 } from '../../schema';
@@ -17,6 +19,41 @@ import { auditService } from '../services/auditService';
 const GLENNJ_USER_ID = 13;
 const SYSTEM_SENDER_ID = 0;
 const SYSTEM_SENDER_NAME = 'System';
+
+type RefundProcessingMethod = 'ACCEPT_BLUE' | 'EXTERNAL' | 'MANUAL';
+
+async function getRefundPaymentContext(orderId: string): Promise<{
+  paymentSource: string | null;
+  processingMethod: RefundProcessingMethod;
+  originalPaymentId: number | null;
+}> {
+  const positivePayments = await db
+    .select()
+    .from(payments)
+    .where(and(eq(payments.orderId, orderId), sql`${payments.paymentAmount} > 0`))
+    .orderBy(desc(payments.paymentDate));
+  const originalPayment = positivePayments[0];
+  if (!originalPayment) {
+    return { paymentSource: null, processingMethod: 'MANUAL', originalPaymentId: null };
+  }
+
+  const [acceptBlueTransaction] = await db
+    .select({ id: creditCardTransactions.id })
+    .from(creditCardTransactions)
+    .where(and(
+      eq(creditCardTransactions.paymentId, originalPayment.id),
+      eq(creditCardTransactions.responseCode, '1')
+    ))
+    .limit(1);
+  const source = originalPayment.paymentType.trim().toLowerCase();
+  return {
+    paymentSource: originalPayment.paymentType,
+    processingMethod: acceptBlueTransaction
+      ? 'ACCEPT_BLUE'
+      : source === 'agr' ? 'EXTERNAL' : 'MANUAL',
+    originalPaymentId: originalPayment.id,
+  };
+}
 
 export async function sendRefundInboxNotification(opts: {
   customerName: string;
@@ -155,6 +192,13 @@ router.get('/', async (req: Request, res: Response) => {
         authNetTransactionId: refundRequests.authNetTransactionId,
         authNetRefundId: refundRequests.authNetRefundId,
         originalTransactionId: refundRequests.originalTransactionId,
+        processingMethod: refundRequests.processingMethod,
+        paymentSource: refundRequests.paymentSource,
+        externalProcessor: refundRequests.externalProcessor,
+        externalRefundReference: refundRequests.externalRefundReference,
+        externalRefundDate: refundRequests.externalRefundDate,
+        refundPaymentId: refundRequests.refundPaymentId,
+        creditMemoId: refundRequests.creditMemoId,
         lastRemindedAt: refundRequests.lastRemindedAt,
         customerName: customers.name,
       })
@@ -166,7 +210,18 @@ router.get('/', async (req: Request, res: Response) => {
       .orderBy(desc(refundRequests.createdAt));
 
     console.log(`✅ Found ${requests.length} refund requests`);
-    res.json(requests);
+    const enrichedRequests = await Promise.all(
+      requests.map(async (request) => {
+        if (request.status === 'PROCESSED' && request.processingMethod) return request;
+        const context = await getRefundPaymentContext(request.orderId);
+        return {
+          ...request,
+          processingMethod: request.processingMethod || context.processingMethod,
+          paymentSource: request.paymentSource || context.paymentSource,
+        };
+      })
+    );
+    res.json(enrichedRequests);
   } catch (error) {
     console.error('❌ Error fetching refund requests:', error);
     res.status(500).json({ error: 'Failed to fetch refund requests' });
@@ -397,6 +452,150 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/refund-requests/:id/complete - Record an externally or manually completed refund.
+// Accept.Blue refunds must use /process so EPOCH cannot accidentally refund an AGR payment there.
+router.post('/:id/complete', async (req: Request, res: Response) => {
+  if (!requireRefundApprovalRole(req, res)) return;
+  try {
+    const refundRequestId = parseInt(req.params.id);
+    const {
+      refundReference,
+      refundDate,
+      processor,
+      completionNotes,
+      externalRefundConfirmed,
+    } = req.body;
+
+    if (!refundReference?.trim()) {
+      return res.status(400).json({ error: 'Refund or bank reference is required' });
+    }
+    if (!refundDate || Number.isNaN(new Date(refundDate).getTime())) {
+      return res.status(400).json({ error: 'A valid refund date is required' });
+    }
+
+    const [refundRequest] = await db
+      .select()
+      .from(refundRequests)
+      .where(eq(refundRequests.id, refundRequestId));
+    if (!refundRequest) return res.status(404).json({ error: 'Refund request not found' });
+    if (refundRequest.status !== 'APPROVED') {
+      return res.status(409).json({ error: `Refund request is ${refundRequest.status}, not APPROVED` });
+    }
+
+    const paymentContext = await getRefundPaymentContext(refundRequest.orderId);
+    if (paymentContext.processingMethod === 'ACCEPT_BLUE') {
+      return res.status(400).json({
+        error: 'This payment was processed by Accept.Blue. Use Process via Accept.Blue instead.',
+      });
+    }
+    if (paymentContext.processingMethod === 'EXTERNAL' && externalRefundConfirmed !== true) {
+      return res.status(400).json({
+        error: 'Confirm that the refund was completed in the external processor before recording it.',
+      });
+    }
+    if (paymentContext.processingMethod === 'EXTERNAL' && !processor?.trim()) {
+      return res.status(400).json({ error: 'External processor name is required' });
+    }
+
+    const refundAmount = refundRequest.refundAmount || refundRequest.amount || 0;
+    if (refundAmount <= 0) return res.status(400).json({ error: 'Refund amount must be greater than zero' });
+    const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, refundRequest.orderId));
+    const customerId = refundRequest.customerId || order?.customerId;
+    if (!customerId) return res.status(400).json({ error: 'Order customer could not be determined' });
+
+    const processedBy = (req as any).user?.username || 'unknown';
+    const effectiveDate = new Date(refundDate);
+    const method = paymentContext.processingMethod;
+    const result = await db.transaction(async (tx) => {
+      const [refundPayment] = await tx.insert(payments).values({
+        orderId: refundRequest.orderId,
+        paymentType: method === 'EXTERNAL' ? 'external_refund' : 'manual_refund',
+        paymentAmount: -refundAmount,
+        paymentDate: effectiveDate,
+        referenceNumber: refundReference.trim(),
+        notes: `${method === 'EXTERNAL' ? `External refund via ${processor.trim()}` : 'Manual refund'}; request #${refundRequestId}${completionNotes?.trim() ? `; ${completionNotes.trim()}` : ''}`,
+      }).returning();
+
+      const [memo] = await tx.insert(creditMemos).values({
+        memoNumber: `REFUND-${refundRequestId}`,
+        customerId: String(customerId),
+        amount: refundAmount,
+        appliedAmount: refundAmount,
+        unappliedAmount: 0,
+        reason: refundRequest.reason,
+        notes: `Applied to ${refundRequest.orderId}; refund reference ${refundReference.trim()}`,
+        status: 'fully_applied',
+        sourceType: 'return',
+        sourceReference: String(refundRequestId),
+        issuedDate: effectiveDate,
+        createdBy: processedBy,
+      }).returning();
+
+      await tx.insert(creditMemoApplications).values({
+        creditMemoId: memo.id,
+        orderId: refundRequest.orderId,
+        amountApplied: refundAmount,
+        appliedDate: effectiveDate,
+        appliedBy: processedBy,
+        notes: `Refund request #${refundRequestId}`,
+      });
+
+      // Applying the credit offsets the negative refund payment, preserving the original receipt
+      // while reducing the order total by the same amount.
+      await tx.insert(payments).values({
+        orderId: refundRequest.orderId,
+        paymentType: 'credit_memo',
+        paymentAmount: refundAmount,
+        paymentDate: effectiveDate,
+        referenceNumber: memo.memoNumber,
+        notes: `Credit Memo ${memo.memoNumber} applied for refund request #${refundRequestId}`,
+      });
+
+      const [updatedRequest] = await tx.update(refundRequests).set({
+        status: 'PROCESSED',
+        processedBy,
+        processedAt: new Date(),
+        processingMethod: method,
+        paymentSource: paymentContext.paymentSource,
+        externalProcessor: method === 'EXTERNAL' ? processor.trim() : null,
+        externalRefundReference: refundReference.trim(),
+        externalRefundDate: effectiveDate,
+        refundPaymentId: refundPayment.id,
+        creditMemoId: memo.id,
+        notes: completionNotes?.trim() || refundRequest.notes,
+        updatedAt: new Date(),
+      }).where(eq(refundRequests.id, refundRequestId)).returning();
+      return { updatedRequest, refundPayment, memo };
+    });
+
+    await auditService.logEvent({
+      entityType: 'p1_order',
+      entityId: refundRequest.orderId,
+      action: method === 'EXTERNAL' ? 'EXTERNAL_REFUND_RECORDED' : 'MANUAL_REFUND_RECORDED',
+      actor: { username: processedBy },
+      meta: {
+        refundRequestId,
+        refundAmount,
+        paymentSource: paymentContext.paymentSource,
+        processor: method === 'EXTERNAL' ? processor.trim() : null,
+        refundReference: refundReference.trim(),
+        refundDate: effectiveDate.toISOString(),
+        refundPaymentId: result.refundPayment.id,
+        creditMemoId: result.memo.id,
+      },
+    });
+
+    res.json({
+      ...result.updatedRequest,
+      message: 'Refund completion recorded and customer balance reconciled',
+      creditMemoNumber: result.memo.memoNumber,
+    });
+  } catch (error) {
+    console.error('Error completing recorded refund:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to complete refund' });
+  }
+});
+
 // POST /api/refund-requests/:id/process - Process an approved refund through Accept.Blue
 router.post('/:id/process', async (req: Request, res: Response) => {
   if (!requireRefundApprovalRole(req, res)) return;
@@ -417,6 +616,13 @@ router.post('/:id/process', async (req: Request, res: Response) => {
     if (refundRequest.status !== 'APPROVED') {
       return res.status(400).json({ 
         error: `Cannot process refund - status is ${refundRequest.status}. Refund must be APPROVED first.` 
+      });
+    }
+
+    const paymentContext = await getRefundPaymentContext(refundRequest.orderId);
+    if (paymentContext.processingMethod !== 'ACCEPT_BLUE') {
+      return res.status(400).json({
+        error: `Accept.Blue cannot process this ${paymentContext.paymentSource || 'unknown'} payment. Record the completed refund instead.`,
       });
     }
 
@@ -530,8 +736,62 @@ router.post('/:id/process', async (req: Request, res: Response) => {
       // Continue even if insert fails - the refund was already processed
     }
 
+    // Match the cash refund with a fully-applied credit memo so the original
+    // receipt and refund both remain visible while the order balance stays closed.
+    const [order] = await db.select().from(allOrders).where(eq(allOrders.orderId, refundRequest.orderId));
+    const customerId = refundRequest.customerId || order?.customerId;
+    if (!customerId) {
+      return res.status(500).json({
+        error: `Refund was processed by Accept.Blue, but customer accounting could not be determined for ${refundRequest.orderId}. Manual reconciliation is required.`,
+        refundProcessed: true,
+        requiresManualReconciliation: true,
+      });
+    }
+    let refundCreditMemoId: number;
+    try {
+      refundCreditMemoId = await db.transaction(async (tx) => {
+        const [memo] = await tx.insert(creditMemos).values({
+          memoNumber: `REFUND-${id}`,
+          customerId: String(customerId),
+          amount: refundAmount,
+          appliedAmount: refundAmount,
+          unappliedAmount: 0,
+          reason: refundRequest.reason,
+          notes: `Applied to ${refundRequest.orderId}; Accept.Blue refund ${refundTransactionIdForDb}`,
+          status: 'fully_applied',
+          sourceType: 'return',
+          sourceReference: String(id),
+          issuedDate: new Date(),
+          createdBy: (req as any).user?.username || 'PROCESSOR',
+        }).returning();
+        await tx.insert(creditMemoApplications).values({
+          creditMemoId: memo.id,
+          orderId: refundRequest.orderId,
+          amountApplied: refundAmount,
+          appliedBy: (req as any).user?.username || 'PROCESSOR',
+          notes: `Accept.Blue refund request #${id}`,
+        });
+        await tx.insert(payments).values({
+          orderId: refundRequest.orderId,
+          paymentType: 'credit_memo',
+          paymentAmount: refundAmount,
+          paymentDate: new Date(),
+          referenceNumber: memo.memoNumber,
+          notes: `Credit Memo ${memo.memoNumber} applied for refund request #${id}`,
+        });
+        return memo.id;
+      });
+    } catch (accountingError) {
+      console.error('CRITICAL: Accept.Blue refund completed but credit memo failed:', accountingError);
+      return res.status(500).json({
+        error: `Refund was processed by Accept.Blue (Ref# ${refundTransactionIdForDb}), but the credit memo failed. Manual reconciliation is required.`,
+        refundProcessed: true,
+        requiresManualReconciliation: true,
+      });
+    }
+
     // Update the refund request with processing details
-    const processedBy = 'PROCESSOR'; // TODO: Get from authentication context
+    const processedBy = (req as any).user?.username || 'PROCESSOR';
     
     const [updatedRequest] = await db
       .update(refundRequests)
@@ -542,6 +802,10 @@ router.post('/:id/process', async (req: Request, res: Response) => {
         authNetTransactionId: result.refundTransactionId, // Store the Accept.Blue transaction ID
         authNetRefundId: result.refundReferenceNumber ? String(result.refundReferenceNumber) : undefined, // Store the Accept.Blue reference number
         originalTransactionId: referenceNumber,
+        processingMethod: 'ACCEPT_BLUE',
+        paymentSource: paymentContext.paymentSource,
+        refundPaymentId,
+        creditMemoId: refundCreditMemoId,
         notes: `Refund processed via Accept.Blue. Refund Ref#: ${result.refundReferenceNumber || 'N/A'}. Trans ID: ${result.refundTransactionId || 'N/A'}. Amount: $${refundAmount}`,
         updatedAt: new Date(),
       })

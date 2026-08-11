@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   CheckCircle,
@@ -52,9 +53,13 @@ interface RefundRequest {
   customerName?: string;
   orderDate?: string;
   paymentTotal?: number;
+  processingMethod?: 'ACCEPT_BLUE' | 'EXTERNAL' | 'MANUAL';
+  paymentSource?: string;
+  externalProcessor?: string;
+  externalRefundReference?: string;
 }
 
-type ActionType = 'approve' | 'reject' | 'process';
+type ActionType = 'approve' | 'reject' | 'process' | 'complete';
 
 export default function RefundQueue() {
   const { toast } = useToast();
@@ -65,6 +70,11 @@ export default function RefundQueue() {
   const [actionType, setActionType] = useState<ActionType>('approve');
   const [rejectionReason, setRejectionReason] = useState('');
   const [showActionDialog, setShowActionDialog] = useState(false);
+  const [refundReference, setRefundReference] = useState('');
+  const [refundDate, setRefundDate] = useState(new Date().toISOString().slice(0, 10));
+  const [processor, setProcessor] = useState('AGR Online Processor');
+  const [completionNotes, setCompletionNotes] = useState('');
+  const [externalRefundConfirmed, setExternalRefundConfirmed] = useState(false);
 
   const { data: session } = useQuery<{ username: string; role?: string } | null>({
     queryKey: ['/api/auth/session'],
@@ -92,14 +102,22 @@ export default function RefundQueue() {
       id,
       action,
       rejectionReason,
+      completion,
     }: {
       id: number;
       action: ActionType;
       rejectionReason?: string;
+      completion?: {
+        refundReference: string;
+        refundDate: string;
+        processor?: string;
+        completionNotes?: string;
+        externalRefundConfirmed: boolean;
+      };
     }) => {
       return await apiRequest(`/api/refund-requests/${id}/${action}`, {
         method: 'POST',
-        body: JSON.stringify({ rejectionReason }),
+        body: JSON.stringify(action === 'complete' ? completion : { rejectionReason }),
       });
     },
     onSuccess: (_, variables) => {
@@ -107,11 +125,13 @@ export default function RefundQueue() {
         approve: 'Request Approved',
         reject: 'Request Rejected',
         process: 'Refund Processed',
+        complete: 'Refund Reconciled',
       };
       const descriptions: Record<ActionType, string> = {
         approve: 'The refund request has been approved. You can now process it through Accept.Blue.',
         reject: 'The refund request has been rejected.',
         process: 'The refund has been successfully processed through Accept.Blue.',
+        complete: 'The completed refund and matching credit memo are now recorded.',
       };
       toast({
         title: titles[variables.action],
@@ -121,6 +141,9 @@ export default function RefundQueue() {
       setShowActionDialog(false);
       setSelectedRequest(null);
       setRejectionReason('');
+      setRefundReference('');
+      setCompletionNotes('');
+      setExternalRefundConfirmed(false);
     },
     onError: (error: any) => {
       toast({
@@ -134,6 +157,10 @@ export default function RefundQueue() {
   const handleAction = (request: RefundRequest, action: ActionType) => {
     setSelectedRequest(request);
     setActionType(action);
+    if (action === 'complete') {
+      setProcessor(request.processingMethod === 'EXTERNAL' ? 'AGR Online Processor' : 'Manual');
+      setRefundDate(new Date().toISOString().slice(0, 10));
+    }
     setShowActionDialog(true);
   };
 
@@ -148,12 +175,27 @@ export default function RefundQueue() {
       });
       return;
     }
+    if (actionType === 'complete' && !refundReference.trim()) {
+      toast({ title: 'Reference Required', description: 'Enter the external refund or bank reference.', variant: 'destructive' });
+      return;
+    }
+    if (actionType === 'complete' && selectedRequest.processingMethod === 'EXTERNAL' && !externalRefundConfirmed) {
+      toast({ title: 'Confirmation Required', description: 'Confirm the refund was completed in the external portal.', variant: 'destructive' });
+      return;
+    }
 
     updateRefundRequestMutation.mutate({
       id: selectedRequest.id,
       action: actionType,
       rejectionReason:
         actionType === 'reject' ? rejectionReason.trim() : undefined,
+      completion: actionType === 'complete' ? {
+        refundReference: refundReference.trim(),
+        refundDate,
+        processor: processor.trim(),
+        completionNotes: completionNotes.trim(),
+        externalRefundConfirmed,
+      } : undefined,
     });
   };
 
@@ -509,6 +551,9 @@ export default function RefundQueue() {
                         <div>
                           Approved by: {request.approvedBy || 'N/A'}
                         </div>
+                        <div>
+                          Payment source: <strong>{request.paymentSource || 'Unknown'}</strong>
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">
@@ -521,12 +566,19 @@ export default function RefundQueue() {
                       {canApprove && (
                         <Button
                           size="sm"
-                          onClick={() => handleAction(request, 'process')}
+                          onClick={() => handleAction(
+                            request,
+                            request.processingMethod === 'ACCEPT_BLUE' ? 'process' : 'complete'
+                          )}
                           className="bg-blue-600 hover:bg-blue-700"
                           data-testid={`process-button-${request.id}`}
                         >
                           <CreditCard className="h-4 w-4 mr-1" />
-                          Process Refund
+                          {request.processingMethod === 'ACCEPT_BLUE'
+                            ? 'Process via Accept.Blue'
+                            : request.processingMethod === 'EXTERNAL'
+                              ? 'Record External Refund'
+                              : 'Record Manual Refund'}
                         </Button>
                       )}
                     </div>
@@ -634,7 +686,7 @@ export default function RefundQueue() {
         <DialogContent data-testid="action-dialog">
           <DialogHeader>
             <DialogTitle data-testid="dialog-title">
-              {actionType === 'approve' ? 'Approve' : actionType === 'process' ? 'Process' : 'Reject'} Refund Request
+              {actionType === 'approve' ? 'Approve' : actionType === 'process' ? 'Process' : actionType === 'complete' ? 'Complete' : 'Reject'} Refund Request
             </DialogTitle>
             <DialogDescription data-testid="dialog-description">
               {selectedRequest && (
@@ -647,6 +699,9 @@ export default function RefundQueue() {
                   )}
                   {actionType === 'reject' && (
                     `Reject the refund request for order ${selectedRequest.orderId}?`
+                  )}
+                  {actionType === 'complete' && (
+                    `Record the ${formatCurrency(selectedRequest.refundAmount)} refund for order ${selectedRequest.orderId} as completed? EPOCH will add the refund transaction and matching credit memo.`
                   )}
                 </>
               )}
@@ -682,6 +737,43 @@ export default function RefundQueue() {
             </div>
           )}
 
+          {actionType === 'complete' && selectedRequest && (
+            <div className="space-y-4">
+              <Alert className="border-amber-200 bg-amber-50">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-900">
+                  EPOCH will only record this transaction; it will not send money through {selectedRequest.paymentSource || 'the original payment source'}.
+                </AlertDescription>
+              </Alert>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="refund-date">Refund date *</Label>
+                  <Input id="refund-date" type="date" value={refundDate} onChange={(e) => setRefundDate(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="refund-reference">Processor / bank reference *</Label>
+                  <Input id="refund-reference" value={refundReference} onChange={(e) => setRefundReference(e.target.value)} placeholder="Confirmation or transaction number" />
+                </div>
+              </div>
+              {selectedRequest.processingMethod === 'EXTERNAL' && (
+                <div className="space-y-2">
+                  <Label htmlFor="refund-processor">External processor *</Label>
+                  <Input id="refund-processor" value={processor} onChange={(e) => setProcessor(e.target.value)} />
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="completion-notes">Reconciliation notes</Label>
+                <Textarea id="completion-notes" value={completionNotes} onChange={(e) => setCompletionNotes(e.target.value)} placeholder="Optional settlement or bank-reconciliation details" rows={2} />
+              </div>
+              {selectedRequest.processingMethod === 'EXTERNAL' && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" className="mt-1" checked={externalRefundConfirmed} onChange={(e) => setExternalRefundConfirmed(e.target.checked)} />
+                  <span>I confirm this refund has already been completed in the external processor portal.</span>
+                </label>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end space-x-2 mt-6">
             <Button
               variant="outline"
@@ -694,7 +786,7 @@ export default function RefundQueue() {
               onClick={confirmAction}
               disabled={updateRefundRequestMutation.isPending}
               variant={actionType === 'reject' ? 'destructive' : 'default'}
-              className={actionType === 'process' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+              className={actionType === 'process' || actionType === 'complete' ? 'bg-blue-600 hover:bg-blue-700' : ''}
               data-testid="confirm-action-button"
             >
               {updateRefundRequestMutation.isPending ? (
@@ -709,6 +801,8 @@ export default function RefundQueue() {
                   <CreditCard className="h-4 w-4 mr-2" />
                   Process via Accept.Blue
                 </>
+              ) : actionType === 'complete' ? (
+                'Record Completed Refund'
               ) : (
                 'Reject Request'
               )}

@@ -35,6 +35,11 @@ const item = (
   partNumber,
   description: `${partNumber} description`,
   itemType,
+  planningClassification: itemType,
+  classificationRevision: 1,
+  classificationSourceRevision: 'test:1',
+  partConfigurationRevision: 'A',
+  classificationCandidateCount: 1,
   manufacturedCategory: itemType === 'MANUFACTURED' ? 'MACHINED_PART' : null,
   manufacturingLevel: itemType === 'MANUFACTURED' ? 'COMPONENT' : null,
   unitOfMeasure: 'EA',
@@ -161,7 +166,7 @@ describe('Production Launch recursive preview', () => {
 
     expect(preview.ready).toBe(true);
     expect(preview.nodes[0]).toMatchObject({
-      classification: 'ASSEMBLY',
+      classification: 'MANUFACTURED',
       extendedProjectQuantity: 3,
     });
     expect(preview.nodes[0].children).toEqual([
@@ -277,6 +282,11 @@ describe('Production Launch recursive preview', () => {
   it('blocks missing inventory identity and missing make-buy classification', async () => {
     const unresolved = item(1, 'UNRESOLVED', 'PURCHASED');
     unresolved.itemType = null;
+    unresolved.planningClassification = null;
+    unresolved.classificationRevision = null;
+    unresolved.classificationSourceRevision = null;
+    unresolved.partConfigurationRevision = null;
+    unresolved.classificationCandidateCount = 0;
     const fixture: Fixture = {
       inventory: [unresolved],
       boms: {},
@@ -296,9 +306,32 @@ describe('Production Launch recursive preview', () => {
       path: ['po-item:20', 'MISSING'],
     });
     expect(missingDecision.blockers).toContainEqual(
-      expect.objectContaining({ code: 'MAKE_BUY_MISSING' })
+      expect.objectContaining({ code: 'CLASSIFICATION_REQUIRED' })
     );
   });
+
+  it.each([
+    ['RAW_MATERIAL', 'RAW_MATERIAL_REQUIRED'],
+    ['CUSTOMER_SUPPLIED', 'CUSTOMER_SUPPLIED_REQUIRED'],
+  ] as const)(
+    'preserves authoritative %s leaf demand',
+    async (classification, demandStatus) => {
+      const leaf = item(1, `${classification}-1`, 'PURCHASED');
+      leaf.planningClassification = classification;
+      if (classification === 'RAW_MATERIAL') leaf.vendorId = 99;
+      const preview = await resolveProductionLaunchPreview(
+        roots(leaf.partNumber, 4),
+        source({ inventory: [leaf], boms: {}, lines: {}, routings: {} })
+      );
+      expect(preview.ready).toBe(true);
+      expect(preview.nodes[0]).toMatchObject({
+        classification,
+        demandStatus,
+        extendedProjectQuantity: 4,
+        routingId: null,
+      });
+    }
+  );
 
   it.each([
     ['BOM_INACTIVE', { isActive: false }],

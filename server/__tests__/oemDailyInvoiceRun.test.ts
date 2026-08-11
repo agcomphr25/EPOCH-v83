@@ -28,4 +28,21 @@ describe('OEM daily invoice preparation workflow', () => {
     expect(pageSource).toContain("status: 'REVIEW'");
     expect(pageSource).toContain('for (const item of items)');
   });
+
+  it('reuses audited posting and sending endpoints with separate confirmations', () => {
+    expect(pageSource).toContain('I verified the selected invoice totals and authorize posting them to accounting');
+    expect(pageSource).toContain('I verified each recipient, message, and attachment selection');
+    expect(pageSource).toContain('`/api/ar-invoices/${item.id}/post`');
+    expect(pageSource).toContain('`/api/ar-invoices/${item.id}/send`');
+    expect(pageSource).toContain('`/api/ar-invoices/${item.id}/email-recipients`');
+    expect(pageSource).toContain('attachmentMediaIds: options.selectedAttachmentIds');
+    expect(pageSource).toContain('setDailySendSelections(new Set(failedKeys))');
+  });
+
+  it('returns existing invoice controls needed for phase-two readiness', () => {
+    expect(routeSource).toContain('inv.pricing_mismatch');
+    expect(routeSource).toContain('inv.pricing_ambiguous');
+    expect(routeSource).toContain('inv.posted_at');
+    expect(routeSource).toContain('inv.sent_at');
+  });
 });

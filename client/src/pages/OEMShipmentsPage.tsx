@@ -31,6 +31,7 @@ import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -135,6 +136,10 @@ interface DailyInvoiceRunItem {
   id?: string | null;
   invoiceNumber?: string | null;
   status?: string | null;
+  pricingMismatch?: boolean;
+  pricingAmbiguous?: boolean;
+  postedAt?: string | null;
+  sentAt?: string | null;
   readiness: 'READY' | 'WARNING' | 'BLOCKED' | 'EXISTING';
   blockers: string[];
   warnings: string[];
@@ -154,6 +159,36 @@ interface DailyInvoiceRun {
   generatedAt: string;
   items: DailyInvoiceRunItem[];
   summary: { total: number; ready: number; blocked: number; existing: number };
+}
+
+interface DailyInvoiceRecipient {
+  name: string;
+  email: string;
+  type: 'primary' | 'additional' | 'contact';
+}
+
+interface DailyInvoiceAttachment {
+  attachment: { id: string; mediaId: string; entityType: string; entityId: string };
+  media: { id: string; filename: string; title?: string | null; mimeType?: string | null; fileSize?: number | null };
+}
+
+interface DailyInvoiceSendOptions {
+  loading: boolean;
+  loaded: boolean;
+  recipients: DailyInvoiceRecipient[];
+  selectedRecipients: string[];
+  attachments: DailyInvoiceAttachment[];
+  selectedAttachmentIds: string[];
+  customerMessage: string;
+  error?: string;
+}
+
+interface DailyInvoiceActionResult {
+  key: string;
+  action: 'POST' | 'SEND';
+  ok: boolean;
+  invoiceNumber?: string;
+  error?: string;
 }
 
 const SERVICE_NAMES: Record<string, string> = {
@@ -199,6 +234,12 @@ export default function OEMShipmentsPage() {
   const [dailyInvoiceSelections, setDailyInvoiceSelections] = useState<Set<string>>(new Set());
   const [dailyInvoiceDates, setDailyInvoiceDates] = useState<Record<string, string>>({});
   const [dailyInvoiceConfirmed, setDailyInvoiceConfirmed] = useState(false);
+  const [dailyPostSelections, setDailyPostSelections] = useState<Set<string>>(new Set());
+  const [dailySendSelections, setDailySendSelections] = useState<Set<string>>(new Set());
+  const [dailyPostConfirmed, setDailyPostConfirmed] = useState(false);
+  const [dailySendConfirmed, setDailySendConfirmed] = useState(false);
+  const [dailyInvoiceSendOptions, setDailyInvoiceSendOptions] = useState<Record<string, DailyInvoiceSendOptions>>({});
+  const [dailyInvoiceActionResults, setDailyInvoiceActionResults] = useState<DailyInvoiceActionResult[]>([]);
   const [dailyInvoiceResults, setDailyInvoiceResults] = useState<Array<{
     key: string;
     ok: boolean;
@@ -396,6 +437,16 @@ export default function OEMShipmentsPage() {
       setDailyInvoiceDates(Object.fromEntries(run.items.map((item) => [dailyInvoiceKey(item), defaultInvoiceDate])));
       setDailyInvoiceResults([]);
       setDailyInvoiceConfirmed(false);
+      setDailyPostSelections(new Set(run.items
+        .filter((item) => item.id && ['DRAFT', 'REVIEW'].includes(String(item.status)) && !item.pricingMismatch && !item.pricingAmbiguous)
+        .map(dailyInvoiceKey)));
+      setDailySendSelections(new Set(run.items
+        .filter((item) => item.id && item.status === 'POSTED')
+        .map(dailyInvoiceKey)));
+      setDailyPostConfirmed(false);
+      setDailySendConfirmed(false);
+      setDailyInvoiceSendOptions({});
+      setDailyInvoiceActionResults([]);
       setDailyInvoiceRunOpen(true);
     },
     onError: (error: any) => {
@@ -469,6 +520,11 @@ export default function OEMShipmentsPage() {
         };
       });
       setDailyInvoiceSelections(new Set(results.filter((result) => !result.ok).map((result) => result.key)));
+      setDailyPostSelections((current) => new Set([
+        ...current,
+        ...results.filter((result) => result.ok).map((result) => result.key),
+      ]));
+      setDailyPostConfirmed(false);
       queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
       queryClient.invalidateQueries({ predicate: (query) =>
         Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
@@ -478,6 +534,145 @@ export default function OEMShipmentsPage() {
         description: `${successes} created or confirmed${failures ? `; ${failures} need attention` : ''}. Nothing was posted or emailed.`,
         variant: failures ? 'destructive' : 'default',
       });
+    },
+  });
+
+  const loadDailyInvoiceSendOptions = async (item: DailyInvoiceRunItem) => {
+    if (!item.id) return;
+    const key = dailyInvoiceKey(item);
+    setDailyInvoiceSendOptions((current) => ({
+      ...current,
+      [key]: {
+        loading: true,
+        loaded: false,
+        recipients: [],
+        selectedRecipients: [],
+        attachments: [],
+        selectedAttachmentIds: [],
+        customerMessage: current[key]?.customerMessage || '',
+      },
+    }));
+    try {
+      const [recipients, attachments] = await Promise.all([
+        apiRequest(`/api/ar-invoices/${item.id}/email-recipients`) as Promise<DailyInvoiceRecipient[]>,
+        fetch(`/api/media/attachments/invoice/${item.id}`, { credentials: 'include' }).then(async (response) => {
+          if (!response.ok) throw new Error('Failed to load invoice attachments');
+          return response.json() as Promise<DailyInvoiceAttachment[]>;
+        }),
+      ]);
+      const uniqueRecipients = recipients.filter((recipient, index, list) =>
+        list.findIndex((candidate) => candidate.email.trim().toLowerCase() === recipient.email.trim().toLowerCase()) === index
+      );
+      const primary = uniqueRecipients.find((recipient) => recipient.type === 'primary');
+      setDailyInvoiceSendOptions((current) => ({
+        ...current,
+        [key]: {
+          loading: false,
+          loaded: true,
+          recipients: uniqueRecipients,
+          selectedRecipients: primary ? [primary.email] : uniqueRecipients.slice(0, 1).map((recipient) => recipient.email),
+          attachments,
+          selectedAttachmentIds: attachments.map((attachment) => attachment.media.id),
+          customerMessage: current[key]?.customerMessage || '',
+        },
+      }));
+    } catch (error: any) {
+      setDailyInvoiceSendOptions((current) => ({
+        ...current,
+        [key]: {
+          loading: false,
+          loaded: false,
+          recipients: [],
+          selectedRecipients: [],
+          attachments: [],
+          selectedAttachmentIds: [],
+          customerMessage: current[key]?.customerMessage || '',
+          error: error.message || 'Send options could not be loaded',
+        },
+      }));
+    }
+  };
+
+  const postDailyInvoicesMutation = useMutation({
+    mutationFn: async (items: DailyInvoiceRunItem[]) => {
+      const results: DailyInvoiceActionResult[] = [];
+      for (const item of items) {
+        const key = dailyInvoiceKey(item);
+        try {
+          await apiRequest(`/api/ar-invoices/${item.id}/post`, { method: 'POST' });
+          results.push({ key, action: 'POST', ok: true, invoiceNumber: item.invoiceNumber || undefined });
+        } catch (error: any) {
+          results.push({ key, action: 'POST', ok: false, invoiceNumber: item.invoiceNumber || undefined, error: error.message || 'Posting failed' });
+        }
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      setDailyInvoiceActionResults((current) => [...current.filter((result) => result.action !== 'POST'), ...results]);
+      const successfulKeys = new Set(results.filter((result) => result.ok).map((result) => result.key));
+      const failedKeys = results.filter((result) => !result.ok).map((result) => result.key);
+      setDailyInvoiceRun((current) => current ? {
+        ...current,
+        items: current.items.map((item) => successfulKeys.has(dailyInvoiceKey(item)) ? { ...item, status: 'POSTED', postedAt: new Date().toISOString() } : item),
+      } : current);
+      setDailyPostSelections(new Set(failedKeys));
+      setDailySendSelections((current) => new Set([...current, ...successfulKeys]));
+      setDailyPostConfirmed(false);
+      setDailySendConfirmed(false);
+      const failed = results.filter((result) => !result.ok).length;
+      toast({
+        title: failed ? 'Posting completed with exceptions' : 'Selected invoices posted',
+        description: `${results.length - failed} posted${failed ? `; ${failed} can be retried` : ''}. No email was sent.`,
+        variant: failed ? 'destructive' : 'default',
+      });
+      queryClient.invalidateQueries({ predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices' });
+    },
+  });
+
+  const sendDailyInvoicesMutation = useMutation({
+    mutationFn: async (items: DailyInvoiceRunItem[]) => {
+      const results: DailyInvoiceActionResult[] = [];
+      for (const item of items) {
+        const key = dailyInvoiceKey(item);
+        const options = dailyInvoiceSendOptions[key];
+        if (!options?.loaded || options.selectedRecipients.length === 0) {
+          results.push({ key, action: 'SEND', ok: false, invoiceNumber: item.invoiceNumber || undefined, error: 'Select at least one verified recipient before sending' });
+          continue;
+        }
+        try {
+          await apiRequest(`/api/ar-invoices/${item.id}/send`, {
+            method: 'POST',
+            body: {
+              recipients: options.selectedRecipients,
+              attachmentMediaIds: options.selectedAttachmentIds,
+              customerMessage: options.customerMessage.trim() || undefined,
+            },
+          });
+          results.push({ key, action: 'SEND', ok: true, invoiceNumber: item.invoiceNumber || undefined });
+        } catch (error: any) {
+          results.push({ key, action: 'SEND', ok: false, invoiceNumber: item.invoiceNumber || undefined, error: error.message || 'Sending failed' });
+        }
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      setDailyInvoiceActionResults((current) => [...current.filter((result) => result.action !== 'SEND'), ...results]);
+      const successfulKeys = new Set(results.filter((result) => result.ok).map((result) => result.key));
+      const failedKeys = results.filter((result) => !result.ok).map((result) => result.key);
+      setDailyInvoiceRun((current) => current ? {
+        ...current,
+        items: current.items.map((item) => successfulKeys.has(dailyInvoiceKey(item)) ? { ...item, status: 'SENT', sentAt: new Date().toISOString() } : item),
+      } : current);
+      setDailySendSelections(new Set(failedKeys));
+      setDailySendConfirmed(false);
+      const failed = results.filter((result) => !result.ok).length;
+      toast({
+        title: failed ? 'Sending completed with exceptions' : 'Selected invoices sent',
+        description: `${results.length - failed} accepted by SendGrid${failed ? `; ${failed} can be retried` : ''}.`,
+        variant: failed ? 'destructive' : 'default',
+      });
+      queryClient.invalidateQueries({ predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices' });
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
     },
   });
 
@@ -825,6 +1020,17 @@ export default function OEMShipmentsPage() {
     });
     return acc;
   }, {} as Record<string, { poNumber: string; customerName: string; customerId: number; items: Array<ShipmentItem & { trackingNumber: string; shippedDate: string; shipmentId: string; hasLabel: boolean }> }>);
+
+  const dailyPostItems = dailyInvoiceRun?.items.filter((item) =>
+    dailyPostSelections.has(dailyInvoiceKey(item)) && item.id && ['DRAFT', 'REVIEW'].includes(String(item.status))
+  ) || [];
+  const dailySendItems = dailyInvoiceRun?.items.filter((item) =>
+    dailySendSelections.has(dailyInvoiceKey(item)) && item.id && item.status === 'POSTED'
+  ) || [];
+  const dailySendConfigurationReady = dailySendItems.length > 0 && dailySendItems.every((item) => {
+    const options = dailyInvoiceSendOptions[dailyInvoiceKey(item)];
+    return options?.loaded && options.selectedRecipients.length > 0;
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -2003,6 +2209,49 @@ export default function OEMShipmentsPage() {
                             View Packing Slip
                           </Button>
                         )}
+                        {item.id && ['DRAFT', 'REVIEW'].includes(String(item.status)) && (
+                          <label className="flex items-center gap-2 rounded border px-2 py-1 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={dailyPostSelections.has(key)}
+                              disabled={Boolean(item.pricingMismatch || item.pricingAmbiguous) || postDailyInvoicesMutation.isPending}
+                              onChange={(event) => setDailyPostSelections((current) => {
+                                const next = new Set(current);
+                                if (event.target.checked) next.add(key); else next.delete(key);
+                                setDailyPostConfirmed(false);
+                                return next;
+                              })}
+                            />
+                            Post
+                          </label>
+                        )}
+                        {item.id && item.status === 'POSTED' && (
+                          <>
+                            <label className="flex items-center gap-2 rounded border px-2 py-1 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={dailySendSelections.has(key)}
+                                disabled={sendDailyInvoicesMutation.isPending}
+                                onChange={(event) => setDailySendSelections((current) => {
+                                  const next = new Set(current);
+                                  if (event.target.checked) next.add(key); else next.delete(key);
+                                  setDailySendConfirmed(false);
+                                  return next;
+                                })}
+                              />
+                              Send
+                            </label>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => loadDailyInvoiceSendOptions(item)}
+                              disabled={dailyInvoiceSendOptions[key]?.loading}
+                            >
+                              {dailyInvoiceSendOptions[key]?.loading && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                              {dailyInvoiceSendOptions[key]?.loaded ? 'Reload Delivery Options' : 'Configure Delivery'}
+                            </Button>
+                          </>
+                        )}
                       </div>
 
                       {(item.blockers.length > 0 || item.warnings.length > 0) && (
@@ -2023,6 +2272,93 @@ export default function OEMShipmentsPage() {
                       {result && (
                         <div className={`mt-2 ml-7 text-sm ${result.ok ? 'text-green-700' : 'text-red-700'}`}>
                           {result.ok ? `Created ${result.invoiceNumber || 'invoice'} in REVIEW` : result.error}
+                        </div>
+                      )}
+
+                      {dailyInvoiceActionResults.filter((entry) => entry.key === key).map((entry) => (
+                        <div key={entry.action} className={`mt-2 ml-7 text-sm ${entry.ok ? 'text-green-700' : 'text-red-700'}`}>
+                          {entry.ok ? `${entry.action === 'POST' ? 'Posted to accounting' : 'Email accepted by SendGrid'}` : `${entry.action}: ${entry.error}`}
+                        </div>
+                      ))}
+
+                      {item.id && item.status === 'POSTED' && dailyInvoiceSendOptions[key] && (
+                        <div className="mt-3 ml-7 rounded-lg border bg-background p-3 space-y-3">
+                          {dailyInvoiceSendOptions[key].error ? (
+                            <div className="text-sm text-red-700">{dailyInvoiceSendOptions[key].error}</div>
+                          ) : dailyInvoiceSendOptions[key].loaded ? (
+                            <>
+                              <div>
+                                <p className="text-sm font-semibold mb-2">Recipients *</p>
+                                <div className="grid gap-2 md:grid-cols-2">
+                                  {dailyInvoiceSendOptions[key].recipients.map((recipient) => (
+                                    <label key={recipient.email} className="flex items-start gap-2 rounded border p-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        className="mt-1"
+                                        checked={dailyInvoiceSendOptions[key].selectedRecipients.includes(recipient.email)}
+                                        onChange={(event) => setDailyInvoiceSendOptions((current) => {
+                                          const options = current[key];
+                                          const selectedRecipients = event.target.checked
+                                            ? [...options.selectedRecipients, recipient.email]
+                                            : options.selectedRecipients.filter((email) => email !== recipient.email);
+                                          setDailySendConfirmed(false);
+                                          return { ...current, [key]: { ...options, selectedRecipients } };
+                                        })}
+                                      />
+                                      <span><strong>{recipient.name}</strong><br/><span className="text-muted-foreground">{recipient.email} • {recipient.type}</span></span>
+                                    </label>
+                                  ))}
+                                  {!dailyInvoiceSendOptions[key].recipients.length && (
+                                    <div className="text-sm text-red-700">No customer email recipients were found. Add one on the invoice/customer before sending.</div>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <Label htmlFor={`daily-message-${key}`}>Customer message override</Label>
+                                <Textarea
+                                  id={`daily-message-${key}`}
+                                  rows={2}
+                                  className="mt-1"
+                                  value={dailyInvoiceSendOptions[key].customerMessage}
+                                  placeholder="Optional message; leave blank to use the invoice's customer-visible notes"
+                                  onChange={(event) => {
+                                    const value = event.target.value;
+                                    setDailyInvoiceSendOptions((current) => ({ ...current, [key]: { ...current[key], customerMessage: value } }));
+                                    setDailySendConfirmed(false);
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold mb-2">Optional invoice attachments</p>
+                                <div className="grid gap-2 md:grid-cols-2">
+                                  {dailyInvoiceSendOptions[key].attachments.map((attachment) => (
+                                    <label key={attachment.media.id} className="flex items-center gap-2 rounded border p-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={dailyInvoiceSendOptions[key].selectedAttachmentIds.includes(attachment.media.id)}
+                                        onChange={(event) => setDailyInvoiceSendOptions((current) => {
+                                          const options = current[key];
+                                          const selectedAttachmentIds = event.target.checked
+                                            ? [...options.selectedAttachmentIds, attachment.media.id]
+                                            : options.selectedAttachmentIds.filter((id) => id !== attachment.media.id);
+                                          setDailySendConfirmed(false);
+                                          return { ...current, [key]: { ...options, selectedAttachmentIds } };
+                                        })}
+                                      />
+                                      <span className="truncate">{attachment.media.title || attachment.media.filename}</span>
+                                      <Button type="button" size="sm" variant="ghost" onClick={(event) => {
+                                        event.preventDefault();
+                                        window.open(`/api/media/${attachment.media.id}/download`, '_blank');
+                                      }}>Open</Button>
+                                    </label>
+                                  ))}
+                                  {!dailyInvoiceSendOptions[key].attachments.length && (
+                                    <div className="text-xs text-muted-foreground">No optional invoice attachments. The generated invoice PDF is always included.</div>
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          ) : null}
                         </div>
                       )}
 
@@ -2066,6 +2402,84 @@ export default function OEMShipmentsPage() {
                 />
                 <span>I reviewed the selected POs, invoice dates, line items, pricing, and totals and want to create these review drafts.</span>
               </label>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card className="border-violet-200">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">2. Post reviewed invoices</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Posting creates the accounting journal entries. It does not email customers.
+                    </p>
+                    <p className="text-sm"><strong>{dailyPostItems.length}</strong> review invoice{dailyPostItems.length === 1 ? '' : 's'} selected.</p>
+                    <label className="flex items-start gap-2 rounded border p-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={dailyPostConfirmed}
+                        onChange={(event) => setDailyPostConfirmed(event.target.checked)}
+                      />
+                      <span>I verified the selected invoice totals and authorize posting them to accounting.</span>
+                    </label>
+                    <Button
+                      className="w-full"
+                      variant="secondary"
+                      disabled={!dailyPostItems.length || !dailyPostConfirmed || postDailyInvoicesMutation.isPending}
+                      onClick={() => postDailyInvoicesMutation.mutate(dailyPostItems)}
+                    >
+                      {postDailyInvoicesMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Post Selected ({dailyPostItems.length})
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-green-200">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">3. Verify delivery and send</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Review recipients, optional attachments, and messages above before sending.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      The generated invoice PDF is always attached, and glenn@agadvanced.com is automatically copied by the existing invoice-delivery control.
+                    </p>
+                    <p className="text-sm"><strong>{dailySendItems.length}</strong> posted invoice{dailySendItems.length === 1 ? '' : 's'} selected.</p>
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      disabled={!dailySendItems.length}
+                      onClick={() => dailySendItems.forEach((item) => {
+                        const options = dailyInvoiceSendOptions[dailyInvoiceKey(item)];
+                        if (!options?.loaded && !options?.loading) loadDailyInvoiceSendOptions(item);
+                      })}
+                    >
+                      Load Selected Delivery Options
+                    </Button>
+                    {!dailySendConfigurationReady && dailySendItems.length > 0 && (
+                      <p className="text-xs text-amber-700">Every selected invoice must have loaded delivery options and at least one recipient.</p>
+                    )}
+                    <label className="flex items-start gap-2 rounded border p-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={dailySendConfirmed}
+                        onChange={(event) => setDailySendConfirmed(event.target.checked)}
+                      />
+                      <span>I verified each recipient, message, and attachment selection and authorize sending these invoices.</span>
+                    </label>
+                    <Button
+                      className="w-full bg-green-600 hover:bg-green-700"
+                      disabled={!dailySendConfigurationReady || !dailySendConfirmed || sendDailyInvoicesMutation.isPending}
+                      onClick={() => sendDailyInvoicesMutation.mutate(dailySendItems)}
+                    >
+                      {sendDailyInvoicesMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Send Selected ({dailySendItems.length})
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
 

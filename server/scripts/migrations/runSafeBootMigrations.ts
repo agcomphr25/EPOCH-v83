@@ -295,6 +295,7 @@ export const safeMigrationFiles = [
   '0264_p2_recursive_production_demand_foundation.sql',
   '0265_p2_demand_planning_foundation.sql',
   '0266_p2_production_launch_persistence.sql',
+  '0267_reconcile_p18380_persisted_shipment.sql',
 ];
 
 export const criticalMigrationFiles = new Set([
@@ -366,6 +367,7 @@ export const criticalMigrationFiles = new Set([
   '0264_p2_recursive_production_demand_foundation.sql',
   '0265_p2_demand_planning_foundation.sql',
   '0266_p2_production_launch_persistence.sql',
+  '0267_reconcile_p18380_persisted_shipment.sql',
 ]);
 
 export async function runSafeBootMigrations() {

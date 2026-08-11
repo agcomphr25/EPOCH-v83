@@ -549,6 +549,40 @@ async function buildP1PackingSlipInvoiceDraft(
   };
 }
 
+function serializeP1InvoiceDraftPreview(draft: any, poNumber: string) {
+  const first = draft.first;
+  return {
+    exists: Boolean(draft.existingInvoice),
+    id: draft.existingInvoice?.id || null,
+    invoiceNumber: draft.existingInvoice?.invoice_number || draft.invoiceNumber || null,
+    status: draft.existingInvoice?.status || null,
+    invoiceDate: toDateOnly(new Date()),
+    poNumber,
+    customerName:
+      first.po_customer_name ||
+      first.shipment_customer_name ||
+      first.ship_to_snapshot?.name ||
+      'P1 OEM Customer',
+    trackingNumber: first.master_tracking_number || null,
+    shipmentReference: first.reference || null,
+    lines: draft.existingInvoice ? [] : draft.consolidatedLines.map((line: any) => {
+      const qty = Number(line.quantity || 0);
+      const unitPrice = Number(line.unit_price || 0);
+      return {
+        partNumber: line.part_number || null,
+        description: line.description || line.order_id || poNumber,
+        quantity: qty,
+        unitPrice: unitPrice.toFixed(2),
+        lineTotal: (qty * unitPrice).toFixed(2),
+        orderIds: line.orderIds,
+      };
+    }),
+    subtotal: draft.subtotal.toFixed(2),
+    totalAmount: draft.subtotal.toFixed(2),
+    pricingMismatch: draft.pricingMismatch,
+  };
+}
+
 async function recordP1FulfillmentArtifacts({
   orderIds,
   poNumber,
@@ -2155,6 +2189,117 @@ router.get(
   }
 );
 
+// POST /api/po-orders/oem-shipments/invoice-runs/preview
+// Build a date-wide readiness snapshot without creating, posting, or sending invoices.
+router.post(
+  '/oem-shipments/invoice-runs/preview',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      if (!isGlennAdmin(req.user)) {
+        return res.status(403).json({
+          error: 'Only glennj/admin can prepare a daily OEM invoice run.',
+        });
+      }
+      const { shipmentDate } = req.body || {};
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(shipmentDate || ''))) {
+        return res.status(400).json({ error: 'shipmentDate must use YYYY-MM-DD format' });
+      }
+
+      const candidateResult = await pool.query(
+        `SELECT
+           sr.id::text AS shipment_id,
+           COALESCE(NULLIF(sr.customer_name, ''), po.customer_name, prod_ord.customer_name, 'P1 OEM Customer') AS customer_name,
+           sr.master_tracking_number,
+           COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number,
+           BOOL_OR(si.packing_slip_base64 IS NOT NULL) AS has_packing_slip,
+           MAX(si.id::text) FILTER (WHERE si.packing_slip_base64 IS NOT NULL) AS packing_slip_item_id
+         FROM shipment_records sr
+         JOIN shipment_items si ON si.shipment_id = sr.id
+         LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
+         LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+         LEFT JOIN purchase_orders po ON po.id = poi.po_id
+         WHERE (sr.created_at AT TIME ZONE 'America/Chicago')::date = $1::date
+         GROUP BY sr.id,
+           COALESCE(NULLIF(sr.customer_name, ''), po.customer_name, prod_ord.customer_name, 'P1 OEM Customer'),
+           sr.master_tracking_number,
+           COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+         ORDER BY customer_name, po_number`,
+        [shipmentDate]
+      );
+
+      const candidates = rowsOf<any>(candidateResult);
+      const items = [];
+      for (const candidate of candidates) {
+        const base = {
+          shipmentId: candidate.shipment_id,
+          poNumber: candidate.po_number,
+          customerName: candidate.customer_name,
+          trackingNumber: candidate.master_tracking_number || null,
+          hasPackingSlip: Boolean(candidate.has_packing_slip),
+          packingSlipItemId: candidate.packing_slip_item_id || null,
+        };
+        if (!candidate.po_number) {
+          items.push({
+            ...base,
+            readiness: 'BLOCKED',
+            blockers: ['PO number is missing'],
+            warnings: [],
+            lines: [],
+            totalAmount: '0.00',
+          });
+          continue;
+        }
+        try {
+          const draft = await buildP1PackingSlipInvoiceDraft(
+            candidate.shipment_id,
+            candidate.po_number
+          );
+          const preview = serializeP1InvoiceDraftPreview(draft, candidate.po_number);
+          const blockers: string[] = [];
+          const warnings: string[] = [];
+          if (!candidate.has_packing_slip) blockers.push('Packing slip is missing');
+          if (preview.pricingMismatch) blockers.push('One or more lines are missing unit pricing');
+          if (!preview.invoiceNumber && !preview.exists) {
+            warnings.push('Invoice number will be assigned when the invoice is created');
+          }
+          items.push({
+            ...base,
+            ...preview,
+            readiness: preview.exists ? 'EXISTING' : blockers.length ? 'BLOCKED' : warnings.length ? 'WARNING' : 'READY',
+            blockers,
+            warnings,
+          });
+        } catch (error: any) {
+          items.push({
+            ...base,
+            readiness: 'BLOCKED',
+            blockers: [error.message || 'Invoice preview could not be generated'],
+            warnings: [],
+            lines: [],
+            totalAmount: '0.00',
+          });
+        }
+      }
+
+      res.json({
+        shipmentDate,
+        generatedAt: new Date().toISOString(),
+        items,
+        summary: {
+          total: items.length,
+          ready: items.filter((item: any) => item.readiness === 'READY' || item.readiness === 'WARNING').length,
+          blocked: items.filter((item: any) => item.readiness === 'BLOCKED').length,
+          existing: items.filter((item: any) => item.readiness === 'EXISTING').length,
+        },
+      });
+    } catch (error: any) {
+      console.error('Failed to prepare daily OEM invoice run:', error);
+      res.status(500).json({ error: error.message || 'Failed to prepare daily OEM invoice run' });
+    }
+  }
+);
+
 // POST /api/po-orders/oem-shipments/:id/invoices
 // Create one review AR invoice for a P1 OEM shipment packing slip (shipment + PO group).
 router.post(
@@ -2180,50 +2325,7 @@ router.post(
       }
 
       const draft = await buildP1PackingSlipInvoiceDraft(id, poNumber);
-      if (draft.existingInvoice) {
-        return res.json({
-          exists: true,
-          id: draft.existingInvoice.id,
-          invoiceNumber: draft.existingInvoice.invoice_number,
-          status: draft.existingInvoice.status,
-          poNumber,
-          lines: [],
-          subtotal: '0.00',
-          totalAmount: '0.00',
-          pricingMismatch: false,
-        });
-      }
-
-      const first = draft.first;
-      const invoiceNumber = draft.invoiceNumber || '(new number will be assigned)';
-      res.json({
-        exists: false,
-        invoiceNumber,
-        invoiceDate: toDateOnly(new Date()),
-        poNumber,
-        customerName:
-          first.po_customer_name ||
-          first.shipment_customer_name ||
-          first.ship_to_snapshot?.name ||
-          'P1 OEM Customer',
-        trackingNumber: first.master_tracking_number || null,
-        shipmentReference: first.reference || null,
-        lines: draft.consolidatedLines.map((line: any) => {
-          const qty = Number(line.quantity || 0);
-          const unitPrice = Number(line.unit_price || 0);
-          return {
-            partNumber: line.part_number || null,
-            description: line.description || line.order_id || poNumber,
-            quantity: qty,
-            unitPrice: unitPrice.toFixed(2),
-            lineTotal: (qty * unitPrice).toFixed(2),
-            orderIds: line.orderIds,
-          };
-        }),
-        subtotal: draft.subtotal.toFixed(2),
-        totalAmount: draft.subtotal.toFixed(2),
-        pricingMismatch: draft.pricingMismatch,
-      });
+      res.json(serializeP1InvoiceDraftPreview(draft, poNumber));
     } catch (error: any) {
       console.error('Failed to preview P1 OEM packing slip invoice:', error);
       res.status(500).json({

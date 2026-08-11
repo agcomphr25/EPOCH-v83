@@ -12,7 +12,7 @@ const read = (file: string) =>
   readFileSync(path.join(process.cwd(), file), 'utf8');
 
 describe('P2 Demand Planning Foundation Phase 1', () => {
-  const migration = read('migrations/0264_p2_demand_planning_foundation.sql');
+  const migration = read('migrations/0265_p2_demand_planning_foundation.sql');
 
   it('defines exactly four authoritative planning classifications without inference backfill', () => {
     for (const value of [
@@ -55,7 +55,7 @@ describe('P2 Demand Planning Foundation Phase 1', () => {
   it('registers the additive migration as safe and critical', () => {
     const runner = read('server/scripts/migrations/runSafeBootMigrations.ts');
     expect(
-      runner.match(/0264_p2_demand_planning_foundation\.sql/g)
+      runner.match(/0265_p2_demand_planning_foundation\.sql/g)
     ).toHaveLength(2);
   });
 

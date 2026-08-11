@@ -111,3 +111,6 @@ stack = "FULLSTACK_JS"
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[objectStorage]
+defaultBucketID = "replit-objstore-1c257fef-79c3-4b81-a189-479be4ee087d"

@@ -73,7 +73,7 @@ export function reconcileP1POLine(input: {
   let pendingQueueQuantity = 0;
   const inProgressDepartmentBreakdown: Record<string, number> = {};
 
-  for (const unit of unitsByOrderId.values()) {
+  for (const unit of Array.from(unitsByOrderId.values())) {
     const status = normalized(unit.productionStatus);
     if (CANCELED_STATUSES.has(status)) continue;
 
@@ -477,6 +477,116 @@ export async function createP1QuantityAdjustment(input: {
       reconciliation: reconciliation!,
       replayed: false,
     };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function createP1QuantityAdjustmentBatch(input: {
+  purchaseOrderId: number;
+  adjustments: Array<{
+    purchaseOrderItemId: number;
+    adjustmentType: P1AdjustmentType;
+    quantity: number;
+    reason: string;
+    createdByUserId: number;
+    createdByDisplayName: string;
+    effectiveAt?: Date;
+    source?: string | null;
+    reference?: string | null;
+    idempotencyKey: string;
+    importRowId?: string;
+    priorCanceledQuantity?: number;
+  }>;
+}): Promise<Array<{ adjustmentId: string; purchaseOrderItemId: number }>> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ordered = [...input.adjustments].sort(
+      (a, b) => a.purchaseOrderItemId - b.purchaseOrderItemId
+    );
+    const inserted: Array<{
+      adjustmentId: string;
+      purchaseOrderItemId: number;
+    }> = [];
+
+    for (const adjustment of ordered) {
+      const current = await getLineReconciliationWithClient(
+        client,
+        adjustment.purchaseOrderItemId,
+        true,
+        input.purchaseOrderId
+      );
+      if (!current) throw new Error('P1 purchase-order line not found');
+
+      const existing = await client.query<{ id: string }>(
+        `SELECT id
+           FROM purchase_order_item_quantity_adjustments
+          WHERE purchase_order_item_id = $1
+            AND idempotency_key = $2`,
+        [adjustment.purchaseOrderItemId, adjustment.idempotencyKey]
+      );
+      if (existing.rows[0]) {
+        inserted.push({
+          adjustmentId: existing.rows[0].id,
+          purchaseOrderItemId: adjustment.purchaseOrderItemId,
+        });
+        continue;
+      }
+
+      validateP1QuantityAdjustment(
+        current,
+        adjustment.adjustmentType,
+        adjustment.quantity
+      );
+      const result = await client.query<{ id: string }>(
+        `INSERT INTO purchase_order_item_quantity_adjustments (
+           purchase_order_item_id, adjustment_type, quantity, reason,
+           effective_at, created_by_user_id, created_by_display_name,
+           source, reference, idempotency_key
+         ) VALUES ($1,$2,$3,$4,COALESCE($5, now()),$6,$7,$8,$9,$10)
+         RETURNING id`,
+        [
+          adjustment.purchaseOrderItemId,
+          adjustment.adjustmentType,
+          adjustment.quantity,
+          adjustment.reason.trim(),
+          adjustment.effectiveAt ?? null,
+          adjustment.createdByUserId,
+          adjustment.createdByDisplayName,
+          adjustment.source ?? 'P1_CUSTOMER_DOCUMENT_IMPORT',
+          adjustment.reference ?? null,
+          adjustment.idempotencyKey,
+        ]
+      );
+      inserted.push({
+        adjustmentId: result.rows[0].id,
+        purchaseOrderItemId: adjustment.purchaseOrderItemId,
+      });
+      if (adjustment.importRowId) {
+        await client.query(
+          `UPDATE p1_customer_po_document_import_rows
+              SET prior_canceled_quantity = $2,
+                  applied_cancellation_quantity = $3,
+                  adjustment_id = $4,
+                  validation_status = 'APPLIED',
+                  validation_message = 'Cancellation applied from customer document'
+            WHERE id = $1`,
+          [
+            adjustment.importRowId,
+            adjustment.priorCanceledQuantity ?? current.canceledDemandQuantity,
+            adjustment.quantity,
+            result.rows[0].id,
+          ]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return inserted;
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
     throw error;

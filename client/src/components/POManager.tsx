@@ -98,6 +98,7 @@ import { type AddressData } from '@/utils/addressUtils';
 import { format as formatDate } from 'date-fns';
 import { formatDateOnly } from '@shared/utils/dateNormalization';
 import { usePermissions } from '@/hooks/usePermissions';
+import P1POImportDialog from './P1POImportDialog';
 
 interface P1POLineReconciliation {
   purchaseOrderItemId: number;
@@ -1647,6 +1648,7 @@ interface StockModel {
 }
 
 export default function POManager() {
+  const { can } = usePermissions();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPO, setEditingPO] = useState<PurchaseOrder | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -2184,9 +2186,20 @@ export default function POManager() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-4">
             <h2 className="text-2xl font-bold">Purchase Order Management</h2>
-            <Dialog
+            <div className="flex items-center gap-2">
+              {can('purchasing.manage_pos') && (
+                <P1POImportDialog
+                  onApplied={() => {
+                    queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+                    queryClient.invalidateQueries({
+                      queryKey: ['/api/p1-customer-po-imports'],
+                    });
+                  }}
+                />
+              )}
+              <Dialog
               open={isDialogOpen}
               onOpenChange={(open) => {
                 console.log('🔵 Dialog onOpenChange called, open:', open);
@@ -2435,6 +2448,7 @@ export default function POManager() {
                 </form>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
 
           {/* Active / Completed tabs + search */}

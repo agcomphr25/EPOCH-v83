@@ -81,15 +81,30 @@ function valueSqlForPublicColumn(columns: Map<string, string>, key: string, valu
     const serialized = JSON.stringify(value.map((entry) => String(entry)));
     return sql`ARRAY(SELECT jsonb_array_elements_text(${serialized}::jsonb))`;
   }
+  if ((dataType === 'text' || dataType?.startsWith('character')) && value !== null && typeof value === 'object') {
+    return sql`${JSON.stringify(value)}`;
+  }
   return sql`${value}`;
 }
 
-async function insertPublicRowReturning(tableName: string, values: Record<string, any>, requiredColumns: string[] = []) {
+async function insertPublicRowReturning(
+  tableName: string,
+  values: Record<string, any>,
+  requiredColumns: string[] = [],
+  executor: Pick<typeof db, 'execute'> = db,
+) {
   if (!TEMPLATE_UPLOAD_TABLES.has(tableName)) {
     throw new Error(`Unsupported template upload table: ${tableName}`);
   }
 
-  const columns = await getPublicTableColumns(tableName);
+  const columnsResult = await executor.execute(sql`
+    SELECT column_name, data_type
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = ${tableName}
+  `);
+  const columnRows = ((columnsResult as any)?.rows || columnsResult || []) as any[];
+  const columns = new Map(columnRows.map((row) => [String(row.column_name), String(row.data_type || '')]));
   const availableKeys = Object.keys(values).filter((key) => columns.has(key) && values[key] !== undefined);
   const missingRequired = requiredColumns.filter((key) => !availableKeys.includes(key));
   if (missingRequired.length > 0) {
@@ -101,7 +116,7 @@ async function insertPublicRowReturning(tableName: string, values: Record<string
 
   const columnSql = availableKeys.map((key) => sql.raw(`"${key}"`));
   const valueSql = availableKeys.map((key) => valueSqlForPublicColumn(columns, key, values[key]));
-  const result = await db.execute(sql`
+  const result = await executor.execute(sql`
     INSERT INTO ${sql.raw(`"${tableName}"`)} (${sql.join(columnSql, sql`, `)})
     VALUES (${sql.join(valueSql, sql`, `)})
     RETURNING *
@@ -4022,49 +4037,57 @@ router.post('/templates', async (req: Request, res: Response) => {
     const normalizedFields = Array.isArray(fields)
       ? fields.map(normalizeTemplateField)
       : [];
-    const template = await insertPublicRowReturning('document_templates', {
-      id: randomUUID(),
-      template_name: String(templateName).trim(),
-      template_type: String(templateType).trim(),
-      description: description || null,
-      source_document_ids: [],
-      learned_from_count: 0,
-      structure: structure || { source: 'manual_builder' },
-      sections: sections || null,
-      default_fields: defaultFields || normalizedFields,
-      template_revision: String(req.body.templateRevision || '1.0'),
-      lifecycle_status: String(req.body.lifecycleStatus || 'DRAFT').toUpperCase(),
-      is_active: true,
-      created_by: user?.username || 'system',
-      created_at: new Date(),
-      updated_at: new Date(),
-    }, ['id', 'template_name', 'template_type']);
-
-    for (const field of normalizedFields) {
-      await insertPublicRowReturning('template_fields', {
-        id: randomUUID(),
-        template_id: template.id,
-        field_name: field.fieldName,
-        field_label: field.fieldLabel,
-        field_type: field.fieldType,
-        is_required: field.isRequired,
-        is_unique_per_serial: field.isUniquePerSerial,
-        default_value: field.defaultValue,
-        validation_rules: field.validationRules,
-        options: field.options,
-        columns: field.columns,
-        minimum_rows: field.minimumRows,
-        maximum_rows: field.maximumRows,
-        allow_manual_rows: field.allowManualRows,
-        allow_import: field.allowImport,
-        data_source: field.dataSource,
-        pdf_layout: field.pdfLayout,
-        section_name: field.sectionName || 'General',
-        sort_order: field.sortOrder,
-        ai_suggested: false,
-        created_at: new Date(),
-      }, ['id', 'template_id', 'field_name', 'field_label', 'field_type']);
+    if (normalizedFields.length === 0) {
+      return res.status(400).json({ error: 'At least one template field is required' });
     }
+
+    const template = await db.transaction(async (tx) => {
+      const createdTemplate = await insertPublicRowReturning('document_templates', {
+        id: randomUUID(),
+        template_name: String(templateName).trim(),
+        template_type: String(templateType).trim(),
+        description: description || null,
+        source_document_ids: [],
+        learned_from_count: 0,
+        structure: structure || { source: 'manual_builder' },
+        sections: sections || null,
+        default_fields: defaultFields || normalizedFields,
+        template_revision: String(req.body.templateRevision || '1.0'),
+        lifecycle_status: String(req.body.lifecycleStatus || 'DRAFT').toUpperCase(),
+        is_active: true,
+        created_by: user?.username || 'system',
+        created_at: new Date(),
+        updated_at: new Date(),
+      }, ['id', 'template_name', 'template_type'], tx);
+
+      for (const field of normalizedFields) {
+        await insertPublicRowReturning('template_fields', {
+          id: randomUUID(),
+          template_id: createdTemplate.id,
+          field_name: field.fieldName,
+          field_label: field.fieldLabel,
+          field_type: field.fieldType,
+          is_required: field.isRequired,
+          is_unique_per_serial: field.isUniquePerSerial,
+          default_value: field.defaultValue,
+          validation_rules: field.validationRules,
+          options: field.options,
+          columns: field.columns,
+          minimum_rows: field.minimumRows,
+          maximum_rows: field.maximumRows,
+          allow_manual_rows: field.allowManualRows,
+          allow_import: field.allowImport,
+          data_source: field.dataSource,
+          pdf_layout: field.pdfLayout,
+          section_name: field.sectionName || 'General',
+          sort_order: field.sortOrder,
+          ai_suggested: false,
+          created_at: new Date(),
+        }, ['id', 'template_id', 'field_name', 'field_label', 'field_type'], tx);
+      }
+
+      return createdTemplate;
+    });
 
     res.status(201).json({ template, fields: normalizedFields });
   } catch (error) {

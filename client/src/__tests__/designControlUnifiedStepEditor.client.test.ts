@@ -44,12 +44,22 @@ describe('unified Design Control step editor', () => {
     );
     expect(presentationFor('1', 'Target manufacturing date').kind).toBe('date');
     expect(presentationFor('1', 'Responsible engineer').kind).toBe('person');
+    expect(presentationFor('1', 'Responsible engineer').help).toMatch(
+      /accountable person/i
+    );
     expect(presentationFor('2', 'Approval roles').kind).toBe('role');
     expect(presentationFor('9', 'Evidence attachment').kind).toBe('attachment');
     expect(presentationFor('9', 'Pass/fail').options).toEqual(['PASS', 'FAIL']);
     expect(presentationFor('9', 'Engineering disposition').kind).not.toBe(
       'person'
     );
+
+    const editor = source(
+      'client/src/features/design-control/DesignControlStepEditor.tsx'
+    );
+    expect(editor).toContain('Select a person...');
+    expect(editor).toContain('{person.label}');
+    expect(editor).not.toContain('<datalist');
   });
 
   it('opens normalized records only where an authoritative register exists', () => {

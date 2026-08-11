@@ -679,6 +679,13 @@ export const refundRequests = pgTable('refund_requests', {
   authNetTransactionId: text('auth_net_transaction_id'), // Authorize.Net refund transaction ID
   authNetRefundId: text('auth_net_refund_id'), // Authorize.Net refund reference
   originalTransactionId: text('original_transaction_id'), // Original transaction being refunded
+  processingMethod: text('processing_method'), // ACCEPT_BLUE, EXTERNAL, or MANUAL
+  paymentSource: text('payment_source'), // Original positive payment type used to route completion
+  externalProcessor: text('external_processor'),
+  externalRefundReference: text('external_refund_reference'),
+  externalRefundDate: timestamp('external_refund_date'),
+  refundPaymentId: integer('refund_payment_id').references(() => payments.id),
+  creditMemoId: integer('credit_memo_id'),
   lastRemindedAt: timestamp('last_reminded_at'), // When the last pending-reminder was sent
 });
 
@@ -20777,7 +20784,7 @@ export const arInvoices = pgTable(
     isDisputed: boolean('is_disputed').default(false),
     disputeNote: text('dispute_note'),
     // creditMemoId â€” FK to credit_memos, set when a credit memo is applied/linked
-    creditMemoId: integer('credit_memo_id').references(() => creditMemos.id),
+  creditMemoId: integer('credit_memo_id'),
     autoCreated: boolean('auto_created').default(false),
     pricingMismatch: boolean('pricing_mismatch').default(false),
     pricingAmbiguous: boolean('pricing_ambiguous').default(false),

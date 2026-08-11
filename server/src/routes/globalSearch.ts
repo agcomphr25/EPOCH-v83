@@ -312,6 +312,95 @@ router.get('/global-search', async (req, res) => {
       console.log('⚠️ Signed documents search failed:', err.message);
     }
 
+    // Search finalized AR invoices, including invoices created from P2 shipments.
+    try {
+      const invoiceResults = await db.execute(sql`
+        SELECT
+          inv.id, inv.invoice_number, inv.status, inv.total_amount,
+          inv.invoice_date, inv.po_override,
+          COALESCE(pc.customer_name, c.name, ps.customer_name) AS customer_name,
+          ps.packing_slip_number
+        FROM ar_invoices inv
+        LEFT JOIN p2_customers pc ON pc.customer_id = inv.customer_id
+        LEFT JOIN customers c
+          ON inv.customer_id ~ '^[0-9]+$'
+         AND c.id = inv.customer_id::integer
+        LEFT JOIN p2_packing_slips ps ON ps.id = inv.packing_slip_id
+        WHERE
+          inv.invoice_number ILIKE ${searchTerm} OR
+          inv.po_override ILIKE ${searchTerm} OR
+          pc.customer_name ILIKE ${searchTerm} OR
+          c.name ILIKE ${searchTerm} OR
+          ps.customer_name ILIKE ${searchTerm} OR
+          ps.packing_slip_number ILIKE ${searchTerm}
+        ORDER BY inv.created_at DESC
+        LIMIT 15
+      `);
+
+      invoiceResults.rows.forEach((invoice: any) => {
+        results.push({
+          type: 'Invoice',
+          id: invoice.id,
+          title: `Invoice ${invoice.invoice_number}`,
+          subtitle: [
+            invoice.customer_name || null,
+            invoice.po_override ? `PO: ${invoice.po_override}` : null,
+            invoice.status ? `Status: ${invoice.status}` : null,
+            invoice.total_amount != null ? `$${Number(invoice.total_amount).toFixed(2)}` : null,
+          ].filter(Boolean).join(' • '),
+          matchedField: 'invoice number',
+          matchedValue: invoice.invoice_number,
+          url: `/finance/invoices/${invoice.id}`,
+          icon: '🧾',
+        });
+      });
+      console.log(`✅ Found ${invoiceResults.rows.length} invoices`);
+    } catch (err: any) {
+      console.log('⚠️ Invoice search failed:', err.message);
+    }
+
+    // Reserved P2 invoice numbers live on packing slips before an AR invoice exists.
+    try {
+      const reservedInvoiceResults = await db.execute(sql`
+        SELECT
+          ps.id, ps.invoice_number, ps.packing_slip_number,
+          ps.customer_name, ps.po_number, ps.status, ps.total_quantity
+        FROM p2_packing_slips ps
+        LEFT JOIN ar_invoices inv ON inv.packing_slip_id = ps.id
+        WHERE inv.id IS NULL
+          AND (
+            ps.invoice_number ILIKE ${searchTerm} OR
+            ps.packing_slip_number ILIKE ${searchTerm} OR
+            ps.po_number ILIKE ${searchTerm} OR
+            ps.customer_name ILIKE ${searchTerm}
+          )
+        ORDER BY ps.created_at DESC
+        LIMIT 15
+      `);
+
+      reservedInvoiceResults.rows.forEach((slip: any) => {
+        const displayNumber = slip.invoice_number || slip.packing_slip_number;
+        results.push({
+          type: 'P2 Invoice Reservation',
+          id: slip.id,
+          title: `Reserved Invoice ${displayNumber}`,
+          subtitle: [
+            slip.customer_name || null,
+            slip.po_number ? `PO: ${slip.po_number}` : null,
+            `Packing Slip: ${slip.packing_slip_number}`,
+            slip.status ? `Status: ${slip.status}` : null,
+          ].filter(Boolean).join(' • '),
+          matchedField: slip.invoice_number ? 'reserved invoice number' : 'packing slip number',
+          matchedValue: displayNumber,
+          url: `/p2/packing-slip/${slip.id}`,
+          icon: '📄',
+        });
+      });
+      console.log(`✅ Found ${reservedInvoiceResults.rows.length} reserved P2 invoices`);
+    } catch (err: any) {
+      console.log('⚠️ Reserved P2 invoice search failed:', err.message);
+    }
+
     // Search P2 Serialized Items — serial number, barcode, part number
     try {
       const serialResults = await db.execute(sql`

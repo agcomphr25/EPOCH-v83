@@ -89,6 +89,11 @@ const roots = (partNumber: string, quantity = 1) => [
     quantity,
     inventoryItemId: null,
     requiredByDate: '2026-10-01',
+    demandLineIdentity: '00000000-0000-4000-8000-000000000020',
+    originalCustomerQuantity: quantity,
+    effectiveCustomerQuantity: quantity,
+    customerDemandEventDigest: '0'.repeat(64),
+    customerDemandSnapshot: { originalQuantity: quantity, events: [] },
   },
 ];
 

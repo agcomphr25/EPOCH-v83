@@ -58,12 +58,26 @@ const selectOptions = (values: string[]) =>
     </SelectItem>
   ));
 
+const wizardPages = [
+  'Confirm the Order',
+  'Review Parts and Assemblies',
+  'Review How Each Part Is Made',
+  'Check Materials',
+  'Check Tooling and Resources',
+  'Check Quality Requirements',
+  'Review Controlled Documents',
+  'Check Schedule and Capacity',
+  'Preview Production Demand',
+  'Review and Approve',
+] as const;
+
 export default function P2V2ProductionPlanning({
   projectId,
 }: {
   projectId: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
   const [header, setHeader] = useState({
     requirementSource: 'Customer PO and released engineering configuration',
     planningBasis:
@@ -161,6 +175,47 @@ export default function P2V2ProductionPlanning({
               records.
             </DialogDescription>
           </DialogHeader>
+          <section
+            className="space-y-3 rounded border bg-muted/30 p-4"
+            aria-label="Production Planning progress"
+            data-testid="production-planning-progress"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">
+                  Page {currentPage + 1} of {wizardPages.length}
+                </p>
+                <h2 className="text-lg font-semibold">
+                  {wizardPages[currentPage]}
+                </h2>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Badge variant="secondary">
+                  {data?.plan ? 'Plan started' : 'Information Missing'}
+                </Badge>
+                <Badge variant="outline">
+                  {data?.readiness.blockers.length ?? 0} blockers
+                </Badge>
+                {data?.readiness.stale && (
+                  <Badge variant="destructive">Source Changed</Badge>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-5 gap-1 md:grid-cols-10">
+              {wizardPages.map((page, index) => (
+                <button
+                  key={page}
+                  type="button"
+                  aria-label={`Page ${index + 1}: ${page}`}
+                  aria-current={index === currentPage ? 'step' : undefined}
+                  className={`h-2 rounded-full ${
+                    index <= currentPage ? 'bg-primary' : 'bg-muted'
+                  }`}
+                  onClick={() => setCurrentPage(index)}
+                />
+              ))}
+            </div>
+          </section>
           {isLoading ? (
             <p>Loading production plan…</p>
           ) : (
@@ -387,6 +442,34 @@ export default function P2V2ProductionPlanning({
                   ))}
                 </section>
               )}
+              <nav
+                className="flex flex-wrap items-center justify-between gap-2 border-t pt-4"
+                aria-label="Production Planning pages"
+              >
+                <Button
+                  variant="outline"
+                  disabled={currentPage === 0}
+                  onClick={() =>
+                    setCurrentPage((page) => Math.max(0, page - 1))
+                  }
+                >
+                  Back
+                </Button>
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Save and Exit
+                </Button>
+                {currentPage < wizardPages.length - 1 && (
+                  <Button
+                    onClick={() =>
+                      setCurrentPage((page) =>
+                        Math.min(wizardPages.length - 1, page + 1)
+                      )
+                    }
+                  >
+                    Continue
+                  </Button>
+                )}
+              </nav>
             </div>
           )}
         </DialogContent>

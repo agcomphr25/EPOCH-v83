@@ -716,27 +716,8 @@ async function saveSpecSheetPdfFile(fileName: string, fileBuffer: Buffer) {
 }
 
 async function saveGeneratedTemplatePdf(fileName: string, fileBuffer: Buffer) {
-  try {
-    const fileUrl = await saveSpecSheetPdfFile(fileName, fileBuffer);
-    return { fileUrl, storagePath: fileUrl, storageWarning: null };
-  } catch (error) {
-    const { reason, message } = getStorageErrorResponse(error);
-    const storedFileName = sanitizeFileName(fileName);
-    const relativePath = path.posix.join('uploads', 'media-library', storedFileName);
-    const absoluteDirectory = path.join(process.cwd(), 'uploads', 'media-library');
-    await fs.promises.mkdir(absoluteDirectory, { recursive: true });
-    await fs.promises.writeFile(path.join(absoluteDirectory, storedFileName), fileBuffer);
-    console.warn('Generated template PDF used central-storage local fallback', {
-      fileName: storedFileName,
-      reason,
-      message,
-    });
-    return {
-      fileUrl: `/api/media/file/${encodeURIComponent(storedFileName)}`,
-      storagePath: relativePath,
-      storageWarning: message,
-    };
-  }
+  const fileUrl = await saveSpecSheetPdfFile(fileName, fileBuffer);
+  return { fileUrl, storagePath: fileUrl, storageWarning: null };
 }
 
 // Helper to format UUID bytes to string if needed

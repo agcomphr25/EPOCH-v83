@@ -8,11 +8,12 @@ describe('generated template document central-storage save path', () => {
   const end = route.indexOf("router.post('/documents/from-template'", start);
   const handler = route.slice(start, end);
 
-  it('falls back to the served central media directory when object storage rejects a buffer upload', () => {
+  it('fails closed instead of creating a deployment-local file when object storage rejects the upload', () => {
     expect(route).toContain('async function saveGeneratedTemplatePdf');
-    expect(route).toContain("path.posix.join('uploads', 'media-library', storedFileName)");
-    expect(route).toContain('await fs.promises.writeFile');
-    expect(route).toContain('fileUrl: `/api/media/file/${encodeURIComponent(storedFileName)}`');
+    expect(route).toContain('await saveSpecSheetPdfFile(fileName, fileBuffer)');
+    expect(route).not.toContain("path.posix.join('uploads', 'media-library', storedFileName)");
+    expect(route).not.toContain('Generated template PDF used central-storage local fallback');
+    expect(route).not.toContain('fileUrl: `/api/media/file/${encodeURIComponent(storedFileName)}`');
   });
 
   it('registers central storage before queueing the Master Document record', () => {

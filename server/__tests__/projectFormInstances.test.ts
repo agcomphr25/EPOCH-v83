@@ -32,7 +32,7 @@ describe('Phase 5 Design Project Form Instances', () => {
     expect(DESIGN_CONTROL_FORM_CATALOG[12].changeRecordType).toBe('ECR');
     expect(DESIGN_CONTROL_FORM_CATALOG[13].changeRecordType).toBe('ECN');
     expect(DESIGN_CONTROL_FORM_RENDERER_VERSION).toBe(
-      'design-control-blank-pdf/1'
+      'design-control-blank-pdf/2'
     );
   });
 

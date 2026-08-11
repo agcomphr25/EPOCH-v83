@@ -179,11 +179,34 @@ const requireAuth = async (req: Request, res: Response, next: any) => {
 router.get(
   '/phase2/availability',
   requireAuth,
-  (_req: Request, res: Response) => {
-    res.json({
-      enabled: isControlledDocumentPhase2Enabled(),
-      workflow: 'REGISTER_APPROVE_RELEASE',
-    });
+  async (_req: Request, res: Response) => {
+    const configured = isControlledDocumentPhase2Enabled();
+    try {
+      await assertControlledDocumentPhase2SchemaReady();
+      return res.json({
+        configured,
+        enabled: configured,
+        schemaReady: true,
+        workflow: 'REGISTER_APPROVE_RELEASE',
+        requiredMigration:
+          '0256_controlled_document_atomic_approval_release.sql',
+        blocker: configured ? null : 'CONTROLLED_DOCUMENT_PHASE2_DISABLED',
+      });
+    } catch (error) {
+      if (error instanceof ControlledDocumentSchemaNotReadyError) {
+        return res.json({
+          configured,
+          enabled: false,
+          schemaReady: false,
+          workflow: 'REGISTER_APPROVE_RELEASE',
+          requiredMigration:
+            '0256_controlled_document_atomic_approval_release.sql',
+          blocker: error.code,
+          missingObjects: error.missingObjects,
+        });
+      }
+      throw error;
+    }
   }
 );
 
@@ -305,6 +328,33 @@ const verifyStoredRevision = async (
 type ControlledDocumentRecord = typeof controlledDocuments.$inferSelect;
 type ControlledRevisionRecord = typeof documentVersionHistory.$inferSelect;
 
+const controlledDocumentMetadata = (document: ControlledDocumentRecord) => {
+  const { filePath, ...metadata } = document;
+  return {
+    ...metadata,
+    fileReferenceAvailable: Boolean(filePath),
+  };
+};
+
+const controlledRevisionMetadata = (revision: ControlledRevisionRecord) => {
+  const { filePath, ...metadata } = revision;
+  return {
+    ...metadata,
+    fileReferenceAvailable: Boolean(filePath),
+  };
+};
+
+const controlledDocumentStateMetadata = (
+  state: Awaited<ReturnType<typeof getControlledDocumentState>>
+) => ({
+  ...state,
+  document: controlledDocumentMetadata(state.document),
+  currentRevision: state.currentRevision
+    ? controlledRevisionMetadata(state.currentRevision)
+    : null,
+  revisions: state.revisions.map(controlledRevisionMetadata),
+});
+
 const recordControlledDocumentDenial = async (
   req: Request,
   documentId: string,
@@ -327,62 +377,9 @@ const recordControlledDocumentDenial = async (
 const isPrivilegedDocumentActor = (actor: { role: string }) =>
   actor.role === 'ADMIN' || actor.role === 'OWNER';
 
-const hasControlledDocumentGrant = async (
-  documentId: string,
-  actor: { username: string; role: string }
-) => {
-  const result = await pool.query<{ id: number }>(
-    `SELECT id FROM vault_access_grants WHERE document_id = $1 AND (
-       (grantee_type = 'user' AND grantee_name = $2)
-       OR (grantee_type = 'role' AND grantee_name = $3)
-     ) LIMIT 1`,
-    [documentId, actor.username, actor.role]
-  );
-  return result.rows.length > 0;
-};
-
-const authorizeControlledDocumentAccess = async (
-  req: Request,
-  document: ControlledDocumentRecord
-) => {
-  const actor = lifecycleActor(req);
-  if (isPrivilegedDocumentActor(actor)) return actor;
-
-  const classification = String(
-    document.classification || 'internal'
-  ).toLowerCase();
-  const accessRule = String(
-    document.accessRule || 'authenticated'
-  ).toLowerCase();
-  const grantRequired =
-    accessRule === 'explicit_grant' ||
-    classification === 'restricted' ||
-    classification === 'classified';
-  const allowed =
-    accessRule !== 'admin_only' &&
-    (!grantRequired || (await hasControlledDocumentGrant(document.id, actor)));
-
-  if (!allowed) {
-    await recordControlledDocumentDenial(
-      req,
-      document.id,
-      actor,
-      requestEvidence(req).ipAddress ?? 'unknown'
-    );
-    throw new ControlledDocumentError(
-      403,
-      'CONTROLLED_DOCUMENT_ACCESS_DENIED',
-      accessRule === 'admin_only'
-        ? 'This document is restricted to administrators and owners'
-        : 'An explicit vault grant is required to access this document',
-      { classification, accessRule }
-    );
-  }
-  return actor;
-};
-
 const assertExactRevisionPermission = async (
   actor: { id: number; role: string },
+  document: ControlledDocumentRecord,
   revision: ControlledRevisionRecord
 ) => {
   if (isPrivilegedDocumentActor(actor)) return;
@@ -392,10 +389,18 @@ const assertExactRevisionPermission = async (
   if (['RELEASED', 'SUPERSEDED', 'OBSOLETE'].includes(lifecycle)) return;
 
   const { permissionSet } = await getUserPermissions(actor.id, actor.role);
+  const phase2CurrentApprovalCandidate =
+    isControlledDocumentPhase2Enabled() &&
+    lifecycle === 'DRAFT' &&
+    String(document.lifecycleStatus || '').toUpperCase() === 'DRAFT' &&
+    document.currentRevisionId === revision.id &&
+    document.workingDraftRevisionId === revision.id;
   const required =
     lifecycle === 'IN_REVIEW' || lifecycle === 'APPROVED'
       ? ['documents.approve', 'documents.release']
-      : ['documents.edit_draft', 'documents.revise'];
+      : phase2CurrentApprovalCandidate
+        ? ['documents.edit_draft', 'documents.revise', 'documents.approve']
+        : ['documents.edit_draft', 'documents.revise'];
   if (!required.some((capability) => permissionSet.has(capability))) {
     throw new ControlledDocumentError(
       403,
@@ -404,6 +409,29 @@ const assertExactRevisionPermission = async (
       { lifecycleStatus: lifecycle, requiredAnyCapability: required }
     );
   }
+};
+
+const authorizedRevisionHistory = async (
+  actor: { id: number; role: string },
+  document: ControlledDocumentRecord,
+  revisions: ControlledRevisionRecord[]
+) => {
+  const authorized: ControlledRevisionRecord[] = [];
+  for (const revision of revisions) {
+    try {
+      await assertExactRevisionPermission(actor, document, revision);
+      authorized.push(revision);
+    } catch (error) {
+      if (
+        error instanceof ControlledDocumentError &&
+        error.code === 'DRAFT_REVISION_ACCESS_DENIED'
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  return authorized;
 };
 
 const getReleasedRevisionForControlledUse = async (
@@ -750,11 +778,11 @@ const controlledDocumentRequiresStepUp = (
   const accessRule = String(doc.accessRule || 'authenticated').toLowerCase();
   return Boolean(
     doc.mfaRequired ||
-    ['restricted', 'classified', 'cui', 'itar'].includes(classification) ||
-    accessRule === 'explicit_grant' ||
-    accessRule === 'admin_only' ||
-    doc.cuiCategory ||
-    doc.itarCategory
+      ['restricted', 'classified', 'cui', 'itar'].includes(classification) ||
+      accessRule === 'explicit_grant' ||
+      accessRule === 'admin_only' ||
+      doc.cuiCategory ||
+      doc.itarCategory
   );
 };
 
@@ -771,6 +799,24 @@ const hasPolicyVaultGrant = async (
     [documentId, username, role]
   );
   return result.rows.length > 0;
+};
+
+const canAccessControlledDocument = async (
+  doc: ControlledDocumentRecord,
+  actor: { username: string; role: string }
+) => {
+  if (isPrivilegedDocumentActor(actor)) return true;
+  const classification = String(doc.classification || 'internal').toLowerCase();
+  const accessRule = String(doc.accessRule || 'authenticated').toLowerCase();
+  if (accessRule === 'admin_only') return false;
+  const grantRequired =
+    accessRule === 'explicit_grant' ||
+    ['restricted', 'classified', 'cui', 'itar'].includes(classification) ||
+    Boolean(doc.cuiCategory || doc.itarCategory);
+  return (
+    !grantRequired ||
+    (await hasPolicyVaultGrant(doc.id, actor.username, actor.role))
+  );
 };
 
 const controlledDocumentAccessPolicy = async (
@@ -791,20 +837,7 @@ const controlledDocumentAccessPolicy = async (
         message: 'Controlled document record was not found',
       });
 
-    const privileged = actor.role === 'ADMIN' || actor.role === 'OWNER';
-    const classification = String(
-      doc.classification || 'internal'
-    ).toLowerCase();
-    const accessRule = String(doc.accessRule || 'authenticated').toLowerCase();
-    const grantRequired =
-      accessRule === 'explicit_grant' ||
-      ['restricted', 'classified', 'cui', 'itar'].includes(classification) ||
-      Boolean(doc.cuiCategory || doc.itarCategory);
-    const allowed =
-      privileged ||
-      (accessRule !== 'admin_only' &&
-        (!grantRequired ||
-          (await hasPolicyVaultGrant(doc.id, actor.username, actor.role))));
+    const allowed = await canAccessControlledDocument(doc, actor);
     if (!allowed) {
       await writeAccessLog({
         documentId: doc.id,
@@ -1015,21 +1048,37 @@ router.get(
   requirePermission('documents.view'),
   async (req: Request, res: Response) => {
     try {
-      const docs = await db
+      const allDocs = await db
         .select()
         .from(controlledDocuments)
         .orderBy(desc(controlledDocuments.createdAt));
-      const revisionIds = docs
-        .map((doc) => doc.currentReleasedRevisionId)
-        .filter((id): id is string => Boolean(id));
-      const releasedRevisions = revisionIds.length
+      const actor = lifecycleActor(req);
+      const docs = (
+        await Promise.all(
+          allDocs.map(async (doc) =>
+            (await canAccessControlledDocument(doc, actor)) ? doc : null
+          )
+        )
+      ).filter((doc): doc is ControlledDocumentRecord => Boolean(doc));
+      const revisionIds = Array.from(
+        new Set(
+          docs.flatMap((doc) =>
+            [
+              doc.currentRevisionId,
+              doc.currentReleasedRevisionId,
+              doc.workingDraftRevisionId,
+            ].filter((id): id is string => Boolean(id))
+          )
+        )
+      );
+      const currentRevisions = revisionIds.length
         ? await db
             .select()
             .from(documentVersionHistory)
             .where(inArray(documentVersionHistory.id, revisionIds))
         : [];
-      const releasedById = new Map(
-        releasedRevisions.map((revision) => [revision.id, revision])
+      const revisionById = new Map(
+        currentRevisions.map((revision) => [revision.id, revision])
       );
       const phase2ReleasedDocumentIds = new Set<string>();
       if (isControlledDocumentPhase2Enabled() && docs.length > 0) {
@@ -1046,7 +1095,13 @@ router.get(
       res.json(
         docs.map((doc) => {
           const released = doc.currentReleasedRevisionId
-            ? releasedById.get(doc.currentReleasedRevisionId)
+            ? revisionById.get(doc.currentReleasedRevisionId)
+            : null;
+          const current = doc.currentRevisionId
+            ? revisionById.get(doc.currentRevisionId)
+            : null;
+          const workingDraft = doc.workingDraftRevisionId
+            ? revisionById.get(doc.workingDraftRevisionId)
             : null;
           const releasedVerified =
             released?.documentId === doc.id &&
@@ -1061,7 +1116,23 @@ router.get(
               String(doc.status || '').toLowerCase()
             ) || String(doc.lifecycleStatus || '').toUpperCase() === 'RELEASED';
           return {
-            ...doc,
+            ...controlledDocumentMetadata(doc),
+            releasedRevisionVersion: released?.versionNumber ?? null,
+            releasedRevisionMediaType: released?.mediaType ?? null,
+            releasedRevisionFileName: released?.fileName ?? null,
+            releasedRevisionAvailable: releasedVerified,
+            releasedRevisionIsPdf:
+              releasedVerified &&
+              (released?.mediaType === 'application/pdf' ||
+                Boolean(released?.fileName?.toLowerCase().endsWith('.pdf'))),
+            currentRevisionVersion: current?.versionNumber ?? null,
+            currentRevisionFileName: current?.fileName ?? null,
+            currentRevisionChecksumStatus: current?.checksumStatus ?? null,
+            currentRevisionHasFile: Boolean(current?.filePath),
+            currentRevisionIsPdf:
+              current?.mediaType === 'application/pdf' ||
+              Boolean(current?.fileName?.toLowerCase().endsWith('.pdf')),
+            workingDraftRevisionVersion: workingDraft?.versionNumber ?? null,
             phase2ProspectiveRelease: phase2ReleasedDocumentIds.has(doc.id),
             compatibilityStatus: releasedVerified
               ? 'Released and Verified'
@@ -1164,11 +1235,11 @@ router.get(
           const fileReferenceType = getControlledFileReferenceType(
             authoritativeReference
           );
-          /* eslint-disable prettier/prettier -- Linux CI and Windows disagree on this union layout. */
           let fileAccessibility:
-            'ACCESSIBLE' | 'INACCESSIBLE' | 'EXTERNAL_MUTABLE' | 'MISSING' =
-            'MISSING';
-          /* eslint-enable prettier/prettier */
+            | 'ACCESSIBLE'
+            | 'INACCESSIBLE'
+            | 'EXTERNAL_MUTABLE'
+            | 'MISSING' = 'MISSING';
           if (fileReferenceType === 'EXTERNAL_MUTABLE_URL') {
             fileAccessibility = 'EXTERNAL_MUTABLE';
           } else if (authoritativeReference) {
@@ -1283,7 +1354,7 @@ router.get(
               'MISSING_APPROVAL_IDENTITY_OR_DATE',
             Boolean(
               document.expirationDate &&
-              new Date(document.expirationDate) < new Date()
+                new Date(document.expirationDate) < new Date()
             ) && 'EXPIRED_OR_REVIEW_DUE',
             !authoritativeReference && 'NO_FILE_ATTACHED',
           ].filter(Boolean);
@@ -1337,19 +1408,28 @@ router.get(
 router.get(
   '/:id',
   requireAuth,
-  requirePermission('documents.view'),
+  controlledDocumentViewPermission,
+  controlledDocumentAccessPolicy,
   async (req: Request, res: Response) => {
     try {
-      const [doc] = await db
-        .select()
-        .from(controlledDocuments)
-        .where(eq(controlledDocuments.id, req.params.id));
+      const doc = (
+        req as Request & {
+          controlledDocument?: ControlledDocumentRecord;
+        }
+      ).controlledDocument;
 
       if (!doc) {
         return res.status(404).json({ error: 'Document not found' });
       }
 
-      res.json(doc);
+      const actor = lifecycleActor(req);
+      await writeAccessLog({
+        documentId: doc.id,
+        userId: actor.username,
+        action: 'view',
+        ipAddress: requestEvidence(req).ipAddress ?? 'unknown',
+      });
+      res.json(controlledDocumentMetadata(doc));
     } catch (error) {
       console.error('Error fetching document:', error);
       res.status(500).json({ error: 'Failed to fetch document' });
@@ -1361,19 +1441,27 @@ router.get(
 router.get(
   '/:id/versions',
   requireAuth,
-  requirePermission('documents.view'),
+  controlledDocumentViewPermission,
+  controlledDocumentAccessPolicy,
   async (req: Request, res: Response) => {
     try {
-      const versions = await db
-        .select()
-        .from(documentVersionHistory)
-        .where(eq(documentVersionHistory.documentId, req.params.id))
-        .orderBy(desc(documentVersionHistory.createdAt));
-
-      res.json(versions);
+      const state = await getControlledDocumentState(req.params.id);
+      const versions = await authorizedRevisionHistory(
+        lifecycleActor(req),
+        state.document,
+        state.revisions
+      );
+      res.json(
+        versions
+          .sort(
+            (left, right) =>
+              new Date(right.createdAt).getTime() -
+              new Date(left.createdAt).getTime()
+          )
+          .map(controlledRevisionMetadata)
+      );
     } catch (error) {
-      console.error('Error fetching version history:', error);
-      res.status(500).json({ error: 'Failed to fetch version history' });
+      sendLifecycleError(res, error, 'Failed to fetch version history');
     }
   }
 );
@@ -1381,15 +1469,28 @@ router.get(
 router.get(
   '/:id/revisions',
   requireAuth,
-  requirePermission('documents.view'),
+  controlledDocumentViewPermission,
+  controlledDocumentAccessPolicy,
   async (req: Request, res: Response) => {
     try {
       const state = await getControlledDocumentState(req.params.id);
+      const revisions = await authorizedRevisionHistory(
+        lifecycleActor(req),
+        state.document,
+        state.revisions
+      );
+      const visibleRevisionIds = new Set(revisions.map((row) => row.id));
       res.json({
-        document: state.document,
-        currentRevision: state.currentRevision,
-        revisions: state.revisions,
-        approvals: state.approvals,
+        document: controlledDocumentMetadata(state.document),
+        currentRevision:
+          state.currentRevision &&
+          visibleRevisionIds.has(state.currentRevision.id)
+            ? controlledRevisionMetadata(state.currentRevision)
+            : null,
+        revisions: revisions.map(controlledRevisionMetadata),
+        approvals: state.approvals.filter((row) =>
+          visibleRevisionIds.has(row.revisionId)
+        ),
       });
     } catch (error) {
       sendLifecycleError(
@@ -1404,23 +1505,50 @@ router.get(
 router.get(
   '/:id/revisions/:revisionId',
   requireAuth,
-  requirePermission('documents.view'),
+  controlledDocumentViewPermission,
+  controlledDocumentAccessPolicy,
   async (req: Request, res: Response) => {
+    const actor = lifecycleActor(req);
+    const ipAddress = requestEvidence(req).ipAddress ?? 'unknown';
+    let documentIdForAudit: string | null = null;
     try {
       const state = await getControlledDocumentState(req.params.id);
+      documentIdForAudit = state.document.id;
       const revision = state.revisions.find(
         (candidate) => candidate.id === req.params.revisionId
       );
-      if (!revision)
+      if (!revision) {
+        await recordControlledDocumentDenial(
+          req,
+          state.document.id,
+          actor,
+          ipAddress
+        );
         return res.status(404).json({ error: 'REVISION_NOT_FOUND' });
+      }
+      await assertExactRevisionPermission(actor, state.document, revision);
+      await writeAccessLog({
+        documentId: state.document.id,
+        userId: actor.username,
+        action: 'view',
+        ipAddress,
+      });
       res.json({
-        document: state.document,
-        revision,
+        document: controlledDocumentMetadata(state.document),
+        revision: controlledRevisionMetadata(revision),
         approvals: state.approvals.filter(
           (row) => row.revisionId === revision.id
         ),
       });
     } catch (error) {
+      if (documentIdForAudit) {
+        await recordControlledDocumentDenial(
+          req,
+          documentIdForAudit,
+          actor,
+          ipAddress
+        );
+      }
       sendLifecycleError(
         res,
         error,
@@ -1430,12 +1558,8 @@ router.get(
   }
 );
 
-router.get(
-  '/:id/revisions/:revisionId/download',
-  requireAuth,
-  controlledDocumentViewPermission,
-  controlledDocumentAccessPolicy,
-  async (req: Request, res: Response) => {
+const exactRevisionFileHandler =
+  (mode: 'view' | 'download') => async (req: Request, res: Response) => {
     const actor = lifecycleActor(req);
     const ipAddress = requestEvidence(req).ipAddress ?? 'unknown';
     let documentIdForAudit: string | null = null;
@@ -1470,8 +1594,7 @@ router.get(
           message: 'This revision has no file reference',
         });
       }
-      await authorizeControlledDocumentAccess(req, state.document);
-      await assertExactRevisionPermission(actor, revision);
+      await assertExactRevisionPermission(actor, state.document, revision);
       if (getExternalRedirectUrl(revision.filePath)) {
         await recordControlledDocumentDenial(
           req,
@@ -1493,21 +1616,42 @@ router.get(
         buffer,
         req
       );
+      const isPdf =
+        revision.mediaType === 'application/pdf' ||
+        revision.fileName?.toLowerCase().endsWith('.pdf') ||
+        revision.filePath.toLowerCase().endsWith('.pdf');
+      if (mode === 'view' && !isPdf) {
+        throw new ControlledDocumentError(
+          422,
+          'PREVIEW_UNAVAILABLE',
+          'This exact revision cannot be previewed in the browser; use Download Exact Revision'
+        );
+      }
+      const responseBuffer =
+        mode === 'view'
+          ? await addControlledDocumentFooter(buffer, state.document, revision)
+          : buffer;
       await writeAccessLog({
         documentId: state.document.id,
         userId: actor.username,
-        action: 'download',
+        action: mode,
         ipAddress,
       });
       res.setHeader(
         'Content-Type',
-        revision.mediaType || 'application/octet-stream'
+        isPdf
+          ? 'application/pdf'
+          : revision.mediaType || 'application/octet-stream'
       );
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="${revision.fileName || `${state.document.documentNumber}-${revision.versionNumber}`}"`
+        `${mode === 'view' ? 'inline' : 'attachment'}; filename="${safeDownloadFilename(
+          revision.fileName,
+          `${state.document.documentNumber}-${revision.versionNumber}${isPdf ? '.pdf' : ''}`
+        )}"`
       );
-      res.send(buffer);
+      res.send(responseBuffer);
     } catch (error) {
       if (documentIdForAudit) {
         await recordControlledDocumentDenial(
@@ -1520,10 +1664,25 @@ router.get(
       sendLifecycleError(
         res,
         error,
-        'Failed to download exact controlled revision'
+        `Failed to ${mode} exact controlled revision`
       );
     }
-  }
+  };
+
+router.get(
+  '/:id/revisions/:revisionId/view',
+  requireAuth,
+  controlledDocumentViewPermission,
+  controlledDocumentAccessPolicy,
+  exactRevisionFileHandler('view')
+);
+
+router.get(
+  '/:id/revisions/:revisionId/download',
+  requireAuth,
+  controlledDocumentViewPermission,
+  controlledDocumentAccessPolicy,
+  exactRevisionFileHandler('download')
 );
 
 router.post(
@@ -1557,7 +1716,10 @@ router.post(
         actor: lifecycleActor(req),
         request: requestEvidence(req),
       });
-      res.status(201).json(result);
+      res.status(201).json({
+        document: controlledDocumentMetadata(result.document),
+        revision: controlledRevisionMetadata(result.revision),
+      });
     } catch (error) {
       sendLifecycleError(res, error, 'Failed to create controlled revision');
     }
@@ -1626,7 +1788,7 @@ const lifecycleHandler =
         actor: lifecycleActor(req),
         request: requestEvidence(req),
       });
-      res.json(result);
+      res.json(controlledDocumentStateMetadata(result));
     } catch (error) {
       sendLifecycleError(res, error, `Failed to ${action} controlled revision`);
     }
@@ -1731,7 +1893,7 @@ router.post(
         sessionToken: sessionToken(req),
         readAuthoritativeBytes: readControlledDocumentBytes,
       });
-      res.json(result);
+      res.json(controlledDocumentStateMetadata(result));
     } catch (error) {
       sendLifecycleError(
         res,
@@ -1761,7 +1923,7 @@ router.post(
         sessionToken: sessionToken(req),
         readAuthoritativeBytes: readControlledDocumentBytes,
       });
-      res.json(result);
+      res.json(controlledDocumentStateMetadata(result));
     } catch (error) {
       sendLifecycleError(
         res,
@@ -1883,7 +2045,7 @@ router.post(
         actor: lifecycleActor(req),
         request: requestEvidence(req),
       });
-      res.status(201).json(result.document);
+      res.status(201).json(controlledDocumentMetadata(result.document));
     } catch (error: any) {
       if (uploadedFilePath) {
         try {
@@ -1968,7 +2130,7 @@ router.put(
           actor: lifecycleActor(req),
           request: requestEvidence(req),
         });
-        return res.json(result.document);
+        return res.json(controlledDocumentMetadata(result.document));
       }
 
       const metadataResult = await updateDraftMetadata({
@@ -1978,7 +2140,7 @@ router.put(
         actor: lifecycleActor(req),
         request: requestEvidence(req),
       });
-      return res.json(metadataResult.document);
+      return res.json(controlledDocumentMetadata(metadataResult.document));
     } catch (error) {
       sendLifecycleError(res, error, 'Failed to update controlled document');
     }
@@ -2032,7 +2194,7 @@ router.post(
         actor: lifecycleActor(req),
         request: requestEvidence(req),
       });
-      res.json(state.document);
+      res.json(controlledDocumentMetadata(state.document));
     } catch (error) {
       sendLifecycleError(res, error, 'Failed to approve controlled revision');
     }

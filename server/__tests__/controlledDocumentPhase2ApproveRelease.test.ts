@@ -104,12 +104,16 @@ describe('atomic approve-and-release contract', () => {
     expect(routes).toMatch(
       /router\.post\(\s*'\/:id\/approve',[\s\S]{0,400}requireLegacyLifecycle[\s\S]{0,200}requireStepUp\(\)/
     );
+    expect(routes).toMatch(
+      /'\/phase2\/availability'[\s\S]*assertControlledDocumentPhase2SchemaReady\(\)/
+    );
+    expect(routes).toContain('blocker: error.code');
   });
 });
 
 describe('truthful gated UI', () => {
   it('removes routine submit and release actions only when Phase 2 is enabled', () => {
-    expect(client).toContain('!phase2Enabled &&');
+    expect(client).toContain('legacyLifecycleEnabled &&');
     expect(client).toContain(
       "phase2Enabled ? 'approve-and-release' : 'decision'"
     );
@@ -121,6 +125,12 @@ describe('truthful gated UI', () => {
     expect(client).toContain('Released — approved and available for use');
     expect(client).toContain('Rejected — correction required');
     expect(client).toContain("? 'Approve and Release'");
+    expect(client).toContain('phase2ModeKnown');
+    expect(client).toContain('legacyLifecycleEnabled');
+    expect(client).toContain(
+      'The controlled-document workflow mode could not be verified. Approval was not attempted.'
+    );
+    expect(client).toContain('Register → Approve and Release is active.');
     expect(client).toContain('Historical/legacy — retained');
   });
 });

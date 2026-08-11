@@ -28,13 +28,13 @@ describe('Master Document Register Phase 1A compatibility', () => {
     expect(auth).toContain("code: 'STEP_UP_REQUIRED'");
   });
 
-  it('uses one access-policy evaluator for View, Download, and Exact Revision', () => {
+  it('uses one access-policy evaluator for View, Download, history, and Exact Revision', () => {
     expect(
       route.match(
         /controlledDocumentViewPermission,\s*controlledDocumentAccessPolicy/g
       )
-    ).toHaveLength(3);
-    expect(route).toContain('hasControlledDocumentGrant');
+    ).toHaveLength(8);
+    expect(route).toContain('hasPolicyVaultGrant');
     expect(route).toContain("action: 'denied'");
   });
 
@@ -48,10 +48,12 @@ describe('Master Document Register Phase 1A compatibility', () => {
   });
 
   it('offers inline View only for PDF and labels original file types', () => {
-    expect(client).toContain('{isPdfDocument(doc) && (');
-    expect(client).toContain('getFileTypeLabel');
-    expect(client).toContain('Download Original');
+    expect(client).toContain('{doc.releasedRevisionIsPdf && (');
+    expect(client).toContain('getReleasedFileTypeLabel');
+    expect(client).toContain('Download Released Revision');
+    expect(client).toContain('Preview Exact Revision');
     expect(route).toContain("'UNSUPPORTED_PREVIEW_TYPE'");
+    expect(route).toContain("'PREVIEW_UNAVAILABLE'");
   });
 
   it('returns useful file, access, revision, and reconciliation errors', () => {

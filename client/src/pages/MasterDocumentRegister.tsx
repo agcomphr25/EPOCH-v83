@@ -210,6 +210,45 @@ type DesignControlTemplateReconciliationView = {
   }>;
 };
 
+type ControlledDocumentView = ControlledDocument & {
+  fileReferenceAvailable?: boolean;
+  currentRevisionId?: string | null;
+  currentReleasedRevisionId?: string | null;
+  workingDraftRevisionId?: string | null;
+  releasedRevisionVersion?: string | null;
+  releasedRevisionMediaType?: string | null;
+  releasedRevisionFileName?: string | null;
+  releasedRevisionAvailable?: boolean;
+  releasedRevisionIsPdf?: boolean;
+  currentRevisionVersion?: string | null;
+  currentRevisionFileName?: string | null;
+  currentRevisionChecksumStatus?: string | null;
+  currentRevisionHasFile?: boolean;
+  currentRevisionIsPdf?: boolean;
+  workingDraftRevisionVersion?: string | null;
+  compatibilityStatus?: string | null;
+  phase2ProspectiveRelease?: boolean;
+};
+
+type DocumentVersionHistoryView = DocumentVersionHistory & {
+  lifecycleStatus?: string | null;
+  fileChecksum?: string | null;
+  checksumStatus?: string | null;
+  fileReferenceAvailable?: boolean;
+  fileName?: string | null;
+  mediaType?: string | null;
+};
+
+type ControlledDocumentPhase2Availability = {
+  configured: boolean;
+  enabled: boolean;
+  schemaReady: boolean;
+  workflow: 'REGISTER_APPROVE_RELEASE';
+  requiredMigration: string;
+  blocker: string | null;
+  missingObjects?: string[];
+};
+
 export default function MasterDocumentRegister() {
   const { can } = usePermissions();
   const [searchQuery, setSearchQuery] = useState('');
@@ -224,7 +263,7 @@ export default function MasterDocumentRegister() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [selectedDocument, setSelectedDocument] =
-    useState<ControlledDocument | null>(null);
+    useState<ControlledDocumentView | null>(null);
   const [createNewVersion, setCreateNewVersion] = useState(false);
   const [newDocumentDepartment, setNewDocumentDepartment] = useState('');
   const [newDocumentType, setNewDocumentType] = useState('');
@@ -243,9 +282,9 @@ export default function MasterDocumentRegister() {
   const { toast } = useToast();
 
   // Fetch controlled documents
-  const { data: documents = [], isLoading } = useQuery<ControlledDocument[]>({
-    queryKey: ['/api/controlled-documents'],
-  });
+  const { data: documents = [], isLoading } = useQuery<
+    ControlledDocumentView[]
+  >({ queryKey: ['/api/controlled-documents'] });
 
   const {
     data: designControlTemplates = [],
@@ -262,13 +301,25 @@ export default function MasterDocumentRegister() {
   const { data: session } = useQuery<{ username: string; role: string }>({
     queryKey: ['/api/auth/session'],
   });
-  const { data: phase2Availability } = useQuery<{ enabled: boolean }>({
+  const {
+    data: phase2Availability,
+    isLoading: isPhase2AvailabilityLoading,
+    isError: isPhase2AvailabilityError,
+  } = useQuery<ControlledDocumentPhase2Availability>({
     queryKey: ['/api/controlled-documents/phase2/availability'],
   });
+  const phase2ModeKnown =
+    !isPhase2AvailabilityLoading &&
+    !isPhase2AvailabilityError &&
+    Boolean(phase2Availability);
   const phase2Enabled = phase2Availability?.enabled === true;
+  const legacyLifecycleEnabled =
+    phase2ModeKnown && phase2Availability?.configured === false;
+  const phase2Blocked =
+    phase2Availability?.configured === true && !phase2Enabled;
 
   const { data: versionHistory = [], isLoading: isHistoryLoading } = useQuery<
-    DocumentVersionHistory[]
+    DocumentVersionHistoryView[]
   >({
     queryKey: ['/api/controlled-documents', selectedDocument?.id, 'versions'],
     enabled: isHistoryDialogOpen && Boolean(selectedDocument?.id),
@@ -431,18 +482,11 @@ export default function MasterDocumentRegister() {
     return matchesSearch && matchesDepartment && matchesType && matchesStatus;
   });
 
-  const getStatusBadge = (doc: ControlledDocument) => {
-    /* eslint-disable prettier/prettier -- Linux CI and Windows disagree on this union layout. */
-    const compatibilityStatus = (doc as any).compatibilityStatus as
-      string | undefined;
-    /* eslint-enable prettier/prettier */
+  const getStatusBadge = (doc: ControlledDocumentView) => {
+    const compatibilityStatus = doc.compatibilityStatus ?? undefined;
     if (
       phase2Enabled &&
-      (
-        doc as ControlledDocument & {
-          phase2ProspectiveRelease?: boolean;
-        }
-      ).phase2ProspectiveRelease === true &&
+      doc.phase2ProspectiveRelease === true &&
       doc.lifecycleStatus === 'RELEASED'
     ) {
       return (
@@ -523,7 +567,6 @@ export default function MasterDocumentRegister() {
         );
       case 'APPROVED':
       case 'approved':
-      case 'approved':
         return (
           <Badge
             variant="default"
@@ -575,17 +618,20 @@ export default function MasterDocumentRegister() {
     })}`;
   };
 
-  const isPdfDocument = (doc: ControlledDocument) =>
-    Boolean(doc.filePath?.toLowerCase().endsWith('.pdf'));
-
-  const getFileTypeLabel = (filePath?: string | null) => {
-    if (!filePath) return 'No file';
-    if (/^https?:\/\//i.test(filePath)) return 'External reference';
-    const extension = filePath.split(/[?#]/)[0].split('.').pop()?.toUpperCase();
+  const getReleasedFileTypeLabel = (doc: ControlledDocumentView) => {
+    if (!doc.currentReleasedRevisionId) return 'Not released';
+    if (!doc.releasedRevisionAvailable) return 'Released file unavailable';
+    const extension = doc.releasedRevisionFileName
+      ?.split(/[?#]/)[0]
+      .split('.')
+      .pop()
+      ?.toUpperCase();
     if (extension === 'PDF') return 'PDF';
     if (['DOC', 'DOCX'].includes(extension || '')) return 'Word document';
     if (['XLS', 'XLSX'].includes(extension || '')) return 'Excel workbook';
-    return extension ? `${extension} file` : 'Original file';
+    return extension || doc.releasedRevisionMediaType
+      ? `${extension || doc.releasedRevisionMediaType} file`
+      : 'Released file';
   };
 
   const getAuthHeaders = (): Record<string, string> => {
@@ -933,6 +979,16 @@ export default function MasterDocumentRegister() {
       id: string;
       effectiveDate: string;
     }) => {
+      if (!phase2ModeKnown) {
+        throw new Error(
+          'The controlled-document workflow mode could not be verified. Approval was not attempted.'
+        );
+      }
+      if (phase2Blocked) {
+        throw new Error(
+          `Approve-and-release is configured but not schema-ready. Apply and certify ${phase2Availability?.requiredMigration}.`
+        );
+      }
       return await apiRequest(
         `/api/controlled-documents/${id}/${phase2Enabled ? 'approve-and-release' : 'decision'}`,
         {
@@ -1128,6 +1184,44 @@ export default function MasterDocumentRegister() {
               )}
             </div>
           </div>
+          {isPhase2AvailabilityLoading ? (
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              Verifying the controlled-document workflow mode. Lifecycle actions
+              remain unavailable until verification completes.
+            </div>
+          ) : isPhase2AvailabilityError || !phase2Availability ? (
+            <div
+              className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+              role="alert"
+            >
+              The controlled-document workflow mode could not be verified.
+              Create remains available, but approval and release actions are
+              fail-closed.
+            </div>
+          ) : phase2Blocked ? (
+            <div
+              className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+              role="alert"
+            >
+              Approve-and-release is configured but its certified schema is
+              incomplete. Required migration:{' '}
+              {phase2Availability.requiredMigration}
+              {phase2Availability.missingObjects?.length
+                ? `. Missing: ${phase2Availability.missingObjects.join(', ')}`
+                : ''}
+            </div>
+          ) : phase2Enabled ? (
+            <div className="rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">
+              Register → Approve and Release is active. Approval targets the
+              exact immutable current revision and releases it atomically.
+            </div>
+          ) : (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Compatibility workflow is active. Submit, Approve, and Release
+              remain separate until the certified Phase 2 activation is
+              authorized.
+            </div>
+          )}
         </div>
 
         {/* Filters */}
@@ -1230,7 +1324,7 @@ export default function MasterDocumentRegister() {
           <CardContent>
             {Boolean(
               designTemplateReconciliation?.conflicts.length ||
-              designTemplateReconciliation?.legacyTemplates.length
+                designTemplateReconciliation?.legacyTemplates.length
             ) && (
               <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
                 <div className="font-medium">
@@ -1528,14 +1622,16 @@ export default function MasterDocumentRegister() {
                         <TableCell className="text-xs">
                           <div>
                             Released:{' '}
-                            {(doc as any).currentReleasedRevisionId
-                              ? doc.currentVersion
+                            {doc.currentReleasedRevisionId
+                              ? doc.releasedRevisionVersion || 'Unknown'
                               : 'None'}
                           </div>
                           <div>
                             Working draft:{' '}
-                            {(doc as any).workingDraftRevisionId
-                              ? doc.currentVersion
+                            {doc.workingDraftRevisionId
+                              ? doc.workingDraftRevisionVersion ||
+                                doc.currentRevisionVersion ||
+                                'Unknown'
                               : 'None'}
                           </div>
                           {(doc as any).numberControlStatus ===
@@ -1569,12 +1665,12 @@ export default function MasterDocumentRegister() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {doc.filePath && (
+                            {doc.releasedRevisionAvailable ? (
                               <>
                                 <span className="text-xs text-muted-foreground">
-                                  {getFileTypeLabel(doc.filePath)}
+                                  {getReleasedFileTypeLabel(doc)}
                                 </span>
-                                {isPdfDocument(doc) && (
+                                {doc.releasedRevisionIsPdf && (
                                   <Badge
                                     variant="outline"
                                     role="button"
@@ -1605,7 +1701,7 @@ export default function MasterDocumentRegister() {
                                   size="sm"
                                   variant="ghost"
                                   className="h-8 w-8 p-0"
-                                  title="Download Original"
+                                  title="Download Released Revision"
                                   disabled={openingDocumentId === doc.id}
                                   onClick={() =>
                                     openDocumentFile(doc, 'download')
@@ -1615,6 +1711,21 @@ export default function MasterDocumentRegister() {
                                   <Download className="h-4 w-4" />
                                 </Button>
                               </>
+                            ) : (
+                              <Badge
+                                variant={
+                                  doc.currentReleasedRevisionId
+                                    ? 'destructive'
+                                    : 'outline'
+                                }
+                                title={
+                                  doc.currentReleasedRevisionId
+                                    ? 'The released revision is not verified and available for controlled use. Use Document File Recovery.'
+                                    : 'A document becomes available for controlled use only after approval and release.'
+                                }
+                              >
+                                {getReleasedFileTypeLabel(doc)}
+                              </Badge>
                             )}
                             <Button
                               size="sm"
@@ -1658,7 +1769,39 @@ export default function MasterDocumentRegister() {
                                   Create Revision
                                 </Button>
                               )}
-                            {!phase2Enabled &&
+                            {!isDesignControlTemplate(doc) &&
+                              doc.currentRevisionId &&
+                              doc.currentRevisionHasFile &&
+                              doc.currentRevisionIsPdf &&
+                              (canApprove ||
+                                can('documents.edit_draft') ||
+                                can('documents.revise')) &&
+                              [
+                                'DRAFT',
+                                'IN_REVIEW',
+                                'APPROVED',
+                                'REJECTED',
+                              ].includes(
+                                String(doc.lifecycleStatus || '').toUpperCase()
+                              ) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    openDocumentFile(
+                                      doc,
+                                      'view',
+                                      undefined,
+                                      `/api/controlled-documents/${doc.id}/revisions/${doc.currentRevisionId}/view`
+                                    )
+                                  }
+                                  data-testid={`button-preview-revision-${doc.id}`}
+                                >
+                                  <Eye className="mr-1 h-4 w-4" />
+                                  Preview Revision
+                                </Button>
+                              )}
+                            {legacyLifecycleEnabled &&
                               !isDesignControlTemplate(doc) &&
                               can('documents.submit') &&
                               doc.lifecycleStatus === 'DRAFT' && (
@@ -1679,7 +1822,7 @@ export default function MasterDocumentRegister() {
                               canApprove &&
                               ((phase2Enabled &&
                                 doc.lifecycleStatus === 'DRAFT') ||
-                                (!phase2Enabled &&
+                                (legacyLifecycleEnabled &&
                                   doc.lifecycleStatus === 'IN_REVIEW')) && (
                                 <Button
                                   size="sm"
@@ -1716,7 +1859,7 @@ export default function MasterDocumentRegister() {
                                   Reject
                                 </Button>
                               )}
-                            {!phase2Enabled &&
+                            {legacyLifecycleEnabled &&
                               !isDesignControlTemplate(doc) &&
                               can('documents.release') &&
                               doc.lifecycleStatus === 'APPROVED' && (
@@ -2228,9 +2371,9 @@ export default function MasterDocumentRegister() {
                       </div>
                     )}
                   </div>
-                  {selectedDocument.filePath && (
+                  {selectedDocument.currentRevisionFileName && (
                     <p className="text-xs text-gray-500">
-                      Current file: {selectedDocument.filePath.split('/').pop()}
+                      Current file: {selectedDocument.currentRevisionFileName}
                     </p>
                   )}
                 </div>
@@ -2294,7 +2437,13 @@ export default function MasterDocumentRegister() {
                     <div>{selectedDocument.documentName}</div>
                     <div className="font-medium">Version:</div>
                     <div className="font-mono">
-                      {selectedDocument.currentVersion}
+                      {selectedDocument.currentRevisionVersion ||
+                        selectedDocument.currentVersion}
+                    </div>
+                    <div className="font-medium">Checksum:</div>
+                    <div className="font-mono">
+                      {selectedDocument.currentRevisionChecksumStatus ||
+                        'Unknown'}
                     </div>
                     <div className="font-medium">Type:</div>
                     <div>{selectedDocument.documentType}</div>
@@ -2303,6 +2452,44 @@ export default function MasterDocumentRegister() {
                   </div>
                 </CardContent>
               </Card>
+
+              {selectedDocument.currentRevisionId &&
+                selectedDocument.currentRevisionHasFile &&
+                selectedDocument.currentRevisionIsPdf && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() =>
+                      openDocumentFile(
+                        selectedDocument,
+                        'view',
+                        undefined,
+                        `/api/controlled-documents/${selectedDocument.id}/revisions/${selectedDocument.currentRevisionId}/view`
+                      )
+                    }
+                    data-testid="button-preview-exact-revision"
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Preview Exact Revision Before Approval
+                  </Button>
+                )}
+
+              {phase2Enabled &&
+                (!selectedDocument.currentRevisionId ||
+                  !selectedDocument.currentRevisionHasFile ||
+                  selectedDocument.currentRevisionChecksumStatus !==
+                    'VERIFIED') && (
+                  <div
+                    className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900"
+                    role="alert"
+                  >
+                    Approval is unavailable until the exact current revision has
+                    immutable EPOCH-managed bytes and a VERIFIED checksum. Use
+                    Document File Recovery when the historical source is
+                    missing.
+                  </div>
+                )}
 
               <div className="space-y-2">
                 <Label htmlFor="effectiveDate">Effective Date *</Label>
@@ -2335,7 +2522,14 @@ export default function MasterDocumentRegister() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={approveDocumentMutation.isPending}
+                  disabled={
+                    approveDocumentMutation.isPending ||
+                    (phase2Enabled &&
+                      (!selectedDocument.currentRevisionId ||
+                        !selectedDocument.currentRevisionHasFile ||
+                        selectedDocument.currentRevisionChecksumStatus !==
+                          'VERIFIED'))
+                  }
                   className="bg-green-600 hover:bg-green-700"
                   data-testid="button-submit-approve"
                 >
@@ -2395,12 +2589,12 @@ export default function MasterDocumentRegister() {
                         {version.changeDescription || 'No change note recorded'}
                       </TableCell>
                       <TableCell>
-                        {(version as any).lifecycleStatus || version.status}
+                        {version.lifecycleStatus || version.status}
                       </TableCell>
                       <TableCell className="font-mono text-xs">
-                        {(version as any).fileChecksum
-                          ? String((version as any).fileChecksum).slice(0, 12)
-                          : (version as any).checksumStatus || 'Legacy unknown'}
+                        {version.fileChecksum
+                          ? version.fileChecksum.slice(0, 12)
+                          : version.checksumStatus || 'Legacy unknown'}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
@@ -2409,24 +2603,6 @@ export default function MasterDocumentRegister() {
                         <div className="text-xs text-gray-500">
                           {version.createdBy}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {(version as any).filePath && selectedDocument && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              openDocumentFile(
-                                selectedDocument,
-                                'download',
-                                null,
-                                `/api/controlled-documents/${selectedDocument.id}/revisions/${version.id}/download`
-                              )
-                            }
-                          >
-                            Download Exact Revision
-                          </Button>
-                        )}
                       </TableCell>
                       <TableCell>
                         {version.approvedAt ? (
@@ -2442,6 +2618,45 @@ export default function MasterDocumentRegister() {
                           <span className="text-sm text-gray-500">
                             Not approved
                           </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {version.fileReferenceAvailable && selectedDocument && (
+                          <div className="flex flex-col gap-2">
+                            {(version.mediaType === 'application/pdf' ||
+                              String(version.fileName || '')
+                                .toLowerCase()
+                                .endsWith('.pdf')) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  openDocumentFile(
+                                    selectedDocument,
+                                    'view',
+                                    undefined,
+                                    `/api/controlled-documents/${selectedDocument.id}/revisions/${version.id}/view`
+                                  )
+                                }
+                              >
+                                Preview Exact Revision
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                openDocumentFile(
+                                  selectedDocument,
+                                  'download',
+                                  null,
+                                  `/api/controlled-documents/${selectedDocument.id}/revisions/${version.id}/download`
+                                )
+                              }
+                            >
+                              Download Exact Revision
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>

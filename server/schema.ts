@@ -6320,6 +6320,7 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
   partNumber: text('part_number').notNull(), // P2-specific part number
   partName: text('part_name').notNull(), // Display name for the part
   quantity: integer('quantity').notNull(),
+  demandLineIdentity: uuid('demand_line_identity').defaultRandom().notNull(),
   dueDate: date('due_date'),
   unitPrice: real('unit_price').default(0), // Price per unit
   totalPrice: real('total_price').default(0), // quantity * unitPrice

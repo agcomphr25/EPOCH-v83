@@ -86,6 +86,7 @@ import surveyEngineRoutes from './surveyEngine';
 import poProductsRoutes from './poProducts';
 import p1POQueueRoutes from './p1POQueue';
 import p1POQuantityAdjustmentsRoutes from './p1POQuantityAdjustments';
+import p2DemandQuantityRoutes from './p2DemandQuantity';
 import poShippingQCRoutes from './poShippingQC';
 import weeklyScheduleRoutes from './weeklySchedule';
 import refundRoutes from './refunds';
@@ -1486,6 +1487,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // P1 PO Queue routes
   app.use('/api/p1-po-queue', p1POQueueRoutes);
   app.use('/api/pos', p1POQuantityAdjustmentsRoutes);
+  app.use('/api/p2-demand', p2DemandQuantityRoutes);
 
   // Product Labels routes
   app.use('/api/product-labels', productLabelsRoutes);
@@ -3470,60 +3472,49 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         // move to the new revision instead of looking "missing" and being generated again.
         let itemsToInsert: Array<{
           sourceItemId: number | null;
+          demandLineIdentity: string | null;
           partNumber: string;
           partName: string;
           quantity: number;
+          dueDate: string | null;
           unitPrice: number;
           inventoryItemId: number | null;
         }> = [];
         const sourceItemsResult = await client.query(
-          `SELECT id, part_number, part_name, quantity, due_date, unit_price, inventory_item_id
+          `SELECT id, part_number, part_name, quantity, due_date, unit_price, inventory_item_id, demand_line_identity
            FROM p2_purchase_order_items WHERE po_id = $1
            ORDER BY id`,
           [sourceId]
         );
         const sourceItems = sourceItemsResult.rows;
         if (lineItems && Array.isArray(lineItems) && lineItems.length > 0) {
-          const unusedSourceIndexes = new Set(sourceItems.map((_: any, index: number) => index));
-          const takeSourceMatch = (item: any, index: number) => {
+          const takeSourceMatch = (item: any) => {
             const explicitId = Number(item.sourceItemId ?? item.source_item_id ?? item.id);
             if (Number.isInteger(explicitId) && sourceItems.some((source: any) => Number(source.id) === explicitId)) {
-              const matchedIndex = sourceItems.findIndex((source: any) => Number(source.id) === explicitId);
-              unusedSourceIndexes.delete(matchedIndex);
               return explicitId;
             }
-
-            const partNumber = String(item.partNumber || item.sku || '').trim().toLowerCase();
-            const matchingIndex = sourceItems.findIndex((source: any, sourceIndex: number) =>
-              unusedSourceIndexes.has(sourceIndex) &&
-              String(source.part_number || '').trim().toLowerCase() === partNumber
-            );
-            if (matchingIndex >= 0) {
-              unusedSourceIndexes.delete(matchingIndex);
-              return Number(sourceItems[matchingIndex].id);
-            }
-
-            if (unusedSourceIndexes.has(index)) {
-              unusedSourceIndexes.delete(index);
-              return Number(sourceItems[index].id);
-            }
-
             return null;
           };
 
-          itemsToInsert = lineItems.map((item: any, index: number) => ({
-            sourceItemId: takeSourceMatch(item, index),
-            partNumber: item.partNumber,
-            partName: item.description || item.partName || item.partNumber,
-            quantity: item.quantity,
-            dueDate: item.dueDate || null,
-            unitPrice: item.unitPrice || 0,
-            inventoryItemId: item.inventoryItemId || null,
-          }));
+          itemsToInsert = lineItems.map((item: any) => {
+            const sourceItemId = takeSourceMatch(item);
+            const sourceItem = sourceItems.find((source: any) => Number(source.id) === sourceItemId);
+            return {
+              sourceItemId,
+              demandLineIdentity: sourceItem?.demand_line_identity ?? null,
+              partNumber: item.partNumber,
+              partName: item.description || item.partName || item.partNumber,
+              quantity: item.quantity,
+              dueDate: item.dueDate || null,
+              unitPrice: item.unitPrice || 0,
+              inventoryItemId: item.inventoryItemId || null,
+            };
+          });
         } else {
           // Fall back to copying source PO's items exactly
           itemsToInsert = sourceItems.map((row: any) => ({
             sourceItemId: Number(row.id),
+            demandLineIdentity: row.demand_line_identity,
             partNumber: row.part_number,
             partName: row.part_name,
             quantity: row.quantity,
@@ -3538,10 +3529,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         for (const item of itemsToInsert) {
           const totalPrice = item.quantity * item.unitPrice;
           const insertedItem = await client.query(
-            `INSERT INTO p2_purchase_order_items (po_id, part_number, part_name, quantity, due_date, unit_price, total_price, inventory_item_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `INSERT INTO p2_purchase_order_items (po_id, part_number, part_name, quantity, due_date, unit_price, total_price, inventory_item_id, demand_line_identity)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::uuid,gen_random_uuid()))
              RETURNING id`,
-            [newPO.id, item.partNumber, item.partName, item.quantity, item.dueDate || null, item.unitPrice, totalPrice, item.inventoryItemId]
+            [newPO.id, item.partNumber, item.partName, item.quantity, item.dueDate || null, item.unitPrice, totalPrice, item.inventoryItemId, item.demandLineIdentity]
           );
           const newItemId = Number(insertedItem.rows[0]?.id);
           if (item.sourceItemId && Number.isInteger(newItemId)) {

@@ -290,6 +290,7 @@ export const safeMigrationFiles = [
   '0259_design_control_form_template_database_artifacts.sql',
   '0260_controlled_document_source_recovery.sql',
   '0261_payment_aware_refund_completion.sql',
+  '0262_p2_customer_demand_quantity_ledger.sql',
 ];
 
 export const criticalMigrationFiles = new Set([
@@ -356,6 +357,7 @@ export const criticalMigrationFiles = new Set([
   '0259_design_control_form_template_database_artifacts.sql',
   '0260_controlled_document_source_recovery.sql',
   '0261_payment_aware_refund_completion.sql',
+  '0262_p2_customer_demand_quantity_ledger.sql',
 ]);
 
 export async function runSafeBootMigrations() {

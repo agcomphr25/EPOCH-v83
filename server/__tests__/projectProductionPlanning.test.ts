@@ -108,4 +108,18 @@ describe('controlled configuration and approval behavior', () => {
     expect(service).toContain('SEGREGATION_OF_DUTIES');
     expect(service).toContain("status='SUPERSEDED'");
   });
+
+  it('builds Confirm the Order from authoritative PO, quote, commercial, and technical records', () => {
+    expect(service).toContain('orderConfirmation: {');
+    expect(service).toContain('LEFT JOIN quotes q ON q.id=po.source_quote_id');
+    expect(service).toContain('project_commercial_stage_reviews');
+    expect(service).toContain('project_technical_configuration_reviews');
+    expect(service).toContain(
+      'JOIN p2_purchase_order_items poi ON poi.po_id=p.po_id'
+    );
+    expect(service).toContain('customerPurchaseOrderRevision');
+    expect(service).toContain(
+      'releasedEvidence: technicalSource.released_evidence'
+    );
+  });
 });

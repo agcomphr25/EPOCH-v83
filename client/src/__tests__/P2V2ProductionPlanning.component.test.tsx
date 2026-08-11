@@ -54,6 +54,41 @@ const model = {
     },
   ],
   approvalHistory: [],
+  orderConfirmation: {
+    projectCode: 'PRJ-100',
+    projectName: 'Customer Assembly',
+    customer: 'Example Aerospace',
+    rfq: 'RFQ-100',
+    acceptedQuote: 'Q-100',
+    acceptedQuoteStatus: 'ACCEPTED',
+    customerPurchaseOrder: 'PO-100',
+    customerPurchaseOrderRevision: 3,
+    customerPurchaseOrderStatus: 'OPEN',
+    requiredDeliveryDate: '2026-10-01',
+    lines: [
+      {
+        id: 10,
+        customer_part_number: 'CUST-100',
+        ag_part_number: 'MAKE-100',
+        description: 'Final assembly',
+        quantity: 2,
+        due_date: '2026-10-01',
+      },
+    ],
+    technicalBaseline: { status: 'COMPLETE', sourceRevision: 'technical-3' },
+    sources: [
+      {
+        name: 'rfq risk assessment',
+        status: 'COMPLETE',
+        revision: 'rfq-2',
+      },
+      {
+        name: 'estimate quote',
+        status: 'COMPLETE',
+        revision: 'quote-4',
+      },
+    ],
+  },
   readiness: {
     ready: false,
     stale: true,
@@ -151,6 +186,15 @@ describe('P2V2ProductionPlanning', () => {
       await screen.findByTestId('production-planning-progress')
     ).toHaveTextContent('Page 1 of 10');
     expect(screen.getByText('Confirm the Order')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('confirm-order-summary')
+    ).toHaveTextContent('Example Aerospace');
+    expect(screen.getByTestId('confirm-order-summary')).toHaveTextContent(
+      'RFQ-100'
+    );
+    expect(screen.getByTestId('confirm-order-summary')).toHaveTextContent(
+      'CUST-100'
+    );
     expect(
       screen.getByRole('button', {
         name: 'Page 9: Preview Production Demand',

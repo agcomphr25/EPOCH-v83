@@ -567,7 +567,7 @@ export function LayupSchedulePreview({
             <div className="flex flex-col items-center border rounded-lg p-3 bg-gray-50">
               <p className="text-xs text-gray-600 mb-2 font-semibold">Scan to Complete Layup</p>
               <div className="bg-white p-2 rounded">
-                <svg ref={barcodeRef} style={{ width: '240px', height: '80px' }}></svg>
+                <svg ref={barcodeRef} data-testid="barcode-svg" style={{ width: '240px', height: '80px' }}></svg>
               </div>
               {scheduleBarcode && (
                 <p className="text-xs text-gray-500 mt-2 font-mono">{scheduleBarcode}</p>

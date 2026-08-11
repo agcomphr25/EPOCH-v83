@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DesignControlWorkflowStep } from '@shared/designControlWorkflow';
 
@@ -130,6 +130,8 @@ export function DesignControlStepEditor({
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(
     step?.updatedAt ?? null
   );
+  // Track dirty state in a ref so the sync effect can read it without adding
+  // dirty to its dep array (which would cause a setDirty(false) → re-run loop).
   const approvalQueryKey = [
     '/api/qms/design-control',
     recordId,
@@ -138,18 +140,12 @@ export function DesignControlStepEditor({
     'approvals',
   ] as const;
 
-  useEffect(() => {
-    setFormData(step?.formData ?? {});
-    setChecklist(step?.checklist ?? {});
-    setChangeReason('');
-    setDecisionComment('');
-    setMessage('');
-    setError('');
-    setDirty(false);
-    setManualPersonFields(new Set());
-    setManualProjectFields(new Set());
-    setLastSavedAt(step?.updatedAt ?? null);
-  }, [definition.key, step?.formData, step?.checklist, step?.updatedAt]);
+  // Track dirty state in a ref so the sync effect can read it without adding
+  // dirty to its dep array (which would cause a setDirty(false) → re-run loop).
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+  // Track the last key we fully initialized for, to detect step navigation.
+  const lastInitializedKey = useRef(definition.key);
 
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -455,44 +451,57 @@ export function DesignControlStepEditor({
                   </select>
                 ) : presentation.kind === 'project' ? (
                   <>
-                    <select
-                      aria-describedby={`${fieldId}-help`}
-                      aria-invalid={missing}
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                      id={fieldId}
-                      value={
-                        manualProjectFields.has(field.key)
-                          ? '__MANUAL__'
-                          : value
-                      }
-                      onChange={(event) => {
-                        if (event.target.value === '__MANUAL__') {
-                          setManualProjectFields((current) =>
-                            new Set(current).add(field.key)
-                          );
-                          update('');
-                          return;
+                    {projectId ? (
+                      // When a project is linked, show the dropdown so the user
+                      // can choose between the linked project and free-text entry.
+                      <select
+                        aria-describedby={`${fieldId}-help`}
+                        aria-invalid={missing}
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                        id={fieldId}
+                        value={
+                          manualProjectFields.has(field.key)
+                            ? '__MANUAL__'
+                            : value
                         }
-                        setManualProjectFields((current) => {
-                          const next = new Set(current);
-                          next.delete(field.key);
-                          return next;
-                        });
-                        update(event.target.value);
-                      }}
-                    >
-                      <option value="">Select the controlled link…</option>
-                      {value && value !== projectId && (
-                        <option value={value}>Existing value: {value}</option>
-                      )}
-                      {projectId && (
+                        onChange={(event) => {
+                          if (event.target.value === '__MANUAL__') {
+                            setManualProjectFields((current) =>
+                              new Set(current).add(field.key)
+                            );
+                            update('');
+                            return;
+                          }
+                          setManualProjectFields((current) => {
+                            const next = new Set(current);
+                            next.delete(field.key);
+                            return next;
+                          });
+                          update(event.target.value);
+                        }}
+                      >
+                        <option value="">Select the controlled link…</option>
+                        {value && value !== projectId && (
+                          <option value={value}>Existing value: {value}</option>
+                        )}
                         <option value={projectId}>Linked project: {projectId}</option>
-                      )}
-                      <option value="__MANUAL__">
-                        Enter another customer or order link…
-                      </option>
-                    </select>
-                    {manualProjectFields.has(field.key) && (
+                        <option value="__MANUAL__">
+                          Enter another customer or order link…
+                        </option>
+                      </select>
+                    ) : (
+                      // No linked project — skip the dropdown and go straight to
+                      // the text input so the field is directly editable.
+                      <Input
+                        aria-describedby={`${fieldId}-help`}
+                        aria-invalid={missing}
+                        id={fieldId}
+                        placeholder="Enter the controlled customer or order reference"
+                        value={value}
+                        onChange={(event) => update(event.target.value)}
+                      />
+                    )}
+                    {projectId && manualProjectFields.has(field.key) && (
                       <Input
                         aria-label={`${field.label} manual entry`}
                         placeholder="Enter the controlled customer or order reference"

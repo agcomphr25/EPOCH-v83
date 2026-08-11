@@ -150,9 +150,9 @@ describe('LayupSchedulePreview printing', () => {
     );
 
     await waitFor(() =>
-      expect(document.querySelector('svg rect')).not.toBeNull()
+      expect(document.querySelector('[data-testid="barcode-svg"] rect')).not.toBeNull()
     );
-    document.querySelector('svg')?.replaceChildren();
+    document.querySelector('[data-testid="barcode-svg"]')?.replaceChildren();
     fireEvent.click(screen.getByTestId('button-print-schedule'));
 
     await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1));

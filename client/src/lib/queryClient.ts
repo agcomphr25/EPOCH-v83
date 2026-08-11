@@ -312,6 +312,7 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
       
       const errorMessage = normalizeApiErrorMessage(
         data?.message ||
+        (typeof data?.detail === 'string' ? data.detail : null) ||
         data?.error ||
         (typeof data?.details === 'string' ? data.details : null) ||
         (typeof data?.reason === 'string' ? data.reason : null) ||

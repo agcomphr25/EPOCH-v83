@@ -70,6 +70,11 @@ export type PreviewRoot = {
   quantity: number;
   inventoryItemId: number | null;
   requiredByDate: string | null;
+  demandLineIdentity: string;
+  originalCustomerQuantity: number;
+  effectiveCustomerQuantity: number;
+  customerDemandEventDigest: string;
+  customerDemandSnapshot: unknown;
 };
 
 export interface ProductionLaunchPreviewSource {
@@ -90,6 +95,13 @@ export interface ProductionLaunchPreviewSource {
 
 export type ProductionLaunchPreviewNode = {
   path: string[];
+  productionPlanAssemblyPath: string;
+  bomLineId: string | null;
+  demandLineIdentity: string;
+  originalCustomerQuantity: number;
+  effectiveCustomerQuantity: number;
+  customerDemandEventDigest: string;
+  customerDemandSnapshot: unknown;
   parentPartNumber: string | null;
   inventoryItemId: number | null;
   partNumber: string;
@@ -169,6 +181,13 @@ export async function resolveProductionLaunchPreview(
     requiredByDate: string | null;
     path: string[];
     ancestry: string[];
+    productionPlanAssemblyPath: string;
+    bomLineId: string | null;
+    demandLineIdentity: string;
+    originalCustomerQuantity: number;
+    effectiveCustomerQuantity: number;
+    customerDemandEventDigest: string;
+    customerDemandSnapshot: unknown;
   }): Promise<ProductionLaunchPreviewNode> {
     const partNumber = input.partNumber.trim();
     const path = [...input.path, partNumber];
@@ -427,6 +446,13 @@ export async function resolveProductionLaunchPreview(
               requiredByDate: input.requiredByDate,
               path,
               ancestry: [...input.ancestry, normalized(partNumber)],
+              productionPlanAssemblyPath: `${input.productionPlanAssemblyPath}/line:${line.id}`,
+              bomLineId: line.id,
+              demandLineIdentity: input.demandLineIdentity,
+              originalCustomerQuantity: input.originalCustomerQuantity,
+              effectiveCustomerQuantity: input.effectiveCustomerQuantity,
+              customerDemandEventDigest: input.customerDemandEventDigest,
+              customerDemandSnapshot: input.customerDemandSnapshot,
             })
           );
         }
@@ -448,6 +474,13 @@ export async function resolveProductionLaunchPreview(
 
     return {
       path,
+      productionPlanAssemblyPath: input.productionPlanAssemblyPath,
+      bomLineId: input.bomLineId,
+      demandLineIdentity: input.demandLineIdentity,
+      originalCustomerQuantity: input.originalCustomerQuantity,
+      effectiveCustomerQuantity: input.effectiveCustomerQuantity,
+      customerDemandEventDigest: input.customerDemandEventDigest,
+      customerDemandSnapshot: input.customerDemandSnapshot,
       parentPartNumber: input.parentPartNumber,
       inventoryItemId: item?.id ?? null,
       partNumber,
@@ -485,6 +518,13 @@ export async function resolveProductionLaunchPreview(
         requiredByDate: root.requiredByDate,
         path: [`po-item:${root.poItemId}`],
         ancestry: [],
+        productionPlanAssemblyPath: `root:${root.poItemId}`,
+        bomLineId: null,
+        demandLineIdentity: root.demandLineIdentity,
+        originalCustomerQuantity: root.originalCustomerQuantity,
+        effectiveCustomerQuantity: root.effectiveCustomerQuantity,
+        customerDemandEventDigest: root.customerDemandEventDigest,
+        customerDemandSnapshot: root.customerDemandSnapshot,
       })
     )
   );

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { sql } from 'drizzle-orm';
 
 import { db } from '../../db';
@@ -209,8 +211,16 @@ export async function getProductionLaunchPreview(projectId: string) {
       );
     const rootRows = rows(
       await tx.execute(sql`
-      SELECT id,part_number,quantity,inventory_item_id,due_date
-      FROM p2_purchase_order_items WHERE po_id=${poId} ORDER BY id`)
+      SELECT poi.id,poi.part_number,poi.quantity original_quantity,
+        (poi.quantity+COALESCE(SUM(e.quantity_delta),0))::numeric effective_quantity,
+        poi.inventory_item_id,poi.due_date,poi.demand_line_identity,
+        COALESCE(jsonb_agg(to_jsonb(e) ORDER BY e.effective_at,e.id)
+          FILTER (WHERE e.id IS NOT NULL),'[]'::jsonb) customer_demand_events
+      FROM p2_purchase_order_items poi
+      LEFT JOIN p2_customer_demand_quantity_events e
+        ON e.po_item_id=poi.id AND e.demand_line_identity=poi.demand_line_identity
+      WHERE poi.po_id=${poId}
+      GROUP BY poi.id ORDER BY poi.id`)
     );
     if (!rootRows.length)
       throw new ProjectProductionPlanningError(
@@ -220,16 +230,37 @@ export async function getProductionLaunchPreview(projectId: string) {
       );
 
     const preview = await resolveProductionLaunchPreview(
-      rootRows.map((entry) => ({
-        poItemId: Number(entry.id),
-        partNumber: String(entry.part_number),
-        quantity: Number(entry.quantity),
-        inventoryItemId:
-          entry.inventory_item_id == null
-            ? null
-            : Number(entry.inventory_item_id),
-        requiredByDate: entry.due_date == null ? null : String(entry.due_date),
-      })),
+      rootRows.map((entry) => {
+        const events = Array.isArray(entry.customer_demand_events)
+          ? entry.customer_demand_events
+          : [];
+        const originalQuantity = Number(entry.original_quantity);
+        const effectiveQuantity = Number(entry.effective_quantity);
+        const snapshot = {
+          demandLineIdentity: String(entry.demand_line_identity),
+          originalQuantity,
+          effectiveQuantity,
+          events,
+        };
+        return {
+          poItemId: Number(entry.id),
+          partNumber: String(entry.part_number),
+          quantity: effectiveQuantity,
+          inventoryItemId:
+            entry.inventory_item_id == null
+              ? null
+              : Number(entry.inventory_item_id),
+          requiredByDate:
+            entry.due_date == null ? null : String(entry.due_date),
+          demandLineIdentity: String(entry.demand_line_identity),
+          originalCustomerQuantity: originalQuantity,
+          effectiveCustomerQuantity: effectiveQuantity,
+          customerDemandEventDigest: createHash('sha256')
+            .update(JSON.stringify(snapshot))
+            .digest('hex'),
+          customerDemandSnapshot: snapshot,
+        };
+      }),
       sourceFor(projectId, tx as Executor)
     );
     return {

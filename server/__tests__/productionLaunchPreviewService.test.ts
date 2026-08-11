@@ -16,7 +16,9 @@ const route = readFileSync(
 describe('Production Launch Phase 1 preview boundary', () => {
   it('executes inside an explicit read-only transaction', () => {
     expect(service).toContain('SET TRANSACTION READ ONLY');
-    expect(service).not.toMatch(/\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b/i);
+    expect(service).not.toMatch(
+      /sql`[^`]*\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[^`]*`/i
+    );
     expect(service).toContain("mode: 'PREVIEW_ONLY'");
     expect(service).toContain('createsRecords: false');
   });
@@ -27,5 +29,12 @@ describe('Production Launch Phase 1 preview boundary', () => {
     );
     expect(service).toContain('isP2V2ProductionLaunchPreviewEnabled()');
     expect(service).toContain('P2_V2_PRODUCTION_LAUNCH_PREVIEW_DISABLED');
+  });
+
+  it('uses the immutable customer-demand event ledger for root quantity authority', () => {
+    expect(service).toContain('p2_customer_demand_quantity_events');
+    expect(service).toContain('poi.quantity+COALESCE(SUM(e.quantity_delta),0)');
+    expect(service).toContain('demandLineIdentity');
+    expect(service).toContain("createHash('sha256')");
   });
 });

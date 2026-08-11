@@ -483,6 +483,17 @@ const KNOWN_BROKEN_ON_SCHEMA_BASELINE: Record<string, string> = {
     'Adds column/index to charge_code_employee_assignments, which is created at runtime ' +
     '(ensureChargeCodeAssignmentTable in employees.ts), not via a migration. ' +
     'Table exists in production but is absent in a fresh scratch-DB baseline replay.',
+  // Migration 0267 is a one-off data-repair that reconciles a single legacy production
+  // order (PO-P18380-46-1) with its persisted March 2026 OEM shipment record.  It is
+  // deliberately fail-closed: if the exact order, PO line, shipment, and tracking number
+  // do not match it raises an EXCEPTION rather than silently doing nothing.  The
+  // schema-baseline replay runs against a schema-only pg_dump (no live rows), so the
+  // production_orders lookup always returns NOT FOUND.  This is expected — the repair
+  // was applied exactly once against the real production data at its correct epoch.
+  '0267_reconcile_p18380_persisted_shipment.sql':
+    'Data-repair migration that fail-closes when production order PO-P18380-46-1 is absent. ' +
+    'Schema-baseline has no live rows so the NOT FOUND guard fires; this is correct behaviour ' +
+    'for a one-off repair that was already applied against real production data.',
 };
 
 // ---------------------------------------------------------------------------

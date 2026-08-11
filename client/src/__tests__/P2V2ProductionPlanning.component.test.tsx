@@ -61,6 +61,21 @@ const model = {
     differences: ['MAKE-100: BOM revision/release changed.'],
   },
 };
+const preview = {
+  mode: 'PREVIEW_ONLY',
+  createsRecords: false,
+  generatedAt: '2026-08-11T20:00:00.000Z',
+  sourceChecksum: 'source-checksum',
+  resultChecksum: 'result-checksum',
+  totals: {
+    manufactured: { lineCount: 2, grossQuantity: 4 },
+    purchased: { lineCount: 1, grossQuantity: 8 },
+    rawMaterial: { lineCount: 0, grossQuantity: 0 },
+    customerSupplied: { lineCount: 0, grossQuantity: 0 },
+  },
+  blockers: ['MAKE-100 needs a released first production department.'],
+  nodes: [],
+};
 
 function renderPlanning() {
   vi.stubGlobal(
@@ -76,7 +91,9 @@ function renderPlanning() {
               'projects.production_planning.operations_decide',
             ],
           }
-        : model;
+        : url.endsWith('/launch-preview')
+          ? preview
+          : model;
       return { ok: true, json: async () => body } as Response;
     })
   );
@@ -98,6 +115,11 @@ describe('P2V2ProductionPlanning', () => {
     expect(
       await screen.findByTestId('production-planning-dialog')
     ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Page 2: Review Parts and Assemblies',
+      })
+    );
     expect(await screen.findByText('MAKE-100')).toBeInTheDocument();
     expect(screen.getByText('BUY-20')).toBeInTheDocument();
     expect(screen.getByText('MAKE')).toBeInTheDocument();
@@ -106,11 +128,19 @@ describe('P2V2ProductionPlanning', () => {
     expect(screen.getByTestId('production-plan-stale')).toHaveTextContent(
       'BOM revision/release changed'
     );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Page 3: Review How Each Part Is Made',
+      })
+    );
+    expect(screen.getAllByTestId('production-plan-item')).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Page 10: Review and Approve' })
+    );
     expect(screen.getByText(/engineering approval/i)).toBeInTheDocument();
     expect(screen.getByText(/quality approval/i)).toBeInTheDocument();
     expect(screen.getByText(/operations approval/i)).toBeInTheDocument();
     expect(screen.getByText(/Revision 1/)).toBeInTheDocument();
-    expect(screen.getAllByTestId('production-plan-item')).toHaveLength(1);
   });
 
   it('starts the ten-page guided workflow and provides simple navigation', async () => {
@@ -135,5 +165,27 @@ describe('P2V2ProductionPlanning', () => {
     expect(screen.getByText('Review Parts and Assemblies')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Save and Exit' })).toBeEnabled();
+  });
+
+  it('loads the shared read-only demand preview only on page nine', async () => {
+    renderPlanning();
+    fireEvent.click(screen.getByTestId('open-production-planning'));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Page 9: Preview Production Demand',
+      })
+    );
+
+    expect(
+      await screen.findByTestId('production-demand-preview')
+    ).toHaveTextContent('Read-only release preview');
+    expect(await screen.findByText('2 demand lines')).toBeInTheDocument();
+    expect(screen.getByText('Gross quantity 4')).toBeInTheDocument();
+    expect(
+      screen.getByText(/needs a released first production department/i)
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('production-demand-preview')).toHaveTextContent(
+      'does not create work orders'
+    );
   });
 });

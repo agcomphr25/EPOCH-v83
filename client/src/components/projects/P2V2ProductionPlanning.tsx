@@ -34,6 +34,16 @@ type Model = {
     differences: string[];
   };
 };
+type PreviewModel = {
+  mode: 'PREVIEW_ONLY';
+  createsRecords: false;
+  generatedAt: string;
+  sourceChecksum: string;
+  resultChecksum: string;
+  totals: Record<string, { lineCount: number; grossQuantity: number }>;
+  blockers: string[];
+  nodes: Row[];
+};
 const endpoint = (projectId: string) =>
   `/api/projects/${projectId}/workflow-v2/production-planning`;
 async function request(url: string, method = 'GET', body?: unknown) {
@@ -51,6 +61,11 @@ async function request(url: string, method = 'GET', body?: unknown) {
 const value = (row: Row, key: string) => String(row[key] ?? '');
 const listValue = (row: Row, key: string) =>
   Array.isArray(row[key]) ? (row[key] as unknown[]).join(', ') : '';
+const displayValue = (row: Row, key: string) => {
+  const current = row[key];
+  if (Array.isArray(current)) return current.map(String).join(', ');
+  return String(current ?? '').trim();
+};
 const selectOptions = (values: string[]) =>
   values.map((item) => (
     <SelectItem key={item} value={item}>
@@ -70,6 +85,36 @@ const wizardPages = [
   'Preview Production Demand',
   'Review and Approve',
 ] as const;
+
+const reviewPageFields: Record<number, Array<[string, string]>> = {
+  3: [
+    ['Required quantity', 'extended_project_quantity'],
+    ['Planning classification', 'planning_classification'],
+    ['Material specification', 'specification_references'],
+  ],
+  4: [
+    ['Required tooling', 'tooling_requirements'],
+    ['Computer numerical control programs', 'cnc_program_requirements'],
+    ['Special process source', 'special_process_source'],
+  ],
+  5: [
+    ['Inspection extent', 'inspection_extent'],
+    ['First Article Inspection', 'fai_requirement'],
+    ['Required certifications', 'required_certifications'],
+    ['Required test records', 'required_test_records'],
+  ],
+  6: [
+    ['Drawing number', 'drawing_number'],
+    ['Drawing revision', 'drawing_revision'],
+    ['Work instruction references', 'work_instruction_references'],
+    ['Specification references', 'specification_references'],
+  ],
+  7: [
+    ['Required quantity', 'extended_project_quantity'],
+    ['Routing revision', 'routing_revision'],
+    ['Effectivity', 'effectivity_reference'],
+  ],
+};
 
 export default function P2V2ProductionPlanning({
   projectId,
@@ -107,6 +152,16 @@ export default function P2V2ProductionPlanning({
     [permissions]
   );
   const canManage = allowed.has('projects.production_planning.manage');
+  const {
+    data: preview,
+    isLoading: previewLoading,
+    error: previewError,
+  } = useQuery<PreviewModel>({
+    queryKey: [...key, 'launch-preview'],
+    queryFn: () => request(`${endpoint(projectId)}/launch-preview`),
+    enabled: open && currentPage === 8 && canManage,
+    retry: false,
+  });
   const mutation = useMutation({
     mutationFn: ({
       url,
@@ -220,100 +275,101 @@ export default function P2V2ProductionPlanning({
             <p>Loading production plan…</p>
           ) : (
             <div className="space-y-6">
-              {data?.plan ? (
-                <section className="grid gap-3 rounded border p-4 md:grid-cols-4">
-                  <div>
-                    <span className="text-xs text-muted-foreground">
-                      Plan revision
-                    </span>
-                    <p>Rev {value(data.plan, 'revision_number')}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground">
-                      Status
-                    </span>
-                    <div className="mt-1">
-                      <Badge>{status}</Badge>
+              {currentPage === 0 &&
+                (data?.plan ? (
+                  <section className="grid gap-3 rounded border p-4 md:grid-cols-4">
+                    <div>
+                      <span className="text-xs text-muted-foreground">
+                        Plan revision
+                      </span>
+                      <p>Rev {value(data.plan, 'revision_number')}</p>
                     </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground">
-                      PO baseline
-                    </span>
-                    <p>
-                      {value(data.plan, 'po_number')} Rev{' '}
-                      {value(data.plan, 'po_revision_number')}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground">
-                      Effectivity
-                    </span>
-                    <p>{value(data.plan, 'effectivity_reference')}</p>
-                  </div>
-                </section>
-              ) : (
-                <section className="grid gap-3 rounded border p-4 md:grid-cols-2">
-                  <div>
-                    <Label>Requirement source</Label>
-                    <Input
-                      value={header.requirementSource}
-                      onChange={(event) =>
-                        setHeader({
-                          ...header,
-                          requirementSource: event.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label>Effectivity override</Label>
-                    <Input
-                      value={header.effectivityReference}
-                      onChange={(event) =>
-                        setHeader({
-                          ...header,
-                          effectivityReference: event.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Planning basis</Label>
-                    <Textarea
-                      value={header.planningBasis}
-                      onChange={(event) =>
-                        setHeader({
-                          ...header,
-                          planningBasis: event.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Notes</Label>
-                    <Textarea
-                      value={header.notes}
-                      onChange={(event) =>
-                        setHeader({ ...header, notes: event.target.value })
-                      }
-                    />
-                  </div>
-                  {canManage && (
-                    <Button
-                      onClick={() =>
-                        mutation.mutate({
-                          url: endpoint(projectId),
-                          method: 'POST',
-                          body: header,
-                        })
-                      }
-                    >
-                      Build Draft From Current Configuration
-                    </Button>
-                  )}
-                </section>
-              )}
+                    <div>
+                      <span className="text-xs text-muted-foreground">
+                        Status
+                      </span>
+                      <div className="mt-1">
+                        <Badge>{status}</Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground">
+                        PO baseline
+                      </span>
+                      <p>
+                        {value(data.plan, 'po_number')} Rev{' '}
+                        {value(data.plan, 'po_revision_number')}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground">
+                        Effectivity
+                      </span>
+                      <p>{value(data.plan, 'effectivity_reference')}</p>
+                    </div>
+                  </section>
+                ) : (
+                  <section className="grid gap-3 rounded border p-4 md:grid-cols-2">
+                    <div>
+                      <Label>Requirement source</Label>
+                      <Input
+                        value={header.requirementSource}
+                        onChange={(event) =>
+                          setHeader({
+                            ...header,
+                            requirementSource: event.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label>Effectivity override</Label>
+                      <Input
+                        value={header.effectivityReference}
+                        onChange={(event) =>
+                          setHeader({
+                            ...header,
+                            effectivityReference: event.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label>Planning basis</Label>
+                      <Textarea
+                        value={header.planningBasis}
+                        onChange={(event) =>
+                          setHeader({
+                            ...header,
+                            planningBasis: event.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label>Notes</Label>
+                      <Textarea
+                        value={header.notes}
+                        onChange={(event) =>
+                          setHeader({ ...header, notes: event.target.value })
+                        }
+                      />
+                    </div>
+                    {canManage && (
+                      <Button
+                        onClick={() =>
+                          mutation.mutate({
+                            url: endpoint(projectId),
+                            method: 'POST',
+                            body: header,
+                          })
+                        }
+                      >
+                        Build Draft From Current Configuration
+                      </Button>
+                    )}
+                  </section>
+                ))}
               {data?.readiness.stale && (
                 <section
                   className="rounded border border-red-300 bg-red-50 p-3"
@@ -339,7 +395,7 @@ export default function P2V2ProductionPlanning({
                   </ul>
                 </section>
               )}
-              {!!data?.items.length && (
+              {currentPage === 1 && !!data?.items.length && (
                 <>
                   <section>
                     <h3 className="font-semibold">Assembly tree</h3>
@@ -368,27 +424,97 @@ export default function P2V2ProductionPlanning({
                       ))}
                     </div>
                   </section>
-                  <section className="space-y-3">
-                    <h3 className="font-semibold">
-                      Manufactured-item planning
-                    </h3>
-                    {data.items
-                      .filter((item) => item.is_manufactured)
-                      .map((item) => (
-                        <PlanningItem
-                          key={value(item, 'id')}
-                          item={item}
-                          editable={status === 'DRAFT' && canManage}
-                          saving={mutation.isPending}
-                          onSave={(changes) =>
-                            act(`/items/${value(item, 'id')}`, 'PATCH', changes)
-                          }
-                        />
-                      ))}
-                  </section>
                 </>
               )}
-              {data?.plan && (
+              {currentPage === 2 && !!data?.items.length && (
+                <section className="space-y-3">
+                  <h3 className="font-semibold">Manufactured-item planning</h3>
+                  {data.items
+                    .filter((item) => item.is_manufactured)
+                    .map((item) => (
+                      <PlanningItem
+                        key={value(item, 'id')}
+                        item={item}
+                        editable={status === 'DRAFT' && canManage}
+                        saving={mutation.isPending}
+                        onSave={(changes) =>
+                          act(`/items/${value(item, 'id')}`, 'PATCH', changes)
+                        }
+                      />
+                    ))}
+                </section>
+              )}
+              {currentPage >= 3 && currentPage <= 7 && (
+                <ReviewByExceptionPanel
+                  items={data?.items ?? []}
+                  fields={reviewPageFields[currentPage] ?? []}
+                />
+              )}
+              {currentPage === 8 && (
+                <section
+                  className="space-y-4"
+                  data-testid="production-demand-preview"
+                >
+                  <div className="rounded border p-4">
+                    <h3 className="font-semibold">Read-only release preview</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      This uses the shared controlled explosion service. Viewing
+                      it does not create work orders, purchases, reservations,
+                      travelers, or allocations.
+                    </p>
+                  </div>
+                  {!canManage && (
+                    <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+                      Production Planning permission is required to view demand
+                      details.
+                    </p>
+                  )}
+                  {previewLoading && (
+                    <p>Preparing the current read-only preview…</p>
+                  )}
+                  {previewError && (
+                    <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+                      {previewError instanceof Error
+                        ? previewError.message
+                        : 'The preview is not available.'}{' '}
+                      Review the blocker or return to the earlier planning
+                      pages.
+                    </p>
+                  )}
+                  {preview && (
+                    <>
+                      <div className="grid gap-3 md:grid-cols-4">
+                        {Object.entries(preview.totals).map(
+                          ([group, total]) => (
+                            <div className="rounded border p-3" key={group}>
+                              <p className="text-sm font-medium capitalize">
+                                {group.replace(/([A-Z])/g, ' $1')}
+                              </p>
+                              <p>{total.lineCount} demand lines</p>
+                              <p className="text-sm text-muted-foreground">
+                                Gross quantity {total.grossQuantity}
+                              </p>
+                            </div>
+                          )
+                        )}
+                      </div>
+                      {!!preview.blockers.length && (
+                        <div className="rounded border border-amber-300 bg-amber-50 p-3">
+                          <h3 className="font-semibold">
+                            Problems preventing release
+                          </h3>
+                          <ul className="mt-2 list-disc pl-5 text-sm">
+                            {preview.blockers.map((blocker) => (
+                              <li key={blocker}>{blocker}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
+              )}
+              {currentPage === 9 && data?.plan && (
                 <div className="flex flex-wrap gap-2">
                   {status === 'DRAFT' && canManage && (
                     <>
@@ -408,7 +534,7 @@ export default function P2V2ProductionPlanning({
                 </div>
               )}
               {error && <p className="text-sm text-red-700">{error}</p>}
-              {data?.plan && (
+              {currentPage === 9 && data?.plan && (
                 <section className="grid gap-4 md:grid-cols-3">
                   {(['engineering', 'quality', 'operations'] as const).map(
                     (capacity) => (
@@ -426,7 +552,7 @@ export default function P2V2ProductionPlanning({
                   )}
                 </section>
               )}
-              {!!data?.history.length && (
+              {currentPage === 9 && !!data?.history.length && (
                 <section>
                   <h3 className="font-semibold">Revision history</h3>
                   {data.history.map((plan) => (
@@ -475,6 +601,54 @@ export default function P2V2ProductionPlanning({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function ReviewByExceptionPanel({
+  items,
+  fields,
+}: {
+  items: Row[];
+  fields: Array<[string, string]>;
+}) {
+  return (
+    <section className="space-y-3" data-testid="review-by-exception-panel">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Completed from existing EPOCH records</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Values below come from the current controlled Production Planning
+          baseline. Missing values remain visible for review and are not
+          silently replaced.
+        </p>
+      </div>
+      {items.map((item) => (
+        <div className="rounded border p-3" key={value(item, 'id')}>
+          <h4 className="font-medium">
+            {value(item, 'part_number')} — {value(item, 'part_name')}
+          </h4>
+          <dl className="mt-2 grid gap-3 text-sm md:grid-cols-2">
+            {fields.map(([label, key]) => {
+              const current = displayValue(item, key);
+              return (
+                <div key={key}>
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className={current ? '' : 'font-medium text-amber-700'}>
+                    {current || 'Information Missing'}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        </div>
+      ))}
+      {!items.length && (
+        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+          No controlled planning items are available. Return to Confirm the
+          Order and build or refresh the draft from the authoritative
+          configuration.
+        </p>
+      )}
+    </section>
   );
 }
 

@@ -264,45 +264,89 @@ export function parseMidwayPoText(text: string): MidwayPdf {
   const pricedLine =
     /^(.+?)\s+(\d+)\s+(\d{5,})\s+(.+?)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})$/;
   const lines: MidwayPdfLine[] = [];
-  for (const line of bodyLines) {
-    const match = line.match(pricedLine);
-    if (match) {
-      lines.push({
-        supplierProductNumber: normalizeIdentifier(match[1]),
-        quantity: Number(match[2]),
-        customerProductNumber: normalizeIdentifier(match[3]),
-        description: match[4].trim(),
-        unitPrice: Number(match[5].replace(/,/g, '')),
-        extendedPrice: Number(match[6].replace(/,/g, '')),
-      });
-      continue;
-    }
-
-    const current = lines.at(-1);
-    if (!current) {
-      throw new Error(
-        `Unable to parse Midway PO line near: ${line.slice(0, 100)}`
-      );
-    }
-
-    // Midway prints a wrapped supplier part-number fragment in the first column,
-    // followed by any wrapped description text. PDF extraction flattens the
-    // columns onto one line, so restore the identifier before matching products.
-    const [possibleSkuFragment, ...descriptionWords] = line.split(/\s+/);
-    const isWrappedSku =
-      /^[A-Z0-9-]+$/.test(possibleSkuFragment) &&
-      (current.supplierProductNumber.endsWith('-') ||
-        (possibleSkuFragment.length <= 2 && descriptionWords.length > 0));
-    if (isWrappedSku) {
-      current.supplierProductNumber = normalizeIdentifier(
-        `${current.supplierProductNumber}${possibleSkuFragment}`
-      );
-      if (descriptionWords.length > 0) {
-        current.description =
-          `${current.description} ${descriptionWords.join(' ')}`.trim();
+  if (bodyLines[0]?.match(pricedLine)) {
+    // Some extraction tools preserve each printed row and place wrapped column
+    // text after it. Keep supporting that representation for archived PDFs.
+    for (const line of bodyLines) {
+      const match = line.match(pricedLine);
+      if (match) {
+        lines.push({
+          supplierProductNumber: normalizeIdentifier(match[1]),
+          quantity: Number(match[2]),
+          customerProductNumber: normalizeIdentifier(match[3]),
+          description: match[4].trim(),
+          unitPrice: Number(match[5].replace(/,/g, '')),
+          extendedPrice: Number(match[6].replace(/,/g, '')),
+        });
+        continue;
       }
-    } else {
-      current.description = `${current.description} ${line}`.trim();
+      const current = lines.at(-1);
+      if (!current)
+        throw new Error(`Unable to parse Midway PO line near: ${line}`);
+      const [possibleSkuFragment, ...descriptionWords] = line.split(/\s+/);
+      const isWrappedSku =
+        /^[A-Z0-9-]+$/.test(possibleSkuFragment) &&
+        (current.supplierProductNumber.endsWith('-') ||
+          (possibleSkuFragment.length <= 2 && descriptionWords.length > 0));
+      if (isWrappedSku) {
+        current.supplierProductNumber = normalizeIdentifier(
+          `${current.supplierProductNumber}${possibleSkuFragment}`
+        );
+        if (descriptionWords.length > 0)
+          current.description =
+            `${current.description} ${descriptionWords.join(' ')}`.trim();
+      } else {
+        current.description = `${current.description} ${line}`.trim();
+      }
+    }
+  } else {
+    // pdf-parse preserves the table columns as separate lines. Supplier SKU
+    // fragments precede the quantity/product-number line, while prices may be
+    // on that line or a later line. Assemble a complete record before parsing.
+    const quantityLine = /^(?:(.+?)\s+)?(\d+)\s+(\d{5,})\s+(.+)$/;
+    const endingPrices = /^(.*?)\s*\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})$/;
+    let pendingSupplier: string[] = [];
+    let current: {
+      supplier: string;
+      quantity: number;
+      customerProductNumber: string;
+      content: string[];
+    } | null = null;
+
+    for (const line of bodyLines) {
+      if (!current) {
+        const match = line.match(quantityLine);
+        if (!match) {
+          pendingSupplier.push(line);
+          continue;
+        }
+        current = {
+          supplier: `${pendingSupplier.join('')}${match[1] ?? ''}`,
+          quantity: Number(match[2]),
+          customerProductNumber: match[3],
+          content: [match[4]],
+        };
+        pendingSupplier = [];
+      } else {
+        current.content.push(line);
+      }
+
+      const completed = current.content.join(' ').match(endingPrices);
+      if (!completed) continue;
+      lines.push({
+        supplierProductNumber: normalizeIdentifier(current.supplier),
+        quantity: current.quantity,
+        customerProductNumber: normalizeIdentifier(
+          current.customerProductNumber
+        ),
+        description: completed[1].trim(),
+        unitPrice: Number(completed[2].replace(/,/g, '')),
+        extendedPrice: Number(completed[3].replace(/,/g, '')),
+      });
+      current = null;
+    }
+    if (current || pendingSupplier.length > 0) {
+      throw new Error('The final Midway PO line item is incomplete');
     }
   }
   if (lines.length === 0) throw new Error('No Midway PO line items were found');

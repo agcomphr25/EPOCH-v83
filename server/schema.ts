@@ -371,24 +371,29 @@ export const potentialOrderDuplicateReviews = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    orderPairUnique: uniqueIndex('potential_order_duplicate_reviews_pair_unique').on(
-      table.newOrderId,
-      table.candidateOrderId
+    orderPairUnique: uniqueIndex(
+      'potential_order_duplicate_reviews_pair_unique'
+    ).on(table.newOrderId, table.candidateOrderId),
+    newOrderIdx: index('potential_order_duplicate_reviews_new_order_idx').on(
+      table.newOrderId
     ),
-    newOrderIdx: index('potential_order_duplicate_reviews_new_order_idx').on(table.newOrderId),
-    candidateOrderIdx: index('potential_order_duplicate_reviews_candidate_order_idx').on(table.candidateOrderId),
-    statusRiskIdx: index('potential_order_duplicate_reviews_status_risk_idx').on(
-      table.status,
-      table.riskLevel
-    ),
+    candidateOrderIdx: index(
+      'potential_order_duplicate_reviews_candidate_order_idx'
+    ).on(table.candidateOrderId),
+    statusRiskIdx: index(
+      'potential_order_duplicate_reviews_status_risk_idx'
+    ).on(table.status, table.riskLevel),
   })
 );
 
 export const insertPotentialOrderDuplicateReviewSchema = createInsertSchema(
   potentialOrderDuplicateReviews
 ).omit({ id: true, createdAt: true, updatedAt: true });
-export type PotentialOrderDuplicateReview = typeof potentialOrderDuplicateReviews.$inferSelect;
-export type InsertPotentialOrderDuplicateReview = z.infer<typeof insertPotentialOrderDuplicateReviewSchema>;
+export type PotentialOrderDuplicateReview =
+  typeof potentialOrderDuplicateReviews.$inferSelect;
+export type InsertPotentialOrderDuplicateReview = z.infer<
+  typeof insertPotentialOrderDuplicateReviewSchema
+>;
 
 // Follow-up Orders - New orders that require customer signature before production
 export const followupOrders = pgTable('followup_orders', {
@@ -12394,7 +12399,8 @@ export type QueueType =
 
 export function mapQueueType(
   category:
-    import('../shared/utils/supplySourceDashboard').ManufacturedCategory | null
+    | import('../shared/utils/supplySourceDashboard').ManufacturedCategory
+    | null
 ): { queueType: QueueType; department: string } | null {
   const route = resolveManufacturingRouteDefinition(category);
   if (!route?.queueType || !route.department) return null;
@@ -12542,25 +12548,40 @@ export const controlledDocumentRevisionApprovals = pgTable(
 );
 
 /* eslint-disable prettier/prettier */
-export const controlledDocumentApprovalReleaseEvents = pgTable('controlled_document_approval_release_events', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  controlledDocumentId: uuid('controlled_document_id').references(() => controlledDocuments.id, { onDelete: 'restrict' }).notNull(),
-  revisionId: uuid('revision_id').references(() => documentVersionHistory.id, { onDelete: 'restrict' }).notNull(),
-  approvalId: uuid('approval_id').references(() => controlledDocumentRevisionApprovals.id, { onDelete: 'restrict' }).notNull(),
-  idempotencyKey: text('idempotency_key').notNull().unique(),
-  requestIdentityHash: text('request_identity_hash').notNull(),
-  fileChecksum: text('file_checksum').notNull(),
-  documentNumberSnapshot: text('document_number_snapshot').notNull(),
-  revisionSnapshot: text('revision_snapshot').notNull(),
-  actorUserId: integer('actor_user_id').references(() => users.id, { onDelete: 'restrict' }).notNull(),
-  actorSnapshot: jsonb('actor_snapshot').notNull(),
-  authoritySnapshot: jsonb('authority_snapshot').notNull(),
-  reason: text('reason').notNull(),
-  beforeLifecycle: text('before_lifecycle').notNull(),
-  afterLifecycle: text('after_lifecycle').notNull(),
-  effectiveDate: date('effective_date').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const controlledDocumentApprovalReleaseEvents = pgTable(
+  'controlled_document_approval_release_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    controlledDocumentId: uuid('controlled_document_id')
+      .references(() => controlledDocuments.id, { onDelete: 'restrict' })
+      .notNull(),
+    revisionId: uuid('revision_id')
+      .references(() => documentVersionHistory.id, { onDelete: 'restrict' })
+      .notNull(),
+    approvalId: uuid('approval_id')
+      .references(() => controlledDocumentRevisionApprovals.id, {
+        onDelete: 'restrict',
+      })
+      .notNull(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    requestIdentityHash: text('request_identity_hash').notNull(),
+    fileChecksum: text('file_checksum').notNull(),
+    documentNumberSnapshot: text('document_number_snapshot').notNull(),
+    revisionSnapshot: text('revision_snapshot').notNull(),
+    actorUserId: integer('actor_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    actorSnapshot: jsonb('actor_snapshot').notNull(),
+    authoritySnapshot: jsonb('authority_snapshot').notNull(),
+    reason: text('reason').notNull(),
+    beforeLifecycle: text('before_lifecycle').notNull(),
+    afterLifecycle: text('after_lifecycle').notNull(),
+    effectiveDate: date('effective_date').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  }
+);
 /* eslint-enable prettier/prettier */
 
 export const controlledDocumentReconciliationPreviews = pgTable(
@@ -20785,7 +20806,7 @@ export const arInvoices = pgTable(
     isDisputed: boolean('is_disputed').default(false),
     disputeNote: text('dispute_note'),
     // creditMemoId â€” FK to credit_memos, set when a credit memo is applied/linked
-  creditMemoId: integer('credit_memo_id'),
+    creditMemoId: integer('credit_memo_id'),
     autoCreated: boolean('auto_created').default(false),
     pricingMismatch: boolean('pricing_mismatch').default(false),
     pricingAmbiguous: boolean('pricing_ambiguous').default(false),
@@ -28255,4 +28276,207 @@ export const qmsEpochValidationResponsibilities = pgTable(
       table.responsibilityRole
     ),
   })
+);
+
+// P2 recursive Production Launch demand evidence. Runtime creation remains
+// disabled; migration 0264 is the database authority for composite controls.
+export const projectProductionDemands = pgTable(
+  'project_production_demands',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, {
+        onDelete: 'restrict',
+      }),
+    productionReleaseId: uuid('production_release_id').notNull(),
+    productionLaunchId: uuid('production_launch_id').notNull(),
+    productionPlanId: uuid('production_plan_id').notNull(),
+    productionPlanItemId: uuid('production_plan_item_id').notNull(),
+    poId: integer('po_id')
+      .notNull()
+      .references(() => p2PurchaseOrders.id, {
+        onDelete: 'restrict',
+      }),
+    poItemId: integer('po_item_id')
+      .notNull()
+      .references(() => p2PurchaseOrderItems.id, { onDelete: 'restrict' }),
+    demandLineIdentity: uuid('demand_line_identity').notNull(),
+    demandKey: text('demand_key').notNull(),
+    parentDemandId: uuid('parent_demand_id').references(
+      (): AnyPgColumn => projectProductionDemands.id,
+      { onDelete: 'restrict' }
+    ),
+    supersedesDemandId: uuid('supersedes_demand_id').references(
+      (): AnyPgColumn => projectProductionDemands.id,
+      { onDelete: 'restrict' }
+    ),
+    replacementForDemandId: uuid('replacement_for_demand_id').references(
+      (): AnyPgColumn => projectProductionDemands.id,
+      { onDelete: 'restrict' }
+    ),
+    assemblyPath: text('assembly_path').notNull(),
+    pathDepth: integer('path_depth').notNull(),
+    inventoryItemId: integer('inventory_item_id').references(
+      () => inventoryItems.id,
+      { onDelete: 'restrict' }
+    ),
+    partNumber: text('part_number').notNull(),
+    partRevision: text('part_revision'),
+    description: text('description'),
+    classification: text('classification').notNull(),
+    disposition: text('disposition').notNull(),
+    quantityPerParent: numeric('quantity_per_parent', {
+      precision: 18,
+      scale: 6,
+    }).notNull(),
+    grossRequiredQuantity: numeric('gross_required_quantity', {
+      precision: 18,
+      scale: 6,
+    }).notNull(),
+    availableQuantitySnapshot: numeric('available_quantity_snapshot', {
+      precision: 18,
+      scale: 6,
+    }).notNull(),
+    allocatedQuantitySnapshot: numeric('allocated_quantity_snapshot', {
+      precision: 18,
+      scale: 6,
+    }).notNull(),
+    shortageQuantity: numeric('shortage_quantity', {
+      precision: 18,
+      scale: 6,
+    }).notNull(),
+    originalCustomerQuantity: numeric('original_customer_quantity', {
+      precision: 18,
+      scale: 6,
+    }).notNull(),
+    effectiveCustomerQuantity: numeric('effective_customer_quantity', {
+      precision: 18,
+      scale: 6,
+    }).notNull(),
+    customerDemandEventDigest: text('customer_demand_event_digest').notNull(),
+    customerDemandSnapshot: jsonb('customer_demand_snapshot').notNull(),
+    unitOfMeasure: text('unit_of_measure'),
+    requiredByDate: date('required_by_date'),
+    bomId: uuid('bom_id').references(() => boms.id, {
+      onDelete: 'restrict',
+    }),
+    bomRevisionId: uuid('bom_revision_id').references(() => bomRevisions.id, {
+      onDelete: 'restrict',
+    }),
+    bomRevisionSnapshot: text('bom_revision_snapshot'),
+    routingId: uuid('routing_id').references(() => partRoutings.id, {
+      onDelete: 'restrict',
+    }),
+    routingRevisionSnapshot: text('routing_revision_snapshot'),
+    firstDepartmentSnapshot: text('first_department_snapshot'),
+    wadAuthorizationId: uuid('wad_authorization_id'),
+    demandStatus: text('demand_status').notNull().default('PLANNED'),
+    blockerSnapshot: jsonb('blocker_snapshot').notNull().default([]),
+    authoritySnapshot: jsonb('authority_snapshot').notNull(),
+    statusReason: text('status_reason'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    launchKeyUnique: uniqueIndex(
+      'project_production_demands_launch_key_unique'
+    ).on(table.productionLaunchId, table.demandKey),
+    projectStatusIdx: index('project_production_demands_project_status_idx').on(
+      table.projectId,
+      table.demandStatus,
+      table.assemblyPath
+    ),
+  })
+);
+
+export const projectProductionDemandDependencies = pgTable(
+  'project_production_demand_dependencies',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, {
+        onDelete: 'restrict',
+      }),
+    predecessorDemandId: uuid('predecessor_demand_id')
+      .notNull()
+      .references(() => projectProductionDemands.id, { onDelete: 'restrict' }),
+    successorDemandId: uuid('successor_demand_id')
+      .notNull()
+      .references(() => projectProductionDemands.id, { onDelete: 'restrict' }),
+    dependencyType: text('dependency_type').notNull(),
+    status: text('status').notNull().default('OPEN'),
+    satisfiedAt: timestamp('satisfied_at'),
+    evidence: jsonb('evidence').notNull().default({}),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  }
+);
+
+export const projectProductionDemandExecutionLinks = pgTable(
+  'project_production_demand_execution_links',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, {
+        onDelete: 'restrict',
+      }),
+    demandId: uuid('demand_id')
+      .notNull()
+      .references(() => projectProductionDemands.id, { onDelete: 'restrict' }),
+    p2ProductionOrderId: integer('p2_production_order_id').references(
+      () => p2ProductionOrders.id,
+      { onDelete: 'restrict' }
+    ),
+    productionWorkOrderId: uuid('production_work_order_id').references(
+      () => productionWorkOrders.id,
+      { onDelete: 'restrict' }
+    ),
+    travelerId: varchar('traveler_id', { length: 255 }).references(
+      () => travelers.id,
+      { onDelete: 'restrict' }
+    ),
+    cncJobId: integer('cnc_job_id').references(() => cncJobs.id, {
+      onDelete: 'restrict',
+    }),
+    manufacturingQueueId: integer('manufacturing_queue_id').references(
+      () => manufacturingQueue.id,
+      { onDelete: 'restrict' }
+    ),
+    cuttingDemandId: uuid('cutting_demand_id').references(
+      () => cuttingPacketSchedule.id,
+      { onDelete: 'restrict' }
+    ),
+    linkType: text('link_type').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  }
+);
+
+export const projectProductionDemandAllocations = pgTable(
+  'project_production_demand_allocations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, {
+        onDelete: 'restrict',
+      }),
+    demandId: uuid('demand_id')
+      .notNull()
+      .references(() => projectProductionDemands.id, { onDelete: 'restrict' }),
+    inventoryItemId: integer('inventory_item_id')
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: 'restrict' }),
+    materialLotId: uuid('material_lot_id').references(() => materialLots.id, {
+      onDelete: 'restrict',
+    }),
+    allocationType: text('allocation_type').notNull(),
+    quantity: numeric('quantity', { precision: 18, scale: 6 }).notNull(),
+    status: text('status').notNull().default('PLANNED'),
+    evidence: jsonb('evidence').notNull().default({}),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  }
 );

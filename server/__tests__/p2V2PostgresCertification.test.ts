@@ -69,6 +69,11 @@ import {
   submitCloseoutReview,
 } from '../src/services/projectShippingCloseoutService';
 import { getP2V2StagesForDefinitionVersion } from '../src/services/projectWorkflowRegistry';
+import {
+  persistProductionLaunch,
+  persistProductionLaunchForCertification,
+} from '../src/services/productionLaunchPersistenceService';
+import { getProductionLaunchPreview } from '../src/services/productionLaunchPreviewService';
 
 // This established lifecycle suite certifies immutable definition v2. The
 // prospective definition-v3 handoff has a separate PostgreSQL suite.
@@ -840,6 +845,98 @@ async function cleanLaunchState(fixture: Fixture) {
   return result.rows[0];
 }
 
+type PreviewNode = {
+  partNumber: string;
+  productionPlanAssemblyPath: string;
+  extendedProjectQuantity: number;
+  children: PreviewNode[];
+};
+
+const flattenPreview = (nodes: PreviewNode[]): PreviewNode[] =>
+  nodes.flatMap((node) => [node, ...flattenPreview(node.children)]);
+
+async function prepareRecursivePersistenceFixture(fixture: Fixture) {
+  await query(
+    `UPDATE inventory_items SET order_url='https://synthetic.invalid/order'
+     WHERE id IN (SELECT inventory_item_id FROM p2_purchase_order_items WHERE po_id=$1)
+        OR ag_part_number IN (
+          SELECT part_number FROM project_production_plan_items WHERE production_plan_id=$2
+        )`,
+    [fixture.poId, fixture.planId]
+  );
+  await query(
+    `INSERT INTO p2_part_planning_classifications
+       (inventory_item_id,revision_number,classification,part_configuration_revision,
+        status,effective_from,ownership_source,source_record_type,source_record_id,
+        source_revision,change_reason,content_checksum,created_by,created_by_display_name,
+        created_by_role,released_by,released_by_display_name,released_by_role,released_at)
+     SELECT DISTINCT ii.id,1,
+       CASE WHEN ii.ag_part_number LIKE 'PARENT-%' THEN 'MANUFACTURED' ELSE 'PURCHASED' END,
+       'A','RELEASED',now()-interval '1 day','SYNTHETIC_CERTIFICATION',
+       'inventory_item',ii.id::text,'A','Seed recursive launch certification',
+       repeat('a',64),$2::integer,'Phase 8 Certifier','ADMIN',$2::integer,'Phase 8 Certifier','ADMIN',now()
+     FROM inventory_items ii
+     JOIN project_production_plan_items ppi ON ppi.part_number=ii.ag_part_number
+     WHERE ppi.production_plan_id=$1
+     ON CONFLICT (inventory_item_id,revision_number) DO NOTHING`,
+    [fixture.planId, actor.userId]
+  );
+  await query(
+    `INSERT INTO routing_operations
+       (part_routing_id,step_number,department_name,operation_name,operation_type,
+        estimated_minutes,requires_signature,requires_certification,instruction_pack)
+     SELECT DISTINCT ppi.routing_id,10,'Assembly','Synthetic launch assembly','RUN',30,true,false,
+       '{"instruction":"SYNTHETIC-LAUNCH-CERT"}'::jsonb
+     FROM project_production_plan_items ppi
+     WHERE ppi.production_plan_id=$1 AND ppi.part_number LIKE 'PARENT-%'
+       AND ppi.routing_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM routing_operations ro WHERE ro.part_routing_id=ppi.routing_id)`,
+    [fixture.planId]
+  );
+
+  process.env.P2_V2_PRODUCTION_LAUNCH_PREVIEW_ENABLED = 'true';
+  process.env.P2_V2_PRODUCTION_LAUNCH_PERSISTENCE_ENABLED = 'true';
+  const initialPreview = await getProductionLaunchPreview(fixture.projectId);
+  expect(initialPreview.blockers).toEqual([]);
+  const nodes = flattenPreview(
+    initialPreview.nodes as unknown as PreviewNode[]
+  );
+  const templates = await query<{ part_number: string; snapshot: unknown }>(
+    `SELECT part_number,to_jsonb(ppi) snapshot
+     FROM project_production_plan_items ppi WHERE production_plan_id=$1
+     ORDER BY id`,
+    [fixture.planId]
+  );
+  const byPart = new Map(
+    templates.rows.map((row) => [row.part_number, row.snapshot])
+  );
+  await query(
+    `DELETE FROM project_production_plan_items WHERE production_plan_id=$1`,
+    [fixture.planId]
+  );
+  for (const node of nodes) {
+    const template = byPart.get(node.partNumber);
+    if (!template)
+      throw new Error(`Missing plan template for ${node.partNumber}`);
+    await query(
+      `INSERT INTO project_production_plan_items
+       SELECT (jsonb_populate_record(NULL::project_production_plan_items,
+         $1::jsonb || jsonb_build_object(
+           'id',gen_random_uuid(),'assembly_path',$2::text,
+           'extended_project_quantity',$3::numeric,'created_at',now(),'updated_at',now()
+         ))).*`,
+      [
+        JSON.stringify(template),
+        node.productionPlanAssemblyPath,
+        node.extendedProjectQuantity,
+      ]
+    );
+  }
+  const preview = await getProductionLaunchPreview(fixture.projectId);
+  expect(preview.blockers).toEqual([]);
+  return preview;
+}
+
 beforeAll(async () => {
   await query(`TRUNCATE audit_events RESTART IDENTITY CASCADE`);
   await query(
@@ -1006,6 +1103,91 @@ describe('real launch feature gate', () => {
   it('enables only exact lowercase true', () => {
     process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED = 'true';
     expect(isP2V2ProductionLaunchEnabled()).toBe(true);
+  });
+});
+
+describe('recursive Production Launch persistence against PostgreSQL', () => {
+  it('rolls back launch, demand, allocation, dependency, and audit rows after real inserts', async () => {
+    const fixture = await createFixture(
+      '00000000-0000-4000-8000-000000000821',
+      'RECURSIVE-ROLLBACK'
+    );
+    const preview = await prepareRecursivePersistenceFixture(fixture);
+    await expect(
+      persistProductionLaunchForCertification(
+        fixture.projectId,
+        {
+          idempotencyKey: 'recursive-persistence-rollback',
+          expectedPreviewDigest: preview.resultChecksum,
+          signatureMeaning: 'Certify atomic recursive planning rollback',
+        },
+        actor,
+        (point) => {
+          if (point === 'BEFORE_AUDIT')
+            throw new Error('CERTIFICATION_RECURSIVE_PERSISTENCE_ROLLBACK');
+        }
+      )
+    ).rejects.toThrow('CERTIFICATION_RECURSIVE_PERSISTENCE_ROLLBACK');
+    const evidence = await query<{
+      launches: number;
+      demands: number;
+      allocations: number;
+      dependencies: number;
+      events: number;
+    }>(
+      `SELECT
+        (SELECT count(*)::int FROM project_production_launches WHERE project_id=$1) launches,
+        (SELECT count(*)::int FROM project_production_demands WHERE project_id=$1) demands,
+        (SELECT count(*)::int FROM project_production_demand_allocations WHERE project_id=$1) allocations,
+        (SELECT count(*)::int FROM project_production_demand_dependencies WHERE project_id=$1) dependencies,
+        (SELECT count(*)::int FROM project_production_launch_events WHERE project_id=$1) events`,
+      [fixture.projectId]
+    );
+    expect(evidence.rows[0]).toEqual({
+      launches: 0,
+      demands: 0,
+      allocations: 0,
+      dependencies: 0,
+      events: 0,
+    });
+  });
+
+  it('serializes simultaneous identical requests into one launch and one exact replay', async () => {
+    const fixture = await createFixture(
+      '00000000-0000-4000-8000-000000000822',
+      'RECURSIVE-CONCURRENT'
+    );
+    const preview = await prepareRecursivePersistenceFixture(fixture);
+    const input = {
+      idempotencyKey: 'recursive-persistence-concurrent',
+      expectedPreviewDigest: preview.resultChecksum,
+      signatureMeaning: 'Certify concurrent recursive planning persistence',
+    };
+    const results = await Promise.all([
+      persistProductionLaunch(fixture.projectId, input, actor),
+      persistProductionLaunch(fixture.projectId, input, actor),
+    ]);
+    expect(results.map((result) => result.replayed).sort()).toEqual([
+      false,
+      true,
+    ]);
+    const evidence = await query<{
+      launches: number;
+      demands: number;
+      events: number;
+      execution_links: number;
+    }>(
+      `SELECT
+        (SELECT count(*)::int FROM project_production_launches WHERE project_id=$1) launches,
+        (SELECT count(*)::int FROM project_production_demands WHERE project_id=$1) demands,
+        (SELECT count(*)::int FROM project_production_launch_events WHERE project_id=$1) events,
+        (SELECT count(*)::int FROM project_production_demand_execution_links WHERE project_id=$1) execution_links`,
+      [fixture.projectId]
+    );
+    expect(evidence.rows[0].launches).toBe(1);
+    expect(evidence.rows[0].demands).toBeGreaterThan(0);
+    expect(evidence.rows[0].events).toBe(1);
+    expect(evidence.rows[0].execution_links).toBe(0);
   });
 });
 

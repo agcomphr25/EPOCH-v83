@@ -15,6 +15,7 @@ import {
   updatePlanItemDecision,
   type PlanningActor,
 } from '../services/projectProductionPlanningService';
+import { getProductionLaunchPreview } from '../services/productionLaunchPreviewService';
 
 const router = Router({ mergeParams: true });
 const headerSchema = z.object({
@@ -150,6 +151,14 @@ const projectId = (req: Request) => String(req.params.id);
 router.get('/', async (req, res) => {
   try {
     res.json(await getCurrentProductionPlan(projectId(req)));
+  } catch (error) {
+    fail(res, error);
+  }
+});
+router.get('/launch-preview', async (req, res) => {
+  try {
+    await requireCapability(req, 'projects.production_planning.manage');
+    res.json(await getProductionLaunchPreview(projectId(req)));
   } catch (error) {
     fail(res, error);
   }

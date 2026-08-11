@@ -44,6 +44,11 @@ export function isP2V2ProductionLaunchEnabled(): boolean {
   return process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED === 'true';
 }
 
+/** Gates the read-only recursive Production Launch preview introduced in Phase 1. */
+export function isP2V2ProductionLaunchPreviewEnabled(): boolean {
+  return process.env.P2_V2_PRODUCTION_LAUNCH_PREVIEW_ENABLED === 'true';
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

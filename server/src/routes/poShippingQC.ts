@@ -99,9 +99,14 @@ async function findP1PackingSlipInvoice(
     id: string;
     invoice_number: string;
     status: string;
+    pricing_mismatch: boolean;
+    pricing_ambiguous: boolean;
+    posted_at: Date | null;
+    sent_at: Date | null;
   }>(
     await pool.query(
-      `SELECT inv.id, inv.invoice_number, inv.status
+      `SELECT inv.id, inv.invoice_number, inv.status, inv.pricing_mismatch,
+              inv.pricing_ambiguous, inv.posted_at, inv.sent_at
      FROM ar_invoices inv
      WHERE COALESCE(inv.status, '') <> 'VOID'
        AND (
@@ -190,9 +195,14 @@ async function findP1PackingSlipInvoiceForOrders(
     id: string;
     invoice_number: string;
     status: string;
+    pricing_mismatch: boolean;
+    pricing_ambiguous: boolean;
+    posted_at: Date | null;
+    sent_at: Date | null;
   }>(
     await pool.query(
-      `SELECT inv.id, inv.invoice_number, inv.status
+      `SELECT inv.id, inv.invoice_number, inv.status, inv.pricing_mismatch,
+              inv.pricing_ambiguous, inv.posted_at, inv.sent_at
      FROM ar_invoices inv
      WHERE COALESCE(inv.status, '') <> 'VOID'
        AND (
@@ -556,6 +566,10 @@ function serializeP1InvoiceDraftPreview(draft: any, poNumber: string) {
     id: draft.existingInvoice?.id || null,
     invoiceNumber: draft.existingInvoice?.invoice_number || draft.invoiceNumber || null,
     status: draft.existingInvoice?.status || null,
+    pricingMismatch: draft.existingInvoice?.pricing_mismatch || draft.pricingMismatch,
+    pricingAmbiguous: draft.existingInvoice?.pricing_ambiguous || false,
+    postedAt: draft.existingInvoice?.posted_at || null,
+    sentAt: draft.existingInvoice?.sent_at || null,
     invoiceDate: toDateOnly(new Date()),
     poNumber,
     customerName:
@@ -579,7 +593,6 @@ function serializeP1InvoiceDraftPreview(draft: any, poNumber: string) {
     }),
     subtotal: draft.subtotal.toFixed(2),
     totalAmount: draft.subtotal.toFixed(2),
-    pricingMismatch: draft.pricingMismatch,
   };
 }
 

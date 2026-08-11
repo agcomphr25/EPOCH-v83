@@ -112,4 +112,28 @@ describe('P2V2ProductionPlanning', () => {
     expect(screen.getByText(/Revision 1/)).toBeInTheDocument();
     expect(screen.getAllByTestId('production-plan-item')).toHaveLength(1);
   });
+
+  it('starts the ten-page guided workflow and provides simple navigation', async () => {
+    renderPlanning();
+    fireEvent.click(screen.getByTestId('open-production-planning'));
+
+    expect(
+      await screen.findByTestId('production-planning-progress')
+    ).toHaveTextContent('Page 1 of 10');
+    expect(screen.getByText('Confirm the Order')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: 'Page 9: Preview Production Demand',
+      })
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(
+      screen.getByTestId('production-planning-progress')
+    ).toHaveTextContent('Page 2 of 10');
+    expect(screen.getByText('Review Parts and Assemblies')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save and Exit' })).toBeEnabled();
+  });
 });

@@ -86,6 +86,7 @@ import surveyEngineRoutes from './surveyEngine';
 import poProductsRoutes from './poProducts';
 import p1POQueueRoutes from './p1POQueue';
 import p1POQuantityAdjustmentsRoutes from './p1POQuantityAdjustments';
+import p1CustomerPoImportsRoutes from './p1CustomerPoImports';
 import p2DemandQuantityRoutes from './p2DemandQuantity';
 import poShippingQCRoutes from './poShippingQC';
 import weeklyScheduleRoutes from './weeklySchedule';
@@ -1487,6 +1488,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // P1 PO Queue routes
   app.use('/api/p1-po-queue', p1POQueueRoutes);
   app.use('/api/pos', p1POQuantityAdjustmentsRoutes);
+  app.use('/api/p1-customer-po-imports', p1CustomerPoImportsRoutes);
   app.use('/api/p2-demand', p2DemandQuantityRoutes);
 
   // Product Labels routes

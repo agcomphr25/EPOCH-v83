@@ -28278,8 +28278,8 @@ export const qmsEpochValidationResponsibilities = pgTable(
   })
 );
 
-// P2 recursive Production Launch demand evidence. Runtime creation remains
-// disabled; migration 0264 is the database authority for composite controls.
+// P2 recursive Production Launch demand evidence. Migrations 0264 and 0266 are
+// the database authority for composite, immutability, and persistence controls.
 export const projectProductionDemands = pgTable(
   'project_production_demands',
   {
@@ -28479,4 +28479,34 @@ export const projectProductionDemandAllocations = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   }
+);
+
+export const projectProductionLaunchEvents = pgTable(
+  'project_production_launch_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'restrict' }),
+    productionLaunchId: uuid('production_launch_id').notNull(),
+    eventType: text('event_type').notNull(),
+    requestHash: text('request_hash').notNull(),
+    evidenceDigest: text('evidence_digest').notNull(),
+    createdRecordIds: jsonb('created_record_ids').notNull(),
+    evidenceSnapshot: jsonb('evidence_snapshot').notNull(),
+    actorUserId: integer('actor_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    actorDisplayName: text('actor_display_name').notNull(),
+    actorRole: text('actor_role').notNull(),
+    signatureMeaning: text('signature_meaning').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    launchEventUnique: uniqueIndex(
+      'project_production_launch_events_launch_event_unique'
+    ).on(table.productionLaunchId, table.eventType),
+  })
 );

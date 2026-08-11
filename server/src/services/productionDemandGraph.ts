@@ -117,7 +117,12 @@ export function compileProductionDemandGraph(
       );
     const key = `${poItemId(node)}:${node.productionPlanAssemblyPath}`;
     const disposition: ProductionDemandSpec['disposition'] =
-      node.shortageQuantity === 0 ? 'STOCK_SATISFIED' : node.makeBuy;
+      node.shortageQuantity === 0
+        ? 'STOCK_SATISFIED'
+        : node.makeBuy === 'RAW_MATERIAL' ||
+            node.makeBuy === 'CUSTOMER_SUPPLIED'
+          ? 'BUY'
+          : node.makeBuy;
     const demandStatus: ProductionDemandSpec['demandStatus'] = node.blockers
       .length
       ? 'BLOCKED'
@@ -163,7 +168,7 @@ export function compileProductionDemandGraph(
     });
     if (parentKey && disposition !== 'STOCK_SATISFIED') {
       const dependencyTypes: ProductionDemandDependencySpec['dependencyType'][] =
-        disposition === 'MAKE' || disposition === 'OUTSIDE_PROCESS'
+        disposition === 'MAKE'
           ? ['COMPLETE', 'ACCEPT', 'ISSUE_OR_SCAN']
           : ['ACCEPT', 'ISSUE_OR_SCAN'];
       for (const dependencyType of dependencyTypes)

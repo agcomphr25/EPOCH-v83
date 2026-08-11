@@ -19,7 +19,7 @@ import {
 } from './productionLaunchPreviewResolver';
 
 type Row = Record<string, unknown>;
-type Executor = typeof db;
+type Executor = Pick<typeof db, 'execute'>;
 const rows = <T extends Row>(value: unknown): T[] =>
   Array.isArray(value)
     ? (value as T[])
@@ -427,32 +427,48 @@ export async function getProductionLaunchPreview(
 
   return db.transaction(async (tx) => {
     await tx.execute(sql`SET TRANSACTION READ ONLY`);
-    const project = rows(
-      await tx.execute(sql`
-      SELECT id,project_code,workflow_version,po_id,current_stage
-      FROM projects WHERE id=${projectId} FOR SHARE`)
-    )[0];
-    if (!project)
-      throw new ProjectProductionPlanningError(
-        'PROJECT_NOT_FOUND',
-        'Project not found.',
-        404
-      );
-    if (project.workflow_version !== 'p2_v2')
-      throw new ProjectProductionPlanningError(
-        'P2_V2_REQUIRED',
-        'Production Launch preview applies only to p2_v2 projects.',
-        409
-      );
-    const poId = Number(project.po_id);
-    if (!Number.isInteger(poId))
-      throw new ProjectProductionPlanningError(
-        'CURRENT_PO_REQUIRED',
-        'A linked P2 PO is required.',
-        409
-      );
-    const rootRows = rows(
-      await tx.execute(sql`
+    return buildProductionLaunchPreview(projectId, effectiveAt, tx, 'SHARE');
+  });
+}
+
+/** Rebuilds the authoritative preview inside a caller-owned transaction. */
+export async function buildProductionLaunchPreview(
+  projectId: string,
+  effectiveAt: Date,
+  tx: Executor,
+  projectLock: 'SHARE' | 'UPDATE' = 'SHARE'
+) {
+  const authorityEffectiveAt = new Date(
+    `${effectiveAt.toISOString().slice(0, 10)}T00:00:00.000Z`
+  );
+  const project = rows(
+    await tx.execute(
+      projectLock === 'UPDATE'
+        ? sql`SELECT id,project_code,workflow_version,po_id,current_stage FROM projects WHERE id=${projectId} FOR UPDATE`
+        : sql`SELECT id,project_code,workflow_version,po_id,current_stage FROM projects WHERE id=${projectId} FOR SHARE`
+    )
+  )[0];
+  if (!project)
+    throw new ProjectProductionPlanningError(
+      'PROJECT_NOT_FOUND',
+      'Project not found.',
+      404
+    );
+  if (project.workflow_version !== 'p2_v2')
+    throw new ProjectProductionPlanningError(
+      'P2_V2_REQUIRED',
+      'Production Launch preview applies only to p2_v2 projects.',
+      409
+    );
+  const poId = Number(project.po_id);
+  if (!Number.isInteger(poId))
+    throw new ProjectProductionPlanningError(
+      'CURRENT_PO_REQUIRED',
+      'A linked P2 PO is required.',
+      409
+    );
+  const rootRows = rows(
+    await tx.execute(sql`
       SELECT poi.id,poi.part_number,poi.quantity original_quantity,
         (poi.quantity+COALESCE(SUM(e.quantity_delta),0))::numeric effective_quantity,
         poi.inventory_item_id,poi.due_date,poi.demand_line_identity,
@@ -463,149 +479,147 @@ export async function getProductionLaunchPreview(
         ON e.po_item_id=poi.id AND e.demand_line_identity=poi.demand_line_identity
       WHERE poi.po_id=${poId}
       GROUP BY poi.id ORDER BY poi.id`)
+  );
+  if (!rootRows.length)
+    throw new ProjectProductionPlanningError(
+      'PO_ITEMS_REQUIRED',
+      'The linked P2 PO has no line items.',
+      409
     );
-    if (!rootRows.length)
-      throw new ProjectProductionPlanningError(
-        'PO_ITEMS_REQUIRED',
-        'The linked P2 PO has no line items.',
-        409
-      );
 
-    const preview = await resolveProductionLaunchPreview(
-      rootRows.map((entry) => {
-        const events = Array.isArray(entry.customer_demand_events)
-          ? entry.customer_demand_events
-          : [];
-        const originalQuantity = Number(entry.original_quantity);
-        const effectiveQuantity = Number(entry.effective_quantity);
-        const snapshot = {
-          demandLineIdentity: String(entry.demand_line_identity),
-          originalQuantity,
-          effectiveQuantity,
-          events,
-        };
-        return {
-          poItemId: Number(entry.id),
-          partNumber: String(entry.part_number),
-          quantity: effectiveQuantity,
-          inventoryItemId:
-            entry.inventory_item_id == null
-              ? null
-              : Number(entry.inventory_item_id),
-          requiredByDate:
-            entry.due_date == null ? null : String(entry.due_date),
-          demandLineIdentity: String(entry.demand_line_identity),
-          originalCustomerQuantity: originalQuantity,
-          effectiveCustomerQuantity: effectiveQuantity,
-          customerDemandEventDigest: createHash('sha256')
-            .update(JSON.stringify(snapshot))
-            .digest('hex'),
-          customerDemandSnapshot: snapshot,
-        };
-      }),
-      sourceFor(projectId, tx as Executor),
-      effectiveAt
-    );
-    const identifiedNodes = addDemandIdentities(
-      preview.nodes as unknown as Array<Record<string, unknown>>,
-      { projectId, poId }
-    );
-    const demandLines = flatten(identifiedNodes);
-    const totalFor = (classification: string) => {
-      const matching = demandLines.filter(
-        (line) => line.classification === classification
-      );
-      return {
-        lineCount: matching.length,
-        grossQuantity: matching.reduce(
-          (sum, line) => sum + Number(line.extendedProjectQuantity ?? 0),
-          0
-        ),
-      };
-    };
-    const totals = {
-      manufactured: totalFor('MANUFACTURED'),
-      purchased: totalFor('PURCHASED'),
-      rawMaterial: totalFor('RAW_MATERIAL'),
-      customerSupplied: totalFor('CUSTOMER_SUPPLIED'),
-    };
-    const sourceEvidence = {
-      projectId,
-      poId,
-      effectiveAt: effectiveAt.toISOString(),
-      roots: rootRows.map((entry) => ({
-        poItemId: Number(entry.id),
+  const preview = await resolveProductionLaunchPreview(
+    rootRows.map((entry) => {
+      const events = Array.isArray(entry.customer_demand_events)
+        ? entry.customer_demand_events
+        : [];
+      const originalQuantity = Number(entry.original_quantity);
+      const effectiveQuantity = Number(entry.effective_quantity);
+      const snapshot = {
         demandLineIdentity: String(entry.demand_line_identity),
+        originalQuantity,
+        effectiveQuantity,
+        events,
+      };
+      return {
+        poItemId: Number(entry.id),
         partNumber: String(entry.part_number),
-        originalQuantity: Number(entry.original_quantity),
-        effectiveQuantity: Number(entry.effective_quantity),
-      })),
-      selectedSources: demandLines.map((line) => ({
-        demandIdentity: line.demandIdentity,
-        inventoryItemId: line.inventoryItemId,
-        partNumber: line.partNumber,
-        partRevision: line.revision,
-        classification: line.classification,
-        bomRevisionId: line.bomRevisionId,
-        routingId: line.routingId,
-        routingRevision: line.routingRevision,
-      })),
-    };
-    const sourceChecksum = checksum(sourceEvidence);
-    const deterministicEvidence = {
-      explosionVersion: 'P2_DEMAND_EXPLOSION_V1',
-      sourceChecksum,
-      nodes: identifiedNodes,
-      blockers: preview.blockers,
-      totals,
-    };
+        quantity: effectiveQuantity,
+        inventoryItemId:
+          entry.inventory_item_id == null
+            ? null
+            : Number(entry.inventory_item_id),
+        requiredByDate: entry.due_date == null ? null : String(entry.due_date),
+        demandLineIdentity: String(entry.demand_line_identity),
+        originalCustomerQuantity: originalQuantity,
+        effectiveCustomerQuantity: effectiveQuantity,
+        customerDemandEventDigest: createHash('sha256')
+          .update(JSON.stringify(snapshot))
+          .digest('hex'),
+        customerDemandSnapshot: snapshot,
+      };
+    }),
+    sourceFor(projectId, tx as Executor),
+    authorityEffectiveAt
+  );
+  const identifiedNodes = addDemandIdentities(
+    preview.nodes as unknown as Array<Record<string, unknown>>,
+    { projectId, poId }
+  );
+  const demandLines = flatten(identifiedNodes);
+  const totalFor = (classification: string) => {
+    const matching = demandLines.filter(
+      (line) => line.classification === classification
+    );
     return {
-      mode: 'PREVIEW_ONLY' as const,
-      createsRecords: false,
-      project: {
-        id: String(project.id),
-        code: String(project.project_code),
-        poId,
-        stage: String(project.current_stage ?? ''),
-      },
-      generatedAt: new Date().toISOString(),
-      effectiveAt: effectiveAt.toISOString(),
-      explosionVersion: 'P2_DEMAND_EXPLOSION_V1' as const,
-      sourceChecksum,
-      resultChecksum: checksum(deterministicEvidence),
-      totals,
-      authority: {
-        bom: 'boms / bom_revisions / bom_lines',
-        excludesDraftBomTables: true,
-        routingPrecedence: [
-          'released project production plan frozen routing',
-          'BOM-line routing unavailable in the current schema',
-          'live routing fallback blocks because revision effectivity cannot be proven',
-        ],
-      },
-      inventoryNetting: {
-        status: 'ESTIMATE' as const,
-        policy:
-          'Sum inventory_balances availability; when lots exist, cap it at accepted, unexpired remaining lot quantity.',
-        excludedLotStatuses: [
-          'QUARANTINE',
-          'REJECTED',
-          'EXPIRED',
-          'HOLD',
-          'LOCKED',
-          'ISSUED',
-          'CONSUMED',
-          'SCRAPPED',
-        ],
-        createsAllocations: false,
-      },
-      limitations: [
-        'Preview quantities are estimates and do not reserve or allocate inventory.',
-        'The current BOM-line schema has no controlled routing reference.',
-        'Live routing fallback is reported as a blocker until revision and effectivity can be proven.',
-      ],
-      ...preview,
-      nodes: identifiedNodes,
+      lineCount: matching.length,
+      grossQuantity: matching.reduce(
+        (sum, line) => sum + Number(line.extendedProjectQuantity ?? 0),
+        0
+      ),
     };
-  });
+  };
+  const totals = {
+    manufactured: totalFor('MANUFACTURED'),
+    purchased: totalFor('PURCHASED'),
+    rawMaterial: totalFor('RAW_MATERIAL'),
+    customerSupplied: totalFor('CUSTOMER_SUPPLIED'),
+  };
+  const sourceEvidence = {
+    projectId,
+    poId,
+    effectiveAt: authorityEffectiveAt.toISOString(),
+    roots: rootRows.map((entry) => ({
+      poItemId: Number(entry.id),
+      demandLineIdentity: String(entry.demand_line_identity),
+      partNumber: String(entry.part_number),
+      originalQuantity: Number(entry.original_quantity),
+      effectiveQuantity: Number(entry.effective_quantity),
+    })),
+    selectedSources: demandLines.map((line) => ({
+      demandIdentity: line.demandIdentity,
+      inventoryItemId: line.inventoryItemId,
+      partNumber: line.partNumber,
+      partRevision: line.revision,
+      classification: line.classification,
+      bomRevisionId: line.bomRevisionId,
+      routingId: line.routingId,
+      routingRevision: line.routingRevision,
+    })),
+  };
+  const sourceChecksum = checksum(sourceEvidence);
+  const deterministicEvidence = {
+    explosionVersion: 'P2_DEMAND_EXPLOSION_V1',
+    sourceChecksum,
+    nodes: identifiedNodes,
+    blockers: preview.blockers,
+    totals,
+  };
+  return {
+    mode: 'PREVIEW_ONLY' as const,
+    createsRecords: false,
+    project: {
+      id: String(project.id),
+      code: String(project.project_code),
+      poId,
+      stage: String(project.current_stage ?? ''),
+    },
+    generatedAt: new Date().toISOString(),
+    effectiveAt: authorityEffectiveAt.toISOString(),
+    explosionVersion: 'P2_DEMAND_EXPLOSION_V1' as const,
+    sourceChecksum,
+    resultChecksum: checksum(deterministicEvidence),
+    totals,
+    authority: {
+      bom: 'boms / bom_revisions / bom_lines',
+      excludesDraftBomTables: true,
+      routingPrecedence: [
+        'released project production plan frozen routing',
+        'BOM-line routing unavailable in the current schema',
+        'live routing fallback blocks because revision effectivity cannot be proven',
+      ],
+    },
+    inventoryNetting: {
+      status: 'ESTIMATE' as const,
+      policy:
+        'Sum inventory_balances availability; when lots exist, cap it at accepted, unexpired remaining lot quantity.',
+      excludedLotStatuses: [
+        'QUARANTINE',
+        'REJECTED',
+        'EXPIRED',
+        'HOLD',
+        'LOCKED',
+        'ISSUED',
+        'CONSUMED',
+        'SCRAPPED',
+      ],
+      createsAllocations: false,
+    },
+    limitations: [
+      'Preview quantities are estimates and do not reserve or allocate inventory.',
+      'The current BOM-line schema has no controlled routing reference.',
+      'Live routing fallback is reported as a blocker until revision and effectivity can be proven.',
+    ],
+    ...preview,
+    nodes: identifiedNodes,
+  };
 }

@@ -16,7 +16,10 @@ function envBool(name: string, defaultValue = false): boolean {
  * Gates all labor_allocations dual-write calls.
  * Set LABOR_ALLOCATIONS_ENABLED=true to enable.
  */
-export const laborAllocationsEnabled: boolean = envBool('LABOR_ALLOCATIONS_ENABLED', false);
+export const laborAllocationsEnabled: boolean = envBool(
+  'LABOR_ALLOCATIONS_ENABLED',
+  false
+);
 
 /**
  * Gates the allocation-based costing read path.
@@ -25,7 +28,10 @@ export const laborAllocationsEnabled: boolean = envBool('LABOR_ALLOCATIONS_ENABL
  * Falls back to the legacy punch_ledger path automatically on any failure.
  * Set USE_ALLOCATION_COSTING_READ=true to enable.
  */
-export const useAllocationCostingRead: boolean = envBool('USE_ALLOCATION_COSTING_READ', false);
+export const useAllocationCostingRead: boolean = envBool(
+  'USE_ALLOCATION_COSTING_READ',
+  false
+);
 
 /**
  * Gates the salaried manual draft time entry UI and API.
@@ -33,7 +39,10 @@ export const useAllocationCostingRead: boolean = envBool('USE_ALLOCATION_COSTING
  * via the employee portal without touching the hourly punch_ledger flow.
  * Set SALARIED_DRAFT_ENTRY_ENABLED=true to enable.
  */
-export const salariedDraftEntryEnabled: boolean = envBool('SALARIED_DRAFT_ENTRY_ENABLED', false);
+export const salariedDraftEntryEnabled: boolean = envBool(
+  'SALARIED_DRAFT_ENTRY_ENABLED',
+  false
+);
 
 /**
  * Gates only the consequential p2_v2 Production Launch mutation.
@@ -47,6 +56,11 @@ export function isP2V2ProductionLaunchEnabled(): boolean {
 /** Gates the read-only recursive Production Launch preview introduced in Phase 1. */
 export function isP2V2ProductionLaunchPreviewEnabled(): boolean {
   return process.env.P2_V2_PRODUCTION_LAUNCH_PREVIEW_ENABLED === 'true';
+}
+
+/** Gates only recursive Production Launch evidence persistence. */
+export function isP2V2ProductionLaunchPersistenceEnabled(): boolean {
+  return process.env.P2_V2_PRODUCTION_LAUNCH_PERSISTENCE_ENABLED === 'true';
 }
 
 /**

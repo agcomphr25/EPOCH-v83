@@ -24,6 +24,8 @@ import {
   ExternalLink,
   Loader2,
   TrendingUp,
+  ClipboardCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -122,6 +124,38 @@ interface PaginationInfo {
   hasMore: boolean;
 }
 
+interface DailyInvoiceRunItem {
+  shipmentId: string;
+  poNumber: string;
+  customerName: string;
+  trackingNumber?: string | null;
+  hasPackingSlip: boolean;
+  packingSlipItemId?: string | null;
+  exists?: boolean;
+  id?: string | null;
+  invoiceNumber?: string | null;
+  status?: string | null;
+  readiness: 'READY' | 'WARNING' | 'BLOCKED' | 'EXISTING';
+  blockers: string[];
+  warnings: string[];
+  totalAmount: string;
+  lines: Array<{
+    partNumber?: string | null;
+    description: string;
+    quantity: number;
+    unitPrice: string;
+    lineTotal: string;
+    orderIds?: string[];
+  }>;
+}
+
+interface DailyInvoiceRun {
+  shipmentDate: string;
+  generatedAt: string;
+  items: DailyInvoiceRunItem[];
+  summary: { total: number; ready: number; blocked: number; existing: number };
+}
+
 const SERVICE_NAMES: Record<string, string> = {
   '03': 'UPS Ground',
   '02': 'UPS 2nd Day Air',
@@ -158,6 +192,20 @@ export default function OEMShipmentsPage() {
     invoiceDate?: string;
   } | null>(null);
   const [invoicePreviewOpen, setInvoicePreviewOpen] = useState(false);
+  const [dailyInvoiceRunOpen, setDailyInvoiceRunOpen] = useState(false);
+  const [dailyInvoiceRun, setDailyInvoiceRun] = useState<DailyInvoiceRun | null>(null);
+  const [dailyInvoiceRunDate, setDailyInvoiceRunDate] = useState('');
+  const [dailyInvoiceSharedDate, setDailyInvoiceSharedDate] = useState('');
+  const [dailyInvoiceSelections, setDailyInvoiceSelections] = useState<Set<string>>(new Set());
+  const [dailyInvoiceDates, setDailyInvoiceDates] = useState<Record<string, string>>({});
+  const [dailyInvoiceConfirmed, setDailyInvoiceConfirmed] = useState(false);
+  const [dailyInvoiceResults, setDailyInvoiceResults] = useState<Array<{
+    key: string;
+    ok: boolean;
+    invoiceNumber?: string;
+    invoiceId?: string;
+    error?: string;
+  }>>([]);
   const limit = 20;
 
   // Fetch shipments with filters
@@ -326,6 +374,117 @@ export default function OEMShipmentsPage() {
       });
     },
   });
+
+  const dailyInvoiceKey = (item: Pick<DailyInvoiceRunItem, 'shipmentId' | 'poNumber'>) =>
+    `${item.shipmentId}:${item.poNumber}`;
+
+  const prepareDailyInvoiceRunMutation = useMutation({
+    mutationFn: async (shipmentDate: string) => {
+      return await apiRequest('/api/po-orders/oem-shipments/invoice-runs/preview', {
+        method: 'POST',
+        body: { shipmentDate },
+      }) as DailyInvoiceRun;
+    },
+    onSuccess: (run) => {
+      const defaultInvoiceDate = run.shipmentDate;
+      const selectable = run.items.filter((item) =>
+        item.readiness === 'READY' || item.readiness === 'WARNING'
+      );
+      setDailyInvoiceRun(run);
+      setDailyInvoiceSharedDate(defaultInvoiceDate);
+      setDailyInvoiceSelections(new Set(selectable.map(dailyInvoiceKey)));
+      setDailyInvoiceDates(Object.fromEntries(run.items.map((item) => [dailyInvoiceKey(item), defaultInvoiceDate])));
+      setDailyInvoiceResults([]);
+      setDailyInvoiceConfirmed(false);
+      setDailyInvoiceRunOpen(true);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Daily invoice preparation failed',
+        description: error.message || 'The daily readiness review could not be generated.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const createDailyInvoicesMutation = useMutation({
+    mutationFn: async (items: DailyInvoiceRunItem[]) => {
+      const results: Array<{
+        key: string;
+        ok: boolean;
+        invoiceNumber?: string;
+        invoiceId?: string;
+        error?: string;
+      }> = [];
+      // Process one at a time so invoice-number assignment remains deterministic and
+      // every PO receives an individual success/failure result.
+      for (const item of items) {
+        const key = dailyInvoiceKey(item);
+        try {
+          const invoice: any = await apiRequest(
+            `/api/po-orders/oem-shipments/${item.shipmentId}/invoices`,
+            {
+              method: 'POST',
+              body: { poNumber: item.poNumber, invoiceDate: dailyInvoiceDates[key] || dailyInvoiceSharedDate },
+            }
+          );
+          results.push({
+            key,
+            ok: true,
+            invoiceNumber: invoice.invoiceNumber,
+            invoiceId: invoice.id,
+          });
+        } catch (error: any) {
+          results.push({ key, ok: false, error: error.message || 'Invoice creation failed' });
+        }
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      setDailyInvoiceResults(results);
+      const successes = results.filter((result) => result.ok).length;
+      const failures = results.length - successes;
+      setDailyInvoiceRun((current) => {
+        if (!current) return current;
+        const nextItems = current.items.map((item) => {
+          const result = results.find((candidate) => candidate.key === dailyInvoiceKey(item));
+          return result?.ok ? {
+            ...item,
+            readiness: 'EXISTING' as const,
+            exists: true,
+            id: result.invoiceId || null,
+            invoiceNumber: result.invoiceNumber || item.invoiceNumber,
+            status: 'REVIEW',
+          } : item;
+        });
+        return {
+          ...current,
+          items: nextItems,
+          summary: {
+            total: nextItems.length,
+            ready: nextItems.filter((item) => item.readiness === 'READY' || item.readiness === 'WARNING').length,
+            blocked: nextItems.filter((item) => item.readiness === 'BLOCKED').length,
+            existing: nextItems.filter((item) => item.readiness === 'EXISTING').length,
+          },
+        };
+      });
+      setDailyInvoiceSelections(new Set(results.filter((result) => !result.ok).map((result) => result.key)));
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
+      queryClient.invalidateQueries({ predicate: (query) =>
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
+      });
+      toast({
+        title: failures ? 'Daily invoice run completed with exceptions' : 'Daily invoice drafts created',
+        description: `${successes} created or confirmed${failures ? `; ${failures} need attention` : ''}. Nothing was posted or emailed.`,
+        variant: failures ? 'destructive' : 'default',
+      });
+    },
+  });
+
+  const openDailyInvoiceRun = (shipmentDate: string) => {
+    setDailyInvoiceRunDate(shipmentDate);
+    prepareDailyInvoiceRunMutation.mutate(shipmentDate);
+  };
 
   const renderInvoiceButton = (
     shipmentId: string | number,
@@ -878,6 +1037,25 @@ export default function OEMShipmentsPage() {
                       {dateShipments.reduce((sum, s) => sum + Number(s.accessory_count || 0), 0)} accessories
                     </Badge>
                   </div>
+                  {isGlennAdmin && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openDailyInvoiceRun(dateKey);
+                      }}
+                      disabled={prepareDailyInvoiceRunMutation.isPending}
+                    >
+                      {prepareDailyInvoiceRunMutation.isPending && dailyInvoiceRunDate === dateKey ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ClipboardCheck className="h-4 w-4" />
+                      )}
+                      Prepare Daily Invoices
+                    </Button>
+                  )}
                   {expandedDates.has(dateKey) ? (
                     <ChevronUp className="h-5 w-5 text-muted-foreground" />
                   ) : (
@@ -1704,6 +1882,212 @@ export default function OEMShipmentsPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={dailyInvoiceRunOpen} onOpenChange={setDailyInvoiceRunOpen}>
+        <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Prepare Daily OEM Invoices</DialogTitle>
+            <DialogDescription>
+              Verify every PO shipped on {dailyInvoiceRunDate}. Creating drafts does not post or email any invoice.
+            </DialogDescription>
+          </DialogHeader>
+
+          {dailyInvoiceRun && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">PO invoices</p><p className="text-2xl font-bold">{dailyInvoiceRun.summary.total}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Ready</p><p className="text-2xl font-bold text-green-600">{dailyInvoiceRun.summary.ready}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Blocked</p><p className="text-2xl font-bold text-red-600">{dailyInvoiceRun.summary.blocked}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Already exists</p><p className="text-2xl font-bold text-blue-600">{dailyInvoiceRun.summary.existing}</p></CardContent></Card>
+              </div>
+
+              <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border p-3">
+                <div className="space-y-2">
+                  <Label htmlFor="daily-shared-invoice-date">Default invoice date</Label>
+                  <Input
+                    id="daily-shared-invoice-date"
+                    type="date"
+                    className="w-48"
+                    value={dailyInvoiceSharedDate}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setDailyInvoiceSharedDate(value);
+                      setDailyInvoiceDates(Object.fromEntries(
+                        dailyInvoiceRun.items.map((item) => [dailyInvoiceKey(item), value])
+                      ));
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">Net 30 due dates are calculated from each invoice date.</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDailyInvoiceSelections(new Set(
+                      dailyInvoiceRun.items
+                        .filter((item) => item.readiness === 'READY' || item.readiness === 'WARNING')
+                        .map(dailyInvoiceKey)
+                    ))}
+                  >
+                    Select all ready
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setDailyInvoiceSelections(new Set())}>
+                    Clear selection
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border divide-y">
+                {dailyInvoiceRun.items.map((item) => {
+                  const key = dailyInvoiceKey(item);
+                  const selectable = item.readiness === 'READY' || item.readiness === 'WARNING';
+                  const selected = dailyInvoiceSelections.has(key);
+                  const result = dailyInvoiceResults.find((entry) => entry.key === key);
+                  return (
+                    <div key={key} className={`p-3 ${selected ? 'bg-blue-50/60 dark:bg-blue-950/20' : ''}`}>
+                      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={selected}
+                          disabled={!selectable || createDailyInvoicesMutation.isPending}
+                          onChange={(event) => setDailyInvoiceSelections((current) => {
+                            const next = new Set(current);
+                            if (event.target.checked) next.add(key); else next.delete(key);
+                            return next;
+                          })}
+                          aria-label={`Select invoice for PO ${item.poNumber}`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold">{item.customerName}</span>
+                            <Badge variant="outline">PO {item.poNumber}</Badge>
+                            <Badge className={
+                              item.readiness === 'READY' ? 'bg-green-100 text-green-800' :
+                              item.readiness === 'WARNING' ? 'bg-amber-100 text-amber-800' :
+                              item.readiness === 'BLOCKED' ? 'bg-red-100 text-red-800' :
+                              'bg-blue-100 text-blue-800'
+                            }>
+                              {item.readiness}
+                            </Badge>
+                            {item.invoiceNumber && <span className="font-mono text-sm">{item.invoiceNumber}</span>}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {item.trackingNumber ? `Tracking ${item.trackingNumber} • ` : ''}
+                            {item.lines.length} line{item.lines.length === 1 ? '' : 's'} • {formatCurrency(Number(item.totalAmount || 0))}
+                          </div>
+                        </div>
+                        {selectable && (
+                          <Input
+                            type="date"
+                            className="w-44"
+                            value={dailyInvoiceDates[key] || dailyInvoiceSharedDate}
+                            onChange={(event) => setDailyInvoiceDates((current) => ({ ...current, [key]: event.target.value }))}
+                            aria-label={`Invoice date for PO ${item.poNumber}`}
+                          />
+                        )}
+                        {item.id && (
+                          <Button size="sm" variant="outline" onClick={() => setLocation(`/finance/invoices/${item.id}`)}>
+                            View Invoice
+                          </Button>
+                        )}
+                        {item.packingSlipItemId && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.open(
+                              `/api/po-orders/oem-shipments/packing-slip/${item.packingSlipItemId}?poNumber=${encodeURIComponent(item.poNumber)}`,
+                              '_blank'
+                            )}
+                          >
+                            View Packing Slip
+                          </Button>
+                        )}
+                      </div>
+
+                      {(item.blockers.length > 0 || item.warnings.length > 0) && (
+                        <div className="mt-2 ml-7 space-y-1 text-sm">
+                          {item.blockers.map((message) => (
+                            <div key={message} className="flex items-center gap-2 text-red-700">
+                              <AlertTriangle className="h-4 w-4" />{message}
+                            </div>
+                          ))}
+                          {item.warnings.map((message) => (
+                            <div key={message} className="flex items-center gap-2 text-amber-700">
+                              <AlertTriangle className="h-4 w-4" />{message}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {result && (
+                        <div className={`mt-2 ml-7 text-sm ${result.ok ? 'text-green-700' : 'text-red-700'}`}>
+                          {result.ok ? `Created ${result.invoiceNumber || 'invoice'} in REVIEW` : result.error}
+                        </div>
+                      )}
+
+                      {item.lines.length > 0 && (
+                        <details className="mt-3 ml-7">
+                          <summary className="cursor-pointer text-sm font-medium text-blue-700">Review line items</summary>
+                          <div className="mt-2 overflow-x-auto rounded border">
+                            <table className="w-full text-sm">
+                              <thead className="bg-muted"><tr><th className="p-2 text-left">Part</th><th className="p-2 text-left">Description</th><th className="p-2 text-right">Qty</th><th className="p-2 text-right">Unit</th><th className="p-2 text-right">Total</th></tr></thead>
+                              <tbody>{item.lines.map((line, index) => (
+                                <tr key={`${line.partNumber}-${index}`} className="border-t">
+                                  <td className="p-2 font-mono text-xs">{line.partNumber || '-'}</td>
+                                  <td className="p-2">{line.description}{line.orderIds?.length ? <div className="text-xs text-muted-foreground">{line.orderIds.join(', ')}</div> : null}</td>
+                                  <td className="p-2 text-right">{line.quantity}</td>
+                                  <td className="p-2 text-right">{formatCurrency(Number(line.unitPrice || 0))}</td>
+                                  <td className="p-2 text-right font-medium">{formatCurrency(Number(line.lineTotal || 0))}</td>
+                                </tr>
+                              ))}</tbody>
+                            </table>
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                Selected: {dailyInvoiceSelections.size} invoice{dailyInvoiceSelections.size === 1 ? '' : 's'} totaling{' '}
+                {formatCurrency(dailyInvoiceRun.items
+                  .filter((item) => dailyInvoiceSelections.has(dailyInvoiceKey(item)))
+                  .reduce((sum, item) => sum + Number(item.totalAmount || 0), 0))}.
+                These will be created in <strong>REVIEW</strong>; nothing will be posted or emailed.
+              </div>
+              <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={dailyInvoiceConfirmed}
+                  onChange={(event) => setDailyInvoiceConfirmed(event.target.checked)}
+                />
+                <span>I reviewed the selected POs, invoice dates, line items, pricing, and totals and want to create these review drafts.</span>
+              </label>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDailyInvoiceRunOpen(false)}>
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                if (!dailyInvoiceRun) return;
+                createDailyInvoicesMutation.mutate(
+                  dailyInvoiceRun.items.filter((item) => dailyInvoiceSelections.has(dailyInvoiceKey(item)))
+                );
+              }}
+              disabled={!dailyInvoiceSelections.size || !dailyInvoiceConfirmed || createDailyInvoicesMutation.isPending}
+            >
+              {createDailyInvoicesMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Receipt className="h-4 w-4 mr-2" />}
+              Create Selected Drafts ({dailyInvoiceSelections.size})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={invoicePreviewOpen} onOpenChange={setInvoicePreviewOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

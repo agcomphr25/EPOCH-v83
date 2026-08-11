@@ -409,15 +409,15 @@ function tableColumns() {
   return {
     line: x + 10,
     part: x + 48,
-    description: x + 116,
+    description: x + 158,
     qtyRight: x + 348,
     unit: x + 360,
     priceLeft: x + 386,
     priceRight: x + 446,
     totalLeft: x + 472,
     totalRight: x + 526,
-    descWidth: 178,
-    partWidth: 60,
+    descWidth: 164,
+    partWidth: 102,
   };
 }
 
@@ -442,9 +442,13 @@ function drawItemsTable(state: DrawState, items: any[], startY: number): { y: nu
       state.fonts.regular,
       FONT_SIZE.SMALL,
     );
+    const itemNotes = cleanText(item.notes).trim();
+    const isInternalPartsRequestProvenance = /^PR-\d+\s*:/i.test(itemNotes);
     const descriptionLines = [
       ...wrapVendorPoText(`${item.description || item.itemDescription || '-'}${purchaseDetail}`, cols.descWidth, state.fonts.regular, FONT_SIZE.BODY),
-      ...(item.notes ? wrapVendorPoText(`Details: ${item.notes}`, cols.descWidth, state.fonts.regular, FONT_SIZE.SMALL) : []),
+      ...(itemNotes && !isInternalPartsRequestProvenance
+        ? wrapVendorPoText(`Details: ${itemNotes}`, cols.descWidth, state.fonts.regular, FONT_SIZE.SMALL)
+        : []),
     ];
     const rowHeight = Math.max(32, descriptionLines.length * 12 + 16, partLines.length * 10 + 16);
 

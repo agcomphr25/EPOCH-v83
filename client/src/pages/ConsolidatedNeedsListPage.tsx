@@ -195,7 +195,6 @@ export default function ConsolidatedNeedsListPage() {
   const [batchExpectedDelivery, setBatchExpectedDelivery] = useState('');
   const [batchShipVia, setBatchShipVia] = useState('');
   const [isCreateBatchDialogOpen, setIsCreateBatchDialogOpen] = useState(false);
-  const [openIssueAfterCreate, setOpenIssueAfterCreate] = useState(false);
   const [batchVendorGroup, setBatchVendorGroup] = useState<VendorGroup | null>(null);
   const [localPickupVendorGroup, setLocalPickupVendorGroup] = useState<VendorGroup | null>(null);
   const [localPickupQuantities, setLocalPickupQuantities] = useState<Record<number, number>>({});
@@ -358,23 +357,20 @@ export default function ConsolidatedNeedsListPage() {
       expectedDeliveryDate?: string | null;
       shipVia?: string | null;
       notes?: string;
-      openIssueAfterCreate?: boolean;
     }) => {
       return apiRequest('/api/inventory/parts-requests/create-vendor-po-draft', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
-    onSuccess: (result: any, variables) => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
       const vendorPoId = result?.vendorPO?.id;
       toast({
         title: 'Vendor PO Draft Created',
         description: vendorPoId
-          ? variables.openIssueAfterCreate
-            ? `Draft Vendor PO internal #${vendorPoId} was created. Opening issue email now.`
-            : `Draft Vendor PO internal #${vendorPoId} was created. RFQ and PO numbers will follow the existing workflow.`
+          ? `Draft Vendor PO internal #${vendorPoId} was created. Choose Send RFQ or Issue PO from the Vendor PO screen.`
           : 'Selected parts were linked to a draft Vendor PO.',
       });
       setIsCreateBatchDialogOpen(false);
@@ -384,9 +380,8 @@ export default function ConsolidatedNeedsListPage() {
       setBatchExpectedDelivery('');
       setBatchShipVia('');
       setSelectedVendorRequests(new Set());
-      setOpenIssueAfterCreate(false);
-      if (variables.openIssueAfterCreate && vendorPoId) {
-        setLocation(`/vendor-pos?poId=${vendorPoId}&issue=1`);
+      if (vendorPoId) {
+        setLocation(`/vendor-pos?poId=${vendorPoId}`);
       }
     },
     onError: (error: any) => {
@@ -532,7 +527,7 @@ export default function ConsolidatedNeedsListPage() {
     },
   });
 
-  const openCreateBatchDialog = (vendorGroup: VendorGroup, issueAfterCreate = false) => {
+  const openCreateBatchDialog = (vendorGroup: VendorGroup) => {
     if (vendorGroup.orderMethod === 'WEBSITE') {
       toast({
         title: 'Website Order',
@@ -554,8 +549,8 @@ export default function ConsolidatedNeedsListPage() {
     const approvedRequests = selectedRequests.length > 0 ? selectedRequests : selectableRequests;
     if (approvedRequests.length === 0) {
       toast({
-        title: 'No Approved Requests',
-        description: 'There are no approved, PO-orderable requests in this vendor group.',
+        title: 'No VPO-Eligible Requests',
+        description: 'The requests shown here are not eligible for a new Vendor PO draft. They may already be linked, have no remaining quantity, or use website, email, or local-pickup ordering.',
         variant: 'destructive',
       });
       return;
@@ -569,7 +564,6 @@ export default function ConsolidatedNeedsListPage() {
     const defaultQuantities: Record<number, number> = {};
     approvedRequests.forEach(r => { defaultQuantities[r.id] = getRemainingRequestQuantity(r); });
     setBatchQuantities(defaultQuantities);
-    setOpenIssueAfterCreate(issueAfterCreate);
     setIsCreateBatchDialogOpen(true);
   };
 
@@ -676,7 +670,7 @@ export default function ConsolidatedNeedsListPage() {
     return 'GENERAL';
   };
 
-  const openCreatePoDialogForRequest = (request: PartsRequest, issueAfterCreate = false) => {
+  const openCreatePoDialogForRequest = (request: PartsRequest) => {
     if (request.orderMethod === 'WEBSITE') {
       toast({
         title: 'Website Order',
@@ -721,7 +715,6 @@ export default function ConsolidatedNeedsListPage() {
     setBatchExpectedDelivery(request.expectedDelivery || '');
     setBatchNotes('');
     setBatchShipVia('');
-    setOpenIssueAfterCreate(issueAfterCreate);
     setIsCreateBatchDialogOpen(true);
   };
 
@@ -739,7 +732,6 @@ export default function ConsolidatedNeedsListPage() {
       expectedDeliveryDate: batchExpectedDelivery || null,
       shipVia: batchShipVia || null,
       notes: batchNotes || undefined,
-      openIssueAfterCreate,
     });
   };
 
@@ -1646,11 +1638,11 @@ export default function ConsolidatedNeedsListPage() {
                         <Button
                           size="sm"
                           variant="default"
-                          onClick={() => openCreateBatchDialog(vendorGroup, true)}
+                          onClick={() => openCreateBatchDialog(vendorGroup)}
                           data-testid={`button-create-issue-batch-${vendorKey}`}
                         >
-                          <Send className="w-4 h-4 mr-1" />
-                          Create & Send PO ({actionCount})
+                          <ShoppingCart className="w-4 h-4 mr-1" />
+                          Create VPO Draft ({actionCount})
                         </Button>
                         <Button
                           size="sm"
@@ -1859,15 +1851,9 @@ export default function ConsolidatedNeedsListPage() {
                               </>
                             )}
                             {canCreateNewPo && (
-                              <Button size="sm" variant="default" onClick={() => openCreatePoDialogForRequest(request, true)} data-testid={`button-create-issue-po-${request.id}`}>
-                                <Send className="w-3 h-3 mr-1" />
-                                Create & Send
-                              </Button>
-                            )}
-                            {canCreateNewPo && (
-                              <Button size="sm" variant="outline" onClick={() => openCreatePoDialogForRequest(request)} data-testid={`button-create-po-${request.id}`}>
+                              <Button size="sm" variant="default" onClick={() => openCreatePoDialogForRequest(request)} data-testid={`button-create-po-${request.id}`}>
                                 <ShoppingCart className="w-3 h-3 mr-1" />
-                                Draft
+                                Create VPO Draft
                               </Button>
                             )}
                             {canLocalPickup && (
@@ -1936,7 +1922,9 @@ export default function ConsolidatedNeedsListPage() {
 
     const readyForGroup = (group: VendorGroup) => group.requests.filter((request) => {
       const method = resolveEffectiveOrderMethod(request, getResolvedVendorForRequest(request));
-      return method === 'EMAIL' ? isEmailOrderableRequest(request) : isOrderMarkableRequest(request);
+      if (method === 'EMAIL') return isEmailOrderableRequest(request);
+      if (method === 'WEBSITE') return isOrderMarkableRequest(request);
+      return isPoDraftableRequest(request);
     });
     const blockedForGroup = (group: VendorGroup) => group.requests.filter((request) => request.status === 'PENDING');
     const urgencyRank = (group: VendorGroup) => {
@@ -1994,7 +1982,7 @@ export default function ConsolidatedNeedsListPage() {
       } else if (focusedGroup.orderMethod === 'EMAIL') {
         handleSendVendorEmail(focusedGroup);
       } else {
-        openCreateBatchDialog(focusedGroup, true);
+        openCreateBatchDialog(focusedGroup);
       }
     };
 
@@ -2114,7 +2102,7 @@ export default function ConsolidatedNeedsListPage() {
                       ? 'Open vendor website'
                       : focusedGroup.orderMethod === 'EMAIL'
                         ? `Send email (${readyRequests.length})`
-                        : `Create & send PO (${readyRequests.length})`}
+                        : `Create VPO draft (${readyRequests.length})`}
                   </Button>
                 )}
               </div>
@@ -2944,19 +2932,14 @@ export default function ConsolidatedNeedsListPage() {
       {/* Create Vendor PO Draft Dialog */}
       <Dialog
         open={isCreateBatchDialogOpen}
-        onOpenChange={(open) => {
-          setIsCreateBatchDialogOpen(open);
-          if (!open) setOpenIssueAfterCreate(false);
-        }}
+        onOpenChange={setIsCreateBatchDialogOpen}
       >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{openIssueAfterCreate ? 'Create & Send Vendor PO' : 'Create Vendor PO Draft'}</DialogTitle>
+            <DialogTitle>Create Vendor PO Draft</DialogTitle>
             <DialogDescription>
               {batchVendorGroup
-                ? openIssueAfterCreate
-                  ? `Create a draft Vendor PO for ${batchVendorGroup.vendorName}, then open the issue email so you can confirm recipients and message.`
-                  : `Create a draft Vendor PO for ${batchVendorGroup.vendorName}. RFQ and PO numbers stay controlled by the existing workflow.`
+                ? `Create a draft Vendor PO for ${batchVendorGroup.vendorName}. You can then choose Send RFQ or Issue PO in the normal Vendor PO workflow.`
                 : 'Select items for the draft.'}
             </DialogDescription>
           </DialogHeader>
@@ -3055,7 +3038,7 @@ export default function ConsolidatedNeedsListPage() {
                     onClick={handleCreateBatch}
                     disabled={createBatchMutation.isPending}
                   >
-                    {createBatchMutation.isPending ? 'Creating...' : openIssueAfterCreate ? 'Create & Open Email' : 'Create Vendor PO Draft'}
+                    {createBatchMutation.isPending ? 'Creating...' : 'Create Vendor PO Draft'}
                   </Button>
                 </div>
               </>

@@ -57,10 +57,39 @@ describe('Master Document Register released-revision access', () => {
   });
 
   it('requires lifecycle permission for exact draft and review revision bytes', () => {
-    expect(route).toContain('assertExactRevisionPermission(actor, revision)');
-    expect(route).toContain("['documents.edit_draft', 'documents.revise']");
+    expect(route).toContain(
+      'assertExactRevisionPermission(actor, state.document, revision)'
+    );
+    expect(route).toContain("'documents.edit_draft'");
+    expect(route).toContain("'documents.revise'");
     expect(route).toContain("['documents.approve', 'documents.release']");
+    expect(route).toContain('phase2CurrentApprovalCandidate');
+    expect(route).toContain("'documents.approve'");
     expect(route).toContain("'DRAFT_REVISION_ACCESS_DENIED'");
+  });
+
+  it('provides an authorized checksum-verified exact-revision preview for approvers', () => {
+    expect(route).toContain("'/:id/revisions/:revisionId/view'");
+    expect(route).toContain("exactRevisionFileHandler('view')");
+    expect(route).toContain("exactRevisionFileHandler('download')");
+    expect(route).toContain("mode === 'view'");
+    expect(route).toMatch(
+      /mode === 'view'[\s\S]*addControlledDocumentFooter\([\s\S]*state\.document,[\s\S]*revision/
+    );
+    expect(route).toContain('action: mode');
+    expect(route).toContain("'PREVIEW_UNAVAILABLE'");
+    expect(client).toContain('Preview Exact Revision Before Approval');
+  });
+
+  it('does not expose draft revision metadata through general document history', () => {
+    expect(route).toContain('authorizedRevisionHistory');
+    expect(route).toMatch(
+      /'\/:id\/versions'[\s\S]*controlledDocumentViewPermission,[\s\S]*controlledDocumentAccessPolicy/
+    );
+    expect(route).toMatch(
+      /'\/:id\/revisions',[\s\S]*controlledDocumentViewPermission,[\s\S]*controlledDocumentAccessPolicy/
+    );
+    expect(route).toContain('visibleRevisionIds.has(row.revisionId)');
   });
 
   it('centralizes restricted, explicit-grant, and admin-only enforcement', () => {
@@ -68,15 +97,36 @@ describe('Master Document Register released-revision access', () => {
       route.match(
         /controlledDocumentViewPermission,\s*controlledDocumentAccessPolicy/g
       )
-    ).toHaveLength(3);
+    ).toHaveLength(8);
+    expect(route).toContain('canAccessControlledDocument');
     expect(route).toContain("accessRule === 'explicit_grant'");
-    expect(route).toContain("classification === 'restricted'");
-    expect(route).toContain("classification === 'classified'");
-    expect(route).toContain("accessRule !== 'admin_only'");
-    expect(route).toContain('hasControlledDocumentGrant');
+    expect(route).toContain(
+      "['restricted', 'classified', 'cui', 'itar'].includes(classification)"
+    );
+    expect(route).toContain("if (accessRule === 'admin_only') return false");
+    expect(route).toContain('hasPolicyVaultGrant');
     expect(route).not.toContain(
       "requirePermission('documents.view'), requireStepUp(), async"
     );
+  });
+
+  it('drives normal controlled-use actions from released revision readiness, not document-level filePath', () => {
+    expect(route).toContain('releasedRevisionAvailable: releasedVerified');
+    expect(route).toContain('releasedRevisionVersion: released?.versionNumber');
+    expect(route).toContain('workingDraftRevisionVersion:');
+    expect(client).toContain('doc.releasedRevisionAvailable');
+    expect(client).toContain('doc.releasedRevisionVersion');
+    expect(client).not.toContain('{doc.filePath && (');
+  });
+
+  it('redacts internal file references from viewer metadata responses', () => {
+    expect(route).toContain('controlledDocumentMetadata');
+    expect(route).toContain('controlledRevisionMetadata');
+    expect(route).toMatch(/const \{ filePath, \.\.\.metadata \} = document/);
+    expect(route).toMatch(/const \{ filePath, \.\.\.metadata \} = revision/);
+    expect(route).toContain('fileReferenceAvailable: Boolean(filePath)');
+    expect(client).not.toContain('selectedDocument.filePath');
+    expect(client).not.toContain('version.filePath');
   });
 
   it('verifies the selected revision checksum before recording allowed access', () => {

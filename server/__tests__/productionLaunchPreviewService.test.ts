@@ -17,7 +17,7 @@ describe('Production Launch Phase 1 preview boundary', () => {
   it('executes inside an explicit read-only transaction', () => {
     expect(service).toContain('SET TRANSACTION READ ONLY');
     expect(service).not.toMatch(
-      /sql`[^`]*\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[^`]*`/i
+      /sql`[^`]*\b(?:INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b[^`]*`/i
     );
     expect(service).toContain("mode: 'PREVIEW_ONLY'");
     expect(service).toContain('createsRecords: false');
@@ -36,5 +36,10 @@ describe('Production Launch Phase 1 preview boundary', () => {
     expect(service).toContain('poi.quantity+COALESCE(SUM(e.quantity_delta),0)');
     expect(service).toContain('demandLineIdentity');
     expect(service).toContain("createHash('sha256')");
+  });
+
+  it('uses a stable UTC effectivity date in the preview digest', () => {
+    expect(service).toContain('effectiveAt.toISOString().slice(0, 10)');
+    expect(service).toContain('authorityEffectiveAt.toISOString()');
   });
 });

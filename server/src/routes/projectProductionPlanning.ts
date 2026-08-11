@@ -16,6 +16,7 @@ import {
   type PlanningActor,
 } from '../services/projectProductionPlanningService';
 import { getProductionLaunchPreview } from '../services/productionLaunchPreviewService';
+import { persistProductionLaunch } from '../services/productionLaunchPersistenceService';
 
 const router = Router({ mergeParams: true });
 const headerSchema = z.object({
@@ -32,6 +33,13 @@ const decisionSchema = z.object({
   signatureMeaning: z.string().min(1),
   reason: z.string().optional().default(''),
 });
+const launchSchema = z
+  .object({
+    idempotencyKey: z.string().trim().min(8).max(200),
+    expectedPreviewDigest: z.string().regex(/^[0-9a-f]{64}$/),
+    signatureMeaning: z.string().trim().min(1).max(500),
+  })
+  .strict();
 const itemSchema = z
   .object({
     drawing_number: z.string().nullable().optional(),
@@ -159,6 +167,22 @@ router.get('/launch-preview', async (req, res) => {
   try {
     await requireCapability(req, 'projects.production_planning.manage');
     res.json(await getProductionLaunchPreview(projectId(req)));
+  } catch (error) {
+    fail(res, error);
+  }
+});
+router.post('/launch', async (req, res) => {
+  try {
+    const user = await requireCapability(
+      req,
+      'projects.production_launch.launch'
+    );
+    const result = await persistProductionLaunch(
+      projectId(req),
+      launchSchema.parse(req.body),
+      user
+    );
+    res.status(result.replayed ? 200 : 201).json(result);
   } catch (error) {
     fail(res, error);
   }

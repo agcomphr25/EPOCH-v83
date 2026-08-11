@@ -63,6 +63,30 @@ describe('P2 customer-demand quantity policy', () => {
     expect(migration).not.toContain("'RESERVATION_RELEASE'");
   });
 
+  it('declares the demand event composite key columns in foreign-key order', () => {
+    const migration = read(
+      'migrations/0262_p2_customer_demand_quantity_ledger.sql'
+    );
+    const eventTable = migration.slice(
+      migration.indexOf(
+        'CREATE TABLE IF NOT EXISTS p2_customer_demand_quantity_events'
+      ),
+      migration.indexOf(
+        'DO $$ BEGIN',
+        migration.indexOf(
+          'CREATE TABLE IF NOT EXISTS p2_customer_demand_quantity_events'
+        )
+      )
+    );
+
+    expect(eventTable.indexOf('po_item_id INTEGER')).toBeLessThan(
+      eventTable.indexOf('demand_line_identity UUID')
+    );
+    expect(migration).toContain(
+      'FOREIGN KEY (po_item_id,demand_line_identity)\n      REFERENCES p2_purchase_order_items(id,demand_line_identity)'
+    );
+  });
+
   it('removes part-number and row-position inference from future revision lineage', () => {
     const route = read('server/src/routes/index.ts');
     const block = route.slice(

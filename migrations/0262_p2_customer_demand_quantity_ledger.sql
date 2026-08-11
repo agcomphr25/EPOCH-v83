@@ -24,9 +24,10 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS p2_customer_demand_quantity_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  demand_line_identity UUID NOT NULL,
   po_id INTEGER NOT NULL REFERENCES p2_purchase_orders(id) ON DELETE RESTRICT,
+  -- Keep these columns in composite-FK order for schema-diff generators.
   po_item_id INTEGER NOT NULL REFERENCES p2_purchase_order_items(id) ON DELETE RESTRICT,
+  demand_line_identity UUID NOT NULL,
   event_type TEXT NOT NULL CHECK (event_type IN (
     'CUSTOMER_CANCELLATION','CUSTOMER_REINSTATEMENT','QUANTITY_CORRECTION',
     'SCOPE_INCREASE','SCOPE_DECREASE','LINE_SUPERSESSION','REPLACEMENT_DEMAND'

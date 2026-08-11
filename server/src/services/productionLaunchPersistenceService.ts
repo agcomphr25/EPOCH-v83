@@ -320,7 +320,7 @@ export async function persistProductionLaunch(
     }
     const createdRecordIds = {
       launchId,
-      demandIds: [...demandIds.values()],
+      demandIds: Array.from(demandIds.values()),
       allocationIds,
       dependencyIds,
     };

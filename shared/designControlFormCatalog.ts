@@ -5,7 +5,7 @@ import {
 
 export const DESIGN_CONTROL_TEMPLATE_SCHEMA_VERSION = '1.0.0';
 export const DESIGN_CONTROL_FORM_RENDERER_VERSION =
-  'design-control-blank-pdf/1';
+  'design-control-blank-pdf/2';
 
 export type DesignControlFormField = {
   key: string;

@@ -2,9 +2,13 @@ import crypto from 'crypto';
 import QRCode from 'qrcode';
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from 'pdf-lib';
 
-import type { DesignControlFormDefinition } from '../../../shared/designControlFormCatalog';
+import {
+  DESIGN_CONTROL_FORM_RENDERER_VERSION,
+  type DesignControlFormDefinition,
+} from '../../../shared/designControlFormCatalog';
 
-export const DESIGN_CONTROL_PDF_RENDERER_VERSION = 'design-control-blank-pdf/1';
+export const DESIGN_CONTROL_PDF_RENDERER_VERSION =
+  DESIGN_CONTROL_FORM_RENDERER_VERSION;
 
 export type BlankFormPdfInput = {
   templateRevisionId: string;
@@ -31,7 +35,7 @@ export async function renderDesignControlBlankPdf(
   const fixedDate = new Date(input.generatedAt.toISOString());
   pdf.setTitle(`${input.documentNumber} ${input.definition.title}`);
   pdf.setSubject(
-    `Controlled blank Design Control form revision ${input.documentRevision}`
+    `Controlled blank Design Control form revision ${input.documentRevision}; template revision ${input.templateRevisionId}`
   );
   pdf.setProducer(DESIGN_CONTROL_PDF_RENDERER_VERSION);
   pdf.setCreator('EPOCH Master Document Register');
@@ -174,22 +178,7 @@ export async function renderDesignControlBlankPdf(
     );
     if (index === 0)
       current.drawImage(qr, { x: 510, y: 615, width: 54, height: 54 });
-    current.drawText(`Template revision: ${input.templateRevisionId}`, {
-      x: MARGIN,
-      y: 50,
-      size: 7,
-      font: regular,
-    });
-    current.drawText(
-      `Generated: ${fixedDate.toISOString()}  |  ${stableRevisionUrl}`,
-      {
-        x: MARGIN,
-        y: 39,
-        size: 7,
-        font: regular,
-      }
-    );
-    current.drawText(input.definition.identification.footerText, {
+    current.drawText('Configuration Controlled | Verify in MDR', {
       x: MARGIN,
       y: 28,
       size: 7,

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { PDFDocument } from 'pdf-lib';
+import { PDFParse } from 'pdf-parse';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../db', () => ({ db: {} }));
@@ -93,8 +94,20 @@ describe('Phase 4 controlled Design Control form templates', () => {
     expect(pdf.getSubject()).toContain('revision 1.0');
     expect(pdf.getCreator()).toBe('EPOCH Master Document Register');
     expect(DESIGN_CONTROL_FORM_RENDERER_VERSION).toBe(
-      'design-control-blank-pdf/1'
+      'design-control-blank-pdf/2'
     );
+    const parser = new PDFParse({ data: first });
+    try {
+      const { text } = await parser.getText();
+      expect(text).toContain('Configuration Controlled | Verify in MDR');
+      expect(text).not.toContain('Template revision:');
+      expect(text).not.toContain('Generated:');
+      expect(text).not.toContain(
+        '/api/design-control-form-templates/revisions/'
+      );
+    } finally {
+      await parser.destroy();
+    }
     expect(pdf.getPageCount()).toBeGreaterThan(0);
   });
 
@@ -221,12 +234,16 @@ describe('Phase 4 controlled Design Control form templates', () => {
     expect(route).not.toMatch(/req\.body\.(actor|actorId|userId|username)/);
   });
 
-  it('includes controlled header, footer, page count, revision, and stable revision barcode content', () => {
+  it('keeps a compact visible footer while retaining exact revision barcode content', () => {
     const renderer = read('server/src/services/designControlFormPdfService.ts');
     expect(renderer).toContain('AG COMPOSITES — DESIGN CONTROL FORM');
     expect(renderer).toContain('Page ${index + 1} of ${pages.length}');
     expect(renderer).toContain('Revision ${input.documentRevision}');
-    expect(renderer).toContain('input.definition.identification.footerText');
+    expect(renderer).toContain('Configuration Controlled | Verify in MDR');
+    expect(renderer).not.toContain(
+      'current.drawText(`Template revision: ${input.templateRevisionId}`'
+    );
+    expect(renderer).not.toContain('`Generated: ${fixedDate.toISOString()}');
     expect(renderer).toContain(
       '/api/design-control-form-templates/revisions/${input.templateRevisionId}'
     );

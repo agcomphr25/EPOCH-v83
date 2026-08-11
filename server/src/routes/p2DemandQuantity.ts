@@ -12,6 +12,11 @@ import {
   P2DemandQuantityError,
   P2_DEMAND_EVENT_TYPES,
 } from '../services/p2CustomerDemandQuantityPolicy';
+import {
+  createPlanningClassificationDraft,
+  getPlanningClassificationHistory,
+  releasePlanningClassification,
+} from '../services/p2PartPlanningClassificationService';
 
 const router = Router();
 const schema = z.object({
@@ -21,6 +26,25 @@ const schema = z.object({
   reason: z.string().trim().min(1).max(2000),
   customerEvidenceReference: z.string().trim().max(500).optional().nullable(),
   idempotencyKey: z.string().trim().min(8).max(200),
+});
+const classificationSchema = z.object({
+  classification: z.enum([
+    'MANUFACTURED',
+    'PURCHASED',
+    'RAW_MATERIAL',
+    'CUSTOMER_SUPPLIED',
+  ]),
+  partConfigurationRevision: z.string().trim().min(1).max(100),
+  effectiveFrom: z.string().datetime().optional().nullable(),
+  effectiveTo: z.string().datetime().optional().nullable(),
+  ownershipSource: z.string().trim().min(1).max(200),
+  sourceRecordType: z.string().trim().min(1).max(100),
+  sourceRecordId: z.string().trim().min(1).max(200),
+  sourceRevision: z.string().trim().min(1).max(100),
+  changeReason: z.string().trim().min(1).max(2000),
+});
+const releaseSchema = z.object({
+  expectedConcurrencyVersion: z.number().int().positive(),
 });
 const ids = (req: Request) => ({
   poId: Number(req.params.poId),
@@ -97,6 +121,94 @@ router.post(
         },
       });
       res.status(result.replayed ? 200 : 201).json(result);
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.get(
+  '/part-classifications/:inventoryItemId',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      await authorize(req, 'projects.p2_demand_planning.view');
+      const inventoryItemId = Number(req.params.inventoryItemId);
+      if (!Number.isInteger(inventoryItemId) || inventoryItemId <= 0)
+        throw new P2DemandQuantityError(
+          'INVALID_ID',
+          'A valid part record is required.',
+          400
+        );
+      res.json({
+        classifications:
+          await getPlanningClassificationHistory(inventoryItemId),
+      });
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/part-classifications/:inventoryItemId',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      await authorize(req, 'projects.p2_part_classification.manage');
+      const inventoryItemId = Number(req.params.inventoryItemId);
+      const body = classificationSchema.parse(req.body);
+      if (!Number.isInteger(inventoryItemId) || inventoryItemId <= 0)
+        throw new P2DemandQuantityError(
+          'INVALID_ID',
+          'A valid part record is required.',
+          400
+        );
+      const snapshot = await resolveUserSnapshot(req.user!.id);
+      res.status(201).json(
+        await createPlanningClassificationDraft({
+          ...body,
+          inventoryItemId,
+          actor: {
+            userId: snapshot.userId,
+            displayName: snapshot.displayName,
+            role: req.user!.role!,
+          },
+        })
+      );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/part-classifications/:inventoryItemId/:classificationId/release',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      await authorize(req, 'projects.p2_part_classification.release');
+      const inventoryItemId = Number(req.params.inventoryItemId);
+      const body = releaseSchema.parse(req.body);
+      if (!Number.isInteger(inventoryItemId) || inventoryItemId <= 0)
+        throw new P2DemandQuantityError(
+          'INVALID_ID',
+          'A valid part record is required.',
+          400
+        );
+      const snapshot = await resolveUserSnapshot(req.user!.id);
+      res.json(
+        await releasePlanningClassification(
+          inventoryItemId,
+          req.params.classificationId,
+          body.expectedConcurrencyVersion,
+          {
+            userId: snapshot.userId,
+            displayName: snapshot.displayName,
+            role: req.user!.role!,
+          }
+        )
+      );
     } catch (error) {
       fail(res, error);
     }

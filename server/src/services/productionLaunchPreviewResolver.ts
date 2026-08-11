@@ -1,7 +1,10 @@
 export type PreviewBlockerCode =
   | 'INVENTORY_ITEM_MISSING'
   | 'INVENTORY_ITEM_AMBIGUOUS'
-  | 'MAKE_BUY_MISSING'
+  | 'CLASSIFICATION_REQUIRED'
+  | 'CLASSIFICATION_CONFLICT'
+  | 'PART_DESCRIPTION_MISSING'
+  | 'PART_REVISION_REQUIRED'
   | 'BOM_MISSING'
   | 'BOM_EMPTY'
   | 'BOM_INACTIVE'
@@ -9,6 +12,8 @@ export type PreviewBlockerCode =
   | 'BOM_NOT_EFFECTIVE'
   | 'BOM_AMBIGUOUS'
   | 'BOM_CYCLE'
+  | 'BOM_DEPTH_EXCEEDED'
+  | 'BOM_DUPLICATE_RELATIONSHIP'
   | 'CHILD_QUANTITY_INVALID'
   | 'ROUTING_MISSING'
   | 'ROUTING_AMBIGUOUS'
@@ -31,6 +36,16 @@ export type PreviewInventoryItem = {
   partNumber: string;
   description: string | null;
   itemType: string | null;
+  planningClassification:
+    | 'MANUFACTURED'
+    | 'PURCHASED'
+    | 'RAW_MATERIAL'
+    | 'CUSTOMER_SUPPLIED'
+    | null;
+  classificationRevision: number | null;
+  classificationSourceRevision: string | null;
+  partConfigurationRevision: string | null;
+  classificationCandidateCount: number;
   manufacturedCategory: string | null;
   manufacturingLevel: string | null;
   unitOfMeasure: string | null;
@@ -78,9 +93,11 @@ export type PreviewRoot = {
 };
 
 export interface ProductionLaunchPreviewSource {
+  prepare?(roots: PreviewRoot[], effectiveAt: Date): Promise<void>;
   findInventory(
     partNumber: string,
-    inventoryItemId: number | null
+    inventoryItemId: number | null,
+    effectiveAt: Date
   ): Promise<PreviewInventoryItem[]>;
   findBoms(
     partNumber: string,
@@ -108,7 +125,7 @@ export type ProductionLaunchPreviewNode = {
   revision: string | null;
   description: string | null;
   classification: string;
-  makeBuy: 'MAKE' | 'BUY' | 'OUTSIDE_PROCESS' | 'PHANTOM' | 'UNRESOLVED';
+  makeBuy: 'MAKE' | 'BUY' | 'RAW_MATERIAL' | 'CUSTOMER_SUPPLIED' | 'UNRESOLVED';
   quantityPerParent: number;
   extendedProjectQuantity: number;
   unitOfMeasure: string | null;
@@ -127,8 +144,8 @@ export type ProductionLaunchPreviewNode = {
     | 'STOCK_SATISFIED'
     | 'MAKE_REQUIRED'
     | 'BUY_REQUIRED'
-    | 'OUTSIDE_PROCESS_REQUIRED'
-    | 'PHANTOM_EXPANSION';
+    | 'RAW_MATERIAL_REQUIRED'
+    | 'CUSTOMER_SUPPLIED_REQUIRED';
   blockers: PreviewBlocker[];
   children: ProductionLaunchPreviewNode[];
 };
@@ -148,21 +165,10 @@ function blocker(
 
 function classification(
   item: PreviewInventoryItem | null,
-  makeBuy: ProductionLaunchPreviewNode['makeBuy']
+  _makeBuy: ProductionLaunchPreviewNode['makeBuy']
 ) {
   if (!item) return 'BLOCKED_UNRESOLVED';
-  if (makeBuy === 'OUTSIDE_PROCESS') return 'OUTSIDE_PROCESS';
-  if (makeBuy === 'PHANTOM') return 'PHANTOM';
-  if (makeBuy === 'BUY')
-    return item.manufacturedCategory === 'RAW_MATERIAL'
-      ? 'RAW_MATERIAL'
-      : 'PURCHASED_COMPONENT';
-  return (
-    item.manufacturedCategory ||
-    (item.manufacturingLevel === 'FINAL'
-      ? 'ASSEMBLY'
-      : 'MANUFACTURED_COMPONENT')
-  );
+  return item.planningClassification ?? 'BLOCKED_UNRESOLVED';
 }
 
 export async function resolveProductionLaunchPreview(
@@ -170,6 +176,7 @@ export async function resolveProductionLaunchPreview(
   source: ProductionLaunchPreviewSource,
   effectiveAt = new Date()
 ) {
+  await source.prepare?.(roots, effectiveAt);
   const allBlockers: PreviewBlocker[] = [];
 
   async function visit(input: {
@@ -221,10 +228,21 @@ export async function resolveProductionLaunchPreview(
           'bom'
         )
       );
+    if (input.ancestry.length >= 50)
+      add(
+        blocker(
+          'BOM_DEPTH_EXCEEDED',
+          partNumber,
+          path,
+          `${partNumber} exceeds the controlled maximum BOM depth of 50.`,
+          'bom'
+        )
+      );
 
     const inventoryMatches = await source.findInventory(
       partNumber,
-      input.inventoryItemId
+      input.inventoryItemId,
+      effectiveAt
     );
     if (inventoryMatches.length === 0)
       add(
@@ -247,24 +265,54 @@ export async function resolveProductionLaunchPreview(
         )
       );
     const item = inventoryMatches.length === 1 ? inventoryMatches[0] : null;
-    const rawType = item?.itemType?.trim().toUpperCase() ?? '';
-    const makeBuy: ProductionLaunchPreviewNode['makeBuy'] =
-      rawType === 'MANUFACTURED'
-        ? 'MAKE'
-        : rawType === 'PURCHASED'
-          ? 'BUY'
-          : rawType === 'OUTSIDE_PROCESS'
-            ? 'OUTSIDE_PROCESS'
-            : rawType === 'PHANTOM'
-              ? 'PHANTOM'
-              : 'UNRESOLVED';
-    if (item && makeBuy === 'UNRESOLVED')
+    if (item && !item.description?.trim())
       add(
         blocker(
-          'MAKE_BUY_MISSING',
+          'PART_DESCRIPTION_MISSING',
           partNumber,
           path,
-          `${partNumber} has no controlled MAKE/BUY classification.`,
+          `${partNumber} has no controlled description.`,
+          'inventory'
+        )
+      );
+    if (item && !item.partConfigurationRevision?.trim())
+      add(
+        blocker(
+          'PART_REVISION_REQUIRED',
+          partNumber,
+          path,
+          `${partNumber} has no controlled part or configuration revision.`,
+          'inventory'
+        )
+      );
+    const controlledClassification = item?.planningClassification ?? null;
+    const makeBuy: ProductionLaunchPreviewNode['makeBuy'] =
+      controlledClassification === 'MANUFACTURED'
+        ? 'MAKE'
+        : controlledClassification === 'PURCHASED'
+          ? 'BUY'
+          : controlledClassification === 'RAW_MATERIAL'
+            ? 'RAW_MATERIAL'
+            : controlledClassification === 'CUSTOMER_SUPPLIED'
+              ? 'CUSTOMER_SUPPLIED'
+              : 'UNRESOLVED';
+    if (item && item.classificationCandidateCount > 1)
+      add(
+        blocker(
+          'CLASSIFICATION_CONFLICT',
+          partNumber,
+          path,
+          `${partNumber} has overlapping released planning classifications.`,
+          'inventory'
+        )
+      );
+    else if (item && makeBuy === 'UNRESOLVED')
+      add(
+        blocker(
+          'CLASSIFICATION_REQUIRED',
+          partNumber,
+          path,
+          `${partNumber} has no released authoritative planning classification.`,
           'inventory'
         )
       );
@@ -276,7 +324,12 @@ export async function resolveProductionLaunchPreview(
     let routing: PreviewRoutingCandidate | null = null;
     const children: ProductionLaunchPreviewNode[] = [];
 
-    if (makeBuy === 'BUY' && shortage > 0 && !item?.vendorId && !item?.orderUrl)
+    if (
+      (makeBuy === 'BUY' || makeBuy === 'RAW_MATERIAL') &&
+      shortage > 0 &&
+      !item?.vendorId &&
+      !item?.orderUrl
+    )
       add(
         blocker(
           'PURCHASING_PATH_MISSING',
@@ -288,8 +341,10 @@ export async function resolveProductionLaunchPreview(
       );
 
     if (
-      (makeBuy === 'MAKE' || makeBuy === 'PHANTOM') &&
-      !nodeBlockers.some((entry) => entry.code === 'BOM_CYCLE')
+      makeBuy === 'MAKE' &&
+      !nodeBlockers.some((entry) =>
+        ['BOM_CYCLE', 'BOM_DEPTH_EXCEEDED'].includes(entry.code)
+      )
     ) {
       const candidates = await source.findBoms(partNumber, effectiveAt);
       const active = candidates.filter((candidate) => candidate.isActive);
@@ -433,7 +488,20 @@ export async function resolveProductionLaunchPreview(
               'bom'
             )
           );
+        const relationshipKeys = new Set<string>();
         for (const line of lines) {
+          const relationshipKey = normalized(line.childPartNumber);
+          if (relationshipKeys.has(relationshipKey))
+            add(
+              blocker(
+                'BOM_DUPLICATE_RELATIONSHIP',
+                line.childPartNumber,
+                [...path, line.childPartNumber],
+                `${partNumber} contains duplicate BOM relationships for ${line.childPartNumber}.`,
+                'bom'
+              )
+            );
+          relationshipKeys.add(relationshipKey);
           const extended =
             input.extendedQuantity * Number(line.quantityPerParent);
           children.push(
@@ -466,10 +534,10 @@ export async function resolveProductionLaunchPreview(
           ? 'STOCK_SATISFIED'
           : makeBuy === 'MAKE'
             ? 'MAKE_REQUIRED'
-            : makeBuy === 'OUTSIDE_PROCESS'
-              ? 'OUTSIDE_PROCESS_REQUIRED'
-              : makeBuy === 'PHANTOM'
-                ? 'PHANTOM_EXPANSION'
+            : makeBuy === 'RAW_MATERIAL'
+              ? 'RAW_MATERIAL_REQUIRED'
+              : makeBuy === 'CUSTOMER_SUPPLIED'
+                ? 'CUSTOMER_SUPPLIED_REQUIRED'
                 : 'BUY_REQUIRED';
 
     return {
@@ -484,7 +552,7 @@ export async function resolveProductionLaunchPreview(
       parentPartNumber: input.parentPartNumber,
       inventoryItemId: item?.id ?? null,
       partNumber,
-      revision: null,
+      revision: item?.partConfigurationRevision ?? null,
       description: item?.description ?? null,
       classification: classification(item, makeBuy),
       makeBuy,

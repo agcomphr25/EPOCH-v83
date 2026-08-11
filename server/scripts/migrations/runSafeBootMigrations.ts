@@ -293,6 +293,7 @@ export const safeMigrationFiles = [
   '0262_p2_customer_demand_quantity_ledger.sql',
   '0263_p1_customer_po_document_imports.sql',
   '0264_p2_recursive_production_demand_foundation.sql',
+  '0265_p2_demand_planning_foundation.sql',
 ];
 
 export const criticalMigrationFiles = new Set([
@@ -362,6 +363,7 @@ export const criticalMigrationFiles = new Set([
   '0262_p2_customer_demand_quantity_ledger.sql',
   '0263_p1_customer_po_document_imports.sql',
   '0264_p2_recursive_production_demand_foundation.sql',
+  '0265_p2_demand_planning_foundation.sql',
 ]);
 
 export async function runSafeBootMigrations() {

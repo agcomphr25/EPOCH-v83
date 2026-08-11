@@ -49,6 +49,23 @@ import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import OrderActionButtons from '@/components/OrderActionButtons';
 import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 
+const TERMINAL_NON_SHIPPING_P1_STATUSES = new Set([
+  'CANCELLED',
+  'CANCELED',
+  'SCRAPPED',
+]);
+
+export function shouldShowP1ShippingQueueItem(item: {
+  isFulfilled?: boolean | null;
+  productionStatus?: string | null;
+}) {
+  if (item.isFulfilled) return false;
+  const status = String(item.productionStatus ?? '')
+    .trim()
+    .toUpperCase();
+  return !TERMINAL_NON_SHIPPING_P1_STATUSES.has(status);
+}
+
 export default function QCShippingQueuePage() {
   // State for tab selection
   const [activeTab, setActiveTab] = useState<string>('regular');
@@ -107,8 +124,9 @@ export default function QCShippingQueuePage() {
     queryKey: ['/api/po-orders/all-p1-with-status'],
   });
 
-  // Filter out fulfilled items from P1 PO Orders
-  // Once items are marked as fulfilled/shipped, they should not appear in the queue
+  // The comprehensive endpoint intentionally includes historical production
+  // records. Shipping QC must show only actionable demand, not fulfilled items
+  // or cancelled/scrapped duplicates retained for traceability.
   const poOrders = useMemo(() => {
     return (rawPoOrders as any[])
       .map((customer: any) => ({
@@ -116,7 +134,7 @@ export default function QCShippingQueuePage() {
         pos: customer.pos
           .map((po: any) => ({
             ...po,
-            items: po.items.filter((item: any) => !item.isFulfilled),
+            items: po.items.filter(shouldShowP1ShippingQueueItem),
           }))
           .filter((po: any) => po.items.length > 0), // Remove POs with no remaining items
       }))

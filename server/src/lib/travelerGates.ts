@@ -1,6 +1,7 @@
 import { storage } from '../../storage';
 import { db } from '../../db';
 import { calibrationAssets, calibrationUseLogs, productionWorkOrders, travelerAuthorizations, travelerMaterialConsumption } from '../../schema';
+import { prospectiveAuthorizationEnforcementEnabled, requireApplicableAuthorization } from '../services/certificationAuthorizationService';
 import { eq, and, inArray } from 'drizzle-orm';
 
 export interface GateResult {
@@ -294,6 +295,22 @@ export async function evaluateTravelerStartGates(
   // Grandfather: only enforce once at least one authorization has been set up for
   // this part (avoids blocking everyone when the system is newly deployed).
   if (traveler.partNumber) {
+    if (prospectiveAuthorizationEnforcementEnabled()) {
+      try {
+        await requireApplicableAuthorization({
+          employeeId: options.employeeId,
+          type: 'WORK',
+          program: 'P2',
+          partNumber: traveler.partNumber,
+          department: step.departmentName,
+          operation: step.departmentName,
+          actionType: 'TRAVELER_START',
+          evidence: { travelerId, travelerStepId: stepId },
+        });
+      } catch (error: any) {
+        return { allowed: false, reason: error.message };
+      }
+    } else {
     const [anyAuth] = await db
       .select({ id: travelerAuthorizations.id })
       .from(travelerAuthorizations)
@@ -325,6 +342,7 @@ export async function evaluateTravelerStartGates(
           reason: `${name} does not have a training authorization for part ${traveler.partNumber}. An authorization record must be created before work can begin.`,
         };
       }
+    }
     }
   }
 
@@ -483,7 +501,14 @@ export async function evaluateStartGatesDetailed(
       reason: identityReason,
     });
     // Cannot evaluate part-auth or op-cert without identity; record them as pending.
-    if (traveler.partNumber) {
+    if (traveler.partNumber && prospectiveAuthorizationEnforcementEnabled()) {
+      try {
+        await requireApplicableAuthorization({ employeeId: options.employeeId, type: 'WORK', program: 'P2', partNumber: traveler.partNumber, department: step.departmentName, operation: step.departmentName, actionType: 'TRAVELER_START', evidence: { travelerId, travelerStepId: stepId } });
+        results.push({ key: 'training', label: 'Work authorization', passed: true });
+      } catch (error: any) {
+        results.push({ key: 'training', label: 'Work authorization', passed: false, reason: error.message });
+      }
+    } else if (traveler.partNumber) {
       results.push({
         key: 'training',
         label: 'Training verified',

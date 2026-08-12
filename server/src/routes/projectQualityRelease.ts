@@ -18,6 +18,7 @@ import {
   ProjectPilotControlError,
   requireActivePilotForAction,
 } from '../services/projectPilotControlService';
+import { requireApplicableAuthorization } from '../services/certificationAuthorizationService';
 
 const router = Router({ mergeParams: true });
 const expected = z.object({ expectedLockVersion: z.number().int().positive() });
@@ -218,6 +219,8 @@ router.post('/releases', async (req, res) => {
       idempotencyKey: body.idempotencyKey,
       confirmation: body.pilotConfirmation,
     });
+    if (!user.employeeId) throw new ProjectQualityReleaseError('EMPLOYEE_IDENTITY_REQUIRED','An employee identity is required for Final Product Release.',403);
+    await requireApplicableAuthorization({ employeeId:user.employeeId, userId:user.userId, type:'FINAL_PRODUCT_RELEASE', program:'P2', partNumber:body.partNumber, actionType:'FINAL_PRODUCT_RELEASE', evidence:{ projectId:id(req), poLineId:body.poLineId, quantity:body.quantity, serialNumbers:body.serialNumbers, batchLots:body.batchLots } });
     res.status(201).json(await releaseProduct(id(req), body, user));
   } catch (error) {
     fail(res, error);

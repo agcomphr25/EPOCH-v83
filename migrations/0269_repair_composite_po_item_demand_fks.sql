@@ -36,3 +36,21 @@ DO $$ BEGIN
       ON DELETE RESTRICT;
   END IF;
 END $$;
+
+-- project_production_demands_plan_project_fk references project_production_plan_items_identity_key,
+-- a composite unique constraint created by migration 0264.  Drizzle places the FK before the
+-- constraint in its diff ordering, so we drop it from dev and restore it here idempotently
+-- after 0264 has guaranteed the unique constraint exists.
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'project_production_demands_plan_project_fk'
+      AND conrelid = 'project_production_demands'::regclass
+  ) THEN
+    ALTER TABLE project_production_demands
+      ADD CONSTRAINT project_production_demands_plan_project_fk
+      FOREIGN KEY (production_plan_item_id, production_plan_id, project_id)
+      REFERENCES project_production_plan_items(id, production_plan_id, project_id)
+      ON DELETE RESTRICT;
+  END IF;
+END $$;

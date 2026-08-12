@@ -6314,26 +6314,90 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
-  id: serial('id').primaryKey(),
-  poId: integer('po_id')
-    .references(() => p2PurchaseOrders.id)
-    .notNull(),
-  inventoryItemId: integer('inventory_item_id').references(
-    () => inventoryItems.id
-  ), // FK to inventory_items
-  partNumber: text('part_number').notNull(), // P2-specific part number
-  partName: text('part_name').notNull(), // Display name for the part
-  quantity: integer('quantity').notNull(),
-  demandLineIdentity: uuid('demand_line_identity').defaultRandom().notNull(),
-  dueDate: date('due_date'),
-  unitPrice: real('unit_price').default(0), // Price per unit
-  totalPrice: real('total_price').default(0), // quantity * unitPrice
-  specifications: text('specifications'), // Part specifications
-  notes: text('notes'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
+export const p2PurchaseOrderItems = pgTable(
+  'p2_purchase_order_items',
+  {
+    id: serial('id').primaryKey(),
+    poId: integer('po_id')
+      .references(() => p2PurchaseOrders.id)
+      .notNull(),
+    inventoryItemId: integer('inventory_item_id').references(
+      () => inventoryItems.id
+    ), // FK to inventory_items
+    partNumber: text('part_number').notNull(), // P2-specific part number
+    partName: text('part_name').notNull(), // Display name for the part
+    quantity: integer('quantity').notNull(),
+    demandLineIdentity: uuid('demand_line_identity').defaultRandom().notNull(),
+    dueDate: date('due_date'),
+    unitPrice: real('unit_price').default(0), // Price per unit
+    totalPrice: real('total_price').default(0), // quantity * unitPrice
+    specifications: text('specifications'), // Part specifications
+    notes: text('notes'),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  (table) => ({
+    // Composite unique required by the p2_demand_event_item_identity_fk and
+    // related composite FKs in migrations 0262, 0264, 0265.
+    idDemandIdentityUnique: unique('p2_po_items_id_demand_identity_unique').on(
+      table.id,
+      table.demandLineIdentity
+    ),
+  })
+);
+
+// P2 customer-demand quantity event ledger. Migration 0262 is the database
+// authority for immutability triggers and CHECK constraints; this schema
+// entry exists so Drizzle's schema-diff produces the correct composite FK
+// column order instead of re-ordering by attnum during introspection.
+export const p2CustomerDemandQuantityEvents = pgTable(
+  'p2_customer_demand_quantity_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    // demand_line_identity is attnum 2; po_id/po_item_id are attnums 3/4.
+    // Column order here matches the live DB so Drizzle generates no drift.
+    demandLineIdentity: uuid('demand_line_identity').notNull(),
+    poId: integer('po_id')
+      .notNull()
+      .references(() => p2PurchaseOrders.id, { onDelete: 'restrict' }),
+    poItemId: integer('po_item_id')
+      .notNull()
+      .references(() => p2PurchaseOrderItems.id, { onDelete: 'restrict' }),
+    eventType: text('event_type').notNull(),
+    quantityDelta: numeric('quantity_delta', { precision: 18, scale: 6 }).notNull(),
+    unitOfMeasure: text('unit_of_measure').notNull(),
+    effectiveAt: timestamp('effective_at', { withTimezone: true }).defaultNow().notNull(),
+    customerEvidenceReference: text('customer_evidence_reference'),
+    reason: text('reason').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    priorEventHash: text('prior_event_hash'),
+    eventHash: text('event_hash').notNull(),
+    recordedBy: integer('recorded_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    recordedByDisplayName: text('recorded_by_display_name').notNull(),
+    recordedByRole: text('recorded_by_role').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    // Named unique constraints — match the names in migration 0262.
+    idempotencyUnique: unique('p2_demand_event_idempotency_unique').on(
+      table.demandLineIdentity,
+      table.idempotencyKey
+    ),
+    hashUnique: unique('p2_demand_event_hash_unique').on(table.eventHash),
+    // Composite FK: poItemId → p2_purchase_order_items.id
+    //               demandLineIdentity → p2_purchase_order_items.demand_line_identity
+    // Column order here (poItemId first) is intentional — it matches the
+    // referenced unique constraint p2_po_items_id_demand_identity_unique(id, demand_line_identity)
+    // and avoids Drizzle's attnum-sort introspection bug that reverses the order.
+    itemIdentityFk: foreignKey({
+      name: 'p2_demand_event_item_identity_fk',
+      columns: [table.poItemId, table.demandLineIdentity],
+      foreignColumns: [p2PurchaseOrderItems.id, p2PurchaseOrderItems.demandLineIdentity],
+    }).onDelete('restrict'),
+  })
+);
 
 export const projectRomDrafts = pgTable(
   'project_rom_drafts',

@@ -36,6 +36,18 @@ describe('P18380 persisted shipment reconciliation', () => {
     expect(sql).toContain('IF v_shipment_count <> 1 THEN');
   });
 
+  it('skips a clean database but fails closed on orphaned target evidence', () => {
+    expect(sql).toContain('IF v_orphaned_evidence_count = 0 THEN');
+    expect(sql).toContain(
+      'P18380 repair skipped: target order and persisted evidence are absent'
+    );
+    expect(sql).toContain(
+      'production order not found while % targeted evidence row(s) remain'
+    );
+    expect(sql).toContain("entity_id = 'PO-P18380-46-1'");
+    expect(sql).toContain("subject_id = 'PO-P18380-46-1'");
+  });
+
   it('repairs fulfillment and records transition and audit evidence', () => {
     expect(sql).toContain("production_status = 'SHIPPED'");
     expect(sql).toContain("current_department = 'Shipped'");

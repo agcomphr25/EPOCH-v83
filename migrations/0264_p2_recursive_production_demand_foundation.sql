@@ -20,7 +20,7 @@ DO $$ BEGIN
     WHERE c.conrelid = 'p2_production_orders'::regclass
       AND c.contype  IN ('p', 'u')
     GROUP BY c.oid
-    HAVING array_agg(a.attname ORDER BY a.attnum) = ARRAY['id']
+    HAVING array_agg(a.attname::text ORDER BY a.attnum) = ARRAY['id']
   ) THEN
     ALTER TABLE p2_production_orders
       ADD CONSTRAINT p2_production_orders_id_unique_repair

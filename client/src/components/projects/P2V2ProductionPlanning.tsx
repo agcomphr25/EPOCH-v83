@@ -102,11 +102,6 @@ const wizardPages = [
 ] as const;
 
 const reviewPageFields: Record<number, Array<[string, string]>> = {
-  3: [
-    ['Required quantity', 'extended_project_quantity'],
-    ['Planning classification', 'planning_classification'],
-    ['Material specification', 'specification_references'],
-  ],
   4: [
     ['Required tooling', 'tooling_requirements'],
     ['Computer numerical control programs', 'cnc_program_requirements'],
@@ -411,7 +406,10 @@ export default function P2V2ProductionPlanning({
                     ))}
                 </section>
               )}
-              {currentPage >= 3 && currentPage <= 7 && (
+              {currentPage === 3 && !!data?.items.length && (
+                <MaterialReview items={data.items} />
+              )}
+              {currentPage >= 4 && currentPage <= 7 && (
                 <ReviewByExceptionPanel
                   items={data?.items ?? []}
                   fields={reviewPageFields[currentPage] ?? []}
@@ -730,6 +728,88 @@ function RoutingReview({
           </article>
         );
       })}
+    </section>
+  );
+}
+
+function MaterialReview({ items }: { items: Row[] }) {
+  const components = items.filter((item) =>
+    Boolean(value(item, 'parent_part_number'))
+  );
+  return (
+    <section className="space-y-3" data-testid="material-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Controlled material definition</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Component identity and quantity come from the saved assembly baseline.
+          This page reviews material definition only; it does not claim that
+          inventory is available, reserved, allocated, or purchased.
+        </p>
+      </div>
+      {components.map((item) => {
+        const classification =
+          value(item, 'planning_classification') ||
+          value(item, 'make_buy') ||
+          (item.is_manufactured ? 'MAKE' : 'BUY');
+        const inventoryLinked = Boolean(value(item, 'inventory_item_id'));
+        const specifications = displayValue(item, 'specification_references');
+        return (
+          <article
+            className="rounded border p-4"
+            data-testid="material-review-item"
+            key={value(item, 'id')}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="font-semibold">
+                  {value(item, 'part_number') || 'Information Missing'} —{' '}
+                  {value(item, 'part_name') || 'Information Missing'}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Used by {value(item, 'parent_part_number')}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Badge variant="outline">
+                  {classification.replaceAll('_', ' ')}
+                </Badge>
+                <Badge variant={inventoryLinked ? 'default' : 'destructive'}>
+                  {inventoryLinked
+                    ? 'Inventory linked'
+                    : 'Inventory link missing'}
+                </Badge>
+              </div>
+            </div>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-4">
+              <OrderFact
+                label="Quantity per parent"
+                current={item.quantity_per_parent}
+              />
+              <OrderFact
+                label="Required project quantity"
+                current={item.extended_project_quantity}
+              />
+              <OrderFact
+                label="Inventory record"
+                current={item.inventory_item_id}
+              />
+              <OrderFact label="BOM status" current={item.bom_release_status} />
+            </dl>
+            <div className="mt-3 text-sm">
+              <p className="text-muted-foreground">Material specifications</p>
+              <p className={specifications ? '' : 'font-medium text-amber-700'}>
+                {specifications || 'Information Missing'}
+              </p>
+            </div>
+          </article>
+        );
+      })}
+      {!components.length && (
+        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+          No component material lines are present in the saved assembly
+          baseline.
+        </p>
+      )}
     </section>
   );
 }

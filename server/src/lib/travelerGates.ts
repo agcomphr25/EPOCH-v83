@@ -289,6 +289,7 @@ export async function evaluateTravelerStartGates(
       reason: `Employee identity is required before starting this step. Scan a valid badge before starting.`,
     };
   }
+  const verifiedEmployeeId = options.employeeId;
 
   // Gate 2a: Part authorization — when the traveler has a partNumber, the employee
   // must have an active authorization record for that part.
@@ -298,7 +299,7 @@ export async function evaluateTravelerStartGates(
     if (prospectiveAuthorizationEnforcementEnabled()) {
       try {
         await requireApplicableAuthorization({
-          employeeId: options.employeeId,
+          employeeId: verifiedEmployeeId,
           type: 'WORK',
           program: 'P2',
           partNumber: traveler.partNumber,
@@ -328,7 +329,7 @@ export async function evaluateTravelerStartGates(
         .from(travelerAuthorizations)
         .where(
           and(
-            eq(travelerAuthorizations.employeeId, options.employeeId),
+            eq(travelerAuthorizations.employeeId, verifiedEmployeeId),
             eq(travelerAuthorizations.partNumber, traveler.partNumber),
             eq(travelerAuthorizations.isActive, true)
           )
@@ -362,7 +363,7 @@ export async function evaluateTravelerStartGates(
         const certName = cert?.name ?? `Certification #${routingOp.certificationId}`;
         const name = options.employeeName || `Employee #${options.employeeId}`;
         const hasCert = await storage.checkEmployeeHasValidTrainingCertificationForCert(
-          options.employeeId,
+          verifiedEmployeeId,
           routingOp.certificationId
         );
         if (!hasCert) {
@@ -375,7 +376,7 @@ export async function evaluateTravelerStartGates(
 
       // Load active qualifications once for both machine-class and operation-type checks.
       const activeQuals = await storage.getActiveEmployeeMachineQualificationsForEmployee(
-        options.employeeId
+        verifiedEmployeeId
       );
 
       // Gate 2c: Machine-class qualification — if the routing operation has a CNC

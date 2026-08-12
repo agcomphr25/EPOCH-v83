@@ -29,10 +29,14 @@ describe('Certification & Authorization Matrix architecture', () => {
     expect(migration).toContain('certification_authorization_use_snapshots');
     expect(migration).toContain('uq_cert_auth_active_scope');
     expect(migration).toContain("WHERE status = 'ACTIVE'");
+    expect(migration).toContain('ON CONFLICT (legacy_p2_employee_certification_id)\n  WHERE legacy_p2_employee_certification_id IS NOT NULL');
   });
 
   it('gates traveler work and final product release server-side', () => {
-    expect(read('server/src/lib/travelerGates.ts')).toContain("type: 'WORK'");
+    const travelerGates = read('server/src/lib/travelerGates.ts');
+    expect(travelerGates).toContain("type: 'WORK'");
+    expect(travelerGates).toContain('const verifiedEmployeeId = options.employeeId;');
+    expect(travelerGates).toContain('employeeId: verifiedEmployeeId');
     expect(read('server/src/routes/projectQualityRelease.ts')).toContain("type:'FINAL_PRODUCT_RELEASE'");
   });
 });

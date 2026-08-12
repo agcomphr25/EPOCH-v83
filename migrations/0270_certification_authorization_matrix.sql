@@ -93,7 +93,9 @@ SELECT pc.employee_id, 'P2', pc.part_number, pc.department, 'WORK', 'DRAFT',
        pc.id, u.id, u.id
 FROM p2_employee_part_certifications pc
 JOIN LATERAL (SELECT id FROM users WHERE role IN ('OWNER','ADMIN') ORDER BY id LIMIT 1) u ON true
-ON CONFLICT (legacy_p2_employee_certification_id) DO NOTHING;
+ON CONFLICT (legacy_p2_employee_certification_id)
+  WHERE legacy_p2_employee_certification_id IS NOT NULL
+DO NOTHING;
 
 INSERT INTO certification_authorization_events(authorization_id, revision, event_type, snapshot, reason, actor_user_id)
 SELECT a.id, a.revision, 'MIGRATED', to_jsonb(a),

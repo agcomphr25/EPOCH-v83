@@ -254,6 +254,7 @@ import offlineReplayRoutes from './offlineReplay';
 import controlTowerRoutes from './controlTower';
 import financialReviewRoutes from './financialReview';
 import quickNotesRoutes from './quickNotes';
+import moveForwardRoutes from './moveForward';
 import governanceRoutes from './governance';
 import { requireExecutiveAccess } from '../middleware/requireExecutiveAccess';
 import {
@@ -1606,6 +1607,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Executive Rundown routes (Glenn-only, access-restricted)
   app.use('/api/executive/rundown', executiveRundownRoutes);
+  app.use('/api/move-forward', moveForwardRoutes);
   app.use('/api/metrics', metricsRoutes);
   app.use('/api/widgets', widgetTypesRouter);
   app.use('/api/dashboards', dashboardsRouter);

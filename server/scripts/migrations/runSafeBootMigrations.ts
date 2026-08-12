@@ -297,6 +297,7 @@ export const safeMigrationFiles = [
   '0266_p2_production_launch_persistence.sql',
   '0267_reconcile_p18380_persisted_shipment.sql',
   '0268_replit_p2_demand_composite_fk_repair.sql',
+  '0269_move_forward.sql',
 ];
 
 export const criticalMigrationFiles = new Set([

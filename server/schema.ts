@@ -21259,6 +21259,63 @@ export const insertQuickNoteShareSchema = createInsertSchema(
 export type QuickNoteShare = typeof quickNoteShares.$inferSelect;
 export type InsertQuickNoteShare = z.infer<typeof insertQuickNoteShareSchema>;
 
+// Move Forward is a private capture-to-action workspace for Glenn. These tables
+// intentionally store suggestions only and never mutate operational records.
+export const moveForwardCaptures = pgTable('move_forward_captures', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  originalText: text('original_text').notNull(),
+  inputMethod: text('input_method').notNull().default('typed'),
+  status: text('status').notNull().default('draft'),
+  analysisError: text('analysis_error'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  confirmedAt: timestamp('confirmed_at'),
+});
+
+export const moveForwardItems = pgTable('move_forward_items', {
+  id: serial('id').primaryKey(),
+  captureId: integer('capture_id').notNull().references(() => moveForwardCaptures.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').notNull().references(() => users.id),
+  itemType: text('item_type').notNull(),
+  title: text('title').notNull(),
+  details: text('details'),
+  category: text('category'),
+  priority: text('priority').notNull().default('NORMAL'),
+  dueDate: date('due_date'),
+  amountCents: integer('amount_cents'),
+  status: text('status').notNull().default('proposed'),
+  suggestedLinks: jsonb('suggested_links').$type<Array<{ type: string; id: string; label: string }>>().default([]).notNull(),
+  rundownItemId: integer('rundown_item_id').references(() => executiveRundownItems.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+});
+
+export const moveForwardClarifications = pgTable('move_forward_clarifications', {
+  id: serial('id').primaryKey(),
+  captureId: integer('capture_id').notNull().references(() => moveForwardCaptures.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').notNull().references(() => users.id),
+  question: text('question').notNull(),
+  answer: text('answer'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  status: text('status').notNull().default('pending'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  answeredAt: timestamp('answered_at'),
+});
+
+export const moveForwardRules = pgTable('move_forward_rules', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  triggerText: text('trigger_text').notNull(),
+  instruction: text('instruction').notNull(),
+  status: text('status').notNull().default('proposed'),
+  correctionCount: integer('correction_count').notNull().default(1),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  approvedAt: timestamp('approved_at'),
+});
+
 // â”€â”€â”€ Improvement Notes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Workflow improvement suggestions captured from any page in EPOCH.
 // Promoted from localStorage prototype to a real backed table in 0104.

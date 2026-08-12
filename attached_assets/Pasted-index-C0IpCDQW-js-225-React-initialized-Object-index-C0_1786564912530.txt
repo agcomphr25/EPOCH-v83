@@ -1,0 +1,54 @@
+index-C0IpCDQW.js:225 React initialized: Object
+index-C0IpCDQW.js:225 React hooks: Object
+index-C0IpCDQW.js:225 [EPOCH SYNC] Sync engine starting
+index-C0IpCDQW.js:225 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-C0IpCDQW.js:222 App component is rendering...
+index-C0IpCDQW.js:222 Environment: production
+index-C0IpCDQW.js:222 Base URL: /
+index-C0IpCDQW.js:189 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-C0IpCDQW.js:189 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 135000ms, deployment: true)
+index-C0IpCDQW.js:189 [EPOCH] Install prompt captured and ready
+employee:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 503 ()
+api/vendor-pos/compliance-backfill?filter=enforced:1  Failed to load resource: the server responded with a status of 503 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 503 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/auth/login:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+index-C0IpCDQW.js:225 Login error: Error: there is no unique constraint matching given keys for referenced table "p2_production_orders"
+    at Ap (index-C0IpCDQW.js:189:6805)
+    at async Ao (index-C0IpCDQW.js:189:7202)
+    at async T (index-C0IpCDQW.js:222:23940)
+console.error @ index-C0IpCDQW.js:225
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+index-C0IpCDQW.js:225 💥 API Request failed for /api/vendor-pos/compliance-backfill?filter=enforced: Error: there is no unique constraint matching given keys for referenced table "p2_production_orders"
+    at Ap (index-C0IpCDQW.js:189:6805)
+    at async Ao (index-C0IpCDQW.js:189:7202)
+    at async un (index-C0IpCDQW.js:189:10928)
+console.error @ index-C0IpCDQW.js:225
+api/auth/login:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+index-C0IpCDQW.js:225 Login error: Error: there is no unique constraint matching given keys for referenced table "p2_production_orders"
+    at Ap (index-C0IpCDQW.js:189:6805)
+    at async Ao (index-C0IpCDQW.js:189:7202)
+    at async T (index-C0IpCDQW.js:222:23940)
+console.error @ index-C0IpCDQW.js:225
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()

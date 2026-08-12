@@ -9,6 +9,7 @@ DECLARE
   v_shipped_at timestamp;
   v_tracking_number text;
   v_shipment_count integer;
+  v_orphaned_evidence_count integer;
   v_reason constant text :=
     'Reconciled legacy cancelled production state to the persisted March 25, 2026 OEM shipment; tracking 1Z27835W0391723408.';
 BEGIN
@@ -19,7 +20,30 @@ BEGIN
    FOR UPDATE;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'P18380 repair aborted: production order not found';
+    SELECT
+      (SELECT COUNT(*)
+         FROM shipment_items AS item
+         LEFT JOIN shipment_records AS shipment ON shipment.id = item.shipment_id
+        WHERE item.order_id = 'PO-P18380-46-1'
+           OR shipment.master_tracking_number = '1Z27835W0391723408')
+      + (SELECT COUNT(*)
+           FROM order_department_transitions
+          WHERE entity_id = 'PO-P18380-46-1')
+      + (SELECT COUNT(*)
+           FROM audit_events
+          WHERE entity_id = 'PO-P18380-46-1'
+             OR subject_id = 'PO-P18380-46-1')
+      INTO v_orphaned_evidence_count;
+
+    IF v_orphaned_evidence_count = 0 THEN
+      RAISE NOTICE
+        'P18380 repair skipped: target order and persisted evidence are absent';
+      RETURN;
+    END IF;
+
+    RAISE EXCEPTION
+      'P18380 repair aborted: production order not found while % targeted evidence row(s) remain',
+      v_orphaned_evidence_count;
   END IF;
 
   IF v_order.po_number IS DISTINCT FROM 'P18380'

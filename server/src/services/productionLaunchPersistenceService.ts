@@ -292,7 +292,8 @@ async function persistProductionLaunchWithDependencies(
         ${preview.resultChecksum},${evidenceDigest},${clean(input.signatureMeaning)})`);
     await dependencies.fault?.('AFTER_LAUNCH');
 
-    for (const [index, demand] of graph.demands.entries()) {
+    for (let index = 0; index < graph.demands.length; index += 1) {
+      const demand = graph.demands[index];
       const demandId = demandIds.get(demand.key)!;
       await tx.execute(sql`
         INSERT INTO project_production_demands

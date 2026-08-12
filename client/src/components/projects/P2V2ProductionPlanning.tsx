@@ -391,7 +391,11 @@ export default function P2V2ProductionPlanning({
               )}
               {currentPage === 2 && !!data?.items.length && (
                 <section className="space-y-3">
-                  <h3 className="font-semibold">Manufactured-item planning</h3>
+                  <RoutingReview
+                    items={data.items}
+                    blockers={data.readiness.blockers}
+                  />
+                  <h3 className="font-semibold">Manufacturing decisions</h3>
                   {data.items
                     .filter((item) => item.is_manufactured)
                     .map((item) => (
@@ -642,6 +646,80 @@ function AssemblyReview({
                 current={item.routing_revision}
               />
             </dl>
+            {!!itemBlockers.length && (
+              <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">
+                {itemBlockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            )}
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
+function RoutingReview({
+  items,
+  blockers,
+}: {
+  items: Row[];
+  blockers: string[];
+}) {
+  const manufacturedItems = items.filter((item) => item.is_manufactured);
+  return (
+    <section className="space-y-3" data-testid="routing-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Controlled routing review</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Routing identity, revision, and release status come from the saved
+          Production Planning baseline. Correct routing content in its
+          controlled source, then refresh the draft here.
+        </p>
+      </div>
+      {manufacturedItems.map((item) => {
+        const partNumber = value(item, 'part_number');
+        const routingStatus =
+          value(item, 'routing_release_status') || 'MISSING';
+        const released = routingStatus === 'RELEASED';
+        const itemBlockers = blockers.filter((blocker) =>
+          blocker.startsWith(`${partNumber}:`)
+        );
+        return (
+          <article
+            className="rounded border p-4"
+            data-testid="routing-review-item"
+            key={value(item, 'id')}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="font-semibold">
+                  {partNumber || 'Information Missing'} —{' '}
+                  {value(item, 'part_name') || 'Information Missing'}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Manufactured item · controlled routing required
+                </p>
+              </div>
+              <Badge variant={released ? 'default' : 'destructive'}>
+                {released ? 'Released' : routingStatus.replaceAll('_', ' ')}
+              </Badge>
+            </div>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+              <OrderFact label="Routing record" current={item.routing_id} />
+              <OrderFact
+                label="Routing revision"
+                current={item.routing_revision}
+              />
+              <OrderFact label="Release status" current={routingStatus} />
+            </dl>
+            {!released && (
+              <p className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">
+                A released routing is not available in this baseline. Production
+                Planning cannot treat this item as ready.
+              </p>
+            )}
             {!!itemBlockers.length && (
               <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">
                 {itemBlockers.map((blocker) => (

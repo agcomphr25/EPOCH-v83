@@ -25,6 +25,7 @@ const model = {
       extended_project_quantity: '2',
       bom_revision: 'B',
       bom_release_status: 'RELEASED',
+      routing_id: 'routing-100-rev-4',
       routing_revision: '4',
       routing_release_status: 'RELEASED',
     },
@@ -183,6 +184,14 @@ describe('P2V2ProductionPlanning', () => {
         name: 'Page 3: Review How Each Part Is Made',
       })
     );
+    expect(screen.getByTestId('routing-review')).toHaveTextContent(
+      'Controlled routing review'
+    );
+    expect(screen.getByTestId('routing-review')).toHaveTextContent(
+      'routing-100-rev-4'
+    );
+    expect(screen.getByTestId('routing-review')).toHaveTextContent('Released');
+    expect(screen.getAllByTestId('routing-review-item')).toHaveLength(1);
     expect(screen.getAllByTestId('production-plan-item')).toHaveLength(1);
     fireEvent.click(
       screen.getByRole('button', { name: 'Page 10: Review and Approve' })

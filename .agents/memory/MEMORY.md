@@ -1,2 +1,3 @@
 - [Neon multi-statement pool.query bug](neon-multi-statement-pool-query.md) — splitting multi-statement DDL into sequential single-statement calls is required; Neon returns an array for multi-statement queries, breaking toCompatibleQueryResult
 - [Migration baseline drift](migration-baseline-drift.md) — BASELINE_APPLIED_THROUGH skips migrations below it; if baseline jumps past a real migration, that column/table is missing from production and needs a safe IF NOT EXISTS follow-up migration
+- [Volatile-default column provisioning hang](volatile-default-column-provisioning.md) — Drizzle diff generates slow ADD COLUMN volatile_func() NOT NULL that hangs Replit provisioning; fix by temporarily stripping DEFAULT+NOT NULL on dev DB, publish, then restore

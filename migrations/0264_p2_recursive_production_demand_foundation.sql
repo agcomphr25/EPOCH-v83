@@ -1,6 +1,33 @@
 -- Phase 2 foundation for controlled recursive P2 production demand.
 -- Additive only: no legacy backfill, no execution records, and no stage changes.
 
+-- Production-drift guard: p2_production_orders.id must be PK/UNIQUE before any
+-- table in this migration references it.  The canonical migration 0000 declares
+-- id as serial PRIMARY KEY, but if that constraint is missing in a target DB this
+-- migration fails with "no unique constraint matching given keys".  The index is
+-- created idempotently; the DO block skips the UNIQUE USING INDEX step when any
+-- PK or UNIQUE constraint already covers exactly the id column.
+CREATE UNIQUE INDEX IF NOT EXISTS p2_production_orders_id_unique_repair
+  ON p2_production_orders(id);
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint c
+    JOIN pg_attribute a
+      ON a.attrelid = c.conrelid
+     AND a.attnum   = ANY(c.conkey)
+    WHERE c.conrelid = 'p2_production_orders'::regclass
+      AND c.contype  IN ('p', 'u')
+    GROUP BY c.oid
+    HAVING array_agg(a.attname ORDER BY a.attnum) = ARRAY['id']
+  ) THEN
+    ALTER TABLE p2_production_orders
+      ADD CONSTRAINT p2_production_orders_id_unique_repair
+      UNIQUE USING INDEX p2_production_orders_id_unique_repair;
+  END IF;
+END $$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS project_production_plan_items_identity_key
   ON project_production_plan_items(id,production_plan_id,project_id);
 

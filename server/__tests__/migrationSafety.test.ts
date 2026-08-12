@@ -333,6 +333,29 @@ describe('Migration file structure', () => {
 describe('Migration step-ordering analysis (static)', () => {
   const files = getMigrationFiles();
 
+  it('0264 prerequisite: p2_production_orders_id_unique_repair appears before execution_links table and before REFERENCES p2_production_orders(id)', () => {
+    const filename = '0264_p2_recursive_production_demand_foundation.sql';
+    const raw = fs.readFileSync(path.join(MIGRATIONS_DIR, filename), 'utf8');
+
+    const repairIdx = raw.indexOf('p2_production_orders_id_unique_repair');
+    const execLinksIdx = raw.indexOf('CREATE TABLE IF NOT EXISTS project_production_demand_execution_links');
+    const referencesIdx = raw.indexOf('REFERENCES p2_production_orders(id)');
+
+    expect(repairIdx, 'p2_production_orders_id_unique_repair not found in 0264').toBeGreaterThan(-1);
+    expect(execLinksIdx, 'project_production_demand_execution_links CREATE TABLE not found in 0264').toBeGreaterThan(-1);
+    expect(referencesIdx, 'REFERENCES p2_production_orders(id) not found in 0264').toBeGreaterThan(-1);
+
+    expect(
+      repairIdx,
+      'p2_production_orders_id_unique_repair must appear before CREATE TABLE project_production_demand_execution_links',
+    ).toBeLessThan(execLinksIdx);
+
+    expect(
+      repairIdx,
+      'p2_production_orders_id_unique_repair must appear before REFERENCES p2_production_orders(id)',
+    ).toBeLessThan(referencesIdx);
+  });
+
   it('no migration nullifies a column via UPDATE before dropping its NOT NULL constraint', () => {
     /**
      * Anti-pattern: "UPDATE … SET col = NULL" appears earlier in the file

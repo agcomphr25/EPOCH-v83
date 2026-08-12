@@ -476,6 +476,49 @@ async function readModel(projectId: string, tx: Executor) {
         )
       )
     : [];
+  const order = resultRows(
+    await tx.execute(sql`
+      SELECT p.project_code,p.project_name,p.target_ship_date,
+             po.po_number,po.revision_number po_revision_number,
+             po.customer_name,po.expected_delivery,po.status po_status,
+             q.quote_number,q.status quote_status
+      FROM projects p
+      LEFT JOIN p2_purchase_orders po ON po.id=p.po_id
+      LEFT JOIN quotes q ON q.id=po.source_quote_id
+      WHERE p.id=${projectId}`)
+  )[0];
+  const orderLines = resultRows(
+    await tx.execute(sql`
+      SELECT poi.id,poi.part_number customer_part_number,
+             COALESCE(ii.ag_part_number,poi.part_number) ag_part_number,
+             COALESCE(ii.name,poi.part_name) description,
+             poi.quantity,poi.due_date
+      FROM projects p
+      JOIN p2_purchase_order_items poi ON poi.po_id=p.po_id
+      LEFT JOIN inventory_items ii ON ii.id=poi.inventory_item_id
+      WHERE p.id=${projectId}
+      ORDER BY poi.id`)
+  );
+  const commercialSources = resultRows(
+    await tx.execute(sql`
+      SELECT stage_type,status,source_record_type,source_revision,source_snapshot
+      FROM project_commercial_stage_reviews
+      WHERE project_id=${projectId} AND status<>'SUPERSEDED'
+      ORDER BY stage_type,revision_number DESC`)
+  );
+  const technicalSource = resultRows(
+    await tx.execute(sql`
+      SELECT status,source_revision,technical_baseline,released_evidence,
+             effectivity_reference
+      FROM project_technical_configuration_reviews
+      WHERE project_id=${projectId} AND status<>'SUPERSEDED'
+      ORDER BY revision_number DESC LIMIT 1`)
+  )[0];
+  const rfqSource = commercialSources.find(
+    (entry) => entry.stage_type === 'rfq_risk_assessment'
+  );
+  const rfqSnapshot = (rfqSource?.source_snapshot ?? {}) as Row;
+  const rfqRecord = (rfqSnapshot.rfq ?? {}) as Row;
   const currentApprovals = plan
     ? await approvals(plan.id, ctx.step.id, tx)
     : [];
@@ -570,6 +613,35 @@ async function readModel(projectId: string, tx: Executor) {
   return {
     plan,
     items,
+    orderConfirmation: {
+      projectCode: order?.project_code ?? null,
+      projectName: order?.project_name ?? null,
+      customer: order?.customer_name ?? null,
+      rfq: rfqRecord.rfq_number ?? rfqRecord.rfqNumber ?? null,
+      acceptedQuote: order?.quote_number ?? null,
+      acceptedQuoteStatus: order?.quote_status ?? null,
+      customerPurchaseOrder: order?.po_number ?? null,
+      customerPurchaseOrderRevision: order?.po_revision_number ?? null,
+      customerPurchaseOrderStatus: order?.po_status ?? null,
+      requiredDeliveryDate:
+        order?.expected_delivery ?? order?.target_ship_date ?? null,
+      lines: orderLines,
+      technicalBaseline: technicalSource
+        ? {
+            status: technicalSource.status,
+            sourceRevision: technicalSource.source_revision,
+            effectivityReference: technicalSource.effectivity_reference,
+            requirements: technicalSource.technical_baseline,
+            releasedEvidence: technicalSource.released_evidence,
+          }
+        : null,
+      sources: commercialSources.map((source) => ({
+        name: String(source.stage_type).replaceAll('_', ' '),
+        status: source.status,
+        type: source.source_record_type,
+        revision: source.source_revision,
+      })),
+    },
     history,
     approvals: currentApprovals,
     approvalHistory,

@@ -25,6 +25,21 @@ type Row = Record<string, unknown>;
 type Model = {
   plan: Row | null;
   items: Row[];
+  orderConfirmation: {
+    projectCode: string | null;
+    projectName: string | null;
+    customer: string | null;
+    rfq: string | null;
+    acceptedQuote: string | null;
+    acceptedQuoteStatus: string | null;
+    customerPurchaseOrder: string | null;
+    customerPurchaseOrderRevision: number | null;
+    customerPurchaseOrderStatus: string | null;
+    requiredDeliveryDate: string | null;
+    lines: Row[];
+    technicalBaseline: Row | null;
+    sources: Row[];
+  };
   history: Row[];
   approvalHistory: Row[];
   readiness: {
@@ -277,37 +292,10 @@ export default function P2V2ProductionPlanning({
             <div className="space-y-6">
               {currentPage === 0 &&
                 (data?.plan ? (
-                  <section className="grid gap-3 rounded border p-4 md:grid-cols-4">
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        Plan revision
-                      </span>
-                      <p>Rev {value(data.plan, 'revision_number')}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        Status
-                      </span>
-                      <div className="mt-1">
-                        <Badge>{status}</Badge>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        PO baseline
-                      </span>
-                      <p>
-                        {value(data.plan, 'po_number')} Rev{' '}
-                        {value(data.plan, 'po_revision_number')}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        Effectivity
-                      </span>
-                      <p>{value(data.plan, 'effectivity_reference')}</p>
-                    </div>
-                  </section>
+                  <ConfirmOrderSummary
+                    confirmation={data.orderConfirmation}
+                    plan={data.plan}
+                  />
                 ) : (
                   <section className="grid gap-3 rounded border p-4 md:grid-cols-2">
                     <div>
@@ -601,6 +589,118 @@ export default function P2V2ProductionPlanning({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function ConfirmOrderSummary({
+  confirmation,
+  plan,
+}: {
+  confirmation: Model['orderConfirmation'];
+  plan: Row;
+}) {
+  const fields: Array<[string, unknown]> = [
+    ['Customer', confirmation.customer],
+    ['Request for Quote', confirmation.rfq],
+    ['Accepted quote', confirmation.acceptedQuote],
+    ['Customer purchase order', confirmation.customerPurchaseOrder],
+    [
+      'Customer purchase order revision',
+      confirmation.customerPurchaseOrderRevision,
+    ],
+    ['Required delivery date', confirmation.requiredDeliveryDate],
+    ['Production plan revision', value(plan, 'revision_number')],
+    ['Planning effectivity', value(plan, 'effectivity_reference')],
+  ];
+  return (
+    <section className="space-y-4" data-testid="confirm-order-summary">
+      <div className="rounded border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">
+              {confirmation.projectCode || 'Project'} —{' '}
+              {confirmation.projectName || 'Information Missing'}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Controlled values are read-only here. Correct them in their source
+              record and return to Production Planning.
+            </p>
+          </div>
+          <Badge>{value(plan, 'status')}</Badge>
+        </div>
+        <dl className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+          {fields.map(([label, current]) => {
+            const displayed = String(current ?? '').trim();
+            return (
+              <div key={label}>
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className={displayed ? '' : 'font-medium text-amber-700'}>
+                  {displayed || 'Information Missing'}
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+      </div>
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Customer order lines</h3>
+        <div className="mt-2 space-y-2">
+          {confirmation.lines.map((line) => (
+            <div
+              className="grid gap-2 rounded border p-3 text-sm md:grid-cols-6"
+              key={value(line, 'id')}
+            >
+              <OrderFact
+                label="Customer part"
+                current={line.customer_part_number}
+              />
+              <OrderFact label="AG part" current={line.ag_part_number} />
+              <OrderFact label="Description" current={line.description} />
+              <OrderFact label="Quantity" current={line.quantity} />
+              <OrderFact label="Due date" current={line.due_date} />
+              <OrderFact
+                label="Technical baseline"
+                current={confirmation.technicalBaseline?.status}
+              />
+            </div>
+          ))}
+          {!confirmation.lines.length && (
+            <p className="text-sm font-medium text-amber-700">
+              Information Missing — the current customer order has no lines.
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Authoritative sources</h3>
+        <div className="mt-2 grid gap-2 md:grid-cols-3">
+          {confirmation.sources.map((source) => (
+            <div
+              className="rounded border p-3 text-sm"
+              key={value(source, 'name')}
+            >
+              <p className="font-medium capitalize">{value(source, 'name')}</p>
+              <p>Status: {value(source, 'status') || 'Information Missing'}</p>
+              <p>
+                Revision: {value(source, 'revision') || 'Information Missing'}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OrderFact({ label, current }: { label: string; current: unknown }) {
+  const displayed = String(current ?? '').trim();
+  return (
+    <div>
+      <p className="text-muted-foreground">{label}</p>
+      <p className={displayed ? '' : 'font-medium text-amber-700'}>
+        {displayed || 'Information Missing'}
+      </p>
+    </div>
   );
 }
 

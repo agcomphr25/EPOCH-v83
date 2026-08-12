@@ -77,7 +77,23 @@ while ((m = entryRegex.exec(arrayBody)) !== null) {
 }
 
 // ── 5. Determine what's missing ───────────────────────────────────────────
-const missing = diskFiles.filter((f) => !existingSet.has(f));
+//
+// Some migration files are intentionally excluded from safeMigrationFiles
+// because they are one-off data repairs whose fail-closed guards would block
+// boot once the repair has been applied or the target row state has changed.
+// List them here so the sync script never re-adds them automatically.
+const INTENTIONALLY_EXCLUDED = new Set([
+  // One-off row-level data repair for PO-P18380-46-1.  Its fail-closed guard
+  // raises an exception when the target production_orders row is not in the
+  // exact legacy mismatch state it was authored against (CANCELLED / Shipping QC),
+  // which blocks boot after the order state changes.  Idempotency key:
+  // migration.0267_reconcile_p18380_persisted_shipment
+  '0267_reconcile_p18380_persisted_shipment.sql',
+]);
+
+const missing = diskFiles.filter(
+  (f) => !existingSet.has(f) && !INTENTIONALLY_EXCLUDED.has(f)
+);
 
 if (missing.length === 0) {
   console.log(

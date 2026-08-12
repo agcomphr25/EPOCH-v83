@@ -62,12 +62,18 @@
  *      would have caught the bug fixed in task #1346.
  */
 
-import { describe, it, expect, afterAll } from 'vitest';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+
+import { describe, it, expect, afterAll } from 'vitest';
 import { Pool, type PoolClient } from 'pg';
+
+import {
+  safeMigrationFiles,
+  criticalMigrationFiles,
+} from '../scripts/migrations/runSafeBootMigrations';
 
 // ---------------------------------------------------------------------------
 // Helpers — file enumeration
@@ -131,7 +137,7 @@ function firstNullifyOffset(sql: string, col: string): number {
 function firstDropNotNullOffset(sql: string, col: string): number {
   const re = new RegExp(
     `ALTER\\s+COLUMN\\s+(${col}|"${col}")\\s+DROP\\s+NOT\\s+NULL`,
-    'gi',
+    'gi'
   );
   const m = re.exec(sql);
   return m ? m.index : -1;
@@ -148,7 +154,7 @@ function getAdminPool(): Pool {
   if (!adminPool) {
     if (!process.env.DATABASE_URL) {
       throw new Error(
-        'DATABASE_URL must be set to run the DB-backed migration safety tests.',
+        'DATABASE_URL must be set to run the DB-backed migration safety tests.'
       );
     }
     adminPool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -184,9 +190,8 @@ function scratchDbUrl(dbName: string): string {
 async function withScratchDatabase(
   name: string,
   seedFile: string,
-  fn: (client: PoolClient) => Promise<void>,
+  fn: (client: PoolClient) => Promise<void>
 ): Promise<void> {
-  const dbUrl = process.env.DATABASE_URL!;
   const admin = getAdminPool();
 
   // CREATE/DROP DATABASE cannot run inside a transaction.
@@ -285,16 +290,21 @@ describe('Migration file structure', () => {
   it('repairs the contradictory P2 V2 production-launch status constraint', () => {
     const base = fs.readFileSync(
       path.join(MIGRATIONS_DIR, '0210_project_preproduction_readiness.sql'),
-      'utf8',
+      'utf8'
     );
     const repair = fs.readFileSync(
-      path.join(MIGRATIONS_DIR, '0223_project_production_launch_status_repair.sql'),
-      'utf8',
+      path.join(
+        MIGRATIONS_DIR,
+        '0223_project_production_launch_status_repair.sql'
+      ),
+      'utf8'
     );
 
-    expect(base).toMatch(/status\s+TEXT\s+NOT NULL\s+CHECK\s*\(status IN \('COMPLETE','FAILED'\)\)/);
+    expect(base).toMatch(
+      /status\s+TEXT\s+NOT NULL\s+CHECK\s*\(status IN \('COMPLETE','FAILED'\)\)/
+    );
     expect(repair).toMatch(
-      /DROP CONSTRAINT IF EXISTS project_production_launches_complete_only_check/,
+      /DROP CONSTRAINT IF EXISTS project_production_launches_complete_only_check/
     );
   });
 
@@ -313,14 +323,14 @@ describe('Migration file structure', () => {
     }
     expect(
       newDuplicates,
-      `NEW undocumented duplicate migration prefixes — add to KNOWN_DUPLICATE_PREFIXES if intentional:\n${newDuplicates.join('\n')}`,
+      `NEW undocumented duplicate migration prefixes — add to KNOWN_DUPLICATE_PREFIXES if intentional:\n${newDuplicates.join('\n')}`
     ).toHaveLength(0);
   });
 
   it('migration files are sorted in ascending numeric order by prefix', () => {
     const prefixes = files.map(numericPrefix);
     const sorted = [...prefixes].sort((a, b) =>
-      a.localeCompare(b, undefined, { numeric: true }),
+      a.localeCompare(b, undefined, { numeric: true })
     );
     expect(prefixes).toEqual(sorted);
   });
@@ -333,26 +343,52 @@ describe('Migration file structure', () => {
 describe('Migration step-ordering analysis (static)', () => {
   const files = getMigrationFiles();
 
+  it('0267 one-off data repair is excluded from both boot lists; 0269 composite FK repair remains registered', () => {
+    // 0267 is a guarded row-level data repair (no DDL). Its fail-closed guard
+    // throws when the target order state does not match the reviewed legacy
+    // mismatch, which blocks boot after the repair has already been applied.
+    // It must never appear in safeMigrationFiles or criticalMigrationFiles.
+    const repair267 = '0267_reconcile_p18380_persisted_shipment.sql';
+    expect(safeMigrationFiles).not.toContain(repair267);
+    expect(criticalMigrationFiles.has(repair267)).toBe(false);
+
+    // 0269 is idempotent schema-level FK repair that must run on every boot.
+    const repair269 = '0269_repair_composite_po_item_demand_fks.sql';
+    expect(safeMigrationFiles).toContain(repair269);
+    expect(criticalMigrationFiles.has(repair269)).toBe(true);
+  });
+
   it('0264 prerequisite: p2_production_orders_id_unique_repair appears before execution_links table and before REFERENCES p2_production_orders(id)', () => {
     const filename = '0264_p2_recursive_production_demand_foundation.sql';
     const raw = fs.readFileSync(path.join(MIGRATIONS_DIR, filename), 'utf8');
 
     const repairIdx = raw.indexOf('p2_production_orders_id_unique_repair');
-    const execLinksIdx = raw.indexOf('CREATE TABLE IF NOT EXISTS project_production_demand_execution_links');
+    const execLinksIdx = raw.indexOf(
+      'CREATE TABLE IF NOT EXISTS project_production_demand_execution_links'
+    );
     const referencesIdx = raw.indexOf('REFERENCES p2_production_orders(id)');
-
-    expect(repairIdx, 'p2_production_orders_id_unique_repair not found in 0264').toBeGreaterThan(-1);
-    expect(execLinksIdx, 'project_production_demand_execution_links CREATE TABLE not found in 0264').toBeGreaterThan(-1);
-    expect(referencesIdx, 'REFERENCES p2_production_orders(id) not found in 0264').toBeGreaterThan(-1);
 
     expect(
       repairIdx,
-      'p2_production_orders_id_unique_repair must appear before CREATE TABLE project_production_demand_execution_links',
+      'p2_production_orders_id_unique_repair not found in 0264'
+    ).toBeGreaterThan(-1);
+    expect(
+      execLinksIdx,
+      'project_production_demand_execution_links CREATE TABLE not found in 0264'
+    ).toBeGreaterThan(-1);
+    expect(
+      referencesIdx,
+      'REFERENCES p2_production_orders(id) not found in 0264'
+    ).toBeGreaterThan(-1);
+
+    expect(
+      repairIdx,
+      'p2_production_orders_id_unique_repair must appear before CREATE TABLE project_production_demand_execution_links'
     ).toBeLessThan(execLinksIdx);
 
     expect(
       repairIdx,
-      'p2_production_orders_id_unique_repair must appear before REFERENCES p2_production_orders(id)',
+      'p2_production_orders_id_unique_repair must appear before REFERENCES p2_production_orders(id)'
     ).toBeLessThan(referencesIdx);
   });
 
@@ -385,7 +421,7 @@ describe('Migration step-ordering analysis (static)', () => {
         if (nullifyAt < dropAt) {
           violations.push(
             `${filename}: column "${col}" is SET to NULL (offset ${nullifyAt}) ` +
-              `before its NOT NULL constraint is dropped (offset ${dropAt})`,
+              `before its NOT NULL constraint is dropped (offset ${dropAt})`
           );
         }
       }
@@ -393,7 +429,7 @@ describe('Migration step-ordering analysis (static)', () => {
 
     expect(
       violations,
-      `Step-ordering violations found:\n${violations.join('\n')}`,
+      `Step-ordering violations found:\n${violations.join('\n')}`
     ).toHaveLength(0);
   });
 });
@@ -409,7 +445,8 @@ function isDeclaredIdempotent(sql: string): boolean {
     /raise\s+notice\s+[^;]*no.?op/.test(stripped) ||
     /raise\s+notice\s+[^;]*already\s+renamed/.test(stripped) ||
     /raise\s+notice\s+[^;]*already\s+applied/.test(stripped) ||
-    (stripped.includes('information_schema.columns') && stripped.includes('return')) ||
+    (stripped.includes('information_schema.columns') &&
+      stripped.includes('return')) ||
     /if\s+not\s+cols_exist/.test(stripped) ||
     /if\s+not\s+col_exists/.test(stripped)
   );
@@ -529,7 +566,7 @@ async function assertColumnsAbsent(
   schema: string,
   table: string,
   columns: readonly string[],
-  migrationHint: string,
+  migrationHint: string
 ): Promise<void> {
   const pool = getAdminPool();
 
@@ -539,7 +576,7 @@ async function assertColumnsAbsent(
       WHERE table_schema = $1
         AND table_name   = $2
         AND column_name  = ANY($3::text[])`,
-    [schema, table, columns],
+    [schema, table, columns]
   );
 
   const stillPresent = result.rows.map((r) => r.column_name);
@@ -549,7 +586,7 @@ async function assertColumnsAbsent(
     `${migrationHint} did not fully remove/rename all expected columns from ` +
       `${schema}.${table}. The following columns are still present: ` +
       `${stillPresent.join(', ')}. ` +
-      `Re-run ${migrationHint} against the database to complete the operation.`,
+      `Re-run ${migrationHint} against the database to complete the operation.`
   ).toHaveLength(0);
 }
 
@@ -587,7 +624,7 @@ describe('Schema-level guard: original identity columns absent from timekeeping.
       'timekeeping',
       'employees',
       ORIGINAL_IDENTITY_COLUMNS,
-      '0049_retire_timekeeping_identity_columns.sql',
+      '0049_retire_timekeeping_identity_columns.sql'
     );
   });
 });
@@ -613,7 +650,7 @@ describe('Schema-level guard: deprecated columns absent from timekeeping.employe
       'timekeeping',
       'employees',
       DEPRECATED_COLUMNS,
-      '0066_drop_timekeeping_deprecated_columns.sql',
+      '0066_drop_timekeeping_deprecated_columns.sql'
     );
   });
 });
@@ -713,7 +750,11 @@ function isExemptFromRetiredColumnCheck(filename: string): boolean {
  * the column-rename has already been applied.
  */
 function isAfterRenameMigration(prefix: string): boolean {
-  return prefix.localeCompare(RENAME_MIGRATION_PREFIX, undefined, { numeric: true }) > 0;
+  return (
+    prefix.localeCompare(RENAME_MIGRATION_PREFIX, undefined, {
+      numeric: true,
+    }) > 0
+  );
 }
 
 /**
@@ -726,7 +767,7 @@ function isAfterRenameMigration(prefix: string): boolean {
  */
 function findRetiredColumnReferences(
   sql: string,
-  columnNames: ReadonlyArray<string>,
+  columnNames: ReadonlyArray<string>
 ): Array<{ column: string; matchSnippet: string }> {
   const hits: Array<{ column: string; matchSnippet: string }> = [];
   for (const col of columnNames) {
@@ -768,7 +809,7 @@ describe('Retired-column name guard (static analysis, no DB required)', () => {
         violations.push(
           `${filename}: references retired *_deprecated column "${column}" ` +
             `(dropped by 0066_drop_timekeeping_deprecated_columns.sql). ` +
-            `Context: ${matchSnippet}`,
+            `Context: ${matchSnippet}`
         );
       }
     }
@@ -777,7 +818,7 @@ describe('Retired-column name guard (static analysis, no DB required)', () => {
       violations,
       `Retired *_deprecated column references found — these will cause runtime ` +
         `SQL errors because the columns no longer exist after migration 0066:\n` +
-        violations.join('\n'),
+        violations.join('\n')
     ).toHaveLength(0);
   });
 
@@ -815,7 +856,7 @@ describe('Retired-column name guard (static analysis, no DB required)', () => {
           `${filename}: references pre-rename column "${column}" ` +
             `(renamed to ${column}_deprecated by 0049_retire_timekeeping_identity_columns.sql). ` +
             `If this is intentional and guarded, add the file to EXEMPT_FROM_RETIRED_COLUMN_CHECK. ` +
-            `Context: ${matchSnippet}`,
+            `Context: ${matchSnippet}`
         );
       }
     }
@@ -825,7 +866,7 @@ describe('Retired-column name guard (static analysis, no DB required)', () => {
       `Pre-rename column references found in migrations after 0049 — these reference ` +
         `column names that were renamed in timekeeping.employees and will cause SQL ` +
         `errors if applied to a database where 0049 has already run:\n` +
-        violations.join('\n'),
+        violations.join('\n')
     ).toHaveLength(0);
   });
 });
@@ -867,7 +908,7 @@ describe('Schema-baseline migration replay (scratch DB seeded from pg_dump)', ()
     } catch {
       console.warn(
         '[migrationSafety] Skipping schema-baseline replay: pg_dump not found on PATH. ' +
-          'Ensure postgresql-client is installed in your CI environment.',
+          'Ensure postgresql-client is installed in your CI environment.'
       );
       return;
     }
@@ -877,28 +918,34 @@ describe('Schema-baseline migration replay (scratch DB seeded from pg_dump)', ()
       execSync('psql --version', { stdio: 'pipe' });
     } catch {
       console.warn(
-        '[migrationSafety] Skipping schema-baseline replay: psql not found on PATH.',
+        '[migrationSafety] Skipping schema-baseline replay: psql not found on PATH.'
       );
       return;
     }
 
     // 4. The DB role must have CREATEDB privilege
     const privCheck = await admin.query<{ usecreatedb: boolean }>(
-      'SELECT usecreatedb FROM pg_user WHERE usename = current_user',
+      'SELECT usecreatedb FROM pg_user WHERE usename = current_user'
     );
     if (!privCheck.rows[0]?.usecreatedb) {
       console.warn(
         '[migrationSafety] Skipping schema-baseline replay: current DB role lacks ' +
-          'CREATEDB privilege.  Grant it or run the suite with a role that has it.',
+          'CREATEDB privilege.  Grant it or run the suite with a role that has it.'
       );
       return;
     }
 
     // --- Step 1: dump current schema to a temp file ---
-    const dumpFile = path.join(os.tmpdir(), `migration_safety_baseline_${Date.now()}.sql`);
-    execSync(`pg_dump --schema-only "${process.env.DATABASE_URL}" > "${dumpFile}"`, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    const dumpFile = path.join(
+      os.tmpdir(),
+      `migration_safety_baseline_${Date.now()}.sql`
+    );
+    execSync(
+      `pg_dump --schema-only "${process.env.DATABASE_URL}" > "${dumpFile}"`,
+      {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }
+    );
 
     const dbName = `migration_safety_${Date.now()}`;
     const files = getMigrationFiles();
@@ -908,7 +955,10 @@ describe('Schema-baseline migration replay (scratch DB seeded from pg_dump)', ()
     try {
       await withScratchDatabase(dbName, dumpFile, async (client) => {
         for (const filename of files) {
-          const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, filename), 'utf8');
+          const sql = fs.readFileSync(
+            path.join(MIGRATIONS_DIR, filename),
+            'utf8'
+          );
           try {
             await client.query(sql);
           } catch (err: unknown) {
@@ -925,21 +975,25 @@ describe('Schema-baseline migration replay (scratch DB seeded from pg_dump)', ()
         }
       });
     } finally {
-      try { fs.unlinkSync(dumpFile); } catch { /* ignore */ }
+      try {
+        fs.unlinkSync(dumpFile);
+      } catch {
+        /* ignore */
+      }
     }
 
     if (knownFailures.length > 0) {
       console.warn(
         '\n[migrationSafety] Known/pre-approved failures (see KNOWN_BROKEN_ON_SCHEMA_BASELINE):\n  ' +
-          knownFailures.join('\n  '),
+          knownFailures.join('\n  ')
       );
     }
 
     expect(
       errors,
-      `Unexpected migration errors on schema-baseline replay — these indicate real bugs:\n${errors.join('\n')}`,
+      `Unexpected migration errors on schema-baseline replay — these indicate real bugs:\n${errors.join('\n')}`
     ).toHaveLength(0);
-  // pg_dump + CREATE DATABASE + psql restore + migration replay can take 30–60 s
-  // initially, but grows with the migration set; allow generous headroom.
+    // pg_dump + CREATE DATABASE + psql restore + migration replay can take 30–60 s
+    // initially, but grows with the migration set; allow generous headroom.
   }, 300_000);
 });

@@ -30,6 +30,17 @@ export type ProductionLaunchPersistenceInput = {
   signatureMeaning: string;
 };
 
+export type ProductionLaunchPersistenceFault =
+  | 'AFTER_LAUNCH'
+  | 'AFTER_FIRST_DEMAND'
+  | 'AFTER_ALLOCATIONS'
+  | 'AFTER_DEPENDENCIES'
+  | 'BEFORE_AUDIT';
+
+type PersistenceDependencies = {
+  fault?: (point: ProductionLaunchPersistenceFault) => void | Promise<void>;
+};
+
 const clean = (value: string) => value.trim();
 const fail = (
   code: string,
@@ -69,6 +80,15 @@ export async function persistProductionLaunch(
   projectId: string,
   input: ProductionLaunchPersistenceInput,
   actor: PlanningActor
+) {
+  return persistProductionLaunchWithDependencies(projectId, input, actor, {});
+}
+
+async function persistProductionLaunchWithDependencies(
+  projectId: string,
+  input: ProductionLaunchPersistenceInput,
+  actor: PlanningActor,
+  dependencies: PersistenceDependencies
 ) {
   validateInput(input);
   if (!isP2V2ProductionLaunchPersistenceEnabled())
@@ -270,8 +290,9 @@ export async function persistProductionLaunch(
         ${String(evidence.workflow_instance_id)},${String(evidence.configuration_baseline_id)},
         ${String(evidence.production_plan_id)},${String(evidence.wad_authorization_id)},${requestHash},
         ${preview.resultChecksum},${evidenceDigest},${clean(input.signatureMeaning)})`);
+    await dependencies.fault?.('AFTER_LAUNCH');
 
-    for (const demand of graph.demands) {
+    for (const [index, demand] of graph.demands.entries()) {
       const demandId = demandIds.get(demand.key)!;
       await tx.execute(sql`
         INSERT INTO project_production_demands
@@ -297,6 +318,7 @@ export async function persistProductionLaunch(
           ${demand.routingRevisionSnapshot},${demand.firstDepartmentSnapshot},${String(evidence.wad_authorization_id)},
           ${demand.demandStatus},${JSON.stringify(demand.blockerSnapshot)}::jsonb,
           ${JSON.stringify({ ...requestEvidence, demandKey: demand.demandKey })}::jsonb)`);
+      if (index === 0) await dependencies.fault?.('AFTER_FIRST_DEMAND');
       const netted = demand.grossRequiredQuantity - demand.shortageQuantity;
       if (demand.inventoryItemId != null && netted > 0) {
         const allocationId = randomUUID();
@@ -308,6 +330,7 @@ export async function persistProductionLaunch(
             ${String(netted)}::numeric,'PLANNED',${JSON.stringify({ previewDigest: preview.resultChecksum, createsReservation: false })}::jsonb)`);
       }
     }
+    await dependencies.fault?.('AFTER_ALLOCATIONS');
     for (const dependency of graph.dependencies) {
       const dependencyId = randomUUID();
       dependencyIds.push(dependencyId);
@@ -318,12 +341,14 @@ export async function persistProductionLaunch(
           ${demandIds.get(dependency.successorKey)!},${dependency.dependencyType},'OPEN',
           ${JSON.stringify({ previewDigest: preview.resultChecksum })}::jsonb)`);
     }
+    await dependencies.fault?.('AFTER_DEPENDENCIES');
     const createdRecordIds = {
       launchId,
       demandIds: Array.from(demandIds.values()),
       allocationIds,
       dependencyIds,
     };
+    await dependencies.fault?.('BEFORE_AUDIT');
     await tx.execute(sql`
       INSERT INTO project_production_launch_events
         (project_id,production_launch_id,event_type,request_hash,evidence_digest,created_record_ids,
@@ -336,5 +361,16 @@ export async function persistProductionLaunch(
       launch: { id: launchId, status: 'COMPLETE', evidenceDigest },
       createdRecordIds,
     };
+  });
+}
+
+export function persistProductionLaunchForCertification(
+  projectId: string,
+  input: ProductionLaunchPersistenceInput,
+  actor: PlanningActor,
+  fault: NonNullable<PersistenceDependencies['fault']>
+) {
+  return persistProductionLaunchWithDependencies(projectId, input, actor, {
+    fault,
   });
 }

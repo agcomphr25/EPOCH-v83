@@ -16,6 +16,7 @@ const route = readFileSync(
 describe('Production Launch Phase 1 preview boundary', () => {
   it('executes inside an explicit read-only transaction', () => {
     expect(service).toContain('SET TRANSACTION READ ONLY');
+    expect(service).toContain("projectLock: 'NONE' | 'UPDATE'");
     expect(service).not.toMatch(
       /sql`[^`]*\b(?:INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b[^`]*`/i
     );
@@ -41,5 +42,19 @@ describe('Production Launch Phase 1 preview boundary', () => {
   it('uses a stable UTC effectivity date in the preview digest', () => {
     expect(service).toContain('effectiveAt.toISOString().slice(0, 10)');
     expect(service).toContain('authorityEffectiveAt.toISOString()');
+  });
+
+  it('binds multiple recursive roots as an explicit PostgreSQL text array', () => {
+    expect(service).toContain('ARRAY[${rootPartList}]::text[]');
+    expect(service).not.toContain('${rootPartNumbers}::text[]');
+  });
+
+  it('normalizes and deduplicates routing candidates before the union', () => {
+    expect(service).toContain(
+      'SELECT DISTINCT ppi.part_number,pr.id,ppi.routing_revision::text routing_revision'
+    );
+    expect(service).toContain(
+      'SELECT pr.part_number,pr.id,pr.routing_revision::text routing_revision'
+    );
   });
 });

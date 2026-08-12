@@ -58,11 +58,15 @@ function sourceFor(
   return {
     async prepare(roots, effectiveAt) {
       const rootPartNumbers = roots.map((root) => root.partNumber.trim());
+      const rootPartList = sql.join(
+        rootPartNumbers.map((part) => sql`${part}`),
+        sql`, `
+      );
       const reachable = rows(
         await tx.execute(sql`
           WITH RECURSIVE graph(part_number,path,depth) AS (
             SELECT root.part_number,ARRAY[upper(trim(root.part_number))],0
-            FROM unnest(${rootPartNumbers}::text[]) root(part_number)
+            FROM unnest(ARRAY[${rootPartList}]::text[]) root(part_number)
             UNION
             SELECT bl.child_part_ag_number,
               graph.path||upper(trim(bl.child_part_ag_number)),graph.depth+1
@@ -141,7 +145,7 @@ function sourceFor(
           ORDER BY bl.revision_id,bl.operation_seq,bl.id`),
           tx.execute(sql`
           WITH candidates AS (
-            SELECT ppi.part_number,pr.id,ppi.routing_revision,pr.is_active,
+            SELECT DISTINCT ppi.part_number,pr.id,ppi.routing_revision::text routing_revision,pr.is_active,
               ARRAY(SELECT ro.department_name FROM routing_operations ro
                 WHERE ro.part_routing_id=pr.id ORDER BY ro.step_number,ro.id) department_sequence,
               pct.approval_status,1 precedence
@@ -151,7 +155,7 @@ function sourceFor(
             LEFT JOIN production_control_templates pct ON pct.id=pr.created_from_template_id
             WHERE pp.project_id=${projectId} AND pp.status='RELEASED' AND ppi.part_number IN (${partList})
             UNION ALL
-            SELECT pr.part_number,pr.id,pr.routing_revision,pr.is_active,
+            SELECT pr.part_number,pr.id,pr.routing_revision::text routing_revision,pr.is_active,
               ARRAY(SELECT ro.department_name FROM routing_operations ro
                 WHERE ro.part_routing_id=pr.id ORDER BY ro.step_number,ro.id),
               pct.approval_status,3 precedence
@@ -427,7 +431,7 @@ export async function getProductionLaunchPreview(
 
   return db.transaction(async (tx) => {
     await tx.execute(sql`SET TRANSACTION READ ONLY`);
-    return buildProductionLaunchPreview(projectId, effectiveAt, tx, 'SHARE');
+    return buildProductionLaunchPreview(projectId, effectiveAt, tx, 'NONE');
   });
 }
 
@@ -436,7 +440,7 @@ export async function buildProductionLaunchPreview(
   projectId: string,
   effectiveAt: Date,
   tx: Executor,
-  projectLock: 'SHARE' | 'UPDATE' = 'SHARE'
+  projectLock: 'NONE' | 'UPDATE' = 'NONE'
 ) {
   const authorityEffectiveAt = new Date(
     `${effectiveAt.toISOString().slice(0, 10)}T00:00:00.000Z`
@@ -445,7 +449,7 @@ export async function buildProductionLaunchPreview(
     await tx.execute(
       projectLock === 'UPDATE'
         ? sql`SELECT id,project_code,workflow_version,po_id,current_stage FROM projects WHERE id=${projectId} FOR UPDATE`
-        : sql`SELECT id,project_code,workflow_version,po_id,current_stage FROM projects WHERE id=${projectId} FOR SHARE`
+        : sql`SELECT id,project_code,workflow_version,po_id,current_stage FROM projects WHERE id=${projectId}`
     )
   )[0];
   if (!project)

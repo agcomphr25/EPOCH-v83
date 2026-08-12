@@ -37,6 +37,7 @@ describe('Certification & Authorization Matrix architecture', () => {
     expect(travelerGates).toContain("type: 'WORK'");
     expect(travelerGates).toContain('const verifiedEmployeeId = options.employeeId;');
     expect(travelerGates).toContain('employeeId: verifiedEmployeeId');
+    expect(travelerGates).not.toContain('requireApplicableAuthorization({ employeeId: options.employeeId');
     expect(read('server/src/routes/projectQualityRelease.ts')).toContain("type:'FINAL_PRODUCT_RELEASE'");
   });
 });

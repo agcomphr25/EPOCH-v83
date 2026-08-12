@@ -502,14 +502,7 @@ export async function evaluateStartGatesDetailed(
       reason: identityReason,
     });
     // Cannot evaluate part-auth or op-cert without identity; record them as pending.
-    if (traveler.partNumber && prospectiveAuthorizationEnforcementEnabled()) {
-      try {
-        await requireApplicableAuthorization({ employeeId: options.employeeId, type: 'WORK', program: 'P2', partNumber: traveler.partNumber, department: step.departmentName, operation: step.departmentName, actionType: 'TRAVELER_START', evidence: { travelerId, travelerStepId: stepId } });
-        results.push({ key: 'training', label: 'Work authorization', passed: true });
-      } catch (error: any) {
-        results.push({ key: 'training', label: 'Work authorization', passed: false, reason: error.message });
-      }
-    } else if (traveler.partNumber) {
+    if (traveler.partNumber) {
       results.push({
         key: 'training',
         label: 'Training verified',
@@ -518,11 +511,19 @@ export async function evaluateStartGatesDetailed(
       });
     }
   } else {
+    const verifiedEmployeeId = options.employeeId;
     results.push({ key: 'identity', label: 'Employee identity', passed: true });
 
     // Gate 2a: Part authorization (only when traveler has a partNumber).
     // Grandfather: only enforce when at least one authorization exists for this part.
-    if (traveler.partNumber) {
+    if (traveler.partNumber && prospectiveAuthorizationEnforcementEnabled()) {
+      try {
+        await requireApplicableAuthorization({ employeeId: verifiedEmployeeId, type: 'WORK', program: 'P2', partNumber: traveler.partNumber, department: step.departmentName, operation: step.departmentName, actionType: 'TRAVELER_START', evidence: { travelerId, travelerStepId: stepId } });
+        results.push({ key: 'training', label: 'Work authorization', passed: true });
+      } catch (error: any) {
+        results.push({ key: 'training', label: 'Work authorization', passed: false, reason: error.message });
+      }
+    } else if (traveler.partNumber) {
       const [anyAuth] = await db
         .select({ id: travelerAuthorizations.id })
         .from(travelerAuthorizations)
@@ -540,7 +541,7 @@ export async function evaluateStartGatesDetailed(
           .from(travelerAuthorizations)
           .where(
             and(
-              eq(travelerAuthorizations.employeeId, options.employeeId),
+              eq(travelerAuthorizations.employeeId, verifiedEmployeeId),
               eq(travelerAuthorizations.partNumber, traveler.partNumber),
               eq(travelerAuthorizations.isActive, true)
             )

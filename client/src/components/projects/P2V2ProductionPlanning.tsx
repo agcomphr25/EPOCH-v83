@@ -384,35 +384,10 @@ export default function P2V2ProductionPlanning({
                 </section>
               )}
               {currentPage === 1 && !!data?.items.length && (
-                <>
-                  <section>
-                    <h3 className="font-semibold">Assembly tree</h3>
-                    <div className="mt-2 space-y-1 rounded border p-3">
-                      {data.items.map((item) => (
-                        <div
-                          key={value(item, 'id')}
-                          style={{
-                            paddingLeft: `${Math.max(0, value(item, 'assembly_path').split('/').length - 1) * 18}px`,
-                          }}
-                          className="text-sm"
-                        >
-                          <Badge
-                            variant={
-                              item.is_manufactured ? 'default' : 'outline'
-                            }
-                          >
-                            {item.is_manufactured ? 'MAKE' : 'BUY'}
-                          </Badge>{' '}
-                          <strong>{value(item, 'part_number')}</strong>{' '}
-                          {value(item, 'part_name')} · Qty{' '}
-                          {value(item, 'extended_project_quantity')} · BOM{' '}
-                          {value(item, 'bom_revision') || 'missing'} · Routing{' '}
-                          {value(item, 'routing_revision') || 'missing'}
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                </>
+                <AssemblyReview
+                  items={data.items}
+                  blockers={data.readiness.blockers}
+                />
               )}
               {currentPage === 2 && !!data?.items.length && (
                 <section className="space-y-3">
@@ -589,6 +564,95 @@ export default function P2V2ProductionPlanning({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function AssemblyReview({
+  items,
+  blockers,
+}: {
+  items: Row[];
+  blockers: string[];
+}) {
+  return (
+    <section className="space-y-3" data-testid="assembly-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Controlled assembly structure</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Quantities and relationships come from the saved Production Planning
+          baseline. Correct BOM or part-master information at its source.
+        </p>
+      </div>
+      {items.map((item) => {
+        const partNumber = value(item, 'part_number');
+        const itemBlockers = blockers.filter((blocker) =>
+          blocker.startsWith(`${partNumber}:`)
+        );
+        const classification =
+          value(item, 'planning_classification') ||
+          value(item, 'make_buy') ||
+          (item.is_manufactured ? 'MAKE' : 'BUY');
+        const ready =
+          itemBlockers.length === 0 &&
+          value(item, 'bom_release_status') !== 'MISSING' &&
+          (!item.is_manufactured ||
+            value(item, 'routing_release_status') === 'RELEASED');
+        return (
+          <article
+            className="rounded border p-4"
+            data-testid="assembly-review-item"
+            key={value(item, 'id')}
+            style={{
+              marginLeft: `${Math.max(0, value(item, 'assembly_path').split('/').length - 1) * 16}px`,
+            }}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="font-semibold">
+                  {partNumber || 'Information Missing'} —{' '}
+                  {value(item, 'part_name') || 'Information Missing'}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Parent:{' '}
+                  {value(item, 'parent_part_number') || 'Top-level deliverable'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Badge variant="outline">
+                  {classification.replaceAll('_', ' ')}
+                </Badge>
+                <Badge variant={ready ? 'default' : 'destructive'}>
+                  {ready ? 'Ready' : 'Blocked'}
+                </Badge>
+              </div>
+            </div>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-5">
+              <OrderFact
+                label="Quantity per parent"
+                current={item.quantity_per_parent}
+              />
+              <OrderFact
+                label="Extended quantity"
+                current={item.extended_project_quantity}
+              />
+              <OrderFact label="BOM revision" current={item.bom_revision} />
+              <OrderFact label="BOM status" current={item.bom_release_status} />
+              <OrderFact
+                label="Routing revision"
+                current={item.routing_revision}
+              />
+            </dl>
+            {!!itemBlockers.length && (
+              <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">
+                {itemBlockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            )}
+          </article>
+        );
+      })}
+    </section>
   );
 }
 

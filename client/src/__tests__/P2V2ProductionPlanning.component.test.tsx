@@ -20,6 +20,8 @@ const model = {
       part_number: 'MAKE-100',
       part_name: 'Final assembly',
       is_manufactured: true,
+      make_buy: 'MAKE',
+      quantity_per_parent: '1',
       extended_project_quantity: '2',
       bom_revision: 'B',
       bom_release_status: 'RELEASED',
@@ -32,6 +34,9 @@ const model = {
       part_number: 'BUY-20',
       part_name: 'Purchased fastener',
       is_manufactured: false,
+      make_buy: 'BUY',
+      parent_part_number: 'MAKE-100',
+      quantity_per_parent: '4',
       extended_project_quantity: '8',
       bom_release_status: 'NOT_REQUIRED_APPROVED',
       routing_release_status: 'NOT_REQUIRED_APPROVED',
@@ -155,11 +160,21 @@ describe('P2V2ProductionPlanning', () => {
         name: 'Page 2: Review Parts and Assemblies',
       })
     );
-    expect(await screen.findByText('MAKE-100')).toBeInTheDocument();
-    expect(screen.getByText('BUY-20')).toBeInTheDocument();
+    expect(await screen.findByTestId('assembly-review')).toHaveTextContent(
+      'MAKE-100'
+    );
+    expect(screen.getByTestId('assembly-review')).toHaveTextContent('BUY-20');
     expect(screen.getByText('MAKE')).toBeInTheDocument();
     expect(screen.getByText('BUY')).toBeInTheDocument();
-    expect(screen.getByText(/traveler decision required/i)).toBeInTheDocument();
+    expect(screen.getByTestId('assembly-review')).toHaveTextContent(
+      'Controlled assembly structure'
+    );
+    expect(screen.getAllByTestId('assembly-review-item')).toHaveLength(2);
+    expect(screen.getByText('Parent: MAKE-100')).toBeInTheDocument();
+    expect(screen.getByText('Blocked')).toBeInTheDocument();
+    expect(screen.getAllByText(/traveler decision required/i)).not.toHaveLength(
+      0
+    );
     expect(screen.getByTestId('production-plan-stale')).toHaveTextContent(
       'BOM revision/release changed'
     );

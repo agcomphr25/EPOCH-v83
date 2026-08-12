@@ -63,7 +63,7 @@ describe('P2 customer-demand quantity policy', () => {
     expect(migration).not.toContain("'RESERVATION_RELEASE'");
   });
 
-  it('declares the demand event composite key columns in foreign-key order', () => {
+  it('enforces item identity without a schema-diff-sensitive composite FK', () => {
     const migration = read(
       'migrations/0262_p2_customer_demand_quantity_ledger.sql'
     );
@@ -82,8 +82,21 @@ describe('P2 customer-demand quantity policy', () => {
     expect(eventTable.indexOf('po_item_id INTEGER')).toBeLessThan(
       eventTable.indexOf('demand_line_identity UUID')
     );
-    expect(migration).toContain(
-      'FOREIGN KEY (po_item_id,demand_line_identity)\n      REFERENCES p2_purchase_order_items(id,demand_line_identity)'
+    expect(migration).not.toContain(
+      'FOREIGN KEY (po_item_id,demand_line_identity)'
+    );
+    expect(migration).toContain('validate_p2_demand_event_item_identity');
+    expect(migration).toContain('p2_po_item_demand_identity_protect');
+
+    const repair = read(
+      'migrations/0268_replit_p2_demand_composite_fk_repair.sql'
+    );
+    expect(repair).toContain(
+      'DROP CONSTRAINT IF EXISTS p2_demand_event_item_identity_fk'
+    );
+    expect(repair).toContain('item.id = NEW.po_item_id');
+    expect(repair).toContain(
+      'item.demand_line_identity = NEW.demand_line_identity'
     );
   });
 

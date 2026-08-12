@@ -51,14 +51,52 @@ CREATE TABLE IF NOT EXISTS p2_customer_demand_quantity_events (
   CONSTRAINT p2_demand_event_hash_unique UNIQUE (event_hash)
 );
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='p2_demand_event_item_identity_fk') THEN
-    ALTER TABLE p2_customer_demand_quantity_events
-      ADD CONSTRAINT p2_demand_event_item_identity_fk
-      FOREIGN KEY (po_item_id,demand_line_identity)
-      REFERENCES p2_purchase_order_items(id,demand_line_identity) ON DELETE RESTRICT;
+-- Replit's schema-diff generator can reverse the local columns of a composite
+-- foreign key on an existing development database. Enforce the same identity
+-- relationship with triggers so deployment generation cannot emit a crossed
+-- (uuid, integer) -> (integer, uuid) constraint.
+CREATE OR REPLACE FUNCTION validate_p2_demand_event_item_identity()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM p2_purchase_order_items item
+    WHERE item.id = NEW.po_item_id
+      AND item.demand_line_identity = NEW.demand_line_identity
+  ) THEN
+    RAISE EXCEPTION 'P2 demand event item identity does not match purchase-order item %', NEW.po_item_id
+      USING ERRCODE = '23503';
   END IF;
+  RETURN NEW;
 END $$;
+
+DROP TRIGGER IF EXISTS p2_demand_event_item_identity_validate
+  ON p2_customer_demand_quantity_events;
+CREATE TRIGGER p2_demand_event_item_identity_validate
+BEFORE INSERT OR UPDATE OF po_item_id, demand_line_identity
+ON p2_customer_demand_quantity_events
+FOR EACH ROW EXECUTE FUNCTION validate_p2_demand_event_item_identity();
+
+CREATE OR REPLACE FUNCTION protect_p2_po_item_demand_identity()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.demand_line_identity IS DISTINCT FROM OLD.demand_line_identity
+     AND EXISTS (
+       SELECT 1
+       FROM p2_customer_demand_quantity_events event
+       WHERE event.po_item_id = OLD.id
+     ) THEN
+    RAISE EXCEPTION 'P2 purchase-order item demand identity is referenced by quantity events'
+      USING ERRCODE = '23503';
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS p2_po_item_demand_identity_protect
+  ON p2_purchase_order_items;
+CREATE TRIGGER p2_po_item_demand_identity_protect
+BEFORE UPDATE OF demand_line_identity ON p2_purchase_order_items
+FOR EACH ROW EXECUTE FUNCTION protect_p2_po_item_demand_identity();
 
 CREATE INDEX IF NOT EXISTS p2_demand_events_identity_time_idx
   ON p2_customer_demand_quantity_events(demand_line_identity, effective_at, id);

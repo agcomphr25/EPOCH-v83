@@ -1211,7 +1211,7 @@ async function decideResponsibility(
         `SELECT r.*,e.is_active AS employee_active
            FROM qms_epoch_validation_responsibilities r
            JOIN employees e ON e.id=r.employee_id
-           WHERE r.id=$1 AND r.package_id=$2 AND r.active=true FOR UPDATE OF r,e`,
+           WHERE r.id=$1 AND r.package_id=$2 AND r.active=true FOR UPDATE OF r`,
         [assignmentId, p.id]
       )
     )[0];

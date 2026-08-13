@@ -101,14 +101,6 @@ const wizardPages = [
   'Review and Approve',
 ] as const;
 
-const reviewPageFields: Record<number, Array<[string, string]>> = {
-  7: [
-    ['Required quantity', 'extended_project_quantity'],
-    ['Routing revision', 'routing_revision'],
-    ['Effectivity', 'effectivity_reference'],
-  ],
-};
-
 export default function P2V2ProductionPlanning({
   projectId,
 }: {
@@ -410,10 +402,12 @@ export default function P2V2ProductionPlanning({
                   blockers={data.readiness.blockers}
                 />
               )}
-              {currentPage === 7 && (
-                <ReviewByExceptionPanel
-                  items={data?.items ?? []}
-                  fields={reviewPageFields[currentPage] ?? []}
+              {currentPage === 7 && data?.plan && (
+                <ScheduleCapacityReview
+                  plan={data.plan}
+                  items={data.items}
+                  orderConfirmation={data.orderConfirmation}
+                  blockers={data.readiness.blockers}
                 />
               )}
               {currentPage === 8 && (
@@ -1152,6 +1146,107 @@ function ControlledDocumentReview({
   );
 }
 
+function ScheduleCapacityReview({
+  plan,
+  items,
+  orderConfirmation,
+  blockers,
+}: {
+  plan: Row;
+  items: Row[];
+  orderConfirmation: Model['orderConfirmation'];
+  blockers: string[];
+}) {
+  const manufacturedItems = items.filter((item) => item.is_manufactured);
+  return (
+    <section className="space-y-4" data-testid="schedule-capacity-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">
+          Scheduling inputs and capacity boundary
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          This page reviews controlled demand and timing inputs. The Production
+          Planning baseline does not calculate labor loading, machine calendars,
+          finite capacity, material availability, or a committed production
+          schedule.
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <OrderFact
+          label="Customer required delivery"
+          current={orderConfirmation.requiredDeliveryDate}
+        />
+        <OrderFact
+          label="Planning effectivity"
+          current={plan.effectivity_reference}
+        />
+        <OrderFact
+          label="Manufactured items"
+          current={manufacturedItems.length}
+        />
+        <OrderFact
+          label="Capacity confirmation"
+          current="Not evaluated in this baseline"
+        />
+      </div>
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Customer order timing</h3>
+        <div className="mt-3 space-y-2">
+          {orderConfirmation.lines.map((line) => (
+            <div
+              className="grid gap-3 rounded border p-3 text-sm md:grid-cols-4"
+              data-testid="schedule-order-line"
+              key={value(line, 'id')}
+            >
+              <OrderFact
+                label="Customer part"
+                current={line.customer_part_number}
+              />
+              <OrderFact label="AG part" current={line.ag_part_number} />
+              <OrderFact label="Order quantity" current={line.quantity} />
+              <OrderFact label="Due date" current={line.due_date} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <h3 className="font-semibold">Manufactured demand inputs</h3>
+        {manufacturedItems.map((item) => (
+          <article
+            className="grid gap-3 rounded border p-3 text-sm md:grid-cols-4"
+            data-testid="schedule-manufactured-item"
+            key={value(item, 'id')}
+          >
+            <OrderFact label="Part" current={item.part_number} />
+            <OrderFact
+              label="Required quantity"
+              current={item.extended_project_quantity}
+            />
+            <OrderFact
+              label="Routing revision"
+              current={item.routing_revision}
+            />
+            <OrderFact
+              label="Effectivity"
+              current={item.effectivity_reference}
+            />
+          </article>
+        ))}
+      </div>
+      {!!blockers.length && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3">
+          <h3 className="font-semibold">Inputs still blocking release</h3>
+          <ul className="mt-2 list-disc pl-5 text-sm">
+            {blockers.map((blocker) => (
+              <li key={blocker}>{blocker}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ConfirmOrderSummary({
   confirmation,
   plan,
@@ -1261,54 +1356,6 @@ function OrderFact({ label, current }: { label: string; current: unknown }) {
         {displayed || 'Information Missing'}
       </p>
     </div>
-  );
-}
-
-function ReviewByExceptionPanel({
-  items,
-  fields,
-}: {
-  items: Row[];
-  fields: Array<[string, string]>;
-}) {
-  return (
-    <section className="space-y-3" data-testid="review-by-exception-panel">
-      <div className="rounded border p-4">
-        <h3 className="font-semibold">Completed from existing EPOCH records</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Values below come from the current controlled Production Planning
-          baseline. Missing values remain visible for review and are not
-          silently replaced.
-        </p>
-      </div>
-      {items.map((item) => (
-        <div className="rounded border p-3" key={value(item, 'id')}>
-          <h4 className="font-medium">
-            {value(item, 'part_number')} — {value(item, 'part_name')}
-          </h4>
-          <dl className="mt-2 grid gap-3 text-sm md:grid-cols-2">
-            {fields.map(([label, key]) => {
-              const current = displayValue(item, key);
-              return (
-                <div key={key}>
-                  <dt className="text-muted-foreground">{label}</dt>
-                  <dd className={current ? '' : 'font-medium text-amber-700'}>
-                    {current || 'Information Missing'}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
-        </div>
-      ))}
-      {!items.length && (
-        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
-          No controlled planning items are available. Return to Confirm the
-          Order and build or refresh the draft from the authoritative
-          configuration.
-        </p>
-      )}
-    </section>
   );
 }
 

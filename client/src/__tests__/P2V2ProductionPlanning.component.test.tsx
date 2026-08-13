@@ -286,6 +286,22 @@ describe('P2V2ProductionPlanning', () => {
       screen.getAllByTestId('controlled-document-review-item')
     ).toHaveLength(1);
     fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Page 8: Check Schedule and Capacity',
+      })
+    );
+    expect(screen.getByTestId('schedule-capacity-review')).toHaveTextContent(
+      'Scheduling inputs and capacity boundary'
+    );
+    expect(screen.getByTestId('schedule-capacity-review')).toHaveTextContent(
+      '2026-10-01'
+    );
+    expect(screen.getByTestId('schedule-capacity-review')).toHaveTextContent(
+      'Not evaluated in this baseline'
+    );
+    expect(screen.getAllByTestId('schedule-order-line')).toHaveLength(1);
+    expect(screen.getAllByTestId('schedule-manufactured-item')).toHaveLength(1);
+    fireEvent.click(
       screen.getByRole('button', { name: 'Page 10: Review and Approve' })
     );
     expect(screen.getByText(/engineering approval/i)).toBeInTheDocument();

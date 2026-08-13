@@ -32,6 +32,10 @@ import {
   shouldRunLegacyStartupDbMaintenance,
 } from './bootstrap/startupMaintenance';
 import { LEGACY_STARTUP_REPAIR_STEPS } from './src/services/projectWorkflowRegistry';
+import {
+  logBackgroundJobControls,
+  shouldRunBackgroundJob,
+} from './config/backgroundJobControls';
 
 // Build version marker - change this to verify deployment updates
 const BUILD_VERSION = '2026-01-27-v2';
@@ -512,6 +516,7 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 async function initializeBackgroundServices() {
   bootState.backgroundServices.status = 'running';
   bootState.backgroundServices.startedAt = new Date().toISOString();
+  logBackgroundJobControls();
   try {
     // Test database connection (non-blocking)
     console.log('Initializing database connection...');
@@ -6256,6 +6261,7 @@ async function initializeBackgroundServices() {
     // Recovery net: creates CNC jobs for any IN_PROGRESS CNC steps that missed
     // the real-time hook (e.g. server was down when step was started).
     cron.schedule('*/30 * * * *', async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const result = await pool.query(`
           SELECT
@@ -6310,6 +6316,7 @@ async function initializeBackgroundServices() {
 
     // Set up annual vendor evaluation reset (runs on Jan 1)
     cron.schedule('1 0 1 1 *', async () => {
+      if (!shouldRunBackgroundJob('high-impact')) return;
       try {
         console.log('🔄 Running annual vendor evaluation reset...');
         const { vendors } = await import('./schema');
@@ -6336,6 +6343,7 @@ async function initializeBackgroundServices() {
 
     // Set up daily follow-up order reminder check
     cron.schedule('0 9 * * *', async () => {
+      if (!shouldRunBackgroundJob('outbound')) return;
       try {
         console.log('📧 Running daily follow-up order reminder check...');
         const { sendReminderForOverdueOrders } = await import('./utils/followupOrderReminder.js');
@@ -6350,6 +6358,7 @@ async function initializeBackgroundServices() {
 
     // Set up ticket stale reminder check (runs daily at 10:00 AM)
     cron.schedule('0 10 * * *', async () => {
+      if (!shouldRunBackgroundJob('outbound')) return;
       try {
         console.log('🎫 Running daily ticket stale reminder check...');
         const { sendStaleTicketReminders } = await import('./utils/ticketReminder.js');
@@ -6365,7 +6374,7 @@ async function initializeBackgroundServices() {
     // Start model stats aggregator (rebuilds model-department cycle time stats every 4 hours)
     try {
       const { startModelStatsAggregator } = await import('./services/modelStatsAggregator');
-      startModelStatsAggregator();
+      if (shouldRunBackgroundJob()) startModelStatsAggregator();
     } catch (aggErr: any) {
       console.warn('⚠️ Model stats aggregator failed to start:', aggErr.message);
     }
@@ -6373,6 +6382,7 @@ async function initializeBackgroundServices() {
     // Set up dynamic health checks scheduler (checks every minute if it's time to run)
     // This allows the scheduled time to be changed via the UI without restarting the server
     cron.schedule('* * * * *', async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const { runAllEnabledChecks, getHealthCheckConfig } = await import('./utils/healthCheckService');
         
@@ -6418,6 +6428,7 @@ async function initializeBackgroundServices() {
     console.log('🏥 Daily system health checks scheduler active (runs at configured time from UI)');
 
     cron.schedule('0 2 * * *', async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const { rebuildModelDepartmentStats } = await import('./src/services/cycleTimeLearning');
         const report = await rebuildModelDepartmentStats();
@@ -6432,6 +6443,7 @@ async function initializeBackgroundServices() {
     // Task #85: persist a tamper-evident checkpoint of the chain head every
     // night so the verifier has stable known-good waypoints for DCAA evidence.
     cron.schedule('15 2 * * *', async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const { writeAnchor } = await import('./src/services/auditLedgerService');
         const anchor = await writeAnchor({
@@ -6451,6 +6463,7 @@ async function initializeBackgroundServices() {
     // survive the trigger's RAISE) and mirrors each attempt into the unified
     // hash-chained ledger as an AUDIT_DML_BLOCKED event with sequence + hash.
     cron.schedule('*/5 * * * *', async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const { drainTamperAttempts } = await import('./src/services/auditLedgerService');
         const n = await drainTamperAttempts(500);
@@ -6467,6 +6480,7 @@ async function initializeBackgroundServices() {
     // emit notifications. Deduped per (detector_key, dedup_key) while OPEN.
     const anomalyCron = process.env.INVENTORY_ANOMALY_CRON ?? '*/15 * * * *';
     cron.schedule(anomalyCron, async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const { runAnomalyDetectionJob } = await import(
           './src/services/inventoryAnomalyDetectionService'
@@ -6501,6 +6515,7 @@ async function initializeBackgroundServices() {
         anomaly: { id: string; detectorKey: string; severity: string; summary: string; agPartNumber: string | null },
         recipients: number[],
       ) => {
+        if (!shouldRunBackgroundJob('outbound')) return;
         if (!recipients || recipients.length === 0) return;
         try {
           const recips = await db
@@ -6585,6 +6600,7 @@ async function initializeBackgroundServices() {
     // mismatch records an AUDIT_CHAIN_INTEGRITY_FAILED event so the
     // compliance dashboard surfaces tamper evidence between nightly anchors.
     cron.schedule('*/30 * * * *', async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const { verifyRecentChain, recordAuditEvent } = await import('./src/services/auditLedgerService');
         const result = await verifyRecentChain(5000);
@@ -6627,6 +6643,7 @@ async function initializeBackgroundServices() {
       return edriCronDefault;
     })();
     cron.schedule(edriCronSchedule, async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const { computeEdriSnapshot } = await import('./src/services/edriScoringService');
         const result = await computeEdriSnapshot(undefined, 'scheduled-refresh');
@@ -6641,6 +6658,7 @@ async function initializeBackgroundServices() {
     // Verifies docs/policies/*.md content hashes match the latest published in-repo
     // policy versions. Drift is logged and visible at /api/policies/admin/drift.
     cron.schedule('30 2 * * *', async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const { runPoliciesDriftCheck } = await import('./src/jobs/policiesDriftCheck');
         await runPoliciesDriftCheck();
@@ -6656,6 +6674,7 @@ async function initializeBackgroundServices() {
     // last_reminded_at is updated after each successful reminder so the same
     // request is never nagged more than once per 2-day window.
     cron.schedule('0 9 * * *', async () => {
+      if (!shouldRunBackgroundJob('outbound')) return;
       try {
         console.log('[RefundReminder] Checking for pending refund requests due for reminder...');
         const { refundRequests: rr, customers: cust } = await import('./schema');
@@ -6728,6 +6747,7 @@ async function initializeBackgroundServices() {
     // The scheduled time is configurable via the Admin UI without a server restart.
     // Defaults to 2:30 AM. Admins can change or disable it from the EDRI dashboard.
     cron.schedule('* * * * *', async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const { runScheduledForensicScan, getForensicAuditScheduleConfig } = await import('./src/jobs/forensicAuditScheduler');
         const config = getForensicAuditScheduleConfig();
@@ -6752,6 +6772,7 @@ async function initializeBackgroundServices() {
     // Idempotent and safe to run on multiple instances — `escalateExpired`
     // re-reads each candidate row under FOR UPDATE SKIP LOCKED.
     cron.schedule('* * * * *', async () => {
+      if (!shouldRunBackgroundJob('high-impact')) return;
       try {
         const { escalateExpired } = await import('./src/services/escalationService');
         const result = await escalateExpired(new Date());
@@ -6769,7 +6790,7 @@ async function initializeBackgroundServices() {
     // Queue integrity background monitor
     try {
       const { startQueueIntegrityService } = await import('./src/services/queueIntegrityService');
-      startQueueIntegrityService();
+      if (shouldRunBackgroundJob()) startQueueIntegrityService();
     } catch (svcError) {
       console.warn('⚠️ Queue integrity service failed to start:', svcError);
     }
@@ -8063,7 +8084,7 @@ async function initializeBackgroundServices() {
     // DCAA Forensic Scan → EDRI baseline (sequenced): scan must complete first so
     // dcaa_audit_findings is populated before EDRI reads it for the startup score.
     // Both steps run fire-and-forget to avoid blocking other startup work.
-    (async () => {
+    if (shouldRunBackgroundJob()) (async () => {
       try {
         const { runForensicScan } = await import('./src/services/dcaaForensicEngine');
         const summary = await runForensicScan();
@@ -8084,6 +8105,7 @@ async function initializeBackgroundServices() {
 
     // DCAA Forensic Scan: re-scan every 6 hours to keep dcaa_audit_findings current
     cron.schedule('0 */6 * * *', async () => {
+      if (!shouldRunBackgroundJob()) return;
       try {
         const { runForensicScan } = await import('./src/services/dcaaForensicEngine');
         const summary = await runForensicScan();
@@ -8095,6 +8117,7 @@ async function initializeBackgroundServices() {
     console.log('🔍 DCAA forensic findings scanner scheduled (every 6 hours)');
     // Training certification expiration digest (runs daily at 8:00 AM)
     cron.schedule('0 8 * * *', async () => {
+      if (!shouldRunBackgroundJob('outbound')) return;
       try {
         console.log('🎓 Running daily training certification expiration digest...');
         const { sendTrainingExpirationDigest } = await import('./utils/trainingAlertReminder.js');

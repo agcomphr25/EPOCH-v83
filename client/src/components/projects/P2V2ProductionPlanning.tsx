@@ -88,6 +88,9 @@ const selectOptions = (values: string[]) =>
     </SelectItem>
   ));
 
+const productionPlanApprovalStatement =
+  'I confirm that this production plan completely identifies the parts, materials, operations, documents, inspections, resources, and controls required to manufacture this customer order.';
+
 const wizardPages = [
   'Confirm the Order',
   'Review Parts and Assemblies',
@@ -144,7 +147,7 @@ export default function P2V2ProductionPlanning({
   } = useQuery<PreviewModel>({
     queryKey: [...key, 'launch-preview'],
     queryFn: () => request(`${endpoint(projectId)}/launch-preview`),
-    enabled: open && currentPage === 8 && canManage,
+    enabled: open && currentPage >= 8 && canManage,
     retry: false,
   });
   const mutation = useMutation({
@@ -177,7 +180,9 @@ export default function P2V2ProductionPlanning({
   const decide = (capacity: string, decision: 'APPROVED' | 'REJECTED') => {
     const signatureMeaning = window.prompt(
       'Signature meaning (required):',
-      `I ${decision === 'APPROVED' ? 'approve' : 'return'} this ${capacity} production-plan revision.`
+      decision === 'APPROVED'
+        ? productionPlanApprovalStatement
+        : `I return this ${capacity} production-plan revision for correction.`
     );
     if (!signatureMeaning) return;
     const reason =
@@ -473,6 +478,16 @@ export default function P2V2ProductionPlanning({
                     </>
                   )}
                 </section>
+              )}
+              {currentPage === 9 && data?.plan && (
+                <ReviewApproveSummary
+                  plan={data.plan}
+                  items={data.items}
+                  readiness={data.readiness}
+                  preview={preview}
+                  previewLoading={previewLoading}
+                  approvalHistory={data.approvalHistory}
+                />
               )}
               {currentPage === 9 && data?.plan && (
                 <div className="flex flex-wrap gap-2">
@@ -1238,6 +1253,123 @@ function ScheduleCapacityReview({
           <h3 className="font-semibold">Inputs still blocking release</h3>
           <ul className="mt-2 list-disc pl-5 text-sm">
             {blockers.map((blocker) => (
+              <li key={blocker}>{blocker}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ReviewApproveSummary({
+  plan,
+  items,
+  readiness,
+  preview,
+  previewLoading,
+  approvalHistory,
+}: {
+  plan: Row;
+  items: Row[];
+  readiness: Model['readiness'];
+  preview: PreviewModel | undefined;
+  previewLoading: boolean;
+  approvalHistory: Row[];
+}) {
+  const approvedFunctions = ['ENGINEERING', 'QUALITY', 'OPERATIONS'].filter(
+    (capacity) =>
+      approvalHistory.some(
+        (approval) =>
+          value(approval, 'approval_type') ===
+            `PRODUCTION_PLANNING_${capacity}` &&
+          value(approval, 'decision') === 'APPROVED'
+      )
+  );
+  const manufactured = items.filter((item) => item.is_manufactured).length;
+  return (
+    <section className="space-y-4" data-testid="review-approve-summary">
+      <div className="rounded border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">Production plan release review</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Review this immutable revision boundary before submission or a
+              functional approval. Approval completes Step 5 only; it does not
+              release work to production.
+            </p>
+          </div>
+          <Badge variant={readiness.ready ? 'default' : 'destructive'}>
+            {readiness.ready ? 'Ready' : 'Blocked'}
+          </Badge>
+        </div>
+        <dl className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+          <OrderFact label="Plan revision" current={plan.revision_number} />
+          <OrderFact label="Effectivity" current={plan.effectivity_reference} />
+          <OrderFact label="Controlled items" current={items.length} />
+          <OrderFact label="Manufactured items" current={manufactured} />
+          <OrderFact
+            label="Functional approvals"
+            current={`${approvedFunctions.length} of 3 recorded`}
+          />
+          <OrderFact
+            label="Stale-source changes"
+            current={readiness.differences.length}
+          />
+          <OrderFact
+            label="Release blockers"
+            current={readiness.blockers.length}
+          />
+        </dl>
+      </div>
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Approval statement</h3>
+        <p
+          className="mt-2 text-sm"
+          data-testid="production-plan-approval-statement"
+        >
+          {productionPlanApprovalStatement}
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Each authorized function records this statement with its own identity,
+          role, PostgreSQL-authoritative time, and revision evidence.
+        </p>
+      </div>
+      {previewLoading && <p>Loading demand-preview totals…</p>}
+      {preview && (
+        <div
+          className="rounded border p-4"
+          data-testid="approval-demand-totals"
+        >
+          <h3 className="font-semibold">Demand preview totals</h3>
+          <div className="mt-3 grid gap-3 md:grid-cols-4">
+            {Object.entries(preview.totals).map(([group, total]) => (
+              <OrderFact
+                key={group}
+                label={group.replace(/([A-Z])/g, ' $1')}
+                current={`${total.lineCount} lines · gross ${total.grossQuantity}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {!!readiness.differences.length && (
+        <div className="rounded border border-red-300 bg-red-50 p-3">
+          <h3 className="font-semibold text-red-800">
+            Source Changed — Review Required
+          </h3>
+          <ul className="mt-2 list-disc pl-5 text-sm text-red-700">
+            {readiness.differences.map((difference) => (
+              <li key={difference}>{difference}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!!readiness.blockers.length && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3">
+          <h3 className="font-semibold">Problems preventing approval</h3>
+          <ul className="mt-2 list-disc pl-5 text-sm">
+            {readiness.blockers.map((blocker) => (
               <li key={blocker}>{blocker}</li>
             ))}
           </ul>

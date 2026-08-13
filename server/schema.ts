@@ -28518,6 +28518,34 @@ export const projectProductionDemandExecutionLinks = pgTable(
   }
 );
 
+export const projectProductionDemandSerializedUnits = pgTable(
+  'project_production_demand_serialized_units',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'restrict' }),
+    demandId: uuid('demand_id')
+      .notNull()
+      .references(() => projectProductionDemands.id, { onDelete: 'restrict' }),
+    p2ProductionOrderId: integer('p2_production_order_id')
+      .notNull()
+      .references(() => p2ProductionOrders.id, { onDelete: 'restrict' }),
+    serializedItemId: uuid('serialized_item_id')
+      .notNull()
+      .references(() => p2SerializedItems.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    serializedItemUnique: uniqueIndex(
+      'project_production_demand_serialized_units_item_unique'
+    ).on(table.serializedItemId),
+    demandItemUnique: uniqueIndex(
+      'project_production_demand_serialized_units_demand_item_unique'
+    ).on(table.demandId, table.serializedItemId),
+  })
+);
+
 export const projectProductionDemandAllocations = pgTable(
   'project_production_demand_allocations',
   {

@@ -301,6 +301,7 @@ export const safeMigrationFiles = [
   '0270_certification_authorization_matrix.sql',
   '0271_p2_execution_authorization_event.sql',
   '0272_p2_production_order_provisioning_event.sql',
+  '0273_p2_serialized_unit_provisioning.sql',
 ];
 
 export const criticalMigrationFiles = new Set([
@@ -378,6 +379,7 @@ export const criticalMigrationFiles = new Set([
   '0270_certification_authorization_matrix.sql',
   '0271_p2_execution_authorization_event.sql',
   '0272_p2_production_order_provisioning_event.sql',
+  '0273_p2_serialized_unit_provisioning.sql',
 ]);
 
 export async function runSafeBootMigrations() {

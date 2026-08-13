@@ -187,6 +187,11 @@ const vendorFormSchema = insertVendorSchema.extend({
     .email('Invalid email')
     .optional()
     .or(z.literal('')),
+  website: z
+    .string()
+    .url('Enter a complete website URL, including https://')
+    .optional()
+    .or(z.literal('')),
   scope: z.string().optional(),
   approvalLevel: z.string().optional(),
   approvalSource: z.string().optional(),
@@ -279,6 +284,7 @@ export default function VendorManagement() {
       email: '',
       additionalEmail: '',
       phone: '',
+      website: '',
       scope: '',
       approvalLevel: '',
       approvalSource: '',
@@ -666,6 +672,7 @@ export default function VendorManagement() {
         email: vendor.email || '',
         additionalEmail: vendor.additionalEmail || '',
         phone: vendor.phone || '',
+        website: vendor.website || '',
 
         street: vendor.street || '',
         city: vendor.city || '',
@@ -1193,6 +1200,7 @@ export default function VendorManagement() {
     email: data.email || undefined,
     additionalEmail: data.additionalEmail || undefined,
     phone: data.phone || undefined,
+    website: data.website || undefined,
 
     street: vendorAddress.street || undefined,
     city: vendorAddress.city || undefined,
@@ -1409,12 +1417,47 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Phone</FormLabel>
                             <FormControl>
-                              <Input {...field} data-testid="input-phone" />
+                              <Input
+                                type="tel"
+                                inputMode="tel"
+                                autoComplete="tel"
+                                placeholder="+1 256 555 0123 ext. 4"
+                                {...field}
+                                data-testid="input-phone"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <FormField
+                        control={form.control}
+                        name="website"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Company Website</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="url"
+                                inputMode="url"
+                                placeholder="https://www.example.com"
+                                autoComplete="url"
+                                {...field}
+                                data-testid="input-vendor-website"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="text-xs text-muted-foreground md:self-end md:pb-3">
+                        Phone numbers may include international country codes,
+                        extensions, spaces, and punctuation (for example,
+                        +44 20 7946 0958 ext. 2).
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

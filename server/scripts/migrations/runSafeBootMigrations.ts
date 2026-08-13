@@ -338,6 +338,7 @@ export const safeMigrationFiles = [
   '0275_design_control_verified_approval_assignments.sql',
   '0276_p2_work_order_provisioning.sql',
   '0277_routing_document_controlled_link.sql',
+  '0278_vendor_international_contact_fields.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -421,6 +422,7 @@ export const criticalMigrationFiles = new Set([
   '0275_design_control_verified_approval_assignments.sql',
   '0276_p2_work_order_provisioning.sql',
   '0277_routing_document_controlled_link.sql',
+  '0278_vendor_international_contact_fields.sql',
 ]);
 
 export async function runSafeBootMigrations() {

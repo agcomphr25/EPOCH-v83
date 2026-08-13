@@ -1314,7 +1314,7 @@ describe('recursive Production Launch persistence against PostgreSQL', () => {
           WHERE project_id=$1 AND link_type='P2_PRODUCTION_ORDER') p2_links,
         (SELECT count(*)::int FROM p2_production_orders WHERE project_id=$1) p2_orders,
         (SELECT count(*)::int FROM p2_serialized_items si
-          JOIN p2_purchase_orders po ON po.id=si.po_id WHERE po.project_id=$1) serialized_items,
+          JOIN projects p ON p.po_id=si.po_id WHERE p.id=$1) serialized_items,
         (SELECT count(*)::int FROM travelers WHERE project_id=$1) travelers`,
       [fixture.projectId]
     );
@@ -1389,6 +1389,7 @@ describe('recursive Production Launch persistence against PostgreSQL', () => {
       root_quantity: number;
       serialized_items: number;
       serialized_links: number;
+      wrong_project_items: number;
       non_root_links: number;
       travelers: number;
     }>(
@@ -1396,10 +1397,16 @@ describe('recursive Production Launch persistence against PostgreSQL', () => {
         (SELECT sum(shortage_quantity)::int FROM project_production_demands
           WHERE project_id=$1 AND parent_demand_id IS NULL AND path_depth=0
             AND classification='MANUFACTURED' AND disposition='MAKE') root_quantity,
-        (SELECT count(*)::int FROM p2_serialized_items si
-          JOIN p2_purchase_orders po ON po.id=si.po_id WHERE po.project_id=$1) serialized_items,
+        (SELECT count(*)::int FROM project_production_demand_serialized_units su
+          JOIN p2_serialized_items si ON si.id=su.serialized_item_id
+          WHERE su.project_id=$1) serialized_items,
         (SELECT count(*)::int FROM project_production_demand_serialized_units
           WHERE project_id=$1) serialized_links,
+        (SELECT count(*)::int FROM project_production_demand_serialized_units su
+          JOIN p2_serialized_items si ON si.id=su.serialized_item_id
+          WHERE su.project_id=$1 AND NOT EXISTS (
+            SELECT 1 FROM projects p WHERE p.id=su.project_id AND p.po_id=si.po_id
+          )) wrong_project_items,
         (SELECT count(*)::int FROM project_production_demand_serialized_units su
           JOIN project_production_demands d ON d.id=su.demand_id
           WHERE su.project_id=$1 AND (d.parent_demand_id IS NOT NULL OR d.path_depth<>0)) non_root_links,
@@ -1412,6 +1419,7 @@ describe('recursive Production Launch persistence against PostgreSQL', () => {
     expect(evidence.rows[0].serialized_links).toBe(
       evidence.rows[0].root_quantity
     );
+    expect(evidence.rows[0].wrong_project_items).toBe(0);
     expect(evidence.rows[0].non_root_links).toBe(0);
     expect(evidence.rows[0].travelers).toBe(0);
   });

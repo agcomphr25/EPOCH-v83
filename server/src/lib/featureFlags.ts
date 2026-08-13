@@ -88,6 +88,11 @@ export function isP2V2WorkOrderProvisioningEnabled(): boolean {
   return process.env.P2_V2_WORK_ORDER_PROVISIONING_ENABLED === 'true';
 }
 
+/** Gates draft batch travelers for manufactured child work orders. */
+export function isP2V2ComponentTravelerProvisioningEnabled(): boolean {
+  return process.env.P2_V2_COMPONENT_TRAVELER_PROVISIONING_ENABLED === 'true';
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

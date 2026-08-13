@@ -102,12 +102,6 @@ const wizardPages = [
 ] as const;
 
 const reviewPageFields: Record<number, Array<[string, string]>> = {
-  5: [
-    ['Inspection extent', 'inspection_extent'],
-    ['First Article Inspection', 'fai_requirement'],
-    ['Required certifications', 'required_certifications'],
-    ['Required test records', 'required_test_records'],
-  ],
   6: [
     ['Drawing number', 'drawing_number'],
     ['Drawing revision', 'drawing_revision'],
@@ -410,7 +404,13 @@ export default function P2V2ProductionPlanning({
                   blockers={data.readiness.blockers}
                 />
               )}
-              {currentPage >= 5 && currentPage <= 7 && (
+              {currentPage === 5 && !!data?.items.length && (
+                <QualityRequirementReview
+                  items={data.items}
+                  blockers={data.readiness.blockers}
+                />
+              )}
+              {currentPage >= 6 && currentPage <= 7 && (
                 <ReviewByExceptionPanel
                   items={data?.items ?? []}
                   fields={reviewPageFields[currentPage] ?? []}
@@ -901,6 +901,117 @@ function ToolingResourceReview({
                 </p>
               </div>
             )}
+            {!!itemBlockers.length && (
+              <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">
+                {itemBlockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            )}
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
+function QualityRequirementReview({
+  items,
+  blockers,
+}: {
+  items: Row[];
+  blockers: string[];
+}) {
+  const manufacturedItems = items.filter((item) => item.is_manufactured);
+  return (
+    <section className="space-y-3" data-testid="quality-requirement-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Controlled quality requirements</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          These are planning decisions from the saved baseline. They do not
+          record inspection results, completed FAI, accepted product, or
+          released certification and test evidence.
+        </p>
+      </div>
+      {manufacturedItems.map((item) => {
+        const partNumber = value(item, 'part_number');
+        const inspection = value(item, 'inspection_extent');
+        const samplingRequired = inspection === 'APPROVED_SAMPLING';
+        const samplingApproved =
+          !samplingRequired ||
+          (Boolean(value(item, 'sampling_plan_id')) &&
+            value(item, 'sampling_plan_status').toUpperCase() === 'APPROVED');
+        const fai = value(item, 'fai_requirement');
+        const faiComplete =
+          Boolean(fai) &&
+          (fai !== 'NOT_REQUIRED' || Boolean(value(item, 'fai_reason')));
+        const decisionsComplete =
+          Boolean(inspection) &&
+          samplingApproved &&
+          faiComplete &&
+          Boolean(value(item, 'traceability_level')) &&
+          Array.isArray(item.required_certifications) &&
+          Array.isArray(item.required_test_records);
+        const certifications = displayValue(item, 'required_certifications');
+        const testRecords = displayValue(item, 'required_test_records');
+        const itemBlockers = blockers.filter((blocker) =>
+          blocker.startsWith(`${partNumber}:`)
+        );
+        return (
+          <article
+            className="rounded border p-4"
+            data-testid="quality-requirement-review-item"
+            key={value(item, 'id')}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="font-semibold">
+                  {partNumber || 'Information Missing'} —{' '}
+                  {value(item, 'part_name') || 'Information Missing'}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Planning quality controls
+                </p>
+              </div>
+              <Badge variant={decisionsComplete ? 'default' : 'destructive'}>
+                {decisionsComplete
+                  ? 'Requirements recorded'
+                  : 'Decision missing'}
+              </Badge>
+            </div>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+              <OrderFact label="Inspection strategy" current={inspection} />
+              <OrderFact label="FAI requirement" current={fai} />
+              <OrderFact
+                label="Traceability level"
+                current={item.traceability_level}
+              />
+              {samplingRequired && (
+                <>
+                  <OrderFact
+                    label="Sampling plan"
+                    current={item.sampling_plan_id}
+                  />
+                  <OrderFact
+                    label="Sampling status"
+                    current={item.sampling_plan_status}
+                  />
+                </>
+              )}
+              {fai === 'NOT_REQUIRED' && (
+                <OrderFact label="FAI N/A basis" current={item.fai_reason} />
+              )}
+            </dl>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+              <OrderFact
+                label="Required certifications"
+                current={certifications || 'None recorded'}
+              />
+              <OrderFact
+                label="Required test records"
+                current={testRecords || 'None recorded'}
+              />
+            </dl>
             {!!itemBlockers.length && (
               <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">
                 {itemBlockers.map((blocker) => (

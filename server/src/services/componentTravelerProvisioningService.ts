@@ -15,6 +15,24 @@ const rows = (value: unknown): Row[] =>
 const digest = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
+export function resolveWadTravelerRequired(value: unknown): boolean | null {
+  const wizard = value && typeof value === 'object' ? (value as Row) : {};
+  const step6 =
+    wizard.step6 && typeof wizard.step6 === 'object'
+      ? (wizard.step6 as Row).travelerRequired
+      : undefined;
+  const legacy = wizard.travelerRequired;
+  const decisions = [step6, legacy].filter(
+    (decision): decision is boolean => typeof decision === 'boolean'
+  );
+  if (
+    !decisions.length ||
+    decisions.some((decision) => decision !== decisions[0])
+  )
+    return null;
+  return decisions[0];
+}
+
 export type ComponentTravelerProvisioningInput = {
   idempotencyKey: string;
   expectedLaunchDigest: string;
@@ -59,7 +77,7 @@ export async function provisionP2ComponentTravelers(
     const launch = rows(
       await db.execute(sql`
       SELECT pl.id,pl.status,pl.preview_digest,wa.status AS wad_status,
-        pwo.wad_status AS work_order_wad_status
+        pwo.wad_status AS work_order_wad_status,pwo.wizard_data AS wad_wizard_data
       FROM project_production_launches pl
       JOIN projects p ON p.id=pl.project_id AND p.workflow_version='p2_v2'
       JOIN project_wad_authorizations wa ON wa.id=pl.wad_authorization_id
@@ -111,6 +129,38 @@ export async function provisionP2ComponentTravelers(
         'WORK_ORDER_PROVISIONING_REQUIRED',
         'Component work orders must be provisioned first.'
       );
+    const travelerRequired = resolveWadTravelerRequired(launch.wad_wizard_data);
+    if (travelerRequired === null)
+      throw new ComponentTravelerProvisioningError(
+        'WAD_TRAVELER_SELECTION_REQUIRED',
+        'Select whether travelers are required in WAD Step 6 before creating manufacturing work orders.'
+      );
+    if (!travelerRequired) {
+      const eventId = randomUUID();
+      const evidence = {
+        launchId,
+        travelerRequired: false,
+        travelerIds: [],
+        reason: 'Released WAD Step 6 does not require travelers.',
+        createsCncJobs: false,
+        createsQueues: false,
+        releasesFloorWork: false,
+      };
+      await db.execute(sql`
+        INSERT INTO project_production_launch_events
+          (id,project_id,production_launch_id,event_type,request_hash,evidence_digest,
+           created_record_ids,evidence_snapshot,actor_user_id,actor_display_name,actor_role,signature_meaning)
+        VALUES (${eventId},${projectId},${launchId},'P2_COMPONENT_TRAVELERS_PROVISIONED',
+          ${requestHash},${digest(evidence)},${JSON.stringify({ travelerIds: [] })}::jsonb,
+          ${JSON.stringify(evidence)}::jsonb,${actor.userId},${actor.displayName},${actor.role},${input.signatureMeaning.trim()})`);
+      return {
+        replayed: false,
+        eventId,
+        travelerRequired: false,
+        travelerIds: [],
+        provisionedDemandIds: [],
+      };
+    }
 
     const targets = rows(
       await db.execute(sql`
@@ -231,6 +281,7 @@ export async function provisionP2ComponentTravelers(
     const eventId = randomUUID();
     const evidence = {
       launchId,
+      travelerRequired: true,
       demandIds: targets.map((target) => target.demand_id),
       workOrderIds: targets.map((target) => target.production_work_order_id),
       travelerIds,

@@ -4303,6 +4303,7 @@ export const vendors = pgTable('vendors', {
   email: text('email'),
   additionalEmail: text('additional_email'),
   phone: text('phone'),
+  website: text('website'),
   address: text('address'), // Legacy field - kept for backward compatibility
   street: text('street'),
   city: text('city'),
@@ -5163,6 +5164,14 @@ export const insertVendorSchema = createInsertSchema(vendors)
       ),
     contactPerson: z.string().optional(),
     phone: z.string().optional(),
+    website: z
+      .string()
+      .optional()
+      .transform((val) => (val === '' ? undefined : val))
+      .refine(
+        (website) => !website || z.string().url().safeParse(website).success,
+        { message: 'Invalid website URL' }
+      ),
     address: z.string().optional(),
     street: z.string().optional(),
     city: z.string().optional(),

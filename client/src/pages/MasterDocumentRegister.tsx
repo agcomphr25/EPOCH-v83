@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -284,6 +284,7 @@ export default function MasterDocumentRegister() {
     null
   );
   const { toast } = useToast();
+  const handledLinkedDocumentId = useRef<string | null>(null);
 
   // Fetch controlled documents
   const {
@@ -295,6 +296,24 @@ export default function MasterDocumentRegister() {
   } = useQuery<ControlledDocumentView[]>({
     queryKey: ['/api/controlled-documents'],
   });
+
+  useEffect(() => {
+    if (isLoading || documents.length === 0) return;
+    const documentId = new URLSearchParams(window.location.search).get('documentId');
+    if (!documentId || handledLinkedDocumentId.current === documentId) return;
+    handledLinkedDocumentId.current = documentId;
+    const linkedDocument = documents.find((doc) => doc.id === documentId);
+    if (!linkedDocument) {
+      toast({
+        title: 'Controlled document not found',
+        description: 'The builder record is not connected to an accessible Master Document Register record.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setSearchQuery(linkedDocument.documentNumber);
+    setSelectedDocument(linkedDocument);
+  }, [documents, isLoading, toast]);
 
   const {
     data: designControlTemplates = [],

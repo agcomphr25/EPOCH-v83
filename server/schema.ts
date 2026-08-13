@@ -17517,6 +17517,10 @@ export const routingDocuments = pgTable(
     fileName: varchar('file_name', { length: 500 }),
     fileType: varchar('file_type', { length: 100 }),
     fileSize: integer('file_size'),
+    controlledDocumentId: uuid('controlled_document_id').references(
+      () => controlledDocuments.id,
+      { onDelete: 'restrict' }
+    ),
 
     extractedText: text('extracted_text'),
     aiExtractedContent: jsonb('ai_extracted_content'),
@@ -17543,6 +17547,9 @@ export const routingDocuments = pgTable(
     ),
     departmentIdx: index('routing_documents_department_idx').on(
       table.departmentName
+    ),
+    controlledDocumentIdx: index('routing_documents_controlled_document_idx').on(
+      table.controlledDocumentId
     ),
   })
 );

@@ -339,6 +339,7 @@ export const safeMigrationFiles = [
   '0276_p2_work_order_provisioning.sql',
   '0277_routing_document_controlled_link.sql',
   '0278_p2_component_traveler_provisioning.sql',
+  '0280_move_forward.sql',
   'investigation_308_order_duplication.sql',
 ];
 

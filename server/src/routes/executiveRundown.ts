@@ -308,6 +308,13 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Item not found' });
     }
 
+    if (result[0].linked_entity_type === 'move_forward_item' && result[0].linked_entity_id) {
+      await pool.query(
+        `UPDATE move_forward_items SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND user_id = $2`,
+        [result[0].linked_entity_id, userId]
+      );
+    }
+
     res.json(result[0]);
   } catch (error: any) {
     console.error('Executive rundown POST /:id/complete error:', error);

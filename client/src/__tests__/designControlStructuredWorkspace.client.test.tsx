@@ -93,6 +93,22 @@ describe('Design Control structured workspaces', () => {
             }),
             { status: 409 }
           );
+        if (init?.method === 'PATCH' && url.endsWith('/steps/1')) {
+          const body = JSON.parse(String(init.body));
+          return new Response(
+            JSON.stringify({
+              step: {
+                stepKey: '1',
+                status: 'draft',
+                formData: body.formData,
+                checklist: body.checklist,
+                currentContentVersionId: 'version-2',
+                updatedAt: '2026-08-12T12:00:00.000Z',
+              },
+            }),
+            { status: 200 }
+          );
+        }
         if (url.endsWith('/structured/REQUIREMENT'))
           return new Response(JSON.stringify({ records: [] }), { status: 200 });
         if (url.endsWith('/structured/VALIDATION'))
@@ -300,6 +316,41 @@ describe('Design Control structured workspaces', () => {
       await screen.findByText('Synthetic save rejected: stale version')
     ).toBeInTheDocument();
     expect(field).toHaveValue('SYNTHETIC-PROJECT-1');
+  });
+
+  it('hydrates the workspace from the committed PATCH row after saving', async () => {
+    const definition = DESIGN_CONTROL_WORKFLOW[0];
+    const onChanged = vi.fn(async () => undefined);
+    renderWithQuery(
+      <DesignControlStepEditor
+        definition={definition}
+        hasNext
+        hasPrevious={false}
+        onChanged={onChanged}
+        onNext={vi.fn()}
+        onPrevious={vi.fn()}
+        readOnly={false}
+        recordId="record-1"
+        step={{ stepKey: definition.key, status: 'draft' }}
+      />
+    );
+
+    const field = await screen.findByLabelText(definition.fields[0].label, {
+      exact: false,
+    });
+    fireEvent.change(field, { target: { value: 'PERSISTED-PROJECT-1' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Save Draft' }));
+
+    await waitFor(() =>
+      expect(onChanged).toHaveBeenCalledWith(
+        expect.objectContaining({
+          currentContentVersionId: 'version-2',
+          formData: expect.objectContaining({
+            [definition.fields[0].key]: 'PERSISTED-PROJECT-1',
+          }),
+        })
+      )
+    );
   });
 
   it('can focus the stage workspace on the matching authoritative register', async () => {

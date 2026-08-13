@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { DESIGN_CONTROL_WORKFLOW } from '@shared/designControlWorkflow';
 import {
@@ -165,6 +165,7 @@ export function DesignControlWorkspace({
   releaseId?: string | null;
   mode?: WorkspaceMode;
 }) {
+  const queryClient = useQueryClient();
   const readOnly = mode === 'auditor';
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const initialStep =
@@ -456,10 +457,7 @@ export function DesignControlWorkspace({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent
-          value="lifecycle"
-          className="space-y-4"
-        >
+        <TabsContent value="lifecycle" className="space-y-4">
           <nav
             className="hidden"
             aria-hidden="true"
@@ -600,7 +598,29 @@ export function DesignControlWorkspace({
                 definition={selectedDefinition}
                 hasNext={selectedIndex < DESIGN_CONTROL_WORKFLOW.length - 1}
                 hasPrevious={selectedIndex > 0}
-                onChanged={() => detailQuery.refetch()}
+                onChanged={async (savedStep) => {
+                  if (!savedStep) {
+                    await detailQuery.refetch();
+                    return;
+                  }
+                  // The PATCH response is the authoritative committed row. Use
+                  // it directly so a lagging read cannot restore the user's
+                  // pre-save values in the editor.
+                  queryClient.setQueryData<Detail>(
+                    ['/api/qms/design-control', recordId],
+                    (current) =>
+                      current
+                        ? {
+                            ...current,
+                            steps: current.steps.map((candidate) =>
+                              candidate.stepKey === savedStep.stepKey
+                                ? { ...candidate, ...savedStep }
+                                : candidate
+                            ),
+                          }
+                        : current
+                  );
+                }}
                 onNext={() =>
                   setActiveStep(DESIGN_CONTROL_WORKFLOW[selectedIndex + 1].key)
                 }

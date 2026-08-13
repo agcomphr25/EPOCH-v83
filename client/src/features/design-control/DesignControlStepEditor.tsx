@@ -47,9 +47,20 @@ type ApprovalSlot = {
     decidedBySnapshot?: { username?: string; role?: string } | null;
     decidedAt?: string | null;
   } | null;
+  assignment?: {
+    employeeId: number;
+    userId: number;
+    employeeCodeSnapshot?: string | null;
+    approverNameSnapshot: string;
+    jobTitleSnapshot?: string | null;
+    departmentSnapshot?: string | null;
+    accountStatusSnapshot: string;
+    status: string;
+  } | null;
 };
 
 type ApprovalState = {
+  currentUserId?: number | null;
   currentContentVersion?: { id: string; contentVersion: number } | null;
   versions: Array<{
     id: string;
@@ -71,6 +82,20 @@ type ApprovalState = {
     status: string;
   }>;
   approvalSlots: ApprovalSlot[];
+};
+
+type EligibleApprovers = {
+  employees: Array<{
+    employeeId: number;
+    employeeCode?: string | null;
+    displayName: string;
+    jobTitle?: string | null;
+    department?: string | null;
+    userId: number;
+    accountRole: string;
+    accountStatus: string;
+    eligibleApprovalKeys: string[];
+  }>;
 };
 
 type Props = {
@@ -117,6 +142,9 @@ export function DesignControlStepEditor({
   const [checklist, setChecklist] = useState<Record<string, unknown>>({});
   const [changeReason, setChangeReason] = useState('');
   const [decisionComment, setDecisionComment] = useState('');
+  const [approvalAssignments, setApprovalAssignments] = useState<
+    Record<string, string>
+  >({});
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -196,6 +224,23 @@ export function DesignControlStepEditor({
         )
       ),
   });
+  const eligibleApproversQuery = useQuery<EligibleApprovers>({
+    queryKey: [
+      '/api/qms/design-control',
+      recordId,
+      'steps',
+      definition.key,
+      'eligible-approvers',
+    ],
+    queryFn: async () =>
+      responsePayload(
+        await fetch(
+          `/api/qms/design-control/${encodeURIComponent(recordId)}/steps/${encodeURIComponent(definition.key)}/eligible-approvers`,
+          { credentials: 'include' }
+        )
+      ),
+    enabled: step?.status !== 'submitted_for_approval',
+  });
 
   const refresh = async () => {
     await Promise.all([
@@ -260,6 +305,20 @@ export function DesignControlStepEditor({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contentVersionId: step?.currentContentVersionId ?? null,
+            assignments: definition.approvals.map((slot) => {
+              const selected = (
+                eligibleApproversQuery.data?.employees ?? []
+              ).find(
+                (employee) =>
+                  `${employee.employeeId}:${employee.userId}` ===
+                  approvalAssignments[slot.key]
+              );
+              return {
+                approvalKey: slot.key,
+                employeeId: selected?.employeeId,
+                userId: selected?.userId,
+              };
+            }),
           }),
         }
       );
@@ -484,7 +543,9 @@ export function DesignControlStepEditor({
                         {value && value !== projectId && (
                           <option value={value}>Existing value: {value}</option>
                         )}
-                        <option value={projectId}>Linked project: {projectId}</option>
+                        <option value={projectId}>
+                          Linked project: {projectId}
+                        </option>
                         <option value="__MANUAL__">
                           Enter another customer or order link…
                         </option>
@@ -518,9 +579,7 @@ export function DesignControlStepEditor({
                       className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                       id={fieldId}
                       value={
-                        manualPersonFields.has(field.key)
-                          ? '__MANUAL__'
-                          : value
+                        manualPersonFields.has(field.key) ? '__MANUAL__' : value
                       }
                       onChange={(event) => {
                         if (event.target.value === '__MANUAL__') {
@@ -671,9 +730,67 @@ export function DesignControlStepEditor({
           </>
         )}
         {canSubmit && (
+          <div className="w-full space-y-3 rounded-md border p-3">
+            <h3 className="font-semibold">Assign verified approvers</h3>
+            <p className="text-sm text-muted-foreground">
+              Only active employees with active, authorized EPOCH accounts are
+              available. Assignments are locked to the submitted version.
+            </p>
+            {definition.approvals.map((slot) => {
+              const candidates = (
+                eligibleApproversQuery.data?.employees ?? []
+              ).filter((employee) =>
+                employee.eligibleApprovalKeys.includes(slot.key)
+              );
+              return (
+                <div className="space-y-1" key={slot.key}>
+                  <Label htmlFor={`approval-assignee-${slot.key}`}>
+                    {slot.label}
+                  </Label>
+                  <Input
+                    id={`approval-assignee-${slot.key}`}
+                    list={`approval-assignee-options-${slot.key}`}
+                    placeholder="Search active employees by name, code, title, department, or role"
+                    value={approvalAssignments[slot.key] ?? ''}
+                    onChange={(event) =>
+                      setApprovalAssignments((current) => ({
+                        ...current,
+                        [slot.key]: event.target.value,
+                      }))
+                    }
+                  />
+                  <datalist id={`approval-assignee-options-${slot.key}`}>
+                    {candidates.map((employee) => (
+                      <option
+                        key={`${employee.employeeId}:${employee.userId}`}
+                        value={`${employee.employeeId}:${employee.userId}`}
+                      >
+                        {employee.displayName} |{' '}
+                        {employee.employeeCode ||
+                          `Employee ${employee.employeeId}`}{' '}
+                        |{' '}
+                        {employee.jobTitle ||
+                          employee.department ||
+                          'Role not recorded'}{' '}
+                        | Account {employee.accountStatus} |{' '}
+                        {employee.accountRole}
+                      </option>
+                    ))}
+                  </datalist>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {canSubmit && (
           <Button
             disabled={
-              busy || dirty || !approvalQuery.data?.currentContentVersion?.id
+              busy ||
+              dirty ||
+              !approvalQuery.data?.currentContentVersion?.id ||
+              definition.approvals.some(
+                (slot) => !approvalAssignments[slot.key]
+              )
             }
             onClick={submit}
             type="button"
@@ -728,6 +845,11 @@ export function DesignControlStepEditor({
                       ? 'Independent reviewer required'
                       : 'Authenticated reviewer required'}
                   </p>
+                  <p className="text-xs text-muted-foreground">
+                    {slot.assignment
+                      ? `${slot.assignment.approverNameSnapshot} (${slot.assignment.employeeCodeSnapshot || `Employee ${slot.assignment.employeeId}`}) · ${slot.assignment.jobTitleSnapshot || slot.assignment.departmentSnapshot || 'Role not recorded'} · Account ${slot.assignment.accountStatusSnapshot}`
+                      : 'Unverified legacy assignment or no verified assignee'}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge
@@ -735,36 +857,39 @@ export function DesignControlStepEditor({
                   >
                     {slot.status.toLowerCase()}
                   </Badge>
-                  {canApprove && slot.status !== 'APPROVED' && (
-                    <>
-                      <Button
-                        disabled={busy || !decisionComment.trim()}
-                        onClick={() => decide(slot, 'APPROVED')}
-                        size="sm"
-                        type="button"
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        disabled={busy || !decisionComment.trim()}
-                        onClick={() => decide(slot, 'RETURNED_FOR_REVISION')}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        Return
-                      </Button>
-                      <Button
-                        disabled={busy}
-                        onClick={() => decide(slot, 'REJECTED')}
-                        size="sm"
-                        type="button"
-                        variant="destructive"
-                      >
-                        Reject
-                      </Button>
-                    </>
-                  )}
+                  {canApprove &&
+                    slot.status !== 'APPROVED' &&
+                    slot.assignment?.userId ===
+                      approvalQuery.data?.currentUserId && (
+                      <>
+                        <Button
+                          disabled={busy || !decisionComment.trim()}
+                          onClick={() => decide(slot, 'APPROVED')}
+                          size="sm"
+                          type="button"
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          disabled={busy || !decisionComment.trim()}
+                          onClick={() => decide(slot, 'RETURNED_FOR_REVISION')}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          Return
+                        </Button>
+                        <Button
+                          disabled={busy}
+                          onClick={() => decide(slot, 'REJECTED')}
+                          size="sm"
+                          type="button"
+                          variant="destructive"
+                        >
+                          Reject
+                        </Button>
+                      </>
+                    )}
                 </div>
               </div>
             ))}

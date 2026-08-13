@@ -6364,9 +6364,14 @@ export const p2CustomerDemandQuantityEvents = pgTable(
       .notNull()
       .references(() => p2PurchaseOrderItems.id, { onDelete: 'restrict' }),
     eventType: text('event_type').notNull(),
-    quantityDelta: numeric('quantity_delta', { precision: 18, scale: 6 }).notNull(),
+    quantityDelta: numeric('quantity_delta', {
+      precision: 18,
+      scale: 6,
+    }).notNull(),
     unitOfMeasure: text('unit_of_measure').notNull(),
-    effectiveAt: timestamp('effective_at', { withTimezone: true }).defaultNow().notNull(),
+    effectiveAt: timestamp('effective_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     customerEvidenceReference: text('customer_evidence_reference'),
     reason: text('reason').notNull(),
     idempotencyKey: text('idempotency_key').notNull(),
@@ -6377,7 +6382,9 @@ export const p2CustomerDemandQuantityEvents = pgTable(
     }),
     recordedByDisplayName: text('recorded_by_display_name').notNull(),
     recordedByRole: text('recorded_by_role').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => ({
     // Named unique constraints — match the names in migration 0262.
@@ -6394,7 +6401,10 @@ export const p2CustomerDemandQuantityEvents = pgTable(
     itemIdentityFk: foreignKey({
       name: 'p2_demand_event_item_identity_fk',
       columns: [table.poItemId, table.demandLineIdentity],
-      foreignColumns: [p2PurchaseOrderItems.id, p2PurchaseOrderItems.demandLineIdentity],
+      foreignColumns: [
+        p2PurchaseOrderItems.id,
+        p2PurchaseOrderItems.demandLineIdentity,
+      ],
     }).onDelete('restrict'),
   })
 );
@@ -22948,6 +22958,68 @@ export const designControlStepApprovals = pgTable(
     ),
     projectIdx: index('design_control_step_approvals_project_idx').on(
       table.rdProjectId
+    ),
+  })
+);
+
+export const designControlStepApprovalAssignments = pgTable(
+  'design_control_step_approval_assignments',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    rdProjectId: text('rd_project_id')
+      .notNull()
+      .references(() => rdProjects.id, { onDelete: 'restrict' }),
+    designControlRecordId: uuid('design_control_record_id')
+      .notNull()
+      .references(() => designControlRecords.id, { onDelete: 'restrict' }),
+    designControlStepId: uuid('design_control_step_id')
+      .notNull()
+      .references(() => designControlSteps.id, { onDelete: 'restrict' }),
+    stepContentVersionId: uuid('step_content_version_id')
+      .notNull()
+      .references(() => designControlStepContentVersions.id, {
+        onDelete: 'restrict',
+      }),
+    approvalKey: text('approval_key').notNull(),
+    approvalRoleSnapshot: text('approval_role_snapshot').notNull(),
+    employeeId: integer('employee_id')
+      .notNull()
+      .references(() => employees.id, { onDelete: 'restrict' }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    employeeCodeSnapshot: text('employee_code_snapshot'),
+    approverNameSnapshot: text('approver_name_snapshot').notNull(),
+    jobTitleSnapshot: text('job_title_snapshot'),
+    departmentSnapshot: text('department_snapshot'),
+    accountStatusSnapshot: text('account_status_snapshot').notNull(),
+    requiredCapabilitySnapshot: text('required_capability_snapshot').notNull(),
+    status: text('status').notNull().default('PENDING'),
+    decisionId: uuid('decision_id').references(
+      () => designControlStepApprovals.id,
+      { onDelete: 'restrict' }
+    ),
+    assignedByUserId: integer('assigned_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    assignedAt: timestamp('assigned_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
+  },
+  (table) => ({
+    versionSlotUnique: uniqueIndex(
+      'dc_step_approval_assignments_version_slot_uq'
+    )
+      .on(table.stepContentVersionId, table.approvalKey)
+      .where(sql`${table.status} <> 'REASSIGNED'`),
+    versionIdx: index('dc_step_approval_assignments_version_idx').on(
+      table.stepContentVersionId
     ),
   })
 );

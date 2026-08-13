@@ -4010,7 +4010,9 @@ export default function ProjectDetailPage() {
                             <p className="text-sm font-medium">Manufacturing Structure</p>
                             <div className="flex items-center gap-2">
                               <Badge variant="secondary">BOM driven</Badge>
-                              {hasMissingManufacturingWorkOrder(line.manufacturingHierarchy) && (
+                              {!hubProduction.manufacturingWorkOrderAction?.completed &&
+                                (hasMissingManufacturingWorkOrder(line.manufacturingHierarchy) ||
+                                  Boolean(line.manufacturingHierarchy)) && (
                                 <Button
                                   size="sm"
                                   disabled={createManufacturingWorkOrders.isPending}

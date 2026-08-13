@@ -59,7 +59,9 @@ import {
   decideDesignControlStepApproval,
   DesignControlApprovalError,
   getDesignControlStepApprovalState,
+  listEligibleDesignControlApprovers,
   reopenDesignControlStep,
+  reassignDesignControlStepApprover,
   saveDesignControlStepDraft,
   submitDesignControlStep,
   type DesignControlApprovalActor,
@@ -601,6 +603,36 @@ router.get(
   }
 );
 
+router.post(
+  '/:id/steps/:stepKey/assignments/:approvalKey/reassign',
+  authenticateToken,
+  requirePermission('design.control.admin'),
+  enforceDesignControlProjectAssignment,
+  async (req: Request, res: Response) => {
+    try {
+      res.json(
+        await reassignDesignControlStepApprover({
+          recordId: req.params.id,
+          stepKey: req.params.stepKey,
+          contentVersionId: String(req.body?.contentVersionId ?? ''),
+          approvalKey: req.params.approvalKey,
+          employeeId: Number(req.body?.employeeId),
+          userId: Number(req.body?.userId),
+          reason: String(req.body?.reason ?? ''),
+          actor: approvalActorFromRequest(req),
+          requestMetadata: requestMetadata(req),
+        })
+      );
+    } catch (error) {
+      sendApprovalError(
+        res,
+        error,
+        'Failed to reassign Design Control approver'
+      );
+    }
+  }
+);
+
 router.get(
   '/oversight/projects',
   requireDesignControlView,
@@ -938,10 +970,38 @@ router.post(
             : undefined,
         actor: approvalActorFromRequest(req),
         requestMetadata: requestMetadata(req),
+        assignments: Array.isArray(req.body?.assignments)
+          ? req.body.assignments.map((assignment: any) => ({
+              approvalKey: String(assignment?.approvalKey ?? ''),
+              employeeId: Number(assignment?.employeeId),
+              userId: Number(assignment?.userId),
+            }))
+          : [],
       });
       res.json(result);
     } catch (error) {
       sendApprovalError(res, error, 'Failed to submit Design Control step');
+    }
+  }
+);
+
+router.get(
+  '/:id/steps/:stepKey/eligible-approvers',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      res.json(
+        await listEligibleDesignControlApprovers(
+          req.params.id,
+          req.params.stepKey
+        )
+      );
+    } catch (error) {
+      sendApprovalError(
+        res,
+        error,
+        'Failed to load eligible Design Control approvers'
+      );
     }
   }
 );
@@ -995,12 +1055,13 @@ router.get(
   authenticateToken,
   async (req: Request, res: Response) => {
     try {
-      res.json(
-        await getDesignControlStepApprovalState(
+      res.json({
+        ...(await getDesignControlStepApprovalState(
           req.params.id,
           req.params.stepKey
-        )
-      );
+        )),
+        currentUserId: req.user?.id ?? null,
+      });
     } catch (error) {
       sendApprovalError(res, error, 'Failed to load Design Control approvals');
     }

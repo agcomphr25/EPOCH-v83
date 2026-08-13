@@ -5,9 +5,12 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   designControlRecords,
+  designControlStepApprovalAssignments,
   designControlStepApprovals,
   designControlStepContentVersions,
   designControlSteps,
+  employees,
+  users,
 } from '../../schema';
 import {
   DESIGN_CONTROL_WORKFLOW,
@@ -32,6 +35,134 @@ export type DesignControlRequestMetadata = {
   ipAddress?: string | null;
   userAgent?: string | null;
 };
+
+export type DesignControlApprovalSelection = {
+  approvalKey: string;
+  employeeId: number;
+  userId: number;
+};
+
+async function verifiedApprover(
+  selection: DesignControlApprovalSelection,
+  slot: DesignControlWorkflowItem,
+  client: Client
+) {
+  const [candidate] = await client
+    .select({
+      employeeId: employees.id,
+      employeeCode: employees.employeeCode,
+      employeeName: employees.name,
+      jobTitle: employees.jobTitle,
+      department: employees.department,
+      userId: users.id,
+      username: users.username,
+      userRole: users.role,
+      accessStatus: users.accessStatus,
+    })
+    .from(users)
+    .innerJoin(employees, eq(employees.id, users.employeeId))
+    .where(
+      and(
+        eq(users.id, selection.userId),
+        eq(users.employeeId, selection.employeeId),
+        eq(users.isActive, true),
+        eq(users.accessStatus, 'ACTIVE'),
+        eq(employees.isActive, true),
+        eq(employees.employmentStatus, 'ACTIVE')
+      )
+    )
+    .limit(1);
+  if (!candidate)
+    throw new DesignControlApprovalError(
+      422,
+      'APPROVER_NOT_ACTIVE_OR_LINKED',
+      'Each approver must be an active employee with an active linked EPOCH account'
+    );
+  if (candidate.userRole === 'ADMIN' || candidate.userRole === 'OWNER')
+    throw new DesignControlApprovalError(
+      422,
+      'ADMIN_APPROVAL_BYPASS_FORBIDDEN',
+      'Administrative account status does not confer Design Control approval authority'
+    );
+  const permissions = await getUserPermissions(
+    candidate.userId,
+    candidate.userRole
+  );
+  if (!permissions.permissionSet.has(slot.requiredCapability!))
+    throw new DesignControlApprovalError(
+      422,
+      'APPROVER_NOT_AUTHORIZED',
+      `${candidate.employeeName} is not authorized for ${slot.label}`
+    );
+  const normalizedRole = candidate.userRole.toUpperCase();
+  if (!(slot.allowedRoles ?? []).includes(normalizedRole))
+    throw new DesignControlApprovalError(
+      422,
+      'APPROVER_ROLE_MISMATCH',
+      `${candidate.employeeName} does not hold an allowed account role for ${slot.label}`
+    );
+  return candidate;
+}
+
+export async function listEligibleDesignControlApprovers(
+  recordId: string,
+  stepKey: string,
+  client: Client = db
+) {
+  const context = await loadStepContext(recordId, stepKey, client, false);
+  const rows = await client
+    .select({
+      employeeId: employees.id,
+      employeeCode: employees.employeeCode,
+      displayName: employees.name,
+      jobTitle: employees.jobTitle,
+      department: employees.department,
+      userId: users.id,
+      username: users.username,
+      accountRole: users.role,
+      accountStatus: users.accessStatus,
+    })
+    .from(users)
+    .innerJoin(employees, eq(employees.id, users.employeeId))
+    .where(
+      and(
+        eq(users.isActive, true),
+        eq(users.accessStatus, 'ACTIVE'),
+        eq(employees.isActive, true),
+        eq(employees.employmentStatus, 'ACTIVE')
+      )
+    );
+  const candidates = await Promise.all(
+    rows
+      .filter(
+        (row) => row.accountRole !== 'ADMIN' && row.accountRole !== 'OWNER'
+      )
+      .map(async (row) => {
+        const permissions = await getUserPermissions(
+          row.userId,
+          row.accountRole
+        );
+        return {
+          ...row,
+          eligibleApprovalKeys: context.definition.approvals
+            .filter(
+              (slot) =>
+                permissions.permissionSet.has(slot.requiredCapability!) &&
+                (slot.allowedRoles ?? []).includes(
+                  row.accountRole.toUpperCase()
+                )
+            )
+            .map((slot) => slot.key),
+        };
+      })
+  );
+  return {
+    approvalSlots: context.definition.approvals,
+    employees: candidates.filter(
+      (candidate) => candidate.eligibleApprovalKeys.length > 0
+    ),
+  };
+}
 
 export class DesignControlApprovalError extends Error {
   constructor(
@@ -507,6 +638,7 @@ export async function submitDesignControlStep(
     expectedContentVersionId?: string | null;
     actor: DesignControlApprovalActor;
     requestMetadata?: DesignControlRequestMetadata;
+    assignments: DesignControlApprovalSelection[];
   },
   client: Client = db
 ) {
@@ -565,6 +697,69 @@ export async function submitDesignControlStep(
       );
     }
     const now = new Date();
+    const selections = new Map(
+      input.assignments.map((assignment) => [
+        assignment.approvalKey,
+        assignment,
+      ])
+    );
+    if (selections.size !== context.definition.approvals.length)
+      throw new DesignControlApprovalError(
+        422,
+        'APPROVAL_ASSIGNMENTS_REQUIRED',
+        'Select one verified employee account for every required approval role'
+      );
+    const assignedUserIds = new Set<number>();
+    for (const slot of context.definition.approvals) {
+      const selection = selections.get(slot.key);
+      if (!selection)
+        throw new DesignControlApprovalError(
+          422,
+          'APPROVAL_ASSIGNMENTS_REQUIRED',
+          `Select an approver for ${slot.label}`
+        );
+      if (
+        slot.requiresIndependentReviewer &&
+        selection.userId === input.actor.id
+      )
+        throw new DesignControlApprovalError(
+          409,
+          'INDEPENDENCE_REQUIRED',
+          'The submitter cannot be assigned to an independent approval'
+        );
+      if (
+        slot.requiresIndependentReviewer &&
+        assignedUserIds.has(selection.userId)
+      )
+        throw new DesignControlApprovalError(
+          409,
+          'SEGREGATION_OF_DUTIES',
+          'One employee cannot satisfy multiple independent approvals'
+        );
+      const candidate = await verifiedApprover(selection, slot, tx as Client);
+      assignedUserIds.add(candidate.userId);
+      await tx.insert(designControlStepApprovalAssignments).values({
+        rdProjectId: context.record.rdProjectId!,
+        designControlRecordId: context.record.id,
+        designControlStepId: context.step.id,
+        stepContentVersionId: version.id,
+        approvalKey: slot.key,
+        approvalRoleSnapshot: slot.label,
+        employeeId: candidate.employeeId,
+        userId: candidate.userId,
+        employeeCodeSnapshot: candidate.employeeCode,
+        approverNameSnapshot: candidate.employeeName,
+        jobTitleSnapshot: candidate.jobTitle,
+        departmentSnapshot: candidate.department,
+        accountStatusSnapshot: candidate.accessStatus,
+        requiredCapabilitySnapshot: slot.requiredCapability!,
+        assignedByUserId: input.actor.id,
+        metadata: {
+          evidenceHash: version.contentChecksum,
+          provenance: 'VERIFIED_EMPLOYEE_ACCOUNT_ASSIGNMENT',
+        },
+      });
+    }
     await tx
       .update(designControlStepContentVersions)
       .set({
@@ -682,6 +877,39 @@ export async function decideDesignControlStepApproval(
       input.actor,
       slot.requiredCapability
     );
+    const [assignment] = await tx
+      .select()
+      .from(designControlStepApprovalAssignments)
+      .where(
+        and(
+          eq(
+            designControlStepApprovalAssignments.stepContentVersionId,
+            input.contentVersionId
+          ),
+          eq(
+            designControlStepApprovalAssignments.approvalKey,
+            input.approvalKey
+          ),
+          eq(designControlStepApprovalAssignments.userId, input.actor.id),
+          eq(designControlStepApprovalAssignments.status, 'PENDING')
+        )
+      )
+      .limit(1);
+    if (!assignment)
+      throw new DesignControlApprovalError(
+        403,
+        'APPROVER_NOT_ASSIGNED',
+        'The authenticated user is not assigned to this approval role'
+      );
+    await verifiedApprover(
+      {
+        approvalKey: assignment.approvalKey,
+        employeeId: assignment.employeeId,
+        userId: assignment.userId,
+      },
+      slot,
+      tx as Client
+    );
     const normalizedRole = input.actor.role.toUpperCase();
     if (
       normalizedRole !== 'ADMIN' &&
@@ -772,6 +1000,22 @@ export async function decideDesignControlStepApproval(
         metadata: { provenance: 'AUTHENTICATED_VERSION_BOUND_APPROVAL' },
       })
       .returning();
+    await tx
+      .update(designControlStepApprovalAssignments)
+      .set({
+        status:
+          input.decision === 'APPROVED'
+            ? 'APPROVED'
+            : input.decision === 'REJECTED'
+              ? 'REJECTED'
+              : 'RETURNED',
+        decisionId: decision.id,
+        metadata: {
+          ...(assignment.metadata ?? {}),
+          decidedEvidenceHash: version.contentChecksum,
+        },
+      })
+      .where(eq(designControlStepApprovalAssignments.id, assignment.id));
 
     const approvals = await tx
       .select()
@@ -854,6 +1098,146 @@ export async function decideDesignControlStepApproval(
       input.stepKey,
       tx as Client
     );
+  });
+}
+
+export async function reassignDesignControlStepApprover(
+  input: {
+    recordId: string;
+    stepKey: string;
+    contentVersionId: string;
+    approvalKey: string;
+    employeeId: number;
+    userId: number;
+    reason: string;
+    actor: DesignControlApprovalActor;
+    requestMetadata?: DesignControlRequestMetadata;
+  },
+  client: Client = db
+) {
+  if (!input.reason.trim())
+    throw new DesignControlApprovalError(
+      422,
+      'REASSIGNMENT_REASON_REQUIRED',
+      'Authorized reassignment requires a reason'
+    );
+  await requireActorCapability(input.actor, 'design.control.admin');
+  return client.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.recordId}:${input.stepKey}`}))`
+    );
+    const context = await loadStepContext(
+      input.recordId,
+      input.stepKey,
+      tx as Client
+    );
+    if (
+      context.step.status !== 'submitted_for_approval' ||
+      context.step.currentContentVersionId !== input.contentVersionId
+    )
+      throw new DesignControlApprovalError(
+        409,
+        'STALE_CONTENT_VERSION',
+        'Reassignment must target the exact pending submitted version'
+      );
+    const slot = context.definition.approvals.find(
+      (candidate) => candidate.key === input.approvalKey
+    );
+    if (!slot?.requiredCapability)
+      throw new DesignControlApprovalError(
+        400,
+        'INVALID_APPROVAL_SLOT',
+        'Unknown approval slot'
+      );
+    const [prior] = await tx
+      .select()
+      .from(designControlStepApprovalAssignments)
+      .where(
+        and(
+          eq(
+            designControlStepApprovalAssignments.stepContentVersionId,
+            input.contentVersionId
+          ),
+          eq(
+            designControlStepApprovalAssignments.approvalKey,
+            input.approvalKey
+          ),
+          eq(designControlStepApprovalAssignments.status, 'PENDING')
+        )
+      )
+      .limit(1);
+    if (!prior)
+      throw new DesignControlApprovalError(
+        409,
+        'ASSIGNMENT_NOT_PENDING',
+        'Only a pending assignment may be reassigned'
+      );
+    const candidate = await verifiedApprover(
+      {
+        approvalKey: input.approvalKey,
+        employeeId: input.employeeId,
+        userId: input.userId,
+      },
+      slot,
+      tx as Client
+    );
+    await tx
+      .update(designControlStepApprovalAssignments)
+      .set({
+        status: 'REASSIGNED',
+        metadata: {
+          ...(prior.metadata ?? {}),
+          reassignedByUserId: input.actor.id,
+          reassignedAt: new Date().toISOString(),
+          reassignmentReason: input.reason.trim(),
+        },
+      })
+      .where(eq(designControlStepApprovalAssignments.id, prior.id));
+    const [replacement] = await tx
+      .insert(designControlStepApprovalAssignments)
+      .values({
+        rdProjectId: context.record.rdProjectId!,
+        designControlRecordId: context.record.id,
+        designControlStepId: context.step.id,
+        stepContentVersionId: input.contentVersionId,
+        approvalKey: slot.key,
+        approvalRoleSnapshot: slot.label,
+        employeeId: candidate.employeeId,
+        userId: candidate.userId,
+        employeeCodeSnapshot: candidate.employeeCode,
+        approverNameSnapshot: candidate.employeeName,
+        jobTitleSnapshot: candidate.jobTitle,
+        departmentSnapshot: candidate.department,
+        accountStatusSnapshot: candidate.accessStatus,
+        requiredCapabilitySnapshot: slot.requiredCapability,
+        assignedByUserId: input.actor.id,
+        metadata: {
+          evidenceHash: prior.metadata?.evidenceHash,
+          provenance: 'AUDITED_AUTHORIZED_REASSIGNMENT',
+          priorAssignmentId: prior.id,
+          reason: input.reason.trim(),
+        },
+      })
+      .returning();
+    await recordAuditEvent(
+      {
+        ...auditBase(context, input.actor, input.requestMetadata ?? {}),
+        eventType: 'DESIGN_CONTROL_APPROVER_REASSIGNED',
+        reason: input.reason.trim(),
+        fieldsChanged: {
+          assignedUserId: { before: prior.userId, after: replacement.userId },
+        },
+        payload: {
+          approvalKey: slot.key,
+          contentVersionId: input.contentVersionId,
+          employeeId: replacement.employeeId,
+          userId: replacement.userId,
+          priorAssignmentId: prior.id,
+        },
+      },
+      tx
+    );
+    return replacement;
   });
 }
 
@@ -945,6 +1329,17 @@ export async function getDesignControlStepApprovalState(
     .from(designControlStepApprovals)
     .where(eq(designControlStepApprovals.designControlStepId, context.step.id))
     .orderBy(asc(designControlStepApprovals.createdAt));
+  const assignments = context.step.currentContentVersionId
+    ? await client
+        .select()
+        .from(designControlStepApprovalAssignments)
+        .where(
+          eq(
+            designControlStepApprovalAssignments.stepContentVersionId,
+            context.step.currentContentVersionId
+          )
+        )
+    : [];
   const currentApprovals = approvals.filter(
     (approval) =>
       approval.stepContentVersionId === context.step.currentContentVersionId &&
@@ -963,6 +1358,7 @@ export async function getDesignControlStepApprovalState(
       ) ?? null,
     versions,
     approvals,
+    assignments,
     approvalSlots: context.definition.approvals.map((slot) => ({
       key: slot.key,
       label: slot.label,
@@ -975,6 +1371,9 @@ export async function getDesignControlStepApprovalState(
         currentApprovals.find(
           (approval) => approval.approvalKey === slot.key
         ) ?? null,
+      assignment:
+        assignments.find((assignment) => assignment.approvalKey === slot.key) ??
+        null,
     })),
     legacyEvidence: {
       provenance: 'LEGACY_UNVERIFIED_APPROVAL_EVIDENCE',

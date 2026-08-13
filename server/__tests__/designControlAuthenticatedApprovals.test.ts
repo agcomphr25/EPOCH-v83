@@ -120,4 +120,35 @@ describe('authenticated Design Control approvals', () => {
       );
     }
   });
+
+  it('binds submitted approval roles to verified employee accounts without name matching', () => {
+    const migration = readRepoFile(
+      'migrations/0275_design_control_verified_approval_assignments.sql'
+    );
+    const service = readRepoFile(
+      'server/src/services/designControlApprovalService.ts'
+    );
+    expect(migration).toContain('design_control_step_approval_assignments');
+    expect(migration).toContain(
+      'employee_id integer NOT NULL REFERENCES employees'
+    );
+    expect(migration).toContain('user_id integer NOT NULL REFERENCES users');
+    expect(migration).toContain("WHERE status <> 'REASSIGNED'");
+    expect(service).toContain('eq(users.employeeId, selection.employeeId)');
+    expect(service).toContain("eq(employees.employmentStatus, 'ACTIVE')");
+    expect(service).toContain("'APPROVER_NOT_ASSIGNED'");
+    expect(service).toContain("'INDEPENDENCE_REQUIRED'");
+    expect(service).toContain("'ADMIN_APPROVAL_BYPASS_FORBIDDEN'");
+    expect(service).not.toMatch(/employeeName\s*===\s*/);
+  });
+
+  it('provides audited exact-version reassignment while preserving legacy evidence as unverified', () => {
+    const service = readRepoFile(
+      'server/src/services/designControlApprovalService.ts'
+    );
+    expect(service).toContain("'DESIGN_CONTROL_APPROVER_REASSIGNED'");
+    expect(service).toContain("'AUDITED_AUTHORIZED_REASSIGNMENT'");
+    expect(service).toContain("'LEGACY_UNVERIFIED_APPROVAL_EVIDENCE'");
+    expect(service).toContain('satisfiesAuthenticatedGate: false');
+  });
 });

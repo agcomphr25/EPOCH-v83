@@ -12,6 +12,7 @@ export const requiredDesignControlMigrations = [
   '0248_design_project_manufacturing_configuration.sql',
   '0251_design_project_configuration_workspace.sql',
   '0258_design_control_structured_lifecycle.sql',
+  '0275_design_control_verified_approval_assignments.sql',
 ] as const;
 
 export const requiredDesignControlTables = [
@@ -19,6 +20,7 @@ export const requiredDesignControlTables = [
   'design_control_steps',
   'design_control_step_content_versions',
   'design_control_step_approvals',
+  'design_control_step_approval_assignments',
   'design_control_requirements',
   'design_control_risks',
   'design_control_reviews',
@@ -249,7 +251,8 @@ export async function assertDesignControlSchemaReady(
       WHERE schemaname = 'public'
         AND indexname IN (
           'design_control_step_content_versions_step_version_unique',
-          'design_control_step_approvals_valid_slot_unique'
+          'design_control_step_approvals_valid_slot_unique',
+          'dc_step_approval_assignments_version_slot_uq'
         )
       UNION ALL
       SELECT tgname AS object_name
@@ -257,7 +260,8 @@ export async function assertDesignControlSchemaReady(
       WHERE NOT tgisinternal
         AND tgname IN (
           'prevent_design_control_step_version_delete',
-          'prevent_design_control_step_approval_delete'
+          'prevent_design_control_step_approval_delete',
+          'prevent_design_control_assignment_delete'
         )
     `);
     const structureRows = ((approvalStructures as any)?.rows ??
@@ -272,6 +276,8 @@ export async function assertDesignControlSchemaReady(
       'design_control_step_approvals_valid_slot_unique',
       'prevent_design_control_step_version_delete',
       'prevent_design_control_step_approval_delete',
+      'dc_step_approval_assignments_version_slot_uq',
+      'prevent_design_control_assignment_delete',
     ];
     const missingStructures = requiredStructures.filter(
       (name) => !presentStructures.has(name)

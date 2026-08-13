@@ -65,6 +65,12 @@ describe('P2 serialized-unit provisioning boundary', () => {
 
   it('registers migration 0273 as safe and critical with a closed event type', () => {
     expect(migration).toContain('project_production_demand_serialized_units');
+    expect(migration).toContain(
+      'project_production_demands_id_project_unique_idx'
+    );
+    expect(migration.indexOf('CREATE UNIQUE INDEX')).toBeLessThan(
+      migration.indexOf('CREATE TABLE')
+    );
     expect(migration).toContain("'P2_SERIALIZED_UNITS_PROVISIONED'");
     expect(
       runner.match(/0273_p2_serialized_unit_provisioning\.sql/g)

@@ -15,9 +15,13 @@ describe('P18380 persisted shipment reconciliation', () => {
     'utf8'
   );
 
-  it('is registered as a critical safe-boot migration', () => {
-    expect(safeMigrationFiles).toContain(migrationName);
-    expect(criticalMigrationFiles.has(migrationName)).toBe(true);
+  it('is excluded from both safe-boot lists (one-off data repair, must not replay on every boot)', () => {
+    // 0267 is a guarded row-level data repair, not repeatable schema DDL.
+    // Its fail-closed guard raises an exception when the target order is not
+    // in the exact legacy mismatch state it was authored against, which blocks
+    // boot once the repair has been applied or the order state has changed.
+    expect(safeMigrationFiles).not.toContain(migrationName);
+    expect(criticalMigrationFiles.has(migrationName)).toBe(false);
   });
 
   it('fails closed around the exact order and persisted shipment evidence', () => {

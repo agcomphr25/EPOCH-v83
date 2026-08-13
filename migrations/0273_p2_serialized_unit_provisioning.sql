@@ -1,5 +1,11 @@
 -- Add an auditable identity bridge from root Production Launch demand to the
 -- customer serialized units allocated for its exact P2 production order.
+-- Older schema baselines may predate the composite constraint declared by
+-- migration 0264. The primary key already guarantees id uniqueness; this
+-- index makes the project-scoped identity explicit and supports the FK below.
+CREATE UNIQUE INDEX IF NOT EXISTS project_production_demands_id_project_unique_idx
+  ON project_production_demands(id,project_id);
+
 CREATE TABLE IF NOT EXISTS project_production_demand_serialized_units (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,

@@ -2480,6 +2480,11 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                 )
               )
               WHERE COALESCE(UPPER(po.status), '') NOT IN ('CANCELLED', 'CANCELED')
+                -- A finished parent PO is no longer an open customer demand,
+                -- even when historical production-order quantities remain.
+                AND COALESCE(UPPER(p2.status), '') NOT IN (
+                  'CLOSED', 'COMPLETE', 'COMPLETED', 'SHIPPED', 'CANCELLED', 'CANCELED'
+                )
                 AND (
                   inv.is_packet = true
                   OR bom.id IS NOT NULL

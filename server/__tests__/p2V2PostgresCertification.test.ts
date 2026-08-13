@@ -73,6 +73,7 @@ import {
   persistProductionLaunch,
   persistProductionLaunchForCertification,
 } from '../src/services/productionLaunchPersistenceService';
+import { authorizeProductionExecution } from '../src/services/productionExecutionAuthorizationService';
 import { getProductionLaunchPreview } from '../src/services/productionLaunchPreviewService';
 
 // This established lifecycle suite certifies immutable definition v2. The
@@ -1188,6 +1189,66 @@ describe('recursive Production Launch persistence against PostgreSQL', () => {
     expect(evidence.rows[0].demands).toBeGreaterThan(0);
     expect(evidence.rows[0].events).toBe(1);
     expect(evidence.rows[0].execution_links).toBe(0);
+  });
+
+  it('authorizes persisted MAKE demand against the released WAD without floor records', async () => {
+    const fixture = await createFixture(
+      '00000000-0000-4000-8000-000000000823',
+      'RECURSIVE-AUTHORIZATION'
+    );
+    const preview = await prepareRecursivePersistenceFixture(fixture);
+    const launch = await persistProductionLaunch(
+      fixture.projectId,
+      {
+        idempotencyKey: 'recursive-authorization-launch',
+        expectedPreviewDigest: preview.resultChecksum,
+        signatureMeaning: 'Persist synthetic planning evidence',
+      },
+      actor
+    );
+    process.env.P2_V2_EXECUTION_AUTHORIZATION_ENABLED = 'true';
+    const input = {
+      idempotencyKey: 'recursive-execution-authorization',
+      expectedLaunchDigest: preview.resultChecksum,
+      signatureMeaning: 'Authorize synthetic MAKE demand against released WAD',
+    };
+    const first = await authorizeProductionExecution(
+      fixture.projectId,
+      String(launch.launch.id),
+      input,
+      actor
+    );
+    const replay = await authorizeProductionExecution(
+      fixture.projectId,
+      String(launch.launch.id),
+      input,
+      actor
+    );
+    expect(first.replayed).toBe(false);
+    expect(replay.replayed).toBe(true);
+    const evidence = await query<{
+      authorized_demands: number;
+      wad_links: number;
+      floor_links: number;
+      floor_records: number;
+    }>(
+      `SELECT
+        (SELECT count(*)::int FROM project_production_demands
+          WHERE project_id=$1 AND disposition='MAKE' AND demand_status='AUTHORIZED') authorized_demands,
+        (SELECT count(*)::int FROM project_production_demand_execution_links
+          WHERE project_id=$1 AND link_type='WAD') wad_links,
+        (SELECT count(*)::int FROM project_production_demand_execution_links
+          WHERE project_id=$1 AND link_type<>'WAD') floor_links,
+        ((SELECT count(*)::int FROM p2_production_orders WHERE project_id=$1)
+          +(SELECT count(*)::int FROM travelers WHERE project_id=$1)) floor_records`,
+      [fixture.projectId]
+    );
+    expect(evidence.rows[0].authorized_demands).toBeGreaterThan(0);
+    expect(evidence.rows[0].wad_links).toBe(
+      evidence.rows[0].authorized_demands
+    );
+    expect(evidence.rows[0].floor_links).toBe(0);
+    expect(evidence.rows[0].floor_records).toBe(0);
   });
 });
 

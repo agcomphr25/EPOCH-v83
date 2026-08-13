@@ -299,6 +299,7 @@ export const safeMigrationFiles = [
   '0268_replit_p2_demand_composite_fk_repair.sql',
   '0269_repair_composite_po_item_demand_fks.sql',
   '0270_certification_authorization_matrix.sql',
+  '0271_p2_execution_authorization_event.sql',
 ];
 
 export const criticalMigrationFiles = new Set([
@@ -374,6 +375,7 @@ export const criticalMigrationFiles = new Set([
   '0268_replit_p2_demand_composite_fk_repair.sql',
   '0269_repair_composite_po_item_demand_fks.sql',
   '0270_certification_authorization_matrix.sql',
+  '0271_p2_execution_authorization_event.sql',
 ]);
 
 export async function runSafeBootMigrations() {

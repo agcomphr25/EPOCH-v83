@@ -1,0 +1,11 @@
+-- Admit the planning-to-floor authorization bridge event without weakening
+-- the immutable Production Launch event ledger.
+ALTER TABLE project_production_launch_events
+  DROP CONSTRAINT IF EXISTS project_production_launch_events_event_type_check;
+
+ALTER TABLE project_production_launch_events
+  ADD CONSTRAINT project_production_launch_events_event_type_check
+  CHECK (event_type IN (
+    'RECURSIVE_DEMAND_GRAPH_PERSISTED',
+    'EXECUTION_AUTHORIZED'
+  ));

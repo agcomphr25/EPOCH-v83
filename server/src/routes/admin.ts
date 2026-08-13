@@ -184,6 +184,140 @@ const DEPARTMENT_FLOW = [
 
 const EXCLUDED_STATUSES = ['SCRAPPED', 'CANCELLED', 'FULFILLED'];
 
+// Read-only safety report for orders that have durable shipment evidence but
+// have drifted back into an active production state. This deliberately keeps
+// the evidence broad; no row is repaired or inferred as safe automatically.
+router.get(
+  '/order-integrity/shipped-in-production',
+  authenticateToken,
+  requireRole('ADMIN', 'OWNER'),
+  async (_req: Request, res: Response) => {
+    try {
+      const result = await pool.query(`
+        WITH candidate_orders AS (
+          SELECT
+            ao.id,
+            ao.order_id,
+            ao.fb_order_number,
+            ao.customer_id,
+            c.name AS customer_name,
+            ao.model_id,
+            ao.status,
+            ao.current_department,
+            ao.shipped_date,
+            ao.shipping_completed_at,
+            ao.tracking_number,
+            ao.shipping_carrier,
+            ao.updated_at,
+            EXISTS (
+              SELECT 1
+              FROM all_orders collision
+              WHERE collision.id = ao.id
+                AND collision.order_id <> ao.order_id
+            ) AS has_duplicate_numeric_id,
+            ARRAY(
+              SELECT collision.order_id
+              FROM all_orders collision
+              WHERE collision.id = ao.id
+                AND collision.order_id <> ao.order_id
+              ORDER BY collision.order_id
+            ) AS colliding_order_ids
+          FROM all_orders ao
+          LEFT JOIN customers c ON ao.customer_id = c.id::text
+          WHERE (
+              ao.shipped_date IS NOT NULL
+              OR ao.shipping_completed_at IS NOT NULL
+              OR NULLIF(TRIM(COALESCE(ao.tracking_number, '')), '') IS NOT NULL
+            )
+            AND UPPER(COALESCE(ao.status, '')) NOT IN ('FULFILLED', 'SHIPPED', 'CANCELLED', 'SCRAPPED')
+            AND LOWER(TRIM(COALESCE(ao.current_department, ''))) NOT IN (
+              'fulfilled', 'shipped', 'shipping management', 'shipping manager'
+            )
+        )
+        SELECT
+          candidate.*,
+          open_shipping.entered_at AS open_shipping_entered_at,
+          open_shipping.cycle_number AS open_shipping_cycle_number,
+          latest_activity.event_type AS latest_activity_type,
+          latest_activity.occurred_at AS latest_activity_at,
+          latest_activity.source_route AS latest_activity_source,
+          latest_activity.reason_code AS latest_activity_reason_code,
+          latest_activity.status_from AS latest_activity_status_from,
+          latest_activity.status_to AS latest_activity_status_to,
+          latest_activity.department_from AS latest_activity_department_from,
+          latest_activity.department_to AS latest_activity_department_to,
+          migration_0167.id AS migration_0167_event_id,
+          migration_0167.occurred_at AS migration_0167_event_at,
+          CASE
+            WHEN candidate.has_duplicate_numeric_id
+              AND candidate.updated_at >= TIMESTAMP '2026-07-31 00:00:00'
+              THEN 'LIKELY_0167_ID_COLLISION'
+            WHEN open_shipping.entered_at IS NOT NULL
+              THEN 'OPEN_SHIPPING_TRANSITION_DRIFT'
+            ELSE 'SHIPPED_EVIDENCE_IN_ACTIVE_PRODUCTION'
+          END AS risk_signature
+        FROM candidate_orders candidate
+        LEFT JOIN LATERAL (
+          SELECT transition.entered_at, transition.cycle_number
+          FROM order_department_transitions transition
+          WHERE transition.entity_type = 'p1_order'
+            AND transition.entity_id = candidate.order_id
+            AND transition.department = 'Shipping'
+            AND transition.exited_at IS NULL
+          ORDER BY transition.entered_at DESC
+          LIMIT 1
+        ) open_shipping ON true
+        LEFT JOIN LATERAL (
+          SELECT
+            activity.event_type,
+            activity.occurred_at,
+            activity.source_route,
+            activity.reason_code,
+            activity.status_from,
+            activity.status_to,
+            activity.department_from,
+            activity.department_to
+          FROM order_activity_events activity
+          WHERE activity.order_id = candidate.order_id
+          ORDER BY activity.occurred_at DESC, activity.id DESC
+          LIMIT 1
+        ) latest_activity ON true
+        LEFT JOIN LATERAL (
+          SELECT activity.id, activity.occurred_at
+          FROM order_activity_events activity
+          WHERE activity.order_id = candidate.order_id
+            AND activity.source_route = 'migrations/0167_repair_customer_signature_fulfilled_orders.sql'
+            AND activity.reason_code = 'CUSTOMER_SIGNATURE_FULFILLED_REPAIR'
+          ORDER BY activity.occurred_at DESC, activity.id DESC
+          LIMIT 1
+        ) migration_0167 ON true
+        ORDER BY candidate.updated_at ASC, candidate.order_id ASC
+      `);
+
+      const candidates = rowsOf(result);
+      const bySignature = candidates.reduce<Record<string, number>>((counts, row: any) => {
+        const signature = String(row.risk_signature || 'UNKNOWN');
+        counts[signature] = (counts[signature] || 0) + 1;
+        return counts;
+      }, {});
+
+      res.json({
+        generatedAt: new Date().toISOString(),
+        readOnly: true,
+        total: candidates.length,
+        bySignature,
+        candidates,
+      });
+    } catch (error) {
+      console.error('[OrderIntegrity] Shipped-in-production report failed:', error);
+      res.status(500).json({
+        error: 'Failed to generate shipped-order production integrity report',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+);
+
 router.get(
   '/domain-truth/order/:orderId',
   authenticateToken,

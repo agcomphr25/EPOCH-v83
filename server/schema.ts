@@ -28546,6 +28546,33 @@ export const projectProductionDemandSerializedUnits = pgTable(
   })
 );
 
+export const projectProductionSerializedUnitTravelers = pgTable(
+  'project_production_serialized_unit_travelers',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'restrict' }),
+    serializedUnitLinkId: uuid('serialized_unit_link_id')
+      .notNull()
+      .references(() => projectProductionDemandSerializedUnits.id, {
+        onDelete: 'restrict',
+      }),
+    travelerId: varchar('traveler_id', { length: 255 })
+      .notNull()
+      .references(() => travelers.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    serializedUnitUnique: uniqueIndex(
+      'project_production_serialized_unit_travelers_unit_unique'
+    ).on(table.serializedUnitLinkId),
+    travelerUnique: uniqueIndex(
+      'project_production_serialized_unit_travelers_traveler_unique'
+    ).on(table.travelerId),
+  })
+);
+
 export const projectProductionDemandAllocations = pgTable(
   'project_production_demand_allocations',
   {

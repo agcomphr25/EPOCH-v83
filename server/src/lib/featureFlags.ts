@@ -78,6 +78,11 @@ export function isP2V2SerializedUnitProvisioningEnabled(): boolean {
   return process.env.P2_V2_SERIALIZED_UNIT_PROVISIONING_ENABLED === 'true';
 }
 
+/** Gates draft traveler creation from audited serialized root units. */
+export function isP2V2TravelerProvisioningEnabled(): boolean {
+  return process.env.P2_V2_TRAVELER_PROVISIONING_ENABLED === 'true';
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

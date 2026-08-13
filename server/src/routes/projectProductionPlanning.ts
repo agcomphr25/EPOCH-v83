@@ -29,6 +29,10 @@ import {
   provisionP2SerializedUnits,
   SerializedUnitProvisioningError,
 } from '../services/serializedUnitProvisioningService';
+import {
+  provisionP2DraftTravelers,
+  TravelerProvisioningError,
+} from '../services/travelerProvisioningService';
 
 const router = Router({ mergeParams: true });
 const headerSchema = z.object({
@@ -61,6 +65,7 @@ const executionAuthorizationSchema = z
   .strict();
 const productionOrderProvisioningSchema = executionAuthorizationSchema;
 const serializedUnitProvisioningSchema = executionAuthorizationSchema;
+const travelerProvisioningSchema = executionAuthorizationSchema;
 const itemSchema = z
   .object({
     drawing_number: z.string().nullable().optional(),
@@ -181,6 +186,10 @@ function fail(res: Response, error: unknown) {
     return res
       .status(error.status)
       .json({ error: error.code, message: error.message, ...error.details });
+  if (error instanceof TravelerProvisioningError)
+    return res
+      .status(error.status)
+      .json({ error: error.code, message: error.message, ...error.details });
   console.error('P2 V2 Production Planning error:', error);
   return res.status(500).json({
     error: 'PRODUCTION_PLANNING_FAILED',
@@ -274,6 +283,23 @@ router.post(
     }
   }
 );
+router.post('/launch/:launchId/provision-draft-travelers', async (req, res) => {
+  try {
+    const user = await requireCapability(
+      req,
+      'projects.production_launch.launch'
+    );
+    const result = await provisionP2DraftTravelers(
+      projectId(req),
+      req.params.launchId,
+      travelerProvisioningSchema.parse(req.body),
+      user
+    );
+    res.status(result.replayed ? 200 : 201).json(result);
+  } catch (error) {
+    fail(res, error);
+  }
+});
 router.post('/', async (req, res) => {
   try {
     const user = await requireCapability(

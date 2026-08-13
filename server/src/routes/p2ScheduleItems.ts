@@ -6,7 +6,8 @@
  *
  * Responsibilities:
  *   1. Move requested P2 serialized items from "Pending Layup" to the first
- *      department in their stamped part routing (falling back to Layup).
+ *      department in their controlled part routing. Missing or ambiguous
+ *      routing evidence fails closed; scheduling never falls back to Layup.
  *   2. Auto-sync cutting-table packet demand for the affected POs into
  *      grouped manufacturing_queue rows via `upsertGroupedCuttingQueueEntry`.
  *
@@ -15,7 +16,220 @@
  */
 import express, { type Request, type Response } from 'express';
 
+type RoutingCandidate = {
+  id: string;
+  inventoryItemId: string;
+  partNumber: string;
+  routingRevision: number;
+  departmentSequence: unknown;
+};
+
+type SchedulableItem = {
+  id: string;
+  poId: number;
+  poItemId: number;
+  partNumber: string;
+  partRoutingId: string | null;
+};
+
+export function chooseP2ScheduleRouting(
+  item: SchedulableItem,
+  inventoryItemId: number | null,
+  candidates: RoutingCandidate[]
+) {
+  const stamped = item.partRoutingId
+    ? candidates.filter((candidate) => candidate.id === item.partRoutingId)
+    : [];
+  const inventoryMatches =
+    inventoryItemId == null
+      ? []
+      : candidates.filter(
+          (candidate) => candidate.inventoryItemId === String(inventoryItemId)
+        );
+  const normalizedPart = item.partNumber.trim().toLowerCase();
+  const partMatches = candidates.filter(
+    (candidate) => candidate.partNumber.trim().toLowerCase() === normalizedPart
+  );
+  const preferred = stamped.length
+    ? stamped
+    : inventoryMatches.length
+      ? inventoryMatches
+      : partMatches;
+  if (preferred.length !== 1) return null;
+  const sequence = Array.isArray(preferred[0].departmentSequence)
+    ? preferred[0].departmentSequence.filter(
+        (department): department is string =>
+          typeof department === 'string' && department.trim().length > 0
+      )
+    : [];
+  if (!sequence.length) return null;
+  return {
+    routingId: preferred[0].id,
+    routingRevision: preferred[0].routingRevision,
+    firstDepartment: sequence[0].trim(),
+  };
+}
+
 const router = express.Router();
+
+router.post(
+  '/api/p2/reconcile-scheduled-routing',
+  async (req: Request, res: Response) => {
+    try {
+      const poNumbers = Array.isArray(req.body?.poNumbers)
+        ? [
+            ...new Set(
+              req.body.poNumbers
+                .filter(
+                  (value: unknown): value is string =>
+                    typeof value === 'string' && value.trim().length > 0
+                )
+                .map((value: string) => value.trim())
+            ),
+          ]
+        : [];
+      if (!poNumbers.length) {
+        return res
+          .status(400)
+          .json({ error: 'At least one PO number is required.' });
+      }
+      const { db } = await import('../../db');
+      const {
+        p2SerializedItems,
+        p2PurchaseOrderItems,
+        p2SerializedItemEvents,
+        partRoutings,
+      } = await import('../../schema');
+      const { and, eq, inArray } = await import('drizzle-orm');
+      const result = await db.transaction(async (tx) => {
+        const items = await tx
+          .select({
+            id: p2SerializedItems.id,
+            poId: p2SerializedItems.poId,
+            poItemId: p2SerializedItems.poItemId,
+            poNumber: p2SerializedItems.poNumber,
+            partNumber: p2SerializedItems.partNumber,
+            barcode: p2SerializedItems.barcode,
+            partRoutingId: p2SerializedItems.partRoutingId,
+          })
+          .from(p2SerializedItems)
+          .where(
+            and(
+              inArray(p2SerializedItems.poNumber, poNumbers),
+              eq(p2SerializedItems.status, 'ACTIVE'),
+              eq(p2SerializedItems.currentDepartment, 'Layup')
+            )
+          );
+        if (!items.length) return { repaired: 0, departments: {} };
+        const poItemIds = [...new Set(items.map((item) => item.poItemId))];
+        const poItems = await tx
+          .select({
+            id: p2PurchaseOrderItems.id,
+            inventoryItemId: p2PurchaseOrderItems.inventoryItemId,
+          })
+          .from(p2PurchaseOrderItems)
+          .where(inArray(p2PurchaseOrderItems.id, poItemIds));
+        const inventoryByPoItem = new Map(
+          poItems.map((item) => [item.id, item.inventoryItemId] as const)
+        );
+        const candidates = await tx
+          .select({
+            id: partRoutings.id,
+            inventoryItemId: partRoutings.inventoryItemId,
+            partNumber: partRoutings.partNumber,
+            routingRevision: partRoutings.routingRevision,
+            departmentSequence: partRoutings.departmentSequence,
+          })
+          .from(partRoutings)
+          .where(eq(partRoutings.isActive, true));
+        const assignments = items.map((item) => ({
+          item,
+          assignment: chooseP2ScheduleRouting(
+            item,
+            inventoryByPoItem.get(item.poItemId) ?? null,
+            candidates
+          ),
+        }));
+        const unresolved = assignments.filter((entry) => !entry.assignment);
+        if (unresolved.length) {
+          const error = new Error(
+            'P2_RECONCILIATION_ROUTING_REQUIRED'
+          ) as Error & {
+            itemIds?: string[];
+          };
+          error.itemIds = unresolved.map((entry) => entry.item.id);
+          throw error;
+        }
+        const departments: Record<string, number> = {};
+        for (const { item, assignment } of assignments) {
+          if (!assignment) continue;
+          const updated = await tx
+            .update(p2SerializedItems)
+            .set({
+              currentDepartment: assignment.firstDepartment,
+              currentStageIndex: 0,
+              partRoutingId: assignment.routingId,
+              partRoutingRevision: assignment.routingRevision,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(p2SerializedItems.id, item.id),
+                eq(p2SerializedItems.status, 'ACTIVE'),
+                eq(p2SerializedItems.currentDepartment, 'Layup')
+              )
+            )
+            .returning({ id: p2SerializedItems.id });
+          if (!updated.length) continue;
+          departments[assignment.firstDepartment] =
+            (departments[assignment.firstDepartment] ?? 0) + 1;
+          await tx.insert(p2SerializedItemEvents).values({
+            serializedItemId: item.id,
+            barcode: item.barcode,
+            eventType: 'ROUTING_RECONCILED',
+            fromDepartment: 'Layup',
+            toDepartment: assignment.firstDepartment,
+            fromStageIndex: 0,
+            toStageIndex: 0,
+            performedBy:
+              String(
+                (req as Request & { user?: { username?: string } }).user
+                  ?.username ?? ''
+              ) || 'system-routing-reconciliation',
+            notes:
+              'Corrected scheduled department from the controlled part routing.',
+            metadata: {
+              poNumber: item.poNumber,
+              routingId: assignment.routingId,
+              routingRevision: assignment.routingRevision,
+            },
+          });
+        }
+        return {
+          repaired: Object.values(departments).reduce(
+            (sum, count) => sum + count,
+            0
+          ),
+          departments,
+        };
+      });
+      return res.json(result);
+    } catch (error) {
+      const routingError = error as Error & { itemIds?: string[] };
+      if (routingError.message === 'P2_RECONCILIATION_ROUTING_REQUIRED') {
+        return res.status(409).json({
+          error: 'Repair blocked: controlled routing is missing or ambiguous.',
+          code: 'P2_RECONCILIATION_ROUTING_REQUIRED',
+          itemIds: routingError.itemIds ?? [],
+        });
+      }
+      console.error('P2 scheduled-routing reconciliation error:', error);
+      return res
+        .status(500)
+        .json({ error: 'Failed to reconcile scheduled routing.' });
+    }
+  }
+);
 
 router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
   try {
@@ -25,14 +239,16 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Item IDs array is required' });
     }
 
-    const { ensureProductionWorkflowReadSchema } =
-      await import('../lib/productionWorkflowReadiness');
+    const { ensureProductionWorkflowReadSchema } = await import(
+      '../lib/productionWorkflowReadiness'
+    );
     await ensureProductionWorkflowReadSchema();
     const { db } = await import('../../db');
     const {
       p2SerializedItems,
       p2ProductionOrders,
       p2PurchaseOrders,
+      p2PurchaseOrderItems,
       partRoutings,
       inventoryItems,
       cuttingPacketBOMs,
@@ -62,6 +278,8 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
             .select({
               id: p2SerializedItems.id,
               poId: p2SerializedItems.poId,
+              poItemId: p2SerializedItems.poItemId,
+              partNumber: p2SerializedItems.partNumber,
               partRoutingId: p2SerializedItems.partRoutingId,
             })
             .from(p2SerializedItems)
@@ -74,57 +292,86 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
             )
         : [];
 
-    const routingIds = [
-      ...new Set(
-        schedulableItems
-          .map((item) => item.partRoutingId)
-          .filter((id): id is string => typeof id === 'string' && id.length > 0)
-      ),
+    const poItemIds = [
+      ...new Set(schedulableItems.map((item) => item.poItemId)),
     ];
-    const routingRows =
-      routingIds.length > 0
-        ? await db
-            .select({
-              id: partRoutings.id,
-              departmentSequence: partRoutings.departmentSequence,
-            })
-            .from(partRoutings)
-            .where(inArray(partRoutings.id, routingIds))
-        : [];
-    const firstDepartmentByRoutingId = new Map(
-      routingRows.map((routing) => {
-        const sequence = Array.isArray(routing.departmentSequence)
-          ? routing.departmentSequence
-          : [];
-        const firstDepartment = sequence.find(
-          (department): department is string =>
-            typeof department === 'string' && department.trim().length > 0
-        );
-        return [routing.id, firstDepartment?.trim() || 'Layup'] as const;
-      })
+    const poItemRows = poItemIds.length
+      ? await db
+          .select({
+            id: p2PurchaseOrderItems.id,
+            inventoryItemId: p2PurchaseOrderItems.inventoryItemId,
+          })
+          .from(p2PurchaseOrderItems)
+          .where(inArray(p2PurchaseOrderItems.id, poItemIds))
+      : [];
+    const inventoryItemIdByPoItemId = new Map(
+      poItemRows.map((item) => [item.id, item.inventoryItemId] as const)
     );
-    const itemIdsByDepartment = new Map<string, string[]>();
+    const routingRows = schedulableItems.length
+      ? await db
+          .select({
+            id: partRoutings.id,
+            inventoryItemId: partRoutings.inventoryItemId,
+            partNumber: partRoutings.partNumber,
+            routingRevision: partRoutings.routingRevision,
+            departmentSequence: partRoutings.departmentSequence,
+          })
+          .from(partRoutings)
+          .where(eq(partRoutings.isActive, true))
+      : [];
+    const itemIdsByAssignment = new Map<
+      string,
+      {
+        routingId: string;
+        routingRevision: number;
+        department: string;
+        ids: string[];
+      }
+    >();
+    const unresolved: string[] = [];
     for (const item of schedulableItems) {
-      const department = item.partRoutingId
-        ? firstDepartmentByRoutingId.get(item.partRoutingId) || 'Layup'
-        : 'Layup';
-      const ids = itemIdsByDepartment.get(department) || [];
-      ids.push(item.id);
-      itemIdsByDepartment.set(department, ids);
+      const assignment = chooseP2ScheduleRouting(
+        item,
+        inventoryItemIdByPoItemId.get(item.poItemId) ?? null,
+        routingRows
+      );
+      if (!assignment) {
+        unresolved.push(item.id);
+        continue;
+      }
+      const key = `${assignment.routingId}:${assignment.firstDepartment}`;
+      const group = itemIdsByAssignment.get(key) || {
+        routingId: assignment.routingId,
+        routingRevision: assignment.routingRevision,
+        department: assignment.firstDepartment,
+        ids: [],
+      };
+      group.ids.push(item.id);
+      itemIdsByAssignment.set(key, group);
+    }
+    if (unresolved.length) {
+      return res.status(409).json({
+        error:
+          'Scheduling blocked: controlled routing is missing or ambiguous.',
+        code: 'P2_SCHEDULE_ROUTING_REQUIRED',
+        itemIds: unresolved,
+      });
     }
 
     const result: Array<{ id: string; poId: number }> = [];
-    for (const [department, ids] of itemIdsByDepartment) {
+    for (const assignment of itemIdsByAssignment.values()) {
       const updated = await db
         .update(p2SerializedItems)
         .set({
-          currentDepartment: department,
+          currentDepartment: assignment.department,
           currentStageIndex: 0,
+          partRoutingId: assignment.routingId,
+          partRoutingRevision: assignment.routingRevision,
           updatedAt: new Date(),
         })
         .where(
           and(
-            inArray(p2SerializedItems.id, ids),
+            inArray(p2SerializedItems.id, assignment.ids),
             eq(p2SerializedItems.status, 'ACTIVE'),
             eq(p2SerializedItems.currentDepartment, 'Pending Layup')
           )
@@ -168,8 +415,9 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
     let cuttingTableSynced = 0;
     try {
       const { ilike, or } = await import('drizzle-orm');
-      const { upsertGroupedCuttingQueueEntry } =
-        await import('../utils/cuttingQueueGroupingHelper');
+      const { upsertGroupedCuttingQueueEntry } = await import(
+        '../utils/cuttingQueueGroupingHelper'
+      );
       const affectedPoIds = [
         ...new Set([
           ...result.map((r) => r.poId),

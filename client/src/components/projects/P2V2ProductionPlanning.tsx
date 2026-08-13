@@ -102,12 +102,6 @@ const wizardPages = [
 ] as const;
 
 const reviewPageFields: Record<number, Array<[string, string]>> = {
-  6: [
-    ['Drawing number', 'drawing_number'],
-    ['Drawing revision', 'drawing_revision'],
-    ['Work instruction references', 'work_instruction_references'],
-    ['Specification references', 'specification_references'],
-  ],
   7: [
     ['Required quantity', 'extended_project_quantity'],
     ['Routing revision', 'routing_revision'],
@@ -410,7 +404,13 @@ export default function P2V2ProductionPlanning({
                   blockers={data.readiness.blockers}
                 />
               )}
-              {currentPage >= 6 && currentPage <= 7 && (
+              {currentPage === 6 && !!data?.items.length && (
+                <ControlledDocumentReview
+                  items={data.items}
+                  blockers={data.readiness.blockers}
+                />
+              )}
+              {currentPage === 7 && (
                 <ReviewByExceptionPanel
                   items={data?.items ?? []}
                   fields={reviewPageFields[currentPage] ?? []}
@@ -1011,6 +1011,132 @@ function QualityRequirementReview({
                 label="Required test records"
                 current={testRecords || 'None recorded'}
               />
+            </dl>
+            {!!itemBlockers.length && (
+              <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">
+                {itemBlockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            )}
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
+function ControlledDocumentReview({
+  items,
+  blockers,
+}: {
+  items: Row[];
+  blockers: string[];
+}) {
+  const manufacturedItems = items.filter((item) => item.is_manufactured);
+  return (
+    <section className="space-y-3" data-testid="controlled-document-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Controlled document requirements</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          This page reviews references and planning decisions saved in the
+          baseline. A reference alone does not prove document release, approval,
+          accessibility, or effectivity.
+        </p>
+      </div>
+      {manufacturedItems.map((item) => {
+        const partNumber = value(item, 'part_number');
+        const workInstructionDecision = value(
+          item,
+          'work_instruction_requirement'
+        );
+        const workInstructionBasis = value(item, 'work_instruction_basis');
+        const packagingDecision = value(
+          item,
+          'packaging_instruction_requirement'
+        );
+        const decisionsComplete =
+          Boolean(workInstructionDecision) &&
+          (!['DRAWING_SPEC_SUFFICIENT', 'NOT_REQUIRED_APPROVED'].includes(
+            workInstructionDecision
+          ) ||
+            Boolean(workInstructionBasis)) &&
+          Boolean(packagingDecision) &&
+          (packagingDecision !== 'REQUIRED' ||
+            Boolean(value(item, 'packaging_instruction_reference'))) &&
+          (packagingDecision !== 'NOT_REQUIRED_APPROVED' ||
+            Boolean(value(item, 'notes')));
+        const workInstructions = displayValue(
+          item,
+          'work_instruction_references'
+        );
+        const specifications = displayValue(item, 'specification_references');
+        const itemBlockers = blockers.filter((blocker) =>
+          blocker.startsWith(`${partNumber}:`)
+        );
+        return (
+          <article
+            className="rounded border p-4"
+            data-testid="controlled-document-review-item"
+            key={value(item, 'id')}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="font-semibold">
+                  {partNumber || 'Information Missing'} —{' '}
+                  {value(item, 'part_name') || 'Information Missing'}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Effectivity{' '}
+                  {value(item, 'effectivity_reference') ||
+                    'Information Missing'}
+                </p>
+              </div>
+              <Badge variant={decisionsComplete ? 'default' : 'destructive'}>
+                {decisionsComplete ? 'Decisions recorded' : 'Decision missing'}
+              </Badge>
+            </div>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+              <OrderFact label="Drawing number" current={item.drawing_number} />
+              <OrderFact
+                label="Drawing revision"
+                current={item.drawing_revision}
+              />
+              <OrderFact
+                label="Specification-sheet decision"
+                current={item.specification_sheet_requirement}
+              />
+              <OrderFact
+                label="Work-instruction decision"
+                current={workInstructionDecision}
+              />
+              <OrderFact
+                label="Work-instruction basis"
+                current={workInstructionBasis}
+              />
+              <OrderFact
+                label="Packaging decision"
+                current={packagingDecision}
+              />
+            </dl>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+              <OrderFact
+                label="Work-instruction references"
+                current={workInstructions || 'None recorded'}
+              />
+              <OrderFact
+                label="Specification references"
+                current={specifications || 'None recorded'}
+              />
+              {packagingDecision === 'REQUIRED' && (
+                <OrderFact
+                  label="Packaging instruction"
+                  current={item.packaging_instruction_reference}
+                />
+              )}
+              {packagingDecision === 'NOT_REQUIRED_APPROVED' && (
+                <OrderFact label="Packaging N/A basis" current={item.notes} />
+              )}
             </dl>
             {!!itemBlockers.length && (
               <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">

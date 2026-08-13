@@ -39,6 +39,15 @@ const model = {
       traceability_level: 'SERIAL',
       required_certifications: ['Certificate of Conformance'],
       required_test_records: ['Final inspection report'],
+      drawing_number: 'DWG-100',
+      drawing_revision: 'C',
+      specification_references: ['AMS-STD-100'],
+      specification_sheet_requirement: 'REQUIRED',
+      work_instruction_requirement: 'REQUIRED',
+      work_instruction_references: ['WI-100 Rev B'],
+      packaging_instruction_requirement: 'REQUIRED',
+      packaging_instruction_reference: 'PKG-100 Rev A',
+      effectivity_reference: 'PO PO-100 Rev 3',
     },
     {
       id: 'leaf',
@@ -255,6 +264,26 @@ describe('P2V2ProductionPlanning', () => {
     );
     expect(
       screen.getAllByTestId('quality-requirement-review-item')
+    ).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Page 7: Review Controlled Documents',
+      })
+    );
+    expect(screen.getByTestId('controlled-document-review')).toHaveTextContent(
+      'Controlled document requirements'
+    );
+    expect(screen.getByTestId('controlled-document-review')).toHaveTextContent(
+      'DWG-100'
+    );
+    expect(screen.getByTestId('controlled-document-review')).toHaveTextContent(
+      'WI-100 Rev B'
+    );
+    expect(screen.getByTestId('controlled-document-review')).toHaveTextContent(
+      'PKG-100 Rev A'
+    );
+    expect(
+      screen.getAllByTestId('controlled-document-review-item')
     ).toHaveLength(1);
     fireEvent.click(
       screen.getByRole('button', { name: 'Page 10: Review and Approve' })

@@ -74,6 +74,7 @@ import {
   persistProductionLaunchForCertification,
 } from '../src/services/productionLaunchPersistenceService';
 import { authorizeProductionExecution } from '../src/services/productionExecutionAuthorizationService';
+import { provisionP2ProductionOrders } from '../src/services/productionOrderProvisioningService';
 import { getProductionLaunchPreview } from '../src/services/productionLaunchPreviewService';
 
 // This established lifecycle suite certifies immutable definition v2. The
@@ -1249,6 +1250,80 @@ describe('recursive Production Launch persistence against PostgreSQL', () => {
     );
     expect(evidence.rows[0].floor_links).toBe(0);
     expect(evidence.rows[0].floor_records).toBe(0);
+  });
+
+  it('provisions one P2 order per authorized MAKE demand without serials or travelers', async () => {
+    const fixture = await createFixture(
+      '00000000-0000-4000-8000-000000000824',
+      'RECURSIVE-P2-ORDER-PROVISIONING'
+    );
+    const preview = await prepareRecursivePersistenceFixture(fixture);
+    const launch = await persistProductionLaunch(
+      fixture.projectId,
+      {
+        idempotencyKey: 'recursive-provisioning-launch',
+        expectedPreviewDigest: preview.resultChecksum,
+        signatureMeaning: 'Persist synthetic planning evidence',
+      },
+      actor
+    );
+    process.env.P2_V2_EXECUTION_AUTHORIZATION_ENABLED = 'true';
+    await authorizeProductionExecution(
+      fixture.projectId,
+      String(launch.launch.id),
+      {
+        idempotencyKey: 'recursive-provisioning-authorization',
+        expectedLaunchDigest: preview.resultChecksum,
+        signatureMeaning:
+          'Authorize synthetic MAKE demand against released WAD',
+      },
+      actor
+    );
+    process.env.P2_V2_PRODUCTION_ORDER_PROVISIONING_ENABLED = 'true';
+    const input = {
+      idempotencyKey: 'recursive-p2-order-provisioning',
+      expectedLaunchDigest: preview.resultChecksum,
+      signatureMeaning: 'Provision synthetic controlled P2 production orders',
+    };
+    const first = await provisionP2ProductionOrders(
+      fixture.projectId,
+      String(launch.launch.id),
+      input,
+      actor
+    );
+    const replay = await provisionP2ProductionOrders(
+      fixture.projectId,
+      String(launch.launch.id),
+      input,
+      actor
+    );
+    expect(first.replayed).toBe(false);
+    expect(replay.replayed).toBe(true);
+    const evidence = await query<{
+      in_process_demands: number;
+      p2_links: number;
+      p2_orders: number;
+      serialized_items: number;
+      travelers: number;
+    }>(
+      `SELECT
+        (SELECT count(*)::int FROM project_production_demands
+          WHERE project_id=$1 AND disposition='MAKE' AND demand_status='IN_PROCESS') in_process_demands,
+        (SELECT count(*)::int FROM project_production_demand_execution_links
+          WHERE project_id=$1 AND link_type='P2_PRODUCTION_ORDER') p2_links,
+        (SELECT count(*)::int FROM p2_production_orders WHERE project_id=$1) p2_orders,
+        (SELECT count(*)::int FROM p2_serialized_items si
+          JOIN p2_purchase_orders po ON po.id=si.po_id WHERE po.project_id=$1) serialized_items,
+        (SELECT count(*)::int FROM travelers WHERE project_id=$1) travelers`,
+      [fixture.projectId]
+    );
+    expect(evidence.rows[0].in_process_demands).toBeGreaterThan(0);
+    expect(evidence.rows[0].p2_links).toBe(evidence.rows[0].in_process_demands);
+    expect(evidence.rows[0].p2_orders).toBe(
+      evidence.rows[0].in_process_demands
+    );
+    expect(evidence.rows[0].serialized_items).toBe(0);
+    expect(evidence.rows[0].travelers).toBe(0);
   });
 });
 

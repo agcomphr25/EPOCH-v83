@@ -21,6 +21,10 @@ import {
   authorizeProductionExecution,
   ProductionExecutionAuthorizationError,
 } from '../services/productionExecutionAuthorizationService';
+import {
+  provisionP2ProductionOrders,
+  ProductionOrderProvisioningError,
+} from '../services/productionOrderProvisioningService';
 
 const router = Router({ mergeParams: true });
 const headerSchema = z.object({
@@ -51,6 +55,7 @@ const executionAuthorizationSchema = z
     signatureMeaning: z.string().trim().min(1).max(500),
   })
   .strict();
+const productionOrderProvisioningSchema = executionAuthorizationSchema;
 const itemSchema = z
   .object({
     drawing_number: z.string().nullable().optional(),
@@ -163,6 +168,10 @@ function fail(res: Response, error: unknown) {
     return res
       .status(error.status)
       .json({ error: error.code, message: error.message, ...error.details });
+  if (error instanceof ProductionOrderProvisioningError)
+    return res
+      .status(error.status)
+      .json({ error: error.code, message: error.message, ...error.details });
   console.error('P2 V2 Production Planning error:', error);
   return res.status(500).json({
     error: 'PRODUCTION_PLANNING_FAILED',
@@ -212,6 +221,23 @@ router.post('/launch/:launchId/authorize-execution', async (req, res) => {
       projectId(req),
       req.params.launchId,
       executionAuthorizationSchema.parse(req.body),
+      user
+    );
+    res.status(result.replayed ? 200 : 201).json(result);
+  } catch (error) {
+    fail(res, error);
+  }
+});
+router.post('/launch/:launchId/provision-p2-orders', async (req, res) => {
+  try {
+    const user = await requireCapability(
+      req,
+      'projects.production_launch.launch'
+    );
+    const result = await provisionP2ProductionOrders(
+      projectId(req),
+      req.params.launchId,
+      productionOrderProvisioningSchema.parse(req.body),
       user
     );
     res.status(result.replayed ? 200 : 201).json(result);

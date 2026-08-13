@@ -68,6 +68,11 @@ export function isP2V2ExecutionAuthorizationEnabled(): boolean {
   return process.env.P2_V2_EXECUTION_AUTHORIZATION_ENABLED === 'true';
 }
 
+/** Gates creation of P2 production orders from authorized recursive demand. */
+export function isP2V2ProductionOrderProvisioningEnabled(): boolean {
+  return process.env.P2_V2_PRODUCTION_ORDER_PROVISIONING_ENABLED === 'true';
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

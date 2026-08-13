@@ -95,6 +95,7 @@ type EligibleApprovers = {
     accountRole: string;
     accountStatus: string;
     eligibleApprovalKeys: string[];
+    eligibleApprovalRoles: string[];
   }>;
 };
 
@@ -145,6 +146,9 @@ export function DesignControlStepEditor({
   const [approvalAssignments, setApprovalAssignments] = useState<
     Record<string, string>
   >({});
+  const [reassignmentRole, setReassignmentRole] = useState<string | null>(null);
+  const [reassignmentSelection, setReassignmentSelection] = useState('');
+  const [reassignmentReason, setReassignmentReason] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -239,7 +243,7 @@ export function DesignControlStepEditor({
           { credentials: 'include' }
         )
       ),
-    enabled: step?.status !== 'submitted_for_approval',
+    enabled: true,
   });
 
   const refresh = async () => {
@@ -356,6 +360,12 @@ export function DesignControlStepEditor({
   const editable = !readOnly && can('design.control.edit') && !underReview;
   const canSubmit = !readOnly && can('design.control.submit') && !underReview;
   const canApprove = !readOnly && can('design.control.approve') && underReview;
+  const canRouteApprovers =
+    !readOnly &&
+    !underReview &&
+    (can('design.control.edit') || can('design.control.submit'));
+  const canReassignApprovers =
+    !readOnly && underReview && can('design.control.admin');
   const missingFields = definition.fields.filter(
     (field) => !String(formData[field.key] ?? '').trim()
   );
@@ -373,6 +383,41 @@ export function DesignControlStepEditor({
       return;
     navigate();
   };
+
+  const reassignApprover = (slot: ApprovalSlot) =>
+    run(async () => {
+      const selected = (eligibleApproversQuery.data?.employees ?? []).find(
+        (employee) =>
+          `${employee.employeeId}:${employee.userId}` === reassignmentSelection
+      );
+      const contentVersionId = approvalQuery.data?.currentContentVersion?.id;
+      if (!selected || !contentVersionId || !reassignmentReason.trim())
+        throw new Error(
+          'Select an active employee and enter a reassignment reason.'
+        );
+      return responsePayload(
+        await fetch(
+          `/api/qms/design-control/${encodeURIComponent(recordId)}/steps/${encodeURIComponent(definition.key)}/assignments/${encodeURIComponent(slot.key)}/reassign`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contentVersionId,
+              employeeId: selected.employeeId,
+              userId: selected.userId,
+              reason: reassignmentReason.trim(),
+            }),
+          }
+        )
+      );
+    }, `${slot.label} reassigned with an audit record.`).then((saved) => {
+      if (saved) {
+        setReassignmentRole(null);
+        setReassignmentSelection('');
+        setReassignmentReason('');
+      }
+    });
 
   return (
     <div className="space-y-5">
@@ -729,7 +774,7 @@ export function DesignControlStepEditor({
             </Button>
           </>
         )}
-        {canSubmit && (
+        {canRouteApprovers && (
           <div className="w-full space-y-3 rounded-md border p-3">
             <h3 className="font-semibold">Assign verified approvers</h3>
             <p className="text-sm text-muted-foreground">
@@ -747,10 +792,9 @@ export function DesignControlStepEditor({
                   <Label htmlFor={`approval-assignee-${slot.key}`}>
                     {slot.label}
                   </Label>
-                  <Input
+                  <select
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                     id={`approval-assignee-${slot.key}`}
-                    list={`approval-assignee-options-${slot.key}`}
-                    placeholder="Search active employees by name, code, title, department, or role"
                     value={approvalAssignments[slot.key] ?? ''}
                     onChange={(event) =>
                       setApprovalAssignments((current) => ({
@@ -758,8 +802,8 @@ export function DesignControlStepEditor({
                         [slot.key]: event.target.value,
                       }))
                     }
-                  />
-                  <datalist id={`approval-assignee-options-${slot.key}`}>
+                  >
+                    <option value="">Select an active employee...</option>
                     {candidates.map((employee) => (
                       <option
                         key={`${employee.employeeId}:${employee.userId}`}
@@ -773,10 +817,10 @@ export function DesignControlStepEditor({
                           employee.department ||
                           'Role not recorded'}{' '}
                         | Account {employee.accountStatus} |{' '}
-                        {employee.accountRole}
+                        {employee.eligibleApprovalRoles.join(', ')}
                       </option>
                     ))}
-                  </datalist>
+                  </select>
                 </div>
               );
             })}
@@ -845,6 +889,87 @@ export function DesignControlStepEditor({
                       ? 'Independent reviewer required'
                       : 'Authenticated reviewer required'}
                   </p>
+                  {canReassignApprovers &&
+                    slot.assignment?.status === 'PENDING' && (
+                      <Button
+                        className="mt-2"
+                        onClick={() => {
+                          setReassignmentRole(slot.key);
+                          setReassignmentSelection('');
+                          setReassignmentReason('');
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Change approver
+                      </Button>
+                    )}
+                  {reassignmentRole === slot.key && (
+                    <div className="mt-3 space-y-2 rounded-md border p-3">
+                      <Label htmlFor={`reassign-${slot.key}`}>
+                        New verified employee
+                      </Label>
+                      <select
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                        id={`reassign-${slot.key}`}
+                        value={reassignmentSelection}
+                        onChange={(event) =>
+                          setReassignmentSelection(event.target.value)
+                        }
+                      >
+                        <option value="">Select an active employee...</option>
+                        {(eligibleApproversQuery.data?.employees ?? [])
+                          .filter((employee) =>
+                            employee.eligibleApprovalKeys.includes(slot.key)
+                          )
+                          .map((employee) => (
+                            <option
+                              key={`${employee.employeeId}:${employee.userId}`}
+                              value={`${employee.employeeId}:${employee.userId}`}
+                            >
+                              {employee.displayName} |{' '}
+                              {employee.employeeCode ||
+                                `Employee ${employee.employeeId}`}{' '}
+                              |{' '}
+                              {employee.jobTitle ||
+                                employee.department ||
+                                'Role not recorded'}
+                            </option>
+                          ))}
+                      </select>
+                      <Input
+                        aria-label="Reassignment reason"
+                        placeholder="Reason for changing this submitted-version assignment"
+                        value={reassignmentReason}
+                        onChange={(event) =>
+                          setReassignmentReason(event.target.value)
+                        }
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          disabled={
+                            busy ||
+                            !reassignmentSelection ||
+                            !reassignmentReason.trim()
+                          }
+                          onClick={() => reassignApprover(slot)}
+                          size="sm"
+                          type="button"
+                        >
+                          Save reassignment
+                        </Button>
+                        <Button
+                          onClick={() => setReassignmentRole(null)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {slot.assignment
                       ? `${slot.assignment.approverNameSnapshot} (${slot.assignment.employeeCodeSnapshot || `Employee ${slot.assignment.employeeId}`}) · ${slot.assignment.jobTitleSnapshot || slot.assignment.departmentSnapshot || 'Role not recorded'} · Account ${slot.assignment.accountStatusSnapshot}`

@@ -94,13 +94,6 @@ async function verifiedApprover(
       'APPROVER_NOT_AUTHORIZED',
       `${candidate.employeeName} is not authorized for ${slot.label}`
     );
-  const normalizedRole = candidate.userRole.toUpperCase();
-  if (!(slot.allowedRoles ?? []).includes(normalizedRole))
-    throw new DesignControlApprovalError(
-      422,
-      'APPROVER_ROLE_MISMATCH',
-      `${candidate.employeeName} does not hold an allowed account role for ${slot.label}`
-    );
   return candidate;
 }
 
@@ -145,14 +138,15 @@ export async function listEligibleDesignControlApprovers(
         return {
           ...row,
           eligibleApprovalKeys: context.definition.approvals
-            .filter(
-              (slot) =>
-                permissions.permissionSet.has(slot.requiredCapability!) &&
-                (slot.allowedRoles ?? []).includes(
-                  row.accountRole.toUpperCase()
-                )
+            .filter((slot) =>
+              permissions.permissionSet.has(slot.requiredCapability!)
             )
             .map((slot) => slot.key),
+          eligibleApprovalRoles: context.definition.approvals
+            .filter((slot) =>
+              permissions.permissionSet.has(slot.requiredCapability!)
+            )
+            .map((slot) => slot.label),
         };
       })
   );
@@ -910,18 +904,6 @@ export async function decideDesignControlStepApproval(
       slot,
       tx as Client
     );
-    const normalizedRole = input.actor.role.toUpperCase();
-    if (
-      normalizedRole !== 'ADMIN' &&
-      normalizedRole !== 'OWNER' &&
-      !(slot.allowedRoles ?? []).includes(normalizedRole)
-    ) {
-      throw new DesignControlApprovalError(
-        403,
-        'APPROVAL_ROLE_MISMATCH',
-        'Actor role cannot satisfy this approval slot'
-      );
-    }
     const [version] = await tx
       .select()
       .from(designControlStepContentVersions)

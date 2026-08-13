@@ -744,7 +744,7 @@ export default function DomainTruthInspector() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState('');
   const [explainActiveDept, setExplainActiveDept] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'inspector' | 'governance'>('inspector');
+  const [activeTab, setActiveTab] = useState<'inspector' | 'shipment-risk' | 'governance'>('inspector');
   const [location] = useLocation();
 
   // Auto-populate from ?orderId= and optional ?queue= query params
@@ -783,6 +783,18 @@ export default function DomainTruthInspector() {
     queryFn: () => apiRequest('/api/auth/session').catch(() => null),
     retry: false,
     staleTime: 60_000,
+  });
+
+  const {
+    data: shipmentRiskData,
+    isLoading: shipmentRiskLoading,
+    error: shipmentRiskError,
+    refetch: refetchShipmentRisk,
+  } = useQuery<any>({
+    queryKey: ['/api/admin/domain-truth/shipped-in-production'],
+    queryFn: () => apiRequest('/api/admin/domain-truth/shipped-in-production'),
+    enabled: activeTab === 'shipment-risk',
+    retry: false,
   });
 
   const explainOrderId = (data as any)?.resolvedId ?? activeId;
@@ -842,11 +854,12 @@ export default function DomainTruthInspector() {
         <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
           {[
             { id: 'inspector', label: 'Order Inspector', icon: Database },
+            { id: 'shipment-risk', label: 'Shipped Orders Back in Production', icon: AlertTriangle },
             { id: 'governance', label: 'Schema Governance', icon: ShieldAlert },
           ].map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => setActiveTab(id as 'inspector' | 'governance')}
+              onClick={() => setActiveTab(id as 'inspector' | 'shipment-risk' | 'governance')}
               className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === id
                   ? 'border-indigo-600 text-indigo-700 dark:text-indigo-400'
@@ -862,6 +875,79 @@ export default function DomainTruthInspector() {
         {/* Governance Tab */}
         {activeTab === 'governance' && (
           <SchemaGovernancePanel isAdmin={isAdmin} />
+        )}
+
+        {activeTab === 'shipment-risk' && (
+          <div className="space-y-4">
+            <Card className="border-red-200 bg-red-50/60 dark:bg-red-950/20">
+              <CardContent className="py-4 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="font-semibold text-red-900 dark:text-red-200">
+                    Shipped Orders Back in Production
+                  </h2>
+                  <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                    Read-only safety report. These orders have shipment evidence but are assigned to an active production department.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => refetchShipmentRisk()} disabled={shipmentRiskLoading}>
+                  {shipmentRiskLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Refresh
+                </Button>
+              </CardContent>
+            </Card>
+
+            {shipmentRiskLoading && (
+              <div className="flex items-center gap-2 text-sm text-gray-500 py-8">
+                <Loader2 className="h-4 w-4 animate-spin" /> Running production safety checks…
+              </div>
+            )}
+
+            {shipmentRiskError && !shipmentRiskLoading && (
+              <Card className="border-red-200">
+                <CardContent className="py-4 text-sm text-red-700">
+                  The report could not be loaded. Refresh after confirming the latest deployment is active.
+                </CardContent>
+              </Card>
+            )}
+
+            {shipmentRiskData && !shipmentRiskLoading && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <Card><CardContent className="py-4"><div className="text-xs text-gray-500">Affected orders</div><div className="text-2xl font-bold text-red-700">{shipmentRiskData.total ?? 0}</div></CardContent></Card>
+                  <Card><CardContent className="py-4"><div className="text-xs text-gray-500">Likely migration ID collisions</div><div className="text-2xl font-bold">{shipmentRiskData.bySignature?.LIKELY_0167_ID_COLLISION ?? 0}</div></CardContent></Card>
+                  <Card><CardContent className="py-4"><div className="text-xs text-gray-500">Open Shipping transition drift</div><div className="text-2xl font-bold">{shipmentRiskData.bySignature?.OPEN_SHIPPING_TRANSITION_DRIFT ?? 0}</div></CardContent></Card>
+                </div>
+
+                {(shipmentRiskData.candidates ?? []).length === 0 ? (
+                  <Card><CardContent className="py-8 text-center text-green-700"><CheckCircle className="h-6 w-6 mx-auto mb-2" />No shipped orders are currently assigned to active production.</CardContent></Card>
+                ) : (
+                  <Card>
+                    <CardContent className="p-0 overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-100 dark:bg-gray-900 text-left">
+                          <tr>
+                            <th className="px-3 py-2">Order</th><th className="px-3 py-2">Customer</th><th className="px-3 py-2">Current state</th><th className="px-3 py-2">Shipment evidence</th><th className="px-3 py-2">Risk signature</th><th className="px-3 py-2">Last changed</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(shipmentRiskData.candidates ?? []).map((row: any) => (
+                            <tr key={row.order_id} className="border-t border-gray-200 dark:border-gray-800 align-top">
+                              <td className="px-3 py-3"><button className="font-mono font-semibold text-indigo-700 hover:underline" onClick={() => { setInputId(row.order_id); setActiveId(row.order_id); setActiveTab('inspector'); }}>{row.order_id}</button></td>
+                              <td className="px-3 py-3">{row.customer_name || row.customer_id || '—'}</td>
+                              <td className="px-3 py-3"><div>{row.status}</div><div className="text-xs text-gray-500">{row.current_department}</div></td>
+                              <td className="px-3 py-3"><div>{row.shipped_date ? new Date(row.shipped_date).toLocaleString() : 'Date unavailable'}</div><div className="text-xs font-mono text-gray-500">{row.tracking_number || 'No tracking number'}</div></td>
+                              <td className="px-3 py-3"><Badge variant="outline" className="whitespace-nowrap">{String(row.risk_signature || '').replaceAll('_', ' ')}</Badge>{row.colliding_order_ids?.length ? <div className="text-xs text-red-600 mt-1">ID collision: {row.colliding_order_ids.join(', ')}</div> : null}</td>
+                              <td className="px-3 py-3 whitespace-nowrap">{row.updated_at ? new Date(row.updated_at).toLocaleString() : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+          </div>
         )}
 
         {/* Inspector Tab content below */}

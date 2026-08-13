@@ -34,6 +34,14 @@ export type ProjectBomAssemblyNode = {
   children: ProjectBomAssemblyNode[];
 };
 
+export type ProjectPurchasedBomPart = {
+  id: string;
+  part_number: string;
+  part_name: string | null;
+  quantity: number;
+  bom_occurrence_count: number;
+};
+
 const keyFor = (segments: string[]) => segments.join('/');
 
 export function buildProjectBomAssemblyTree(rows: ProjectBomAssemblyRow[]): ProjectBomAssemblyNode[] {
@@ -79,4 +87,43 @@ export function buildProjectBomAssemblyTree(rows: ProjectBomAssemblyRow[]): Proj
   });
 
   return roots;
+}
+
+export function collectPurchasedBomParts(
+  roots: ProjectBomAssemblyNode[],
+  orderedQuantityByRootPart: ReadonlyMap<string, number>
+): ProjectPurchasedBomPart[] {
+  const purchasedByPart = new Map<string, ProjectPurchasedBomPart>();
+
+  const visit = (node: ProjectBomAssemblyNode, extendedParentQuantity: number) => {
+    const requiredQuantity = extendedParentQuantity * node.quantityPerParent;
+    if (!node.isManufactured) {
+      const normalizedPartNumber = node.partNumber.trim().toLowerCase();
+      const existing = purchasedByPart.get(normalizedPartNumber);
+      if (existing) {
+        existing.quantity += requiredQuantity;
+        existing.bom_occurrence_count += 1;
+      } else {
+        purchasedByPart.set(normalizedPartNumber, {
+          id: `bom-purchased:${normalizedPartNumber}`,
+          part_number: node.partNumber,
+          part_name: node.partName,
+          quantity: requiredQuantity,
+          bom_occurrence_count: 1,
+        });
+      }
+      return;
+    }
+
+    node.children.forEach((child) => visit(child, requiredQuantity));
+  };
+
+  roots.forEach((root) => {
+    const orderedQuantity = orderedQuantityByRootPart.get(root.partNumber.trim().toLowerCase()) ?? 0;
+    root.children.forEach((child) => visit(child, orderedQuantity));
+  });
+
+  return Array.from(purchasedByPart.values()).sort((left, right) =>
+    left.part_number.localeCompare(right.part_number)
+  );
 }

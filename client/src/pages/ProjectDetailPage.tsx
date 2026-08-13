@@ -4133,8 +4133,8 @@ export default function ProjectDetailPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
                 <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">PO Parts</p>
-                  <p className="font-medium">{Array.isArray(hubMaterial.parts) ? hubMaterial.parts.length : 0}</p>
+                  <p className="text-xs text-muted-foreground">BOM Purchased Parts</p>
+                  <p className="font-medium">{hubMaterial.summary?.purchasedBomPartCount ?? (Array.isArray(hubMaterial.parts) ? hubMaterial.parts.length : 0)}</p>
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Parts Requests</p>
@@ -4221,7 +4221,12 @@ export default function ProjectDetailPage() {
                 </div>
               )}
               {Array.isArray(hubMaterial.parts) && hubMaterial.parts.length > 0 && (
-                <div className="space-y-2">
+                <div className="rounded-md border p-4">
+                  <div className="mb-3">
+                    <h3 className="text-base font-semibold">BOM Purchased Parts</h3>
+                    <p className="text-sm text-muted-foreground">All purchased components required by the active assembly BOM, extended by the ordered assembly quantity.</p>
+                  </div>
+                  <div className="space-y-2">
                   {hubMaterial.parts.map((part: any) => (
                     <div key={part.id} className="flex items-center justify-between rounded-md border p-3">
                       <div>
@@ -4231,6 +4236,7 @@ export default function ProjectDetailPage() {
                       <Badge variant="outline">Qty {part.quantity}</Badge>
                     </div>
                   ))}
+                  </div>
                 </div>
               )}
             </CardContent>

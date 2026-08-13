@@ -32,6 +32,13 @@ const model = {
       cnc_program_requirements: [],
       special_process_source: 'EXTERNAL_APPROVED_SUPPLIER',
       special_process_requirements: ['Type II anodize'],
+      inspection_extent: 'APPROVED_SAMPLING',
+      sampling_plan_id: 'SP-100',
+      sampling_plan_status: 'APPROVED',
+      fai_requirement: 'PARTIAL',
+      traceability_level: 'SERIAL',
+      required_certifications: ['Certificate of Conformance'],
+      required_test_records: ['Final inspection report'],
     },
     {
       id: 'leaf',
@@ -229,6 +236,26 @@ describe('P2V2ProductionPlanning', () => {
     expect(screen.getAllByTestId('tooling-resource-review-item')).toHaveLength(
       1
     );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Page 6: Check Quality Requirements',
+      })
+    );
+    expect(screen.getByTestId('quality-requirement-review')).toHaveTextContent(
+      'Controlled quality requirements'
+    );
+    expect(screen.getByTestId('quality-requirement-review')).toHaveTextContent(
+      'SP-100'
+    );
+    expect(screen.getByTestId('quality-requirement-review')).toHaveTextContent(
+      'Certificate of Conformance'
+    );
+    expect(screen.getByTestId('quality-requirement-review')).toHaveTextContent(
+      'Final inspection report'
+    );
+    expect(
+      screen.getAllByTestId('quality-requirement-review-item')
+    ).toHaveLength(1);
     fireEvent.click(
       screen.getByRole('button', { name: 'Page 10: Review and Approve' })
     );

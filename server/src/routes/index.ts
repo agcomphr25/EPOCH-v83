@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier -- Legacy aggregate route registry is not Prettier-clean; avoid an unrelated whole-file rewrite. */
 /*
 EPOCH USER IDENTITY STANDARD
 
@@ -102,7 +103,8 @@ import metalAccessoriesRoutes from './metalAccessories';
 import featureSelectionsRoutes from './featureSelections';
 import calendarRoutes from './calendar';
 import documentIntelligenceRoutes from './documentIntelligence';
-import trainingRoutes from './training';
+  import trainingRoutes from './training';
+  import certificationAuthorizationRoutes from './certificationAuthorizations';
 import magicLinkRoutes from './magicLink';
 import certificationsRoutes from './certifications';
 import globalSearchRoutes from './globalSearch';
@@ -1559,6 +1561,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Training management routes
   app.use('/api/training', trainingRoutes);
+  app.use('/api/training/certification-authorizations', certificationAuthorizationRoutes);
 
   // Certifications management routes
   app.use('/api/certifications', certificationsRoutes);

@@ -326,6 +326,48 @@ router.post('/launch/:launchId/provision-work-orders', async (req, res) => {
     fail(res, error);
   }
 });
+router.post(
+  '/launch/:launchId/create-manufacturing-work-orders',
+  async (req, res) => {
+    try {
+      const user = await requireCapability(
+        req,
+        'projects.production_launch.launch'
+      );
+      const input = workOrderProvisioningSchema.parse(req.body);
+      const sharedInput = {
+        ...input,
+        idempotencyKey: `manufacturing-work-orders:${req.params.launchId}`,
+      };
+      await authorizeProductionExecution(
+        projectId(req),
+        req.params.launchId,
+        sharedInput,
+        user
+      );
+      await provisionP2ProductionOrders(
+        projectId(req),
+        req.params.launchId,
+        sharedInput,
+        user
+      );
+      const result = await provisionP2WorkOrders(
+        projectId(req),
+        req.params.launchId,
+        sharedInput,
+        user
+      );
+      res.status(result.replayed ? 200 : 201).json({
+        ...result,
+        message: result.replayed
+          ? 'Manufacturing work orders already exist.'
+          : 'Manufacturing work orders created.',
+      });
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
 router.post('/', async (req, res) => {
   try {
     const user = await requireCapability(

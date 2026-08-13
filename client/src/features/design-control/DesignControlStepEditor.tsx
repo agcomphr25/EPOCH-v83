@@ -47,9 +47,20 @@ type ApprovalSlot = {
     decidedBySnapshot?: { username?: string; role?: string } | null;
     decidedAt?: string | null;
   } | null;
+  assignment?: {
+    employeeId: number;
+    userId: number;
+    employeeCodeSnapshot?: string | null;
+    approverNameSnapshot: string;
+    jobTitleSnapshot?: string | null;
+    departmentSnapshot?: string | null;
+    accountStatusSnapshot: string;
+    status: string;
+  } | null;
 };
 
 type ApprovalState = {
+  currentUserId?: number | null;
   currentContentVersion?: { id: string; contentVersion: number } | null;
   versions: Array<{
     id: string;
@@ -73,13 +84,28 @@ type ApprovalState = {
   approvalSlots: ApprovalSlot[];
 };
 
+type EligibleApprovers = {
+  employees: Array<{
+    employeeId: number;
+    employeeCode?: string | null;
+    displayName: string;
+    jobTitle?: string | null;
+    department?: string | null;
+    userId: number;
+    accountRole: string;
+    accountStatus: string;
+    eligibleApprovalKeys: string[];
+    eligibleApprovalRoles: string[];
+  }>;
+};
+
 type Props = {
   recordId: string;
   projectId?: string;
   definition: DesignControlWorkflowStep;
   step?: StepRow;
   readOnly: boolean;
-  onChanged: () => Promise<unknown>;
+  onChanged: (savedStep?: StepRow) => Promise<unknown>;
   onPrevious: () => void;
   onNext: () => void;
   hasPrevious: boolean;
@@ -117,6 +143,12 @@ export function DesignControlStepEditor({
   const [checklist, setChecklist] = useState<Record<string, unknown>>({});
   const [changeReason, setChangeReason] = useState('');
   const [decisionComment, setDecisionComment] = useState('');
+  const [approvalAssignments, setApprovalAssignments] = useState<
+    Record<string, string>
+  >({});
+  const [reassignmentRole, setReassignmentRole] = useState<string | null>(null);
+  const [reassignmentSelection, setReassignmentSelection] = useState('');
+  const [reassignmentReason, setReassignmentReason] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -196,56 +228,84 @@ export function DesignControlStepEditor({
         )
       ),
   });
+  const eligibleApproversQuery = useQuery<EligibleApprovers>({
+    queryKey: [
+      '/api/qms/design-control',
+      recordId,
+      'steps',
+      definition.key,
+      'eligible-approvers',
+    ],
+    queryFn: async () =>
+      responsePayload(
+        await fetch(
+          `/api/qms/design-control/${encodeURIComponent(recordId)}/steps/${encodeURIComponent(definition.key)}/eligible-approvers`,
+          { credentials: 'include' }
+        )
+      ),
+    enabled: true,
+  });
 
-  const refresh = async () => {
+  const refresh = async (savedStep?: StepRow) => {
     await Promise.all([
-      onChanged(),
+      onChanged(savedStep),
       queryClient.invalidateQueries({ queryKey: approvalQueryKey }),
     ]);
   };
 
-  const run = async (action: () => Promise<unknown>, success: string) => {
+  const run = async <T,>(
+    action: () => Promise<T>,
+    success: string,
+    savedStepFromResult?: (result: T) => StepRow | undefined
+  ) => {
     setBusy(true);
     setError('');
     setMessage('');
     try {
-      await action();
+      const result = await action();
       setMessage(success);
       setDirty(false);
-      await refresh();
-      return true;
+      await refresh(savedStepFromResult?.(result));
+      return result;
     } catch (actionError) {
       setError(
         actionError instanceof Error
           ? actionError.message
           : 'The controlled action failed.'
       );
-      return false;
+      return null;
     } finally {
       setBusy(false);
     }
   };
 
   const saveDraft = async (continueAfterSave = false) => {
-    const saved = await run(async () => {
-      const response = await fetch(
-        `/api/qms/design-control/${encodeURIComponent(recordId)}/steps/${encodeURIComponent(definition.key)}`,
-        {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            formData,
-            checklist,
-            attachments: step?.attachments ?? [],
-            contentVersionId: step?.currentContentVersionId ?? null,
-            changeReason:
-              changeReason.trim() || 'Design Control step draft saved',
-          }),
-        }
-      );
-      return responsePayload(response);
-    }, 'Draft saved as a controlled content version.');
+    const saved = await run(
+      async () => {
+        const response = await fetch(
+          `/api/qms/design-control/${encodeURIComponent(recordId)}/steps/${encodeURIComponent(definition.key)}`,
+          {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              formData,
+              checklist,
+              attachments: step?.attachments ?? [],
+              contentVersionId: step?.currentContentVersionId ?? null,
+              changeReason:
+                changeReason.trim() || 'Design Control step draft saved',
+            }),
+          }
+        );
+        return responsePayload(response);
+      },
+      'Draft saved as a controlled content version.',
+      (result) =>
+        result && typeof result === 'object' && 'step' in result
+          ? (result.step as StepRow)
+          : undefined
+    );
     if (saved) setLastSavedAt(new Date().toISOString());
     if (saved && continueAfterSave && hasNext) onNext();
   };
@@ -260,6 +320,20 @@ export function DesignControlStepEditor({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contentVersionId: step?.currentContentVersionId ?? null,
+            assignments: definition.approvals.map((slot) => {
+              const selected = (
+                eligibleApproversQuery.data?.employees ?? []
+              ).find(
+                (employee) =>
+                  `${employee.employeeId}:${employee.userId}` ===
+                  approvalAssignments[slot.key]
+              );
+              return {
+                approvalKey: slot.key,
+                employeeId: selected?.employeeId,
+                userId: selected?.userId,
+              };
+            }),
           }),
         }
       );
@@ -297,6 +371,12 @@ export function DesignControlStepEditor({
   const editable = !readOnly && can('design.control.edit') && !underReview;
   const canSubmit = !readOnly && can('design.control.submit') && !underReview;
   const canApprove = !readOnly && can('design.control.approve') && underReview;
+  const canRouteApprovers =
+    !readOnly &&
+    !underReview &&
+    (can('design.control.edit') || can('design.control.submit'));
+  const canReassignApprovers =
+    !readOnly && underReview && can('design.control.admin');
   const missingFields = definition.fields.filter(
     (field) => !String(formData[field.key] ?? '').trim()
   );
@@ -314,6 +394,41 @@ export function DesignControlStepEditor({
       return;
     navigate();
   };
+
+  const reassignApprover = (slot: ApprovalSlot) =>
+    run(async () => {
+      const selected = (eligibleApproversQuery.data?.employees ?? []).find(
+        (employee) =>
+          `${employee.employeeId}:${employee.userId}` === reassignmentSelection
+      );
+      const contentVersionId = approvalQuery.data?.currentContentVersion?.id;
+      if (!selected || !contentVersionId || !reassignmentReason.trim())
+        throw new Error(
+          'Select an active employee and enter a reassignment reason.'
+        );
+      return responsePayload(
+        await fetch(
+          `/api/qms/design-control/${encodeURIComponent(recordId)}/steps/${encodeURIComponent(definition.key)}/assignments/${encodeURIComponent(slot.key)}/reassign`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contentVersionId,
+              employeeId: selected.employeeId,
+              userId: selected.userId,
+              reason: reassignmentReason.trim(),
+            }),
+          }
+        )
+      );
+    }, `${slot.label} reassigned with an audit record.`).then((saved) => {
+      if (saved) {
+        setReassignmentRole(null);
+        setReassignmentSelection('');
+        setReassignmentReason('');
+      }
+    });
 
   return (
     <div className="space-y-5">
@@ -484,7 +599,9 @@ export function DesignControlStepEditor({
                         {value && value !== projectId && (
                           <option value={value}>Existing value: {value}</option>
                         )}
-                        <option value={projectId}>Linked project: {projectId}</option>
+                        <option value={projectId}>
+                          Linked project: {projectId}
+                        </option>
                         <option value="__MANUAL__">
                           Enter another customer or order link…
                         </option>
@@ -518,9 +635,7 @@ export function DesignControlStepEditor({
                       className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                       id={fieldId}
                       value={
-                        manualPersonFields.has(field.key)
-                          ? '__MANUAL__'
-                          : value
+                        manualPersonFields.has(field.key) ? '__MANUAL__' : value
                       }
                       onChange={(event) => {
                         if (event.target.value === '__MANUAL__') {
@@ -670,10 +785,67 @@ export function DesignControlStepEditor({
             </Button>
           </>
         )}
+        {canRouteApprovers && (
+          <div className="w-full space-y-3 rounded-md border p-3">
+            <h3 className="font-semibold">Assign verified approvers</h3>
+            <p className="text-sm text-muted-foreground">
+              Only active employees with active, authorized EPOCH accounts are
+              available. Assignments are locked to the submitted version.
+            </p>
+            {definition.approvals.map((slot) => {
+              const candidates = (
+                eligibleApproversQuery.data?.employees ?? []
+              ).filter((employee) =>
+                employee.eligibleApprovalKeys.includes(slot.key)
+              );
+              return (
+                <div className="space-y-1" key={slot.key}>
+                  <Label htmlFor={`approval-assignee-${slot.key}`}>
+                    {slot.label}
+                  </Label>
+                  <select
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    id={`approval-assignee-${slot.key}`}
+                    value={approvalAssignments[slot.key] ?? ''}
+                    onChange={(event) =>
+                      setApprovalAssignments((current) => ({
+                        ...current,
+                        [slot.key]: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Select a person...</option>
+                    {candidates.map((employee) => (
+                      <option
+                        key={`${employee.employeeId}:${employee.userId}`}
+                        value={`${employee.employeeId}:${employee.userId}`}
+                      >
+                        {employee.displayName} |{' '}
+                        {employee.employeeCode ||
+                          `Employee ${employee.employeeId}`}{' '}
+                        |{' '}
+                        {employee.jobTitle ||
+                          employee.department ||
+                          'Role not recorded'}{' '}
+                        | Account {employee.accountStatus} |{' '}
+                        {employee.eligibleApprovalRoles.join(', ')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {canSubmit && (
           <Button
             disabled={
-              busy || dirty || !approvalQuery.data?.currentContentVersion?.id
+              busy ||
+              dirty ||
+              !approvalQuery.data?.currentContentVersion?.id ||
+              definition.approvals.some(
+                (slot) => !approvalAssignments[slot.key]
+              )
             }
             onClick={submit}
             type="button"
@@ -728,6 +900,92 @@ export function DesignControlStepEditor({
                       ? 'Independent reviewer required'
                       : 'Authenticated reviewer required'}
                   </p>
+                  {canReassignApprovers &&
+                    slot.assignment?.status === 'PENDING' && (
+                      <Button
+                        className="mt-2"
+                        onClick={() => {
+                          setReassignmentRole(slot.key);
+                          setReassignmentSelection('');
+                          setReassignmentReason('');
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Change approver
+                      </Button>
+                    )}
+                  {reassignmentRole === slot.key && (
+                    <div className="mt-3 space-y-2 rounded-md border p-3">
+                      <Label htmlFor={`reassign-${slot.key}`}>
+                        New verified employee
+                      </Label>
+                      <select
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                        id={`reassign-${slot.key}`}
+                        value={reassignmentSelection}
+                        onChange={(event) =>
+                          setReassignmentSelection(event.target.value)
+                        }
+                      >
+                        <option value="">Select an active employee...</option>
+                        {(eligibleApproversQuery.data?.employees ?? [])
+                          .filter((employee) =>
+                            employee.eligibleApprovalKeys.includes(slot.key)
+                          )
+                          .map((employee) => (
+                            <option
+                              key={`${employee.employeeId}:${employee.userId}`}
+                              value={`${employee.employeeId}:${employee.userId}`}
+                            >
+                              {employee.displayName} |{' '}
+                              {employee.employeeCode ||
+                                `Employee ${employee.employeeId}`}{' '}
+                              |{' '}
+                              {employee.jobTitle ||
+                                employee.department ||
+                                'Role not recorded'}
+                            </option>
+                          ))}
+                      </select>
+                      <Input
+                        aria-label="Reassignment reason"
+                        placeholder="Reason for changing this submitted-version assignment"
+                        value={reassignmentReason}
+                        onChange={(event) =>
+                          setReassignmentReason(event.target.value)
+                        }
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          disabled={
+                            busy ||
+                            !reassignmentSelection ||
+                            !reassignmentReason.trim()
+                          }
+                          onClick={() => reassignApprover(slot)}
+                          size="sm"
+                          type="button"
+                        >
+                          Save reassignment
+                        </Button>
+                        <Button
+                          onClick={() => setReassignmentRole(null)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {slot.assignment
+                      ? `${slot.assignment.approverNameSnapshot} (${slot.assignment.employeeCodeSnapshot || `Employee ${slot.assignment.employeeId}`}) · ${slot.assignment.jobTitleSnapshot || slot.assignment.departmentSnapshot || 'Role not recorded'} · Account ${slot.assignment.accountStatusSnapshot}`
+                      : 'Unverified legacy assignment or no verified assignee'}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge
@@ -735,36 +993,39 @@ export function DesignControlStepEditor({
                   >
                     {slot.status.toLowerCase()}
                   </Badge>
-                  {canApprove && slot.status !== 'APPROVED' && (
-                    <>
-                      <Button
-                        disabled={busy || !decisionComment.trim()}
-                        onClick={() => decide(slot, 'APPROVED')}
-                        size="sm"
-                        type="button"
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        disabled={busy || !decisionComment.trim()}
-                        onClick={() => decide(slot, 'RETURNED_FOR_REVISION')}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        Return
-                      </Button>
-                      <Button
-                        disabled={busy}
-                        onClick={() => decide(slot, 'REJECTED')}
-                        size="sm"
-                        type="button"
-                        variant="destructive"
-                      >
-                        Reject
-                      </Button>
-                    </>
-                  )}
+                  {canApprove &&
+                    slot.status !== 'APPROVED' &&
+                    slot.assignment?.userId ===
+                      approvalQuery.data?.currentUserId && (
+                      <>
+                        <Button
+                          disabled={busy || !decisionComment.trim()}
+                          onClick={() => decide(slot, 'APPROVED')}
+                          size="sm"
+                          type="button"
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          disabled={busy || !decisionComment.trim()}
+                          onClick={() => decide(slot, 'RETURNED_FOR_REVISION')}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          Return
+                        </Button>
+                        <Button
+                          disabled={busy}
+                          onClick={() => decide(slot, 'REJECTED')}
+                          size="sm"
+                          type="button"
+                          variant="destructive"
+                        >
+                          Reject
+                        </Button>
+                      </>
+                    )}
                 </div>
               </div>
             ))}

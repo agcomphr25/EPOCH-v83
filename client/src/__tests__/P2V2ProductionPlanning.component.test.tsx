@@ -28,9 +28,30 @@ const model = {
       routing_id: 'routing-100-rev-4',
       routing_revision: '4',
       routing_release_status: 'RELEASED',
+      tooling_requirements: ['Assembly fixture AF-100'],
+      cnc_program_requirements: [],
+      special_process_source: 'EXTERNAL_APPROVED_SUPPLIER',
+      special_process_requirements: ['Type II anodize'],
+      inspection_extent: 'APPROVED_SAMPLING',
+      sampling_plan_id: 'SP-100',
+      sampling_plan_status: 'APPROVED',
+      fai_requirement: 'PARTIAL',
+      traceability_level: 'SERIAL',
+      required_certifications: ['Certificate of Conformance'],
+      required_test_records: ['Final inspection report'],
+      drawing_number: 'DWG-100',
+      drawing_revision: 'C',
+      specification_references: ['AMS-STD-100'],
+      specification_sheet_requirement: 'REQUIRED',
+      work_instruction_requirement: 'REQUIRED',
+      work_instruction_references: ['WI-100 Rev B'],
+      packaging_instruction_requirement: 'REQUIRED',
+      packaging_instruction_reference: 'PKG-100 Rev A',
+      effectivity_reference: 'PO PO-100 Rev 3',
     },
     {
       id: 'leaf',
+      inventory_item_id: 20,
       assembly_path: 'root:1/line:2',
       part_number: 'BUY-20',
       part_name: 'Purchased fastener',
@@ -41,6 +62,7 @@ const model = {
       extended_project_quantity: '8',
       bom_release_status: 'NOT_REQUIRED_APPROVED',
       routing_release_status: 'NOT_REQUIRED_APPROVED',
+      specification_references: ['AMS-QQ-A-200'],
     },
   ],
   history: [
@@ -194,7 +216,107 @@ describe('P2V2ProductionPlanning', () => {
     expect(screen.getAllByTestId('routing-review-item')).toHaveLength(1);
     expect(screen.getAllByTestId('production-plan-item')).toHaveLength(1);
     fireEvent.click(
+      screen.getByRole('button', { name: 'Page 4: Check Materials' })
+    );
+    expect(screen.getByTestId('material-review')).toHaveTextContent(
+      'Controlled material definition'
+    );
+    expect(screen.getByTestId('material-review')).toHaveTextContent('BUY-20');
+    expect(screen.getByTestId('material-review')).toHaveTextContent(
+      'AMS-QQ-A-200'
+    );
+    expect(screen.getByText('Inventory linked')).toBeInTheDocument();
+    expect(screen.getAllByTestId('material-review-item')).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Page 5: Check Tooling and Resources',
+      })
+    );
+    expect(screen.getByTestId('tooling-resource-review')).toHaveTextContent(
+      'Tooling and resource requirements'
+    );
+    expect(screen.getByTestId('tooling-resource-review')).toHaveTextContent(
+      'Assembly fixture AF-100'
+    );
+    expect(screen.getByTestId('tooling-resource-review')).toHaveTextContent(
+      'Type II anodize'
+    );
+    expect(screen.getByText('Requirements recorded')).toBeInTheDocument();
+    expect(screen.getAllByTestId('tooling-resource-review-item')).toHaveLength(
+      1
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Page 6: Check Quality Requirements',
+      })
+    );
+    expect(screen.getByTestId('quality-requirement-review')).toHaveTextContent(
+      'Controlled quality requirements'
+    );
+    expect(screen.getByTestId('quality-requirement-review')).toHaveTextContent(
+      'SP-100'
+    );
+    expect(screen.getByTestId('quality-requirement-review')).toHaveTextContent(
+      'Certificate of Conformance'
+    );
+    expect(screen.getByTestId('quality-requirement-review')).toHaveTextContent(
+      'Final inspection report'
+    );
+    expect(
+      screen.getAllByTestId('quality-requirement-review-item')
+    ).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Page 7: Review Controlled Documents',
+      })
+    );
+    expect(screen.getByTestId('controlled-document-review')).toHaveTextContent(
+      'Controlled document requirements'
+    );
+    expect(screen.getByTestId('controlled-document-review')).toHaveTextContent(
+      'DWG-100'
+    );
+    expect(screen.getByTestId('controlled-document-review')).toHaveTextContent(
+      'WI-100 Rev B'
+    );
+    expect(screen.getByTestId('controlled-document-review')).toHaveTextContent(
+      'PKG-100 Rev A'
+    );
+    expect(
+      screen.getAllByTestId('controlled-document-review-item')
+    ).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Page 8: Check Schedule and Capacity',
+      })
+    );
+    expect(screen.getByTestId('schedule-capacity-review')).toHaveTextContent(
+      'Scheduling inputs and capacity boundary'
+    );
+    expect(screen.getByTestId('schedule-capacity-review')).toHaveTextContent(
+      '2026-10-01'
+    );
+    expect(screen.getByTestId('schedule-capacity-review')).toHaveTextContent(
+      'Not evaluated in this baseline'
+    );
+    expect(screen.getAllByTestId('schedule-order-line')).toHaveLength(1);
+    expect(screen.getAllByTestId('schedule-manufactured-item')).toHaveLength(1);
+    fireEvent.click(
       screen.getByRole('button', { name: 'Page 10: Review and Approve' })
+    );
+    expect(
+      await screen.findByTestId('review-approve-summary')
+    ).toHaveTextContent('Production plan release review');
+    expect(
+      screen.getByTestId('production-plan-approval-statement')
+    ).toHaveTextContent(
+      'completely identifies the parts, materials, operations'
+    );
+    expect(
+      await screen.findByTestId('approval-demand-totals')
+    ).toHaveTextContent('2 lines');
+    expect(screen.getByTestId('review-approve-summary')).toHaveTextContent(
+      'Source Changed — Review Required'
     );
     expect(screen.getByText(/engineering approval/i)).toBeInTheDocument();
     expect(screen.getByText(/quality approval/i)).toBeInTheDocument();

@@ -41,7 +41,7 @@ import P2BOMWizard from '@/components/p2/P2BOMWizard';
 import P2ProductionScheduler from '@/components/p2/P2ProductionScheduler';
 import P2StatusDashboard from '@/components/p2/P2StatusDashboard';
 import P2ProductionQueue from '@/components/p2/P2ProductionQueue';
-import P2CertificationsManager from './P2CertificationsManager';
+import CertificationAuthorizationMatrix from './CertificationAuthorizationMatrix';
 import PartRoutingManagement from './PartRoutingManagement';
 import RoutingDocumentManagement from './RoutingDocumentManagement';
 import P2ChangesTab from '@/components/p2/P2ChangesTab';
@@ -926,7 +926,7 @@ export default function P2ControlCenter() {
         </TabsContent>
 
         <TabsContent value="certifications">
-          <P2CertificationsManager />
+          <CertificationAuthorizationMatrix defaultProgram="P2" defaultStatus="ACTIVE" />
         </TabsContent>
 
         <TabsContent value="scrapped">

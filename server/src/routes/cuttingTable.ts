@@ -40,6 +40,7 @@ import {
   insertCuttingPacketBOMCutSchema,
   type CuttingFabricInventoryTransaction,
 } from '../../schema';
+import { getFabricInventoryDeleteErrorResponse } from '../services/fabricInventoryDeletion';
 
 const router = Router();
 
@@ -1087,6 +1088,10 @@ router.delete('/fabric-inventory/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting fabric inventory:', error);
+    const deleteError = getFabricInventoryDeleteErrorResponse(error);
+    if (deleteError) {
+      return res.status(deleteError.status).json(deleteError.body);
+    }
     res.status(500).json({ error: 'Failed to delete fabric inventory' });
   }
 });
@@ -2475,6 +2480,11 @@ router.get('/weekly-cutting-queue', async (req, res) => {
                 )
               )
               WHERE COALESCE(UPPER(po.status), '') NOT IN ('CANCELLED', 'CANCELED')
+                -- A finished parent PO is no longer an open customer demand,
+                -- even when historical production-order quantities remain.
+                AND COALESCE(UPPER(p2.status), '') NOT IN (
+                  'CLOSED', 'COMPLETE', 'COMPLETED', 'SHIPPED', 'CANCELLED', 'CANCELED'
+                )
                 AND (
                   inv.is_packet = true
                   OR bom.id IS NOT NULL

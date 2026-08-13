@@ -63,6 +63,36 @@ export function isP2V2ProductionLaunchPersistenceEnabled(): boolean {
   return process.env.P2_V2_PRODUCTION_LAUNCH_PERSISTENCE_ENABLED === 'true';
 }
 
+/** Gates the planning-to-floor authorization bridge; disabled unless exact lowercase true. */
+export function isP2V2ExecutionAuthorizationEnabled(): boolean {
+  return process.env.P2_V2_EXECUTION_AUTHORIZATION_ENABLED === 'true';
+}
+
+/** Gates creation of P2 production orders from authorized recursive demand. */
+export function isP2V2ProductionOrderProvisioningEnabled(): boolean {
+  return process.env.P2_V2_PRODUCTION_ORDER_PROVISIONING_ENABLED === 'true';
+}
+
+/** Gates serialized customer-unit allocation from provisioned root demand. */
+export function isP2V2SerializedUnitProvisioningEnabled(): boolean {
+  return process.env.P2_V2_SERIALIZED_UNIT_PROVISIONING_ENABLED === 'true';
+}
+
+/** Gates draft traveler creation from audited serialized root units. */
+export function isP2V2TravelerProvisioningEnabled(): boolean {
+  return process.env.P2_V2_TRAVELER_PROVISIONING_ENABLED === 'true';
+}
+
+/** Gates canonical assembly/component work-order links from authorized MAKE demand. */
+export function isP2V2WorkOrderProvisioningEnabled(): boolean {
+  return process.env.P2_V2_WORK_ORDER_PROVISIONING_ENABLED === 'true';
+}
+
+/** Gates draft batch travelers for manufactured child work orders. */
+export function isP2V2ComponentTravelerProvisioningEnabled(): boolean {
+  return process.env.P2_V2_COMPONENT_TRAVELER_PROVISIONING_ENABLED === 'true';
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

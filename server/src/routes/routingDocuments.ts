@@ -838,7 +838,27 @@ router.get('/', async (req: Request, res: Response) => {
     const { partNumber, departmentName, documentType, isTemplate } = req.query;
     
     // Use raw SQL template to avoid Neon HTTP driver issues with empty tables
-    const results = await db.execute(sql`SELECT * FROM routing_documents WHERE is_active = true ORDER BY created_at DESC`);
+    const results = await db.execute(sql`
+      SELECT
+        rd.*,
+        cd.document_number AS controlled_document_number,
+        cd.lifecycle_status AS controlled_lifecycle_status,
+        cd.status AS controlled_status,
+        cd.current_revision_id AS controlled_current_revision_id,
+        cd.working_draft_revision_id AS controlled_working_draft_revision_id,
+        revision.checksum_status AS controlled_revision_checksum_status,
+        revision.file_path AS controlled_revision_file_path
+      FROM routing_documents rd
+      LEFT JOIN controlled_documents cd ON cd.id = rd.controlled_document_id
+      LEFT JOIN document_version_history revision
+        ON revision.id = COALESCE(
+          cd.working_draft_revision_id,
+          cd.current_revision_id,
+          cd.current_released_revision_id
+        )
+      WHERE rd.is_active = true
+      ORDER BY rd.created_at DESC
+    `);
     
     // Extract rows from the raw result and transform UUIDs
     const rows = (results as any)?.rows || results || [];
@@ -1703,6 +1723,12 @@ router.post('/upload-template-to-register', async (req: Request, res: Response) 
           status = 'draft'
       WHERE id = ${controlledDocument.id}
     `);
+    await db.execute(sql`
+      UPDATE routing_documents
+      SET controlled_document_id = ${controlledDocument.id},
+          updated_at = NOW()
+      WHERE id = ${routingDocument.id}
+    `);
 
     res.status(201).json({
       document: routingDocument,
@@ -2115,6 +2141,10 @@ ${templateContent ? `\nTemplate:\n${templateContent}` : ''}`;
       lifecycleStatus: 'DRAFT',
       status: 'draft',
     }).where(eq(controlledDocuments.id, controlledDocument.id));
+    await db.update(routingDocuments).set({
+      controlledDocumentId: controlledDocument.id,
+      updatedAt: new Date(),
+    }).where(eq(routingDocuments.id, newDocument.id));
     if (specSheet && specActor) {
       const snapshot = {
         documentNumber,

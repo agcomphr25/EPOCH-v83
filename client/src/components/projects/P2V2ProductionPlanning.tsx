@@ -88,6 +88,9 @@ const selectOptions = (values: string[]) =>
     </SelectItem>
   ));
 
+const productionPlanApprovalStatement =
+  'I confirm that this production plan completely identifies the parts, materials, operations, documents, inspections, resources, and controls required to manufacture this customer order.';
+
 const wizardPages = [
   'Confirm the Order',
   'Review Parts and Assemblies',
@@ -100,36 +103,6 @@ const wizardPages = [
   'Preview Production Demand',
   'Review and Approve',
 ] as const;
-
-const reviewPageFields: Record<number, Array<[string, string]>> = {
-  3: [
-    ['Required quantity', 'extended_project_quantity'],
-    ['Planning classification', 'planning_classification'],
-    ['Material specification', 'specification_references'],
-  ],
-  4: [
-    ['Required tooling', 'tooling_requirements'],
-    ['Computer numerical control programs', 'cnc_program_requirements'],
-    ['Special process source', 'special_process_source'],
-  ],
-  5: [
-    ['Inspection extent', 'inspection_extent'],
-    ['First Article Inspection', 'fai_requirement'],
-    ['Required certifications', 'required_certifications'],
-    ['Required test records', 'required_test_records'],
-  ],
-  6: [
-    ['Drawing number', 'drawing_number'],
-    ['Drawing revision', 'drawing_revision'],
-    ['Work instruction references', 'work_instruction_references'],
-    ['Specification references', 'specification_references'],
-  ],
-  7: [
-    ['Required quantity', 'extended_project_quantity'],
-    ['Routing revision', 'routing_revision'],
-    ['Effectivity', 'effectivity_reference'],
-  ],
-};
 
 export default function P2V2ProductionPlanning({
   projectId,
@@ -174,7 +147,7 @@ export default function P2V2ProductionPlanning({
   } = useQuery<PreviewModel>({
     queryKey: [...key, 'launch-preview'],
     queryFn: () => request(`${endpoint(projectId)}/launch-preview`),
-    enabled: open && currentPage === 8 && canManage,
+    enabled: open && currentPage >= 8 && canManage,
     retry: false,
   });
   const mutation = useMutation({
@@ -207,7 +180,9 @@ export default function P2V2ProductionPlanning({
   const decide = (capacity: string, decision: 'APPROVED' | 'REJECTED') => {
     const signatureMeaning = window.prompt(
       'Signature meaning (required):',
-      `I ${decision === 'APPROVED' ? 'approve' : 'return'} this ${capacity} production-plan revision.`
+      decision === 'APPROVED'
+        ? productionPlanApprovalStatement
+        : `I return this ${capacity} production-plan revision for correction.`
     );
     if (!signatureMeaning) return;
     const reason =
@@ -411,10 +386,33 @@ export default function P2V2ProductionPlanning({
                     ))}
                 </section>
               )}
-              {currentPage >= 3 && currentPage <= 7 && (
-                <ReviewByExceptionPanel
-                  items={data?.items ?? []}
-                  fields={reviewPageFields[currentPage] ?? []}
+              {currentPage === 3 && !!data?.items.length && (
+                <MaterialReview items={data.items} />
+              )}
+              {currentPage === 4 && !!data?.items.length && (
+                <ToolingResourceReview
+                  items={data.items}
+                  blockers={data.readiness.blockers}
+                />
+              )}
+              {currentPage === 5 && !!data?.items.length && (
+                <QualityRequirementReview
+                  items={data.items}
+                  blockers={data.readiness.blockers}
+                />
+              )}
+              {currentPage === 6 && !!data?.items.length && (
+                <ControlledDocumentReview
+                  items={data.items}
+                  blockers={data.readiness.blockers}
+                />
+              )}
+              {currentPage === 7 && data?.plan && (
+                <ScheduleCapacityReview
+                  plan={data.plan}
+                  items={data.items}
+                  orderConfirmation={data.orderConfirmation}
+                  blockers={data.readiness.blockers}
                 />
               )}
               {currentPage === 8 && (
@@ -480,6 +478,16 @@ export default function P2V2ProductionPlanning({
                     </>
                   )}
                 </section>
+              )}
+              {currentPage === 9 && data?.plan && (
+                <ReviewApproveSummary
+                  plan={data.plan}
+                  items={data.items}
+                  readiness={data.readiness}
+                  preview={preview}
+                  previewLoading={previewLoading}
+                  approvalHistory={data.approvalHistory}
+                />
               )}
               {currentPage === 9 && data?.plan && (
                 <div className="flex flex-wrap gap-2">
@@ -734,6 +742,643 @@ function RoutingReview({
   );
 }
 
+function MaterialReview({ items }: { items: Row[] }) {
+  const components = items.filter((item) =>
+    Boolean(value(item, 'parent_part_number'))
+  );
+  return (
+    <section className="space-y-3" data-testid="material-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Controlled material definition</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Component identity and quantity come from the saved assembly baseline.
+          This page reviews material definition only; it does not claim that
+          inventory is available, reserved, allocated, or purchased.
+        </p>
+      </div>
+      {components.map((item) => {
+        const classification =
+          value(item, 'planning_classification') ||
+          value(item, 'make_buy') ||
+          (item.is_manufactured ? 'MAKE' : 'BUY');
+        const inventoryLinked = Boolean(value(item, 'inventory_item_id'));
+        const specifications = displayValue(item, 'specification_references');
+        return (
+          <article
+            className="rounded border p-4"
+            data-testid="material-review-item"
+            key={value(item, 'id')}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="font-semibold">
+                  {value(item, 'part_number') || 'Information Missing'} —{' '}
+                  {value(item, 'part_name') || 'Information Missing'}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Used by {value(item, 'parent_part_number')}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Badge variant="outline">
+                  {classification.replaceAll('_', ' ')}
+                </Badge>
+                <Badge variant={inventoryLinked ? 'default' : 'destructive'}>
+                  {inventoryLinked
+                    ? 'Inventory linked'
+                    : 'Inventory link missing'}
+                </Badge>
+              </div>
+            </div>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-4">
+              <OrderFact
+                label="Quantity per parent"
+                current={item.quantity_per_parent}
+              />
+              <OrderFact
+                label="Required project quantity"
+                current={item.extended_project_quantity}
+              />
+              <OrderFact
+                label="Inventory record"
+                current={item.inventory_item_id}
+              />
+              <OrderFact label="BOM status" current={item.bom_release_status} />
+            </dl>
+            <div className="mt-3 text-sm">
+              <p className="text-muted-foreground">Material specifications</p>
+              <p className={specifications ? '' : 'font-medium text-amber-700'}>
+                {specifications || 'Information Missing'}
+              </p>
+            </div>
+          </article>
+        );
+      })}
+      {!components.length && (
+        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+          No component material lines are present in the saved assembly
+          baseline.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ToolingResourceReview({
+  items,
+  blockers,
+}: {
+  items: Row[];
+  blockers: string[];
+}) {
+  const manufacturedItems = items.filter((item) => item.is_manufactured);
+  return (
+    <section className="space-y-3" data-testid="tooling-resource-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Tooling and resource requirements</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          These requirements come from the saved Production Planning baseline.
+          This review does not establish physical availability, calibration,
+          program release, machine capacity, or supplier approval.
+        </p>
+      </div>
+      {manufacturedItems.map((item) => {
+        const partNumber = value(item, 'part_number');
+        const tooling = displayValue(item, 'tooling_requirements');
+        const programs = displayValue(item, 'cnc_program_requirements');
+        const specialProcessSource = value(item, 'special_process_source');
+        const specialProcesses = displayValue(
+          item,
+          'special_process_requirements'
+        );
+        const decisionsComplete =
+          Array.isArray(item.tooling_requirements) &&
+          Array.isArray(item.cnc_program_requirements) &&
+          Boolean(specialProcessSource) &&
+          (specialProcessSource === 'NONE' || Boolean(specialProcesses));
+        const itemBlockers = blockers.filter((blocker) =>
+          blocker.startsWith(`${partNumber}:`)
+        );
+        return (
+          <article
+            className="rounded border p-4"
+            data-testid="tooling-resource-review-item"
+            key={value(item, 'id')}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="font-semibold">
+                  {partNumber || 'Information Missing'} —{' '}
+                  {value(item, 'part_name') || 'Information Missing'}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Routing revision{' '}
+                  {value(item, 'routing_revision') || 'Information Missing'}
+                </p>
+              </div>
+              <Badge variant={decisionsComplete ? 'default' : 'destructive'}>
+                {decisionsComplete
+                  ? 'Requirements recorded'
+                  : 'Decision missing'}
+              </Badge>
+            </div>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+              <OrderFact
+                label="Required tooling"
+                current={tooling || 'None recorded'}
+              />
+              <OrderFact
+                label="CNC programs"
+                current={programs || 'None recorded'}
+              />
+              <OrderFact
+                label="Special-process source"
+                current={specialProcessSource}
+              />
+            </dl>
+            {specialProcessSource && specialProcessSource !== 'NONE' && (
+              <div className="mt-3 text-sm">
+                <p className="text-muted-foreground">
+                  Special-process requirements
+                </p>
+                <p
+                  className={
+                    specialProcesses ? '' : 'font-medium text-amber-700'
+                  }
+                >
+                  {specialProcesses || 'Information Missing'}
+                </p>
+              </div>
+            )}
+            {!!itemBlockers.length && (
+              <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">
+                {itemBlockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            )}
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
+function QualityRequirementReview({
+  items,
+  blockers,
+}: {
+  items: Row[];
+  blockers: string[];
+}) {
+  const manufacturedItems = items.filter((item) => item.is_manufactured);
+  return (
+    <section className="space-y-3" data-testid="quality-requirement-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Controlled quality requirements</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          These are planning decisions from the saved baseline. They do not
+          record inspection results, completed FAI, accepted product, or
+          released certification and test evidence.
+        </p>
+      </div>
+      {manufacturedItems.map((item) => {
+        const partNumber = value(item, 'part_number');
+        const inspection = value(item, 'inspection_extent');
+        const samplingRequired = inspection === 'APPROVED_SAMPLING';
+        const samplingApproved =
+          !samplingRequired ||
+          (Boolean(value(item, 'sampling_plan_id')) &&
+            value(item, 'sampling_plan_status').toUpperCase() === 'APPROVED');
+        const fai = value(item, 'fai_requirement');
+        const faiComplete =
+          Boolean(fai) &&
+          (fai !== 'NOT_REQUIRED' || Boolean(value(item, 'fai_reason')));
+        const decisionsComplete =
+          Boolean(inspection) &&
+          samplingApproved &&
+          faiComplete &&
+          Boolean(value(item, 'traceability_level')) &&
+          Array.isArray(item.required_certifications) &&
+          Array.isArray(item.required_test_records);
+        const certifications = displayValue(item, 'required_certifications');
+        const testRecords = displayValue(item, 'required_test_records');
+        const itemBlockers = blockers.filter((blocker) =>
+          blocker.startsWith(`${partNumber}:`)
+        );
+        return (
+          <article
+            className="rounded border p-4"
+            data-testid="quality-requirement-review-item"
+            key={value(item, 'id')}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="font-semibold">
+                  {partNumber || 'Information Missing'} —{' '}
+                  {value(item, 'part_name') || 'Information Missing'}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Planning quality controls
+                </p>
+              </div>
+              <Badge variant={decisionsComplete ? 'default' : 'destructive'}>
+                {decisionsComplete
+                  ? 'Requirements recorded'
+                  : 'Decision missing'}
+              </Badge>
+            </div>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+              <OrderFact label="Inspection strategy" current={inspection} />
+              <OrderFact label="FAI requirement" current={fai} />
+              <OrderFact
+                label="Traceability level"
+                current={item.traceability_level}
+              />
+              {samplingRequired && (
+                <>
+                  <OrderFact
+                    label="Sampling plan"
+                    current={item.sampling_plan_id}
+                  />
+                  <OrderFact
+                    label="Sampling status"
+                    current={item.sampling_plan_status}
+                  />
+                </>
+              )}
+              {fai === 'NOT_REQUIRED' && (
+                <OrderFact label="FAI N/A basis" current={item.fai_reason} />
+              )}
+            </dl>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+              <OrderFact
+                label="Required certifications"
+                current={certifications || 'None recorded'}
+              />
+              <OrderFact
+                label="Required test records"
+                current={testRecords || 'None recorded'}
+              />
+            </dl>
+            {!!itemBlockers.length && (
+              <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">
+                {itemBlockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            )}
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
+function ControlledDocumentReview({
+  items,
+  blockers,
+}: {
+  items: Row[];
+  blockers: string[];
+}) {
+  const manufacturedItems = items.filter((item) => item.is_manufactured);
+  return (
+    <section className="space-y-3" data-testid="controlled-document-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Controlled document requirements</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          This page reviews references and planning decisions saved in the
+          baseline. A reference alone does not prove document release, approval,
+          accessibility, or effectivity.
+        </p>
+      </div>
+      {manufacturedItems.map((item) => {
+        const partNumber = value(item, 'part_number');
+        const workInstructionDecision = value(
+          item,
+          'work_instruction_requirement'
+        );
+        const workInstructionBasis = value(item, 'work_instruction_basis');
+        const packagingDecision = value(
+          item,
+          'packaging_instruction_requirement'
+        );
+        const decisionsComplete =
+          Boolean(workInstructionDecision) &&
+          (!['DRAWING_SPEC_SUFFICIENT', 'NOT_REQUIRED_APPROVED'].includes(
+            workInstructionDecision
+          ) ||
+            Boolean(workInstructionBasis)) &&
+          Boolean(packagingDecision) &&
+          (packagingDecision !== 'REQUIRED' ||
+            Boolean(value(item, 'packaging_instruction_reference'))) &&
+          (packagingDecision !== 'NOT_REQUIRED_APPROVED' ||
+            Boolean(value(item, 'notes')));
+        const workInstructions = displayValue(
+          item,
+          'work_instruction_references'
+        );
+        const specifications = displayValue(item, 'specification_references');
+        const itemBlockers = blockers.filter((blocker) =>
+          blocker.startsWith(`${partNumber}:`)
+        );
+        return (
+          <article
+            className="rounded border p-4"
+            data-testid="controlled-document-review-item"
+            key={value(item, 'id')}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="font-semibold">
+                  {partNumber || 'Information Missing'} —{' '}
+                  {value(item, 'part_name') || 'Information Missing'}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Effectivity{' '}
+                  {value(item, 'effectivity_reference') ||
+                    'Information Missing'}
+                </p>
+              </div>
+              <Badge variant={decisionsComplete ? 'default' : 'destructive'}>
+                {decisionsComplete ? 'Decisions recorded' : 'Decision missing'}
+              </Badge>
+            </div>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+              <OrderFact label="Drawing number" current={item.drawing_number} />
+              <OrderFact
+                label="Drawing revision"
+                current={item.drawing_revision}
+              />
+              <OrderFact
+                label="Specification-sheet decision"
+                current={item.specification_sheet_requirement}
+              />
+              <OrderFact
+                label="Work-instruction decision"
+                current={workInstructionDecision}
+              />
+              <OrderFact
+                label="Work-instruction basis"
+                current={workInstructionBasis}
+              />
+              <OrderFact
+                label="Packaging decision"
+                current={packagingDecision}
+              />
+            </dl>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+              <OrderFact
+                label="Work-instruction references"
+                current={workInstructions || 'None recorded'}
+              />
+              <OrderFact
+                label="Specification references"
+                current={specifications || 'None recorded'}
+              />
+              {packagingDecision === 'REQUIRED' && (
+                <OrderFact
+                  label="Packaging instruction"
+                  current={item.packaging_instruction_reference}
+                />
+              )}
+              {packagingDecision === 'NOT_REQUIRED_APPROVED' && (
+                <OrderFact label="Packaging N/A basis" current={item.notes} />
+              )}
+            </dl>
+            {!!itemBlockers.length && (
+              <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">
+                {itemBlockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            )}
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
+function ScheduleCapacityReview({
+  plan,
+  items,
+  orderConfirmation,
+  blockers,
+}: {
+  plan: Row;
+  items: Row[];
+  orderConfirmation: Model['orderConfirmation'];
+  blockers: string[];
+}) {
+  const manufacturedItems = items.filter((item) => item.is_manufactured);
+  return (
+    <section className="space-y-4" data-testid="schedule-capacity-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">
+          Scheduling inputs and capacity boundary
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          This page reviews controlled demand and timing inputs. The Production
+          Planning baseline does not calculate labor loading, machine calendars,
+          finite capacity, material availability, or a committed production
+          schedule.
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <OrderFact
+          label="Customer required delivery"
+          current={orderConfirmation.requiredDeliveryDate}
+        />
+        <OrderFact
+          label="Planning effectivity"
+          current={plan.effectivity_reference}
+        />
+        <OrderFact
+          label="Manufactured items"
+          current={manufacturedItems.length}
+        />
+        <OrderFact
+          label="Capacity confirmation"
+          current="Not evaluated in this baseline"
+        />
+      </div>
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Customer order timing</h3>
+        <div className="mt-3 space-y-2">
+          {orderConfirmation.lines.map((line) => (
+            <div
+              className="grid gap-3 rounded border p-3 text-sm md:grid-cols-4"
+              data-testid="schedule-order-line"
+              key={value(line, 'id')}
+            >
+              <OrderFact
+                label="Customer part"
+                current={line.customer_part_number}
+              />
+              <OrderFact label="AG part" current={line.ag_part_number} />
+              <OrderFact label="Order quantity" current={line.quantity} />
+              <OrderFact label="Due date" current={line.due_date} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <h3 className="font-semibold">Manufactured demand inputs</h3>
+        {manufacturedItems.map((item) => (
+          <article
+            className="grid gap-3 rounded border p-3 text-sm md:grid-cols-4"
+            data-testid="schedule-manufactured-item"
+            key={value(item, 'id')}
+          >
+            <OrderFact label="Part" current={item.part_number} />
+            <OrderFact
+              label="Required quantity"
+              current={item.extended_project_quantity}
+            />
+            <OrderFact
+              label="Routing revision"
+              current={item.routing_revision}
+            />
+            <OrderFact
+              label="Effectivity"
+              current={item.effectivity_reference}
+            />
+          </article>
+        ))}
+      </div>
+      {!!blockers.length && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3">
+          <h3 className="font-semibold">Inputs still blocking release</h3>
+          <ul className="mt-2 list-disc pl-5 text-sm">
+            {blockers.map((blocker) => (
+              <li key={blocker}>{blocker}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ReviewApproveSummary({
+  plan,
+  items,
+  readiness,
+  preview,
+  previewLoading,
+  approvalHistory,
+}: {
+  plan: Row;
+  items: Row[];
+  readiness: Model['readiness'];
+  preview: PreviewModel | undefined;
+  previewLoading: boolean;
+  approvalHistory: Row[];
+}) {
+  const approvedFunctions = ['ENGINEERING', 'QUALITY', 'OPERATIONS'].filter(
+    (capacity) =>
+      approvalHistory.some(
+        (approval) =>
+          value(approval, 'approval_type') ===
+            `PRODUCTION_PLANNING_${capacity}` &&
+          value(approval, 'decision') === 'APPROVED'
+      )
+  );
+  const manufactured = items.filter((item) => item.is_manufactured).length;
+  return (
+    <section className="space-y-4" data-testid="review-approve-summary">
+      <div className="rounded border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">Production plan release review</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Review this immutable revision boundary before submission or a
+              functional approval. Approval completes Step 5 only; it does not
+              release work to production.
+            </p>
+          </div>
+          <Badge variant={readiness.ready ? 'default' : 'destructive'}>
+            {readiness.ready ? 'Ready' : 'Blocked'}
+          </Badge>
+        </div>
+        <dl className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+          <OrderFact label="Plan revision" current={plan.revision_number} />
+          <OrderFact label="Effectivity" current={plan.effectivity_reference} />
+          <OrderFact label="Controlled items" current={items.length} />
+          <OrderFact label="Manufactured items" current={manufactured} />
+          <OrderFact
+            label="Functional approvals"
+            current={`${approvedFunctions.length} of 3 recorded`}
+          />
+          <OrderFact
+            label="Stale-source changes"
+            current={readiness.differences.length}
+          />
+          <OrderFact
+            label="Release blockers"
+            current={readiness.blockers.length}
+          />
+        </dl>
+      </div>
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Approval statement</h3>
+        <p
+          className="mt-2 text-sm"
+          data-testid="production-plan-approval-statement"
+        >
+          {productionPlanApprovalStatement}
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Each authorized function records this statement with its own identity,
+          role, PostgreSQL-authoritative time, and revision evidence.
+        </p>
+      </div>
+      {previewLoading && <p>Loading demand-preview totals…</p>}
+      {preview && (
+        <div
+          className="rounded border p-4"
+          data-testid="approval-demand-totals"
+        >
+          <h3 className="font-semibold">Demand preview totals</h3>
+          <div className="mt-3 grid gap-3 md:grid-cols-4">
+            {Object.entries(preview.totals).map(([group, total]) => (
+              <OrderFact
+                key={group}
+                label={group.replace(/([A-Z])/g, ' $1')}
+                current={`${total.lineCount} lines · gross ${total.grossQuantity}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {!!readiness.differences.length && (
+        <div className="rounded border border-red-300 bg-red-50 p-3">
+          <h3 className="font-semibold text-red-800">
+            Source Changed — Review Required
+          </h3>
+          <ul className="mt-2 list-disc pl-5 text-sm text-red-700">
+            {readiness.differences.map((difference) => (
+              <li key={difference}>{difference}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!!readiness.blockers.length && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3">
+          <h3 className="font-semibold">Problems preventing approval</h3>
+          <ul className="mt-2 list-disc pl-5 text-sm">
+            {readiness.blockers.map((blocker) => (
+              <li key={blocker}>{blocker}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ConfirmOrderSummary({
   confirmation,
   plan,
@@ -843,54 +1488,6 @@ function OrderFact({ label, current }: { label: string; current: unknown }) {
         {displayed || 'Information Missing'}
       </p>
     </div>
-  );
-}
-
-function ReviewByExceptionPanel({
-  items,
-  fields,
-}: {
-  items: Row[];
-  fields: Array<[string, string]>;
-}) {
-  return (
-    <section className="space-y-3" data-testid="review-by-exception-panel">
-      <div className="rounded border p-4">
-        <h3 className="font-semibold">Completed from existing EPOCH records</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Values below come from the current controlled Production Planning
-          baseline. Missing values remain visible for review and are not
-          silently replaced.
-        </p>
-      </div>
-      {items.map((item) => (
-        <div className="rounded border p-3" key={value(item, 'id')}>
-          <h4 className="font-medium">
-            {value(item, 'part_number')} — {value(item, 'part_name')}
-          </h4>
-          <dl className="mt-2 grid gap-3 text-sm md:grid-cols-2">
-            {fields.map(([label, key]) => {
-              const current = displayValue(item, key);
-              return (
-                <div key={key}>
-                  <dt className="text-muted-foreground">{label}</dt>
-                  <dd className={current ? '' : 'font-medium text-amber-700'}>
-                    {current || 'Information Missing'}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
-        </div>
-      ))}
-      {!items.length && (
-        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
-          No controlled planning items are available. Return to Confirm the
-          Order and build or refresh the draft from the authoritative
-          configuration.
-        </p>
-      )}
-    </section>
   );
 }
 

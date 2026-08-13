@@ -1,6 +1,16 @@
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { calibrationAssets, calibrationUseLogs, productionWorkOrders, travelerAuthorizations, travelerMaterialConsumption } from '../../schema';
+import {
+  calibrationAssets,
+  calibrationUseLogs,
+  productionWorkOrders,
+  travelerAuthorizations,
+  travelerMaterialConsumption,
+} from '../../schema';
+import {
+  prospectiveAuthorizationEnforcementEnabled,
+  requireApplicableAuthorization,
+} from '../services/certificationAuthorizationService';
 import { eq, and, inArray } from 'drizzle-orm';
 
 export interface GateResult {
@@ -40,7 +50,11 @@ export type AnyGateErrorBody = GateErrorBody | TrainingGateErrorBody;
  * Build a consistent HTTP error body for a gate rejection.
  * Includes both the new structured fields and legacy `error`/`reason` aliases for backward compat.
  */
-export function buildGateErrorBody(gate: string, message: string, detail: string): GateErrorBody {
+export function buildGateErrorBody(
+  gate: string,
+  message: string,
+  detail: string
+): GateErrorBody {
   return { gate, message, detail, error: message, reason: detail };
 }
 
@@ -54,7 +68,7 @@ export function buildTrainingGateErrorBody(
   detail: string,
   missingRequirement?: string,
   requirementType?: string,
-  gate = 'training',
+  gate = 'training'
 ): TrainingGateErrorBody {
   return {
     gate,
@@ -73,7 +87,9 @@ export function buildTrainingGateErrorBody(
  *
  * @param wadId  UUID of the production_work_orders row
  */
-export async function evaluateWadReleaseGate(wadId: string): Promise<GateResult> {
+export async function evaluateWadReleaseGate(
+  wadId: string
+): Promise<GateResult> {
   const [wad] = await db
     .select({
       id: productionWorkOrders.id,
@@ -84,11 +100,18 @@ export async function evaluateWadReleaseGate(wadId: string): Promise<GateResult>
     .where(eq(productionWorkOrders.id, wadId))
     .limit(1);
   if (!wad) {
-    return { allowed: false, reason: 'The linked production work order could not be found.' };
+    return {
+      allowed: false,
+      reason: 'The linked production work order could not be found.',
+    };
   }
 
-  const status = String(wad.status || '').trim().toUpperCase();
-  const wadStatus = String(wad.wadStatus || '').trim().toUpperCase();
+  const status = String(wad.status || '')
+    .trim()
+    .toUpperCase();
+  const wadStatus = String(wad.wadStatus || '')
+    .trim()
+    .toUpperCase();
 
   if (status === 'RELEASED' || status === 'IN_PROGRESS') {
     return { allowed: true };
@@ -96,7 +119,9 @@ export async function evaluateWadReleaseGate(wadId: string): Promise<GateResult>
 
   if (wadStatus === 'APPROVED') {
     await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
-    console.log(`[TravelerGate] Promoted approved WAD ${wad.id} from ${wad.status} to IN_PROGRESS at traveler start`);
+    console.log(
+      `[TravelerGate] Promoted approved WAD ${wad.id} from ${wad.status} to IN_PROGRESS at traveler start`
+    );
     return { allowed: true };
   }
 
@@ -112,12 +137,16 @@ export async function evaluateWadReleaseGate(wadId: string): Promise<GateResult>
  *
  * @param travelerId  UUID of the traveler
  */
-export async function evaluateMaterialReadinessGate(travelerId: string): Promise<GateResult> {
+export async function evaluateMaterialReadinessGate(
+  travelerId: string
+): Promise<GateResult> {
   const traveler = await storage.getTraveler(travelerId);
   if (!traveler) {
     return { allowed: false, reason: 'Traveler not found.' };
   }
-  const hasMaterialOnTraveler = !!(traveler.lotNumber || traveler.internalControlNumber);
+  const hasMaterialOnTraveler = !!(
+    traveler.lotNumber || traveler.internalControlNumber
+  );
   if (!hasMaterialOnTraveler) {
     const [consumption] = await db
       .select({ id: travelerMaterialConsumption.id })
@@ -127,7 +156,8 @@ export async function evaluateMaterialReadinessGate(travelerId: string): Promise
     if (!consumption) {
       return {
         allowed: false,
-        reason: 'No material (lot number or ICN) has been allocated to this traveler. Assign material before starting.',
+        reason:
+          'No material (lot number or ICN) has been allocated to this traveler. Assign material before starting.',
       };
     }
   }
@@ -141,8 +171,15 @@ export interface GateCheckResult {
   reason?: string;
 }
 
-function isCalibrationAssetUsable(asset: { status: string; calibrationDueDate: Date | string | null }): boolean {
-  if (asset.status === 'locked_out' || asset.status === 'expired' || asset.status === 'retired') {
+function isCalibrationAssetUsable(asset: {
+  status: string;
+  calibrationDueDate: Date | string | null;
+}): boolean {
+  if (
+    asset.status === 'locked_out' ||
+    asset.status === 'expired' ||
+    asset.status === 'retired'
+  ) {
     return false;
   }
   if (!asset.calibrationDueDate) return false;
@@ -164,7 +201,9 @@ async function evaluateRequiredCalibrationAssets(
     logBlocked?: boolean;
   } = {}
 ): Promise<GateResult> {
-  const tags = Array.from(new Set(requiredAssetTags.map((tag) => tag.trim()).filter(Boolean)));
+  const tags = Array.from(
+    new Set(requiredAssetTags.map((tag) => tag.trim()).filter(Boolean))
+  );
   if (tags.length === 0) return { allowed: true };
 
   const assets = await db
@@ -178,13 +217,21 @@ async function evaluateRequiredCalibrationAssets(
 
   if (missing.length > 0 || blocked.length > 0) {
     const blockedDetails = blocked.map((asset) => {
-      const due = asset.calibrationDueDate ? ` due ${asset.calibrationDueDate}` : ' with no due date';
+      const due = asset.calibrationDueDate
+        ? ` due ${asset.calibrationDueDate}`
+        : ' with no due date';
       return `${asset.assetTag} (${asset.status}${due})`;
     });
     const reason = [
-      missing.length > 0 ? `Missing calibration asset(s): ${missing.join(', ')}` : null,
-      blockedDetails.length > 0 ? `Unavailable calibration asset(s): ${blockedDetails.join(', ')}` : null,
-    ].filter(Boolean).join('. ');
+      missing.length > 0
+        ? `Missing calibration asset(s): ${missing.join(', ')}`
+        : null,
+      blockedDetails.length > 0
+        ? `Unavailable calibration asset(s): ${blockedDetails.join(', ')}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join('. ');
 
     if (context.logBlocked) {
       await db.insert(calibrationUseLogs).values(
@@ -250,7 +297,11 @@ async function evaluateRequiredCalibrationAssets(
 export async function evaluateTravelerStartGates(
   travelerId: string,
   stepId: string,
-  options: { employeeId?: number; employeeName?: string; skipOperationCertCheck?: boolean } = {}
+  options: {
+    employeeId?: number;
+    employeeName?: string;
+    skipOperationCertCheck?: boolean;
+  } = {}
 ): Promise<GateResult> {
   const traveler = await storage.getTraveler(travelerId);
   if (!traveler) {
@@ -288,42 +339,61 @@ export async function evaluateTravelerStartGates(
       reason: `Employee identity is required before starting this step. Scan a valid badge before starting.`,
     };
   }
+  const verifiedEmployeeId = options.employeeId;
 
   // Gate 2a: Part authorization — when the traveler has a partNumber, the employee
   // must have an active authorization record for that part.
   // Grandfather: only enforce once at least one authorization has been set up for
   // this part (avoids blocking everyone when the system is newly deployed).
   if (traveler.partNumber) {
-    const [anyAuth] = await db
-      .select({ id: travelerAuthorizations.id })
-      .from(travelerAuthorizations)
-      .where(
-        and(
-          eq(travelerAuthorizations.partNumber, traveler.partNumber),
-          eq(travelerAuthorizations.isActive, true)
-        )
-      )
-      .limit(1);
-
-    if (anyAuth) {
-      const [empAuth] = await db
+    if (prospectiveAuthorizationEnforcementEnabled()) {
+      try {
+        await requireApplicableAuthorization({
+          employeeId: verifiedEmployeeId,
+          type: 'WORK',
+          program: 'P2',
+          partNumber: traveler.partNumber,
+          department: step.departmentName,
+          operation: step.departmentName,
+          actionType: 'TRAVELER_START',
+          evidence: { travelerId, travelerStepId: stepId },
+        });
+      } catch (error: any) {
+        return { allowed: false, reason: error.message };
+      }
+    } else {
+      const [anyAuth] = await db
         .select({ id: travelerAuthorizations.id })
         .from(travelerAuthorizations)
         .where(
           and(
-            eq(travelerAuthorizations.employeeId, options.employeeId),
             eq(travelerAuthorizations.partNumber, traveler.partNumber),
             eq(travelerAuthorizations.isActive, true)
           )
         )
         .limit(1);
 
-      if (!empAuth) {
-        const name = options.employeeName || `Employee #${options.employeeId}`;
-        return {
-          allowed: false,
-          reason: `${name} does not have a training authorization for part ${traveler.partNumber}. An authorization record must be created before work can begin.`,
-        };
+      if (anyAuth) {
+        const [empAuth] = await db
+          .select({ id: travelerAuthorizations.id })
+          .from(travelerAuthorizations)
+          .where(
+            and(
+              eq(travelerAuthorizations.employeeId, verifiedEmployeeId),
+              eq(travelerAuthorizations.partNumber, traveler.partNumber),
+              eq(travelerAuthorizations.isActive, true)
+            )
+          )
+          .limit(1);
+
+        if (!empAuth) {
+          const name =
+            options.employeeName || `Employee #${options.employeeId}`;
+          return {
+            allowed: false,
+            reason: `${name} does not have a training authorization for part ${traveler.partNumber}. An authorization record must be created before work can begin.`,
+          };
+        }
       }
     }
   }
@@ -340,13 +410,17 @@ export async function evaluateTravelerStartGates(
       // Phase 1 WARN policy: when skipOperationCertCheck=true, the cert was already
       // evaluated by the training gate above and a WARN was recorded. Do not double-block here.
       if (routingOp.certificationId && !options.skipOperationCertCheck) {
-        const cert = await storage.getCertificationById(routingOp.certificationId);
-        const certName = cert?.name ?? `Certification #${routingOp.certificationId}`;
-        const name = options.employeeName || `Employee #${options.employeeId}`;
-        const hasCert = await storage.checkEmployeeHasValidTrainingCertificationForCert(
-          options.employeeId,
+        const cert = await storage.getCertificationById(
           routingOp.certificationId
         );
+        const certName =
+          cert?.name ?? `Certification #${routingOp.certificationId}`;
+        const name = options.employeeName || `Employee #${options.employeeId}`;
+        const hasCert =
+          await storage.checkEmployeeHasValidTrainingCertificationForCert(
+            verifiedEmployeeId,
+            routingOp.certificationId
+          );
         if (!hasCert) {
           return {
             allowed: false,
@@ -356,20 +430,24 @@ export async function evaluateTravelerStartGates(
       }
 
       // Load active qualifications once for both machine-class and operation-type checks.
-      const activeQuals = await storage.getActiveEmployeeMachineQualificationsForEmployee(
-        options.employeeId
-      );
+      const activeQuals =
+        await storage.getActiveEmployeeMachineQualificationsForEmployee(
+          verifiedEmployeeId
+        );
 
       // Gate 2c: Machine-class qualification — if the routing operation has a CNC
       // extension with a machineClass, the employee must hold an active, non-expired
       // MACHINE_CLASS qualification for that class.
-      const cncOp = await storage.getRoutingCncOperationForRoutingOp(routingOp.id);
+      const cncOp = await storage.getRoutingCncOperationForRoutingOp(
+        routingOp.id
+      );
       if (cncOp?.machineClass) {
         const hasMachineQual = activeQuals.some(
           (q) => q.machineClass === cncOp.machineClass
         );
         if (!hasMachineQual) {
-          const name = options.employeeName || `Employee #${options.employeeId}`;
+          const name =
+            options.employeeName || `Employee #${options.employeeId}`;
           return {
             allowed: false,
             reason: `${name} does not have a valid machine-class qualification for "${cncOp.machineClass}". A qualification must be granted by an admin before starting this step.`,
@@ -385,7 +463,8 @@ export async function evaluateTravelerStartGates(
           (q) => q.operationType === routingOp.operationType
         );
         if (!hasOpTypeQual) {
-          const name = options.employeeName || `Employee #${options.employeeId}`;
+          const name =
+            options.employeeName || `Employee #${options.employeeId}`;
           return {
             allowed: false,
             reason: `${name} does not have a valid operation-type qualification for "${routingOp.operationType}". A qualification must be granted by an admin before starting this step.`,
@@ -411,7 +490,9 @@ export async function evaluateTravelerStartGates(
   }
 
   // Gate 3: Material — a lot/ICN must be allocated to the traveler
-  const hasMaterialOnTraveler = !!(traveler.lotNumber || traveler.internalControlNumber);
+  const hasMaterialOnTraveler = !!(
+    traveler.lotNumber || traveler.internalControlNumber
+  );
   if (!hasMaterialOnTraveler) {
     const [consumption] = await db
       .select({ id: travelerMaterialConsumption.id })
@@ -422,7 +503,8 @@ export async function evaluateTravelerStartGates(
     if (!consumption) {
       return {
         allowed: false,
-        reason: 'No material (lot number or ICN) has been allocated to this traveler. Assign material before starting.',
+        reason:
+          'No material (lot number or ICN) has been allocated to this traveler. Assign material before starting.',
       };
     }
   }
@@ -444,19 +526,32 @@ export async function evaluateStartGatesDetailed(
 
   const traveler = await storage.getTraveler(travelerId);
   if (!traveler) {
-    return [{ key: 'traveler', label: 'Traveler', passed: false, reason: 'Traveler not found.' }];
+    return [
+      {
+        key: 'traveler',
+        label: 'Traveler',
+        passed: false,
+        reason: 'Traveler not found.',
+      },
+    ];
   }
 
   const step = await storage.getTravelerStep(stepId);
   if (!step) {
-    return [{ key: 'step', label: 'Step', passed: false, reason: 'Step not found.' }];
+    return [
+      { key: 'step', label: 'Step', passed: false, reason: 'Step not found.' },
+    ];
   }
 
   // Gate 1: Sequence
   const allSteps = await storage.getTravelerSteps(travelerId);
   const currentIndex = allSteps.findIndex((s) => s.id === stepId);
   if (currentIndex === 0) {
-    results.push({ key: 'sequence', label: 'Previous step done', passed: true });
+    results.push({
+      key: 'sequence',
+      label: 'Previous step done',
+      passed: true,
+    });
   } else {
     const previousStep = allSteps[currentIndex - 1];
     if (previousStep.status !== 'COMPLETED') {
@@ -467,7 +562,11 @@ export async function evaluateStartGatesDetailed(
         reason: `Step ${previousStep.stepNumber} (${previousStep.departmentName}) must be completed first.`,
       });
     } else {
-      results.push({ key: 'sequence', label: 'Previous step done', passed: true });
+      results.push({
+        key: 'sequence',
+        label: 'Previous step done',
+        passed: true,
+      });
     }
   }
 
@@ -488,15 +587,42 @@ export async function evaluateStartGatesDetailed(
         key: 'training',
         label: 'Training verified',
         passed: false,
-        reason: 'Cannot verify training authorization — identity required first.',
+        reason:
+          'Cannot verify training authorization — identity required first.',
       });
     }
   } else {
+    const verifiedEmployeeId = options.employeeId;
     results.push({ key: 'identity', label: 'Employee identity', passed: true });
 
     // Gate 2a: Part authorization (only when traveler has a partNumber).
     // Grandfather: only enforce when at least one authorization exists for this part.
-    if (traveler.partNumber) {
+    if (traveler.partNumber && prospectiveAuthorizationEnforcementEnabled()) {
+      try {
+        await requireApplicableAuthorization({
+          employeeId: verifiedEmployeeId,
+          type: 'WORK',
+          program: 'P2',
+          partNumber: traveler.partNumber,
+          department: step.departmentName,
+          operation: step.departmentName,
+          actionType: 'TRAVELER_START',
+          evidence: { travelerId, travelerStepId: stepId },
+        });
+        results.push({
+          key: 'training',
+          label: 'Work authorization',
+          passed: true,
+        });
+      } catch (error: any) {
+        results.push({
+          key: 'training',
+          label: 'Work authorization',
+          passed: false,
+          reason: error.message,
+        });
+      }
+    } else if (traveler.partNumber) {
       const [anyAuth] = await db
         .select({ id: travelerAuthorizations.id })
         .from(travelerAuthorizations)
@@ -514,7 +640,7 @@ export async function evaluateStartGatesDetailed(
           .from(travelerAuthorizations)
           .where(
             and(
-              eq(travelerAuthorizations.employeeId, options.employeeId),
+              eq(travelerAuthorizations.employeeId, verifiedEmployeeId),
               eq(travelerAuthorizations.partNumber, traveler.partNumber),
               eq(travelerAuthorizations.isActive, true)
             )
@@ -530,7 +656,11 @@ export async function evaluateStartGatesDetailed(
             reason: `${name} does not have a training authorization for part ${traveler.partNumber}.`,
           });
         } else {
-          results.push({ key: 'training', label: 'Training verified', passed: true });
+          results.push({
+            key: 'training',
+            label: 'Training verified',
+            passed: true,
+          });
         }
       }
     }
@@ -545,8 +675,11 @@ export async function evaluateStartGatesDetailed(
     if (routingOp) {
       // Gate 2b: Operation certification
       if (routingOp.certificationId) {
-        const cert = await storage.getCertificationById(routingOp.certificationId);
-        const certName = cert?.name ?? `Certification #${routingOp.certificationId}`;
+        const cert = await storage.getCertificationById(
+          routingOp.certificationId
+        );
+        const certName =
+          cert?.name ?? `Certification #${routingOp.certificationId}`;
         if (!options.employeeId) {
           results.push({
             key: 'operation_cert',
@@ -555,11 +688,13 @@ export async function evaluateStartGatesDetailed(
             reason: `Employee identity is required to verify the ${certName} certification for this routing step.`,
           });
         } else {
-          const name = options.employeeName || `Employee #${options.employeeId}`;
-          const hasCert = await storage.checkEmployeeHasValidTrainingCertificationForCert(
-            options.employeeId,
-            routingOp.certificationId
-          );
+          const name =
+            options.employeeName || `Employee #${options.employeeId}`;
+          const hasCert =
+            await storage.checkEmployeeHasValidTrainingCertificationForCert(
+              options.employeeId,
+              routingOp.certificationId
+            );
           if (!hasCert) {
             results.push({
               key: 'operation_cert',
@@ -568,21 +703,31 @@ export async function evaluateStartGatesDetailed(
               reason: `${name} does not hold a valid, non-expired ${certName} certification required by this routing step.`,
             });
           } else {
-            results.push({ key: 'operation_cert', label: `Operation cert: ${certName}`, passed: true });
+            results.push({
+              key: 'operation_cert',
+              label: `Operation cert: ${certName}`,
+              passed: true,
+            });
           }
         }
       }
 
       if (options.employeeId) {
-        const activeQuals = await storage.getActiveEmployeeMachineQualificationsForEmployee(
-          options.employeeId
-        );
+        const activeQuals =
+          await storage.getActiveEmployeeMachineQualificationsForEmployee(
+            options.employeeId
+          );
 
         // Gate 2c: Machine-class qualification
-        const cncOp = await storage.getRoutingCncOperationForRoutingOp(routingOp.id);
+        const cncOp = await storage.getRoutingCncOperationForRoutingOp(
+          routingOp.id
+        );
         if (cncOp?.machineClass) {
-          const hasMachineQual = activeQuals.some((q) => q.machineClass === cncOp.machineClass);
-          const name = options.employeeName || `Employee #${options.employeeId}`;
+          const hasMachineQual = activeQuals.some(
+            (q) => q.machineClass === cncOp.machineClass
+          );
+          const name =
+            options.employeeName || `Employee #${options.employeeId}`;
           results.push({
             key: 'machine_class',
             label: `Machine class: ${cncOp.machineClass}`,
@@ -597,8 +742,11 @@ export async function evaluateStartGatesDetailed(
         // specifies an operationType.
         if (routingOp.operationType) {
           {
-            const hasOpTypeQual = activeQuals.some((q) => q.operationType === routingOp.operationType);
-            const name = options.employeeName || `Employee #${options.employeeId}`;
+            const hasOpTypeQual = activeQuals.some(
+              (q) => q.operationType === routingOp.operationType
+            );
+            const name =
+              options.employeeName || `Employee #${options.employeeId}`;
             results.push({
               key: 'operation_type',
               label: `Operation type: ${routingOp.operationType}`,
@@ -635,7 +783,9 @@ export async function evaluateStartGatesDetailed(
   }
 
   // Gate 3: Material
-  const hasMaterialOnTraveler = !!(traveler.lotNumber || traveler.internalControlNumber);
+  const hasMaterialOnTraveler = !!(
+    traveler.lotNumber || traveler.internalControlNumber
+  );
   if (!hasMaterialOnTraveler) {
     const [consumption] = await db
       .select({ id: travelerMaterialConsumption.id })
@@ -648,10 +798,15 @@ export async function evaluateStartGatesDetailed(
         key: 'material',
         label: 'Material assigned',
         passed: false,
-        reason: 'No material (lot number or ICN) has been allocated to this traveler.',
+        reason:
+          'No material (lot number or ICN) has been allocated to this traveler.',
       });
     } else {
-      results.push({ key: 'material', label: 'Material assigned', passed: true });
+      results.push({
+        key: 'material',
+        label: 'Material assigned',
+        passed: true,
+      });
     }
   } else {
     results.push({ key: 'material', label: 'Material assigned', passed: true });
@@ -668,7 +823,9 @@ export async function evaluateStartGatesDetailed(
  *
  * @param stepId UUID of the step being finished
  */
-export async function evaluateTravelerFinishGates(stepId: string): Promise<GateResult> {
+export async function evaluateTravelerFinishGates(
+  stepId: string
+): Promise<GateResult> {
   const tasks = await storage.getTravelerTasks(stepId);
 
   const isCompletionGate = (t: { taskType: string }) =>

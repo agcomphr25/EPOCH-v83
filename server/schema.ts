@@ -6314,26 +6314,100 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
-  id: serial('id').primaryKey(),
-  poId: integer('po_id')
-    .references(() => p2PurchaseOrders.id)
-    .notNull(),
-  inventoryItemId: integer('inventory_item_id').references(
-    () => inventoryItems.id
-  ), // FK to inventory_items
-  partNumber: text('part_number').notNull(), // P2-specific part number
-  partName: text('part_name').notNull(), // Display name for the part
-  quantity: integer('quantity').notNull(),
-  demandLineIdentity: uuid('demand_line_identity').defaultRandom().notNull(),
-  dueDate: date('due_date'),
-  unitPrice: real('unit_price').default(0), // Price per unit
-  totalPrice: real('total_price').default(0), // quantity * unitPrice
-  specifications: text('specifications'), // Part specifications
-  notes: text('notes'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
+export const p2PurchaseOrderItems = pgTable(
+  'p2_purchase_order_items',
+  {
+    id: serial('id').primaryKey(),
+    poId: integer('po_id')
+      .references(() => p2PurchaseOrders.id)
+      .notNull(),
+    inventoryItemId: integer('inventory_item_id').references(
+      () => inventoryItems.id
+    ), // FK to inventory_items
+    partNumber: text('part_number').notNull(), // P2-specific part number
+    partName: text('part_name').notNull(), // Display name for the part
+    quantity: integer('quantity').notNull(),
+    demandLineIdentity: uuid('demand_line_identity').defaultRandom().notNull(),
+    dueDate: date('due_date'),
+    unitPrice: real('unit_price').default(0), // Price per unit
+    totalPrice: real('total_price').default(0), // quantity * unitPrice
+    specifications: text('specifications'), // Part specifications
+    notes: text('notes'),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  (table) => ({
+    // Composite unique required by the p2_demand_event_item_identity_fk and
+    // related composite FKs in migrations 0262, 0264, 0265.
+    idDemandIdentityUnique: unique('p2_po_items_id_demand_identity_unique').on(
+      table.id,
+      table.demandLineIdentity
+    ),
+  })
+);
+
+// P2 customer-demand quantity event ledger. Migration 0262 is the database
+// authority for immutability triggers and CHECK constraints; this schema
+// entry exists so Drizzle's schema-diff produces the correct composite FK
+// column order instead of re-ordering by attnum during introspection.
+export const p2CustomerDemandQuantityEvents = pgTable(
+  'p2_customer_demand_quantity_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    // demand_line_identity is attnum 2; po_id/po_item_id are attnums 3/4.
+    // Column order here matches the live DB so Drizzle generates no drift.
+    demandLineIdentity: uuid('demand_line_identity').notNull(),
+    poId: integer('po_id')
+      .notNull()
+      .references(() => p2PurchaseOrders.id, { onDelete: 'restrict' }),
+    poItemId: integer('po_item_id')
+      .notNull()
+      .references(() => p2PurchaseOrderItems.id, { onDelete: 'restrict' }),
+    eventType: text('event_type').notNull(),
+    quantityDelta: numeric('quantity_delta', {
+      precision: 18,
+      scale: 6,
+    }).notNull(),
+    unitOfMeasure: text('unit_of_measure').notNull(),
+    effectiveAt: timestamp('effective_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    customerEvidenceReference: text('customer_evidence_reference'),
+    reason: text('reason').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    priorEventHash: text('prior_event_hash'),
+    eventHash: text('event_hash').notNull(),
+    recordedBy: integer('recorded_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    recordedByDisplayName: text('recorded_by_display_name').notNull(),
+    recordedByRole: text('recorded_by_role').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    // Named unique constraints — match the names in migration 0262.
+    idempotencyUnique: unique('p2_demand_event_idempotency_unique').on(
+      table.demandLineIdentity,
+      table.idempotencyKey
+    ),
+    hashUnique: unique('p2_demand_event_hash_unique').on(table.eventHash),
+    // Composite FK: poItemId → p2_purchase_order_items.id
+    //               demandLineIdentity → p2_purchase_order_items.demand_line_identity
+    // Column order here (poItemId first) is intentional — it matches the
+    // referenced unique constraint p2_po_items_id_demand_identity_unique(id, demand_line_identity)
+    // and avoids Drizzle's attnum-sort introspection bug that reverses the order.
+    itemIdentityFk: foreignKey({
+      name: 'p2_demand_event_item_identity_fk',
+      columns: [table.poItemId, table.demandLineIdentity],
+      foreignColumns: [
+        p2PurchaseOrderItems.id,
+        p2PurchaseOrderItems.demandLineIdentity,
+      ],
+    }).onDelete('restrict'),
+  })
+);
 
 export const projectRomDrafts = pgTable(
   'project_rom_drafts',
@@ -17443,6 +17517,10 @@ export const routingDocuments = pgTable(
     fileName: varchar('file_name', { length: 500 }),
     fileType: varchar('file_type', { length: 100 }),
     fileSize: integer('file_size'),
+    controlledDocumentId: uuid('controlled_document_id').references(
+      () => controlledDocuments.id,
+      { onDelete: 'restrict' }
+    ),
 
     extractedText: text('extracted_text'),
     aiExtractedContent: jsonb('ai_extracted_content'),
@@ -17469,6 +17547,9 @@ export const routingDocuments = pgTable(
     ),
     departmentIdx: index('routing_documents_department_idx').on(
       table.departmentName
+    ),
+    controlledDocumentIdx: index('routing_documents_controlled_document_idx').on(
+      table.controlledDocumentId
     ),
   })
 );
@@ -22941,6 +23022,68 @@ export const designControlStepApprovals = pgTable(
     ),
     projectIdx: index('design_control_step_approvals_project_idx').on(
       table.rdProjectId
+    ),
+  })
+);
+
+export const designControlStepApprovalAssignments = pgTable(
+  'design_control_step_approval_assignments',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    rdProjectId: text('rd_project_id')
+      .notNull()
+      .references(() => rdProjects.id, { onDelete: 'restrict' }),
+    designControlRecordId: uuid('design_control_record_id')
+      .notNull()
+      .references(() => designControlRecords.id, { onDelete: 'restrict' }),
+    designControlStepId: uuid('design_control_step_id')
+      .notNull()
+      .references(() => designControlSteps.id, { onDelete: 'restrict' }),
+    stepContentVersionId: uuid('step_content_version_id')
+      .notNull()
+      .references(() => designControlStepContentVersions.id, {
+        onDelete: 'restrict',
+      }),
+    approvalKey: text('approval_key').notNull(),
+    approvalRoleSnapshot: text('approval_role_snapshot').notNull(),
+    employeeId: integer('employee_id')
+      .notNull()
+      .references(() => employees.id, { onDelete: 'restrict' }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    employeeCodeSnapshot: text('employee_code_snapshot'),
+    approverNameSnapshot: text('approver_name_snapshot').notNull(),
+    jobTitleSnapshot: text('job_title_snapshot'),
+    departmentSnapshot: text('department_snapshot'),
+    accountStatusSnapshot: text('account_status_snapshot').notNull(),
+    requiredCapabilitySnapshot: text('required_capability_snapshot').notNull(),
+    status: text('status').notNull().default('PENDING'),
+    decisionId: uuid('decision_id').references(
+      () => designControlStepApprovals.id,
+      { onDelete: 'restrict' }
+    ),
+    assignedByUserId: integer('assigned_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    assignedAt: timestamp('assigned_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
+  },
+  (table) => ({
+    versionSlotUnique: uniqueIndex(
+      'dc_step_approval_assignments_version_slot_uq'
+    )
+      .on(table.stepContentVersionId, table.approvalKey)
+      .where(sql`${table.status} <> 'REASSIGNED'`),
+    versionIdx: index('dc_step_approval_assignments_version_idx').on(
+      table.stepContentVersionId
     ),
   })
 );
@@ -28509,6 +28652,61 @@ export const projectProductionDemandExecutionLinks = pgTable(
     linkType: text('link_type').notNull(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   }
+);
+
+export const projectProductionDemandSerializedUnits = pgTable(
+  'project_production_demand_serialized_units',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'restrict' }),
+    demandId: uuid('demand_id')
+      .notNull()
+      .references(() => projectProductionDemands.id, { onDelete: 'restrict' }),
+    p2ProductionOrderId: integer('p2_production_order_id')
+      .notNull()
+      .references(() => p2ProductionOrders.id, { onDelete: 'restrict' }),
+    serializedItemId: uuid('serialized_item_id')
+      .notNull()
+      .references(() => p2SerializedItems.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    serializedItemUnique: uniqueIndex(
+      'project_production_demand_serialized_units_item_unique'
+    ).on(table.serializedItemId),
+    demandItemUnique: uniqueIndex(
+      'project_production_demand_serialized_units_demand_item_unique'
+    ).on(table.demandId, table.serializedItemId),
+  })
+);
+
+export const projectProductionSerializedUnitTravelers = pgTable(
+  'project_production_serialized_unit_travelers',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'restrict' }),
+    serializedUnitLinkId: uuid('serialized_unit_link_id')
+      .notNull()
+      .references(() => projectProductionDemandSerializedUnits.id, {
+        onDelete: 'restrict',
+      }),
+    travelerId: varchar('traveler_id', { length: 255 })
+      .notNull()
+      .references(() => travelers.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    serializedUnitUnique: uniqueIndex(
+      'project_production_serialized_unit_travelers_unit_unique'
+    ).on(table.serializedUnitLinkId),
+    travelerUnique: uniqueIndex(
+      'project_production_serialized_unit_travelers_traveler_unique'
+    ).on(table.travelerId),
+  })
 );
 
 export const projectProductionDemandAllocations = pgTable(

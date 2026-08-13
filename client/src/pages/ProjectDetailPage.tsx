@@ -104,6 +104,66 @@ function BomAssemblyTreeNode({ node, isRoot = false }: { node: any; isRoot?: boo
   );
 }
 
+function ProductionHierarchyNode({ node, isRoot = false }: { node: any; isRoot?: boolean }) {
+  const workOrders = Array.isArray(node.workOrders) ? node.workOrders : [];
+  const demand = node.productionDemand ?? {};
+  const departments = Array.isArray(demand.departments) ? demand.departments : [];
+  const isPurchased = node.sourceType === 'PURCHASED_MATERIAL';
+  const typeLabel = node.sourceType === 'ASSEMBLY_WORK_ORDER'
+    ? 'Assembly work order'
+    : isPurchased
+      ? 'Purchased material'
+      : `${departments.join(' / ') || 'Manufactured'} work order`;
+
+  return (
+    <div className={isRoot ? '' : 'ml-4 border-l pl-4'}>
+      <div className="rounded-md border bg-background p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-mono text-sm font-semibold">{node.partNumber}</p>
+            <p className="truncate text-xs text-muted-foreground">{node.partName || 'No part description'}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant={isPurchased ? 'secondary' : 'default'}>{typeLabel}</Badge>
+            <Badge variant="outline">Required {Number(node.requiredQuantity ?? 0).toLocaleString()}</Badge>
+          </div>
+        </div>
+        {isPurchased ? (
+          <p className="mt-2 text-xs text-muted-foreground">Purchase demand only - no production work order.</p>
+        ) : workOrders.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {workOrders.map((wo: any) => (
+              <Badge key={wo.id ?? wo.workOrderNumber ?? wo.work_order_number} variant="outline">
+                {wo.workOrderNumber ?? wo.work_order_number} - Qty {Number(wo.quantity ?? 0).toLocaleString()}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs font-medium text-amber-700">Required work order has not been provisioned.</p>
+        )}
+        {!isPurchased && Number(demand.recordCount ?? 0) > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Production demand: {Number(demand.totalQuantity ?? 0).toLocaleString()}
+            {demand.legacyUnitRows ? ` (${Number(demand.recordCount).toLocaleString()} historical unit rows collapsed for display)` : ''}
+          </p>
+        )}
+      </div>
+      {Array.isArray(node.children) && node.children.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {node.children.map((child: any) => <ProductionHierarchyNode key={child.key} node={child} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function hasMissingManufacturingWorkOrder(node: any): boolean {
+  if (!node) return false;
+  const required = node.sourceType !== 'PURCHASED_MATERIAL';
+  if (required && (!Array.isArray(node.workOrders) || node.workOrders.length === 0)) return true;
+  return Array.isArray(node.children) && node.children.some(hasMissingManufacturingWorkOrder);
+}
+
 const ROM_CATEGORY_CONFIG = [
   { key: 'labor', label: 'Labor', field: 'quotedHours', kind: 'hours', detail: 'Direct labor estimate from ROM/quote feedback' },
   { key: 'material', label: 'Material', field: 'budgetAmount', kind: 'currency', detail: 'Material budget that will seed the WAD' },
@@ -847,6 +907,37 @@ export default function ProjectDetailPage() {
     queryKey: ['/api/projects', id, 'p2-hub'],
     queryFn: () => fetch(`/api/projects/${id}/p2-hub`).then(r => r.json()),
     enabled: !!id,
+  });
+
+  const createManufacturingWorkOrders = useMutation({
+    mutationFn: async () => {
+      const action = p2Hub?.tabs?.production?.manufacturingWorkOrderAction;
+      if (!action?.launchId || !action?.expectedLaunchDigest)
+        throw new Error('Complete Production Launch before creating manufacturing work orders.');
+      if (!action.enabled)
+        throw new Error('Manufacturing work-order creation is not enabled for this deployment yet.');
+      return apiRequest(
+        `/api/projects/${id}/workflow-v2/production-planning/launch/${action.launchId}/create-manufacturing-work-orders`,
+        {
+          method: 'POST',
+          body: {
+            idempotencyKey: `manufacturing-work-orders:${action.launchId}`,
+            expectedLaunchDigest: action.expectedLaunchDigest,
+            signatureMeaning: 'Create manufacturing work orders from the released BOM and routing.',
+          },
+        }
+      );
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'p2-hub'] });
+      toast({ title: result?.message || 'Manufacturing work orders created' });
+    },
+    onError: (error: any) =>
+      toast({
+        title: 'Work orders could not be created',
+        description: error?.message || 'Check the released BOM, routing, and WAD information.',
+        variant: 'destructive',
+      }),
   });
 
   interface GateStatus {
@@ -3819,7 +3910,6 @@ export default function ProjectDetailPage() {
                 ) : (
                   productionLinePlacements.map((line: any) => {
                     const lineWorkOrders = Array.isArray(line.workOrders) ? line.workOrders : [];
-                    const lineProductionOrders = Array.isArray(line.productionOrders) ? line.productionOrders : [];
                     const lineSerializedItems = Array.isArray(line.serializedItems) ? line.serializedItems : [];
                     const inProductionQuantity = Math.max(0, Number(line.serializedQuantity ?? 0) - Number(line.completedQuantity ?? 0));
 
@@ -3861,7 +3951,7 @@ export default function ProjectDetailPage() {
                           )}
                         </div>
 
-                        <div className="mt-4 grid gap-3 xl:grid-cols-3">
+                        <div className="mt-4 grid gap-3 xl:grid-cols-2">
                           <div className="rounded-md border bg-muted/20 p-3">
                             <div className="mb-2 flex items-center justify-between gap-2">
                               <p className="text-sm font-medium">Serialized / Traveler Status</p>
@@ -3913,29 +4003,32 @@ export default function ProjectDetailPage() {
                             )}
                           </div>
 
-                          <div className="rounded-md border bg-muted/20 p-3">
-                            <div className="mb-2 flex items-center justify-between gap-2">
-                              <p className="text-sm font-medium">Production Orders</p>
-                              <Badge variant="secondary">{formatQuantityLabel(lineProductionOrders.length)}</Badge>
+                        </div>
+
+                        <div className="mt-3 rounded-md border bg-muted/20 p-3">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium">Manufacturing Structure</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary">BOM driven</Badge>
+                              {!hubProduction.manufacturingWorkOrderAction?.completed &&
+                                (hasMissingManufacturingWorkOrder(line.manufacturingHierarchy) ||
+                                  Boolean(line.manufacturingHierarchy)) && (
+                                <Button
+                                  size="sm"
+                                  disabled={createManufacturingWorkOrders.isPending}
+                                  onClick={() => createManufacturingWorkOrders.mutate()}
+                                  data-testid="create-manufacturing-work-orders"
+                                >
+                                  {createManufacturingWorkOrders.isPending ? 'Creating...' : 'Create Manufacturing Work Orders'}
+                                </Button>
+                              )}
                             </div>
-                            {lineProductionOrders.length === 0 ? (
-                              <p className="text-sm text-muted-foreground">No generated production-order rows are linked to this PO line.</p>
-                            ) : (
-                              <div className="space-y-2">
-                                {lineProductionOrders.slice(0, 5).map((order: any) => (
-                                  <div key={order.id} className="rounded-md border bg-background p-2">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <p className="truncate font-medium">{order.order_id}</p>
-                                      <Badge variant="outline">{order.status ?? 'Unknown'}</Badge>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                      Qty {formatQuantityLabel(order.quantity)} - Made {formatQuantityLabel(order.quantity_manufactured)}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
                           </div>
+                          {line.manufacturingHierarchy ? (
+                            <ProductionHierarchyNode node={line.manufacturingHierarchy} isRoot />
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No released BOM hierarchy is linked to this PO line.</p>
+                          )}
                         </div>
                       </div>
                     );

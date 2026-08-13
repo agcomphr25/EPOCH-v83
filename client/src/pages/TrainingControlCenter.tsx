@@ -14,6 +14,7 @@ import {
   UserCheck,
   BookOpen,
   Wrench
+  ,Award
 } from 'lucide-react';
 
 import Training from './Training';
@@ -22,6 +23,7 @@ import TrainingManagement from './TrainingManagement';
 import TrainingMatrixManage from './TrainingMatrixManage';
 import TrainTheTrainer from './TrainTheTrainer';
 import TrainingContentLibrary from './TrainingContentLibrary';
+import CertificationAuthorizationMatrix from './CertificationAuthorizationMatrix';
 
 interface TrainingStats {
   totalModules: number;
@@ -32,7 +34,7 @@ interface TrainingStats {
 }
 
 type Language = 'en' | 'es';
-type TrainingTab = 'modules' | 'library' | 'matrix' | 'assignments' | 'trainer' | 'management';
+type TrainingTab = 'modules' | 'library' | 'matrix' | 'authorizations' | 'assignments' | 'trainer' | 'management';
 
 const translations = {
   en: {
@@ -168,7 +170,7 @@ export default function TrainingControlCenter() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="flex items-center gap-2">
-          <TabsList className="grid flex-1 grid-cols-6">
+          <TabsList className="grid flex-1 grid-cols-7">
           <TabsTrigger value="modules" className="flex items-center gap-2" data-testid="tab-modules">
             <GraduationCap className="h-4 w-4" />
             {t.tabModules}
@@ -180,6 +182,9 @@ export default function TrainingControlCenter() {
           <TabsTrigger value="matrix" className="flex items-center gap-2" data-testid="tab-matrix">
             <LayoutGrid className="h-4 w-4" />
             {t.tabMatrix}
+          </TabsTrigger>
+          <TabsTrigger value="authorizations" className="flex items-center gap-2" data-testid="tab-authorizations">
+            <Award className="h-4 w-4" /> Authorizations
           </TabsTrigger>
           <TabsTrigger value="assignments" className="flex items-center gap-2" data-testid="tab-assignments">
             <Users className="h-4 w-4" />
@@ -215,6 +220,9 @@ export default function TrainingControlCenter() {
 
         <TabsContent value="matrix" className="space-y-4">
           <TrainingMatrixView />
+        </TabsContent>
+        <TabsContent value="authorizations" className="space-y-4">
+          <CertificationAuthorizationMatrix />
         </TabsContent>
 
         <TabsContent value="assignments" className="space-y-4">

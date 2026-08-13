@@ -29,6 +29,11 @@ import { ensureProjectHasWAD } from '../lib/wadHelper';
 import { evaluateDocumentationRequirements } from '../lib/documentationRequirementsEngine';
 import { cancelWadWorkOrdersSupersededByP2 } from '../services/wadSupersedeService';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
+import {
+  isP2V2ExecutionAuthorizationEnabled,
+  isP2V2ProductionOrderProvisioningEnabled,
+  isP2V2WorkOrderProvisioningEnabled,
+} from '../lib/featureFlags';
 import { resolveCustomersIntegerId } from '../lib/customerResolver';
 import { getQuoteContractReviewGate } from '../services/quoteContractService';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
@@ -4171,6 +4176,25 @@ router.get('/:id/p2-hub', async (req, res) => {
         unreleasedQuantity: 0,
       }
     );
+    const manufacturingWorkOrderLaunch =
+      (
+        await pool.query(
+          `SELECT id, preview_digest AS "previewDigest", status
+           FROM project_production_launches
+          WHERE project_id = $1 AND status = 'COMPLETE'
+          ORDER BY launched_at DESC
+          LIMIT 1`,
+          [id]
+        )
+      ).rows[0] ?? null;
+    const manufacturingWorkOrderAction = {
+      launchId: manufacturingWorkOrderLaunch?.id ?? null,
+      expectedLaunchDigest: manufacturingWorkOrderLaunch?.previewDigest ?? null,
+      enabled:
+        isP2V2ExecutionAuthorizationEnabled() &&
+        isP2V2ProductionOrderProvisioningEnabled() &&
+        isP2V2WorkOrderProvisioningEnabled(),
+    };
     const laborBudgetHours = workOrders.reduce(
       (sum: number, workOrder: LegacyProjectValue) => {
         const hours = Number(workOrder.totalBudgetHours ?? 0);
@@ -4679,6 +4703,7 @@ router.get('/:id/p2-hub', async (req, res) => {
             ...productionTotals,
           },
           poLinePlacements,
+          manufacturingWorkOrderAction,
           productionOrders,
           serializedItems,
           assemblyTree: {

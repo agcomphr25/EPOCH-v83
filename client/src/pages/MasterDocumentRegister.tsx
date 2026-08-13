@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FileText,
   Plus,
@@ -44,6 +45,7 @@ import {
   Upload,
   Printer,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import type {
   ControlledDocument,
@@ -255,6 +257,8 @@ export default function MasterDocumentRegister() {
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [activeSection, setActiveSection] = useState('register');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
@@ -282,9 +286,15 @@ export default function MasterDocumentRegister() {
   const { toast } = useToast();
 
   // Fetch controlled documents
-  const { data: documents = [], isLoading } = useQuery<
-    ControlledDocumentView[]
-  >({ queryKey: ['/api/controlled-documents'] });
+  const {
+    data: documents = [],
+    isLoading,
+    isError: isDocumentsError,
+    error: documentsError,
+    refetch: refetchDocuments,
+  } = useQuery<ControlledDocumentView[]>({
+    queryKey: ['/api/controlled-documents'],
+  });
 
   const {
     data: designControlTemplates = [],
@@ -481,6 +491,27 @@ export default function MasterDocumentRegister() {
 
     return matchesSearch && matchesDepartment && matchesType && matchesStatus;
   });
+
+  const PAGE_SIZE = 25;
+  const totalPages = Math.max(1, Math.ceil(filteredDocuments.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const visibleDocuments = filteredDocuments.slice(
+    (safeCurrentPage - 1) * PAGE_SIZE,
+    safeCurrentPage * PAGE_SIZE
+  );
+  const hasActiveFilters = Boolean(
+    searchQuery ||
+      departmentFilter !== 'all' ||
+      typeFilter !== 'all' ||
+      statusFilter !== 'all'
+  );
+  const clearFilters = () => {
+    setSearchQuery('');
+    setDepartmentFilter('all');
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setCurrentPage(1);
+  };
 
   const getStatusBadge = (doc: ControlledDocumentView) => {
     const compatibilityStatus = doc.compatibilityStatus ?? undefined;
@@ -1136,10 +1167,10 @@ export default function MasterDocumentRegister() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto ml-16">
+      <div className="mx-auto max-w-[1600px] md:pl-16">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
                 <FileText className="h-8 w-8 text-blue-600" />
@@ -1149,7 +1180,7 @@ export default function MasterDocumentRegister() {
                 Controlled documents for P1 and P2 operations
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
               {can('documents.number_admin') && (
                 <Button variant="outline" onClick={downloadLegacyAuditReport}>
                   Legacy Audit Report
@@ -1224,7 +1255,19 @@ export default function MasterDocumentRegister() {
           )}
         </div>
 
+        <Tabs value={activeSection} onValueChange={setActiveSection} className="mb-6">
+          <TabsList className="grid w-full max-w-xl grid-cols-2">
+            <TabsTrigger value="register">
+              Document Register ({documents.length})
+            </TabsTrigger>
+            <TabsTrigger value="templates">
+              Design Control Templates ({designControlTemplates.length})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Filters */}
+        {activeSection === 'register' && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -1240,7 +1283,10 @@ export default function MasterDocumentRegister() {
                 <Input
                   placeholder="Search documents..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="pl-10"
                   data-testid="input-search-documents"
                 />
@@ -1249,7 +1295,10 @@ export default function MasterDocumentRegister() {
               {/* Department Filter */}
               <Select
                 value={departmentFilter}
-                onValueChange={setDepartmentFilter}
+                onValueChange={(value) => {
+                  setDepartmentFilter(value);
+                  setCurrentPage(1);
+                }}
               >
                 <SelectTrigger data-testid="select-department-filter">
                   <SelectValue placeholder="All Departments" />
@@ -1264,7 +1313,10 @@ export default function MasterDocumentRegister() {
               </Select>
 
               {/* Type Filter */}
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <Select value={typeFilter} onValueChange={(value) => {
+                setTypeFilter(value);
+                setCurrentPage(1);
+              }}>
                 <SelectTrigger data-testid="select-type-filter">
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
@@ -1278,7 +1330,10 @@ export default function MasterDocumentRegister() {
               </Select>
 
               {/* Status Filter */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={(value) => {
+                setStatusFilter(value);
+                setCurrentPage(1);
+              }}>
                 <SelectTrigger data-testid="select-status-filter">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
@@ -1294,10 +1349,17 @@ export default function MasterDocumentRegister() {
                   <SelectItem value="expired">Expired</SelectItem>
                 </SelectContent>
               </Select>
+              {hasActiveFilters && (
+                <Button variant="ghost" onClick={clearFilters} className="justify-self-start">
+                  <X className="mr-2 h-4 w-4" /> Clear filters
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
+        )}
 
+        {activeSection === 'templates' && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
@@ -1558,18 +1620,31 @@ export default function MasterDocumentRegister() {
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* Documents Table */}
+        {activeSection === 'register' && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">
-              Controlled Documents ({filteredDocuments.length})
+              Controlled Documents ({filteredDocuments.length} of {documents.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="text-center py-8 text-gray-500">
                 Loading documents...
+              </div>
+            ) : isDocumentsError ? (
+              <div className="rounded-md border border-red-200 bg-red-50 p-6 text-center" role="alert">
+                <AlertCircle className="mx-auto mb-2 h-6 w-6 text-red-600" />
+                <p className="font-medium text-red-900">The register could not be loaded</p>
+                <p className="mt-1 text-sm text-red-700">
+                  {documentsError instanceof Error ? documentsError.message : 'The server did not return the controlled-document register.'}
+                </p>
+                <Button variant="outline" className="mt-4" onClick={() => refetchDocuments()}>
+                  Try again
+                </Button>
               </div>
             ) : filteredDocuments.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
@@ -1593,7 +1668,7 @@ export default function MasterDocumentRegister() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredDocuments.map((doc) => (
+                    {visibleDocuments.map((doc) => (
                       <TableRow
                         key={doc.id}
                         className={isExpired(doc) ? 'bg-red-50' : ''}
@@ -1917,10 +1992,37 @@ export default function MasterDocumentRegister() {
                     ))}
                   </TableBody>
                 </Table>
+                {totalPages > 1 && (
+                  <div className="flex flex-col gap-3 border-t px-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(safeCurrentPage - 1) * PAGE_SIZE + 1}–{Math.min(safeCurrentPage * PAGE_SIZE, filteredDocuments.length)} of {filteredDocuments.length}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={safeCurrentPage === 1}
+                        onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      >
+                        Previous
+                      </Button>
+                      <span className="text-sm">Page {safeCurrentPage} of {totalPages}</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={safeCurrentPage === totalPages}
+                        onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* Create Document Dialog */}

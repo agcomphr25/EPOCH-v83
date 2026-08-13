@@ -14454,32 +14454,53 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Department Progression Methods
+  private async getActivePipelineOrders(): Promise<any[]> {
+    // Keep production tracking on the same merged/deduplicated source used by
+    // the department queues. getAllOrders() prefers production_orders for P1
+    // items when a legacy all_orders shadow row also exists.
+    const orders = (await this.getAllOrders()) as any[];
+
+    const normalizeDepartment = (department: unknown): string => {
+      const value = String(department || '').trim();
+      const normalized = value.toLowerCase().replace(/['"]/g, '');
+
+      if (normalized === 'qc') return 'Shipping QC';
+      if (normalized === 'finishqc') return 'Finish QC';
+      if (normalized === 'shipping manager' || normalized === 'shipping management') {
+        return 'Fulfilled';
+      }
+
+      return value;
+    };
+
+    return orders
+      .map((order) => ({
+        ...order,
+        currentDepartment: normalizeDepartment(order.currentDepartment),
+      }))
+      .filter((order) => {
+        const status = String(order.status || '').toUpperCase();
+        const department = String(order.currentDepartment || '').toLowerCase();
+
+        if (!department || department === 'fulfilled' || department === 'shipped') return false;
+        if (status === 'SCRAPPED' || status === 'CANCELLED') return false;
+        if (order.scrapDate || order.isCancelled === true) return false;
+
+        // Match isOrderInDepartment() used by department queue pages: P1
+        // production orders are eligible by their production status, while
+        // regular orders must actually be active in production.
+        if (order.productionStatus) return true;
+        return status === 'FINALIZED' || status === 'IN_PROGRESS';
+      });
+  }
+
   async getPipelineCounts(): Promise<Record<string, number>> {
     try {
-      // Use GROUP BY to count orders by current department from allOrders (includes both drafts and finalized)
-      const results = await db
-        .select({
-          department: allOrders.currentDepartment,
-          count: sql<number>`count(*)::integer`,
-        })
-        .from(allOrders)
-        .where(
-          and(
-            ne(allOrders.status, 'SCRAPPED'), // Only count active orders
-            ne(allOrders.status, 'CANCELLED'), // Exclude cancelled orders
-            isNull(allOrders.scrapDate), // Exclude scrapped orders
-            ne(allOrders.currentDepartment, 'Fulfilled'), // Exclude fulfilled/shipped orders
-            ne(allOrders.currentDepartment, 'Shipped') // Exclude shipped orders
-          )
-        )
-        .groupBy(allOrders.currentDepartment);
-
-      // Convert to object format
+      const orders = await this.getActivePipelineOrders();
       const counts: Record<string, number> = {};
-      results.forEach((result) => {
-        if (result.department) {
-          counts[result.department] = result.count;
-        }
+      orders.forEach((order) => {
+        const department = order.currentDepartment;
+        if (department) counts[department] = (counts[department] || 0) + 1;
       });
 
       return counts;
@@ -14507,33 +14528,7 @@ export class DatabaseStorage implements IStorage {
     >
   > {
     try {
-      const orders = await db
-        .select({
-          orderId: allOrders.orderId,
-          fbOrderNumber: allOrders.fbOrderNumber,
-          modelId: allOrders.modelId,
-          currentDepartment: allOrders.currentDepartment,
-          dueDate: allOrders.dueDate,
-          orderDate: allOrders.orderDate,
-          layupCompletedAt: allOrders.layupCompletedAt,
-          pluggingCompletedAt: allOrders.pluggingCompletedAt,
-          cncCompletedAt: allOrders.cncCompletedAt,
-          finishCompletedAt: allOrders.finishCompletedAt,
-          gunsmithCompletedAt: allOrders.gunsmithCompletedAt,
-          paintCompletedAt: allOrders.paintCompletedAt,
-          qcCompletedAt: allOrders.qcCompletedAt,
-          createdAt: allOrders.createdAt,
-        })
-        .from(allOrders)
-        .where(
-          and(
-            ne(allOrders.status, 'SCRAPPED'),
-            ne(allOrders.status, 'CANCELLED'),
-            isNull(allOrders.scrapDate),
-            ne(allOrders.currentDepartment, 'Fulfilled'),
-            ne(allOrders.currentDepartment, 'Shipped')
-          )
-        );
+      const orders = await this.getActivePipelineOrders();
 
       let expectedDeptMap: Record<string, string> = {};
       try {

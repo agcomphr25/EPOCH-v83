@@ -105,7 +105,7 @@ type Props = {
   definition: DesignControlWorkflowStep;
   step?: StepRow;
   readOnly: boolean;
-  onChanged: () => Promise<unknown>;
+  onChanged: (savedStep?: StepRow) => Promise<unknown>;
   onPrevious: () => void;
   onNext: () => void;
   hasPrevious: boolean;
@@ -246,55 +246,66 @@ export function DesignControlStepEditor({
     enabled: true,
   });
 
-  const refresh = async () => {
+  const refresh = async (savedStep?: StepRow) => {
     await Promise.all([
-      onChanged(),
+      onChanged(savedStep),
       queryClient.invalidateQueries({ queryKey: approvalQueryKey }),
     ]);
   };
 
-  const run = async (action: () => Promise<unknown>, success: string) => {
+  const run = async <T,>(
+    action: () => Promise<T>,
+    success: string,
+    savedStepFromResult?: (result: T) => StepRow | undefined
+  ) => {
     setBusy(true);
     setError('');
     setMessage('');
     try {
-      await action();
+      const result = await action();
       setMessage(success);
       setDirty(false);
-      await refresh();
-      return true;
+      await refresh(savedStepFromResult?.(result));
+      return result;
     } catch (actionError) {
       setError(
         actionError instanceof Error
           ? actionError.message
           : 'The controlled action failed.'
       );
-      return false;
+      return null;
     } finally {
       setBusy(false);
     }
   };
 
   const saveDraft = async (continueAfterSave = false) => {
-    const saved = await run(async () => {
-      const response = await fetch(
-        `/api/qms/design-control/${encodeURIComponent(recordId)}/steps/${encodeURIComponent(definition.key)}`,
-        {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            formData,
-            checklist,
-            attachments: step?.attachments ?? [],
-            contentVersionId: step?.currentContentVersionId ?? null,
-            changeReason:
-              changeReason.trim() || 'Design Control step draft saved',
-          }),
-        }
-      );
-      return responsePayload(response);
-    }, 'Draft saved as a controlled content version.');
+    const saved = await run(
+      async () => {
+        const response = await fetch(
+          `/api/qms/design-control/${encodeURIComponent(recordId)}/steps/${encodeURIComponent(definition.key)}`,
+          {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              formData,
+              checklist,
+              attachments: step?.attachments ?? [],
+              contentVersionId: step?.currentContentVersionId ?? null,
+              changeReason:
+                changeReason.trim() || 'Design Control step draft saved',
+            }),
+          }
+        );
+        return responsePayload(response);
+      },
+      'Draft saved as a controlled content version.',
+      (result) =>
+        result && typeof result === 'object' && 'step' in result
+          ? (result.step as StepRow)
+          : undefined
+    );
     if (saved) setLastSavedAt(new Date().toISOString());
     if (saved && continueAfterSave && hasNext) onNext();
   };

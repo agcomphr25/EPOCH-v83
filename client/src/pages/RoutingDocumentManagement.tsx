@@ -36,7 +36,8 @@ import {
   MoreHorizontal,
   Plus,
   X,
-  ChevronsUpDown
+  ChevronsUpDown,
+  ExternalLink
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -56,6 +57,10 @@ interface RoutingDocument {
   aiProcessedAt: string | null;
   isTemplate: boolean;
   createdAt: string;
+  controlledDocumentId: string | null;
+  controlledDocumentNumber: string | null;
+  controlledLifecycleStatus: string | null;
+  controlledRevisionChecksumStatus: string | null;
 }
 
 interface DocumentTemplate {
@@ -397,6 +402,10 @@ export default function RoutingDocumentManagement() {
       aiProcessedAt: doc.ai_processed_at ?? doc.aiProcessedAt,
       isTemplate: doc.is_template ?? doc.isTemplate ?? false,
       createdAt: doc.created_at ?? doc.createdAt,
+      controlledDocumentId: doc.controlled_document_id ?? doc.controlledDocumentId ?? null,
+      controlledDocumentNumber: doc.controlled_document_number ?? doc.controlledDocumentNumber ?? null,
+      controlledLifecycleStatus: doc.controlled_lifecycle_status ?? doc.controlledLifecycleStatus ?? null,
+      controlledRevisionChecksumStatus: doc.controlled_revision_checksum_status ?? doc.controlledRevisionChecksumStatus ?? null,
     })),
   });
 
@@ -1313,6 +1322,7 @@ export default function RoutingDocumentManagement() {
                       <TableHead>Type</TableHead>
                       <TableHead>Part Number</TableHead>
                       <TableHead>Department</TableHead>
+                      <TableHead>Document Control</TableHead>
                       <TableHead>AI Analyzed</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -1338,6 +1348,20 @@ export default function RoutingDocumentManagement() {
                         </TableCell>
                         <TableCell>{doc.partNumber || '-'}</TableCell>
                         <TableCell>{doc.departmentName || '-'}</TableCell>
+                        <TableCell>
+                          {doc.controlledDocumentId ? (
+                            <div className="space-y-1">
+                              <Badge variant="outline">
+                                {doc.controlledLifecycleStatus || 'DRAFT'}
+                              </Badge>
+                              <div className="text-xs text-muted-foreground">
+                                {doc.controlledDocumentNumber}
+                              </div>
+                            </div>
+                          ) : (
+                            <Badge variant="secondary">Not registered</Badge>
+                          )}
+                        </TableCell>
                         <TableCell>
                           {doc.aiProcessedAt ? (
                             <Badge className="bg-green-100 text-green-800">
@@ -1375,6 +1399,14 @@ export default function RoutingDocumentManagement() {
                                   <Pencil className="h-4 w-4 mr-2" />
                                   Edit Details
                                 </DropdownMenuItem>
+                                {doc.controlledDocumentId && (
+                                  <DropdownMenuItem onClick={() => {
+                                    window.location.assign(`/master-document-register?documentId=${encodeURIComponent(doc.controlledDocumentId!)}`);
+                                  }}>
+                                    <ExternalLink className="h-4 w-4 mr-2" />
+                                    Review / View Controlled PDF
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem onClick={() => {
                                   setSelectedDocument(doc);
                                   setShowParseDialog(true);
@@ -1407,7 +1439,7 @@ export default function RoutingDocumentManagement() {
                     ))}
                     {documents.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                           No documents uploaded yet. Upload your first document to get started.
                         </TableCell>
                       </TableRow>
@@ -2462,6 +2494,23 @@ export default function RoutingDocumentManagement() {
                     <Badge variant="secondary">Not Analyzed</Badge>
                   )}
                 </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Controlled Document</Label>
+                  <div>{selectedDocument.controlledDocumentNumber || 'Not registered'}</div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Control Status</Label>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      {selectedDocument.controlledLifecycleStatus || 'Unavailable'}
+                    </Badge>
+                    {selectedDocument.controlledRevisionChecksumStatus && (
+                      <span className="text-xs text-muted-foreground">
+                        Checksum {selectedDocument.controlledRevisionChecksumStatus}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {selectedDocument.aiExtractedContent && Object.keys(selectedDocument.aiExtractedContent).length > 0 && (
@@ -2600,6 +2649,14 @@ export default function RoutingDocumentManagement() {
           )}
           <DialogFooter className="flex gap-2">
             <Button variant="outline" onClick={() => setShowViewDialog(false)}>Close</Button>
+            {selectedDocument?.controlledDocumentId && (
+              <Button variant="outline" onClick={() => {
+                window.location.assign(`/master-document-register?documentId=${encodeURIComponent(selectedDocument.controlledDocumentId!)}`);
+              }}>
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Review / View Controlled PDF
+              </Button>
+            )}
             {selectedDocument && !selectedDocument.aiProcessedAt && (
               <Button onClick={() => {
                 setShowViewDialog(false);

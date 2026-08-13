@@ -64,7 +64,7 @@ describe('Certification & Authorization Matrix architecture', () => {
       'requireApplicableAuthorization({ employeeId: options.employeeId'
     );
     expect(read('server/src/routes/projectQualityRelease.ts')).toContain(
-      "type:'FINAL_PRODUCT_RELEASE'"
+      "type: 'FINAL_PRODUCT_RELEASE'"
     );
   });
 });

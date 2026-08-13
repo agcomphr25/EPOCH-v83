@@ -814,7 +814,7 @@ export function DesignControlStepEditor({
                       }))
                     }
                   >
-                    <option value="">Select an active employee...</option>
+                    <option value="">Select a person...</option>
                     {candidates.map((employee) => (
                       <option
                         key={`${employee.employeeId}:${employee.userId}`}

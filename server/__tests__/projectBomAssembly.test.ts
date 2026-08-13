@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildProjectBomAssemblyTree, type ProjectBomAssemblyRow } from '../src/services/projectBomAssembly';
+import { buildProjectBomAssemblyTree, collectPurchasedBomParts, type ProjectBomAssemblyRow } from '../src/services/projectBomAssembly';
 
 const row = (overrides: Partial<ProjectBomAssemblyRow>): ProjectBomAssemblyRow => ({
   node_key: ['root:1000'],
@@ -68,5 +68,28 @@ describe('buildProjectBomAssemblyTree', () => {
   it('treats a part with a BOM as manufactured when inventory classification is absent', () => {
     const tree = buildProjectBomAssemblyTree([row({ item_type: null })]);
     expect(tree[0]).toMatchObject({ isManufactured: true, hasBom: true });
+  });
+
+  it('collects every purchased BOM component and extends quantities through the assembly tree', () => {
+    const tree = buildProjectBomAssemblyTree([
+      row({}),
+      row({
+        node_key: ['root:1000', 'line:1'], parent_key: ['root:1000'], part_number: '2000',
+        part_name: 'Manufactured child', item_type: 'MANUFACTURED', qty_per: 2, depth: 1, bom_id: 'bom-child',
+      }),
+      row({
+        node_key: ['root:1000', 'line:1', 'line:2'], parent_key: ['root:1000', 'line:1'], part_number: 'BUY-1',
+        part_name: 'Fastener', item_type: 'PURCHASED', qty_per: 3, depth: 2, bom_id: null,
+      }),
+      row({
+        node_key: ['root:1000', 'line:3'], parent_key: ['root:1000'], part_number: 'BUY-1',
+        part_name: 'Fastener', item_type: 'PURCHASED', qty_per: 1, depth: 1, bom_id: null,
+      }),
+    ]);
+
+    expect(collectPurchasedBomParts(tree, new Map([['1000', 10]]))).toEqual([{
+      id: 'bom-purchased:buy-1', part_number: 'BUY-1', part_name: 'Fastener',
+      quantity: 70, bom_occurrence_count: 2,
+    }]);
   });
 });

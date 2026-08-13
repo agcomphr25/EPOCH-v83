@@ -40,6 +40,7 @@ import { getQuoteContractReviewGate } from '../services/quoteContractService';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 import {
   buildProjectBomAssemblyTree,
+  collectPurchasedBomParts,
   type ProjectBomAssemblyRow,
 } from '../services/projectBomAssembly';
 import { buildProjectProductionHierarchy } from '../services/projectProductionHierarchy';
@@ -3898,6 +3899,25 @@ router.get('/:id/p2-hub', async (req, res) => {
           )
         : [];
     const assemblyTree = buildProjectBomAssemblyTree(assemblyRows);
+    const orderedQuantityByRootPart = new Map<string, number>();
+    assemblySourceItems.forEach((item: LegacyProjectValue) => {
+      const rootPartNumber = String(
+        poInventoryPartById.get(Number(item.inventory_item_id)) || item.part_number || ''
+      )
+        .trim()
+        .toLowerCase();
+      if (!rootPartNumber) return;
+      const quantity = Number(item.quantity ?? 0);
+      orderedQuantityByRootPart.set(
+        rootPartNumber,
+        (orderedQuantityByRootPart.get(rootPartNumber) ?? 0) +
+          (Number.isFinite(quantity) ? quantity : 0)
+      );
+    });
+    const purchasedBomParts = collectPurchasedBomParts(
+      assemblyTree,
+      orderedQuantityByRootPart
+    );
     const recursiveBomRecords = Array.from(
       new Map(
         assemblyRows
@@ -4722,12 +4742,13 @@ router.get('/:id/p2-hub', async (req, res) => {
         },
         material: {
           summary: {
+            purchasedBomPartCount: purchasedBomParts.length,
             partsRequestCount: partsRequests.length,
             receivedMaterialCount: receivedMaterials.length,
             materialBudget,
             receivedMaterialCost,
           },
-          parts: poItems,
+          parts: purchasedBomParts,
           partsRequests,
           receivedMaterials,
         },

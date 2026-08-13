@@ -336,6 +336,7 @@ export const safeMigrationFiles = [
   '0273_p2_serialized_unit_provisioning.sql',
   '0274_p2_traveler_provisioning.sql',
   '0275_design_control_verified_approval_assignments.sql',
+  '0276_p2_work_order_provisioning.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -417,6 +418,7 @@ export const criticalMigrationFiles = new Set([
   '0273_p2_serialized_unit_provisioning.sql',
   '0274_p2_traveler_provisioning.sql',
   '0275_design_control_verified_approval_assignments.sql',
+  '0276_p2_work_order_provisioning.sql',
 ]);
 
 export async function runSafeBootMigrations() {

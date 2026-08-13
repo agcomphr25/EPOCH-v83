@@ -151,4 +151,21 @@ describe('authenticated Design Control approvals', () => {
     expect(service).toContain("'LEGACY_UNVERIFIED_APPROVAL_EVIDENCE'");
     expect(service).toContain('satisfiesAuthenticatedGate: false');
   });
+
+  it('uses Design Control capabilities rather than login-role names for employee eligibility', () => {
+    const service = readRepoFile(
+      'server/src/services/designControlApprovalService.ts'
+    );
+    const editor = readRepoFile(
+      'client/src/features/design-control/DesignControlStepEditor.tsx'
+    );
+    expect(service).toContain(
+      'permissions.permissionSet.has(slot.requiredCapability!)'
+    );
+    expect(service).not.toContain('APPROVER_ROLE_MISMATCH');
+    expect(editor).toContain('Select an active employee...');
+    expect(editor).toContain('canRouteApprovers');
+    expect(editor).toContain('Change approver');
+    expect(editor).toContain('/reassign');
+  });
 });

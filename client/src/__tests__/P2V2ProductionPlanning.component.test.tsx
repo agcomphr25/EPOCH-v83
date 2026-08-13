@@ -304,6 +304,20 @@ describe('P2V2ProductionPlanning', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Page 10: Review and Approve' })
     );
+    expect(
+      await screen.findByTestId('review-approve-summary')
+    ).toHaveTextContent('Production plan release review');
+    expect(
+      screen.getByTestId('production-plan-approval-statement')
+    ).toHaveTextContent(
+      'completely identifies the parts, materials, operations'
+    );
+    expect(
+      await screen.findByTestId('approval-demand-totals')
+    ).toHaveTextContent('2 lines');
+    expect(screen.getByTestId('review-approve-summary')).toHaveTextContent(
+      'Source Changed — Review Required'
+    );
     expect(screen.getByText(/engineering approval/i)).toBeInTheDocument();
     expect(screen.getByText(/quality approval/i)).toBeInTheDocument();
     expect(screen.getByText(/operations approval/i)).toBeInTheDocument();

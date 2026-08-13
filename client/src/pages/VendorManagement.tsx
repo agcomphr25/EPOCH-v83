@@ -113,6 +113,31 @@ type VendorDocumentEntry = {
   uploadedAt?: string;
 };
 
+type VendorDocumentCategory = 'Quality Certificate' | 'Approval Document' | 'General Document';
+
+type VendorDocumentSummary = {
+  id: number;
+  name: string;
+  mainDocumentUrl?: string | null;
+  approvalPdfUrl?: string | null;
+  approvalSource?: string | null;
+};
+
+export function getVendorApprovalDocument(vendor: VendorDocumentSummary) {
+  const url = String(vendor.approvalPdfUrl || '').trim();
+  if (!url) return null;
+
+  const isCertification = vendor.approvalSource === 'Certification';
+  return {
+    url,
+    name: getDocumentNameFromUrl(url),
+    category: (isCertification
+      ? 'Quality Certificate'
+      : 'Approval Document') as VendorDocumentCategory,
+    badgeLabel: isCertification ? 'Quality Cert' : 'Approval Doc',
+  };
+}
+
 function getDocumentNameFromUrl(url: string) {
   const fallback = 'Vendor Document.pdf';
   const trimmed = url.trim();
@@ -402,7 +427,7 @@ export default function VendorManagement() {
 
   // Fetch all vendors with documents
   const { data: vendorDocuments = [], isLoading: docsLoading } = useQuery<
-    { id: number; name: string; mainDocumentUrl: string }[]
+    VendorDocumentSummary[]
   >({
     queryKey: ['/api/vendors/documents/all'],
     queryFn: async () => {
@@ -1255,14 +1280,29 @@ export default function VendorManagement() {
 
   const watchedMainDocumentUrl = form.watch('mainDocumentUrl');
   const currentVendorDocuments = parseVendorDocuments(watchedMainDocumentUrl);
-  const vendorDocumentRows = vendorDocuments.flatMap((vendor) =>
-    parseVendorDocuments(vendor.mainDocumentUrl).map((document, index) => ({
-      vendorId: vendor.id,
-      vendorName: vendor.name,
-      document,
-      index,
-    }))
-  );
+  const vendorDocumentRows = vendorDocuments.flatMap((vendor) => {
+    const approvalDocument = getVendorApprovalDocument(vendor);
+    return [
+      ...(approvalDocument
+        ? [
+            {
+              vendorId: vendor.id,
+              vendorName: vendor.name,
+              document: approvalDocument,
+              category: approvalDocument.category,
+              index: 'approval',
+            },
+          ]
+        : []),
+      ...parseVendorDocuments(vendor.mainDocumentUrl).map((document, index) => ({
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+        document,
+        category: 'General Document' as VendorDocumentCategory,
+        index: `general-${index}`,
+      })),
+    ];
+  });
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -2545,6 +2585,7 @@ export default function VendorManagement() {
                 vendorsData?.data.map((vendor) => {
                   const vendorDocs = parseVendorDocuments(vendor.mainDocumentUrl);
                   const primaryDoc = vendorDocs[0] ?? null;
+                  const approvalDocument = getVendorApprovalDocument(vendor);
                   return (
                     <tr
                       key={vendor.id}
@@ -2557,6 +2598,26 @@ export default function VendorManagement() {
                       >
                         <div className="flex items-center gap-2">
                           {vendor.name}
+                          {approvalDocument && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 gap-1 border-emerald-300 bg-emerald-50 px-2 py-0 text-xs text-emerald-800 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-200"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openVendorPdf(
+                                  approvalDocument.url,
+                                  approvalDocument.category
+                                );
+                              }}
+                              data-testid={`button-view-vendor-approval-doc-${vendor.id}`}
+                              title={`Open ${approvalDocument.category}`}
+                            >
+                              <CheckCircle className="w-3 h-3" />
+                              {approvalDocument.badgeLabel}
+                            </Button>
+                          )}
                           {primaryDoc && (
                             <Button
                               type="button"
@@ -2574,12 +2635,12 @@ export default function VendorManagement() {
                               {vendorDocs.length === 1 ? 'Document' : `${vendorDocs.length} Docs`}
                             </Button>
                           )}
-                          {vendor.approved && vendorDocs.length === 0 && (
+                          {vendor.approved && !approvalDocument && (
                             <span
                               tabIndex={0}
                               role="img"
-                              aria-label="Missing document: this approved vendor has no main document on file"
-                              title="Missing document: this approved vendor has no main document on file"
+                              aria-label="Missing approval document: this approved vendor has no quality certificate or supplier approval form on file"
+                              title="Missing approval document: this approved vendor has no quality certificate or supplier approval form on file"
                               className="text-amber-500 flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded"
                               data-testid={`icon-missing-doc-${vendor.id}`}
                             >
@@ -2672,13 +2733,16 @@ export default function VendorManagement() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Document
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Type
+                    </th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                  {vendorDocumentRows.map(({ vendorId, vendorName, document, index }) => (
+                  {vendorDocumentRows.map(({ vendorId, vendorName, document, category, index }) => (
                     <tr key={`${vendorId}-${document.url}-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                       <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
                         {vendorName}
@@ -2688,6 +2752,9 @@ export default function VendorManagement() {
                           <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
                           <span className="truncate max-w-xs">{document.name || getDocumentNameFromUrl(document.url)}</span>
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                        {category}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Button

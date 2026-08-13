@@ -598,17 +598,24 @@ router.get('/documents/view', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/vendors/documents/all - Get all vendors that have an uploaded document
+// GET /api/vendors/documents/all - Get all vendors that have a general or
+// scope-approval document. Both categories are surfaced in Vendor Management.
 router.get('/documents/all', async (req: Request, res: Response) => {
   try {
     await ensureVendorDefaultOrderMethodColumn();
     const result = await storage.getAllVendors({ pageSize: 10000 });
     const withDocs = result.data
-      .filter((v) => v.mainDocumentUrl && v.mainDocumentUrl.trim().length > 0)
+      .filter(
+        (v) =>
+          (v.mainDocumentUrl && v.mainDocumentUrl.trim().length > 0) ||
+          (v.approvalPdfUrl && v.approvalPdfUrl.trim().length > 0)
+      )
       .map((v) => ({
         id: v.id,
         name: v.name,
         mainDocumentUrl: v.mainDocumentUrl,
+        approvalPdfUrl: v.approvalPdfUrl,
+        approvalSource: v.approvalSource,
       }));
     res.json(withDocs);
   } catch (error) {

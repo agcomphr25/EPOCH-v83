@@ -31,6 +31,9 @@ describe('P2 component traveler provisioning boundary', () => {
   });
 
   it('requires exact draft work-order and frozen-routing evidence', () => {
+    expect(service).toContain('resolveWadTravelerRequired');
+    expect(service).toContain('WAD_TRAVELER_SELECTION_REQUIRED');
+    expect(service).toContain('travelerRequired: false');
     expect(service).toContain("target.work_order_status !== 'PLANNED'");
     expect(service).toContain("target.work_order_wad_status !== 'DRAFT'");
     expect(service).toContain('work_order_part_number');

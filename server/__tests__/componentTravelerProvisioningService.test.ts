@@ -21,7 +21,10 @@ vi.mock('../src/lib/featureFlags', () => ({
   isP2V2ComponentTravelerProvisioningEnabled: mocks.enabled,
 }));
 
-import { provisionP2ComponentTravelers } from '../src/services/componentTravelerProvisioningService';
+import {
+  provisionP2ComponentTravelers,
+  resolveWadTravelerRequired,
+} from '../src/services/componentTravelerProvisioningService';
 
 const input = {
   idempotencyKey: 'synthetic-key',
@@ -40,6 +43,22 @@ describe('P2 component traveler provisioning service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.enabled.mockReturnValue(true);
+  });
+
+  it('uses only an explicit, unambiguous WAD traveler selection', () => {
+    expect(
+      resolveWadTravelerRequired({ step6: { travelerRequired: true } })
+    ).toBe(true);
+    expect(
+      resolveWadTravelerRequired({ step6: { travelerRequired: false } })
+    ).toBe(false);
+    expect(resolveWadTravelerRequired({})).toBeNull();
+    expect(
+      resolveWadTravelerRequired({
+        travelerRequired: true,
+        step6: { travelerRequired: false },
+      })
+    ).toBeNull();
   });
 
   it('performs no database or storage work while disabled', async () => {
@@ -64,6 +83,7 @@ describe('P2 component traveler provisioning service', () => {
           preview_digest: input.expectedLaunchDigest,
           wad_status: 'RELEASED',
           work_order_wad_status: 'APPROVED',
+          wad_wizard_data: { step6: { travelerRequired: true } },
         },
       ],
       [],
@@ -115,6 +135,62 @@ describe('P2 component traveler provisioning service', () => {
         productionWorkOrderId: 'wo-1',
       })
     );
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it('records a WAD no-traveler selection without generating travelers', async () => {
+    const client = { query: vi.fn(), release: vi.fn() };
+    mocks.connect.mockResolvedValue(client);
+    const responses: unknown[] = [
+      [
+        {
+          id: 'launch-1',
+          status: 'COMPLETE',
+          preview_digest: input.expectedLaunchDigest,
+          wad_status: 'RELEASED',
+          work_order_wad_status: 'APPROVED',
+          wad_wizard_data: { step6: { travelerRequired: false } },
+        },
+      ],
+      [],
+      [{ id: 'work-order-event' }],
+      [],
+    ];
+    mocks.execute.mockImplementation(async () => responses.shift() ?? []);
+    await expect(
+      provisionP2ComponentTravelers('project-1', 'launch-1', input, actor)
+    ).resolves.toMatchObject({
+      replayed: false,
+      travelerRequired: false,
+      travelerIds: [],
+    });
+    expect(mocks.generate).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it('blocks when the released WAD has no traveler selection', async () => {
+    const client = { query: vi.fn(), release: vi.fn() };
+    mocks.connect.mockResolvedValue(client);
+    const responses: unknown[] = [
+      [
+        {
+          id: 'launch-1',
+          status: 'COMPLETE',
+          preview_digest: input.expectedLaunchDigest,
+          wad_status: 'RELEASED',
+          work_order_wad_status: 'APPROVED',
+          wad_wizard_data: {},
+        },
+      ],
+      [],
+      [{ id: 'work-order-event' }],
+    ];
+    mocks.execute.mockImplementation(async () => responses.shift() ?? []);
+    await expect(
+      provisionP2ComponentTravelers('project-1', 'launch-1', input, actor)
+    ).rejects.toMatchObject({ code: 'WAD_TRAVELER_SELECTION_REQUIRED' });
+    expect(mocks.generate).not.toHaveBeenCalled();
     expect(client.release).toHaveBeenCalledOnce();
   });
 });

@@ -30,6 +30,7 @@ import { evaluateDocumentationRequirements } from '../lib/documentationRequireme
 import { cancelWadWorkOrdersSupersededByP2 } from '../services/wadSupersedeService';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import {
+  isP2V2ComponentTravelerProvisioningEnabled,
   isP2V2ExecutionAuthorizationEnabled,
   isP2V2ProductionOrderProvisioningEnabled,
   isP2V2WorkOrderProvisioningEnabled,
@@ -4179,10 +4180,15 @@ router.get('/:id/p2-hub', async (req, res) => {
     const manufacturingWorkOrderLaunch =
       (
         await pool.query(
-          `SELECT id, preview_digest AS "previewDigest", status
-           FROM project_production_launches
-          WHERE project_id = $1 AND status = 'COMPLETE'
-          ORDER BY launched_at DESC
+          `SELECT pl.id, pl.preview_digest AS "previewDigest", pl.status,
+             EXISTS (
+               SELECT 1 FROM project_production_launch_events ple
+               WHERE ple.production_launch_id = pl.id
+                 AND ple.event_type = 'P2_COMPONENT_TRAVELERS_PROVISIONED'
+             ) AS completed
+           FROM project_production_launches pl
+           WHERE pl.project_id = $1 AND pl.status = 'COMPLETE'
+          ORDER BY pl.launched_at DESC
           LIMIT 1`,
           [id]
         )
@@ -4190,7 +4196,9 @@ router.get('/:id/p2-hub', async (req, res) => {
     const manufacturingWorkOrderAction = {
       launchId: manufacturingWorkOrderLaunch?.id ?? null,
       expectedLaunchDigest: manufacturingWorkOrderLaunch?.previewDigest ?? null,
+      completed: Boolean(manufacturingWorkOrderLaunch?.completed),
       enabled:
+        isP2V2ComponentTravelerProvisioningEnabled() &&
         isP2V2ExecutionAuthorizationEnabled() &&
         isP2V2ProductionOrderProvisioningEnabled() &&
         isP2V2WorkOrderProvisioningEnabled(),

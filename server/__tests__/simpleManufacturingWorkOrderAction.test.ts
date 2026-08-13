@@ -24,6 +24,7 @@ describe('simple manufacturing work-order action', () => {
     expect(route).toContain('authorizeProductionExecution(');
     expect(route).toContain('provisionP2ProductionOrders(');
     expect(route).toContain('provisionP2WorkOrders(');
+    expect(route).toContain('provisionP2ComponentTravelers(');
     expect(route).toContain("'projects.production_launch.launch'");
   });
 
@@ -38,6 +39,8 @@ describe('simple manufacturing work-order action', () => {
     expect(hub).toContain('isP2V2ExecutionAuthorizationEnabled()');
     expect(hub).toContain('isP2V2ProductionOrderProvisioningEnabled()');
     expect(hub).toContain('isP2V2WorkOrderProvisioningEnabled()');
+    expect(hub).toContain('isP2V2ComponentTravelerProvisioningEnabled()');
+    expect(hub).toContain("event_type = 'P2_COMPONENT_TRAVELERS_PROVISIONED'");
   });
 
   it('shows one plain-language button only while work orders are missing', () => {

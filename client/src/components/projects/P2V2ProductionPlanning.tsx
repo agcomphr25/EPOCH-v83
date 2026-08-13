@@ -102,11 +102,6 @@ const wizardPages = [
 ] as const;
 
 const reviewPageFields: Record<number, Array<[string, string]>> = {
-  4: [
-    ['Required tooling', 'tooling_requirements'],
-    ['Computer numerical control programs', 'cnc_program_requirements'],
-    ['Special process source', 'special_process_source'],
-  ],
   5: [
     ['Inspection extent', 'inspection_extent'],
     ['First Article Inspection', 'fai_requirement'],
@@ -409,7 +404,13 @@ export default function P2V2ProductionPlanning({
               {currentPage === 3 && !!data?.items.length && (
                 <MaterialReview items={data.items} />
               )}
-              {currentPage >= 4 && currentPage <= 7 && (
+              {currentPage === 4 && !!data?.items.length && (
+                <ToolingResourceReview
+                  items={data.items}
+                  blockers={data.readiness.blockers}
+                />
+              )}
+              {currentPage >= 5 && currentPage <= 7 && (
                 <ReviewByExceptionPanel
                   items={data?.items ?? []}
                   fields={reviewPageFields[currentPage] ?? []}
@@ -810,6 +811,106 @@ function MaterialReview({ items }: { items: Row[] }) {
           baseline.
         </p>
       )}
+    </section>
+  );
+}
+
+function ToolingResourceReview({
+  items,
+  blockers,
+}: {
+  items: Row[];
+  blockers: string[];
+}) {
+  const manufacturedItems = items.filter((item) => item.is_manufactured);
+  return (
+    <section className="space-y-3" data-testid="tooling-resource-review">
+      <div className="rounded border p-4">
+        <h3 className="font-semibold">Tooling and resource requirements</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          These requirements come from the saved Production Planning baseline.
+          This review does not establish physical availability, calibration,
+          program release, machine capacity, or supplier approval.
+        </p>
+      </div>
+      {manufacturedItems.map((item) => {
+        const partNumber = value(item, 'part_number');
+        const tooling = displayValue(item, 'tooling_requirements');
+        const programs = displayValue(item, 'cnc_program_requirements');
+        const specialProcessSource = value(item, 'special_process_source');
+        const specialProcesses = displayValue(
+          item,
+          'special_process_requirements'
+        );
+        const decisionsComplete =
+          Array.isArray(item.tooling_requirements) &&
+          Array.isArray(item.cnc_program_requirements) &&
+          Boolean(specialProcessSource) &&
+          (specialProcessSource === 'NONE' || Boolean(specialProcesses));
+        const itemBlockers = blockers.filter((blocker) =>
+          blocker.startsWith(`${partNumber}:`)
+        );
+        return (
+          <article
+            className="rounded border p-4"
+            data-testid="tooling-resource-review-item"
+            key={value(item, 'id')}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="font-semibold">
+                  {partNumber || 'Information Missing'} —{' '}
+                  {value(item, 'part_name') || 'Information Missing'}
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Routing revision{' '}
+                  {value(item, 'routing_revision') || 'Information Missing'}
+                </p>
+              </div>
+              <Badge variant={decisionsComplete ? 'default' : 'destructive'}>
+                {decisionsComplete
+                  ? 'Requirements recorded'
+                  : 'Decision missing'}
+              </Badge>
+            </div>
+            <dl className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+              <OrderFact
+                label="Required tooling"
+                current={tooling || 'None recorded'}
+              />
+              <OrderFact
+                label="CNC programs"
+                current={programs || 'None recorded'}
+              />
+              <OrderFact
+                label="Special-process source"
+                current={specialProcessSource}
+              />
+            </dl>
+            {specialProcessSource && specialProcessSource !== 'NONE' && (
+              <div className="mt-3 text-sm">
+                <p className="text-muted-foreground">
+                  Special-process requirements
+                </p>
+                <p
+                  className={
+                    specialProcesses ? '' : 'font-medium text-amber-700'
+                  }
+                >
+                  {specialProcesses || 'Information Missing'}
+                </p>
+              </div>
+            )}
+            {!!itemBlockers.length && (
+              <ul className="mt-3 list-disc pl-5 text-sm text-amber-800">
+                {itemBlockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            )}
+          </article>
+        );
+      })}
     </section>
   );
 }

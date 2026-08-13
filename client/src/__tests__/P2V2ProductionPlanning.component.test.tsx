@@ -28,6 +28,10 @@ const model = {
       routing_id: 'routing-100-rev-4',
       routing_revision: '4',
       routing_release_status: 'RELEASED',
+      tooling_requirements: ['Assembly fixture AF-100'],
+      cnc_program_requirements: [],
+      special_process_source: 'EXTERNAL_APPROVED_SUPPLIER',
+      special_process_requirements: ['Type II anodize'],
     },
     {
       id: 'leaf',
@@ -207,6 +211,24 @@ describe('P2V2ProductionPlanning', () => {
     );
     expect(screen.getByText('Inventory linked')).toBeInTheDocument();
     expect(screen.getAllByTestId('material-review-item')).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Page 5: Check Tooling and Resources',
+      })
+    );
+    expect(screen.getByTestId('tooling-resource-review')).toHaveTextContent(
+      'Tooling and resource requirements'
+    );
+    expect(screen.getByTestId('tooling-resource-review')).toHaveTextContent(
+      'Assembly fixture AF-100'
+    );
+    expect(screen.getByTestId('tooling-resource-review')).toHaveTextContent(
+      'Type II anodize'
+    );
+    expect(screen.getByText('Requirements recorded')).toBeInTheDocument();
+    expect(screen.getAllByTestId('tooling-resource-review-item')).toHaveLength(
+      1
+    );
     fireEvent.click(
       screen.getByRole('button', { name: 'Page 10: Review and Approve' })
     );

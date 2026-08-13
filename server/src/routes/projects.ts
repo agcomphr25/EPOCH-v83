@@ -36,6 +36,7 @@ import {
   buildProjectBomAssemblyTree,
   type ProjectBomAssemblyRow,
 } from '../services/projectBomAssembly';
+import { buildProjectProductionHierarchy } from '../services/projectProductionHierarchy';
 import {
   getActiveWorkflowInstanceForProject,
   getWorkflowReadModel,
@@ -4130,6 +4131,20 @@ router.get('/:id/p2-hub', async (req, res) => {
         placementCounts,
         productionOrders: lineProductionOrders,
         workOrders: lineWorkOrders,
+        manufacturingHierarchy: buildProjectProductionHierarchy({
+          root:
+            assemblyTree.find(
+              (root) =>
+                normalizeProductionKey(root.partNumber) ===
+                normalizeProductionKey(
+                  poInventoryPartById.get(Number(item.inventory_item_id)) ??
+                    item.part_number
+                )
+            ) ?? null,
+          orderedQuantity,
+          workOrders,
+          productionOrders: lineProductionOrders,
+        }),
         serializedItems: lineSerializedItems.map(
           (serializedItem: LegacyProjectValue) => ({
             ...serializedItem,

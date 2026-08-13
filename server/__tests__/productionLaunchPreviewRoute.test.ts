@@ -43,6 +43,22 @@ vi.mock('../src/services/productionLaunchPreviewService', () => ({
 vi.mock('../src/services/productionLaunchPersistenceService', () => ({
   persistProductionLaunch: mocks.persistProductionLaunch,
 }));
+vi.mock('../src/services/productionExecutionAuthorizationService', () => ({
+  authorizeProductionExecution: vi.fn(),
+  ProductionExecutionAuthorizationError: class extends Error {},
+}));
+vi.mock('../src/services/productionOrderProvisioningService', () => ({
+  provisionP2ProductionOrders: vi.fn(),
+  ProductionOrderProvisioningError: class extends Error {},
+}));
+vi.mock('../src/services/serializedUnitProvisioningService', () => ({
+  provisionP2SerializedUnits: vi.fn(),
+  SerializedUnitProvisioningError: class extends Error {},
+}));
+vi.mock('../src/services/travelerProvisioningService', () => ({
+  provisionP2DraftTravelers: vi.fn(),
+  TravelerProvisioningError: class extends Error {},
+}));
 
 import projectProductionPlanningRouter from '../src/routes/projectProductionPlanning';
 

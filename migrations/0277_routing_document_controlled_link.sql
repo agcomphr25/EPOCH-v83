@@ -11,6 +11,7 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'routing_documents_controlled_document_id_fkey'
+      AND conrelid = 'routing_documents'::regclass
   ) THEN
     ALTER TABLE routing_documents
       ADD CONSTRAINT routing_documents_controlled_document_id_fkey

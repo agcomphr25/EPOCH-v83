@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 describe('Form & Document Builder controlled-document linkage', () => {
   const route = readFileSync(join(process.cwd(), 'server/src/routes/routingDocuments.ts'), 'utf8');
   const migration = readFileSync(
-    join(process.cwd(), 'migrations/0276_routing_document_controlled_link.sql'),
+    join(process.cwd(), 'migrations/0277_routing_document_controlled_link.sql'),
     'utf8'
   );
   const client = readFileSync(

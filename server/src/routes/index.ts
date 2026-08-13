@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier -- Legacy aggregate route registry is not Prettier-clean; avoid an unrelated whole-file rewrite. */
 /*
 EPOCH USER IDENTITY STANDARD
 

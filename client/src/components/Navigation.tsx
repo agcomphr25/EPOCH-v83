@@ -84,6 +84,7 @@ import {
   Tag,
   HandCoins,
   Thermometer,
+  Brain,
 } from 'lucide-react';
 
 interface NavItemDef {
@@ -3081,6 +3082,22 @@ export default function Navigation() {
               >
                 <Layers className="h-4 w-4" />
                 <span className="hidden lg:inline">Field</span>
+              </Button>
+            )}
+            {currentUser?.username === 'glennj' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  closeAllDropdowns();
+                  setLocation('/move-forward');
+                }}
+                className="gap-2"
+                data-testid="button-move-forward"
+                title="Quick capture"
+              >
+                <Brain className="h-4 w-4" />
+                <span className="hidden lg:inline">Move Forward</span>
               </Button>
             )}
             {currentUser?.username === 'glennj' && (

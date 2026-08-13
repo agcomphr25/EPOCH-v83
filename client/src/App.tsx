@@ -725,6 +725,7 @@ const UrgentOrdersReport = React.lazy(
 const OTDReport = React.lazy(() => import('./pages/OTDReport'));
 const OrderHeatMap = React.lazy(() => import('./pages/OrderHeatMap'));
 const QuickNotesPage = React.lazy(() => import('./pages/QuickNotesPage'));
+const MoveForwardPage = React.lazy(() => import('./pages/MoveForwardPage'));
 const ImprovementNotesDashboard = React.lazy(
   () => import('./pages/ImprovementNotesDashboard')
 );
@@ -1146,6 +1147,7 @@ function App() {
                           component={OrderHeatMap}
                         />
                         <Route path="/quick-notes" component={QuickNotesPage} />
+                        <Route path="/move-forward" component={MoveForwardPage} />
                         <Route
                           path="/improvement-notes"
                           component={ImprovementNotesDashboard}

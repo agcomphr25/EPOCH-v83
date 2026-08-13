@@ -9,7 +9,7 @@ describe('shipped-order production forensic report', () => {
   );
 
   it('is an authenticated, read-only report backed by durable shipment evidence', () => {
-    expect(source).toContain("'/order-integrity/shipped-in-production'");
+    expect(source).toContain("'/domain-truth/shipped-in-production'");
     expect(source).toContain("requireRole('ADMIN', 'OWNER')");
     expect(source).toContain('ao.shipped_date IS NOT NULL');
     expect(source).toContain('ao.shipping_completed_at IS NOT NULL');
@@ -26,7 +26,7 @@ describe('shipped-order production forensic report', () => {
   });
 
   it('does not contain a mutation statement in the report route', () => {
-    const routeStart = source.indexOf("'/order-integrity/shipped-in-production'");
+    const routeStart = source.indexOf("'/domain-truth/shipped-in-production'");
     const routeEnd = source.indexOf("router.get(\n  '/domain-truth/order/:orderId'", routeStart);
     const route = source.slice(routeStart, routeEnd);
 

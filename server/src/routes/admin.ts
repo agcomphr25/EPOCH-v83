@@ -188,7 +188,7 @@ const EXCLUDED_STATUSES = ['SCRAPPED', 'CANCELLED', 'FULFILLED'];
 // have drifted back into an active production state. This deliberately keeps
 // the evidence broad; no row is repaired or inferred as safe automatically.
 router.get(
-  '/order-integrity/shipped-in-production',
+  '/domain-truth/shipped-in-production',
   authenticateToken,
   requireRole('ADMIN', 'OWNER'),
   async (_req: Request, res: Response) => {

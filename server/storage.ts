@@ -14464,13 +14464,33 @@ export class DatabaseStorage implements IStorage {
       const value = String(department || '').trim();
       const normalized = value.toLowerCase().replace(/['"]/g, '');
 
-      if (normalized === 'qc') return 'Shipping QC';
-      if (normalized === 'finishqc') return 'Finish QC';
-      if (normalized === 'shipping manager' || normalized === 'shipping management') {
-        return 'Fulfilled';
-      }
+      const canonicalDepartments: Record<string, string> = {
+        'p1 production queue': 'P1 Production Queue',
+        'production queue': 'P1 Production Queue',
+        layup: 'Layup/Plugging',
+        plugging: 'Layup/Plugging',
+        'layup/plugging': 'Layup/Plugging',
+        'layup plugging': 'Layup/Plugging',
+        barcode: 'Barcode',
+        cnc: 'CNC',
+        gunsmith: 'Gunsmith',
+        gunsmit: 'Gunsmith',
+        finish: 'Finish',
+        finishqc: 'Finish QC',
+        'finish qc': 'Finish QC',
+        paint: 'Paint',
+        qc: 'Shipping QC',
+        'qc shipping': 'Shipping QC',
+        'shipping qc': 'Shipping QC',
+        shipping: 'Shipping',
+        'shipping manager': 'Fulfilled',
+        'shipping management': 'Fulfilled',
+        fulfilled: 'Fulfilled',
+        shipped: 'Shipped',
+      };
 
-      return value;
+      if (normalized.startsWith('gun')) return 'Gunsmith';
+      return canonicalDepartments[normalized] || value;
     };
 
     return orders

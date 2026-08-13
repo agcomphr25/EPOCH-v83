@@ -416,8 +416,12 @@ export default function FabricInventoryPage() {
       setIsDeleteDialogOpen(false);
       setSelectedItem(null);
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to delete fabric inventory item", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({
+        title: "Unable to delete fabric roll",
+        description: error.message || "Failed to delete fabric inventory item",
+        variant: "destructive",
+      });
     },
   });
 

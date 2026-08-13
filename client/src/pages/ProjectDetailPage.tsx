@@ -157,6 +157,13 @@ function ProductionHierarchyNode({ node, isRoot = false }: { node: any; isRoot?:
   );
 }
 
+function hasMissingManufacturingWorkOrder(node: any): boolean {
+  if (!node) return false;
+  const required = node.sourceType !== 'PURCHASED_MATERIAL';
+  if (required && (!Array.isArray(node.workOrders) || node.workOrders.length === 0)) return true;
+  return Array.isArray(node.children) && node.children.some(hasMissingManufacturingWorkOrder);
+}
+
 const ROM_CATEGORY_CONFIG = [
   { key: 'labor', label: 'Labor', field: 'quotedHours', kind: 'hours', detail: 'Direct labor estimate from ROM/quote feedback' },
   { key: 'material', label: 'Material', field: 'budgetAmount', kind: 'currency', detail: 'Material budget that will seed the WAD' },
@@ -900,6 +907,37 @@ export default function ProjectDetailPage() {
     queryKey: ['/api/projects', id, 'p2-hub'],
     queryFn: () => fetch(`/api/projects/${id}/p2-hub`).then(r => r.json()),
     enabled: !!id,
+  });
+
+  const createManufacturingWorkOrders = useMutation({
+    mutationFn: async () => {
+      const action = p2Hub?.tabs?.production?.manufacturingWorkOrderAction;
+      if (!action?.launchId || !action?.expectedLaunchDigest)
+        throw new Error('Complete Production Launch before creating manufacturing work orders.');
+      if (!action.enabled)
+        throw new Error('Manufacturing work-order creation is not enabled for this deployment yet.');
+      return apiRequest(
+        `/api/projects/${id}/workflow-v2/production-planning/launch/${action.launchId}/create-manufacturing-work-orders`,
+        {
+          method: 'POST',
+          body: {
+            idempotencyKey: `manufacturing-work-orders:${action.launchId}`,
+            expectedLaunchDigest: action.expectedLaunchDigest,
+            signatureMeaning: 'Create manufacturing work orders from the released BOM and routing.',
+          },
+        }
+      );
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'p2-hub'] });
+      toast({ title: result?.message || 'Manufacturing work orders created' });
+    },
+    onError: (error: any) =>
+      toast({
+        title: 'Work orders could not be created',
+        description: error?.message || 'Check the released BOM, routing, and WAD information.',
+        variant: 'destructive',
+      }),
   });
 
   interface GateStatus {
@@ -3970,7 +4008,21 @@ export default function ProjectDetailPage() {
                         <div className="mt-3 rounded-md border bg-muted/20 p-3">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <p className="text-sm font-medium">Manufacturing Structure</p>
-                            <Badge variant="secondary">BOM driven</Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary">BOM driven</Badge>
+                              {!hubProduction.manufacturingWorkOrderAction?.completed &&
+                                (hasMissingManufacturingWorkOrder(line.manufacturingHierarchy) ||
+                                  Boolean(line.manufacturingHierarchy)) && (
+                                <Button
+                                  size="sm"
+                                  disabled={createManufacturingWorkOrders.isPending}
+                                  onClick={() => createManufacturingWorkOrders.mutate()}
+                                  data-testid="create-manufacturing-work-orders"
+                                >
+                                  {createManufacturingWorkOrders.isPending ? 'Creating...' : 'Create Manufacturing Work Orders'}
+                                </Button>
+                              )}
+                            </div>
                           </div>
                           {line.manufacturingHierarchy ? (
                             <ProductionHierarchyNode node={line.manufacturingHierarchy} isRoot />

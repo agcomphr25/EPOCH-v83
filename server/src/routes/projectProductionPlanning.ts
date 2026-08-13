@@ -37,6 +37,10 @@ import {
   provisionP2WorkOrders,
   WorkOrderProvisioningError,
 } from '../services/workOrderProvisioningService';
+import {
+  provisionP2ComponentTravelers,
+  ComponentTravelerProvisioningError,
+} from '../services/componentTravelerProvisioningService';
 
 const router = Router({ mergeParams: true });
 const headerSchema = z.object({
@@ -71,6 +75,7 @@ const productionOrderProvisioningSchema = executionAuthorizationSchema;
 const serializedUnitProvisioningSchema = executionAuthorizationSchema;
 const travelerProvisioningSchema = executionAuthorizationSchema;
 const workOrderProvisioningSchema = executionAuthorizationSchema;
+const componentTravelerProvisioningSchema = executionAuthorizationSchema;
 const itemSchema = z
   .object({
     drawing_number: z.string().nullable().optional(),
@@ -196,6 +201,10 @@ function fail(res: Response, error: unknown) {
       .status(error.status)
       .json({ error: error.code, message: error.message, ...error.details });
   if (error instanceof WorkOrderProvisioningError)
+    return res
+      .status(error.status)
+      .json({ error: error.code, message: error.message, ...error.details });
+  if (error instanceof ComponentTravelerProvisioningError)
     return res
       .status(error.status)
       .json({ error: error.code, message: error.message, ...error.details });
@@ -326,6 +335,74 @@ router.post('/launch/:launchId/provision-work-orders', async (req, res) => {
     fail(res, error);
   }
 });
+router.post(
+  '/launch/:launchId/create-manufacturing-work-orders',
+  async (req, res) => {
+    try {
+      const user = await requireCapability(
+        req,
+        'projects.production_launch.launch'
+      );
+      const input = workOrderProvisioningSchema.parse(req.body);
+      const sharedInput = {
+        ...input,
+        idempotencyKey: `manufacturing-work-orders:${req.params.launchId}`,
+      };
+      await authorizeProductionExecution(
+        projectId(req),
+        req.params.launchId,
+        sharedInput,
+        user
+      );
+      await provisionP2ProductionOrders(
+        projectId(req),
+        req.params.launchId,
+        sharedInput,
+        user
+      );
+      await provisionP2WorkOrders(
+        projectId(req),
+        req.params.launchId,
+        sharedInput,
+        user
+      );
+      const result = await provisionP2ComponentTravelers(
+        projectId(req),
+        req.params.launchId,
+        sharedInput,
+        user
+      );
+      res.status(result.replayed ? 200 : 201).json({
+        ...result,
+        message: result.replayed
+          ? 'Manufacturing work orders already exist.'
+          : 'Manufacturing work orders created.',
+      });
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+router.post(
+  '/launch/:launchId/provision-component-travelers',
+  async (req, res) => {
+    try {
+      const user = await requireCapability(
+        req,
+        'projects.production_launch.launch'
+      );
+      const result = await provisionP2ComponentTravelers(
+        projectId(req),
+        req.params.launchId,
+        componentTravelerProvisioningSchema.parse(req.body),
+        user
+      );
+      res.status(result.replayed ? 200 : 201).json(result);
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
 router.post('/', async (req, res) => {
   try {
     const user = await requireCapability(

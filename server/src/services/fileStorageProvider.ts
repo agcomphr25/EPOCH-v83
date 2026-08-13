@@ -2,6 +2,7 @@ import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
 import { Readable } from 'stream';
 import { Response } from 'express';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
+export { getStorageErrorResponse } from './fileStorageErrors';
 
 export type FileStorageProviderName = 'replit' | 'supabase';
 
@@ -391,16 +392,4 @@ export function isReplitObjectPath(objectPath: string | null | undefined) {
 export async function uploadSupabaseObjectFromSignedToken(token: string, body: Buffer, contentType?: string) {
   const provider = new SupabaseFileStorageProvider();
   return provider.uploadWithToken(token, body, contentType);
-}
-
-export function getStorageErrorResponse(error: unknown) {
-  const err = error as { status?: number; reason?: string; message?: string };
-  const reason = err?.reason || 'storage_error';
-  const rawMessage = err?.message || 'Storage operation failed';
-  const message =
-    rawMessage.toLowerCase().includes('error code undefined')
-      ? 'File storage is not available. Check the storage provider configuration and try again.'
-      : rawMessage;
-  const status = err?.status && err.status >= 400 ? err.status : 500;
-  return { status, reason, message };
 }

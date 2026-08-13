@@ -9,7 +9,7 @@ import {
   safeMigrationFiles,
 } from '../scripts/migrations/runSafeBootMigrations';
 
-const migrationName = '0278_vendor_international_contact_fields.sql';
+const migrationName = '0279_vendor_international_contact_fields.sql';
 
 describe('vendor international contact fields', () => {
   it('deploys the website column as a critical safe migration', () => {

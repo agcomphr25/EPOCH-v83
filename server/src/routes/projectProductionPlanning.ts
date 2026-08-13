@@ -17,6 +17,10 @@ import {
 } from '../services/projectProductionPlanningService';
 import { getProductionLaunchPreview } from '../services/productionLaunchPreviewService';
 import { persistProductionLaunch } from '../services/productionLaunchPersistenceService';
+import {
+  authorizeProductionExecution,
+  ProductionExecutionAuthorizationError,
+} from '../services/productionExecutionAuthorizationService';
 
 const router = Router({ mergeParams: true });
 const headerSchema = z.object({
@@ -37,6 +41,13 @@ const launchSchema = z
   .object({
     idempotencyKey: z.string().trim().min(8).max(200),
     expectedPreviewDigest: z.string().regex(/^[0-9a-f]{64}$/),
+    signatureMeaning: z.string().trim().min(1).max(500),
+  })
+  .strict();
+const executionAuthorizationSchema = z
+  .object({
+    idempotencyKey: z.string().trim().min(8).max(200),
+    expectedLaunchDigest: z.string().regex(/^[0-9a-f]{64}$/),
     signatureMeaning: z.string().trim().min(1).max(500),
   })
   .strict();
@@ -148,6 +159,10 @@ function fail(res: Response, error: unknown) {
     return res
       .status(error.status)
       .json({ error: error.code, message: error.message, ...error.details });
+  if (error instanceof ProductionExecutionAuthorizationError)
+    return res
+      .status(error.status)
+      .json({ error: error.code, message: error.message, ...error.details });
   console.error('P2 V2 Production Planning error:', error);
   return res.status(500).json({
     error: 'PRODUCTION_PLANNING_FAILED',
@@ -180,6 +195,23 @@ router.post('/launch', async (req, res) => {
     const result = await persistProductionLaunch(
       projectId(req),
       launchSchema.parse(req.body),
+      user
+    );
+    res.status(result.replayed ? 200 : 201).json(result);
+  } catch (error) {
+    fail(res, error);
+  }
+});
+router.post('/launch/:launchId/authorize-execution', async (req, res) => {
+  try {
+    const user = await requireCapability(
+      req,
+      'projects.production_launch.launch'
+    );
+    const result = await authorizeProductionExecution(
+      projectId(req),
+      req.params.launchId,
+      executionAuthorizationSchema.parse(req.body),
       user
     );
     res.status(result.replayed ? 200 : 201).json(result);

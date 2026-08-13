@@ -63,6 +63,11 @@ export function isP2V2ProductionLaunchPersistenceEnabled(): boolean {
   return process.env.P2_V2_PRODUCTION_LAUNCH_PERSISTENCE_ENABLED === 'true';
 }
 
+/** Gates the planning-to-floor authorization bridge; disabled unless exact lowercase true. */
+export function isP2V2ExecutionAuthorizationEnabled(): boolean {
+  return process.env.P2_V2_EXECUTION_AUTHORIZATION_ENABLED === 'true';
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

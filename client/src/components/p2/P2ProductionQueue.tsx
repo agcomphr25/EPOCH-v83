@@ -53,7 +53,8 @@ import {
   Check,
   Users,
   FolderOpen,
-  FileText
+  FileText,
+  Wrench
 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import { getBarcodeFormat } from '@/lib/barcodeFormat';
@@ -235,6 +236,23 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
         },
       }
     : queueDataRaw;
+
+  const routingRepairMutation = useMutation({
+    mutationFn: () => apiRequest('/api/p2/reconcile-scheduled-routing', {
+      method: 'POST', body: { poNumbers: selectedPONumbers },
+    }),
+    onSuccess: (result: { repaired?: number; departments?: Record<string, number> }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/scheduling-list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      refetchQueue();
+      const summary = Object.entries(result.departments ?? {}).map(([department, count]) => `${count} to ${department}`).join(', ');
+      toast({ title: 'Routing Reconciled', description: result.repaired ? `${result.repaired} scheduled items corrected${summary ? `: ${summary}` : '.'}` : 'No incorrectly routed scheduled items were found.' });
+    },
+    onError: (error: Error) => toast({ title: 'Routing Repair Blocked', description: error.message, variant: 'destructive' }),
+  });
+
+  const hasSelectedLayupMismatch = selectedPONumbers.length > 0 && (queueData?.departments.some((department) => department.name === 'Layup' && department.items.length > 0) ?? false);
 
   const scanMutation = useMutation({
     mutationFn: async (barcode: string) => {
@@ -700,6 +718,20 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
 
   return (
     <div className="space-y-6">
+      {hasSelectedLayupMismatch && (
+        <Card className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <div>
+              <p className="font-medium">Scheduled items need routing reconciliation</p>
+              <p className="text-sm text-muted-foreground">Move Layup items to the first department in their controlled routing. Missing or ambiguous routing will block the repair.</p>
+            </div>
+            <Button variant="outline" onClick={() => routingRepairMutation.mutate()} disabled={routingRepairMutation.isPending} data-testid="button-reconcile-scheduled-routing">
+              {routingRepairMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wrench className="mr-2 h-4 w-4" />}
+              Repair Scheduled Routing
+            </Button>
+          </CardContent>
+        </Card>
+      )}
       {/* Barcode Scanner Input */}
       <Card className="border-2 border-dashed border-primary/30">
         <CardContent className="py-4">

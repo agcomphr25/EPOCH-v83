@@ -152,7 +152,11 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
       FROM all_orders o
       WHERE (o.status = 'FINALIZED' OR (o.status = 'IN_PROGRESS' AND o.current_department = 'P1 Production Queue'))
         AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
-        AND o.current_department NOT IN ('Shipping', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC')
+        AND UPPER(COALESCE(o.status, '')) NOT IN ('FULFILLED', 'SHIPPED')
+        AND COALESCE(o.current_department, '') NOT IN ('Shipping', 'Shipping Management', 'Fulfilled', 'Shipped', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC')
+        AND o.shipped_date IS NULL
+        AND o.shipping_completed_at IS NULL
+        AND NULLIF(TRIM(COALESCE(o.tracking_number, '')), '') IS NULL
         AND (o.model_id IS NOT NULL AND o.model_id != '' AND o.model_id != 'None' 
              AND LOWER(o.model_id) != 'no stock' AND LOWER(o.model_id) != 'no_stock')
       ORDER BY o.due_date ASC, o.created_at ASC
@@ -320,6 +324,69 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
       error: 'Failed to fetch P1 production queue',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
+  }
+});
+
+// Incident population captured before migration 0281 restores canonical state.
+router.get('/shipped-regression-audit', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        audit.order_id AS "orderId",
+        ao.customer_id AS "customerId",
+        ao.customer_po AS "customerPo",
+        ao.model_id AS "modelId",
+        ao.due_date AS "dueDate",
+        audit.tracking_number AS "trackingNumber",
+        audit.shipped_date AS "shippedDate",
+        audit.shipping_completed_at AS "shippingCompletedAt",
+        audit.last_floor_update_at AS "lastFloorUpdateAt",
+        audit.detected_at AS "detectedAt",
+        audit.restored_at AS "restoredAt",
+        audit.floor_removal_required AS "floorRemovalRequired",
+        audit.containment_reason AS "containmentReason"
+      FROM p1_shipped_order_containment_audit audit
+      LEFT JOIN all_orders ao ON ao.order_id = audit.order_id
+      ORDER BY audit.last_floor_update_at DESC NULLS LAST, audit.order_id ASC
+    `);
+
+    const rows = Array.isArray(result) ? result : result.rows || [];
+    res.set('Cache-Control', 'no-store');
+
+    if (req.query.format === 'csv') {
+      const csvCell = (value: unknown) => {
+        const raw = value == null ? '' : String(value);
+        const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+        return `"${safe.replace(/"/g, '""')}"`;
+      };
+      const fields = [
+        'orderId', 'customerId', 'customerPo', 'modelId', 'dueDate',
+        'trackingNumber', 'shippedDate', 'shippingCompletedAt',
+        'lastFloorUpdateAt', 'detectedAt', 'restoredAt', 'floorRemovalRequired',
+      ];
+      const csv = [
+        fields.join(','),
+        ...rows.map((row: any) =>
+          fields.map(field => csvCell(row[field])).join(',')
+        ),
+      ].join('\r\n');
+
+      res.set({
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="p1-shipped-order-floor-removal-audit.csv"',
+      });
+      return res.send(csv);
+    }
+
+    res.json({
+      incident: 'SHIPPED_ORDER_FOUND_IN_MANUFACTURING',
+      floorRemovalRequired: true,
+      count: rows.length,
+      orders: rows,
+    });
+  } catch (error) {
+    console.error('Failed to fetch shipped-order regression audit:', error);
+    res.status(500).json({ error: 'Failed to fetch shipped-order regression audit' });
   }
 });
 

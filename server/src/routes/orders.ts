@@ -2416,6 +2416,17 @@ router.post('/:id/progress', async (req: Request, res: Response) => {
     res.json(updatedOrder);
   } catch (error) {
     console.error('Progress order error:', error);
+    if (
+      error instanceof Error &&
+      error.message.includes('SHIPPED_ORDER_MANUFACTURING_BLOCK')
+    ) {
+      return res.status(409).json({
+        error: 'Shipped orders cannot progress through manufacturing',
+        code: 'SHIPPED_ORDER_MANUFACTURING_BLOCK',
+        requiredStatus: 'FULFILLED',
+        requiredDepartment: 'Shipping Management',
+      });
+    }
     res.status(500).json({ error: 'Failed to progress order' });
   }
 });
@@ -3102,12 +3113,12 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     if (!targetDepartment) {
       // Special case: Shipping is the final department
-      // When progressing from Shipping, set status to FULFILLED and clear department
+      // When progressing from Shipping, preserve the completed Shipping Management bucket.
       if (existingOrder.currentDepartment === 'Shipping') {
         shouldMarkFulfilled = true;
-        targetDepartment = null; // Clear department
+        targetDepartment = 'Shipping Management';
         console.log(
-          `📦 Order ${orderId} completing Shipping - will be marked as FULFILLED with no department`
+          `📦 Order ${orderId} completing Shipping - will be marked as FULFILLED in Shipping Management`
         );
       }
       // Orders with no stock model should skip manufacturing departments
@@ -3184,8 +3195,8 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     if (shouldMarkFulfilled) {
       updateData.status = 'FULFILLED';
       updateData.shippedDate = now;
-      updateData.currentDepartment = undefined; // Clear department when fulfilled
-      console.log(`📦 Marking order as FULFILLED with no department`);
+      updateData.currentDepartment = 'Shipping Management';
+      console.log(`📦 Marking order as FULFILLED in Shipping Management`);
     } else {
       updateData.currentDepartment = targetDepartment;
       if (
@@ -3259,6 +3270,11 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
         if (shouldMarkFulfilled) {
           fieldDiff['status'] = { before: existingOrder.status ?? null, after: 'FULFILLED', label: 'Order Status' };
+          fieldDiff['currentDepartment'] = {
+            before: existingOrder.currentDepartment ?? null,
+            after: 'Shipping Management',
+            label: 'Current Department',
+          };
         } else {
           fieldDiff['currentDepartment'] = {
             before: existingOrder.currentDepartment ?? null,
@@ -3287,7 +3303,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
           statusFrom: existingOrder.status ?? null,
           statusTo: shouldMarkFulfilled ? 'FULFILLED' : (after.status ?? null),
           departmentFrom: existingOrder.currentDepartment ?? null,
-          departmentTo: shouldMarkFulfilled ? null : (targetDepartment ?? null),
+          departmentTo: shouldMarkFulfilled ? 'Shipping Management' : (targetDepartment ?? null),
           fieldDiff,
         });
 
@@ -4204,6 +4220,28 @@ router.patch(
           previousDepartment = (productionOrder as any).currentDepartment || null;
         }
       }
+    }
+
+    const normalizedExistingStatus = String(
+      existingOrder?.status ?? existingOrder?.productionStatus ?? ''
+    ).toUpperCase();
+    const hasDurableShipmentEvidence = Boolean(
+      existingOrder?.shippedDate ||
+      existingOrder?.shippedAt ||
+      existingOrder?.shippingCompletedAt ||
+      String(existingOrder?.trackingNumber || '').trim() ||
+      existingOrder?.isFulfilled === true ||
+      normalizedExistingStatus === 'FULFILLED' ||
+      normalizedExistingStatus === 'SHIPPED'
+    );
+    if (hasDurableShipmentEvidence) {
+      return res.status(409).json({
+        error: 'Shipped orders cannot be transferred into manufacturing',
+        code: 'SHIPPED_ORDER_MANUFACTURING_BLOCK',
+        orderId,
+        requiredStatus: 'FULFILLED',
+        requiredDepartment: 'Shipping Management',
+      });
     }
 
     const shouldResetStatusToInProgress = shouldResetReadyForShippingToInProgress(

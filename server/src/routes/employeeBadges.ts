@@ -373,9 +373,12 @@ router.post('/execute-badge-action', async (req, res) => {
             const fromDepartment = order.currentDepartment;
             const toDepartment = actionConfig.toDepartment;
             const currentTimestamp = new Date();
+            const completingShipping =
+              fromDepartment === 'Shipping' ||
+              fromDepartment === 'Shipping Management';
             
             // Skip no-op moves
-            if (fromDepartment === toDepartment) {
+            if (fromDepartment === toDepartment && !completingShipping) {
               executionResult = { success: true, message: `Order already in ${toDepartment}` };
               break;
             }
@@ -416,13 +419,16 @@ router.post('/execute-badge-action', async (req, res) => {
             } else if (fromDepartment === 'QC' || fromDepartment === 'QC Shipping Queue') {
               updateData.qcCompletedAt = currentTimestamp;
             } else if (fromDepartment === 'Shipping' || fromDepartment === 'Shipping Management') {
+              updateData.status = 'FULFILLED';
+              updateData.currentDepartment = 'Shipping Management';
+              updateData.shippedDate = currentTimestamp;
               updateData.shippingCompletedAt = currentTimestamp;
             }
             
             await recordBadgeScanTransition(
               order.orderId,
               fromDepartment ?? '',
-              toDepartment,
+              updateData.currentDepartment,
               updateData,
               {
                 actorDisplayName: employeeCode,
@@ -475,15 +481,21 @@ router.post('/execute-badge-action', async (req, res) => {
             // Update each matched production_order row using its own actual currentDepartment
             for (const poOrder of poMatches) {
               const rowFromDepartment = poOrder.currentDepartment;
+              const completingShipping =
+                rowFromDepartment === 'Shipping' ||
+                rowFromDepartment === 'Shipping Management';
+              const rowToDepartment = completingShipping
+                ? 'Shipping Management'
+                : toDepartment;
 
               // Skip no-op: this unit is already in the target department
-              if (rowFromDepartment === toDepartment) continue;
+              if (rowFromDepartment === rowToDepartment && !completingShipping) continue;
 
               const existingHistory = (poOrder as any).departmentHistory || [];
               const departmentHistory = Array.isArray(existingHistory) ? [...existingHistory] : [];
               departmentHistory.push({
                 fromDepartment: rowFromDepartment,
-                toDepartment,
+                toDepartment: rowToDepartment,
                 timestamp: currentTimestamp.toISOString(),
                 progressedBy: employeeCode,
                 scanMethod: 'badge',
@@ -492,7 +504,15 @@ router.post('/execute-badge-action', async (req, res) => {
               await db
                 .update(productionOrders)
                 .set({
-                  currentDepartment: toDepartment,
+                  currentDepartment: rowToDepartment,
+                  ...(completingShipping
+                    ? {
+                        productionStatus: 'SHIPPED',
+                        isFulfilled: true,
+                        shippedAt: currentTimestamp,
+                        fulfilledDate: currentTimestamp,
+                      }
+                    : {}),
                   updatedAt: currentTimestamp,
                   ...completionFields(rowFromDepartment),
                   departmentHistory,
@@ -509,6 +529,12 @@ router.post('/execute-badge-action', async (req, res) => {
             // Sync corresponding all_orders rows once per unique (poNumber, fromDepartment) pair
             for (const [syncKey, rowFromDepartment] of allOrdersSyncKeys) {
               const poNumber = syncKey.split('|')[0];
+              const completingShipping =
+                rowFromDepartment === 'Shipping' ||
+                rowFromDepartment === 'Shipping Management';
+              const rowToDepartment = completingShipping
+                ? 'Shipping Management'
+                : toDepartment;
               const correspondingAllOrders = await db
                 .select()
                 .from(allOrders)
@@ -524,7 +550,7 @@ router.post('/execute-badge-action', async (req, res) => {
                 const aoDepartmentHistory = Array.isArray(aoExistingHistory) ? [...aoExistingHistory] : [];
                 aoDepartmentHistory.push({
                   fromDepartment: rowFromDepartment,
-                  toDepartment,
+                  toDepartment: rowToDepartment,
                   timestamp: currentTimestamp.toISOString(),
                   progressedBy: employeeCode,
                   scanMethod: 'badge',
@@ -533,9 +559,16 @@ router.post('/execute-badge-action', async (req, res) => {
                 await recordBadgeScanTransition(
                   aoOrder.orderId,
                   rowFromDepartment ?? '',
-                  toDepartment,
+                  rowToDepartment,
                   {
-                    currentDepartment: toDepartment,
+                    currentDepartment: rowToDepartment,
+                    ...(completingShipping
+                      ? {
+                          status: 'FULFILLED',
+                          shippedDate: currentTimestamp,
+                          shippingCompletedAt: currentTimestamp,
+                        }
+                      : {}),
                     updatedAt: currentTimestamp,
                     ...completionFields(rowFromDepartment),
                     departmentHistory: aoDepartmentHistory,

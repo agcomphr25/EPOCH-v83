@@ -3858,9 +3858,17 @@ export class DatabaseStorage implements IStorage {
     orderId: string,
     data: Partial<InsertOrderDraft>
   ): Promise<OrderDraft> {
+    const updateData: Partial<InsertOrderDraft> = { ...data };
+    const recordsShipmentCompletion = Boolean(
+      updateData.shippedDate || updateData.shippingCompletedAt
+    );
+    if (recordsShipmentCompletion) {
+      updateData.status = 'FULFILLED';
+      updateData.currentDepartment = 'Shipping Management';
+    }
     const [draft] = await db
       .update(orderDrafts)
-      .set(data)
+      .set(updateData)
       .where(eq(orderDrafts.orderId, orderId))
       .returning();
 
@@ -14789,6 +14797,11 @@ export class DatabaseStorage implements IStorage {
           currentOrder = {
             orderId: productionOrderRecord.orderId,
             currentDepartment: productionOrderRecord.currentDepartment,
+            status: productionOrderRecord.productionStatus,
+            shippedDate: productionOrderRecord.shippedAt,
+            shippingCompletedAt: productionOrderRecord.shippingCompletedAt,
+            trackingNumber: (productionOrderRecord as any).trackingNumber,
+            isFulfilled: productionOrderRecord.isFulfilled,
             departmentHistory: productionOrderRecord.departmentHistory || [],
             features: parsedFeatures,
             isFlattop: false,
@@ -14799,6 +14812,21 @@ export class DatabaseStorage implements IStorage {
 
       if (!currentOrder) {
         throw new Error(`Order ${orderId} not found`);
+      }
+
+      const normalizedStatus = String((currentOrder as any).status || '').toUpperCase();
+      const hasDurableShipmentEvidence = Boolean(
+        (currentOrder as any).shippedDate ||
+        (currentOrder as any).shippingCompletedAt ||
+        String((currentOrder as any).trackingNumber || '').trim() ||
+        (currentOrder as any).isFulfilled === true ||
+        normalizedStatus === 'FULFILLED' ||
+        normalizedStatus === 'SHIPPED'
+      );
+      if (hasDurableShipmentEvidence) {
+        throw new Error(
+          `SHIPPED_ORDER_MANUFACTURING_BLOCK: Order ${orderId} has shipment evidence and cannot progress through manufacturing`
+        );
       }
 
       // Department progression logic
@@ -14829,7 +14857,8 @@ export class DatabaseStorage implements IStorage {
         Array.isArray(features?.other_options) &&
         features.other_options.includes('tripod_tap');
 
-      let nextDept = nextDepartment;
+      const completingShipping = currentOrder.currentDepartment === 'Shipping';
+      let nextDept = completingShipping ? 'Shipping Management' : nextDepartment;
       if (!nextDept) {
         // Flat top orders skip CNC and go directly to Finish after Layup/Plugging
         if (isFlatTop && currentOrder.currentDepartment === 'Layup/Plugging') {
@@ -14922,6 +14951,11 @@ export class DatabaseStorage implements IStorage {
           isFulfilled: (productionOrderRecord as any).isFulfilled,
           currentStatus: productionOrderRecord.productionStatus,
         });
+        if (completingShipping) {
+          productionCompletionUpdates.productionStatus = 'SHIPPED';
+          productionCompletionUpdates.isFulfilled = true;
+          productionCompletionUpdates.fulfilledDate = now;
+        }
         
         // Map completion timestamps for production orders (using schema column names)
         // Schema columns: barcodeCompletedAt, layupCompletedAt, cncCompletedAt, 
@@ -15001,11 +15035,25 @@ export class DatabaseStorage implements IStorage {
       } else if (isFinalized) {
         updatedOrder = await this.updateFinalizedOrder(orderId, {
           currentDepartment: nextDept,
+          ...(completingShipping
+            ? {
+                status: 'FULFILLED',
+                shippedDate: now,
+                shippingCompletedAt: now,
+              }
+            : {}),
           ...completionUpdates,
         });
       } else {
         updatedOrder = await this.updateOrderDraft(orderId, {
           currentDepartment: nextDept,
+          ...(completingShipping
+            ? {
+                status: 'FULFILLED',
+                shippedDate: now,
+                shippingCompletedAt: now,
+              }
+            : {}),
           ...completionUpdates,
           updatedAt: now,
         });
@@ -23012,6 +23060,13 @@ export class DatabaseStorage implements IStorage {
   ): Promise<AllOrder> {
     try {
       const updateData: Partial<InsertAllOrder> = { ...data };
+      const recordsShipmentCompletion = Boolean(
+        updateData.shippedDate || updateData.shippingCompletedAt
+      );
+      if (recordsShipmentCompletion) {
+        updateData.status = 'FULFILLED';
+        updateData.currentDepartment = 'Shipping Management';
+      }
       if (!options.allowDueDateUpdate && Object.prototype.hasOwnProperty.call(updateData, 'dueDate')) {
         delete updateData.dueDate;
       }
@@ -23046,9 +23101,29 @@ export class DatabaseStorage implements IStorage {
         // sync it within the same transaction so getAllOrders deduplication
         // (which prefers production_orders) always returns the correct department.
         if (updateData.currentDepartment !== undefined && productionRecord) {
-          await tx.execute(
-            sql`UPDATE production_orders SET current_department = ${updateData.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
-          );
+          if (recordsShipmentCompletion) {
+            await tx
+              .update(productionOrders)
+              .set({
+                currentDepartment: 'Shipping Management',
+                productionStatus: 'SHIPPED',
+                isFulfilled: true,
+                shippedAt:
+                  updateData.shippedDate ||
+                  updateData.shippingCompletedAt ||
+                  new Date(),
+                fulfilledDate:
+                  updateData.shippedDate ||
+                  updateData.shippingCompletedAt ||
+                  new Date(),
+                updatedAt: new Date(),
+              })
+              .where(eq(productionOrders.orderId, orderId));
+          } else {
+            await tx.execute(
+              sql`UPDATE production_orders SET current_department = ${updateData.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
+            );
+          }
           console.log(`[updateFinalizedOrder] Synced production_orders.current_department for ${orderId} → ${updateData.currentDepartment}`);
         }
 

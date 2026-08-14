@@ -11856,17 +11856,26 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
           // If the destination is a real production department (not an initial queue),
           // always force status to IN_PROGRESS regardless of what the caller sent.
-          const resolvedStatus =
-            INITIAL_QUEUE_DEPARTMENTS.includes(department)
+          const completingShipping = currentOrder.currentDepartment === 'Shipping';
+          const resolvedDepartment = completingShipping
+            ? 'Shipping Management'
+            : department;
+          const resolvedStatus = completingShipping
+            ? 'FULFILLED'
+            : INITIAL_QUEUE_DEPARTMENTS.includes(department)
               ? (status || 'IN_PROGRESS')
               : 'IN_PROGRESS';
 
           // Prepare update data
           const updateData: any = {
-            currentDepartment: department,
+            currentDepartment: resolvedDepartment,
             status: resolvedStatus,
             ...completionUpdates,
           };
+          if (completingShipping) {
+            updateData.shippingCompletedAt = now;
+            if (!isProductionOrder) updateData.shippedDate = now;
+          }
 
           // Add technician assignment if provided
           if (assignedTechnician) {
@@ -11877,13 +11886,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           let updatedOrder;
           if (isProductionOrder) {
             const productionStatus = deriveP1ProductionStatus({
-              currentDepartment: department,
-              isFulfilled: (currentOrder as any).isFulfilled,
+              currentDepartment: resolvedDepartment,
+              isFulfilled: completingShipping || (currentOrder as any).isFulfilled,
               currentStatus: (currentOrder as any).productionStatus,
             });
             const productionUpdateData = {
               ...updateData,
               productionStatus,
+              ...(completingShipping
+                ? { isFulfilled: true, shippedAt: now, fulfilledDate: now }
+                : {}),
               updatedAt: now,
             };
             delete (productionUpdateData as any).status;
@@ -12688,7 +12700,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           } else if (currentDept === 'QC' || currentDept === 'QC Shipping Queue') {
             updateData.qcCompletedAt = currentTimestamp;
           } else if (currentDept === 'Shipping' || currentDept === 'Shipping Management') {
+            updateData.currentDepartment = 'Shipping Management';
             updateData.shippingCompletedAt = currentTimestamp;
+            if (isProductionOrder) {
+              updateData.productionStatus = 'SHIPPED';
+              updateData.isFulfilled = true;
+              updateData.shippedAt = currentTimestamp;
+              updateData.fulfilledDate = currentTimestamp;
+            } else {
+              updateData.status = 'FULFILLED';
+              updateData.shippedDate = currentTimestamp;
+            }
           }
 
           // Capture BEFORE state for audit

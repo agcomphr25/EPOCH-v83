@@ -145,6 +145,9 @@ const QMSPlaceholderPage = React.lazy(
 const QMSChangeControlPage = React.lazy(
   () => import('./pages/QMSChangeControlPage')
 );
+const QMSCorrectiveActionsPage = React.lazy(
+  () => import('./pages/QMSCorrectiveActionsPage')
+);
 const MyQualityActionsPage = React.lazy(
   () => import('./pages/MyQualityActionsPage')
 );
@@ -1629,6 +1632,10 @@ function App() {
                         <Route
                           path="/qms/change-control"
                           component={QMSChangeControlPage}
+                        />
+                        <Route
+                          path="/qms/cars"
+                          component={QMSCorrectiveActionsPage}
                         />
                         <Route
                           path="/my-quality-actions"

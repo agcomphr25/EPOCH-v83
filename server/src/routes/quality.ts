@@ -31,7 +31,7 @@ import {
   nonconformanceRecords,
 } from '../../schema';
 import { storage } from '../../storage';
-import { requirePermission } from '../../middleware/requirePermission';
+import { requireAnyPermission, requirePermission } from '../../middleware/requirePermission';
 import { resolveUserSnapshot } from '../../utils/userSnapshot';
 
 const router = Router();
@@ -859,6 +859,18 @@ router.post('/freezer-temperature-logs/:id/restore', async (req: Request, res: R
   }
 });
 
+const validateCapaCompletion = (input: Record<string, unknown>) => {
+  if (
+    ['effective', 'ineffective'].includes(String(input.effectivenessStatus)) &&
+    (!String(input.effectivenessCriteria ?? '').trim() || !String(input.effectivenessReview ?? '').trim())
+  ) return 'Effectiveness criteria and review evidence are required before recording an outcome';
+  if (
+    input.status === 'closed' &&
+    (input.effectivenessStatus !== 'effective' || !String(input.rootCause ?? '').trim() || !String(input.correctiveAction ?? '').trim())
+  ) return 'CAR closure requires a root cause, corrective action, and an effective review outcome';
+  return null;
+};
+
 // Section 9 CAPA records
 router.get('/capa', async (_req: Request, res: Response) => {
   try {
@@ -873,13 +885,22 @@ router.get('/capa', async (_req: Request, res: Response) => {
   }
 });
 
-router.post('/capa', requirePermission('quality.manage_capa'), async (req: Request, res: Response) => {
+router.post('/capa', requireAnyPermission(['quality.manage_capa', 'qms.quality_action.car_create']), async (req: Request, res: Response) => {
   try {
     const data = insertCapaRecordSchema.parse(req.body);
+    const completionError = validateCapaCompletion(data);
+    if (completionError) return res.status(422).json({ error: completionError });
     const capaNumber = await nextCapaNumber();
+    const actor = req.user?.id ? await resolveUserSnapshot(req.user.id) : null;
     const [record] = await db
       .insert(capaRecords)
-      .values({ ...data, capaNumber, updatedAt: new Date() })
+      .values({
+        ...data,
+        capaNumber,
+        createdByUserId: actor?.userId ?? data.createdByUserId,
+        createdByDisplayName: actor?.displayName ?? data.createdByDisplayName,
+        updatedAt: new Date(),
+      })
       .returning();
     res.status(201).json(record);
   } catch (error) {
@@ -891,6 +912,8 @@ router.post('/capa', requirePermission('quality.manage_capa'), async (req: Reque
 
 router.put('/capa/:id', requirePermission('quality.manage_capa'), async (req: Request, res: Response) => {
   try {
+    const completionError = validateCapaCompletion(req.body);
+    if (completionError) return res.status(422).json({ error: completionError });
     const updateData = {
       ...req.body,
       updatedAt: new Date(),

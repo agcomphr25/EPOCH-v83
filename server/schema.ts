@@ -5812,6 +5812,10 @@ export const capaRecords = pgTable(
       .array()
       .notNull()
       .default(sql`ARRAY[]::text[]`),
+    carFormData: jsonb('car_form_data')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     createdByUserId: integer('created_by_user_id'),
     createdByDisplayName: text('created_by_display_name'),
     createdAt: timestamp('created_at').defaultNow().notNull(),

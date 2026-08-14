@@ -61,6 +61,7 @@ describe('EPOCH validation wizard Phase 1 architecture', () => {
     expect(route).toContain('responsibilityDecisionIdentityError');
     expect(route).toContain('authenticatedEmployeeId');
     expect(route).toContain('WHERE id=$1 FOR SHARE');
+    expect(route).not.toContain('FOR SHARE OF u,e');
     expect(route).toContain('FOR UPDATE OF r`');
     expect(route).not.toContain('FOR UPDATE OF r,e');
     expect(route).toContain('packageRevision: packageRow.revision');

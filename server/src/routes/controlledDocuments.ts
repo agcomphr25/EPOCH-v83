@@ -2105,6 +2105,7 @@ router.put(
             message: 'A revision reason is required',
           });
         }
+        const revisionState = await getControlledDocumentState(existingDoc.id);
         const filePath = await persistControlledDocumentUpload(
           req.file,
           existingDoc.id
@@ -2117,7 +2118,10 @@ router.put(
               : undefined,
           revisionValue: String(
             req.body.revisionValue ||
-              nextRevisionVersion(existingDoc.currentVersion)
+              nextRevisionVersion(
+                revisionState.currentRevision?.versionNumber ||
+                  existingDoc.currentVersion
+              )
           ),
           reason: String(changeDescription),
           file: {

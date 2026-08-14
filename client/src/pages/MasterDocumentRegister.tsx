@@ -175,6 +175,9 @@ const nextRevisionVersion = (version: string | null | undefined) => {
   return `${major}.${minor + 1}`;
 };
 
+const revisionBaseVersion = (document: ControlledDocument) =>
+  document.currentRevisionVersion || document.currentVersion;
+
 type DesignControlTemplateRevisionView = {
   id: string;
   documentVersionHistoryId: string;
@@ -995,7 +998,7 @@ export default function MasterDocumentRegister() {
     if (createNewVersion) {
       formData.append(
         'revisionValue',
-        nextRevisionVersion(selectedDocument.currentVersion)
+        nextRevisionVersion(revisionBaseVersion(selectedDocument))
       );
       formData.append(
         'reason',
@@ -2291,11 +2294,12 @@ export default function MasterDocumentRegister() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">
-                        Current Version: {selectedDocument.currentVersion}
+                        Current Version:{' '}
+                        {revisionBaseVersion(selectedDocument)}
                       </p>
                       <p className="text-xs text-gray-600">
                         {createNewVersion
-                          ? `Next revision: ${nextRevisionVersion(selectedDocument.currentVersion)}`
+                          ? `Next revision: ${nextRevisionVersion(revisionBaseVersion(selectedDocument))}`
                           : 'Updating current version'}
                       </p>
                     </div>
@@ -2311,7 +2315,9 @@ export default function MasterDocumentRegister() {
                           Next Version
                         </div>
                         <div className="font-mono text-lg">
-                          {nextRevisionVersion(selectedDocument.currentVersion)}
+                          {nextRevisionVersion(
+                            revisionBaseVersion(selectedDocument)
+                          )}
                         </div>
                       </div>
 

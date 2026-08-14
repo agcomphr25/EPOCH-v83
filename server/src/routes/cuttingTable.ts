@@ -40,6 +40,8 @@ import {
   insertCuttingPacketBOMCutSchema,
   type CuttingFabricInventoryTransaction,
 } from '../../schema';
+import { P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL } from '../lib/p2ShipmentEvidence';
+import { reconcileP2CuttingDemandWithShipmentLedger } from '../lib/p2CuttingDemand';
 import { getFabricInventoryDeleteErrorResponse } from '../services/fabricInventoryDeletion';
 
 const router = Router();
@@ -2697,7 +2699,30 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             ORDER BY pg.id, pg."dueDate" ASC
           `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
-      const p2Rows = Array.isArray(p2Result) ? p2Result : (p2Result as any).rows || [];
+      const rawP2Rows = Array.isArray(p2Result) ? p2Result : (p2Result as any).rows || [];
+      const p2PoIds = Array.from(new Set(
+        rawP2Rows.map((row: any) => Number(row.poId)).filter(Number.isFinite)
+      ));
+      const shippedByPoItem = new Map<number, number>();
+      if (p2PoIds.length > 0) {
+        const shipmentMembershipResult = await pool.query(`
+          SELECT
+            si.po_item_id AS "poItemId",
+            COUNT(DISTINCT membership."serializedItemId")::int AS "shippedQuantity"
+          FROM (${P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL}) membership
+          JOIN p2_serialized_items si
+            ON LOWER(si.id::text) = LOWER(membership."serializedItemId")
+          WHERE si.po_item_id IS NOT NULL
+          GROUP BY si.po_item_id
+        `, [p2PoIds]);
+        const shipmentMembershipRows = Array.isArray(shipmentMembershipResult)
+          ? shipmentMembershipResult
+          : (shipmentMembershipResult as any).rows || [];
+        for (const row of shipmentMembershipRows as any[]) {
+          shippedByPoItem.set(Number(row.poItemId), Number(row.shippedQuantity) || 0);
+        }
+      }
+      const p2Rows = reconcileP2CuttingDemandWithShipmentLedger(rawP2Rows, shippedByPoItem);
       const p2MaterialCache: Record<string, string> = {};
       for (const item of p2Rows) {
         const matchingBomId = item.matchedBomId;

@@ -10,8 +10,13 @@ describe('QMS CAR workflow', () => {
   it('routes the QMS CAR navbar item to the template-based workspace', () => {
     const app = read('client/src/App.tsx');
     const page = read('client/src/pages/QMSCorrectiveActionsPage.tsx');
+    const workspace = read(
+      'client/src/components/qms/QualityActionWorkspace.tsx'
+    );
     expect(app).toContain('path="/qms/cars"');
+    expect(app).toContain('path="/qms/corrective-actions"');
     expect(app).toContain('QMSCorrectiveActionsPage');
+    expect(workspace).toContain("return '/qms/cars'");
     for (const section of [
       'Problem and scope',
       'Containment and correction',

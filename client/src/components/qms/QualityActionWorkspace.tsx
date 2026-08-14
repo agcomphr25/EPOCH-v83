@@ -235,7 +235,7 @@ export default function QualityActionWorkspace({
 
   const recommendationHref = (code: string) => {
     if (code.includes('NCR')) return '/nonconformance';
-    if (code.includes('CAR')) return '/qms/corrective-actions';
+    if (code.includes('CAR')) return '/qms/cars';
     if (code.includes('PCR')) return '/my-quality-actions';
     if (code.includes('ECR') || code.includes('ECN'))
       return '/qms/design-control';

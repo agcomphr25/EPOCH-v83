@@ -408,7 +408,8 @@ router.post('/mark-shipped/:orderId', requirePermission('shipping.mark_shipped')
 
     // Update order with shipping information
     const updateData = {
-      currentDepartment: 'Fulfilled',
+      status: 'FULFILLED',
+      currentDepartment: 'Shipping Management',
       trackingNumber,
       shippingCarrier,
       shippingMethod,
@@ -626,7 +627,11 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
     }
 
     // If order doesn't have a shipped date, set it now
-    updateData.shippedDate = new Date();
+    const shippedAt = new Date();
+    updateData.status = 'FULFILLED';
+    updateData.currentDepartment = 'Shipping Management';
+    updateData.shippedDate = shippedAt;
+    updateData.shippingCompletedAt = shippedAt;
 
     // Update in allOrders table via canonical audit service
     await recordShippingUpdate(
@@ -1072,6 +1077,8 @@ router.post('/create-label', requirePermission('shipping.create_label'), async (
       if (order) {
         try {
           const updateData = {
+            status: 'FULFILLED',
+            currentDepartment: 'Shipping Management',
             trackingNumber,
             shippingCarrier: 'UPS',
             shippingMethod: getServiceName(serviceType || '03'),
@@ -1080,6 +1087,7 @@ router.post('/create-label', requirePermission('shipping.create_label'), async (
             shippingLabelGenerated: true,
             labelGeneratedAt: new Date(),
             shippedDate: new Date(),
+            shippingCompletedAt: new Date(),
           };
 
           // Try updating finalized order first, fall back to draft
@@ -2057,11 +2065,14 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
 
       // Update ALL orders with the same tracking number
       const updateData = {
+        status: 'FULFILLED',
+        currentDepartment: 'Shipping Management',
         trackingNumber,
         shippingCarrier: 'UPS',
         shippingMethod: getServiceName(serviceCode || '03'),
         shippingCost: shipmentCost ? parseFloat(shipmentCost) : null,
         shippedDate: new Date(),
+        shippingCompletedAt: new Date(),
         shippingLabelGenerated: true,
         labelGeneratedAt: new Date(),
       };
@@ -2683,10 +2694,13 @@ router.post('/bulk/create-labels', async (req: Request, res: Response) => {
           // Update order with tracking number
           try {
             const updateData = {
+              status: 'FULFILLED',
+              currentDepartment: 'Shipping Management',
               trackingNumber,
               shippingCarrier: 'UPS',
               shippingMethod: getServiceName(serviceCode || '03'),
               shippedDate: new Date(),
+              shippingCompletedAt: new Date(),
               shippingLabelGenerated: true,
             };
             

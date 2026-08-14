@@ -2468,6 +2468,32 @@ router.post('/spec-sheets/complete-upload', async (req: Request, res: Response) 
 
 // Fill any reusable template, save the finished PDF in central storage, register it in MDR,
 // and optionally attach it directly to a project.
+const normalizeTemplateFieldValues = (fieldValues: unknown) => {
+  const values = fieldValues && typeof fieldValues === 'object'
+    ? { ...(fieldValues as Record<string, unknown>) }
+    : {};
+
+  // Older Work Instructions templates stored the browser field as `partsList`
+  // while their canonical template_fields row uses `partList`. Preserve the
+  // authored selection under the canonical key before required-field validation.
+  if (
+    (values.partList == null || values.partList === '') &&
+    values.partsList != null &&
+    values.partsList !== ''
+  ) {
+    values.partList = values.partsList;
+  }
+  if (
+    (values.partsList == null || values.partsList === '') &&
+    values.partList != null &&
+    values.partList !== ''
+  ) {
+    values.partsList = values.partList;
+  }
+
+  return values;
+};
+
 const createDocumentFromTemplate = async (req: Request, res: Response) => {
   let creationStage = 'validating request';
   try {
@@ -2529,7 +2555,7 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       };
     });
 
-    const values = fieldValues && typeof fieldValues === 'object' ? fieldValues : {};
+    const values = normalizeTemplateFieldValues(fieldValues);
     for (const field of templateFields) {
       const fieldValue = values[field.fieldName];
       if (field.isRequired && (fieldValue == null || fieldValue === '' || (Array.isArray(fieldValue) && fieldValue.length < (field.minimumRows || 1)))) {

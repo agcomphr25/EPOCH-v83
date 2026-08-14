@@ -29,9 +29,24 @@ describe('document-from-template legacy part-list compatibility', () => {
     expect(result.partsList).toBe('canonical');
   });
 
+  it('reconciles browser and server field names that share the Part List label', () => {
+    const result = normalizeTemplateFieldValues(
+      { selectedInventoryParts: '1 | 26246 | Body, Heated Pitot' },
+      [
+        { fieldName: 'selectedInventoryParts', fieldLabel: 'Part List' },
+        { field_name: 'requiredMaterials', field_label: 'Part List' },
+      ],
+    );
+
+    expect(result.requiredMaterials).toBe('1 | 26246 | Body, Heated Pitot');
+    expect(result.partList).toBe('1 | 26246 | Body, Heated Pitot');
+  });
+
   it('normalizes submitted values before required-field validation and PDF rendering', () => {
-    expect(handler).toContain('const values = normalizeTemplateFieldValues(fieldValues)');
-    expect(handler.indexOf('normalizeTemplateFieldValues(fieldValues)')).toBeLessThan(
+    expect(handler).toContain(
+      'const values = normalizeTemplateFieldValues(fieldValues, [...defaultFields, ...templateFields])',
+    );
+    expect(handler.indexOf('normalizeTemplateFieldValues(fieldValues,')).toBeLessThan(
       handler.indexOf('for (const field of templateFields)'),
     );
     expect(handler).toContain('fieldValues: values');

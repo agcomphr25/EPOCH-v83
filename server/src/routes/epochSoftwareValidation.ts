@@ -1192,7 +1192,7 @@ async function decideResponsibility(
       await q(
         `SELECT u.id AS user_id,u.employee_id,e.is_active AS employee_active
            FROM users u JOIN employees e ON e.id=u.employee_id
-           WHERE u.id=$1 AND u.is_active=true FOR SHARE OF u,e`,
+           WHERE u.id=$1 AND u.is_active=true`,
         [a.id]
       )
     )[0];

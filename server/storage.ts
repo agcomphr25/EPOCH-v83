@@ -5964,7 +5964,11 @@ export class DatabaseStorage implements IStorage {
           OR EXISTS (
             SELECT 1 FROM customers c
             WHERE c.id::text = ${allOrders.customerId}
-            AND (LOWER(c.name) LIKE ${searchPattern} OR LOWER(COALESCE(c.phone, '')) LIKE ${searchPattern})
+            AND (
+              LOWER(c.name) LIKE ${searchPattern}
+              OR LOWER(COALESCE(c.phone, '')) LIKE ${searchPattern}
+              OR LOWER(COALESCE(c.email, '')) LIKE ${searchPattern}
+            )
           )
         )`
       );

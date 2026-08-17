@@ -180,6 +180,7 @@ function SummaryCard({
 export default function RolesPermissionsPage() {
   const [search, setSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
+  const [matrixSearch, setMatrixSearch] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const workspace = useQuery<Workspace>({
     queryKey: ['/api/permissions/authority-workspace'],
@@ -210,6 +211,35 @@ export default function RolesPermissionsPage() {
     } ${user.role}`
       .toLowerCase()
       .includes(userSearch.toLowerCase())
+  );
+  const accessMatrixRows = useMemo(() => {
+    const allUsers = users.data ?? [];
+    const userRows = allUsers.map((user) => {
+      const employee = employees.find(
+        (candidate) =>
+          candidate.id === user.employeeId || candidate.userId === user.id
+      );
+      return { user, employee };
+    });
+    const linkedEmployeeIds = new Set(
+      userRows
+        .map(({ employee }) => employee?.id)
+        .filter((id): id is number => id !== undefined)
+    );
+    return [
+      ...userRows,
+      ...employees
+        .filter((employee) => !linkedEmployeeIds.has(employee.id))
+        .map((employee) => ({ user: undefined, employee })),
+    ];
+  }, [employees, users.data]);
+  const filteredAccessMatrixRows = accessMatrixRows.filter(
+    ({ user, employee }) =>
+      `${employee?.name ?? ''} ${employee?.employeeNumber ?? ''} ${
+        user?.username ?? ''
+      } ${user?.role ?? employee?.role ?? ''}`
+        .toLowerCase()
+        .includes(matrixSearch.toLowerCase())
   );
   const employeeAuths = selected
     ? auths.filter((a) => a.employee_id === selected.id)
@@ -311,9 +341,12 @@ export default function RolesPermissionsPage() {
           authority.
         </CardContent>
       </Card>
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue="access-matrix">
         <TabsList className="flex flex-wrap h-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="access-matrix">
+            Employee Access Matrix
+          </TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="employees">Employees</TabsTrigger>
           <TabsTrigger value="profile">Employee Authority Profile</TabsTrigger>
@@ -420,6 +453,131 @@ export default function RolesPermissionsPage() {
                   The two controls disagree. No setting was changed.
                 </p>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="access-matrix">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                Employee, user, role and authorization matrix
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                One combined view of employee records, linked EPOCH accounts,
+                system roles and active formal authorizations. A missing link is
+                shown explicitly and does not mean the account or employee was
+                deleted.
+              </p>
+              <div className="relative max-w-xl">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search employee, employee number, username or role"
+                  value={matrixSearch}
+                  onChange={(event) => setMatrixSearch(event.target.value)}
+                />
+              </div>
+              {workspace.isError || users.isError ? (
+                <p>Not available</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee name</TableHead>
+                      <TableHead>Employee number</TableHead>
+                      <TableHead>Username</TableHead>
+                      <TableHead>System role</TableHead>
+                      <TableHead>Account status</TableHead>
+                      <TableHead>Authorization allowed</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAccessMatrixRows.map(
+                      ({ user, employee }, index) => {
+                        const activeAuthorityTypes = employee
+                          ? Array.from(
+                              new Set(
+                                auths
+                                  .filter(
+                                    (authorization) =>
+                                      authorization.employee_id ===
+                                        employee.id &&
+                                      authorization.status === 'ACTIVE'
+                                  )
+                                  .map(
+                                    (authorization) =>
+                                      authorityLabels[
+                                        authorization.authorization_type
+                                      ] || authorization.authorization_type
+                                  )
+                              )
+                            )
+                          : [];
+                        return (
+                          <TableRow
+                            key={`${employee?.id ?? 'no-employee'}-${
+                              user?.id ?? `no-user-${index}`
+                            }`}
+                          >
+                            <TableCell className="font-medium">
+                              {employee?.name || (
+                                <Badge variant="outline">
+                                  No linked employee
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {employee?.employeeNumber || 'Not available'}
+                            </TableCell>
+                            <TableCell>
+                              {user?.username || (
+                                <Badge variant="outline">No linked user</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {user?.role || employee?.role || 'Not available'}
+                            </TableCell>
+                            <TableCell>
+                              {user ? (
+                                <Badge
+                                  variant={
+                                    user.isActive ? 'default' : 'outline'
+                                  }
+                                >
+                                  {user.isActive ? 'Active' : 'Inactive'}
+                                </Badge>
+                              ) : (
+                                'No account'
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {!employee || !availability.authorizations
+                                ? 'Not available'
+                                : activeAuthorityTypes.length
+                                  ? activeAuthorityTypes.join(', ')
+                                  : 'No active formal authorization'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+              {!workspace.isLoading &&
+                !users.isLoading &&
+                !workspace.isError &&
+                !users.isError &&
+                !filteredAccessMatrixRows.length && (
+                  <p>No matching employee or user records.</p>
+                )}
+              <p className="text-xs text-muted-foreground">
+                “Authorization allowed” lists active formal authorization
+                records only. System role permissions and training do not create
+                formal authority.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>

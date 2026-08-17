@@ -45,6 +45,14 @@ describe('Master Document Register released-revision access', () => {
     );
   });
 
+  it('keeps stamped footer control information inside the printable page area', () => {
+    expect(route).toContain('page.getCropBox()');
+    expect(route).toContain('const bottomInset = 24');
+    expect(route).toContain('y: pageY + bottomInset');
+    expect(route).toContain('y: pageY + bottomInset + 8');
+    expect(route).not.toMatch(/page\.drawText\(text, \{[\s\S]*?y: 8,/);
+  });
+
   it('keeps external references behind the API and out of controlled release', () => {
     expect(client).not.toMatch(/window\.open\(doc\.filePath/);
     expect(client).toContain('/api/controlled-documents/${doc.id}/${mode}');

@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont } from 'pdf-lib';
 import { db } from '../../db';
-import { arInvoices, arInvoiceLines, customers, purchaseOrders, p2Customers, p2PurchaseOrders, p2PackingSlips, p2LotNumbers, p2SerializedItems } from '../../schema';
+import { arInvoices, arInvoiceLines, customers, purchaseOrders, p2Customers, p2PurchaseOrders, p2PackingSlips, p2LotNumbers, p2SerializedItems, projects } from '../../schema';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { COMPANY_INFO } from '../../../shared/company-config';
 import { resolveAssetPath } from '../../src/utils/assetPaths';
@@ -245,6 +245,9 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
       invoiceSource: invoiceSourceSql(),
       packingSlipId: arInvoices.packingSlipId,
       lotId: arInvoices.lotId,
+      invoiceType: arInvoices.invoiceType,
+      depositPurpose: arInvoices.depositPurpose,
+      projectCode: projects.projectCode,
       subtotal: arInvoices.subtotal,
       discountAmount: arInvoices.discountAmount,
       freightAmount: arInvoices.freightAmount,
@@ -353,6 +356,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
     .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
     .leftJoin(p2PackingSlips, eq(arInvoices.packingSlipId, p2PackingSlips.id))
+    .leftJoin(projects, eq(arInvoices.projectId, projects.id))
     .leftJoin(p2LotNumbers, eq(arInvoices.lotId, p2LotNumbers.id))
     .where(eq(arInvoices.id, invoiceId));
 
@@ -381,6 +385,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   };
 
   const isP1Invoice = invoice.invoiceSource === 'P1';
+  const isMaterialDeposit = invoice.invoiceType === 'MATERIAL_DEPOSIT';
   const companyInfo = isP1Invoice ? P1_COMPANY_INFO : COMPANY_INFO;
 
   if (isP1Invoice && logo) {
@@ -399,7 +404,9 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   const boxX = PAGE.WIDTH - PAGE.MARGIN - 200;
   const boxY = PAGE.HEIGHT - PAGE.MARGIN - 60;
   page.drawRectangle({ x: boxX, y: boxY, width: 200, height: 60, color: COLOR.ACCENT });
-  page.drawText('INVOICE', { x: boxX + 66, y: boxY + 37, size: FONT_SIZE.TITLE, font: bold, color: COLOR.WHITE });
+  const documentTitle = isMaterialDeposit ? 'MATERIAL DEPOSIT' : 'INVOICE';
+  const titleWidth = bold.widthOfTextAtSize(documentTitle, FONT_SIZE.TITLE);
+  page.drawText(documentTitle, { x: boxX + (200 - titleWidth) / 2, y: boxY + 37, size: FONT_SIZE.TITLE, font: bold, color: COLOR.WHITE });
   page.drawText(invoice.invoiceNumber, { x: boxX + 28, y: boxY + 17, size: FONT_SIZE.NUMBER, font: bold, color: COLOR.WHITE });
 
   y = Math.min(y - 8, boxY - 18);
@@ -437,8 +444,12 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     ['Due Date:', date(invoice.dueDate)],
     ['Terms:', String(invoice.terms || 'N/A')],
     ['Customer PO:', String(invoice.poOverride || invoice.poNumber || invoice.poId || 'N/A')],
-    ['Packing Slip:', String(invoice.packingSlipNumber || (isP1Invoice ? invoice.invoiceNumber : 'N/A'))],
-    ...(isP1Invoice ? [['Tracking #:', String(invoice.p1TrackingNumber || 'N/A')]] : [['Lot:', String(invoice.lotNumber || 'N/A')]]),
+    ...(isMaterialDeposit
+      ? [['Project:', String(invoice.projectCode || 'N/A')]]
+      : [
+          ['Packing Slip:', String(invoice.packingSlipNumber || (isP1Invoice ? invoice.invoiceNumber : 'N/A'))],
+          ...(isP1Invoice ? [['Tracking #:', String(invoice.p1TrackingNumber || 'N/A')]] : [['Lot:', String(invoice.lotNumber || 'N/A')]]),
+        ]),
   ];
   for (const [label, value] of detailRows) {
     page.drawText(label, { x: mid + 12, y: rightY, size: FONT_SIZE.BODY, font: bold, color: COLOR.MUTED });

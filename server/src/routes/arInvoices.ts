@@ -29,6 +29,11 @@ import { getFileStorageProviderForObjectPath } from '../services/fileStorageProv
 import { recordAuditEvent } from '../services/auditLedgerService';
 import { buildRevenueDimensionTags } from '../services/productionLineAccounting';
 import { postArInvoiceAccounting } from '../services/arInvoicePostingService';
+import {
+  applyP2ProjectDeposit,
+  createP2MaterialDepositInvoice,
+  getP2ProjectDepositWorkspace,
+} from '../services/p2ProjectDepositService';
 import { formatP2DocumentPoNumber } from '../utils/p2DocumentPoNumber';
 import {
   recordP2InvoiceNumberAudit,
@@ -395,6 +400,9 @@ router.get('/', async (req: Request, res: Response) => {
         autoCreated: arInvoices.autoCreated,
         packingSlipId: arInvoices.packingSlipId,
         lotId: arInvoices.lotId,
+        invoiceType: arInvoices.invoiceType,
+        projectId: arInvoices.projectId,
+        depositPurpose: arInvoices.depositPurpose,
         wadId: arInvoices.wadId,
         discountAmount: arInvoices.discountAmount,
         freightAmount: arInvoices.freightAmount,
@@ -438,6 +446,10 @@ router.get('/', async (req: Request, res: Response) => {
           (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
           0
         )`,
+        depositApplied: sql<string>`COALESCE(
+          (SELECT SUM(amount::numeric) FROM p2_deposit_applications WHERE final_invoice_id = ${arInvoices.id} AND status = 'POSTED'),
+          0
+        )`,
         balance: sql<string>`(
           ${arInvoices.totalAmount}::numeric - COALESCE(
             (
@@ -450,6 +462,9 @@ router.get('/', async (req: Request, res: Response) => {
             0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
+            0
+          ) - COALESCE(
+            (SELECT SUM(amount::numeric) FROM p2_deposit_applications WHERE final_invoice_id = ${arInvoices.id} AND status = 'POSTED'),
             0
           )
         )`,
@@ -623,6 +638,80 @@ async function getPackingSlipLotLink(packingSlipId: string) {
   if (!slip.lotNumberId) return { error: 'Packing slip is not linked to a lot' as const, status: 422 as const };
   return { slip };
 }
+
+const materialDepositSchema = z.object({
+  projectId: z.string().uuid(),
+  amount: z.coerce.number().positive(),
+  invoiceDate: z.string().optional(),
+  dueDate: z.string().optional(),
+  terms: z.string().optional(),
+  poReference: z.string().nullable().optional(),
+  description: z.string().min(1).optional(),
+  depositPurpose: z.string().min(1).optional(),
+  customerVisibleNotes: z.string().nullable().optional(),
+  internalReason: z.string().min(3),
+});
+
+router.get('/project-deposits', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
+  try {
+    const projectId = z.string().uuid().parse(req.query.projectId);
+    res.json(await getP2ProjectDepositWorkspace(projectId));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load project deposits';
+    res.status(error instanceof z.ZodError ? 400 : 500).json({ error: message });
+  }
+});
+
+router.post('/project-deposits', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
+  try {
+    const input = materialDepositSchema.parse(req.body);
+    const invoice = await createP2MaterialDepositInvoice({
+      ...input,
+      createdBy: (req as any).user?.username || null,
+    });
+    await recordAuditEvent({
+      eventType: 'P2_MATERIAL_DEPOSIT_INVOICE_CREATED',
+      subjectType: 'ar_invoice',
+      subjectId: invoice.id,
+      sourceService: 'arInvoices.route',
+      actor: { username: (req as any).user?.username || null },
+      payload: { projectId: input.projectId, amount: input.amount, reason: input.internalReason },
+      reason: input.internalReason,
+    });
+    res.status(201).json(invoice);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create material deposit invoice';
+    res.status(error instanceof z.ZodError ? 400 : 500).json({ error: message });
+  }
+});
+
+router.post('/project-deposits/:depositInvoiceId/apply', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
+  try {
+    const input = z.object({
+      finalInvoiceId: z.string().uuid(),
+      amount: z.coerce.number().positive(),
+      reason: z.string().min(3),
+    }).parse(req.body);
+    const application = await applyP2ProjectDeposit({
+      depositInvoiceId: req.params.depositInvoiceId,
+      ...input,
+      appliedBy: (req as any).user?.username || null,
+    });
+    await recordAuditEvent({
+      eventType: 'P2_MATERIAL_DEPOSIT_APPLIED',
+      subjectType: 'ar_invoice',
+      subjectId: req.params.depositInvoiceId,
+      sourceService: 'arInvoices.route',
+      actor: { username: (req as any).user?.username || null },
+      payload: { applicationId: application.id, ...input },
+      reason: input.reason,
+    });
+    res.status(201).json(application);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to apply material deposit';
+    res.status(error instanceof z.ZodError ? 400 : 409).json({ error: message });
+  }
+});
 
 router.get('/from-packing-slip/:packingSlipId/preview', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {

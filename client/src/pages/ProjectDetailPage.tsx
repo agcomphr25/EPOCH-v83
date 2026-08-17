@@ -18,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
+import P2ProjectDepositsCard from '@/components/p2/P2ProjectDepositsCard';
 import P2V2ProjectWorkflow from '@/components/projects/P2V2ProjectWorkflow';
 import { 
   ArrowLeft, 
@@ -5485,6 +5486,7 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         <TabsContent value="shipping-invoicing" className="space-y-4">
+          <P2ProjectDepositsCard projectId={project.id} />
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

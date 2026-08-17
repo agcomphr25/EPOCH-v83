@@ -89,6 +89,7 @@ export async function postArInvoiceAccounting({
   const tax = money(invoice.taxAmount);
   const retainage = money(invoice.retainageAmount);
   const classification = classifyArInvoiceRevenueStream(invoice, invoiceLines);
+  const isMaterialDeposit = invoice.invoiceType === 'MATERIAL_DEPOSIT';
 
   const allAccounts = await tx.select().from(chartOfAccounts);
   const revenueMaps = await tx
@@ -99,12 +100,16 @@ export async function postArInvoiceAccounting({
   const accountByNumber = (accountNumber: string) => allAccounts.find((a: any) => a.accountNumber === accountNumber);
   const accountByName = (accountName: string) => allAccounts.find((a: any) => a.accountName === accountName);
   const revenueAccountFallback = accountByNumber('41000') ?? accountByName('Product Revenue') ?? accountByName('Revenue - P2 Products');
+  const customerDeposits = accountByNumber('20600') ?? accountByName('Customer Deposits');
 
   if (!accountByNumber('11000') && !accountByName('Accounts Receivable')) {
     throw new Error('Required chart-of-accounts entry not found: 11000 Accounts Receivable');
   }
-  if (!revenueAccountFallback) {
+  if (!isMaterialDeposit && !revenueAccountFallback) {
     throw new Error('Required chart-of-accounts entry not found: 41000 Product Revenue');
+  }
+  if (isMaterialDeposit && !customerDeposits) {
+    throw new Error('Required chart-of-accounts entry not found: 20600 Customer Deposits');
   }
   if (retainage > 0 && !accountByNumber('11200')) {
     throw new Error('Retainage Receivable account not found in chart of accounts');
@@ -133,9 +138,11 @@ export async function postArInvoiceAccounting({
     directIndirect: 'DIRECT',
     costPool: 'DIRECT',
     dimensionTags: {
-      source: 'ar_invoice',
+      source: isMaterialDeposit ? 'p2_material_deposit_invoice' : 'ar_invoice',
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
+      invoiceType: invoice.invoiceType,
+      depositPurpose: invoice.depositPurpose,
       revenueStream: classification.revenueStream,
       revenueRecognitionTiming: classification.recognitionTiming,
       revenuePaymentTerms: classification.paymentTerms,
@@ -177,12 +184,14 @@ export async function postArInvoiceAccounting({
     if (lineCredit <= 0) continue;
 
     const lineProductionLine = line.productionLine || 'MIGRATION_REVIEW';
-    const lineRevenueAccount = resolveRevenueAccountForProductionLine({
-      productionLine: lineProductionLine,
-      accounts: allAccounts,
-      revenueMaps,
-      fallbackRevenueAccount: revenueAccountFallback,
-    });
+    const lineRevenueAccount = isMaterialDeposit
+      ? customerDeposits!
+      : resolveRevenueAccountForProductionLine({
+          productionLine: lineProductionLine,
+          accounts: allAccounts,
+          revenueMaps,
+          fallbackRevenueAccount: revenueAccountFallback!,
+        });
     lines.push({
       ...commonDimensions,
       accountNumber: lineRevenueAccount.accountNumber || '41000',
@@ -204,8 +213,9 @@ export async function postArInvoiceAccounting({
         ...(line.dimensionTags && typeof line.dimensionTags === 'object' ? line.dimensionTags : {}),
         arInvoiceLineId: line.id,
         lineDescription: line.description,
-        revenueAccountNumber: lineRevenueAccount.accountNumber,
-        revenueAccountName: lineRevenueAccount.accountName,
+        ...(isMaterialDeposit
+          ? { liabilityAccountNumber: lineRevenueAccount.accountNumber, liabilityAccountName: lineRevenueAccount.accountName }
+          : { revenueAccountNumber: lineRevenueAccount.accountNumber, revenueAccountName: lineRevenueAccount.accountName }),
       },
     });
   }

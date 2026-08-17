@@ -6241,7 +6241,9 @@ export const p2Customers = pgTable('p2_customers', {
 // P2 Customer Contacts - Additional contacts for P2 customers
 export const p2CustomerContacts = pgTable('p2_customer_contacts', {
   id: serial('id').primaryKey(),
-  customerId: integer('customer_id').notNull(),
+  customerId: integer('customer_id')
+    .references(() => p2Customers.id, { onDelete: 'cascade' })
+    .notNull(),
   name: text('name').notNull(),
   title: text('title'),
   email: text('email'),
@@ -20882,6 +20884,11 @@ export const arInvoices = pgTable(
     // Shipment traceability â€” populated when invoice is raised against a specific shipment
     lotId: uuid('lot_id').references(() => p2LotNumbers.id),
     packingSlipId: uuid('packing_slip_id').references(() => p2PackingSlips.id),
+    invoiceType: text('invoice_type').notNull().default('STANDARD'),
+    projectId: uuid('project_id').references(() => projects.id, {
+      onDelete: 'set null',
+    }),
+    depositPurpose: text('deposit_purpose'),
     wadId: uuid('wad_id'),
     createdBy: text('created_by'),
     createdAt: timestamp('created_at').defaultNow(),
@@ -20914,6 +20921,8 @@ export const arInvoices = pgTable(
     packingSlipIdUniq: uniqueIndex('ar_invoices_packing_slip_id_uniq').on(
       table.packingSlipId
     ),
+    projectIdIdx: index('ar_invoices_project_id_idx').on(table.projectId),
+    invoiceTypeIdx: index('ar_invoices_invoice_type_idx').on(table.invoiceType),
   })
 );
 
@@ -20960,6 +20969,66 @@ export const insertArInvoiceLineSchema = createInsertSchema(
 });
 export type ArInvoiceLine = typeof arInvoiceLines.$inferSelect;
 export type InsertArInvoiceLine = z.infer<typeof insertArInvoiceLineSchema>;
+
+export const p2DepositApplications = pgTable(
+  'p2_deposit_applications',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    depositInvoiceId: uuid('deposit_invoice_id').notNull().references(() => arInvoices.id, { onDelete: 'restrict' }),
+    finalInvoiceId: uuid('final_invoice_id').notNull().references(() => arInvoices.id, { onDelete: 'restrict' }),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'restrict' }),
+    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+    journalEntryId: integer('journal_entry_id').references(() => journalEntries.id, { onDelete: 'restrict' }),
+    status: text('status').notNull().default('POSTED'),
+    reason: text('reason').notNull(),
+    appliedBy: text('applied_by'),
+    appliedAt: timestamp('applied_at').notNull().defaultNow(),
+    reversedBy: text('reversed_by'),
+    reversedAt: timestamp('reversed_at'),
+    reversalReason: text('reversal_reason'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    depositIdx: index('p2_deposit_applications_deposit_idx').on(table.depositInvoiceId, table.status),
+    finalIdx: index('p2_deposit_applications_final_idx').on(table.finalInvoiceId, table.status),
+  })
+);
+
+export const arPaymentSettlements = pgTable('ar_payment_settlements', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  settlementDate: date('settlement_date').notNull(),
+  processor: text('processor').notNull(),
+  bankReference: text('bank_reference').notNull(),
+  grossAmount: numeric('gross_amount', { precision: 14, scale: 2 }).notNull(),
+  feeAmount: numeric('fee_amount', { precision: 14, scale: 2 }).notNull().default('0'),
+  netAmount: numeric('net_amount', { precision: 14, scale: 2 }).notNull(),
+  bankAccountNumber: text('bank_account_number').notNull().default('10100'),
+  feeAccountNumber: text('fee_account_number').notNull().default('77000'),
+  journalEntryId: integer('journal_entry_id').references(() => journalEntries.id, { onDelete: 'restrict' }),
+  status: text('status').notNull().default('POSTED'),
+  reason: text('reason').notNull(),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  voidedBy: text('voided_by'),
+  voidedAt: timestamp('voided_at'),
+  voidReason: text('void_reason'),
+});
+
+export const arPaymentSettlementItems = pgTable(
+  'ar_payment_settlement_items',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    settlementId: uuid('settlement_id').notNull().references(() => arPaymentSettlements.id, { onDelete: 'restrict' }),
+    paymentSource: text('payment_source').notNull(),
+    paymentId: text('payment_id').notNull(),
+    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    paymentIdx: index('ar_payment_settlement_items_payment_idx').on(table.paymentSource, table.paymentId),
+    settlementIdx: index('ar_payment_settlement_items_settlement_idx').on(table.settlementId),
+  })
+);
 
 // â”€â”€â”€ AR Payments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const arPayments = pgTable(

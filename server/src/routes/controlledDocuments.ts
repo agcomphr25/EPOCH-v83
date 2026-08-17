@@ -952,8 +952,9 @@ const addControlledDocumentFooter = async (
   const footerText = `Doc #: ${doc.documentNumber || 'N/A'} | Version: ${revision.versionNumber || 'N/A'} | Effective: ${footerDate} | Status: ${lifecycleStatus}`;
 
   for (const page of pages) {
-    const { width } = page.getSize();
+    const { x: pageX, y: pageY, width } = page.getCropBox();
     const marginX = 36;
+    const bottomInset = 24;
     const footerHeight = 24;
     const fontSize = 8;
     const text = truncateTextToWidth(
@@ -964,22 +965,28 @@ const addControlledDocumentFooter = async (
     );
 
     page.drawRectangle({
-      x: 0,
-      y: 0,
+      x: pageX,
+      y: pageY + bottomInset,
       width,
       height: footerHeight,
       color: rgb(1, 1, 1),
       opacity: 0.92,
     });
     page.drawLine({
-      start: { x: marginX, y: footerHeight },
-      end: { x: width - marginX, y: footerHeight },
+      start: {
+        x: pageX + marginX,
+        y: pageY + bottomInset + footerHeight,
+      },
+      end: {
+        x: pageX + width - marginX,
+        y: pageY + bottomInset + footerHeight,
+      },
       thickness: 0.5,
       color: rgb(0.72, 0.72, 0.72),
     });
     page.drawText(text, {
-      x: marginX,
-      y: 8,
+      x: pageX + marginX,
+      y: pageY + bottomInset + 8,
       size: fontSize,
       font,
       color: rgb(0.2, 0.2, 0.2),

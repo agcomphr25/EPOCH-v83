@@ -70,6 +70,11 @@ type PreviewRow = {
   data: Record<string, unknown>;
 };
 
+type DesignProjectOption = {
+  id: string;
+  projectName: string;
+};
+
 const TYPES = [
   'NCR',
   'CAR',
@@ -101,6 +106,9 @@ const initialHistorical = {
 export default function QMSChangeControlPage() {
   const { can } = usePermissions();
   const [rows, setRows] = useState<ChangeRow[]>([]);
+  const [designProjects, setDesignProjects] = useState<DesignProjectOption[]>(
+    []
+  );
   const [cards, setCards] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +135,6 @@ export default function QMSChangeControlPage() {
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [native, setNative] = useState({
     designControlProjectId: '',
-    designControlRecordId: '',
     changeType: 'ECR',
     title: '',
     description: '',
@@ -210,6 +217,18 @@ export default function QMSChangeControlPage() {
   useEffect(() => {
     void load();
   }, [query]);
+
+  useEffect(() => {
+    const loadDesignProjects = async () => {
+      const response = await fetch('/api/rd-projects', {
+        credentials: 'include',
+      });
+      if (!response.ok) return;
+      const payload = await response.json().catch(() => []);
+      setDesignProjects(Array.isArray(payload) ? payload : []);
+    };
+    void loadDesignProjects();
+  }, []);
 
   const openDetails = async (id: string) => {
     const response = await fetch(`/api/change-control/${id}`, {
@@ -770,20 +789,33 @@ export default function QMSChangeControlPage() {
             authenticated signatures.
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field
-              label="Design Control project ID"
-              value={native.designControlProjectId}
-              onChange={(value) =>
-                setNative({ ...native, designControlProjectId: value })
-              }
-            />
-            <Field
-              label="Design Control record ID"
-              value={native.designControlRecordId}
-              onChange={(value) =>
-                setNative({ ...native, designControlRecordId: value })
-              }
-            />
+            <div className="space-y-2">
+              <Label>Design Project</Label>
+              <Select
+                value={native.designControlProjectId}
+                onValueChange={(value) =>
+                  setNative({ ...native, designControlProjectId: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an R&amp;D Design Project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {designProjects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.projectName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Design Control record</Label>
+              <div className="flex min-h-10 items-center rounded-md border bg-muted/30 px-3 text-sm text-muted-foreground">
+                Selected automatically from the project&apos;s authoritative
+                record
+              </div>
+            </div>
             <TypeSelect
               value={native.changeType}
               onChange={(value) => setNative({ ...native, changeType: value })}
@@ -826,7 +858,12 @@ export default function QMSChangeControlPage() {
             }
           />
           <DialogFooter>
-            <Button onClick={() => void createNative()}>
+            <Button
+              onClick={() => void createNative()}
+              disabled={
+                !native.designControlProjectId || !native.title.trim()
+              }
+            >
               Create Controlled Draft
             </Button>
           </DialogFooter>

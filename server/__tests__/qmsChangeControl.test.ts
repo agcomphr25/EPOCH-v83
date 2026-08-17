@@ -30,6 +30,16 @@ const service = readFileSync(
   path.join(root, 'server', 'src', 'services', 'changeControlService.ts'),
   'utf8'
 );
+const ecrService = readFileSync(
+  path.join(
+    root,
+    'server',
+    'src',
+    'services',
+    'engineeringChangeRequestService.ts'
+  ),
+  'utf8'
+);
 const page = readFileSync(
   path.join(root, 'client', 'src', 'pages', 'QMSChangeControlPage.tsx'),
   'utf8'
@@ -64,6 +74,18 @@ describe('QMS Change Control architecture', () => {
     );
     expect(service).not.toMatch(
       /INSERT INTO engineering_change_notice_approvals/
+    );
+  });
+
+  it('selects the Design Project without exposing internal IDs and resolves its authoritative record', () => {
+    expect(page).toContain('Select an R&amp;D Design Project');
+    expect(page).toContain(
+      "Selected automatically from the project&apos;s authoritative"
+    );
+    expect(page).not.toContain('label="Design Control project ID"');
+    expect(page).not.toContain('label="Design Control record ID"');
+    expect(ecrService).toContain(
+      "dcr.authority_status = 'authoritative'"
     );
   });
 

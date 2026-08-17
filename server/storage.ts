@@ -1812,6 +1812,7 @@ export interface IStorage {
   getAllP1POOrdersWithStatus(): Promise<{
     customerName: string;
     customerId: string;
+    customerEmail: string | null;
     earliestDueDate: string | null;
     pos: {
       poNumber: string;
@@ -12781,6 +12782,7 @@ export class DatabaseStorage implements IStorage {
   async getAllP1POOrdersWithStatus(): Promise<{
     customerName: string;
     customerId: string;
+    customerEmail: string | null;
     earliestDueDate: string | null;
     pos: {
       poNumber: string;
@@ -12865,6 +12867,7 @@ export class DatabaseStorage implements IStorage {
           po.po_number as "poNumber",
           po.customer_id as "customerId",
           po.customer_name as "customerName",
+          customer_record.email as "customerEmail",
           po.po_date as "poDate",
           po.expected_delivery as "expectedDelivery",
           poi.id as "poItemId",
@@ -12884,6 +12887,7 @@ export class DatabaseStorage implements IStorage {
           prod.fulfilled_date as "fulfilledDate",
           pp.customer_product_number as "customerProductNumber"
         FROM purchase_orders po
+        LEFT JOIN customers customer_record ON customer_record.id::text = po.customer_id
         INNER JOIN purchase_order_items poi ON po.id = poi.po_id
         INNER JOIN item_type_cte itc ON itc.poi_id = poi.id
         LEFT JOIN production_orders prod ON poi.id = prod.po_item_id
@@ -12916,6 +12920,7 @@ export class DatabaseStorage implements IStorage {
           po.po_number as "poNumber",
           po.customer_id as "customerId",
           po.customer_name as "customerName",
+          customer_record.email as "customerEmail",
           po.po_date as "poDate",
           po.expected_delivery as "expectedDelivery",
           poi.id as "poItemId",
@@ -12936,6 +12941,7 @@ export class DatabaseStorage implements IStorage {
           pp.customer_product_number as "customerProductNumber"
         FROM production_orders prod
         INNER JOIN purchase_orders po ON prod.po_id = po.id
+        LEFT JOIN customers customer_record ON customer_record.id::text = po.customer_id
         INNER JOIN (
           -- Pick the first PO item for this PO (by id) to anchor the orphaned production order
           SELECT DISTINCT ON (po_id) id, po_id, item_name, stock_model_name, quantity,
@@ -12984,6 +12990,7 @@ export class DatabaseStorage implements IStorage {
       poNumber: string;
       customerId: string | null;
       customerName: string;
+      customerEmail: string | null;
       poDate: Date | null;
       expectedDelivery: Date | null;
       poItemId: number;
@@ -13020,6 +13027,7 @@ export class DatabaseStorage implements IStorage {
         customerMap.set(customerId, {
           customerId,
           customerName,
+          customerEmail: row.customerEmail || null,
           earliestDueDate: null,
           posMap: new Map<string, any>(),
         });
@@ -13212,6 +13220,7 @@ export class DatabaseStorage implements IStorage {
       return {
         customerId: customer.customerId,
         customerName: customer.customerName,
+        customerEmail: customer.customerEmail,
         earliestDueDate,
         pos,
       };

@@ -19,6 +19,11 @@ import { buildRevenueDimensionTags } from '../services/productionLineAccounting'
 import { deriveP1ProductionStatus } from '../utils/p1ProductionStatus';
 import { isP1FlatTop } from '../utils/p1FlatTop';
 import { reconcileAndCloseP1PO } from '../services/p1POReconciliationService';
+import {
+  isPurePrecisionCustomer,
+  sendPurePrecisionShipmentNotification,
+  type P1ShipmentNotificationResult,
+} from '../services/p1ShipmentNotificationService';
 
 const router = Router();
 
@@ -3296,6 +3301,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       existingTrackingNumber,
       actualShipDate,
       auditReason,
+      sendTrackingNotification = false,
     } = req.body;
 
     if (historicalShipment) {
@@ -4146,6 +4152,53 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       await tryReconcileAndCloseP1PO(poId);
     }
 
+    // Pure Precision is the initial opt-in P1 customer. Notification delivery
+    // is deliberately non-blocking: a successfully persisted shipment remains
+    // shipped even if SendGrid is unavailable. Historical and test shipments
+    // never send automatically.
+    let trackingNotification: P1ShipmentNotificationResult = {
+      requested: Boolean(sendTrackingNotification),
+      eligible: false,
+      sent: false,
+      skipped: !sendTrackingNotification,
+    };
+    const resolvedCustomerName =
+      firstCustomer?.name || orderDetails[0]?.po?.customerName || '';
+    const canSendPurePrecisionTracking =
+      Boolean(sendTrackingNotification) &&
+      !historicalShipment &&
+      !skipDbPersistence &&
+      isPurePrecisionCustomer(resolvedCustomerName);
+
+    if (canSendPurePrecisionTracking) {
+      try {
+        trackingNotification = await sendPurePrecisionShipmentNotification({
+          shipmentId,
+          customerId: String(orderDetails[0].order.customerId),
+          customerName: resolvedCustomerName,
+          customerEmail: firstCustomer?.email || null,
+          trackingNumber,
+          carrier: 'UPS',
+          poNumbers,
+          triggeredBy: req.user?.username || 'p1-shipment',
+        });
+      } catch (notificationError: any) {
+        trackingNotification = {
+          requested: true,
+          eligible: true,
+          sent: false,
+          recipient: firstCustomer?.email || undefined,
+          error:
+            notificationError?.message ||
+            'Tracking notification could not be recorded.',
+        };
+        console.error(
+          `Pure Precision tracking notification failed for shipment ${shipmentId}:`,
+          notificationError
+        );
+      }
+    }
+
     // 10. BUILD PACKING SLIP RESPONSE (reuse PDFs already generated in step 8)
     const packingSlips: Array<{
       poNumber: string;
@@ -4183,6 +4236,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       itemsShipped: orderDetails.length,
       poNumbers: Array.from(poGroups.keys()),
       totalWeight: totalWeight,
+      trackingNotification,
     });
   } catch (error: any) {
     console.error('❌ Error processing shipment:', error);

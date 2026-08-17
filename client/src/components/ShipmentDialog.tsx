@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
@@ -133,6 +134,7 @@ interface ShipmentDialogProps {
     quantity: number;
     description: string;
     customerName: string;
+    customerEmail?: string | null;
     poNumber: string;
   }>;
   onSuccess?: (data: any) => void;
@@ -163,6 +165,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   const [existingTrackingNumber, setExistingTrackingNumber] = useState('');
   const [actualShipDate, setActualShipDate] = useState('');
   const [historicalReason, setHistoricalReason] = useState('');
+  const [sendTrackingNotification, setSendTrackingNotification] = useState(false);
   const [printPopup, setPrintPopup] = useState<{
     show: boolean;
     trackingNumber: string;
@@ -216,6 +219,13 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
   }, [unitsByPoItemId]);
 
   const hasP2Units = p2PoItemIds.length > 0;
+
+  const isPurePrecisionShipment = useMemo(() => {
+    if (selectedItems.length === 0) return false;
+    return selectedItems.every(
+      (item) => item.customerName.trim().toLowerCase().replace(/\s+/g, ' ') === 'pure precision'
+    );
+  }, [selectedItems]);
 
   const poItemIdsNeedingFinalization = useMemo(() => {
     return p2PoItemIds.filter((poItemId) => {
@@ -271,6 +281,25 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
           variant: 'destructive',
         });
       }
+
+      if (data.trackingNotification?.requested) {
+        if (data.trackingNotification.sent) {
+          toast({
+            title: data.trackingNotification.skipped
+              ? 'Tracking Email Already Sent'
+              : 'Tracking Email Sent',
+            description: `Pure Precision tracking was sent to ${data.trackingNotification.recipient}.`,
+          });
+        } else {
+          toast({
+            title: 'Shipment Created — Tracking Email Not Sent',
+            description:
+              data.trackingNotification.error ||
+              'The shipment was saved, but the tracking email could not be sent.',
+            variant: 'destructive',
+          });
+        }
+      }
       
       if (onSuccess) {
         onSuccess(data);
@@ -316,10 +345,17 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       setExistingTrackingNumber('');
       setActualShipDate('');
       setHistoricalReason('');
+      setSendTrackingNotification(false);
       setUnitsByPoItemId({});
       setServerMissing(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    setSendTrackingNotification(
+      open && shipmentMode === 'standard' && isPurePrecisionShipment
+    );
+  }, [open, shipmentMode, isPurePrecisionShipment]);
 
   const stepLabel = (step: number) => {
     if (step === 0) return 'Finalize P2 Units';
@@ -442,6 +478,10 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
       existingTrackingNumber: shipmentMode === 'historical' ? existingTrackingNumber.trim() : undefined,
       actualShipDate: shipmentMode === 'historical' ? actualShipDate : undefined,
       auditReason: shipmentMode === 'historical' ? historicalReason.trim() : undefined,
+      sendTrackingNotification:
+        shipmentMode === 'standard' && isPurePrecisionShipment
+          ? sendTrackingNotification
+          : false,
     };
 
     if (state.boxSize === 'custom') {
@@ -565,11 +605,37 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
         )}
 
         {state.currentStep === 3 && (
-          <StepReviewPreview
-            state={state}
-            selectedItems={selectedItems}
-            itemsByCustomer={itemsByCustomer}
-          />
+          <div className="space-y-4">
+            <StepReviewPreview
+              state={state}
+              selectedItems={selectedItems}
+              itemsByCustomer={itemsByCustomer}
+            />
+
+            {shipmentMode === 'standard' && isPurePrecisionShipment && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/30">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="pure-precision-tracking-notification"
+                    checked={sendTrackingNotification}
+                    onCheckedChange={(checked) => setSendTrackingNotification(checked === true)}
+                    data-testid="checkbox-pure-precision-tracking-notification"
+                  />
+                  <div className="space-y-1">
+                    <Label
+                      htmlFor="pure-precision-tracking-notification"
+                      className="font-medium cursor-pointer"
+                    >
+                      Email tracking information to Pure Precision
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Send to <strong>{selectedItems[0]?.customerEmail || 'the current primary customer email'}</strong>. One email is sent for this shipment and includes every selected PO number.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         <div className="flex justify-between items-center mt-6 pt-4 border-t">

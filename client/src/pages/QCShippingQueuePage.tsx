@@ -251,6 +251,7 @@ export default function QCShippingQueuePage() {
           const metadata = {
             item,
             customerName: customer.customerName,
+            customerEmail: customer.customerEmail,
             poNumber: po.poNumber,
           };
 
@@ -273,6 +274,7 @@ export default function QCShippingQueuePage() {
       quantity: number;
       description: string;
       customerName: string;
+      customerEmail?: string | null;
       poNumber: string;
     }> = [];
 
@@ -281,7 +283,7 @@ export default function QCShippingQueuePage() {
       const metadata = orderIdMap.get(key) || compositeKeyMap.get(key);
 
       if (metadata) {
-        const { item, customerName, poNumber } = metadata;
+        const { item, customerName, customerEmail, poNumber } = metadata;
         
         // Include items with or without orderIds (non-stock items bypass production)
         items.push({
@@ -290,6 +292,7 @@ export default function QCShippingQueuePage() {
           quantity: item.quantity ?? 1,
           description: item.description || item.itemName || item.stockModelName || item.stockModel || 'Unknown Item',
           customerName,
+          customerEmail,
           poNumber,
         });
       } else {
